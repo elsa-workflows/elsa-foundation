@@ -185,6 +185,12 @@ if (args.Contains("--public-http-remote-check"))
         return 1;
     }
 }
+if (args is ["--native-terminal-envelope-check"])
+{
+    var failed = false;
+    await NativeTerminalEnvelopeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--native-detached-handles-check"))
 {
     var failed = false;

@@ -594,6 +594,31 @@ against the same checkpoint can reach the bound again. An authorized operator ca
 all its retained inputs, or terminate the selected instance through the existing qualified command. Discard leaves
 the instance faulted. The provider-encoding and near-limit termination cases retain their own checks.
 
+### Termination at the checkpoint limit
+
+Run the authored Native envelope check from `prototypes/kernel-model`:
+
+```bash
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --native-terminal-envelope-check
+```
+
+In Balanced and Durable, the real model opens 3,500 invocation inboxes, attaches one
+waiting descendant and emits three sets of 500 detached creators. The stopped-owner
+fixture restores the old `CustomHandles` representation from those issued IDs while
+preserving the authored checkpoint. The successor runs all growth and termination through
+the built-in Worker and fenced in-memory store. Growth above the terminal budget parks.
+TG-1(c1) uses the current public header reserve to derive the no-handle bound. The
+historical 16,416,460-byte state predates that reserve. Adjacent controls reject one
+byte above the admitted limit, including the protected invocation shape. The exact-fit
+and protected ThenDelete cases keep all inbox identities, close them and commit one
+bound descendant terminate with the final parent notice. The protected case returns
+`terminated and kept` and preserves the invocation receipt. TG-1(c1) sends a provisional
+notice when it parks. The later parent-bound terminate cascades while preserving the
+faulted checkpoint.
+The cases exercise the in-memory encoding. The physical-provider and state-version
+upgrade cases have separate acceptance requirements.
+
+
 ## 10. Private durable lexical-resource probe
 
 The [lexical runner](../../essentials/tests/Workflows/Runtime/Native/Scopes/Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.
