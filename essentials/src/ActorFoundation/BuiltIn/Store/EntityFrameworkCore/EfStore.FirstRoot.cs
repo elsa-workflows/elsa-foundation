@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -7,6 +8,18 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     // The generic load treats this as an unknown state family and leaves its bytes intact.
+    private const string StableBodyMarker = "wire";
+    private const string StableBodyFamily = StoredState.Family + "12:public-root-stable-body:";
+    internal static string RootTerminationStateFamily(KernelDb db) => db.UsesRootStableBody ? StableBodyFamily : TerminationRootStateFamily;
+    private bool? _rootStableBody;
+    private bool RootStableBody => _rootStableBody ??= ReadRootStableBody();
+
+    private bool ReadRootStableBody()
+    {
+        using var db = create();
+        return db.UsesRootStableBody;
+    }
+
     private const int RootContentBytes = 16 * 1024 * 1024 - 24 * 1024;
 
     private const string PublicRootState = StoredState.Family + "4:public-root:";
@@ -16,7 +29,7 @@ public sealed partial class EfStore
     {
         { UsesRootValueProtocol: true } => StoredState.Family + "5:public-root-values:",
         { UsesRootTimedJobSettlement: true } => TimedRootStateFamily,
-        { UsesRootTermination: true } => TerminationRootStateFamily,
+        { UsesRootTermination: true } => RootTerminationStateFamily(db),
         { UsesRootReplyProtocol: true } => StoredState.Family + "7:public-root-replies:",
         _ => PublicRootState
     };
@@ -53,7 +66,8 @@ public sealed partial class EfStore
         internal abstract Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken);
     }
 
-    private sealed record FirstRootCheckpoint(string Tenant, string Reference, Message Creator, InstanceRow Row, string Header) : QualifiedRootCheckpoint(1)
+    private sealed record FirstRootCheckpoint(string Tenant, string Reference, Message Creator, InstanceRow Row, string Header,
+        byte[]? Wire, long Growth) : QualifiedRootCheckpoint(1)
     {
         internal override async ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -61,8 +75,10 @@ public sealed partial class EfStore
             var terminalHeader = db.UsesRootTermination && Row.Status == InstanceStatus.Running
                 ? RootTerminalHeaderBytes(Creator.Start!.Model, Creator.Start.Definition) : 0;
             var reserve = Math.Max(0, terminalHeader - Encoding.UTF8.GetByteCount(Header));
-            var bytes = await MeasureRootContentAsync(db, RootStateFamily(db).Length + escape.Length + reserve, state, Header,
-                Row.Jobs, cancellationToken);
+            var bytes = db.UsesRootStableBody
+                ? StableContentBytes(state, Header, Wire, reserve, Row.Status == InstanceStatus.Running ? Growth : 0)
+                : await MeasureRootContentAsync(db, RootStateFamily(db).Length + escape.Length + reserve, state, Header,
+                    Row.Jobs, cancellationToken);
             if (bytes > RootContentBytes) throw new StoreException(Failure.Definite, RootContentFailure);
         }
 
@@ -73,7 +89,7 @@ public sealed partial class EfStore
             var family = RootStateFamily(db);
             var fingerprint = CreationProtocol.Fingerprint(Creator.Start, Creator.Kind, Creator.Payload);
             var finished = Row.Status == InstanceStatus.Finished;
-            var candidates = await db.Messages.FromSqlInterpolated($"""
+            var candidates = await db.Messages.FromSqlInterpolated(AddRootWire(db, $"""
                 WITH consumed AS (
                     DELETE FROM "Messages" m USING "FoundationRootBirths" b
                     WHERE b."Creator" = m."Id" AND b."Actor" = m."Target" AND b."Partition" = m."Partition"
@@ -84,7 +100,7 @@ public sealed partial class EfStore
                     RETURNING m.*
                 ), bound AS (
                     UPDATE "Instances" i SET "FoundationReference" = b."Reference", "FoundationTenant" = b."Tenant",
-                        "FoundationHeader" = {Header}, "State" = {family} || i."State",
+                        "FoundationHeader" = {Header}, "State" = {family} || i."State", /*root-wire*/
                         "FoundationTerminalRevision" = CASE WHEN {finished} THEN {JournalRevision} ELSE NULL END,
                         "FoundationTerminalAt" = CASE WHEN {finished} THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint ELSE NULL END
                     FROM "FoundationRootBirths" b JOIN consumed m ON b."Creator" = m."Id" AND b."Actor" = m."Target"
@@ -96,7 +112,7 @@ public sealed partial class EfStore
                     RETURNING i."Id"
                 )
                 SELECT consumed.* FROM consumed JOIN bound ON bound."Id" = consumed."Target"
-                """).AsNoTracking().ToListAsync(cancellationToken);
+                """, Wire)).AsNoTracking().ToListAsync(cancellationToken);
             if (candidates.Count != 1) return false;
             var admitted = PostgresRootAdmission.DecodeCreator(candidates[0]);
             return admitted.Id == Creator.Id && admitted.Target == Creator.Target && admitted.InboxKey == Creator.InboxKey &&
@@ -147,7 +163,7 @@ public sealed partial class EfStore
 
     private PreparedRoot PrepareFirstRoot(string tenant, string reference, Message creator,
         PartitionFence fence, string? state, int stateVersion, string typeData,
-        IReadOnlyDictionary<string, string> labels, string journal, RootJobState? jobState = null, InstanceStatus status = InstanceStatus.Running)
+        IReadOnlyDictionary<string, string> labels, string journal, RootJobState? jobState = null, InstanceStatus status = InstanceStatus.Running, long terminalGrowth = 0)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("First root checkpoints require PostgreSQL.");
         if (creator.Start is not { Parent: null, Creation: { Generation: 1, Previous: 0 } } start ||
@@ -155,14 +171,16 @@ public sealed partial class EfStore
             creator.InboxKey != new InboxKey("root:" + creator.Target.Id) || creator.Payload != start.Input || creator.Sender is not null ||
             start.Creation.Intent != FoundationRootCreator.OperationDigest(creator.Id))
             throw new ArgumentException("First root checkpoint requires the admitted exact creator.", nameof(creator));
-        var (storedState, header) = EncodeRootContent(start.Model, start.Definition, state, stateVersion, typeData, labels, journal);
+        var stable = RootStableBody;
+        var (storedState, header) = EncodeRootContent(start.Model, start.Definition, stable && state is not null ? StableBodyMarker : state, stateVersion, typeData, labels, journal);
+        var wire = stable && state is not null ? RootSelfContent.Encode(state) : null;
         // Model and definition are in the qualified header, including values that PostgreSQL text cannot carry.
         var row = new InstanceRow(creator.Target.Id, "", "", status, "null", 1, null,
             History: start.History, StateVersion: stateVersion, Jobs: jobState?.Jobs).WithFoundationState(storedState)
             with { NextJobGeneration = jobState?.NextGeneration };
         // BindCheckpointAsync consumes the exact, due creator before this same transaction lands.
         var turn = new TurnCommit(row.Id, row, null, [], [], [], [], [], journal);
-        return new(turn, new FirstRootCheckpoint(tenant, reference, creator, row, header));
+        return new(turn, new FirstRootCheckpoint(tenant, reference, creator, row, header, wire, terminalGrowth));
     }
 
     private static (string? State, string Header) EncodeRootContent(string model, string definition, string? state,
@@ -218,7 +236,19 @@ public sealed partial class EfStore
             """).SingleAsync(cancellationToken));
     }
 
-    private sealed record PhysicalRoot(string Id, long Creation, string State, int StateVersion, long Revision, string Header,
+    private static FormattableString AddRootWire(KernelDb db, FormattableString sql, byte[]? wire) =>
+        db.UsesRootStableBody ? FormattableStringFactory.Create(
+            sql.Format.Replace("/*root-wire*/", $$""" "FoundationStateWire" = {{{sql.ArgumentCount}}}, """, StringComparison.Ordinal),
+            [.. sql.GetArguments(), wire]) : sql;
+
+    private static long StableContentBytes(string stored, string header, byte[]? wire, int reserve, long growth)
+    {
+        if (growth < 0 || growth > RootContentBytes) return (long)RootContentBytes + 1;
+        return (long)StableBodyFamily.Length + stored.Length + Encoding.UTF8.GetByteCount(header) +
+            (wire?.Length ?? 0) + reserve + growth;
+    }
+
+    private sealed record PhysicalRoot(string Id, long Creation, string State, byte[]? Wire, int StateVersion, long Revision, string Header,
         History History, InstanceStatus Status, bool Suspended, long? TerminalRevision, long? TerminalAt, long AsOf,
         string? Jobs, long? NextJobGeneration);
 
@@ -226,24 +256,39 @@ public sealed partial class EfStore
     {
         await using var db = create();
         var family = RootStateFamily(db);
-        if (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol)
+        if (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol || db.UsesRootStableBody)
             await RequireStoreVersionsAsync(db, cancellationToken);
-        var physical = await db.Database.SqlQuery<PhysicalRoot>($"""
-            SELECT i."Id", b."Creation", i."State", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
+        FormattableString query = $"""
+            SELECT i."Id", b."Creation", i."State", /*root-wire*/ AS "Wire", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
                 i."History", i."Status", i."Suspended", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
                 floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
                 i."Jobs", i."NextJobGeneration"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Reference" = i."FoundationReference"
                 AND b."Actor" = i."Id" AND b."Tenant" = i."FoundationTenant"
             WHERE i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference} AND i."Partition" = b."Partition" AND NOT i."Retired"
-            """).SingleOrDefaultAsync(cancellationToken);
+            """;
+        var physical = await db.Database.SqlQuery<PhysicalRoot>(FormattableStringFactory.Create(
+            query.Format.Replace("/*root-wire*/", db.UsesRootStableBody ? """i."FoundationStateWire" """ : "NULL::bytea", StringComparison.Ordinal),
+            query.GetArguments())).SingleOrDefaultAsync(cancellationToken);
         if (physical is null) return null;
         if (!physical.State.StartsWith(family, StringComparison.Ordinal))
             throw new StoreException(Failure.Definite, "Unsupported qualified actor checkpoint.");
         var header = DurableKeyJson.Read<RootHeader>(physical.Header);
         var logical = StoredState.Restore(new(physical.Id, header.Model, header.Definition, InstanceStatus.Running,
             physical.State[family.Length..], physical.Revision, null, Creation: physical.Creation));
-        var state = logical.FoundationNullState ? null : header.EscapedState ? DurableKeyJson.Read<string>(logical.State) : logical.State;
+        string? state;
+        if (db.UsesRootStableBody)
+        {
+            if (header.EscapedState || logical.FoundationNullState != (physical.Wire is null) ||
+                !logical.FoundationNullState && logical.State != StableBodyMarker)
+                throw new StoreException(Failure.Definite, "Invalid PostgreSQL stable-body checkpoint.");
+            try { state = physical.Wire is null ? null : RootSelfContent.Decode(physical.Wire); }
+            catch (Exception error) when (error is FormatException or DecoderFallbackException)
+            {
+                throw new StoreException(Failure.Definite, "Invalid PostgreSQL stable-body encoding.", error);
+            }
+        }
+        else state = logical.FoundationNullState ? null : header.EscapedState ? DurableKeyJson.Read<string>(logical.State) : logical.State;
         return new(new(physical.Id, physical.Creation), header.Model, header.Definition, header.TypeData,
             header.Labels.ToDictionary(StringComparer.Ordinal), state, physical.StateVersion, physical.Revision)
             {

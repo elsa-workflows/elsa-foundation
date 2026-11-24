@@ -12,7 +12,7 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootTerminateChecks
 {
-    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool fallback = false)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool fallback = false, bool stableBody = false)
     {
         const string operation = "terminate-copy";
         const string definition = "before-upgraded-turn";
@@ -21,7 +21,8 @@ internal static class PostgresRootTerminateChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => KernelDb.ForPostgresRootTerminations(options);
+        KernelDb Open() => stableBody ? KernelDb.ForPostgresRootStableBody(options) : KernelDb.ForPostgresRootTerminations(options);
+        KernelDb OpenPrior() => stableBody ? KernelDb.ForPostgresRootTerminations(options) : KernelDb.ForPostgresRootOperators(options);
         EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch)
             { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
@@ -55,6 +56,7 @@ internal static class PostgresRootTerminateChecks
         EncodedContent before;
         string inbox;
         var recoveryTargets = new HashSet<string>(StringComparer.Ordinal);
+        var declaredGrowth = new Dictionary<long, long>();
         await using (var owner = await Own("writer", new PublicActor([writer])))
         {
             var start = await Drive(owner, image => image is { Revision: 1 });
@@ -68,6 +70,9 @@ internal static class PostgresRootTerminateChecks
                 "the v13 writer accepts Suspend");
             prior = await Drive(owner, image => image is { Revision: 3, Suspended: true });
             priorEpoch = ((Worker)owner).Epoch;
+            if (stableBody)
+                Check(Enumerable.Range(1, 3).All(revision => declaredGrowth.GetValueOrDefault(revision) > 0),
+                    "the actual Native adapter carries its nonzero growth declaration on birth, update and Suspend");
             before = await ReadEncodedContent(prior.Actor.Id);
             var previousInbox = Json.Read<NativeState>(prior.State!).Inboxes!.Single();
             inbox = previousInbox.Key;
@@ -89,12 +94,26 @@ internal static class PostgresRootTerminateChecks
             }
         }
 
+        if (!stableBody)
+        {
+            var newer = new EfStore(() => KernelDb.ForPostgresRootStableBody(options), postgres: true);
+            try
+            {
+                await newer.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop);
+                throw new InvalidOperationException("The stable-body cold reader accepted the prior protocol.");
+            }
+            catch (StoreFormatException)
+            {
+                Console.WriteLine("ok the stable-body cold reader refuses the prior protocol before reading its columns");
+            }
+        }
+
         var adjacentInput = neighbor is { } adjacent
             ? (await admission.ReadPendingDirectAsync(tenant.Tenant, adjacent.Id, stop)).Single()
             : null;
         var adjacentWire = adjacentInput is null ? null : Json.Write(await HeldRow(adjacentInput.InboxKey));
 
-        await using (var older = KernelDb.ForPostgresRootOperators(options))
+        await using (var older = OpenPrior())
         {
             try
             {
@@ -165,11 +184,11 @@ internal static class PostgresRootTerminateChecks
                     recoveryTargets.SetEquals([prior.Actor.Id]),
                     "the selected fallback owner leaves the adjacent actor and its input untouched");
             }
-            var legacyReader = new EfStore(() => KernelDb.ForPostgresRootOperators(options), postgres: true);
+            var legacyReader = new EfStore(OpenPrior, postgres: true);
             try
             {
                 await legacyReader.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop);
-                throw new InvalidOperationException("The prior operator reader decoded a format-11 checkpoint.");
+                throw new InvalidOperationException("The prior reader decoded the new checkpoint format.");
             }
             catch (StoreException error) when (error.Failure == Failure.Definite && error.Message == "Unsupported qualified actor checkpoint.")
             {
@@ -257,7 +276,9 @@ internal static class PostgresRootTerminateChecks
             var store = existingStore ?? Store();
             var roots = selected ? await store.BindWorkerRootsAsync([(tenant.Tenant, actor.Id)], stop)
                 : (await store.BindWorkerPartitionAsync(0, stop)).Scope;
-            var adapter = new ActorAdapter(new EfStore.RootHeaders(roots), model);
+            IActorType adapter = new ActorAdapter(new EfStore.RootHeaders(roots), model);
+            if (stableBody && node == "writer")
+                adapter = new ObserveGrowth(adapter, actor.Id, declaredGrowth);
             var workerOptions = new WorkerOptions
             {
                 Partitions = 1,
@@ -284,6 +305,12 @@ internal static class PostgresRootTerminateChecks
         async Task<EncodedContent> ReadEncodedContent(string id)
         {
             await using var db = Open();
+            if (stableBody)
+                return await db.Database.SqlQuery<EncodedContent>($"""
+                    SELECT md5("State") || ':' || md5("FoundationStateWire") AS "StateHash", md5("FoundationHeader") AS "HeaderHash",
+                        octet_length("State") + octet_length("FoundationHeader") + octet_length("FoundationStateWire") AS "Bytes"
+                    FROM "Instances" WHERE "Id" = {id}
+                    """).SingleAsync(stop);
             return await db.Database.SqlQuery<EncodedContent>($"""
                 SELECT md5("State") AS "StateHash", md5("FoundationHeader") AS "HeaderHash",
                     octet_length("State") + octet_length("FoundationHeader") AS "Bytes"
@@ -295,6 +322,27 @@ internal static class PostgresRootTerminateChecks
         {
             await using var db = Open();
             return await db.Messages.AsNoTracking().SingleAsync(row => row.InboxScope == key.Scope && row.Id == key.Id, stop);
+        }
+    }
+
+    private sealed class ObserveGrowth(IActorType actor, string reference, IDictionary<long, long> growth) : IActorType
+    {
+        public string? SelfReference(Delivery delivery) => actor.SelfReference(delivery);
+        bool IActorType.AcceptsFoundationOperator(InstanceRow? row, Message message) => actor.AcceptsFoundationOperator(row, message);
+        public bool SelectsAlone(string? model, InstanceRow? row, Delivery delivery) => actor.SelectsAlone(model, row, delivery);
+        public bool RevisitsHeld(string? model, InstanceRow row, Delivery delivery) => actor.RevisitsHeld(model, row, delivery);
+        public bool Withholds(InstanceRow row, ITurnServices services) => actor.Withholds(row, services);
+        public TurnOutcome? Command(TurnInput input) => Observe(actor.Command(input));
+        public async ValueTask<TurnOutcome> TurnAsync(TurnInput input) => Observe(await actor.TurnAsync(input))!;
+        public TurnOutcome Park(InstanceRow? row, string address, IReadOnlyList<Delivery> taken, StartSpec? spec, string error) =>
+            actor.Park(row, address, taken, spec, error);
+        public ValueTask<object?> ExecuteJobAsync(string model, IJob job, CancellationToken token) => actor.ExecuteJobAsync(model, job, token);
+
+        private TurnOutcome? Observe(TurnOutcome? outcome)
+        {
+            if (outcome?.Row is { FoundationDispatchHeader: { } header } row && header.Reference == reference)
+                growth[row.Revision] = header.TerminalGrowth;
+            return outcome;
         }
     }
 

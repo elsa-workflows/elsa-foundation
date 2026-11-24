@@ -93,7 +93,7 @@ internal sealed partial class PostgresRootAdmission
                     EfStore.TimedRootStateFamily, cancellationToken) ||
                 status == InstanceStatus.Cancelled && db.UsesRootTermination &&
                 await IsQualifiedTerminalAsync(db, address, tenant, reference, InstanceStatus.Cancelled,
-                    EfStore.TerminationRootStateFamily, cancellationToken);
+                    EfStore.RootTerminationStateFamily(db), cancellationToken);
             if (terminal && await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "FoundationDirectReceipts"
                     WHERE "Reference" = {reference} AND "Operation" = {digest}

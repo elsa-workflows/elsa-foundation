@@ -121,6 +121,7 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     private sealed class RootTimerDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootOperatorDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootTerminationDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootStableBodyDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootJobDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootTimedJobIssuanceDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootValueDb(DbContextOptions<KernelDb> options) : KernelDb(options);
@@ -135,6 +136,7 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
         RootJobDb => StoreFormat.RootJobs,
         RootOperatorDb => StoreFormat.RootOperators,
         RootTerminationDb => StoreFormat.RootTerminations,
+        RootStableBodyDb => StoreFormat.RootStableBody,
         RootTimerDb => StoreFormat.RootTimers,
         RootSelfDb => StoreFormat.RootSelf,
         _ => StoreFormat.Current
@@ -150,8 +152,10 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     internal static KernelDb ForPostgresRootJobs(DbContextOptions<KernelDb> options) => new RootJobDb(options);
     internal static KernelDb ForPostgresRootTimedJobIssuance(DbContextOptions<KernelDb> options) => new RootTimedJobIssuanceDb(options);
     internal static KernelDb ForPostgresRootTimedJobSettlement(DbContextOptions<KernelDb> options) => new RootTimedJobSettlementDb(options);
-    internal bool UsesRootOperatorProtocol => this is RootOperatorDb or RootTerminationDb;
-    internal bool UsesRootTermination => this is RootTerminationDb;
+    internal bool UsesRootOperatorProtocol => this is RootOperatorDb || UsesRootTermination;
+    internal bool UsesRootTermination => this is RootTerminationDb or RootStableBodyDb;
+    internal bool UsesRootStableBody => this is RootStableBodyDb;
+    internal static KernelDb ForPostgresRootStableBody(DbContextOptions<KernelDb> options) => new RootStableBodyDb(options);
     internal static KernelDb ForPostgresRootTerminations(DbContextOptions<KernelDb> options) => new RootTerminationDb(options);
     internal static KernelDb ForPostgresRootOperators(DbContextOptions<KernelDb> options) => new RootOperatorDb(options);
     internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => new RootTimerDb(options);

@@ -212,7 +212,7 @@ public sealed partial class EfStore
                     AND b."Creation" = 1 AND i."Partition" = {Root.Partition} AND NOT i."Retired"
                     AND (i."Status" = {(int)InstanceStatus.Finished} OR
                         ({db.UsesRootTermination} AND i."Status" = {(int)InstanceStatus.Cancelled}
-                            AND starts_with(i."State", {TerminationRootStateFamily})) OR
+                            AND starts_with(i."State", {RootTerminationStateFamily(db)})) OR
                         ({db.UsesRootTimedJobSettlement} AND i."Status" = {(int)InstanceStatus.Faulted}
                             AND starts_with(i."State", {TimedRootStateFamily})))
                     AND i."FoundationTerminalAt" IS NOT NULL AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
@@ -232,6 +232,8 @@ public sealed partial class EfStore
             throw new NotSupportedException("The PostgreSQL job profile requires the qualified Worker checkpoint writer.");
         if (db.UsesRootValueProtocol)
             throw new NotSupportedException("The PostgreSQL value qualification requires the qualified Worker checkpoint writer.");
+        if (db.UsesRootStableBody)
+            throw new NotSupportedException("The PostgreSQL stable-body profile requires the qualified Worker checkpoint writer.");
         return await CommitAsync(new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [prepared.JournalTurn!], [], []),
             prepared.Checkpoint, sentAt, token);
     }
@@ -389,7 +391,7 @@ public sealed partial class EfStore
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History) throw RootShape();
             if (RootJobsEnabled) ValidateRootJobChange(null, row, [], turn.Sent, turn.FoundationRootJobCompletion, RootTimedJobs);
             return WithSends(PrepareFirstRoot(root.Tenant, root.Reference, creator, fence, state, row.StateVersion,
-                change.TypeData, change.Labels, turn.Journal, jobState, row.Status));
+                change.TypeData, change.Labels, turn.Journal, jobState, row.Status, header.TerminalGrowth));
         }
 
         if (turn.Done.Count + turn.Consumed.Count == 0 || !InputsMatch(root, turn, RootJobsEnabled))
@@ -423,12 +425,12 @@ public sealed partial class EfStore
                 row.Suspended != (command.Kind == Kinds.Suspend) || row.StateVersion != current.StateVersion || state != current.State ||
                 turn.Sent.Count != 0 || recalls is not null || turn.Journal is not null) throw RootShape();
             return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
-                row.StateVersion, header.Header.TypeData, header.Header.Labels, null, operatorSuspension: row.Suspended);
+                row.StateVersion, header.Header.TypeData, header.Header.Labels, null, operatorSuspension: row.Suspended, terminalGrowth: header.TerminalGrowth);
         }
         if (row.Suspended != current.Suspended || inputs.Any(input => input.Operator is not null)) throw RootShape();
         if (RootJobsEnabled) ValidateRootJobChange(current, row, inputs, turn.Sent, turn.FoundationRootJobCompletion);
         return WithSends(PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
             row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, recalls?.Select(key => key.Id).ToArray(),
-            jobState: jobState, jobCompletion: turn.FoundationRootJobCompletion, values: values));
+            jobState: jobState, jobCompletion: turn.FoundationRootJobCompletion, values: values, terminalGrowth: header.TerminalGrowth));
     }
 }

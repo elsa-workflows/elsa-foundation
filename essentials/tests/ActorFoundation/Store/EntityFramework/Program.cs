@@ -206,7 +206,9 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
     {
         await using var fixture = (Provided)await CreateAsync(1, new());
         Console.WriteLine(Name);
-        if (flags.Contains("--terminal-header"))
+        if (flags.Contains("--stable-body"))
+            await RootStableBodyChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        else if (flags.Contains("--terminal-header"))
             await RootTerminalHeaderChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
         else if (flags.Contains("--job-registry"))
             await RootCheckpointLimitChecks.RunJobs(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
@@ -237,6 +239,8 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
             _ => builder.UseSqlite(connection),
         };
         var options = builder.AddInterceptors(interceptors).Options;
+        if (engine == "postgres" && flags.Contains("--stable-body"))
+            return () => KernelDb.ForPostgresRootStableBody(options);
         if (engine == "postgres" && flags.Contains("--terminal-header"))
             return () => KernelDb.ForPostgresRootTerminations(options);
         if (engine == "postgres" && flags.Contains("--job-registry"))

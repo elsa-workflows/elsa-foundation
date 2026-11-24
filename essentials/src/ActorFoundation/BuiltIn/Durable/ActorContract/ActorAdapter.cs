@@ -357,7 +357,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
                 TypeData = outcome.FoundationHeader?.TypeData ?? header.TypeData,
                 Labels = outcome.FoundationHeader?.Labels ?? header.Labels
             };
-            ValidateTerminalEnvelope(nextRow, nextHeader);
+            var growth = ValidateTerminalEnvelope(nextRow, nextHeader);
             if (roots is not null)
             {
                 // Withholds can run before this turn has landed. Carry its own metadata in the owner's row.
@@ -365,7 +365,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
                 {
                     Suspended = IsRootControl(delivery.Message) && delivery.Message.Kind != Durable.Kinds.Terminate
                         ? delivery.Message.Kind == Durable.Kinds.Suspend : nextRow.Suspended,
-                    FoundationDispatchHeader = new(nextHeader.Tenant, nextHeader.Ref.Id, new(nextHeader.TypeData, nextHeader.Labels))
+                    FoundationDispatchHeader = new(nextHeader.Tenant, nextHeader.Ref.Id, new(nextHeader.TypeData, nextHeader.Labels), growth)
                 };
             }
             if (nextRow.ParkCohort is { } cohort && (nextRow.Status != Durable.InstanceStatus.Running ||
@@ -405,7 +405,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         return outcome;
     }
 
-    private void ValidateTerminalEnvelope(Durable.InstanceRow row, Contract.ActorHeader header)
+    private long ValidateTerminalEnvelope(Durable.InstanceRow row, Contract.ActorHeader header)
     {
         var growth = row.Status == Durable.InstanceStatus.Running ? actor.TerminalGrowth(header, row.State) : 0;
         // This is the built-in in-memory encoding. Keep enough space for the terminal registry even when the live row is smaller.
@@ -420,6 +420,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             + Bytes(row.State) + Bytes(row.CustomHandles) + Bytes(row.CommitTimes) + Bytes(row.Model) + Bytes(row.Definition);
         if (growth < 0 || growth > TerminalEnvelopeLimit - bytes)
             throw new InvalidOperationException("The actor checkpoint and its terminal growth exceed the record envelope.");
+
+        return growth;
 
         static long Bytes(string? value) => value is null ? 0 : Encoding.UTF8.GetByteCount(value);
     }

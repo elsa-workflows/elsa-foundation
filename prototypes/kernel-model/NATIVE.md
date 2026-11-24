@@ -656,6 +656,20 @@ and four labels whose keys and values each use their full limit. Run the EF stor
 conformance command `postgres <connection> root-checkpoint-limit --terminal-header`
 on a disposable PostgreSQL server.
 
+The opt-in PostgreSQL format 12 stores opaque root state in the existing lossless
+binary encoding. It preserves null, empty, NUL, supplementary Unicode and unpaired
+UTF-16 units. The encoded body has the same byte count as the Foundation's UTF-8
+budget. Live writes reserve the declared terminal body growth and maximum encoded
+terminal header. Terminal writes check their actual encoded size. The body, header
+and state transition share the fenced commit. Format-11 owners and readers refuse
+format 12. A format-12 reader verifies the store marker before selecting the body
+column. The Core Preview continues to use its current format.
+
+Use `--stable-body` with the store conformance command above. For the live Native
+termination replay, use `pg-root-terminate owned checked stable-body`. Use
+`stable-body-fallback` to verify that an unavailable-model termination keeps the
+saved binary body and header byte for byte.
+
 ## 10. Private durable lexical-resource probe
 
 The [lexical runner](../../essentials/tests/Workflows/Runtime/Native/Scopes/Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.
