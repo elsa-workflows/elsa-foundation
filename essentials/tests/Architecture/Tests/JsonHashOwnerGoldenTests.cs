@@ -55,7 +55,9 @@ public sealed class JsonHashOwnerGoldenTests
         {
             var constructor = Assert.Single(type.GetConstructors().Where(c => c.GetParameters().All(p => fields.TryGetProperty(p.Name!, out _))));
             return constructor.Invoke(constructor.GetParameters().Select(p =>
-                fields.GetProperty(p.Name!).Deserialize(p.ParameterType, JsonBaseline.Options)).ToArray());
+                p.ParameterType == typeof(IReadOnlySet<string>)
+                    ? fields.GetProperty(p.Name!).Deserialize<string[]>()!.ToHashSet(StringComparer.Ordinal)
+                    : fields.GetProperty(p.Name!).Deserialize(p.ParameterType, JsonBaseline.Options)).ToArray());
         }
         var json = argument.GetProperty("json");
         if (type == typeof(object) || type == typeof(JsonElement)) return json.Clone();

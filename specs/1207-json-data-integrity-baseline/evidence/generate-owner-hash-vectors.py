@@ -52,7 +52,7 @@ def generate():
     for name, actor in [('base',dict(tenantId='tenant-é',userId='reader',roleIds=[],permissions=[])),
                         ('different-subject',dict(tenantId='tenant-é',userId='other',roleIds=[],permissions=[]))]:
         add('audience-scope/'+name,'Elsa.Studio.Dashboard.Api','Elsa.Studio.Dashboard.Api.DashboardAudienceCursors','Scope',
-            [{'json':actor},{'text':'role'},{'text':'Mixed'}],[actor['tenantId'],actor['userId'],'role','Mixed'])
+            [{'ctor':{key[0].upper()+key[1:]:value for key,value in actor.items()}},{'text':'role'},{'text':'Mixed'}],[actor['tenantId'],actor['userId'],'role','Mixed'])
     key=bytes(range(32))
     actor=dict(tenantId='tenant-é',subjectId='reader')
     projection=[actor['tenantId'],actor['subjectId'],'after-key']

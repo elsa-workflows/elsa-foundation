@@ -166,6 +166,24 @@ public sealed class UserTaskApiTests
     }
 
     [Fact]
+    public async Task Draft_configuration_keeps_raw_object_text_and_refuses_present_null_while_accepting_absence()
+    {
+        await using var host = await Host.Start(); host.SignIn("alice");
+        const string raw = """{ "MixedKey": "Ren\u00e9 <>&", "number": 1.0, "rows": [null, 9007199254740993] }""";
+        static string Body(string configuration) => """{"revision":0,"form":{"id":"raw","version":"1","name":"Raw","provider":"elsa.basic-forms/1","fields":[{"key":"value","label":"Value","kind":"text" """ + configuration + "}]}}";
+        using var nullRequest = new StringContent(Body(",\"configuration\":null"), System.Text.Encoding.UTF8, "application/json");
+        var refused = await host.Client.PostAsync("/runtime/user-task-forms/raw/draft", nullRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        using var objectRequest = new StringContent(Body(",\"configuration\":" + raw), System.Text.Encoding.UTF8, "application/json");
+        var saved = await host.Client.PostAsync("/runtime/user-task-forms/raw/draft", objectRequest);
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var read = await host.Client.GetFromJsonAsync<JsonElement>("/runtime/user-task-forms/raw/definition");
+        Assert.Equal(raw, read.GetProperty("draft").GetProperty("form").GetProperty("fields")[0].GetProperty("configuration").GetRawText());
+        using var absentRequest = new StringContent(Body("").Replace("\"raw\"", "\"absent\"", StringComparison.Ordinal), System.Text.Encoding.UTF8, "application/json");
+        Assert.Equal(HttpStatusCode.OK, (await host.Client.PostAsync("/runtime/user-task-forms/absent/draft", absentRequest)).StatusCode);
+    }
+
+    [Fact]
     public async Task Draft_API_preserves_custom_control_metadata_but_publication_requires_a_server_validator()
     {
         await using var host = await Host.Start(); host.SignIn("alice");

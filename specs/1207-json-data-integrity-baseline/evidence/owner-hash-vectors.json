@@ -485,11 +485,11 @@
     "method": "Scope",
     "arguments": [
       {
-        "json": {
-          "tenantId": "tenant-\u00e9",
-          "userId": "reader",
-          "roleIds": [],
-          "permissions": []
+        "ctor": {
+          "TenantId": "tenant-\u00e9",
+          "UserId": "reader",
+          "RoleIds": [],
+          "Permissions": []
         }
       },
       {
@@ -509,11 +509,11 @@
     "method": "Scope",
     "arguments": [
       {
-        "json": {
-          "tenantId": "tenant-\u00e9",
-          "userId": "other",
-          "roleIds": [],
-          "permissions": []
+        "ctor": {
+          "TenantId": "tenant-\u00e9",
+          "UserId": "other",
+          "RoleIds": [],
+          "Permissions": []
         }
       },
       {
