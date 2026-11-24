@@ -515,6 +515,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
         if (root is null && batch.Turns.Any(turn => turn.FoundationRootJobCompletion is not null))
             throw new StoreException(Failure.Definite, "Generated-root job completions require the qualified writer.");
+        // The ordinary Done mark remains eligible for sweeping. It cannot preserve a Park's kept inputs.
+        if (batch.Turns.Any(turn => turn.FoundationKept is not null))
+            throw new StoreException(Failure.Definite, "This store does not support retaining Park inputs.");
         StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
             supportsJobTrialClear:SupportsJobTrialClear);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is

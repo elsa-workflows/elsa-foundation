@@ -37,6 +37,12 @@ switch (args)
         return await new EfProvider("sqlite", null, options).CheckTimedJobWorkerAsync();
     case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "timed-job-worker", .. var options]:
         return await new EfProvider(engine, connection, options).CheckTimedJobWorkerAsync();
+    case ["sqlite", "park-write-boundary", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckParkWriteBoundaryAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "park-write-boundary", .. var options]:
+        await new EfProvider(engine, connection, options).CheckParkWriteBoundaryAsync();
+        return 0;
     case ["sqlite", "checkpoint-byte-count", .. var options]:
         await new EfProvider("sqlite", null, options).CheckCheckpointBytesAsync();
         return 0;
@@ -182,6 +188,13 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
         await using var fixture = (Provided)await CreateAsync(1, new());
         return await RelationalTimedJobChecks.RunAsync((EfStore)fixture.Store, fixture.CreateContext, Name,
             trialWithdrawal: !flags.Contains("--without-trial-withdrawal"));
+    }
+
+    internal async Task CheckParkWriteBoundaryAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(1, new());
+        Console.WriteLine(Name);
+        await ParkWriteBoundaryChecks.Run(fixture.CreateContext, fixture.Store, fixture.NewClient());
     }
 
     internal async Task CheckCheckpointBytesAsync()
