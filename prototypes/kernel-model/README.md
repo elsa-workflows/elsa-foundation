@@ -314,8 +314,8 @@ bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release
 ```
 
 The receipt builds the normal Workbench executable and uses disposable PostgreSQL 17 databases and
-ephemeral loopback ports. It exercises the ordinary, untimed job, timed completion and deadline
-outcomes. Disabled Workbench opens no preview connection, and each enabled lane refuses to start
+ephemeral loopback ports. It exercises the ordinary, untimed job, timed completion, deadline and
+active-job takeover cases. Disabled Workbench opens no preview connection, and each enabled lane refuses to start
 an owner with a different format. The first process saves an approval wait and stops. A different
 process takes the same actor at a higher epoch. Replaying the first approval leaves checkpoint bytes
 and the journal unchanged. A new approval advances the workflow. In the timed profile the approval
@@ -337,7 +337,7 @@ that matches the format used to provision the database.
 |---|---|---|
 | Ordinary | `new KernelDb(options)` | `direct-approval` |
 | `Elsa__CorePreview__NativeJobs=true` | `PostgresPreviewHosting.CreateNativeJobContext(options)` | `direct-approval`, `direct-approval-with-job` |
-| `Elsa__CorePreview__TimedNativeJobs=true` | `PostgresPreviewHosting.CreateTimedNativeJobContext(options)` | `direct-approval`, `direct-approval-with-timed-job`, `direct-approval-with-timeout` |
+| `Elsa__CorePreview__TimedNativeJobs=true` | `PostgresPreviewHosting.CreateTimedNativeJobContext(options)` | `direct-approval`, `direct-approval-with-timed-job`, `direct-approval-with-timeout`, `direct-approval-with-timed-takeover` |
 
 Use the same context for `EfStore.CreateAsync`, `InstallPreviewRootSchemaAsync`,
 `OpenPreviewRootIngressAsync` and `OpenPreviewRootReadsAsync`. Each job profile supports one outstanding
@@ -345,7 +345,17 @@ job of its type per generated root. The timed host uses message protocol 18. The
 timed qualification keeps its own protocol 9. Provision a dedicated database for each format. Workbench
 checks the installed format before registering an owner. Run one Workbench process at a time against
 the preview database. Existing workflow and Studio endpoints still use their current runtime.
-The restart demo stops while the approval wait is open. Takeover during a timed job and Park recovery
+The first restart in each lane stops while the approval wait is open. Run the active-job takeover on its own:
+
+```bash
+PG_PREVIEW_PROFILE=takeover bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release
+```
+
+This lane starts `direct-approval-with-timed-takeover` and exits the second Workbench process after its
+timed callback enters, with the ticket and deadline still present. A third process takes the partition
+at a higher epoch and records one timeout using the unchanged deadline. The Native workflow catches
+it and finishes. Replay of the job-starting approval leaves the final checkpoint and journal unchanged.
+This covers abrupt exit and the deadline outcome. Graceful shutdown with an active job and Park recovery
 retain their separate qualification.
 
 ### Standalone CLI
