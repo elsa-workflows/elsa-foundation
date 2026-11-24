@@ -39,6 +39,7 @@ Modules should stay opt-in. A shell composes only the capabilities it needs, and
 ## Start here
 
 - The process entry point is [`Essentials/apps/Elsa.Workbench/Program.cs`](Essentials/apps/Elsa.Workbench/Program.cs); which features it composes is decided by [`Essentials/apps/Elsa.Workbench/shells.json`](Essentials/apps/Elsa.Workbench/shells.json).
+- Three hosts live under `apps/`: `Elsa.Foundation.Host` compiles in no feature and takes every one from a Nuplane feed, [`Elsa.Essentials.Host`](apps/Elsa.Essentials.Host/README.md) compiles in a curated set of workflow essentials, and `Elsa.Workbench` compiles in everything under development for testing it.
 - [How a workflow executes](docs/how-a-workflow-executes.md) traces one request from that entry point to a durable checkpoint, file by file.
 - [AGENTS.md](AGENTS.md) is the provider-neutral entrypoint for AI agents and engineers.
 - [docs/README.md](docs/README.md) routes to glossary, skills, maps, reports, and architecture orientation.

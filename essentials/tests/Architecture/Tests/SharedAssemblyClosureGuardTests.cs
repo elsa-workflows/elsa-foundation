@@ -73,6 +73,10 @@ public sealed class SharedAssemblyClosureGuardTests
         Assert.NotEmpty(Examined(foundationHost));
         Assert.Equal(foundationHost.Where(ProjectGraph.IsElsa), Examined(foundationHost));
 
+        // The Essentials host compiles in its curated features but shares exactly what Elsa.Foundation.Host shares, so an add-on
+        // package from the feed binds the same host contracts on either host.
+        Assert.Equal(foundationHost, SharedAssemblies(ReadNuplane("Elsa.Essentials.Host")));
+
         // The edge behind the original bug, resolved from the real csproj files.
         Assert.Contains("Elsa.Events.Core", ElsaReferences["Elsa.Serialization.Core"]);
     }
