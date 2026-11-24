@@ -6,6 +6,8 @@ using Kernel.EntityFramework;
 using Kernel.Native.Preview;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 using PublicActor = Kernel.WorkflowActor.WorkflowActor;
 
@@ -34,6 +36,7 @@ internal static class PostgresRootRetentionChecks
         await cold.CreateAsync(1);
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         await admission.InstallAsync(stop);
+        var cursor = await admission.OpenJournalCursorAsync(stop);
         var reads = await cold.OpenPreviewRootReadsAsync(pageSize: 2, cancellationToken: stop);
         var blue = ContractScopes.Bind("retention-blue");
         var red = ContractScopes.Bind("retention-red");
@@ -53,8 +56,8 @@ internal static class PostgresRootRetentionChecks
         var running = await Start(blue, "running", Wait);
         var otherTenant = await Start(red, "expired", Expiring);
 
-        var actorType = new PublicActor([new PostgresRootThenDeleteChecks.SeededReceipt(new NativeExecutionModel(registry),
-            reference => reference == protectedActor)]);
+        var native = new NativeExecutionModel(registry);
+        var actorType = new PublicActor([new PostgresRootThenDeleteChecks.SeededReceipt(native, reference => reference == protectedActor)]);
         var extended = false;
         const int expiryMilliseconds = 25;
         TimeSpan? Window(Contract.ActorHeader header) => header.Tenant != blue.Tenant ? null
@@ -170,23 +173,29 @@ internal static class PostgresRootRetentionChecks
 
         async Task CheckProjectedCandidates(long endedBefore)
         {
-            await using var db = Open();
-            // Quiesce owners, then remove the former owner-state and journal lookup paths for these readers.
-            await db.Database.ExecuteSqlRawAsync("""
-                ALTER TABLE "Instances" RENAME COLUMN "State" TO "FixtureOwnerState";
-                ALTER TABLE "Journal" RENAME TO "FixtureJournalRows";
-                """, stop);
             try
             {
+                // The real checkpoint reader first pins the journal's schema. Keep that prerequisite
+                // until the missing checkpoint columns have caused the real read to fail.
+                await SetOwnerReadPaths(hideCheckpoint: true, hideJournal: false, stop);
+                await RequireOwnerReadFailure(() => cold.ReadFirstRootAsync(blue.Tenant, expired.Id, stop),
+                    PostgresErrorCodes.UndefinedColumn, "the real owner checkpoint lookup fails while state, header and terminal columns are unavailable");
+                await SetOwnerReadPaths(hideCheckpoint: true, hideJournal: true, stop);
+                await RequireOwnerReadFailure(() => cold.ReadJournalOfAsync(0, expiredBefore.Actor.Id, 0, stop).AsTask(),
+                    PostgresErrorCodes.UndefinedTable, "the real owner journal lookup fails while the journal relation is unavailable");
+
                 var query = new Contract.ActorQuery(Status: Contract.ActorStatus.Finished, EndedBefore: endedBefore,
                     Labels: new Dictionary<string, string> { ["definition"] = Expiring });
                 var list = await runtime.ListAsync(blue, query, cancellationToken: stop);
                 var point = await reads.GetAsync(blue, expired, stop);
+                var terminalAt = expiredBefore.TerminalAt!.Value;
+                var terminalRevision = expiredBefore.TerminalRevision!.Value;
                 Check(list is { Items: [var view], Next: null } && point is not null && view.Header.Ref == expired &&
                     view.Header.Type == PublicActor.ActorType && view.Header.Labels["definition"] == Expiring &&
-                    view.Header.EndedAt == expiredBefore.TerminalAt && point.Header.EndedAt == view.Header.EndedAt &&
-                    view.Selection is { Length: > 0 } && view.AsOf == list.AsOf,
-                    "the public workflow list and point read still return the definition, end time and exact selection without owner state or journal");
+                    view.Header.EndedAt == terminalAt && point.Header.EndedAt == terminalAt && view.AsOf == list.AsOf &&
+                    PostgresRootSelection.MatchesTerminal(cursor, view.Selection, blue.Tenant, expired.Id, terminalRevision, terminalAt) &&
+                    PostgresRootSelection.MatchesTerminal(cursor, point.Selection, blue.Tenant, expired.Id, terminalRevision, terminalAt),
+                    "public list and point reads return the definition, end time and exact terminal selection from the projection");
                 Check((await runtime.ListAsync(blue, query with
                     { Labels = new Dictionary<string, string> { ["definition"] = "missing" } }, cancellationToken: stop)).Items.Count == 0 &&
                     await reads.GetAsync(blue, otherTenant, stop) is null,
@@ -204,7 +213,8 @@ internal static class PostgresRootRetentionChecks
                 var workflow = metadata.RootElement;
                 Check(workflow.GetProperty("Model").GetString() == NativeExecutionModel.ModelKey &&
                     workflow.GetProperty("Definition").GetString() == Wait && !workflow.GetProperty("Ephemeral").GetBoolean() &&
-                    workflow.GetProperty("Version").GetInt32().ToString(CultureInfo.InvariantCulture) == current.Labels["version"],
+                    workflow.GetProperty("Version").GetInt32() == native.StateVersion &&
+                    current.Labels["version"] == native.StateVersion.ToString(CultureInfo.InvariantCulture),
                     "the projected running header carries the model, definition, state version and persistence mode used by migration selection");
 
                 var candidates = new HashSet<Contract.ActorRef>();
@@ -218,15 +228,69 @@ internal static class PostgresRootRetentionChecks
                 do { from = (await planning.RunAsync(blue, from, stop)).Next; }
                 while (from is not null);
                 Check(candidates.SetEquals([expired, later, protectedActor]),
-                    "the retention pass derives its exact candidates from projected definitions and end times while owner state and journal are absent");
+                    "the retention pass derives its exact candidates from projected definitions and end times while the owner lookups are unavailable");
             }
             finally
             {
-                await db.Database.ExecuteSqlRawAsync("""
-                    ALTER TABLE "Instances" RENAME COLUMN "FixtureOwnerState" TO "State";
-                    ALTER TABLE "FixtureJournalRows" RENAME TO "Journal";
-                    """, CancellationToken.None);
+                using var restore = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                await SetOwnerReadPaths(hideCheckpoint: false, hideJournal: false, restore.Token);
             }
+        }
+
+        async Task SetOwnerReadPaths(bool hideCheckpoint, bool hideJournal, CancellationToken token)
+        {
+            // Keep Instances and its triggers visible to the projection's catalog readiness query.
+            string[] columns = ["State", "FoundationStateWire", "StateVersion", "FoundationHeader", "FoundationTenant",
+                "FoundationReference", "FoundationTerminalAt", "FoundationTerminalRevision", "Status", "Revision", "Retired"];
+            await using var db = Open();
+            await using var transaction = await db.Database.BeginTransactionAsync(token);
+            var journalHidden = await db.Database.SqlQueryRaw<bool>("""
+                SELECT to_regclass('"FixtureJournalRows"') IS NOT NULL AS "Value"
+                """).SingleAsync(token);
+            var checkpointHidden = await db.Database.SqlQueryRaw<bool>("""
+                SELECT NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute
+                    WHERE attrelid = to_regclass('"Instances"') AND NOT attisdropped AND attname = 'FoundationStateWire') AS "Value"
+                """).SingleAsync(token);
+            if (checkpointHidden != hideCheckpoint)
+            {
+                // All identifiers are fixed fixture names. Commit these renames together for readers on other connections.
+                await using var ddl = db.Database.GetDbConnection().CreateCommand();
+                ddl.Transaction = transaction.GetDbTransaction();
+                var renames = columns.Select(column => hideCheckpoint
+                    ? $"ALTER TABLE \"Instances\" RENAME COLUMN \"{column}\" TO \"Fixture{column}\""
+                    : $"ALTER TABLE \"Instances\" RENAME COLUMN \"Fixture{column}\" TO \"{column}\"");
+                ddl.CommandText = string.Join(";\n", renames);
+                await ddl.ExecuteNonQueryAsync(token);
+            }
+            if (journalHidden != hideJournal)
+                await db.Database.ExecuteSqlRawAsync(hideJournal
+                    ? "ALTER TABLE \"Journal\" RENAME TO \"FixtureJournalRows\""
+                    : "ALTER TABLE \"FixtureJournalRows\" RENAME TO \"Journal\"", token);
+
+            var expectedColumns = hideCheckpoint ? 0 : columns.Length;
+            var valid = await db.Database.SqlQuery<bool>($"""
+                SELECT (to_regclass('"Journal"') IS NULL) = {hideJournal}
+                   AND (to_regclass('"FixtureJournalRows"') IS NOT NULL) = {hideJournal}
+                   AND (SELECT count(*) FROM pg_catalog.pg_attribute
+                        WHERE attrelid = to_regclass('"Instances"') AND NOT attisdropped
+                          AND attname::text = ANY({columns})) = {expectedColumns} AS "Value"
+                """).SingleAsync(token);
+            await transaction.CommitAsync(token);
+            Check(valid, hideCheckpoint
+                ? hideJournal ? "the canonical owner state wire, header, terminal and journal lookup names are absent"
+                    : "the canonical owner state wire, header and terminal lookup names are absent"
+                : "the canonical owner checkpoint and journal lookup names are restored");
+        }
+
+        static async Task RequireOwnerReadFailure(Func<Task> read, string sqlState, string description)
+        {
+            try { await read(); }
+            catch (PostgresException error) when (error.SqlState == sqlState)
+            {
+                Console.WriteLine($"ok {description}");
+                return;
+            }
+            throw new InvalidOperationException(description);
         }
 
         async Task InterruptAfterAdmission()
