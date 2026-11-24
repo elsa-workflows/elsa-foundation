@@ -182,12 +182,13 @@ cannot produce with the same meaning fails the template with the output named (F
 - [ ] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` whose suites are neither JOIN-blocked,
   value-capture-blocked nor issue-blocked; the rest stay `unclassified` with the reason, and T043 completes SC-003.
 - [ ] T038 [US3] Once spec 1207 is implemented on the initiative branch (its status Implemented), merge the initiative branch into this branch and
-  make the qualifying run: the 41 suites of the acceptance set on a fresh Workbench from that head; record it as the non-JOIN milestone run
-  (FR-020, SC-004). Before recording it, confirm with `git diff` that `JTest/tests/**` differs from the T022 state
+  make the qualifying run: the 41 suites of the acceptance set on a fresh Workbench from that head. Record it as the non-JOIN milestone run
+  (FR-020, SC-004) only when every acceptance-set suite that SC-004 does not exempt passed in it; otherwise record it
+  as a qualifying run and repeat T038 once the blocking issues or prerequisites are closed. Before recording it, confirm with `git diff` that `JTest/tests/**` differs from the T022 state
   only by approved T029 rows, that `JTest/templates/` differs only by approved rows too, and rerun the changed suites
   on 3.6.3 (SC-002).
 
-**Checkpoint**: non-JOIN milestone. The specification stays Draft/in progress while J-tasks are open.
+**Checkpoint**: non-JOIN milestone, once T038 records it. The specification stays Draft/in progress while J-tasks are open.
 
 ---
 
