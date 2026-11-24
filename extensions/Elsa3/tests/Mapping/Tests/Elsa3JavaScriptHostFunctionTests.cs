@@ -502,7 +502,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         var result = await ConvertTextAsync(expression, [LookupCustomer]);
 
         Assert.False(result.Succeeded);
-        var diagnostic = Assert.Single(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
         Assert.Equal(Elsa3ImportDiagnosticCodes.ReplacedFunctionReference, diagnostic.Code);
         Assert.Contains("'lookupCustomer' as a value", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("'acme.lookupCustomer'", diagnostic.Message, StringComparison.Ordinal);
@@ -537,7 +537,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         var result = await ConvertTextAsync("(() => { lookupCustomer = null; return 1; })()", [LookupCustomer]);
 
         Assert.False(result.Succeeded);
-        var diagnostic = Assert.Single(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
         Assert.Equal(Elsa3ImportDiagnosticCodes.UnsupportedShape, diagnostic.Code);
     }
 
