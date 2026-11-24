@@ -6,7 +6,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Statecharts.Native/Kernel.Statecharts.Native.csproj" />
-    <ProjectReference Include="../../sim/Kernel.Sim.csproj" />
+    <ProjectReference Include="../../../../essentials/tests/ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj" />
     <ProjectReference Include="../../../../essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
   </ItemGroup>
 </Project>

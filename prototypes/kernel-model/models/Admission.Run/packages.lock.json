@@ -65,7 +65,7 @@
           "Kernel.Workflows": "[1.0.0, )"
         }
       },
-      "kernel.sim": {
+      "Kernel.Sim": {
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",

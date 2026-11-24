@@ -29,7 +29,7 @@ Every claim says how it is known: **run** means a command below produced it; **r
 | `models/Native` | The authoring surface, the activities (the Flowchart hosts the graph engine), the model (`NativeModel.cs`), the live channel and HTTP host (`Live.cs`) |
 | `models/Graph`, `models/Graph.Tests` | The graph engine (main's Flowchart engine) and main's conformance corpus against it (`dotnet test models/Graph.Tests -c Release`) |
 | `../../essentials/tests/ActorFoundation/Native/Run` | Smoke tests of every activity and the HTTP cases, the cost measurement, the in-memory cost |
-| `sim/NativeWorkflows.cs`, `sim/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N7 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
+| `../../essentials/tests/ActorFoundation/Simulation/NativeWorkflows.cs`, `../../essentials/tests/ActorFoundation/Simulation/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N7 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
 
 ```
 dotnet build ../../essentials/tests/ActorFoundation/Native/Run -c Release
@@ -37,11 +37,11 @@ dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Ker
 dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll cost sqlite
 dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll cost postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel;Database=kernel_native"
 dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory 3000
-dotnet build sim -c Release
-dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 20000
-dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 5000 --from 500001 --actions 1000
-dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native-mutations --seeds 20000
-dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --native-flaw InFlightInMemory --seed 1     # replay one, shrunk
+dotnet build ../../essentials/tests/ActorFoundation/Simulation -c Release
+dotnet ../../essentials/tests/ActorFoundation/Simulation/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 20000
+dotnet ../../essentials/tests/ActorFoundation/Simulation/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 5000 --from 500001 --actions 1000
+dotnet ../../essentials/tests/ActorFoundation/Simulation/bin/Release/net10.0/Kernel.Sim.dll --native-mutations --seeds 20000
+dotnet ../../essentials/tests/ActorFoundation/Simulation/bin/Release/net10.0/Kernel.Sim.dll --native --native-flaw InFlightInMemory --seed 1     # replay one, shrunk
 ```
 
 Without `--native` the simulation runs exactly as before; its seeds replay unchanged (run: 20,000 seeds pass).
@@ -392,7 +392,7 @@ seen (finding F3), and the turn that finishes. A direct resume needs no subscrip
 cannot know that it will come that way.
 
 Size and the model's own work, in memory (run: `memory 3000`, the in-memory store, one worker; the toy sequence of
-`sim/Models.cs` is the kernel without a model's work):
+`../../essentials/tests/ActorFoundation/Simulation/Models.cs` is the kernel without a model's work):
 
 | Run | Ephemeral: allocated, time per run | State bytes per commit, Balanced (Durable) |
 |---|---|---:|
@@ -429,7 +429,7 @@ Checks:
 | N5 | Final variables and outputs match a run without faults | Every finished native instance (children too) has the variables of the same definition and input run alone, without faults; everything started from outside finished or was cancelled by request |
 | N7 (round 5 C) | An outbound effect carries a stable effect key; one key, one logical activation; a key never leaves in two turns that both landed | Four halves. At the host's transport (`OnOutbound`): the HTTP request carries the key in `Idempotency-Key`, the email as `<key@domain>` in its `Message-ID`. At the same place, the lost-turn half: an activation is named by its node and the content it alone determines (the mix's rule: bodies name the iteration; `NativeWorkflows.ContentNamesActivation` lists the nodes, `hj` fires twice with one body and is out), and that name has one key in every sending, in a turn that lands or in one that is lost, so a lost turn that sent another activation's valid key is seen here and nowhere else. At the commit (`Wire.Commit`, `World.Landed`): the sendings of the turns a batch writes ride on it, and the store records them the moment the commit lands, whatever becomes of the answer on the wire (an answer that arrives late, after the owner's lease ran out and it took the partition again, gives nothing back to the pending list: the landing is recorded and the take discarded the memory the call came from; a stale refusal, from a call that outlived a take, leaves the new incarnation's pending sendings alone, since the take is the one place that discards them; `Kernel.Sim --landed-check` replays the three cases); a second sending of a key is a redelivery only while the first one's turn did not land (its commit lost, refused, or never made because its owner died), so a key that left in two turns that both landed, or twice in one, is two activations under one key, whatever the reference run says. At the end, against the fault-free reference run of the same definition and input (an oracle that takes no identity from the sending's own node, path or frame fields; it compares the key string stripped of its instance origin and attempt with the keys the reference minted on its own): the reference sends every key once, and every key an instance sent is one the reference sends. What N7 cannot see: a collision whose two sendings never both land and whose node is not in the content list (an instance that ends in memory without a write, a turn lost before its commit); a resend's content, which is not compared (the receiver keeps the first); a moved key that equals another activation's reference key when that activation never sends in the same run and its content does not name it; and nothing at all for a mix workflow whose key set depends on event order, which is a false red and is kept out of the mix. The sweep counts the same-key resends, the frame numbers a replay handed to another activation and the nodes sent from under a second iteration path; none of the counters is a gate. `n-out` (a While and a ForEach sending twice from one node beside a timer branch, and two event branches meeting at a merge that forks again to a join) puts those cases in the mix |
 
-The graph invariants of the design sketch (round 4, `sim/NativeSim.cs`: `NoteGraph`, `CheckGraphStates`). They read
+The graph invariants of the design sketch (round 4, `../../essentials/tests/ActorFoundation/Simulation/NativeSim.cs`: `NoteGraph`, `CheckGraphStates`). They read
 the native Flowchart's own journal entries, which ride in the turn's commit: `g|x` a path the step cancelled, `g|f` a
 node a join or continuation scheduled, with the sources of the arrivals it consumed, live and dead (taken from the
 engine's unpruned state, `FlowchartStep.Live`), `g|c` a completion with the paths still live. They also read the

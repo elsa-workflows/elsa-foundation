@@ -21,7 +21,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `../../essentials/src/ActorFoundation/BuiltIn/Runtime` | Layer 1, the actor runtime: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal, and `PartitionRuntime`, the built-in runtime (balancer, activations, one pass at a time per partition); addresses, flaws, the owner's defaults |
 | `src/Kernel.Durable` | Layer 2, durable actors: `Worker` (a partition's activation: inbox, fenced commit, timers, background jobs, events, poison, journal), `DurableHost`, the seam to layer 3 (`IActorType`, `DurableTurn`), the store contract, the in-memory store, the projector, reply addresses for live output |
 | `src/Kernel.Workflows` | Layer 3, actor types: `WorkflowInstance` (status, definition, parent and children, suspend, resume, terminate, rebind, delete, the history envelope) and the execution-model contract (`IExecutionModel`, `ITurn`) |
-| `sim` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
+| `../../essentials/tests/ActorFoundation/Simulation` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
 | `models/Graph` | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
 | `models/Graph.Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
 | `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
@@ -51,7 +51,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 One project at a time (they share `obj/` folders through project references):
 
 ```
-for p in sim ../../essentials/tests/ActorFoundation/Native/Run ef/Kernel.Ef.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
+for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ef/Kernel.Ef.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
@@ -60,7 +60,7 @@ dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 From `prototypes/kernel-model`, run:
 
 ```bash
-dotnet restore sim --locked-mode
+dotnet restore ../../essentials/tests/ActorFoundation/Simulation --locked-mode
 dotnet run -c Release --no-restore --project sim -- --park-operator-demo
 ```
 
@@ -810,7 +810,7 @@ Foundation use across an owned set and the remaining release-profile acceptance 
 ## The simulation
 
 ```
-SIM="dotnet sim/bin/Release/net10.0/Kernel.Sim.dll"
+SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/bin/Release/net10.0/Kernel.Sim.dll"
 $SIM --seeds 200000                                  # 200,000 seeds of 300 actions each
 $SIM --seeds 20000 --actions 1000                    # 20,000 seeds of 1,000 actions
 $SIM --seeds 200000 --count 4096                     # K1: the store's virtual partitions, 1,024 (the default) or 4,096
@@ -895,7 +895,7 @@ obligation held, and the recorded parent's terminate which starts the cascade. I
 two-page cascades across takeover, an exact registry hand-off, and root retirement. Park drains, ThenDelete,
 and physical-provider qualification have separate cases.
 
-The focused [held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
+The focused [held request cases](../../essentials/tests/ActorFoundation/Simulation/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
 response after takeover and an input that stays durable across local reset. The seeded actor workload
 uses already-started counter receivers and one state version. The other legacy actor and transport
 mixes continue to use their separate simulation and case suites.

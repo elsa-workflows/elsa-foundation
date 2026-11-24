@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Kernel.Sim</RootNamespace>
+    <AssemblyName>Kernel.Sim</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsPackable>false</IsPackable>
+    <DefineConstants>$(DefineConstants);NATIVE_FRIEND</DefineConstants>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
+    <Using Include="Elsa.ActorFoundation.TestSupport" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Compile Include="../Native/Run/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
+    <ProjectReference Include="../../../../prototypes/kernel-model/src/Kernel.Workflows/Kernel.Workflows.csproj" />
+    <ProjectReference Include="../../../../prototypes/kernel-model/src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
+    <ProjectReference Include="../../../../prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj" />
+    <ProjectReference Include="../../../../prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
+    <ProjectReference Include="../../../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
+    <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+  </ItemGroup>
+</Project>
