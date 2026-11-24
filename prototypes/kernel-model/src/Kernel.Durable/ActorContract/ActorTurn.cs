@@ -4,7 +4,7 @@ using Kernel.Runtime;
 using Contract = Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
 
-namespace Kernel.Foundation.InMemory;
+namespace Kernel.Durable;
 
 internal sealed partial class ActorAdapter
 {

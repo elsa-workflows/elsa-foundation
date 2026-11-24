@@ -1,6 +1,5 @@
 using Kernel.Durable;
 using Kernel.EntityFramework;
-using Kernel.Foundation.InMemory;
 using Kernel.Runtime;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;

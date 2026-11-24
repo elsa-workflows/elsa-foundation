@@ -499,7 +499,8 @@
       "kernel.durable": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )"
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
       "kernel.entityframework": {
@@ -511,13 +512,6 @@
           "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.15, )",
           "MySql.EntityFrameworkCore": "[10.0.12, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
-        }
-      },
-      "kernel.foundation.inmemory": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
-          "Kernel.Durable": "[1.0.0, )"
         }
       }
     }

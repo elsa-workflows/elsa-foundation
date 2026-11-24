@@ -11,7 +11,7 @@ internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        if (!Durable.InMemoryStore.IsOutsideMessageId(id) || !HeaderLimits.FitsStart(target.Spec.Type, target.Spec.TypeData, target.Spec.Input))
+        if (!Durable.InMemoryStore.IsOutsideMessageId(id) || !Durable.HeaderLimits.FitsStart(target.Spec.Type, target.Spec.TypeData, target.Spec.Input))
             return new(new Admission(AdmissionOutcome.Refused));
 
         var receipt = store.AdmitGeneratedFoundationStart(scope.Tenant, id, Start(target.Spec), options?.DueAt, options?.KeepFor, replyTo, inlineOwner);
@@ -42,7 +42,7 @@ internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        if (target.Spec is { } start ? !HeaderLimits.FitsStart(start.Type, start.TypeData, start.Input) : !IsOrdinary(kind))
+        if (target.Spec is { } start ? !Durable.HeaderLimits.FitsStart(start.Type, start.TypeData, start.Input) : !IsOrdinary(kind))
             return new(new Admission(AdmissionOutcome.Refused));
 
         var receipt = store.AdmitFoundationKey(scope.Tenant, target.CallerKey, id, kind, payload,

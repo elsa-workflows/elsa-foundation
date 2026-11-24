@@ -1,6 +1,4 @@
-using Kernel.Durable;
-
-namespace Kernel.Foundation.InMemory;
+namespace Kernel.Durable;
 
 // A qualification seam for generated roots. The public model contract and lifetime rules are separate work.
 internal interface IRootValueTurn

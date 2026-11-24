@@ -11,6 +11,8 @@ internal sealed class InMemoryIngress(Durable.InMemoryStore store, Durable.Reque
     private readonly EventIngress _event = new(store, requests, node);
     private readonly OperatorIngress _operator = new(store, authorizeOperator);
 
+    internal Durable.IActorType CreateActorType(IActorType actor) => new Durable.ActorAdapter(store, actor);
+
     public ValueTask<Admission> SendAsync(BoundScope scope, Target target, string id, string kind, string? payload = null,
         AddOptions? options = null, CancellationToken cancellationToken = default) =>
         target is Target.Event events
