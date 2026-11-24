@@ -24,6 +24,11 @@ Raw output of every run is under `.out/` (not committed).
 The table records the software versions used for the historical runs below. Current builds of the
 relational provider use the [repository's central package versions](../../Directory.Packages.props).
 
+The current SQL Server fixture uses SQL authentication. With SqlClient 7, an application using
+Microsoft Entra connection-string authentication modes needs the version-matched Azure extension.
+Qualify that mode separately when integrating the SQL Server provider into an application.
+[Microsoft SqlClient connection-string guidance](https://learn.microsoft.com/en-us/sql/connect/ado-net/connection-string-syntax?view=sql-server-ver17)
+
 | Engine | Image | Provider | Driver |
 |---|---|---|---|
 | PostgreSQL 17 | `postgres:17` | Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 | Npgsql 10.0.3 |
