@@ -12,7 +12,7 @@
     <!-- The toy execution models of the simulation drive the stress test and the cost runs. -->
     <Compile Include="../../../../../prototypes/kernel-model/models/Recreate.Run/MetadataModels.cs" Link="MetadataModels.cs" />
     <Compile Include="../../Simulation/Models.cs" Link="Models.cs" />
-    <ProjectReference Include="../../../../../prototypes/kernel-model/src/Kernel.Workflows/Kernel.Workflows.csproj" />
+    <ProjectReference Include="../../Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />

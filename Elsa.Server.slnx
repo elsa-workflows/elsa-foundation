@@ -267,6 +267,9 @@
   <Folder Name="/prototypes/kernel-model/runtime/">
     <Project Path="prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj" />
   </Folder>
+  <Folder Name="/essentials/tests/ActorFoundation/Legacy/">
+    <Project Path="essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
+  </Folder>
   <Folder Name="/essentials/tests/ActorFoundation/Store/">
     <Project Path="essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
     <Project Path="essentials/tests/ActorFoundation/Store/EntityFramework/Elsa.ActorFoundation.Store.EntityFramework.csproj" />
@@ -278,7 +281,6 @@
     <Project Path="prototypes/kernel-model/src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
     <Project Path="prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <Project Path="prototypes/kernel-model/src/Kernel.Durable/Kernel.Durable.csproj" />
-    <Project Path="prototypes/kernel-model/src/Kernel.Workflows/Kernel.Workflows.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Activities/">
     <Project Path="essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />

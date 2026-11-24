@@ -21,7 +21,7 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
-      "kernel.workflows": {
+      "Kernel.Workflows": {
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",

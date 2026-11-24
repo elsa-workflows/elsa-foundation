@@ -442,7 +442,7 @@
           "System.Security.Cryptography.Pkcs": "[9.0.21, )"
         }
       },
-      "kernel.workflows": {
+      "Kernel.Workflows": {
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",

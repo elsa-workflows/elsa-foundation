@@ -48,7 +48,7 @@ native model.
 |---|---|---|
 | 1. Actor runtime | Placement of scopes on nodes, activation and deactivation, one pass at a time per scope, wake-ups between nodes. No guarantee about messages or state | `../../essentials/src/ActorFoundation/BuiltIn/Runtime`: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal (`IWakeSignal`, `InProcessWakeSignal`), membership (`IMembership`, `Cluster`), and `PartitionRuntime`, the built-in runtime (fair share from `node` heartbeats, activations, passes). Also `InstanceRef`, `Flaw` and `Defaults` |
 | 2. Durable actors | The durable inbox, a turn's state and messages committed atomically, the fence, timers, background jobs, events, poison, the journal, live output | `src/Kernel.Durable`: `Worker` (one partition's `IScopeActivation`), `DurableHost` (the `IScopeHost`), the seam to layer 3 (`IActorType`, `TurnInput`, `TurnOutcome`, `Delivery`, `DurableTurn`, `ITurnServices`), `IKernelStore` and `InMemoryStore`, `Projector`, `Requests` and `IReplyTransport`, messages and kinds |
-| 3. Actor types | What an actor does with its messages | `src/Kernel.Workflows`: `WorkflowInstance`, the one actor type (definition and version, status, parent and children, cancel of a tree, suspend, resume, terminate, rebind, delete, the history envelope), and the execution-model contract it runs (`IExecutionModel`, `ITurn`). Models: the simulation's toy models, `NativeModel` (its Flowchart runs on the graph engine of `models/Graph`, main's Flowchart engine) |
+| 3. Actor types | What an actor does with its messages | `../../essentials/tests/ActorFoundation/Legacy/Workflows`: `WorkflowInstance`, the one actor type (definition and version, status, parent and children, cancel of a tree, suspend, resume, terminate, rebind, delete, the history envelope), and the execution-model contract it runs (`IExecutionModel`, `ITurn`). Models: the simulation's toy models, `NativeModel` (its Flowchart runs on the graph engine of `models/Graph`, main's Flowchart engine) |
 
 Dependencies point downward only: `Kernel.Workflows` references `Kernel.Durable`, which references `Kernel.Runtime`,
 which references nothing. Where a clean cut would have changed behaviour or round trips, the code keeps what it had and
@@ -272,7 +272,7 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
   This is an observed-history hint: false does not prove that another owner did not execute it (F-N6, #4362).
 - **Side effects run at least once; the kernel makes none of them exactly once** (decision 1; round 5 C). A crash
   between an effect and its commit, a lost turn result, a redelivery or a takeover runs the activity again. What the
-  kernel gives the activity instead is a **stable effect key** (`EffectKey.For`, `src/Kernel.Workflows/EffectKey.cs`):
+  kernel gives the activity instead is a **stable effect key** (`EffectKey.For`, `../../essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs`):
   **`{instance origin}/{node}/{iteration path}/{attempt}`**, the owner's shape of 16 November, from committed facts
   only. The instance id is fixed at creation and the key never reads partitions or positions; the node is the activity's
   stable id in the definition; the iteration path is the iteration numbers of the repeating scopes that enclose the
@@ -355,7 +355,7 @@ like a suspended one (F14).
 
 ## The execution model contract
 
-Layer 3's (`src/Kernel.Workflows/Contracts.cs`). The workflow instance runs a model for everything it does not own
+Layer 3's (`../../essentials/tests/ActorFoundation/Legacy/Workflows/Contracts.cs`). The workflow instance runs a model for everything it does not own
 itself; what is durable in a turn (sends, jobs, holds, waits, live output) it hands to layer 2's `DurableTurn`.
 
 ```csharp

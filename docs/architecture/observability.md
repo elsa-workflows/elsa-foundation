@@ -30,7 +30,7 @@ work extends the owner's 13 November Park decision; the owner adopted the extens
 - **No metric instruments.** The harnesses count commands, round trips, takes, resets and deadlocks
   ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md), [ENGINES.md](../../prototypes/kernel-model/ENGINES.md)),
   which shows where each number comes from.
-- **Park**, in `WorkflowInstance.Park` ([WorkflowInstance.cs](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs);
+- **Park**, in `WorkflowInstance.Park` ([WorkflowInstance.cs](../../essentials/tests/ActorFoundation/Legacy/Workflows/WorkflowInstance.cs);
   [DESIGN.md](../../prototypes/kernel-model/DESIGN.md), "Park"). Unrelated jobs already entered keep their tickets and
   completion path (`RemainingJobs`). A timer not yet due stays a row; when it comes due it is a message to a faulted
   instance and is dropped.
