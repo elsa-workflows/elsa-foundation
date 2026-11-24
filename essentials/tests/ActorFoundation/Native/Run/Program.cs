@@ -7,10 +7,10 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 // Usage:
-//   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll smoke
-//   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll cost sqlite
-//   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll cost postgres "<connection string>"
-//   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
+//   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll smoke
+//   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll cost sqlite
+//   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll cost postgres "<connection string>"
+//   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
 if (args is ["pg-root-operators", "admit"])
@@ -230,7 +230,7 @@ if (args is ["memory", ..]) return await Memory.RunAsync(args.Length > 1 ? int.P
 Console.Error.WriteLine("smoke | variants <mode> | replay-variants | join-variants <mode> | join-replay-variants | cost sqlite | cost postgres <connection> | pg-write-budget <owned|ef> <checked|in-batch> [--require-budget] | memory [runs] | pg-runtime-cluster [partitions] [wake]");
 return 2;
 
-static class Cost
+internal static class Cost
 {
     public static async Task<int> RunAsync(bool postgres, string connection, bool fenceInBatch)
     {
@@ -389,7 +389,7 @@ static class Cost
 }
 
 /// <summary>The model's own work, in memory: no database, one worker, the in-memory store.</summary>
-static class Memory
+internal static class Memory
 {
     public static async Task<int> RunAsync(int runs)
     {
@@ -447,7 +447,7 @@ static class Memory
     }
 }
 
-sealed class Probe(Dictionary<string, JsonNode?> variables) : IScope
+internal sealed class Probe(Dictionary<string, JsonNode?> variables) : IScope
 {
     public JsonNode? Variable(string name) => variables.GetValueOrDefault(name);
     public JsonNode? Result(string node) => null;

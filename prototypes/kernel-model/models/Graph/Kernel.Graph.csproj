@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
   <!-- The graph engine: main's Flowchart engine (Essentials/src/Activities/Flowchart), lifted out of the Elsa runtime.
        No reference to the kernel, to Elsa or to any package: the native model and tests are its hosts. -->
   <PropertyGroup>

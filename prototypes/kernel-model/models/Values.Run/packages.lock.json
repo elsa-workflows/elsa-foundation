@@ -523,7 +523,7 @@
           "Kernel.Workflows": "[1.0.0, )"
         }
       },
-      "kernel.native.run": {
+      "Kernel.Native.Run": {
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",

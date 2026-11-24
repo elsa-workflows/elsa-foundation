@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
   <PropertyGroup><KernelContractOnly>true</KernelContractOnly></PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Statecharts.Run" />

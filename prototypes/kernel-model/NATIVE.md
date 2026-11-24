@@ -28,15 +28,15 @@ Every claim says how it is known: **run** means a command below produced it; **r
 |---|---|
 | `models/Native` | The authoring surface, the activities (the Flowchart hosts the graph engine), the model (`NativeModel.cs`), the live channel and HTTP host (`Live.cs`) |
 | `models/Graph`, `models/Graph.Tests` | The graph engine (main's Flowchart engine) and main's conformance corpus against it (`dotnet test models/Graph.Tests -c Release`) |
-| `models/Native.Run` | Smoke tests of every activity and the HTTP cases, the cost measurement, the in-memory cost |
+| `../../essentials/tests/ActorFoundation/Native/Run` | Smoke tests of every activity and the HTTP cases, the cost measurement, the in-memory cost |
 | `sim/NativeWorkflows.cs`, `sim/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N7 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
 
 ```
-dotnet build models/Native.Run -c Release
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll smoke
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll cost sqlite
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll cost postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel;Database=kernel_native"
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory 3000
+dotnet build ../../essentials/tests/ActorFoundation/Native/Run -c Release
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll smoke
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll cost sqlite
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll cost postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel;Database=kernel_native"
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory 3000
 dotnet build sim -c Release
 dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 20000
 dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 5000 --from 500001 --actions 1000
@@ -93,7 +93,7 @@ writes its ticket and committed with it.
 Why the frame number is not in the key (the owner's reason): in Balanced and Ephemeral the frame numbers are minted
 from the committed `Next` in agenda order, and a replay over a longer inbox (a timer that became due meanwhile) orders
 the agenda differently, so a frame number can land on another activity, or on another iteration of the same one
-(the alias case of `models/Native.Run/AliasChecks.cs`: a While body sending twice beside a sibling branch with Sets;
+(the alias case of `../../essentials/tests/ActorFoundation/Native/Run/AliasChecks.cs`: a While body sending twice beside a sibling branch with Sets;
 with the frame in the key, iteration 2 of the lost turn and iteration 1 of the replay shared one key). The iteration
 path is independent of agenda order: one logical activation keeps one key across the lost turn and its replay, on
 whichever owner, and two activations never share one. A renumbered frame therefore changes nothing: the key never named
@@ -267,7 +267,7 @@ Use a fresh dedicated PostgreSQL database for each fence mode and set `KERNEL_PR
 `prototypes/kernel-model`, run:
 
 ```sh
-dotnet run -c Release --project models/Native.Run -- pg-root-held-direct checked
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-root-held-direct checked
 ```
 
 Use `in-batch` for the other owned fence. Append `after-deadline` to hold the emitted reply in the
@@ -290,7 +290,7 @@ Both owners run in one process, with an orderly handover and an in-process reply
 With `KERNEL_PREVIEW_POSTGRES` pointing to a fresh dedicated database, run from `prototypes/kernel-model`:
 
 ```sh
-dotnet run -c Release --project models/Native.Run -- pg-http-preview in-batch timely
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-http-preview in-batch timely
 ```
 
 The Native runner starts an actual loopback Kestrel host on a dynamic port and holds a real HTTP
@@ -322,7 +322,7 @@ preview.
 Use the same setup with a fresh PostgreSQL database per run:
 
 ```sh
-dotnet run -c Release --project models/Native.Run -- pg-http-owner-loss in-batch before
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-http-owner-loss in-batch before
 ```
 
 A Kestrel receiver keeps the original connection open while a separate owner process waits with the

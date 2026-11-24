@@ -252,6 +252,20 @@
   <Folder Name="/essentials/tests/ActorFoundation/">
     <Project Path="essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
   </Folder>
+  <Folder Name="/essentials/tests/ActorFoundation/Native/">
+    <Project Path="essentials/tests/ActorFoundation/Native/Run/Elsa.ActorFoundation.Native.Run.csproj" />
+  </Folder>
+  <Folder Name="/prototypes/kernel-model/models/">
+    <Project Path="prototypes/kernel-model/models/Graph/Kernel.Graph.csproj" />
+    <Project Path="prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
+    <Project Path="prototypes/kernel-model/models/Native.Activities/Kernel.Native.Activities.csproj" />
+    <Project Path="prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj" />
+    <Project Path="prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
+    <Project Path="prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj" />
+  </Folder>
+  <Folder Name="/prototypes/kernel-model/runtime/">
+    <Project Path="prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj" />
+  </Folder>
   <Folder Name="/essentials/tests/ActorFoundation/Store/">
     <Project Path="essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
     <Project Path="essentials/tests/ActorFoundation/Store/EntityFramework/Elsa.ActorFoundation.Store.EntityFramework.csproj" />
@@ -260,6 +274,8 @@
     <Project Path="prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
   </Folder>
   <Folder Name="/prototypes/kernel-model/src/">
+    <Project Path="prototypes/kernel-model/src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
+    <Project Path="prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <Project Path="prototypes/kernel-model/src/Kernel.Durable/Kernel.Durable.csproj" />
     <Project Path="prototypes/kernel-model/src/Kernel.Workflows/Kernel.Workflows.csproj" />
   </Folder>

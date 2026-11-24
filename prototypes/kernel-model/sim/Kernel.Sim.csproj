@@ -11,7 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <Compile Include="../models/Native.Run/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
+    <Compile Include="../../../essentials/tests/ActorFoundation/Native/Run/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
     <ProjectReference Include="../src/Kernel.Workflows/Kernel.Workflows.csproj" />
     <ProjectReference Include="../src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
     <ProjectReference Include="../models/Native.Legacy/Kernel.Native.Legacy.csproj" />
