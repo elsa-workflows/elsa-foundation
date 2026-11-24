@@ -206,17 +206,29 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
 
 ## R-13 Shared OpenIddict token store (spec Q10)
 
-- **Decision**: move the Workbench's OpenIddict vendor store, `apps/Elsa.Workbench/OpenIddict/`,
-  `apps/Elsa.Workbench/OpenIddictEngines/` and the `WorkbenchOpenIddict*` registration files, into one library,
-  `essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore`,
-  next to the existing `AspNetCoreIdentity/EntityFrameworkCore` store. It exposes the four registrations the Workbench
-  calls today (vendor, store provider, migration policy, pruning) under neutral names. Both hosts call them; neither
-  composes them as a feature, so the identity feature still registers no store (Program.cs:137–140).
-- **Behaviour preserved**: the migrations move with their identifiers unchanged, so an existing Workbench store
-  migrates as before; the Workbench's tests that cover the store (`essentials/tests/Workbench/`) move or keep running
-  against the library; the S-15 run is unaffected.
-- **Admission**: the library resolves `OpenIddict.EntityFrameworkCore` and EF Core, so it is admitted in
-  `EfCoreDependencyGuardTests` the way the Workbench is today, and the Workbench's admission for those packages is
-  removed if nothing else in it needs them. Whether the library is packed follows the identity domain's other
-  EntityFrameworkCore projects.
-- **Alternatives**: copying the store into the essentials host (two copies of migrations and a store that drift).
+- **Decision**: move the Workbench's OpenIddict vendor store into one host-side library, `apps/Elsa.Essentials.OpenIddict`,
+  that both hosts reference. It holds `apps/Elsa.Workbench/OpenIddict/` (DbContext, SQLite migrations, initializer,
+  options), `apps/Elsa.Workbench/OpenIddictEngines/` (PostgreSQL and SQL Server contexts and their migrations), and the
+  `WorkbenchOpenIddict*` registration and platform-provider files, with neutral names. It exposes the four
+  registrations the Workbench calls today (vendor, store provider, migration policy, pruning). Neither host composes
+  them as a feature, so the identity feature still registers no store (Program.cs:137–140).
+- **Why `apps/` and not the Identity domain**: ADR 0073 keeps OpenIddict "a vendor-owned EF Core boundary", and
+  `OpenIddictPersistenceArchitectureTests` forbids an `EntityFrameworkCore` folder inside or beside
+  `essentials/src/Foundation/Identity/OpenIddict/` ("No EF wrapper"). A library among the hosts keeps the store
+  host-owned: it is no Elsa domain package and no Elsa contract. `Workbench_owns_the_vendor_package` changes from "the
+  Workbench references `OpenIddict.EntityFrameworkCore`" to "only host projects in `apps/` reference it"; the Workbench
+  keeps its direct reference. No ADR text changes; if the coordinator reads ADR 0073 as host-*project*-owned rather than
+  host-side, this needs an ADR 0073 note instead.
+- **Behaviour preserved**: the OpenIddict files depend only on `Elsa.Foundation.Identity.OpenIddict`,
+  `Elsa.Persistence.EntityFramework` (with tooling and resource resolution) and CShells, nothing else in the Workbench.
+  Migrations keep their identifiers; the history table is the constant `__EFMigrationsHistory_OpenIddict` and the
+  migrations assembly is the context's own, so it moves with the code and an existing Workbench store migrates as
+  before.
+- **Tests**: `essentials/tests/Modularity/ProviderTests/WorkbenchOpenIddictEngineTests.cs` and
+  `OpenIddictEngineDatabases.cs` (today through a project reference to `Elsa.Workbench.csproj`) repoint to the library;
+  `OpenIddictPersistenceArchitectureTests` is updated as above.
+- **Admission**: `EfCoreDependencyGuardTests` reads each project's full restore graph. The library, the composition
+  library and the essentials engine host each get a reviewed EF closure in `AllowedEfConsumers`; the Workbench's
+  `AllowedWorkbenchEfPackages` stays unchanged, because it still resolves the same packages through the library.
+- **Alternatives**: copying the store into the essentials host (two copies of migrations that drift); a library in the
+  Identity domain (refused by the guard and ADR 0073).

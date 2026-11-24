@@ -111,7 +111,7 @@ apps/Elsa.Essentials.Server/
 ├── Dockerfile
 └── packages.lock.json
 
-essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/   # OpenIddict token store moved from the Workbench (R-13)
+apps/Elsa.Essentials.OpenIddict/   # OpenIddict token store moved from the Workbench (R-13)
 
 Studio/src/apps/Elsa.Studio.Essentials/
 ├── Elsa.Studio.Essentials.csproj

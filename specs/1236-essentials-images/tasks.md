@@ -19,7 +19,8 @@ worktree path on Windows (MSB3030).
   both to `Elsa.Server.slnx`, register the test project as PR tier in `tools/ci/test-tiers.json`, add
   `Elsa.Essentials.Composition` and the test project to `ArchitectureGuardTests.ExpectedProjectPath` and
   `ExpectedSolutionFolder` the way `Elsa.Foundation.Host` is listed, add `Elsa.Essentials` to the host and test groupings
-  in constitution §E2.1, and run `ArchitectureGuardTests.Project_paths_match_domain_tree_convention` (R-2).
+  in constitution §E2.1, add the library's reviewed EF closure (it resolves EF through the listed features) to
+  `EfCoreDependencyGuardTests.AllowedEfConsumers`, and run `ArchitectureGuardTests.Project_paths_match_domain_tree_convention` (R-2).
 - [ ] T002 [P] Create `apps/Elsa.Essentials.Server/Elsa.Essentials.Server.csproj` referencing
   `Elsa.Essentials.Composition`, `Elsa.Foundation.Hosting` and the Nuplane/CShells hosting packages the Workbench uses,
   importing `apps/ComputedProductionSettings.targets` as the Workbench does; add it to
@@ -51,12 +52,15 @@ worktree path on Windows (MSB3030).
 - [ ] T008 Restore the new projects' `packages.lock.json` (only the affected projects) and run `EfCoreDependencyGuardTests`
   and `FeatureCompositionTests`; admit the library where §2.20 requires it, with the reason.
 
-- [ ] T008a Move the OpenIddict vendor store out of the Workbench into
-  `essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/` (R-13): the DbContext, the SQLite migrations with
-  their identifiers unchanged, the initializer, the store provider, the migration policy and pruning, with neutral
-  registration names. Make `apps/Elsa.Workbench/Program.cs` call the library, move or repoint the Workbench's store
-  tests, update `EfCoreDependencyGuardTests` admissions, and confirm the Workbench's tests and an existing Workbench
-  SQLite token store still migrate and issue tokens unchanged (FR-017).
+- [ ] T008a Move the OpenIddict vendor store out of the Workbench into `apps/Elsa.Essentials.OpenIddict/` (R-13): the
+  SQLite, PostgreSQL and SQL Server DbContexts with their migrations (identifiers unchanged), the initializer, the store
+  and platform providers, the migration policy and pruning, with neutral registration names. Make
+  `apps/Elsa.Workbench/Program.cs` call the library and keep its direct `OpenIddict.EntityFrameworkCore` reference;
+  repoint `essentials/tests/Modularity/ProviderTests/WorkbenchOpenIddictEngineTests.cs` and `OpenIddictEngineDatabases.cs`;
+  change `OpenIddictPersistenceArchitectureTests.Workbench_owns_the_vendor_package` to "only host projects in `apps/`
+  reference the vendor package"; add the library's reviewed EF closure to `EfCoreDependencyGuardTests` and leave the
+  Workbench's unchanged; add it to the guard's `ExpectedProjectPath`/`ExpectedSolutionFolder`. Confirm the Workbench's
+  tests and an existing Workbench SQLite token store still migrate and issue tokens unchanged (FR-017).
 
 **Checkpoint**: the list, its assemblies and the merge exist and are guarded; the CLI spec can reference the library.
 
