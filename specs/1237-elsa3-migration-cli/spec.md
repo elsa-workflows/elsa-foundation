@@ -355,7 +355,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 | ID | Question | Decision |
 |---|---|---|
 | Q1 | Where does the migrated content come from? | It is exported from the run's own Elsa 4 store after publish, not written from the converter's output. The folder is `migrated/`. Workflows use the workflow format, and reusables use the activity format. |
-| Q2 | Converted reusables depend on other activity versions, and the engine's source reconciliation refuses such content. | The engine gap is fixed in its own issue, outside this specification. The CLI exports reusables anyway, and the report flags every reusable and every workflow that uses one. Only that part of SC-004 waits on the fix. |
+| Q2 | Converted reusables depend on other activity versions, and the engine's source reconciliation refuses such content. | The engine gap is fixed by specification 1239, outside this one. The CLI exports reusables anyway, and the report flags every reusable and every workflow that uses one. Only that part of SC-004 waits on the fix. |
 | Q3 | Where does the CLI's Elsa 4 closure come from? | The Elsa 3 migration image, built `FROM` the essentials engine at the same version, with the Elsa 3 additions baked in. The CLI ships no closure, and Docker is a prerequisite. |
 | Q4 | Does using the ADR 0076 worker for this group need an ADR change? | Yes. A small ADR 0076 amendment lets the worker reach further named frozen entry points, one per command group. This specification is provisional on it. |
 | Q5 | How is the run kept to one database when the shared transaction refuses a supplied connection? | Every module gets the same connection string, for a uniquely named in-memory shared-cache database that is kept alive for the run. |
@@ -410,7 +410,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **ADR 0076 amendment**: the worker may reach one further named frozen entry point per command group, each a
   compatibility surface. Until the amendment is agreed, this specification stays provisional.
 - **Engine gap**: the engine's JSON activity reconciliation refuses source-owned activity content that depends on other
-  activity versions. That gap is fixed outside this specification (Q2).
+  activity versions. Specification 1239 fixes that gap (Q2).
 - **Migration skill** (specification 1238): it starts the image with `docker run` and consumes `report.json` through
   the schema this specification publishes.
 - [Elsa constitution](../../.specify/memory/constitution.md) E2.7 keeps Elsa 3 behind the import boundary. The Elsa 3
