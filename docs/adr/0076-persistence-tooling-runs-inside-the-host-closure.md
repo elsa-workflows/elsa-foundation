@@ -10,6 +10,10 @@ amendment_context: 2026-09-29, decided by Sipke Schoorstra on #2093 and delivere
 
 # Persistence tooling runs inside the host's closure
 
+Amendment (further entry points), proposed: the worker may reach one further frozen entry point per command group, each
+named, versioned and refused by name when missing (D14), and a group that runs in a reference host the tool publishes
+may restore that pinned package on first use (D10). The first case is the Elsa 3 migration CLI.
+
 Status: accepted (2026-09-21). Sipke Schoorstra accepted ADR 0076 after the design it records — the
 out-of-process worker, the `[EfModule]` descriptor, and the two-gate activation guard — was
 implemented in slices 1 to 10 of issue #1861, merged 2026-09-20 and 2026-09-21; the optional slice 11
@@ -303,8 +307,8 @@ load is irreversible for the process lifetime, which fits the short-lived worker
 chose but rules out a long-running one. It passes no `TargetFrameworkOverride`, because the worker
 already runs on the host's own runtimeconfig; RID-specific assets follow the worker's own runtime
 identifier. A state read that races a host write (`IOException` or `JsonException`) is retried a
-bounded number of times and then exits 3. The worker's one call into product code is a frozen entry
-point, reflectively invoked in the host's own
+bounded number of times and then exits 3. The worker's one call into product code for persistence is a frozen entry
+point (D14 lets another command group reach its own), reflectively invoked in the host's own
 `Elsa.Persistence.EntityFramework`: `Tooling.EfToolingHost.RunAsync(Stream request, Stream response)`
 (proposed), taking versioned JSON on stdin.
 
@@ -689,6 +693,16 @@ frozen `EfToolingHost` contract is untouched. Spec 171 FR-083 to FR-086 specify 
 still rules out is unchanged: an *implicit* restore, triggered by an empty install root or a stale
 state file rather than by the operator.
 
+**A second exception, for a host the tool brings itself.** A command group whose work runs in a reference host that
+the tool publishes, rather than in an operator's host, may restore that host's package on first use. The Elsa 3
+migration group's reference host is the case in point. The restore takes exactly one package id at exactly the tool's
+own version into the NuGet global packages folder, and reuses a cached copy without touching the network. It refuses
+by name when the package is neither cached nor restorable. It never touches an operator's host, install root or state
+file, so the risk this decision guards against, an artifact that depends on feed state when it was produced, does not
+arise: the package is pinned to the tool's version. A user's own packages for such a group are never downloaded. They
+come from a folder the user names, read as a directory feed into a run-scoped install root that is deleted after the
+run.
+
 Reason: the issue asks the tool to avoid silently falling back to a different provider or migration
 set, and an implicit restore is the same category of surprise applied to packages instead of
 providers — a script generated today should reflect exactly the packages an operator already pinned,
@@ -780,6 +794,32 @@ that acceptance criterion wait on the Elsa pin bump
 ([#1893](https://github.com/elsa-workflows/elsa-foundation/issues/1893)) before it could be met —
 the Nuplane contract itself is already delivered — while the Elsa guard has no such dependency and
 can ship on its own schedule.
+
+### D14 — The worker may reach further frozen entry points, one per command group, each named and frozen
+
+The worker of D1 is not tied to persistence. A command group that must run product code inside a host's closure may
+reach its own frozen entry point there, by type name and through the same worker, instead of adding a second worker or
+loading product code into the tool. Each such entry point:
+
+- is a `public static Task<int> RunAsync(Stream request, Stream response)` on a named type in a named assembly, taking
+  versioned JSON on stdin and answering on stdout, exactly as `EfToolingHost` does;
+- is a frozen compatibility surface the moment it ships. A host without it is refused by name, with the minimum
+  version that carries it, never with an opaque reflection failure;
+- lives in the assembly that owns its product code, so the tool and the worker gain no reference to it. In particular
+  an entry point that runs Elsa 3 code lives under `extensions/Elsa3/`, which keeps Elsa 3 behind the import boundary
+  (Elsa constitution §E2.7);
+- reuses the worker's package loading (D1, D10, D12) unchanged. A group that needs packages the host does not record
+  loads them as D10 allows.
+
+The first such entry point is `Elsa3.Migration.Tooling.Elsa3MigrationToolingHost`, for the
+`elsa3-migration workflows` group.
+
+Reason: a group like the Elsa 3 migration must compose features and run the real import and publish pipeline. That
+needs the host's exact closure for the same reason persistence tooling does. Routing it through `EfToolingHost` would put
+unrelated product code, and Elsa 3 code, into the persistence assembly.
+
+Rejected: a separate worker per group. It would duplicate deps-file reading, Nuplane loading and the refusal rules of
+D1, and each copy could drift from the others.
 
 ## Consequences
 
