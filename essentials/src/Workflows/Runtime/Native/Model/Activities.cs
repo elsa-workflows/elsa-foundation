@@ -527,7 +527,9 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
     /// In the middle of a workflow, the values of its route's parameters: an object of strings, numbers or booleans. Bound,
     /// it makes <see cref="Path"/> a template to resolve; unbound, the path is literal.
     /// </summary>
-    [Input] public JsonObject? RouteValues { get; set; }
+    [Input] public JsonObject? RouteValues { get => _routeValues; set => (_routeValues, _routeValuesBound) = (value, true); }
+    private JsonObject? _routeValues;
+    private bool _routeValuesBound;     // the hydrator sets an input only when the node binds it
     [Input] public string Method { get; set; } = "POST";
     /// <summary>The route's opt-out of the release rule: its caller is answered when the turn ends, not after its commit.</summary>
     [Input] public bool RespondBeforeCommit { get; set; }
@@ -535,13 +537,12 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
     protected override ValueTask<Transition> ExecuteAsync(StartContext<HttpRequest> context)
     {
         if (context.TryGetTrigger(out var request)) return new(Complete(request));
-        // Without route values the path is a literal route, as before templates: an expression may compute it, braces and
-        // all. A path that is a template with parameters needs values, so bound values that came out null fault here
-        // rather than wait on a key no request reaches (HttpRoutes refuses a literal template with no RouteValues bound).
-        if (RouteValues is null)
-            return new(IsTemplate(Path)
-                ? Fault("http.route.invalid", $"The route '{Path}' has parameters and its route values are null.")
-                : Suspend(new HttpWaitState(Method, Path), new HttpTrigger(Method, Path)));
+        // Without route values bound the path is a literal route, as before templates: an expression may compute it,
+        // braces and all (HttpRoutes refuses a literal template with parameters and no RouteValues bound). Bound values that
+        // came out null on a template fault here rather than wait on a key no request reaches.
+        if (!_routeValuesBound || RouteValues is null && !IsTemplate(Path))
+            return new(Suspend(new HttpWaitState(Method, Path), new HttpTrigger(Method, Path)));
+        if (RouteValues is null) return new(Fault("http.route.invalid", $"The route '{Path}' has parameters and its route values are null."));
         string path;
         try
         {

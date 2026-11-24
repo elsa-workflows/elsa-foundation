@@ -56,6 +56,8 @@ public sealed class HttpRouteTemplate
             {
                 if (part.AsSpan().IndexOfAny('{', '}') >= 0)
                     throw new HttpRouteTemplateException($"The route '{template}' has a parameter inside the segment '{part}'; a parameter is a whole segment.");
+                if (part is "." or "..")
+                    throw new HttpRouteTemplateException($"The route '{template}' has the segment '{part}', which a client removes from its path.");
                 if (part.Contains('%'))
                     throw new HttpRouteTemplateException($"The route '{template}' has a percent-escape in '{part}'; write a literal as it reads.");
                 segments.Add(new(HttpRouteSegmentKind.Literal, part.ToLowerInvariant()));

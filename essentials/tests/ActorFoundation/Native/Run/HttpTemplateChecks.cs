@@ -99,6 +99,11 @@ internal static class HttpTemplateChecks
             .Add(Wf.Workflow("computed", Wf.Sequence("main", Wf.HttpEndpoint("in", "computed").Capture("order", "Body"),
                 Wf.Respond("waiting", "waiting"), Wf.HttpEndpoint("wait", Binding.Expr("'computed/' + order.id + '/go'")),
                 Wf.Respond("went", Binding.Expr("'went ' + order.id"))), ("order", null)))
+            .Add(Wf.Workflow("shadow-template", Wf.Sequence("main", Wf.HttpEndpoint("in", "shadow-begin/{id}"),
+                Wf.HttpEndpoint("wait", "shadow/{id}/cancel", routeValues: Binding.Result("in", "RouteValues")), Wf.Respond("out", "template"))))
+            .Add(Wf.Workflow("shadow-computed", Wf.Sequence("main", Wf.HttpEndpoint("in", "shadow-computed").Capture("order", "Body"),
+                Wf.Respond("waiting", "waiting"), Wf.HttpEndpoint("wait", Binding.Expr("'shadow/' + order.id + '/cancel'")),
+                Wf.Respond("out", Binding.Expr("'computed ' + order.id"))), ("order", null)))
             .Add(Wf.Workflow("null-values", Wf.Sequence("main", Wf.HttpEndpoint("in", "null-values/{id}"),
                 Wf.HttpEndpoint("wait", "null-values/{id}/go", routeValues: Binding.Result("in", "Nope")), Wf.Respond("out", "never"))))
             .Add(Wf.Workflow("unbound", Wf.Sequence("main", Wf.HttpEndpoint("in", "unbound/{id}"),
@@ -143,11 +148,23 @@ internal static class HttpTemplateChecks
                   hashedWait.Body?.GetValue<string>() == $"cancelled {longId} by {longId}",
                 $"{mode}: ids that differ only in case wait on two keys, and an id past the readable key length waits on its hash ({lower.Body}, {upper.Body})");
 
-            var odd = "{a b}/";
-            await owner.Http.SendAsync(new HttpRequest("POST", "computed", Wf.Object(("id", odd))), worker, mode, () => owner.PumpAsync());
-            var went = await Send("POST", $"computed/{Uri.EscapeDataString(odd)}/go", poll: true);
-            check(went.Body?.GetValue<string>() == $"went {odd}",
-                $"{mode}: a wait whose path an expression computes keeps its literal key, braces and all, and the request's decoded path meets it ({went.StatusCode} {went.Body})");
+            var answers = new List<string?>();
+            foreach (var odd in new[] { "{a b}/", "{ab}" })
+            {
+                await owner.Http.SendAsync(new HttpRequest("POST", "computed", Wf.Object(("id", odd))), worker, mode, () => owner.PumpAsync());
+                answers.Add((await Send("POST", $"computed/{Uri.EscapeDataString(odd)}/go", poll: true)).Body?.GetValue<string>());
+            }
+            check(answers is ["went {a b}/", "went {ab}"],
+                $"{mode}: a wait whose path an expression computes keeps its literal key, braces and all, and the request's decoded path meets it ({string.Join(", ", answers)})");
+
+            var shadowed = new List<string?>();
+            foreach (var id in new[] { "Ab", "a b" })
+            {
+                await owner.Http.SendAsync(new HttpRequest("POST", "shadow-computed", Wf.Object(("id", id))), worker, mode, () => owner.PumpAsync());
+                shadowed.Add((await Send("POST", $"shadow/{Uri.EscapeDataString(id)}/cancel", poll: true)).Body?.GetValue<string>());
+            }
+            check(shadowed is ["computed Ab", "computed a b"],
+                $"{mode}: a computed wait that shares a template wait's shape is reached by the edge's literal retry ({string.Join(", ", shadowed)})");
 
             var dots = await Send("POST", "orders/%2E%2E/cancel");
             var nulled = await Send("POST", "null-values/5");

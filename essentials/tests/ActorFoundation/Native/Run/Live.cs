@@ -62,6 +62,12 @@ public sealed class HttpHost(string node, Requests requests, HttpRoutes routes, 
     {
         var id = "q" + Interlocked.Increment(ref _requests);
         var match = HttpRouteMatcher.Match(routes, request.Method, request.Path);
+        var waiting = match.Route is { Start: true } ? [] : await store.FindSubscriptionsAsync(match.Key);
+        if (match.Route is { Start: false } && waiting.Count == 0)
+        {
+            match = HttpRouteMatcher.Literal(request.Method, request.Path);
+            waiting = await store.FindSubscriptionsAsync(match.Key);
+        }
         try { request = request with { RouteValues = match.Values }; }
         catch (HttpFieldsException refused) { return new HttpResponse(414, "text/plain", refused.Message); }
         var open = requests.Open(id, local.Now + 30_000);
@@ -78,7 +84,6 @@ public sealed class HttpHost(string node, Requests requests, HttpRoutes routes, 
             else
             {
                 var key = match.Key;
-                var waiting = await store.FindSubscriptionsAsync(key);
                 if (waiting.Count == 0) return new HttpResponse(404, "text/plain", "no workflow waits on this route");
                 var delivery = new EventRoute(new EventRow(key, $"{node}.{open.Registration}", Json.Write(request), local.Now + 60_000), waiting[0]).Delivery(replyTo: replyTo);
                 await store.AddEventAsync(delivery);

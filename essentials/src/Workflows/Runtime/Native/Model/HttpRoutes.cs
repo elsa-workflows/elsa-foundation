@@ -73,7 +73,7 @@ public sealed class HttpRoutes
                 {
                     // A path an expression computes is a literal route known only at run time: the edge cannot match a
                     // template it never sees, so it takes no route values.
-                    if (node.Inputs.ContainsKey("RouteValues"))
+                    if (BindsRouteValues(node))
                         throw new HttpRouteTemplateException($"Workflow '{workflow.Id}', endpoint '{node.Id}': RouteValues need a literal route template, and this path is computed.");
                     continue;
                 }
@@ -83,7 +83,7 @@ public sealed class HttpRoutes
                 var start = starts.Contains(node);
                 if (!start && !template.FullyBound)
                     throw new HttpRouteTemplateException($"Workflow '{workflow.Id}', endpoint '{node.Id}': the wait's route '{template.Text}' has an optional or catch-all parameter; a wait's route is fully bound.");
-                if (!start && template.Segments.Any(segment => segment.Kind != HttpRouteSegmentKind.Literal) && !node.Inputs.ContainsKey("RouteValues"))
+                if (!start && template.Segments.Any(segment => segment.Kind != HttpRouteSegmentKind.Literal) && !BindsRouteValues(node))
                     throw new HttpRouteTemplateException($"Workflow '{workflow.Id}', endpoint '{node.Id}': the wait's route '{template.Text}' has parameters and no RouteValues to resolve them.");
                 // Its opt-out of the release rule (the owner's default of 12 November is to release a response after the
                 // commit of the turn that wrote it).
@@ -108,6 +108,10 @@ public sealed class HttpRoutes
         }
         _routes.Sort((a, b) => HttpRouteTemplate.Compare(a.Template, b.Template));
     }
+
+    // A RouteValues input bound to a literal null (an importer that writes every input) binds none.
+    private static bool BindsRouteValues(Node node) =>
+        node.Inputs.TryGetValue("RouteValues", out var binding) && binding is not LiteralBinding { Value: null };
 
     // Two fully bound templates match one path when they have as many segments and no position holds two different literals.
     private static bool Overlap(HttpRouteTemplate a, HttpRouteTemplate b) =>
