@@ -670,6 +670,14 @@ termination replay, use `pg-root-terminate owned checked stable-body`. Use
 `stable-body-fallback` to verify that an unavailable-model termination keeps the
 saved binary body and header byte for byte.
 
+Format 12 point and list reads issue a terminal selection bound to the tenant,
+exact generated reference, terminal revision and terminal time. The terminal mark
+is projected in the same transaction as the checkpoint. Disabling the mark
+trigger makes both reads refuse. An exclusive setup pass can backfill the mark
+from a committed terminal checkpoint. Retention and delete command admission
+still need their own qualification. The ordinary Core Preview keeps its existing
+read layout.
+
 ## 10. Private durable lexical-resource probe
 
 The [lexical runner](../../essentials/tests/Workflows/Runtime/Native/Scopes/Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.

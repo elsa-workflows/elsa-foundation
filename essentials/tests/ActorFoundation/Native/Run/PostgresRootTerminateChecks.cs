@@ -33,7 +33,8 @@ internal static class PostgresRootTerminateChecks
         await cold.CreateAsync(1);
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         await admission.InstallAsync(stop);
-        var reads = new PostgresRootReads(cold, await admission.OpenJournalCursorAsync(stop), 12);
+        var cursor = await admission.OpenJournalCursorAsync(stop);
+        var reads = new PostgresRootReads(cold, cursor, 12);
         var tenant = EmbeddedTenant.Bind("operators");
         var basic = new PostgresPreviewFoundation(admission, reads, PublicActor.ActorType);
         var api = new PostgresPreviewFoundation(admission, reads, PublicActor.ActorType,
@@ -73,6 +74,9 @@ internal static class PostgresRootTerminateChecks
             if (stableBody)
                 Check(Enumerable.Range(1, 3).All(revision => declaredGrowth.GetValueOrDefault(revision) > 0),
                     "the actual Native adapter carries its nonzero growth declaration on birth, update and Suspend");
+            if (stableBody)
+                Check(await reads.GetAsync(tenant, actor, stop) is { Selection: null, Header.EndedAt: null },
+                    "a running actor has no terminal selection");
             before = await ReadEncodedContent(prior.Actor.Id);
             var previousInbox = Json.Read<NativeState>(prior.State!).Inboxes!.Single();
             inbox = previousInbox.Key;
@@ -195,6 +199,40 @@ internal static class PostgresRootTerminateChecks
                 Console.WriteLine("ok the prior reader refuses the persisted terminal checkpoint");
             }
         }
+        if (stableBody)
+        {
+            var mark = (await cold.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop))!;
+            var endedAt = mark.TerminalAt!.Value;
+            var revision = mark.TerminalRevision!.Value;
+            var point = (await reads.GetAsync(tenant, actor, stop))!;
+            var listed = (await reads.ListAsync(tenant, new(Status: Contract.ActorStatus.Cancelled), cancellationToken: stop)).Items.Single();
+            Check(point.Header.EndedAt == endedAt && listed.Header.EndedAt == endedAt &&
+                  PostgresRootTerminalSelection.Matches(cursor, point.Selection, tenant.Tenant, actor.Id, revision, endedAt) &&
+                  PostgresRootTerminalSelection.Matches(cursor, listed.Selection, tenant.Tenant, actor.Id, revision, endedAt),
+                "point and list select the exact committed terminal mark");
+            Check(!PostgresRootTerminalSelection.Matches(cursor, point.Selection, tenant.Tenant, actor.Id, revision + 1, endedAt) &&
+                  !PostgresRootTerminalSelection.Matches(cursor, point.Selection, tenant.Tenant, actor.Id, revision, endedAt + 1) &&
+                  !PostgresRootTerminalSelection.Matches(cursor, point.Selection, "other", actor.Id, revision, endedAt) &&
+                  !PostgresRootTerminalSelection.Matches(cursor, point.Selection, tenant.Tenant, actor.Id + "-other", revision, endedAt) &&
+                  await cold.ReadRootActorAsync("other", actor.Id, stop) is null,
+                "the selection is qualified to the actor, scope and complete terminal mark");
+
+            await using (var db = Open())
+            {
+                await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_project_root_terminal_mark""", stop);
+                await db.Database.ExecuteSqlRawAsync("""UPDATE "FoundationActorList" SET "TerminalRevision" = NULL""", stop);
+            }
+
+            await RequireUnavailable(async () => { _ = await reads.GetAsync(tenant, actor, stop); });
+            await RequireUnavailable(async () => { _ = await reads.ListAsync(tenant, new(), cancellationToken: stop); });
+
+            await admission.InstallAsync(stop);
+            var reopened = new PostgresRootReads(Store(), await admission.OpenJournalCursorAsync(stop), 12);
+            var restored = (await reopened.GetAsync(tenant, actor, stop))!;
+            Check(PostgresRootTerminalSelection.Matches(cursor, restored.Selection, tenant.Tenant, actor.Id, revision, endedAt),
+                "exclusive reinstall restores terminal selection from the same physical transition");
+        }
+
         if (neighbor is { } remaining)
         {
             await using var normal = await Own("normal-owner", new PublicActor([new ObservedNative(native, native.StateVersion)]));
@@ -208,6 +246,17 @@ internal static class PostgresRootTerminateChecks
                 "releasing the selected owner lets the neighboring actor resume exactly once");
         }
         return 0;
+
+        static async Task RequireUnavailable(Func<Task> read)
+        {
+            try { await read(); }
+            catch (StoreFormatException)
+            {
+                Console.WriteLine("ok selection reads refuse with the mark projection disabled");
+                return;
+            }
+            throw new InvalidOperationException("A read accepted a disabled terminal-mark projection.");
+        }
 
         async Task<long> ProveExpandedWriteRefused()
         {

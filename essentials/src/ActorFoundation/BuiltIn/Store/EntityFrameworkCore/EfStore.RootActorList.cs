@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -5,13 +6,13 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    internal sealed record RootListItem(string Reference, string Type, InstanceStatus Status, long? EndedAt,
+    internal sealed record RootListItem(string Reference, string Type, InstanceStatus Status, long? EndedAt, long? TerminalRevision,
         string TypeData, IReadOnlyDictionary<string, string> Labels);
     internal sealed record RootListPage(IReadOnlyList<RootListItem> Items, long AsOf);
 
-    private sealed record RootListRow(string? Reference, int? Status, long? EndedAt, string? Header, long AsOf, bool SourceReady,
+    private sealed record RootListRow(string? Reference, int? Status, long? EndedAt, long? TerminalRevision, string? Header, long AsOf, bool SourceReady,
         int? StoreSchema, int? MessageProtocol, int? JournalCodec);
-    private sealed record RootPointRow(string? Reference, int? Status, long? EndedAt, string? Header, long AsOf, bool SourceReady,
+    private sealed record RootPointRow(string? Reference, int? Status, long? EndedAt, long? TerminalRevision, string? Header, long AsOf, bool SourceReady,
         int? StoreSchema, int? MessageProtocol, int? JournalCodec);
 
     internal static async Task RequirePreviewInstallSchemaAsync(KernelDb db, CancellationToken token)
@@ -83,17 +84,46 @@ public sealed partial class EfStore
             $install$;
             """, cancellationToken);
 
+    internal static Task InstallRootTerminalMarksAsync(KernelDb db, CancellationToken token) =>
+        db.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE "FoundationActorList" ADD COLUMN IF NOT EXISTS "TerminalRevision" bigint;
+            CREATE OR REPLACE FUNCTION kernel_project_root_terminal_mark() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            BEGIN
+                UPDATE "FoundationActorList" SET "TerminalRevision" = NEW."FoundationTerminalRevision",
+                    "EndedAt" = NEW."FoundationTerminalAt"
+                WHERE "Tenant" = NEW."FoundationTenant" AND "Reference" = NEW."FoundationReference";
+                RETURN NEW;
+            END
+            $fn$;
+            CREATE OR REPLACE TRIGGER kernel_project_root_terminal_mark
+            AFTER UPDATE OF "FoundationTerminalRevision" ON "Instances"
+            FOR EACH ROW WHEN (NEW."FoundationReference" IS NOT NULL AND
+                OLD."FoundationTerminalRevision" IS DISTINCT FROM NEW."FoundationTerminalRevision")
+            EXECUTE FUNCTION kernel_project_root_terminal_mark();
+
+            UPDATE "FoundationActorList" p SET "TerminalRevision" = i."FoundationTerminalRevision",
+                "EndedAt" = i."FoundationTerminalAt"
+            FROM "Instances" i WHERE i."FoundationTenant" = p."Tenant" AND i."FoundationReference" = p."Reference"
+                AND NOT i."Retired" AND
+                (p."TerminalRevision", p."EndedAt") IS DISTINCT FROM (i."FoundationTerminalRevision", i."FoundationTerminalAt");
+            """, token);
+
+    private static FormattableString ActorListQuery(KernelDb db, FormattableString query) =>
+        FormattableStringFactory.Create(query.Format.Replace("/*terminal-mark*/",
+            db.UsesRootStableBody ? """l."TerminalRevision" """ : "NULL::bigint", StringComparison.Ordinal), query.GetArguments());
+
     internal async Task<(RootListItem Item, long AsOf)?> ReadRootActorAsync(string tenant, string reference,
         CancellationToken cancellationToken)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root actor reads require PostgreSQL.");
         await using var db = create();
         var expected = db.RequiredFormat;
+        var triggers = db.UsesRootStableBody ? RootListWithMarkTriggers : RootListSourceTriggers;
         RootPointRow row;
         try
         {
-            row = await db.Database.SqlQuery<RootPointRow>($"""
-                SELECT l."Reference", l."Status", l."EndedAt", l."Header",
+            row = await db.Database.SqlQuery<RootPointRow>(ActorListQuery(db, $"""
+                SELECT l."Reference", l."Status", l."EndedAt", /*terminal-mark*/ AS "TerminalRevision", l."Header",
                     kernel."StoreSchema", kernel."MessageProtocol", kernel."JournalCodec",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
                     EXISTS (
@@ -102,15 +132,15 @@ public sealed partial class EfStore
                         JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
                             AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
                         WHERE source.tgrelid = to_regclass('"Instances"')
-                            AND source.tgname::text = ANY({RootListSourceTriggers}) AND source.tgenabled IN ('O', 'A')
-                        GROUP BY source.tgrelid HAVING count(*) = {RootListSourceTriggers.Length}
+                            AND source.tgname::text = ANY({triggers}) AND source.tgenabled IN ('O', 'A')
+                        GROUP BY source.tgrelid HAVING count(*) = {triggers.Length}
                     ) AS "SourceReady"
                 FROM (VALUES (1)) stamp(id)
                 LEFT JOIN "KernelStoreVersions" kernel ON kernel."Id" = {StoreVersionEntity.MarkerId}
                 LEFT JOIN "FoundationActorList" l ON l."Tenant" = {tenant} AND l."Reference" = {reference}
                     AND kernel."StoreSchema" = {expected.StoreSchema} AND kernel."MessageProtocol" = {expected.MessageProtocol}
                     AND kernel."JournalCodec" = {expected.JournalCodec}
-                """).SingleAsync(cancellationToken);
+                """)).SingleAsync(cancellationToken);
         }
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
         {
@@ -125,7 +155,7 @@ public sealed partial class EfStore
         }
         RequireSnapshotFormat(expected, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
         RequireRootActorListSource(row.SourceReady);
-        return row.Reference is null ? null : (ToRootListItem(row.Reference, row.Status!.Value, row.EndedAt, row.Header!), row.AsOf);
+        return row.Reference is null ? null : (ToRootListItem(row.Reference, row.Status!.Value, row.EndedAt, row.TerminalRevision, row.Header!), row.AsOf);
     }
 
     internal async Task<RootListPage> ReadRootActorListAsync(string tenant, string after, string? type, int? status,
@@ -134,12 +164,13 @@ public sealed partial class EfStore
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root actor lists require PostgreSQL.");
         await using var db = create();
         var expected = db.RequiredFormat;
+        var triggers = db.UsesRootStableBody ? RootListWithMarkTriggers : RootListSourceTriggers;
         var encodedType = type is null ? null : DurableKeyJson.Write(type);
         var encodedLabels = DurableKeyJson.Write(labels);
         List<RootListRow> rows;
         try
         {
-            rows = await db.Database.SqlQuery<RootListRow>($"""
+            rows = await db.Database.SqlQuery<RootListRow>(ActorListQuery(db, $"""
                 WITH marker AS (
                     SELECT "StoreSchema", "MessageProtocol", "JournalCodec"
                     FROM "KernelStoreVersions" WHERE "Id" = {StoreVersionEntity.MarkerId}
@@ -150,11 +181,11 @@ public sealed partial class EfStore
                         JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
                             AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
                         WHERE source.tgrelid = to_regclass('"Instances"')
-                            AND source.tgname::text = ANY({RootListSourceTriggers}) AND source.tgenabled IN ('O', 'A')
-                        GROUP BY source.tgrelid HAVING count(*) = {RootListSourceTriggers.Length}
+                            AND source.tgname::text = ANY({triggers}) AND source.tgenabled IN ('O', 'A')
+                        GROUP BY source.tgrelid HAVING count(*) = {triggers.Length}
                     ) AS "SourceReady"
                 ), page AS (
-                    SELECT l."Reference", l."Status", l."EndedAt", l."Header"
+                    SELECT l."Reference", l."Status", l."EndedAt", /*terminal-mark*/ AS "TerminalRevision", l."Header"
                     FROM "FoundationActorList" l
                     WHERE l."Tenant" = {tenant} AND l."Reference" > {after}
                         AND (SELECT "SourceReady" FROM readiness)
@@ -168,13 +199,13 @@ public sealed partial class EfStore
                             WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements(l."Labels") label(entry) WHERE label.entry = criterion.entry))
                     ORDER BY l."Reference" LIMIT {limit}
                 )
-                SELECT page."Reference", page."Status", page."EndedAt", page."Header",
+                SELECT page."Reference", page."Status", page."EndedAt", page."TerminalRevision", page."Header",
                     marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec",
                     (SELECT "SourceReady" FROM readiness) AS "SourceReady",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
                 FROM (VALUES (1)) stamp(id) LEFT JOIN page ON true LEFT JOIN marker ON true
                 ORDER BY page."Reference" COLLATE "C"
-                """).ToListAsync(cancellationToken);
+                """)).ToListAsync(cancellationToken);
         }
         catch (PostgresException error) when (error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn)
         {
@@ -189,7 +220,7 @@ public sealed partial class EfStore
         var first = rows[0];
         RequireSnapshotFormat(expected, first.StoreSchema, first.MessageProtocol, first.JournalCodec);
         RequireRootActorListSource(first.SourceReady);
-        var items = rows.Where(row => row.Reference is not null).Select(row => ToRootListItem(row.Reference!, row.Status!.Value, row.EndedAt, row.Header!)).ToArray();
+        var items = rows.Where(row => row.Reference is not null).Select(row => ToRootListItem(row.Reference!, row.Status!.Value, row.EndedAt, row.TerminalRevision, row.Header!)).ToArray();
         return new(items, first.AsOf);
     }
 
@@ -198,9 +229,9 @@ public sealed partial class EfStore
         if (!ready) throw new StoreFormatException("The root actor projection source or a required trigger is missing or disabled.");
     }
 
-    private static RootListItem ToRootListItem(string reference, int status, long? endedAt, string encodedHeader)
+    private static RootListItem ToRootListItem(string reference, int status, long? endedAt, long? terminalRevision, string encodedHeader)
     {
         var header = DurableKeyJson.Read<RootHeader>(encodedHeader);
-        return new(reference, header.Model, (InstanceStatus)status, endedAt, header.TypeData, header.Labels.ToDictionary(StringComparer.Ordinal));
+        return new(reference, header.Model, (InstanceStatus)status, endedAt, terminalRevision, header.TypeData, header.Labels.ToDictionary(StringComparer.Ordinal));
     }
 }
