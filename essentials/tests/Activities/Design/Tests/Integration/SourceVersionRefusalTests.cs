@@ -74,6 +74,23 @@ public sealed class SourceVersionRefusalTests
     }
 
     [Fact]
+    public async Task A_pass_that_ends_on_an_exception_still_records_and_logs_what_it_refused_before()
+    {
+        var publisher = new RefusingPublisher("1.0.0");
+        var diagnostics = new InMemoryActivityReconciliationDiagnosticStore();
+        var logger = new RecordingLogger();
+        // 2.0.0 is contributed twice with the same content; duplicate handling Throw ends the pass at the second one.
+        var source = new InMemoryReconcilerHarness.InMemorySource("acme", "Configuration", Model("1.0.0"), Model("2.0.0"), Model("2.0.0"));
+
+        await Assert.ThrowsAnyAsync<Exception>(() => InMemoryReconcilerHarness
+            .BuildReconciler(new(), source, DuplicateHandling.Throw, sourceVersionPublisher: publisher, diagnosticStore: diagnostics, logger: logger)
+            .Reconcile(CancellationToken.None));
+
+        Assert.Equal("acme.refused", Assert.Single(diagnostics.Find(ActivityCatalogStableIds.VersionId(TypeKey, "1.0.0")!)).Code);
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains("acme.refused", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Versions_that_use_each_other_are_refused_and_the_pass_ends()
     {
         var publisher = new DependentPublisher(("1.0.0", "2.0.0"), ("2.0.0", "1.0.0"));

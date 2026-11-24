@@ -78,17 +78,25 @@ public sealed class ActivityVersionReconciler(
         var (definitionIndex, versionIndex) = await Prefetch(@event.Versions, cancellationToken);
 
         var pass = new SourcePublicationPass();
-        foreach (var version in @event.Versions)
+        try
         {
-            await ReconcileVersion(version, definitionIndex, versionIndex, pass, cancellationToken);
+            foreach (var version in @event.Versions)
+            {
+                await ReconcileVersion(version, definitionIndex, versionIndex, pass, cancellationToken);
+            }
+
+            if (SingleSourceVersionPublisher() is { } sourceVersionPublisher)
+                await RetryRefusedPublicationsAsync(sourceVersionPublisher, pass, cancellationToken);
+        }
+        finally
+        {
+            // A pass that ends early, on a hash mismatch for example, still reports what it refused up to that point.
+            foreach (var refusal in pass.Refusals.Values)
+                RecordRefusal(refusal);
         }
 
-        if (SingleSourceVersionPublisher() is not { } sourceVersionPublisher)
+        if (SingleSourceVersionPublisher() is null)
             return;
-
-        await RetryRefusedPublicationsAsync(sourceVersionPublisher, pass, cancellationToken);
-        foreach (var refusal in pass.Refusals.Values)
-            RecordRefusal(refusal);
 
         // A complete pass is the whole truth about refusals: an entry for a version this pass did not refuse (published,
         // or no longer contributed, such as one a source replaced by a fixed next version) is no longer current.

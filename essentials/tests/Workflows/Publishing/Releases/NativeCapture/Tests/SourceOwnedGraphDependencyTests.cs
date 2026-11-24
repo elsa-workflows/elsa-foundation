@@ -36,6 +36,26 @@ public sealed class SourceOwnedGraphDependencyTests
     }
 
     [Fact]
+    public async Task A_composite_tried_before_the_composite_it_uses_is_refused_then_published_once_that_one_is()
+    {
+        // The order a reconciliation pass with T listed before S tries them in: T, S, then T again in a retry round.
+        await using var f = await PublishedNativeFixture.Create();
+        var writeLine = await f.PublishClrCatalog();
+
+        var early = await f.PublishSourceOwnedGraph("source-t", "Migrated.T", "source-s", childIsWriteLine: false);
+        var s = await f.PublishSourceOwnedGraph("source-s", "Migrated.S", writeLine, childIsWriteLine: true);
+        var retried = await f.PublishSourceOwnedGraph("source-t", "Migrated.T", "source-s", childIsWriteLine: false);
+
+        Assert.False(early.IsPublished);
+        Assert.Contains(early.Diagnostics, x => x.Code == "activity.dependency.version-not-found");
+        Assert.True(s.IsPublished);
+        Assert.True(retried.IsPublished, string.Join(",", retried.Diagnostics.Select(x => x.Code)));
+        var db = f.Service<ActivitiesDesignDbContext>();
+        db.ChangeTracker.Clear();
+        Assert.Equal(2, await db.ActivityDependencyEdges.AsNoTracking().CountAsync());
+    }
+
+    [Fact]
     public async Task A_source_owned_composite_that_uses_an_unknown_version_is_refused_and_nothing_is_stored()
     {
         await using var f = await PublishedNativeFixture.Create();
