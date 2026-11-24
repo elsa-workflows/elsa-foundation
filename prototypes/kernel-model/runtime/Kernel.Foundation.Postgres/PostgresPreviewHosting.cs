@@ -47,7 +47,7 @@ public static class PostgresPreviewHosting
         var scope = store.BindWorkerNode();
         var watchdog = new Watchdog(Defaults.Lease, endProcess);
         var watched = watchdog.Watch(store);
-        var host = DurableHost.ForNode(node, watched, new ActorAdapter(new RootHeaders(scope), actor), partitions);
+        var host = DurableHost.ForNode(node, watched, new ActorAdapter(new EfStore.RootHeaders(scope), actor), partitions);
         var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
             beforeRelease: host.DrainEnteredTurnsAsync);
         try
@@ -60,24 +60,5 @@ public static class PostgresPreviewHosting
             await runtime.KillAsync();
             throw;
         }
-    }
-
-    internal sealed class RootHeaders(EfStore.WorkerRoots roots) : IRootDispatchHeaders
-    {
-        public (string Tenant, string Reference) Creator(Message creator)
-        {
-            if (roots.Discover)
-            {
-                if (creator.FoundationRootBinding is not { } binding || binding.Actor != creator.Target.Id || !roots.Includes(creator.Target.Partition) ||
-                    creator.TargetCreation != 1 || creator.InboxKey != new InboxKey("root:" + binding.Actor))
-                    throw new InvalidOperationException("The polled creator needs its admitted root identity.");
-                return (binding.Tenant, binding.Reference);
-            }
-            var root = roots.ForActor(creator.Target.Id);
-            return root.Owns(creator.InboxKey) ? (root.Tenant, root.Reference) : throw new InvalidOperationException("Unexpected root creator.");
-        }
-
-        public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
-            throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
     }
 }

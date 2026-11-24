@@ -402,7 +402,7 @@ internal static class PostgresClusterChecks
                 try
                 {
                     await application.StartAsync(stop);
-                    return new(service.Runtime, application);
+                    return new(() => service.LastError, application.StopAsync, () => DisposeHostAsync(application));
                 }
                 catch
                 {
@@ -416,7 +416,7 @@ internal static class PostgresClusterChecks
             try
             {
                 await runtime.StartAsync(host, stop);
-                return new(runtime);
+                return new(() => runtime.LastError, token => runtime.StopAsync(token).AsTask(), runtime.DisposeAsync);
             }
             catch
             {
@@ -427,7 +427,7 @@ internal static class PostgresClusterChecks
 
         void Healthy(RunningNode running)
         {
-            if (running.Runtime.LastError is { } ex) throw new InvalidOperationException(name + " runtime error", ex);
+            if (running.LastError is { } ex) throw new InvalidOperationException(name + " runtime error", ex);
         }
     }
 
@@ -440,12 +440,14 @@ internal static class PostgresClusterChecks
     {
         if (!pass) throw new InvalidOperationException(detail);
     }
-    private sealed record RunningNode(RuntimeNode Runtime, IHost? Application = null) : IAsyncDisposable
+    private sealed class RunningNode(Func<Exception?> readError, Func<CancellationToken, Task> stop, Func<ValueTask> dispose)
+        : IAsyncDisposable
     {
-        internal Task StopAsync(CancellationToken cancellationToken) =>
-            Application?.StopAsync(cancellationToken) ?? Runtime.StopAsync(cancellationToken).AsTask();
+        internal Exception? LastError => readError();
 
-        public ValueTask DisposeAsync() => Application is { } app ? DisposeHostAsync(app) : Runtime.DisposeAsync();
+        internal Task StopAsync(CancellationToken cancellationToken) => stop(cancellationToken);
+
+        public ValueTask DisposeAsync() => dispose();
     }
 
     private static ValueTask DisposeHostAsync(IHost app)

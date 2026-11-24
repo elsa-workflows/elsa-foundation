@@ -447,8 +447,9 @@ The application passes the installed PostgreSQL context factory, a distinct node
 All nodes on the database use the same actor type and definitions. The launcher checks the installed
 partition layout and runs the owner-call watchdog. Supply a process-termination policy for a call
 that remains stuck after cancellation or when the application's shutdown deadline expires. The application
-stops and disposes its Generic Host. A direct caller of the launcher owns the returned runtime. The driver's start, direct input and journal reads use the EF
-provider's public surfaces. The Flowchart and StateMachine qualification fixtures keep their own setup.
+stops and disposes its Generic Host. A direct caller of the launcher owns the returned runtime. The hosted service's
+`LastError` reports the latest exception caught by the runtime loops. The driver's start, direct input and journal
+reads use the EF provider's public surfaces. The Flowchart and StateMachine qualification fixtures keep their own setup.
 
 Run `pg-preview-host-lifetime` on a fresh disposable PostgreSQL database to watch application shutdown
 keep renewing through fenced drain passes while an entered turn waits beyond one lease. The completed
@@ -456,8 +457,9 @@ sibling commits first and the slow turn commits before release. A replacement ap
 then verifies the saved journal bookmark and replay.
 
 To check launcher validation, a plain public actor and watchdog escalation, run
-`pg-preview-host-watchdog` on a fresh disposable PostgreSQL database. The fixture stalls an entered
-heartbeat after the actor completes and observes the escalation callback before releasing the stall.
+`pg-preview-host-watchdog` on a fresh disposable PostgreSQL database. After the actor completes, the fixture
+stalls an entered heartbeat and observes the escalation callback before releasing the stall. The fixture makes
+that callback throw and checks that the hosted service reports the exception through `LastError`.
 
 The first node checkpoints roots on distinct partitions in one PostgreSQL transaction. A second OS process joins
 with its own RuntimeNode. A single store snapshot shows the two nodes each own half the partitions. The second

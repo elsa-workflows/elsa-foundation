@@ -1,6 +1,5 @@
 using Kernel.EntityFramework;
 using Kernel.Foundation.InMemory;
-using Kernel.Foundation.Postgres;
 using PublicActor = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Kernel.Native.Run;
@@ -32,7 +31,7 @@ internal sealed class PostgresNativeRootOwner
     }
 
     internal static ActorAdapter Adapter(EfStore store, EfStore.WorkerRoots roots, WorkflowRegistry registry) =>
-        new(new PostgresPreviewHosting.RootHeaders(roots), new PublicActor([new NativeExecutionModel(registry)]), store.RootSelfIssuer, store.RootJobHandle,
+        new(new EfStore.RootHeaders(roots), new PublicActor([new NativeExecutionModel(registry)]), store.RootSelfIssuer, store.RootJobHandle,
             store.RootTimedJobIssuanceEnabled, store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null);
 
     internal static async Task<PostgresNativeRootOwner> PreparePartitionAsync(EfStore store, string node, int partition,

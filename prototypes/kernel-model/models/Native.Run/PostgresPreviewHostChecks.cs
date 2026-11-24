@@ -59,14 +59,22 @@ internal static class PostgresPreviewHostChecks
         var hang = new StalledHeartbeat();
         var watched = new DbContextOptionsBuilder<KernelDb>(data).AddInterceptors(hang).Options;
         var escalated = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var runtime = await PostgresPreviewHosting.StartAsync(() => new(watched), "preview-host",
-            actor, message => escalated.TrySetResult(message), new() { PollInterval = TimeSpan.FromMilliseconds(25) }, stop);
+        var failure = new InvalidOperationException("Fixture escalation failed.");
+        await using var service = new PostgresPreviewHostedService(() => new(watched), "preview-host",
+            actor, message =>
+            {
+                escalated.TrySetResult(message);
+                throw failure;
+            }, new() { PollInterval = TimeSpan.FromMilliseconds(25) });
+        if (service.LastError is not null)
+            throw new InvalidOperationException("A node that has not started has no runtime error.");
+        await service.StartAsync(stop);
         try
         {
             Contract.ActorView? view;
             while ((view = await reads.GetAsync(scope, root, stop)) is not { Header.Status: Contract.ActorStatus.Finished })
             {
-                if (runtime.LastError is { } error) throw new InvalidOperationException("The host failed before serving the actor.", error);
+                if (service.LastError is { } error) throw new InvalidOperationException("The host failed before serving the actor.", error);
                 await Task.Delay(25, stop);
             }
             if (view.Header.Type != actor.Type || actor.Turns != 1 ||
@@ -80,13 +88,17 @@ internal static class PostgresPreviewHostChecks
             if (!message.Contains("heartbeat", StringComparison.Ordinal) || hang.Released.Task.IsCompleted)
                 throw new InvalidOperationException("The watchdog did not escalate the stalled owner heartbeat.");
             Console.WriteLine("ok the host watchdog invokes the supplied escalation policy for an entered heartbeat");
+            while (service.LastError is null) await Task.Delay(25, stop);
+            if (service.LastError != failure)
+                throw new InvalidOperationException("The hosted service must report the watchdog loop error.", service.LastError);
+            Console.WriteLine("ok the hosted service reports the watchdog loop error");
         }
         finally
         {
             // This fixture records the process-termination policy and releases the synthetic call to leave normally.
             hang.Released.TrySetResult();
         }
-        await runtime.StopAsync(stop);
+        await service.StopAsync(stop);
         return 0;
     }
 

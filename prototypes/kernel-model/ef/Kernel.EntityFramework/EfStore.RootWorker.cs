@@ -39,6 +39,25 @@ public sealed partial class EfStore
         }
     }
 
+    internal sealed class RootHeaders(WorkerRoots roots) : IRootDispatchHeaders
+    {
+        public (string Tenant, string Reference) Creator(Message creator)
+        {
+            if (roots.Discover)
+            {
+                if (creator.FoundationRootBinding is not { } binding || binding.Actor != creator.Target.Id || !roots.Includes(creator.Target.Partition) ||
+                    creator.TargetCreation != 1 || creator.InboxKey != new InboxKey("root:" + binding.Actor))
+                    throw new InvalidOperationException("The polled creator needs its admitted root identity.");
+                return (binding.Tenant, binding.Reference);
+            }
+            var root = roots.ForActor(creator.Target.Id);
+            return root.Owns(creator.InboxKey) ? (root.Tenant, root.Reference) : throw new InvalidOperationException("Unexpected root creator.");
+        }
+
+        public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
+            throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
+    }
+
     private static (string Name, bool Creator) InputBinding(InboxKey key)
     {
         if (key.Match is null && key.Scope == 0 && key.Id.StartsWith("root:", StringComparison.Ordinal)) return (key.Id[5..], true);

@@ -34,9 +34,10 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         return await PostgresPreviewHosting.StartAsync(create, node, actor, Escalate, options, startup.Token);
     }
 
-    internal RuntimeNode Runtime => _startup is { IsCompletedSuccessfully: true } started
-        ? started.Result
-        : throw new InvalidOperationException("The PostgreSQL preview service has not started.");
+    /// <summary>The last error recorded by the node's runtime loops, if any.</summary>
+    public Exception? LastError => Volatile.Read(ref _startup) is { IsCompletedSuccessfully: true } started
+        ? started.Result.LastError
+        : null;
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
