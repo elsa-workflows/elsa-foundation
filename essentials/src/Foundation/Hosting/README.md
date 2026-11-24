@@ -43,3 +43,10 @@ if (moduleManagement.Enabled)
 ```
 
 The module-management endpoints need `AddNuplaneAdmin()` and the host's `ManualReconcileCoordinator` and `INuplaneAdminOperations` shared with shells, as `Elsa.Foundation.Host` composes them.
+## Cross-domain contributions
+
+This package implements a contributor contract from another domain:
+
+- **`IAttentionContributor`** *(Core, `Elsa.Attention.Core`)*: `ShellActivationAttentionContributor` adds one Attention item for each shell whose activation failed and that is not active now: a warning for a fault, critical when an EF module refused activation. The host registers it on its root container and CShells copies it into each shell, so every active shell's Attention endpoint lists it.
+  - Known impl: `ShellActivationAttentionContributor`.
+  - Catalog: none yet; the Attention domain has no `EXTENSION_POINTS.md`.
