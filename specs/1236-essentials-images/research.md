@@ -53,14 +53,19 @@ acceptance set and templates from the merged S-15 or the then-current head).
 - **No `shells.Production.json`**: the essentials image has one environment shape; the secrets FR-008 names are
   blank in the list and validated at start (R-5).
 
-## R-4 Workflows folder
+## R-4 The migrated folder
 
-- **Decision**: `JsonWorkflowReconciliation` in the list with `Options.FolderPath` `/app/workflows`, `SourceId`
+- **Decision**: `JsonWorkflowReconciliation` in the list with `Options.FolderPath` `/app/migrated/workflows`, `SourceId`
   `essentials`, `PublishOnReconcile` `true` (spec Q4). The folder exists in the image and is owned by the runtime user.
 - **Rationale**: the feature reads a flat folder in ordinal file-name order and fails the pass when the folder is
   missing (`JsonWorkflowReconciliationOptions.FolderPath`); an empty folder contributes nothing. `PublishOnReconcile`
   needs `WorkflowsPublishing` in the same shell, which the list carries.
-- **Interface to the CLI spec**: `converted/` is a flat folder of files in this feature's catalog format (an array of
+- **Activities file**: `JsonActivityReconciliation` with `Options.FilePath` `/app/migrated/activities/activities.json`
+  and `SourceId` `essentials`, next to `ActivitiesDesignReconciliation`, which its feature documentation says it needs.
+  The feature takes a file, not a folder, and the reader needs the file to exist, so the image ships
+  `/app/migrated/activities/activities.json` containing `[]` and an empty `/app/migrated/workflows/`; a mounted
+  `migrated/` replaces both. T017 confirms what a missing file does when a user mounts a folder without it.
+- **Interface to the CLI spec**: `migrated/workflows/` is a flat folder of files in this feature's catalog format (an array of
   workflow version models). If the CLI spec chooses another layout, one of the two specs changes before either is
   implemented.
 
@@ -110,7 +115,7 @@ not enabled there).
 | Expressions | Expressions, ExpressionsApi, JavaScriptExpressions, JavaScriptJintEngine, JavaScriptActivities, JavaScriptWorkflowsDesign, JavaScriptEndpoints | JavaScript expressions and `RunJavaScript`; the designer's expression editor |
 | HTTP | Http, HttpJavaScript, ActivitiesHttp, WorkflowsRuntimeHttp | six HTTP suites; `HttpEndpoint`, `WriteHttpResponse` |
 | Activities | ActivitiesRuntime, ActivitiesPrimitives, ActivitiesControlFlow, ActivitiesSequence, ActivitiesFlowchart, ActivitiesGraphDesign, ActivitiesGraphRuntime, ActivitiesScripting, ActivitiesDispatchWorkflowRuntime, ActivitiesDispatchWorkflowDesign, ActivitiesDesignApi, ActivitiesDesignReconciliation, ClrActivityReconciliation, ActivitiesDesignEntityFrameworkCore | the activity types above; the activity catalog the designer and publishing read |
-| Workflows design | WorkflowsDesignApi, WorkflowDesignValidations, WorkflowsDesignEntityFrameworkCore, JsonWorkflowReconciliation | the workflows folder; the designer |
+| Workflows design | WorkflowsDesignApi, WorkflowDesignValidations, WorkflowsDesignEntityFrameworkCore, JsonWorkflowReconciliation, JsonActivityReconciliation | the workflows folder and the activities file; the designer |
 | Publishing | WorkflowsPublishing, WorkflowsPublishingApi, WorkflowsPublishingEntityFrameworkCore | publish on reconcile; publish from Studio |
 | Runtime | WorkflowsRuntimeEntityFrameworkCore, WorkflowsRuntimeApi (with its workflow alteration payload protection key settings), WorkflowsRuntimeTriggers, WorkflowsRuntimeResumption, WorkflowsRuntimeScheduling, WorkflowsRuntimeCheckpointPersistence, WorkflowsRuntimeHistory, WorkflowsExecutionEvidence | executables, instances and activity-execution reads; correlation and event resumption; dispatch; diagnostics settings |
 | Events | the feature that provides `PublishEvent` and the `Event` trigger | the events suite |
@@ -153,7 +158,7 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
 ## R-10 Images and CI
 
 - **Decision**: `apps/Elsa.Essentials.Server/Dockerfile` follows the Workbench Dockerfile (restore with lock files,
-  ReadyToRun publish, computed package versions, non-root user, health check) and adds `/app/config`, `/app/workflows`.
+  ReadyToRun publish, computed package versions, non-root user, health check) and adds `/app/config` and the `/app/migrated` skeleton (R-4).
   `Studio/src/apps/Elsa.Studio.Essentials/Dockerfile` follows the Studio Web Dockerfile. `docker.yml` and
   `studio-docker.yml` build and push them next to the existing images with the same tags.
 - **Images build only from `main`**: an initiative-branch head is checked by a local `docker build` (as S-15 does);
@@ -166,7 +171,7 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
   admin password comes from the user settings, not a seeded development value). The run record is a row in the S-15
   ledger `extensions/Elsa3/tests/JTest/ledger/runs.md` with engine `essentials`, so both runs on one head sit side by
   side. Capture is set through the diagnostics settings API after start, as in S-15.
-- **Before the CLI exists** (FR-022): a hand-written Elsa 4 definition `docker/compose/essentials/workflows/hello.json`
+- **Before the CLI exists** (FR-022): a hand-written Elsa 4 definition `docker/compose/essentials/migrated/workflows/hello.json`
   (HTTP trigger, `WriteHttpResponse`) doubles as the quickstart example.
 - **Ordering**: the final acceptance task waits for the CLI's `inventory` command and for S-15's Elsa 4 run on the
   same head.

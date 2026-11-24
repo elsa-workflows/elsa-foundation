@@ -9,7 +9,7 @@
 Add one small library that holds the essentials feature list, the assemblies behind it and the settings merge; a new
 engine host that composes exactly that list and reads one user `appsettings.json`; a new Studio app with only the
 workflow designer; two Dockerfiles, their CI image jobs and a compose file. Then prove the engine with the S-15 JTest
-acceptance set, using the migration CLI's `converted/` folder as the mounted workflows folder. The Workbench does not
+acceptance set, using the migration CLI's `migrated/` folder as the mounted folder. The Workbench does not
 change.
 
 ## Technical Context
@@ -63,14 +63,14 @@ Workbench unchanged (FR-017); no JTest CI tier (FR-023).
 | P-1 | Hosts | R-1: `apps/Elsa.Essentials.Server`, `Studio/src/apps/Elsa.Studio.Essentials`. |
 | P-2 | List | R-2: `essentials.features.json` in `Elsa.Essentials.Composition`, every composed feature with a reason, placed in the image's composition folder (R-12). |
 | P-3 | Merge | R-3: list → baked `appsettings.json` → `/app/config/appsettings.json` → environment → command line, one extension method. |
-| P-4 | Workflows | R-4: `/app/workflows`, flat, published on reconcile. |
+| P-4 | Migrated folder | R-4: `/app/migrated/workflows` (flat, published on reconcile) and `/app/migrated/activities/activities.json`, both shipped empty. |
 | P-5 | Secrets | R-5: no baked values; existing refusals checked to name the setting. |
 | P-6 | Guard | R-6. |
 | P-7 | Feature list | R-7 candidates, each confirmed with a reason or dropped. |
 | P-8 | Studio | R-8. |
 | P-9 | Persistence | R-9: one SQLite database under `/app/data`, `AutoMigrate`. |
 | P-10 | Images | R-10: CI jobs next to the existing images; local builds on the initiative branch. |
-| P-11 | Acceptance | R-11: S-15 templates, CLI `converted/`, results in the S-15 ledger. |
+| P-11 | Acceptance | R-11: S-15 templates, CLI `migrated/`, results in the S-15 ledger. |
 
 ## Project Structure
 

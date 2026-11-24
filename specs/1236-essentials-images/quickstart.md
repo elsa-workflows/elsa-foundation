@@ -9,10 +9,10 @@ Copy-Item essentials/appsettings.example.json essentials/appsettings.json
 docker compose -f docker-compose.essentials.yml up
 ```
 
-- Engine: <http://localhost:13000> (health JSON). `essentials/workflows/hello.json` answers on the HTTP
+- Engine: <http://localhost:13000> (health JSON). `essentials/migrated/workflows/hello.json` answers on the HTTP
   path it declares (`hello`, under the engine's HTTP activity base path).
 - Studio: <http://localhost:14000>, sign in as `admin` with the password from `appsettings.json`.
-- Own workflows: put Elsa 4 definition files in `essentials/workflows/` (for a migration, the CLI's `converted/`).
+- Own workflows: put Elsa 4 definition files in `essentials/migrated/workflows/` (for a migration, the CLI's `migrated/`).
 - Own features: put their `.nupkg` files in `essentials/packages/` and add the features under
   `CShells:Shells:default:Features` in `appsettings.json`.
 
@@ -25,9 +25,9 @@ docker build -f Studio/src/apps/Elsa.Studio.Essentials/Dockerfile -t elsa-studio
 
 ## JTest acceptance run
 
-1. Produce `converted/` for the S-15 acceptance definitions with the migration CLI's `inventory` command (approved
+1. Produce `migrated/` for the S-15 acceptance definitions with the migration CLI's `inventory` command (approved
    adjusted copies in place of their originals).
-2. Start a fresh engine container from the local image with `converted/` mounted at `/app/workflows` and a run
+2. Start a fresh engine container from the local image with `migrated/` mounted at `/app/migrated` and a run
    `appsettings.json`.
 3. Set capture through `PUT /runtime/workflows/diagnostics/settings`, as the S-15 README does.
 4. From `extensions/Elsa3/tests/JTest`, run the S-15 Elsa 4 command with `ELSA_API_BASE_URL` and the credentials

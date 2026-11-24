@@ -54,8 +54,11 @@ with an HTTP trigger in the workflows folder and no packages; call the trigger a
    container starts, **Then** it refuses to start and names the missing feature.
 5. **Given** an `appsettings.json` without a required secret, **When** the container starts, **Then** it refuses to
    start and names the missing setting.
-6. **Given** no workflows folder is mounted, **When** the container starts, **Then** it starts with no workflows and
-   reports no error.
+6. **Given** no `migrated/` folder is mounted, **When** the container starts, **Then** it starts with no workflows
+   and reports no error.
+7. **Given** a `migrated/` folder whose activities file holds a reusable composite and whose workflows folder holds a
+   workflow using it, **When** the container starts, **Then** both load, the workflow is published and running it
+   runs the composite.
 
 ### User Story 2 - The JTest acceptance set passes against the engine image (Priority: P1)
 
@@ -66,12 +69,12 @@ the Workbench run gives on the same initiative head.
 only the Workbench.
 
 **Independent Test**: Build the engine image at the head, convert the acceptance definitions with the migration CLI's
-`inventory` command, mount the `converted/` folder, run `jtest run` with the S-15 Elsa 4 templates and an environment
+`inventory` command, mount the `migrated/` folder, run `jtest run` with the S-15 Elsa 4 templates and an environment
 that differs only in base URL and credentials, and compare the result per suite with the S-15 Workbench run on the same head.
 
 **Acceptance Scenarios**:
 
-1. **Given** the engine image and the `converted/` folder for the acceptance definitions, **When** the container
+1. **Given** the engine image and the `migrated/` folder for the acceptance definitions, **When** the container
    starts, **Then** every converted definition is published.
 2. **Given** a suite that passes on the Workbench on the same head, **When** it runs against the engine image,
    **Then** it passes, with the suite file and the Elsa 4 templates unchanged.
@@ -187,15 +190,25 @@ and see it composed next to the essentials list.
   value, and the identity features MUST NOT run in development or demo mode. When one is missing, the engine
   MUST refuse to start and name the setting. A documented example `appsettings.json` MUST list every required setting.
 
-**Workflows**
+**Workflows and reusable activities**
 
-- **FR-009**: The engine MUST compose JSON workflow reconciliation, reading a fixed workflows folder that exists in
+The engine reads one mounted folder, `migrated/`, with the layout the migration CLI writes: Elsa 4 workflow
+definitions under `workflows/` (the workflows folder) and converted reusables under `activities/activities.json` (the
+activities file).
+
+- **FR-009**: The engine MUST compose JSON workflow reconciliation, reading the workflows folder, which exists in
   the image and is empty by default, and MUST publish what it imports by default. A user MAY turn publishing off in
   `appsettings.json`.
 - **FR-010**: The workflows folder MUST be read as a flat folder of files in the JSON workflow reconciliation format.
-  This is the format and layout the migration CLI writes to `converted/`. Files are read in ordinal file-name order;
+  This is the format and layout the migration CLI writes to `migrated/workflows/`. Files are read in ordinal file-name order;
   if a definition that uses a reusable workflow cannot be published before that reusable is, the CLI names its files so
-  that reusables sort first, and this order rule is part of the `converted/` interface.
+  that reusables sort first, and this order rule is part of the `migrated/` interface.
+- **FR-025**: The engine MUST compose JSON activity reconciliation, reading the activities file in the JSON activity
+  reconciliation format, so the reusables the CLI converts to composite activities load at startup. The image MUST ship
+  an empty activities file, so an engine without a mounted `migrated/` starts. A mounted `migrated/` MUST hold the
+  file (the CLI writes it, empty when there are no reusables). Loading a source-owned composite that depends on other
+  activities needs the engine fix for source-owned composites with dependencies, a separate issue this specification
+  depends on and does not deliver.
 - **FR-011**: The engine MUST store its data in SQLite under a data folder meant for a volume by default. The other
   storage providers the persistence layer already supports MUST remain selectable through settings.
 
@@ -234,8 +247,7 @@ and see it composed next to the essentials list.
 **Acceptance**
 
 - **FR-019**: The acceptance run MUST start a fresh engine container from an image built at the initiative head, with
-  the workflows folder holding the `converted/` output of the migration CLI's `inventory` command for the S-15
-  acceptance definitions (approved adjusted copies in place of their originals), and run `jtest run` with the S-15
+  the `migrated/` output of the migration CLI's `inventory` command for the S-15 acceptance definitions mounted (approved adjusted copies in place of their originals), and run `jtest run` with the S-15
   Elsa 4 templates and an environment that differs from the Workbench one only in base URL and credentials.
 - **FR-020**: Every suite that passes on the S-15 Workbench run on the same head MUST pass on the engine image. A suite
   the S-15 rules exempt (JOIN, value capture, a 3.6.3 defect, an approved incompatibility) keeps its exemption and
@@ -259,12 +271,13 @@ and see it composed next to the essentials list.
 | ID | Question | Decision |
 |---|---|---|
 | Q1 | New hosts or Workbench profiles? | New hosts (Joey, 2026-11-24). A Workbench profile would still ship every Workbench feature in the binary, and the CLI could not reuse it as its closure. |
-| Q2 | How do the Elsa 3 definitions reach an engine that carries no Elsa 3 code? | Through the migration CLI's `converted/` folder, mounted as the workflows folder: the user's own go-live path. Joey gave no preference; this was the recommendation. The final acceptance run therefore waits for the CLI's `inventory` command (FR-019); FR-022 checks the image before that. |
+| Q2 | How do the Elsa 3 definitions reach an engine that carries no Elsa 3 code? | Through the migration CLI's `migrated/` folder, mounted at the engine's `migrated/` path: the user's own go-live path. Joey gave no preference; this was the recommendation. The final acceptance run therefore waits for the CLI's `inventory` command (FR-019); FR-022 checks the image before that. |
 | Q3 | Image names? | `elsaworkflows/elsa-server-essentials` and `elsaworkflows/elsa-studio-essentials`, chosen with Q1. The engine is not the clean product host constitution §E5 reserves `Elsa.Server` for: that host carries no domains and takes every feature from the feed, while the essentials engine compiles in one fixed composition for migration and evaluation. |
 | Q8 | The intake says the engine has exactly the JTest features; may it add what the designer-only Studio needs? | Yes: the intake also asks for a designer-only Studio running against this engine, which needs the designer's backend (activity catalog, expression and design APIs). Each such feature is listed with the reason "essentials Studio" (FR-001). |
 | Q4 | Does the engine publish what it imports? | Yes by default: going live means the mounted workflows run. Users can turn it off. |
 | Q5 | Can configuration switch a baked feature off? | Deliberately left alone, as agreed in the migration design. |
 | Q7 | How does the Elsa 3 migration image get the essentials composition? | It is built `FROM` the engine at the same version and adds its own baked list and packages (Joey on PR #5669). The engine therefore carries no Elsa 3 code and offers a documented extension point (FR-024). |
+| Q9 | How do converted reusables reach the engine? | As composite activities in the activities file, loaded by JSON activity reconciliation (Joey on PR #5678, spec 1237). The engine fix for source-owned composites with dependencies is a separate issue. |
 | Q6 | Which data store? | SQLite in a data folder by default, as the S-15 run uses; the providers the persistence layer already supports stay selectable through settings. No new provider work. |
 
 ## Success Criteria *(mandatory)*
@@ -290,8 +303,10 @@ and see it composed next to the essentials list.
   templates, its exemptions and the Workbench run this spec compares with. It stays on the Workbench, unchanged.
 - The migration CLI (`dotnet elsa elsa3-migration workflows inventory|assess`, specified in parallel) runs inside the
   Elsa 3 migration image, built `FROM` the engine (FR-024) with its Dockerfile under `extensions/Elsa3/`. It consumes
-  the feature list (FR-018) and the settings merge (FR-006), and writes the `converted/` folder FR-010 describes. The
+  the feature list (FR-018) and the settings merge (FR-006), and writes the `migrated/` folder FR-010 and FR-025 describe. The
   final acceptance run (FR-019) needs its `inventory` command.
+- The engine fix for source-owned composites with activity dependencies (a separate issue, handed to the coordinator)
+  is needed by User Story 1 scenario 7 and by every acceptance suite whose definitions use a reusable workflow.
 - [Elsa constitution](../../.specify/memory/constitution.md) E2.7 keeps Elsa 3 behind the import boundary; the engine
   image carries no Elsa 3 code.
 - JOIN behaviour (#4193) and value capture (#5647) keep the suites they block blocked, as in spec 1235.

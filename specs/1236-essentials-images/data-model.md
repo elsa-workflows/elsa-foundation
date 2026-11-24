@@ -27,8 +27,13 @@ layer.
 
 ## Workflows folder
 
-`/app/workflows`: a flat folder of `*.json` files, each a JSON workflow reconciliation catalog (an array of workflow
+`/app/migrated/workflows`: a flat folder of `*.json` files, each a JSON workflow reconciliation catalog (an array of workflow
 version models). Read once per start in ordinal file-name order; imported and published.
+
+## Activities file
+
+`/app/migrated/activities/activities.json`: one JSON activity reconciliation catalog (an array of activity version
+models), the converted reusables as composite activities. `[]` in the image.
 
 ## Acceptance run record
 
@@ -39,6 +44,6 @@ A row in `extensions/Elsa3/tests/JTest/ledger/runs.md`, the S-15 run ledger.
 | Engine | `essentials` |
 | Head | initiative commit |
 | Image | local tag and digest |
-| CLI | version and commit of the CLI that wrote `converted/` |
+| CLI | version and commit of the CLI that wrote `migrated/` |
 | `jtest` | version |
 | Result | per suite: pass, fail, or the S-15 exemption it carries; compared with the Workbench row of the same head |

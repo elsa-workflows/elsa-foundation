@@ -32,7 +32,7 @@ worktree path on Windows (MSB3030).
   `required by <feature>` that justifies it, reading the S-15 acceptance definitions and Elsa 4 templates in
   `extensions/Elsa3/tests/JTest/` and the `DependsOn` of each feature; settle the R-7 "to confirm" items; drop every
   candidate without a reason. Write `apps/Elsa.Essentials.Composition/essentials.features.json` in the format of
-  [contracts/feature-list.md](contracts/feature-list.md), with `JsonWorkflowReconciliation` set as R-4 describes, no
+  [contracts/feature-list.md](contracts/feature-list.md), with `JsonWorkflowReconciliation` and `JsonActivityReconciliation` set as R-4 describes, no
   secret values and `IsDevelopmentOrDemo: false` on both identity features (R-5).
 - [ ] T005 Add the project references of every listed feature to `Elsa.Essentials.Composition.csproj` and list their
   assemblies in `apps/Elsa.Essentials.Composition/EssentialsFeatureAssemblies.cs`.
@@ -51,9 +51,9 @@ worktree path on Windows (MSB3030).
 ## Phase 3: User Story 1 - Start the engine with my own files (P1) 🎯 MVP
 
 **Goal**: the engine composes the list, reads `/app/config/appsettings.json`, loads user packages and imports and
-publishes `/app/workflows`.
+publishes `/app/migrated/workflows`.
 
-**Independent Test**: User Story 1 scenarios 1–6 with the example settings and `hello.json`.
+**Independent Test**: User Story 1 scenarios 1–7 with the example settings and `hello.json`.
 
 - [ ] T009 [US1] Write `apps/Elsa.Essentials.Server/Program.cs`: configuration via `AddEssentialsConfiguration`
   (baked `appsettings.json`, user file `config/appsettings.json` under the content root, which is
@@ -74,17 +74,20 @@ publishes `/app/workflows`.
 - [ ] T013 [US1] Confirm that an added feature without a package refuses start and names the feature (scenario 4);
   add a host check and a test only if the existing refusal does not name it.
 - [ ] T014 [P] [US1] Write `docker/compose/essentials/appsettings.example.json` with every required setting as a
-  `change-me` value and a comment key per setting, and `docker/compose/essentials/workflows/hello.json`, an Elsa 4
+  `change-me` value and a comment key per setting, and `docker/compose/essentials/migrated/activities/activities.json` (`[]`), and
+  `docker/compose/essentials/migrated/workflows/hello.json`, an Elsa 4
   JSON workflow reconciliation catalog with one HTTP-triggered workflow writing a fixed response (FR-022).
 - [ ] T015 [US1] Write `apps/Elsa.Essentials.Server/Dockerfile` from the Workbench Dockerfile (locked restore,
-  ReadyToRun, computed versions, non-root user, health check), creating `/app/config`, `/app/workflows`,
+  ReadyToRun, computed versions, non-root user, health check), creating `/app/config`, the `/app/migrated` skeleton (empty `workflows/`, `activities/activities.json` of `[]`),
   `/app/packages` and `/app/data` owned by the runtime user; build it locally.
 - [ ] T016 [US1] Check FR-003 and SC-004: list every assembly in the built image's `/app` and confirm none is an Elsa 3 assembly and every Elsa assembly belongs to a listed feature or to hosting and
   package loading;
   record the command and result in the PR evidence.
-- [ ] T017 [US1] Run User Story 1 scenarios 1–6 against the local image (example settings, `hello.json`, the
+- [ ] T017 [US1] Run User Story 1 scenarios 1–7 (scenario 7 once the engine fix for source-owned composites with
+  dependencies has landed on the initiative branch) against the local image (example settings, `hello.json`, the
   locally packed Liquid feature package for scenario 2 with a definition that uses a Liquid expression, a changed baked
-  setting for scenario 3 (`PublishOnReconcile: false`, checking `hello.json` is imported but not published, FR-009), a missing package, a missing secret, no workflows mount), plus the import-failure
+  setting for scenario 3 (`PublishOnReconcile: false`, checking `hello.json` is imported but not published, FR-009), a missing package, a missing secret, no `migrated/` mount, a mounted `migrated/` without an
+  activities file, and for scenario 7 a composite in `activities.json` used by a workflow), plus the import-failure
   edge case (a malformed file next to `hello.json`: the pass fails and the log names the file), and the order case: a
   definition using a reusable workflow in a file that sorts after it (S-15's `composition-workflow-as-activity-root`
   and `-sub`). If the root is not published, record the order rule in FR-010 and the hand-over note for the CLI spec; record each
@@ -99,11 +102,11 @@ publishes `/app/workflows`.
 **Independent Test**: the acceptance run in [quickstart.md](quickstart.md).
 
 **Prerequisites**: US1; spec 1235's Elsa 4 templates and a Workbench run on the same head; the migration CLI's
-`inventory` command.
+`inventory` command; the engine fix for source-owned composites with dependencies (reusable-using suites).
 
 - [ ] T018 [US2] Write the essentials run section of `extensions/Elsa3/tests/JTest/README.md`: build the image, run
   the CLI's `inventory` over the acceptance definitions (adjusted copies in place of originals), start the container
-  with `converted/` at `/app/workflows` and a run settings file, set capture, run the S-15 Elsa 4 command with the
+  with `migrated/` at `/app/migrated` and a run settings file, set capture, run the S-15 Elsa 4 command with the
   container's base URL and credentials.
 - [ ] T019 [US2] Run it on the initiative head; record the run in `extensions/Elsa3/tests/JTest/ledger/runs.md` with
   engine `essentials` (data model, *Acceptance run record*).
@@ -145,7 +148,7 @@ publishes `/app/workflows`.
   configuration through `Elsa.Essentials.Composition` alone, with no reference to `Elsa.Essentials.Server` (scenario 3);
   confirm the T011 guard fails naming a feature when one is removed from `EssentialsFeatureAssemblies` (scenario 2).
 - [ ] T029 [US4] Leave a hand-over note for the migration CLI specification in the PR: the library name and path, the
-  two entry points and the `converted/` layout rule (R-4).
+  two entry points and the `migrated/` layout rule (R-4).
 
 - [ ] T030 [US4] Make the engine read its baked composition from `/app/composition/` (`essentials.features.json` first,
   then the other `*.features.json` in ordinal order) and register `/app/composition/packages` as a second Nuplane directory feed (R-12): in

@@ -6,7 +6,7 @@
 |---|---|---|
 | `/app/config/appsettings.json` | file, read-only | The user's settings (overrides and added features). |
 | `/app/packages` | folder | Nuplane directory feed for the user's feature packages. |
-| `/app/workflows` | folder, read-only | Elsa 4 workflow definitions, imported and published at startup. Exists and is empty in the image. |
+| `/app/migrated` | folder, read-only | The migration CLI's output: `workflows/` (Elsa 4 workflow definitions, imported and published at startup) and `activities/activities.json` (composite activities, imported at startup). The image holds an empty `workflows/` and an `activities.json` of `[]`. |
 | `/app/data` | volume | SQLite databases and the Data Protection key ring. |
 
 - Port 8080; the root path returns the health JSON, as the Workbench image does.

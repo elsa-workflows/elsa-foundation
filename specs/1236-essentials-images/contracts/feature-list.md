@@ -12,11 +12,11 @@ Consumers: the essentials engine host and the migration CLI, which runs inside t
   "features": [
     {
       "name": "JsonWorkflowReconciliation",
-      "reason": "Workflows folder: imports and publishes /app/workflows at startup",
+      "reason": "Workflows folder: imports and publishes /app/migrated/workflows at startup",
       "settings": {
         "Options": {
           "SourceId": "essentials",
-          "FolderPath": "/app/workflows",
+          "FolderPath": "/app/migrated/workflows",
           "PublishOnReconcile": true
         }
       }
