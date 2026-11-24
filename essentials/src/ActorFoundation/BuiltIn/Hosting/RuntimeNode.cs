@@ -99,7 +99,11 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 _loop = Task.WhenAll(OnNode(LoopAsync), OnNode(BalanceLoopAsync));
                 if (heartbeatEvery is { } every) _heartbeats = Task.Run(() => HeartbeatLoopAsync(every));
                 if (_beside is { } beside) _besideRun = Task.Run(() => Beside(beside));     // not in _loop: the stop must not wait on it
+                return;
             }
+        // A stop or kill that landed while the start validated its scopes found no host to release. The start has attached
+        // one since: end that run here, before any scope was taken, so the host is free for a later runtime.
+        await OnNode(() => _runtime.StopAsync(CancellationToken.None).AsTask());
     }
 
     /// <summary>The heartbeat's cadence: at least three per lease and at most half the window apart, a second at most by default.</summary>

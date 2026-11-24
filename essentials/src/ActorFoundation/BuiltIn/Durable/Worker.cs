@@ -2371,10 +2371,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // ---- background jobs -------------------------------------------------------------------------------------------
 
     /// <summary>
-    /// Close job entry, cancel the entered jobs and wait for them to exit. With <paramref name="keepOwnership"/> (the node's
-    /// Worker) the wait counts as this Worker's pass, as the actor-turn drain does: each heartbeat answer is judged, the
-    /// fence must stay usable, and the pass gate stays open so the node lease keeps renewing until the jobs have exited or
-    /// <paramref name="cancellationToken"/> (the stop deadline) ends the wait.
+    /// Close job entry, cancel the entered jobs and wait for them to exit. With <paramref name="keepOwnership"/> the wait
+    /// counts as this Worker's pass, as the actor-turn drain does: each heartbeat answer is judged, the fence must stay
+    /// usable, and the pass gate stays open so the node lease keeps renewing until the jobs have exited or
+    /// <paramref name="cancellationToken"/> (the stop deadline) ends the wait. A lost fence ends the renewal, not the wait:
+    /// the loss is thrown once the entered jobs have exited, so the caller can still release what it holds.
     /// </summary>
     internal async Task DrainJobsAsync(bool keepOwnership = false, CancellationToken cancellationToken = default)
     {
@@ -2393,6 +2394,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         // Use asynchronous cancellation so cleanup callbacks cannot hold up admission closure or a kill deadline.
         var ended = Task.WhenAll(entered.Select(CancelAsync).Append(exited));
+        Exception? lost = null;
         if (keepOwnership && Owns)
         {
             var generation = _generation;
@@ -2405,14 +2407,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     cancellationToken.ThrowIfCancellationRequested();
                     if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
                     if (_generation != generation || !LeaseUsable())
-                        throw new InvalidOperationException("Ownership was lost while draining entered jobs during shutdown.");
+                    {
+                        lost = new ScopeOwnershipLostException("Ownership was lost while draining entered jobs during shutdown.");
+                        break;
+                    }
                     Volatile.Write(ref _lastPass, _options.Monotonic());
-                    await Task.WhenAny(ended, beat.Task, Task.Delay(_options.Lease / 3, cancellationToken));
+                    using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    await Task.WhenAny(ended, beat.Task, Task.Delay(_options.Lease / 3, wait.Token));
+                    wait.Cancel();     // a beat or the exit woke the drain: drop this round's timer
                 }
             }
             finally { Volatile.Write(ref _drainBeat, null); }
         }
-        await ended;
+        await ended.WaitAsync(cancellationToken);
+        if (lost is not null) throw lost;
 
         static async Task CancelAsync(CancellationTokenSource source)
         {

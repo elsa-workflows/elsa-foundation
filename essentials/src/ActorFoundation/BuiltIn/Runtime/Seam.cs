@@ -26,8 +26,17 @@ public interface IScopeHost
 
     /// <summary>Optionally claim this host for one runtime run, after scope validation. This is a synchronous local
     /// operation. A host which tracks attachment refuses a new claim while another run owns it.</summary>
+    /// <remarks>The default claims nothing: a host with no off-turn work (the conformance stubs, the models' fixed hosts)
+    /// has nothing to drain and keeps no attachment, so the runtime stops it by releasing its scopes alone.</remarks>
     IScopeHostRun? AttachRuntime() => null;
 }
+
+/// <summary>
+/// Thrown by <see cref="IScopeHostRun.PrepareToStopAsync"/> when the host lost ownership of a scope while it drained, after
+/// its off-turn work has ended. The runtime still releases what it holds, completes the run and then reports this. Any
+/// other fault leaves the run abandoned, for its leases to expire.
+/// </summary>
+public sealed class ScopeOwnershipLostException(string message) : InvalidOperationException(message);
 
 /// <summary>The attachment returned to one runtime run. Only that run can finish shutdown and free the host to be attached again.</summary>
 public interface IScopeHostRun

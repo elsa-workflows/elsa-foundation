@@ -155,8 +155,9 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
                     throw new InvalidOperationException("Only the attached runtime can prepare this durable host for shutdown.");
                 host._stopping = true;
             }
-            // The node's Worker keeps its ownership live while it waits; the runtime's host stops renewing only after this.
-            await Task.WhenAll(host.Workers.Select(worker => worker.DrainJobsAsync(worker == host._node, cancellationToken)))
+            // Every Worker keeps its ownership live while it waits, the node's and each per-partition one alike; the
+            // runtime's host stops renewing only after this. A Worker that lost its fence reports it after its jobs exit.
+            await Task.WhenAll(host.Workers.Select(worker => worker.DrainJobsAsync(keepOwnership: true, cancellationToken)))
                 .WaitAsync(cancellationToken);
         }
 
@@ -256,7 +257,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
     }
 
     internal Task DrainEnteredTurnsAsync(CancellationToken cancellationToken) =>
-        _node?.DrainEnteredTurnsAsync(cancellationToken) ?? Task.CompletedTask;
+        Task.WhenAll(Workers.Select(worker => worker.DrainEnteredTurnsAsync(cancellationToken)));     // per-partition Workers too
 
     private NodeScope Scope(int scope) =>
         _scopes.TryGetValue(scope, out var known) ? known : _scopes[scope] = new NodeScope(this, scope);
