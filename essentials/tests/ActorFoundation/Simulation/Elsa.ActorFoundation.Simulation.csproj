@@ -17,7 +17,7 @@
     <Compile Include="../Native/Run/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
     <ProjectReference Include="../Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
     <ProjectReference Include="../Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
-    <ProjectReference Include="../../../../prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj" />
+    <ProjectReference Include="../../Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
     <ProjectReference Include="../../../../prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
     <ProjectReference Include="../../../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <ProjectReference Include="../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />

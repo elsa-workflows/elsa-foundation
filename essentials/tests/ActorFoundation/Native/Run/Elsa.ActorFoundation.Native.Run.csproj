@@ -17,7 +17,7 @@
     <Compile Include="../../Simulation/Models.cs" Link="Models.cs" />
     <Compile Include="../../Statecharts/Run/OrderStatechart.cs" Link="OrderStatechart.cs" />
     <ProjectReference Include="../../../../../prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj" />
-    <ProjectReference Include="../../../../../prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj" />
+    <ProjectReference Include="../../../Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
     <ProjectReference Include="../../Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />

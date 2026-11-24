@@ -58,7 +58,7 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
-      "kernel.native.legacy": {
+      "Kernel.Native.Legacy": {
         "type": "Project",
         "dependencies": {
           "Kernel.Native": "[1.0.0, )",
