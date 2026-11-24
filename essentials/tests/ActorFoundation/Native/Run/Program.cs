@@ -157,6 +157,8 @@ if (args is ["pg-root-park-arrivals", var arrivalWriter and ("owned" or "ef"), v
     return await PostgresRootParkOpeningChecks.RunAsync(arrivalWriter == "owned", arrivalFence == "in-batch", inspection: true, arrivals: true);
 if (args is ["pg-root-park-recovery", var recoverWriter and ("owned" or "ef"), var recoverFence and ("checked" or "in-batch")])
     return await PostgresRootParkOpeningChecks.RunAsync(recoverWriter == "owned", recoverFence == "in-batch", recovery: true);
+if (args is ["pg-root-park-drain", var drainWriter and ("owned" or "ef"), var drainFence and ("checked" or "in-batch")])
+    return await PostgresRootParkDrainChecks.RunAsync(drainWriter == "owned", drainFence == "in-batch");
 if (args is ["pg-root-park-opening", var parkWriter and ("owned" or "ef"), var parkFence and ("checked" or "in-batch")])
     return await PostgresRootParkOpeningChecks.RunAsync(parkWriter == "owned", parkFence == "in-batch");
 if (args is ["pg-root-park-inspection", var parkReadWriter and ("owned" or "ef"), var parkReadFence and ("checked" or "in-batch")])
