@@ -2,7 +2,7 @@
   "solution": {
     "path": "Elsa.Server.slnx",
     "projects": [
-      "apps/Elsa.Workbench/Elsa.Workbench.csproj",
+      "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj",
       "essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj",
       "essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj",
       "essentials/src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj",

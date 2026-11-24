@@ -16,7 +16,7 @@
 # repo-root configuration (Directory.Packages.props, NuGet.config) and the
 # project references reach across the whole src/ tree. Example:
 #
-#   docker build -f apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
+#   docker build -f apps/Elsa.Workbench.Host/Dockerfile -t elsa-workbench:local .
 #
 # Runtime configuration is supplied via environment variables (standard .NET
 # double-underscore layering, e.g. Elsa__ModuleManagement__ApiKey) and an
@@ -77,7 +77,7 @@ COPY --parents essentials/**/*.csproj essentials/**/*.targets essentials/**/pack
 # version each range admits, which is what the lock files recorded, so they land on the
 # versions this restore has just shown the feed still serves.
 # See docs/reference/nuget-lock-files.md.
-RUN dotnet restore apps/Elsa.Workbench/Elsa.Workbench.csproj \
+RUN dotnet restore apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj \
     --locked-mode \
     -p:WarningsNotAsErrors=NU1603
 
@@ -89,7 +89,7 @@ RUN dotnet restore apps/Elsa.Workbench/Elsa.Workbench.csproj \
 # Map BuildKit's TARGETARCH (amd64/arm64) to the .NET RID (linux-x64/linux-arm64).
 # Restore is RID-specific because R2R needs the target's crossgen2 + runtime pack.
 RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
-    && dotnet restore apps/Elsa.Workbench/Elsa.Workbench.csproj \
+    && dotnet restore apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj \
         -r "$RID" \
         -p:PublishReadyToRun=true \
         -p:WarningsNotAsErrors=NU1603
@@ -109,7 +109,7 @@ COPY extensions/ ./extensions/
 # build args one per line. Both commands below read it through
 # -p:CustomBeforeDirectoryBuildProps, which gives every Elsa assembly, and every
 # Elsa package in the deps.json, the version the feed carries, and makes
-# Elsa.Workbench.csproj ship ComputedVersions/appsettings.Production.json, which
+# Elsa.Workbench.Host.csproj ship ComputedVersions/appsettings.Production.json, which
 # declares the Elsa shares host-provided. The restore has to see it too: deps.json
 # takes a project reference's version from the restore, not the build, so a
 # publish alone would stamp the assemblies and still record the dev versions.
@@ -139,12 +139,12 @@ RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
             && printf '%s' "$ELSA_PACKAGE_VERSIONS" | base64 -d | gunzip > /tmp/elsa/package-versions.props \
             && set -- -p:CustomBeforeDirectoryBuildProps=/tmp/elsa/package-versions.props ;; \
     esac \
-    && dotnet restore apps/Elsa.Workbench/Elsa.Workbench.csproj \
+    && dotnet restore apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj \
         -r "$RID" \
         -p:PublishReadyToRun=true \
         -p:WarningsNotAsErrors=NU1603 \
         "$@" \
-    && dotnet publish apps/Elsa.Workbench/Elsa.Workbench.csproj \
+    && dotnet publish apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj \
         -c Release \
         -r "$RID" \
         --self-contained false \
@@ -192,4 +192,4 @@ HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=10 \
 # Run as the non-root user provided by the base image.
 USER $APP_UID
 
-ENTRYPOINT ["dotnet", "Elsa.Workbench.dll"]
+ENTRYPOINT ["dotnet", "Elsa.Workbench.Host.dll"]

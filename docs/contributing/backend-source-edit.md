@@ -29,13 +29,13 @@ Console.WriteLine($"Onboarding: {Text}");
 Run the same locked-mode focused test again. It should pass. Build the default Workbench:
 
 ```bash
-dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
 ```
 
 Start the HTTP profile in one terminal and wait for readiness as shown in the quickstart:
 
 ```bash
-dotnet run --no-build --project Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
+dotnet run --no-build --project apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --launch-profile http
 ```
 
 In a second terminal, check readiness and submit a one-child Sequence workflow. The script verifies the actual run result: one completed Sequence root, one completed WriteLine child, matching activity counts, and zero reported or returned incidents. The server terminal must separately show the exact line `Onboarding: Contributor exercise`.
@@ -59,7 +59,7 @@ The script's echoed input is not proof of activity output. Stop only the Workben
 Finally, undo just the two exercise edits. Inspect `git diff --` for those paths and confirm both are back to their original contents; do not discard unrelated work. Rerun the focused test without the temporary expectation and confirm it passes. The Workbench build output still contains the exercise edit until rebuilt, so restore the original host output before reusing this checkout:
 
 ```bash
-dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
 ```
 
 The hosted [backend source platform workflow](../../.github/workflows/ci.yml) replays the same exercise on Ubuntu 24.04 with PowerShell 7 and Windows Server 2025 with Windows PowerShell 5.1. It classifies the expected-red test from its TRX result and assertion text, restores both files byte-for-byte even on failure, reruns the original focused test, and rebuilds the original Workbench output. This is automated command replay; it does not claim an interactive human trial.

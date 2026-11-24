@@ -478,9 +478,27 @@ public sealed class DispatchWorkflow : StatefulActivity<DispatchResult, Dispatch
 
 // ---- HTTP ------------------------------------------------------------------------------------------------------------
 
-public sealed record HttpRequest(string Method, string Path, JsonNode? Body = null);
+/// <summary>An HTTP request as a workflow receives it. Its headers and query string follow the <see cref="HttpFields"/> rules.</summary>
+public sealed record HttpRequest(string Method, string Path, JsonNode? Body = null)
+{
+    private readonly IReadOnlyDictionary<string, string> _query = HttpFields.None;
+    private readonly IReadOnlyDictionary<string, string> _headers = HttpFields.None;
 
-public sealed record HttpResponse(int StatusCode, string ContentType, JsonNode? Body);
+    /// <summary>The query parameters by name, exactly as sent; a repeated parameter's values joined with ",".</summary>
+    public IReadOnlyDictionary<string, string> Query { get => _query; init => _query = HttpFields.Query(value); }
+
+    /// <summary>The header fields by lower-case name, credentials left out; a repeated field's values joined with ", ".</summary>
+    public IReadOnlyDictionary<string, string> Headers { get => _headers; init => _headers = HttpFields.RequestHeaders(value); }
+}
+
+/// <summary>An HTTP response as a workflow writes it. Its headers follow the <see cref="HttpFields"/> rules.</summary>
+public sealed record HttpResponse(int StatusCode, string ContentType, JsonNode? Body)
+{
+    private readonly IReadOnlyDictionary<string, string> _headers = HttpFields.None;
+
+    /// <summary>The header fields by lower-case name, one value each, besides the content type and the edge's own (<see cref="HttpFields.Reserved"/>).</summary>
+    public IReadOnlyDictionary<string, string> Headers { get => _headers; init => _headers = HttpFields.ResponseHeaders(value); }
+}
 
 public sealed record HttpWaitState(string Method, string Path);
 
@@ -506,10 +524,15 @@ public sealed class WriteHttpResponse : Activity<HttpResponse>
     [Input] public int StatusCode { get; set; } = 200;
     [Input] public string ContentType { get; set; } = "text/plain";
     [Input] public JsonNode? Body { get; set; }
+    /// <summary>The response headers besides the content type: an object of strings, numbers or booleans.</summary>
+    [Input] public JsonObject? Headers { get; set; }
 
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
     {
-        var response = new HttpResponse(StatusCode, ContentType, Body);
+        IReadOnlyDictionary<string, string> headers;
+        try { headers = HttpFields.ResponseHeaders(Headers); }
+        catch (HttpFieldsException refused) { return new(Fault("http.headers.invalid", refused.Message)); }
+        var response = new HttpResponse(StatusCode, ContentType, Body) { Headers = headers };
         return new(Complete(response).With(new EmitEffect("response", Values.From(response))));
     }
 }

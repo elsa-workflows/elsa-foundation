@@ -153,7 +153,7 @@ public static class ProjectGraph
     /// <summary>The top-level grouping a project belongs to.</summary>
     public static string DomainGroup(string project)
     {
-        if (project is "Elsa.Workbench" or "Workbench") return "Elsa.Workbench";
+        if (project is "Elsa.Workbench.Host" or "Workbench") return "Elsa.Workbench";
         if (project.StartsWith("Test.", StringComparison.Ordinal)) return "Test";
         if (project.StartsWith("Elsa3.", StringComparison.Ordinal)) return "Elsa3";
 
@@ -253,7 +253,7 @@ public static class ProjectGraph
     private static string Role(string project, string kind)
     {
         if (kind == "test") return "test";
-        if (project is "Elsa.Workbench" or "Workbench") return "host";
+        if (project is "Elsa.Workbench.Host" or "Workbench") return "host";
         if (project.EndsWith(".Core", StringComparison.Ordinal)) return "contract";
 
         if (EndsWithAny(project, ".Strategies", ".Schedules", ".Libraries")) return "helper";

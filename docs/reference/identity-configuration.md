@@ -31,7 +31,7 @@ unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` a
 
 ## Development / demo defaults
 
-The checked-in `Essentials/apps/Elsa.Workbench/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
+The checked-in `apps/Elsa.Workbench.Host/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
 intended **only** for local development and demos:
 
 ```jsonc

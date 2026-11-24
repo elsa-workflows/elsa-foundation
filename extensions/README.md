@@ -62,7 +62,7 @@ site already covers `extensions/`, and this is the complete list:
 |---|---|---|
 | `.github/workflows/packages.yml` | nothing itself: it packs the dependency map's packable projects, which `RepoLayout.cs` below enumerates | the version calculator refuses a map that misses a project, so packing fails |
 | `.github/workflows/ci.yml` | container-free test projects | the module's tests stop running, job still green |
-| `apps/Elsa.Workbench/Dockerfile` | restore inputs and the source copy | image build fails (the one that fails loudly) |
+| `apps/Elsa.Workbench.Host/Dockerfile` | restore inputs and the source copy | image build fails (the one that fails loudly) |
 | `.dockerignore` | what reaches the build context | extension tests bloat the context |
 | `tools/ef/generate-module-migrations.sh` | EF modules and model snapshots | finds no module, generates nothing |
 | `tools/maps/Elsa.Maps.Generator/RepoLayout.cs` | projects, sources and catalogs for every map | the module vanishes from every map |
