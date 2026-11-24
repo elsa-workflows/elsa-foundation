@@ -111,16 +111,18 @@ definition in the designer, change it and publish it.
 - **Exclusions**: instance views, user management and settings screens are the workflows module's own and are not
   qualified again here; this record covers what the essentials composition changes (what is present and absent).
 
-### User Story 4 - One feature list for the image and the migration CLI (Priority: P2)
+### User Story 4 - One feature list, and an image others build on (Priority: P2)
 
-As a maintainer, I change the essentials composition in one place, and both the engine image and the migration CLI's
-reference closure follow it.
+As a maintainer, I change the essentials composition in one place, and both the engine image and the Elsa 3
+migration image built `FROM` it follow it. The migration image adds its own baked features without copying the list.
 
-**Why this priority**: The migration CLI promises that a clean assessment means the workflows run on the image. That
-holds only while both use the same composition.
+**Why this priority**: The migration CLI runs inside the Elsa 3 migration image, which is built `FROM` the engine at
+the same version. Its promise, that a clean assessment means the workflows run on the engine, holds only while both
+start from the same composition.
 
 **Independent Test**: Add a feature to the list and see the engine host compose it; remove a feature from the engine
-host's references and see the guard test name it.
+host's references and see the guard test name it; build a test image `FROM` the engine that adds one baked feature
+and see it composed next to the essentials list.
 
 **Acceptance Scenarios**:
 
@@ -129,6 +131,9 @@ host's references and see the guard test name it.
 2. **Given** a feature in the list that the engine host cannot resolve, **When** the guard test runs, **Then** it fails
    and names the feature.
 3. **Given** the list, **When** a separate tool reads it, **Then** it can do so without referencing the engine host.
+4. **Given** an image built `FROM` the engine that adds a baked feature list and that feature's package, **When** it
+   starts, **Then** it composes the essentials list plus the added features, and the user's `appsettings.json` still
+   applies over both.
 
 ### Edge Cases
 
@@ -211,6 +216,11 @@ host's references and see the guard test name it.
 - **FR-018**: The feature list MUST be machine-readable and readable by another tool without referencing the engine
   host. A guard test MUST fail, naming the feature, when the engine host cannot resolve a listed feature or composes
   one that is not listed.
+- **FR-024**: The engine image MUST be usable as a base image. An image built `FROM` it MUST be able to add features
+  to the baked composition by adding its own feature list and those features' packages at documented paths, without
+  changing or copying the essentials list. The added features stay baked: the user's `appsettings.json` applies over
+  them as over the essentials list. The Elsa 3 migration image, which belongs to the migration CLI's specification,
+  is the first such image; this specification delivers only the extension point and a test image that proves it.
 
 **Acceptance**
 
@@ -244,6 +254,7 @@ host's references and see the guard test name it.
 | Q3 | Image names? | `elsaworkflows/elsa-server-essentials` and `elsaworkflows/elsa-studio-essentials`, chosen with Q1. |
 | Q4 | Does the engine publish what it imports? | Yes by default: going live means the mounted workflows run. Users can turn it off. |
 | Q5 | Can configuration switch a baked feature off? | Deliberately left alone, as agreed in the migration design. |
+| Q7 | How does the Elsa 3 migration image get the essentials composition? | It is built `FROM` the engine at the same version and adds its own baked list and packages (Joey on PR #5669). The engine therefore carries no Elsa 3 code and offers a documented extension point (FR-024). |
 | Q6 | Which data store? | SQLite in a data folder by default, as the S-15 run uses; the providers the persistence layer already supports stay selectable through settings. No new provider work. |
 
 ## Success Criteria *(mandatory)*
@@ -260,14 +271,17 @@ host's references and see the guard test name it.
 - **SC-005**: Drift between the list and the engine host fails a test that names the feature.
 - **SC-006**: The essentials Studio journey passes the Studio UX acceptance, and its navigation shows no module the
   engine does not compose.
+- **SC-007**: An image built `FROM` the engine adds a baked feature with one list file and one package, and composes
+  it next to every essentials feature, with zero edits to the essentials list.
 
 ## Dependencies and boundaries
 
 - [Final JTest acceptance, spec 1235](../1235-jtest-final-acceptance/spec.md) supplies the acceptance set, its Elsa 4
   templates, its exemptions and the Workbench run this spec compares with. It stays on the Workbench, unchanged.
-- The migration CLI (`dotnet elsa elsa3-migration workflows inventory|assess`, specified in parallel) consumes the
-  feature list (FR-018) and the settings merge (FR-006), and writes the `converted/` folder FR-010 describes. The final
-  acceptance run (FR-019) needs its `inventory` command.
+- The migration CLI (`dotnet elsa elsa3-migration workflows inventory|assess`, specified in parallel) runs inside the
+  Elsa 3 migration image, built `FROM` the engine (FR-024) with its Dockerfile under `extensions/Elsa3/`. It consumes
+  the feature list (FR-018) and the settings merge (FR-006), and writes the `converted/` folder FR-010 describes. The
+  final acceptance run (FR-019) needs its `inventory` command.
 - [Elsa constitution](../../.specify/memory/constitution.md) E2.7 keeps Elsa 3 behind the import boundary; the engine
   image carries no Elsa 3 code.
 - JOIN behaviour (#4193) and value capture (#5647) keep the suites they block blocked, as in spec 1235.

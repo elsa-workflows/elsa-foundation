@@ -61,7 +61,7 @@ Workbench unchanged (FR-017); no JTest CI tier (FR-023).
 | # | Decision | Detail |
 |---|---|---|
 | P-1 | Hosts | R-1: `apps/Elsa.Essentials.Server`, `Studio/src/apps/Elsa.Studio.Essentials`. |
-| P-2 | List | R-2: `essentials.features.json` embedded in `Elsa.Foundation.Essentials`, every composed feature with a reason. |
+| P-2 | List | R-2: `essentials.features.json` in `Elsa.Foundation.Essentials`, every composed feature with a reason, placed in the image's composition folder (R-12). |
 | P-3 | Merge | R-3: list → baked `appsettings.json` → `/app/config/appsettings.json` → environment → command line, one extension method. |
 | P-4 | Workflows | R-4: `/app/workflows`, flat, published on reconcile. |
 | P-5 | Secrets | R-5: no baked values; existing refusals checked to name the setting. |
@@ -95,7 +95,7 @@ specs/1236-essentials-images/
 ```text
 essentials/src/Foundation/Essentials/
 ├── Elsa.Foundation.Essentials.csproj      # project references of every listed feature
-├── essentials.features.json               # the list (embedded resource)
+├── essentials.features.json               # the list (copied to output and to /app/composition)
 ├── EssentialsFeatureList.cs               # reads the list
 ├── EssentialsFeatureAssemblies.cs         # assemblies for feature discovery
 └── EssentialsConfigurationExtensions.cs   # the merge (P-3)

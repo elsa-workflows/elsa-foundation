@@ -36,7 +36,7 @@ worktree path on Windows (MSB3030).
   secret values (R-5).
 - [ ] T005 Add the project references of every listed feature to `Elsa.Foundation.Essentials.csproj` and list their
   assemblies in `essentials/src/Foundation/Essentials/EssentialsFeatureAssemblies.cs`.
-- [ ] T006 Implement `EssentialsFeatureList` (reads the embedded file) and
+- [ ] T006 Implement `EssentialsFeatureList` (reads `essentials.features.json` first, then every other `*.features.json` in the composition folder in ordinal file-name order, R-12) and
   `EssentialsConfigurationExtensions.AddEssentialsConfiguration` (list → baked settings → optional user file, R-3) in
   `essentials/src/Foundation/Essentials/`.
 - [ ] T007 Write the guard and merge tests in `essentials/tests/Foundation/Essentials/Tests/` (R-6): every entry has a
@@ -146,21 +146,31 @@ publishes `/app/workflows`.
 - [ ] T029 [US4] Leave a hand-over note for the migration CLI specification in the PR: the library name and path, the
   two entry points and the `converted/` layout rule (R-4).
 
+- [ ] T030 [US4] Make the engine read its baked composition from `/app/composition/` (`essentials.features.json` first,
+  then the other `*.features.json` in ordinal order) and register `/app/composition/packages` as a second Nuplane directory feed (R-12): in
+  `apps/Elsa.Essentials.Server/Program.cs`, and in the Dockerfile (copy `essentials.features.json` there, create
+  `packages/`). Add a test in `essentials/tests/Foundation/Essentials/Tests/` that a second list file in the folder adds
+  a feature and merges key by key over an essentials entry.
+- [ ] T031 [US4] Write `essentials/tests/Foundation/Essentials/DerivedImage/Dockerfile` (`FROM` the local engine image,
+  adds `liquid.features.json` and the locally packed Liquid package) and its README; build and start it with a
+  definition that uses a Liquid expression and record the result in the PR evidence (SC-007, scenario 4). Document the
+  extension paths in `docs/docker.md` (T033).
+
 ## Phase 7: Polish
 
-- [ ] T030 [P] Add `elsa-server-essentials` to `.github/workflows/docker.yml` and `elsa-studio-essentials` to
+- [ ] T032 [P] Add `elsa-server-essentials` to `.github/workflows/docker.yml` and `elsa-studio-essentials` to
   `.github/workflows/studio-docker.yml`, same tags and version stamping as their siblings (FR-015).
-- [ ] T031 [P] Add an essentials section to `docs/docker.md`: what the images contain, the four mounts, the required
+- [ ] T033 [P] Add an essentials section to `docs/docker.md`: what the images contain, the four mounts, the required
   settings, how to add a feature, and that the composition cannot be edited.
-- [ ] T032 Regenerate the solution filters and check maps (`dotnet run --project tools/maps/Elsa.Maps.Generator -- check`;
+- [ ] T034 Regenerate the solution filters and check maps (`dotnet run --project tools/maps/Elsa.Maps.Generator -- check`;
   on Windows compare with `git diff --stat`).
-- [ ] T033 Confirm the Workbench, its image, its compose files and S-15's Workbench run are unchanged (FR-017).
-- [ ] T034 Set the spec status to Implemented in the PR that finishes the work.
+- [ ] T035 Confirm the Workbench, its image, its compose files and S-15's Workbench run are unchanged (FR-017).
+- [ ] T036 Set the spec status to Implemented in the PR that finishes the work.
 
 ## Dependencies
 
 - Phase 1 → Phase 2 → US1. US2 needs US1, S-15's Elsa 4 run on the same head and the CLI's `inventory`. US3 needs
-  US1 (an engine to sign in to). US4 needs Phase 2 and T011.
+  US1 (an engine to sign in to). US4 needs Phase 2 and T011; T030–T031 need T009 and T015.
 - T004 before T005–T007. T011 needs T009. T020 may change T004's list; rerun T007 and T011 after it.
 
 ## Parallel examples
@@ -168,7 +178,7 @@ publishes `/app/workflows`.
 - Phase 1: T002 and T003 together after T001.
 - US1: T014 while T009–T013 are in progress.
 - US3 (T022–T025) and US4 (T028–T029) can run while US2 waits for the CLI.
-- Polish: T030 and T031 together.
+- Polish: T032 and T033 together.
 
 ## Implementation strategy
 

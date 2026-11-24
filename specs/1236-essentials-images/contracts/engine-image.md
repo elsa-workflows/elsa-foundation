@@ -26,14 +26,24 @@ The engine refuses to start, naming the setting, when one of these is empty:
 | `CShells:Shells:default:Features:WorkflowsRuntimeApi:WorkflowAlterationPayloadProtectionKeys` and `...ActiveKeyId` | Protects workflow alteration payloads. |
 | `Elsa:ModuleManagement:ApiKey` | Shared with the Studio image's management bridge. |
 
+The final list is whatever the composed features require; the implementation checks it against the refusals and
+updates this table and `appsettings.example.json` together.
+
 ### Studio settings
 
 Not required to start; set them when Studio is used. `Cors:AllowedOrigins` and the identity feature's
 `AllowedReturnUrlOrigins` hold the Studio origin. The essentials list bakes no origins, so a user's list starts at
 index 0.
 
-The final list is whatever the composed features require; the implementation checks it against the refusals and
-updates this table and `appsettings.example.json` together.
+### Extending the image (`FROM`)
+
+| Path | Owner | Purpose |
+|---|---|---|
+| `/app/composition/essentials.features.json` | engine image | The essentials list. A derived image does not change it. |
+| `/app/composition/<name>.features.json` | derived image | Its added baked features. The essentials list is read first, then the other files in ordinal file-name order. |
+| `/app/composition/packages/` | derived image | Packages of its added features, loaded by Nuplane like `/app/packages`. |
+
+A derived image uses the same version tag as its base. Users configure it exactly as the engine.
 
 ## `elsaworkflows/elsa-studio-essentials`
 

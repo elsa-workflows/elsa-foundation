@@ -19,7 +19,7 @@ Facts are from `origin/initiative/3052-elsa3-to-elsa4-conversion` at `2db2d8a899
 
 ## R-2 One feature list
 
-- **Decision**: one JSON file, `essentials.features.json`, embedded in a small library
+- **Decision**: one JSON file, `essentials.features.json`, kept in a small library
   `essentials/src/Foundation/Essentials/Elsa.Foundation.Essentials`. Each entry holds the feature name, its baked
   settings and its reason. The library also holds the project references of every listed feature, an
   `EssentialsFeatureAssemblies` list for feature discovery, and the settings merge (R-3). The engine host and the
@@ -161,3 +161,22 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
   (HTTP trigger, `WriteHttpResponse`) doubles as the quickstart example.
 - **Ordering**: the final acceptance task waits for the CLI's `inventory` command and for S-15's Elsa 4 run on the
   same head.
+
+## R-12 Base image for derived images
+
+- **Decision**: the engine reads its baked composition from a folder, `/app/composition/`: `essentials.features.json`
+  first, then every other `*.features.json` in ordinal file-name order (the essentials image holds only the first), and registers
+  `/app/composition/packages` as a second Nuplane directory feed next to the user's `/app/packages`. An image built
+  `FROM` the engine adds a list file (for example `elsa3.features.json`) and its packages there. Its features are baked
+  like the essentials ones; the user's `appsettings.json` applies over both.
+- **Rationale**: the Elsa 3 migration image is built `FROM` the engine at the same version (Joey on PR #5669, spec Q7)
+  and must add the converter and import features without copying the essentials list. Packages are the extension
+  path the engine already has for user features, so a derived image needs no rebuilt host. Keeping baked packages out
+  of `/app/packages` means a user's mount there cannot hide them.
+- **Proof**: a test Dockerfile, `essentials/tests/Foundation/Essentials/DerivedImage/Dockerfile`, builds `FROM` the
+  local engine image, adds a list naming the Liquid feature and the locally packed Liquid package, and starts; a
+  Liquid expression in a definition in the workflows folder then evaluates (SC-007). It is a manual check recorded in
+  the PR evidence, not a CI job.
+- **Alternatives**: the derived image rebuilds its own host from source with extra project references (it then ships a
+  second engine binary and the "same composition" promise rests on two builds staying in step); environment variables
+  in the derived Dockerfile (settings only, cannot add assemblies).
