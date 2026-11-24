@@ -26,5 +26,6 @@ A refusal to run (exit code 2) writes no report: the skill reads the `docker run
 reason on standard error (spec 1237's command-line contract) and stops (FR-022).
 
 A storage-driver finding names the Elsa 3 driver, memory or custom, as a storage-driver component; the skill answers
-it with the case 17 interview, not with a port. Once the pending converter change lands it is a Reconsider finding
-(no remedy) for both drivers, which spec 1237 lists as components; until then it is the converter's refusal.
+it with the case 17 interview, not with a port, once per driver type (the component name), not once per finding.
+Once the pending converter change lands it is a Reconsider finding (no remedy) for both drivers, which spec 1237
+lists as components; until then it is the converter's refusal.

@@ -11,9 +11,9 @@ and the check's `--self-test`. The skill text itself is verified by the walkthro
 beyond xunit.
 
 **Dependencies outside this spec**: T013 and case 14 follow the converter's global-matching rule as merged at the
-time (a change to it is pending). T029–T031 with a storage driver in the sample export need the pending converter
-change that turns storage-driver refusals into Reconsider findings; before it, the walkthrough checks the interview
-on the refusal. T021 takes the migration image's name and tags from spec 1237. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
+time (a change to it is pending). T018's case 17 and T029–T031 with a storage driver in the sample export need the
+pending converter change that converts storage drivers with Reconsider findings and adds the storage-driver
+migration guide; before it, the walkthrough checks the interview on the refusal. T021 takes the migration image's name and tags from spec 1237. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
 need spec 1237's `report.json` schema agreed. Everything else can start once this spec is approved.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -82,8 +82,9 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T
 - [ ] T018 [US3] Write `skill/porting-catalog.md`: an introduction (how to use a case, the verdicts, apply cases in
   order), then cases 01–19 in the [entry shape](contracts/catalog-entry.md) with the FR-014 verdicts and the R-2
   evidence turned into plain guidance. Case 14 states the replaced-global rules of research R-2. *Port* "after" blocks are copied from the sample regions; *redesign* parts name
-  the alternatives and offer no workaround code. Case 17 is an *interview*: find the Elsa 4 features that keep a
-  value from being persisted, verify them in the code, and write the questions and the per-objective guidance. Elsa 3 "before" examples are written for the catalog, synthetic.
+  the alternatives and offer no workaround code. Case 17 is an *interview*, once per driver type: restate the
+  questions and goals of the Elsa 3 storage-driver migration guide in `docs/migration/` (secret, bulky data, another
+  store, no reason), verify the Elsa 4 features it names in the code, and link the guide for further reading. Elsa 3 "before" examples are written for the catalog, synthetic.
 - [ ] T019 [US3] Run the check; fix until it passes. Review that every case's search finds the "before" example.
   SC-006: rename an Elsa 4 member a region uses in a scratch commit, confirm the sample build or the check fails, then
   drop the commit.
@@ -122,7 +123,8 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T
 - [ ] T025 [P] [US5] Add a "Changing the converter" section to `extensions/Elsa3/src/Mapping/README.md` (FR-018): a
   converter change needs JTest suites for it (the JTest suite folder of spec 1235, written as a code path, not a link,
   until that folder exists) and a skill update (catalog, plan
-  template); an Elsa 4 activity authoring API change used by a *port* case needs the sample and catalog updated.
+  template, and case 17 when the storage-driver migration guide changes); an Elsa 4 activity authoring API change used
+  by a *port* case needs the sample and catalog updated.
 - [ ] T026 [P] [US5] Add a one-line pointer to that section in `AGENTS.md`, and one line in `docs/skills/catalog.md`
   saying that user-facing product skills live under `plugins/` and are not contributor workflows.
 
