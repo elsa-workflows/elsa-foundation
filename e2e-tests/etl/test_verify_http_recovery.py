@@ -15,6 +15,27 @@ etl=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(etl)
 EVIDENCE=etl.q.REPO/"specs/1017-direct-bpmn-hosting/evidence/pipeline/native-http-reference"
 
 
+class ProtectedWorkerSchemaTests(unittest.TestCase):
+    def test_each_capture_pins_its_exact_known_writer(self):
+        state={'modelWorkOrigin': {'workerExecutionId': 'opaque'}}
+        for expected in ('2.0.0','2.1.0'):
+            for actual in ('1.0.0','2.0.0','2.1.0','2.2.0','unknown'):
+                with self.subTest(expected=expected,actual=actual):
+                    self.assertEqual(actual==expected,etl.protected_worker_schema(actual,state,expected))
+        self.assertFalse(etl.protected_worker_schema('2.2.0',state,'2.2.0'))
+
+    def test_historical_version_refuses_even_null_protected_fields(self):
+        for name in ('ingressOrigin','IngressOrigin','stimulusDeliveryOrigin','STIMULUSDELIVERYORIGIN'):
+            with self.subTest(name=name):
+                self.assertFalse(etl.protected_worker_schema('2.0.0',{'modelWorkOrigin':{},name:None},'2.0.0'))
+        for name in ('ingressOrigin','IngressOrigin','INGRESSORIGIN'):
+            self.assertFalse(etl.protected_worker_schema('2.0.0',{'modelWorkOrigin':{name:None}},'2.0.0'))
+
+    def test_current_gate_version_is_valid_with_or_without_ingress(self):
+        for state in ({'modelWorkOrigin':{}}, {'modelWorkOrigin':{'ingressOrigin':None},'ingressOrigin':None}):
+            self.assertTrue(etl.protected_worker_schema('2.1.0',state,'2.1.0'))
+
+
 class _ActualRecoveryControls(unittest.TestCase):
     evidence=EVIDENCE
 

@@ -289,6 +289,7 @@ try
             ? new[] { "Elsa.Studio.Web.dll", "Elsa.Studio.Hosting.dll", "Elsa.Studio.Core.dll", "Elsa.Studio.Workflows.dll" }
             : args[0] == "--inspect-native-bpmn-products"
             ? new[] { "Elsa.Workbench.dll", "Elsa.Activities.Bpmn.Core.dll", "Elsa.Activities.Bpmn.dll", "Elsa.Activities.Bpmn.Api.dll",
+                "Elsa.Serialization.Core.dll", "Elsa.Activities.Runtime.Core.dll",
                 "Elsa.Workflows.Runtime.Core.dll", "Elsa.Workflows.Runtime.dll", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
                 "Elsa.Etl.Core.dll", "Elsa.Etl.Runtime.dll", "Elsa.Etl.Workflows.Runtime.dll", "Elsa.Etl.Persistence.EntityFrameworkCore.dll", "Elsa.Etl.Runtime.Api.dll" }
             : new[] { "Elsa.Workbench.dll", "Elsa.Etl.Core.dll", "Elsa.Etl.Runtime.dll", "Elsa.Etl.Workflows.Runtime.dll", "Elsa.Etl.Persistence.EntityFrameworkCore.dll", "Elsa.Etl.Runtime.Api.dll" };
