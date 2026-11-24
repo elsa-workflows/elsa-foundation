@@ -1,7 +1,7 @@
 using Contract = Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
 
-namespace Kernel.Foundation.InMemory;
+namespace Kernel.Durable;
 
 /// <summary>Qualified read results supplied by the store for a generated root. Reads belong to the
 /// same admitted creation or loaded revision as the envelope or checkpoint passed here.</summary>

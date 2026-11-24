@@ -17,7 +17,8 @@
       "kernel.durable": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )"
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
       "kernel.etl": {

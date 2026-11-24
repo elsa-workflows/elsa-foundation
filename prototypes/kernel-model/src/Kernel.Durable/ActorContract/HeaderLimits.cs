@@ -2,7 +2,7 @@ using System.Text;
 using Contract = Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
 
-namespace Kernel.Foundation.InMemory;
+namespace Kernel.Durable;
 
 /// <summary>The opaque actor metadata budget, expressed in UTF-8 bytes before provider encoding.</summary>
 internal static class HeaderLimits

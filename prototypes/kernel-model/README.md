@@ -32,6 +32,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `conformance/Kernel.Store.Conformance.Run` | The suite against the in-memory store |
 | `conformance/Kernel.Runtime.Conformance` | The runtime conformance suite: semantic cases, the fence broken on purpose, the stress test, for any actor runtime |
 | `conformance/Kernel.Runtime.Conformance.Run` | The runtime suite against the built-in runtime |
+| `src/Kernel.Durable/ActorContract` | The shared actor-turn adapter and header checks consumed by the built-in providers |
 | `../../essentials/src/ActorFoundation/BuiltIn/Hosting` | `RuntimeNode`: the built-in runtime of one node on a clock |
 | `mongo/Kernel.Mongo` | The storage interface on MongoDB |
 | `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |

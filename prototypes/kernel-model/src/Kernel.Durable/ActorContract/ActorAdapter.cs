@@ -3,7 +3,7 @@ using Kernel.Runtime;
 using Contract = Kernel.Foundation.Contracts;
 using Durable = Kernel.Durable;
 
-namespace Kernel.Foundation.InMemory;
+namespace Kernel.Durable;
 
 /// <summary>Runs a contract actor in the owner's turn. The adapter only stages effects.</summary>
 internal sealed partial class ActorAdapter : Durable.IActorType

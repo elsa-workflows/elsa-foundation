@@ -85,6 +85,9 @@ expected = json.loads(Path('expected-workbench-providers.json').read_text())
 manifest = Path('apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.deps.json')
 compile_assets = Path('prototypes/kernel-model/ef/Kernel.EntityFramework/obj/project.assets.json')
 actual = dict(key.rsplit('/', 1) for key in json.loads(manifest.read_text())['libraries'])
+if 'Kernel.Foundation.InMemory' in actual:
+    raise SystemExit('The PostgreSQL preview must not load the in-memory ingress assembly.')
+print('ok PostgreSQL preview uses the durable actor adapter without the in-memory ingress assembly')
 compile_entries = json.loads(compile_assets.read_text())['targets']['net10.0']
 compiled = dict(key.rsplit('/', 1) for key in compile_entries)
 runtime_required = {'Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',

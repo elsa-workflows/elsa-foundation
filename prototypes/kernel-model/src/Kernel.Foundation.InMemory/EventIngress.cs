@@ -62,10 +62,10 @@ internal sealed class EventIngress(Durable.InMemoryStore store, Durable.Requests
         cancellationToken.ThrowIfCancellationRequested();
         if (spec is not null)
         {
-            HeaderLimits.RequireName(correlationKey, nameof(correlationKey));
-            HeaderLimits.RequireName(wait, nameof(wait));
-            HeaderLimits.RequireContent(spec.Input, nameof(spec), Durable.FoundationMetadataLimits.EventStartInputBytes);
-            HeaderLimits.ValidateStart(spec.Type, spec.TypeData, spec.Input);
+            Durable.HeaderLimits.RequireName(correlationKey, nameof(correlationKey));
+            Durable.HeaderLimits.RequireName(wait, nameof(wait));
+            Durable.HeaderLimits.RequireContent(spec.Input, nameof(spec), Durable.FoundationMetadataLimits.EventStartInputBytes);
+            Durable.HeaderLimits.ValidateStart(spec.Type, spec.TypeData, spec.Input);
         }
         var start = spec is null ? null : new Durable.StartSpec(spec.Type, spec.TypeData, spec.Input,
             Ephemeral: spec.Ephemeral, History: (Durable.History)spec.History);
