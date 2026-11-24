@@ -1201,6 +1201,13 @@
       "elsa.actorfoundation.builtin.runtime": {
         "type": "Project"
       },
+      "elsa.actorfoundation.builtin.runtime.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "elsa.actorfoundation.contracts": {
         "type": "Project"
       },
