@@ -41,12 +41,12 @@ read by several agents and renders as an ordinary document on GitHub.
 | 14 | `ConfigureEngine(engine.SetValue(...))`, `EvaluatingJavaScript` handler | `JavaScriptHostFunctionDeclaration("prefix.name", …)` naming the replaced Elsa 3 global | Direct when effect-free and JSON in and out; a function with effects becomes an activity. The converter rewrites direct calls of a declared global only (`lookupCustomer(x)` → `acme.lookupCustomer(x)`); a global assigned or passed as a callback is not rewritten and fails at run time, so the catalog says to make it a direct call first. The catalog also states the conversion's rules in prose: one declaration per global; the global must not clash with a generated variable or input accessor; scripts must not declare the prefix themselves; functions the converter already converts keep that conversion. |
 | 15 | `ILiquidFilter` + `AddLiquidFilter`, expression descriptor providers | Liquid filters closed (`ILiquidFilter` internal); `IExpressionDescriptorProvider` and `IPortableExpressionHandler` are public | Liquid filters: redesign as a host function or an activity. A new syntax: named with its extension points, no example; Elsa 3 projects that add a whole expression language are rare, so no compiled example is built for it. |
 | 16 | `AddVariableTypeAndAlias<T>(alias)` | `IVariableTypeDescriptorProvider` with a dotted alias | Direct. |
-| 17 | `IStorageDriver` + `AddStorageDriver` | Publication refuses non-default variable storage | Redesign: default durable storage. |
+| 17 | `IStorageDriver` + `AddStorageDriver` | `IRuntimeDurableValueStorageDriver`, which spec 1240 extends to workflow variables, inputs and outputs; today publication refuses non-default variable storage | Port once spec 1240 is implemented: the Elsa 3 driver becomes a durable-value storage driver in the feature. Before that, redesign onto default durable storage. |
 | 18 | `FeatureBase` + `UseXxx()` | `[ShellFeature]` `IShellFeature` in a Nuplane package, enabled in `appsettings.json` | Direct. |
 | 19 | `Elsa.Testing.Shared` `ActivityTestFixture` | No shipped helper; build the context, call `IActivity.ExecuteAsync` | Direct, with a few more lines. |
 
 **Alternatives considered**: Porting composites (7) or signals (8) through the engine-only protocol: it is documented
-as not an author surface and would break on engine changes. Emulating storage drivers (17) inside an activity:
+as not an author surface and would break on engine changes. Emulating storage drivers (17) inside an activity while spec 1240 is pending:
 a workaround that hides a semantic change; refuse with guidance instead.
 
 ## R-3 Keeping the catalog's examples correct

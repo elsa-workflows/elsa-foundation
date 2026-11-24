@@ -39,7 +39,7 @@ markdown, or none.
 customer material (the sample is synthetic, `Acme`); no Elsa 3 reference in any project (§E2.7); the skill never
 publishes or deploys.
 
-**Scale/Scope**: 3 skill files, 2 adapter files, 19 catalog cases (16 with a *port* part), 2 projects, 1 check,
+**Scale/Scope**: 3 skill files, 2 adapter files, 19 catalog cases (16 with a *port* part, 17 once spec 1240 is implemented), 2 projects, 1 check,
 3 edited docs (README, Elsa 3 mapping README, `AGENTS.md`).
 
 ## Constitution Check

@@ -10,7 +10,7 @@
 and the check's `--self-test`. The skill text itself is verified by the walkthrough (T029–T031). No test framework
 beyond xunit.
 
-**Dependencies outside this spec**: T021 takes the migration image's name and tags from spec 1237. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
+**Dependencies outside this spec**: T033 and the *port* part of case 17 need spec 1240 implemented. T021 takes the migration image's name and tags from spec 1237. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
 need spec 1237's `report.json` schema agreed. Everything else can start once this spec is approved.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -64,6 +64,9 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T
   the dotted alias.
 - [ ] T015 [P] Tests (case 19): the region is one of the tests above, chosen as the example of building an activity
   execution context and calling the activity.
+- [ ] T033 Storage driver (case 17), after spec 1240 is implemented: a durable-value storage driver registered in
+  `AcmeFeature` (after T014, same file); test that a value round-trips through it. If spec 1240 is not approved, drop
+  this task and keep case 17 *redesign*.
 - [ ] T016 `tools/skills/check_migration_skill.py` per [contracts/catalog-entry.md](contracts/catalog-entry.md), with
   `--self-test` covering every failure rule.
 - [ ] T017 Add a step running the check (self-test, then real) next to `Check catalog and module README links` in
