@@ -20,6 +20,6 @@ export async function openQuestionSection(page: Page, path: string) {
   }
   await expect(section).toBeVisible();
   const trigger = section.locator("button[aria-expanded]").first();
-  if (await trigger.getAttribute("aria-expanded") !== "true") await trigger.click();
+  if (await trigger.count() && await trigger.getAttribute("aria-expanded") !== "true") await trigger.click();
   return section;
 }

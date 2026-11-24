@@ -170,8 +170,8 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
   await picker().selectOption("Europe/Amsterdam");
   await page.goto("/workflows/instances");
   await page.getByRole("button", { name: /^More filters/ }).click();
-  await page.getByLabel("From", { exact: true }).fill("2026-01-15T09:30");
-  await page.getByLabel("To", { exact: true }).fill("2026-07-15T09:30");
+  await page.getByLabel("Workflow run from", { exact: true }).fill("2026-01-15T09:30");
+  await page.getByLabel("Workflow run to", { exact: true }).fill("2026-07-15T09:30");
   const filtered = page.waitForRequest(request => request.method() === "GET" && request.url().includes("/runtime/workflows/instances") && new URL(request.url()).searchParams.has("from"));
   const filteredResponse = page.waitForResponse(response => response.request().method() === "GET" && response.url().includes("/runtime/workflows/instances") && new URL(response.url()).searchParams.has("from"));
   await page.getByRole("button", { name: "Apply filters", exact: true }).click();

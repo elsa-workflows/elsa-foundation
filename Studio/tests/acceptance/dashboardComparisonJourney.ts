@@ -132,6 +132,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     const savedResponse = await saving; expect(savedResponse.ok()).toBe(true); saved = await savedResponse.json() as Resource;
     expect(canonicalDashboardDefinition(saved.definition)).toEqual(canonicalDashboardDefinition(included.definition));
     await page.reload();
+    await openQuestionSection(page, "query.time");
     await expect(page.getByRole("combobox", { name: "Compare with", exact: true })).toHaveValue("absolute");
     const refresh = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/questions/${saved!.id}/execute`));
     await page.getByRole("button", { name: "Preview", exact: true }).click();
