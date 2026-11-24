@@ -22,8 +22,8 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `../../essentials/src/ActorFoundation/BuiltIn/Durable` | Layer 2, durable actors: `Worker` (a partition's activation: inbox, fenced commit, timers, background jobs, events, poison, journal), `DurableHost`, the seam to layer 3 (`IActorType`, `DurableTurn`), the store contract, the in-memory store, the projector, reply addresses for live output |
 | `../../essentials/tests/ActorFoundation/Legacy/Workflows` | Legacy test adapter: `WorkflowInstance` (status, definition, parent and children, suspend, resume, terminate, rebind, delete, the history envelope) and the execution-model contract (`IExecutionModel`, `ITurn`) |
 | `../../essentials/tests/ActorFoundation/Simulation` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
-| `models/Graph` | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
-| `models/Graph.Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
+| [`Graph`](../../essentials/src/Workflows/Runtime/Graph) | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
+| `../../essentials/tests/Workflows/Runtime/Graph/Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
 | `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
 | `../../essentials/tests/ActorFoundation/Native/Run` | Native smoke tests, cost and memory measurement, PostgreSQL Core Preview |
 | `../../essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
@@ -52,7 +52,7 @@ One project at a time (they share `obj/` folders through project references):
 
 ```
 for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ef/Kernel.Ef.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
-dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
+dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release      # the graph engine's corpus
 ```
 
 ## Inspect and retry parked work
@@ -1071,7 +1071,7 @@ $SIM --native-mutations --seeds 20000
 dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic
 $EFC sqlite --checked-fence semantic; $EFC sqlite --fence-in-batch semantic
 $NAT smoke; $NAT cost sqlite
-dotnet test models/Graph.Tests -c Release
+dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release
 mkdir -p .out; $EFR x cost sqlite "Data Source=.out/cost.db" fence=checked                # and fence=batch; delete .out/cost.db* between runs
 $EFR x cost postgres "$PG;Database=kernel_cost" proxy=1 fence=checked                     # and fence=batch; and commit=ef for the reference path
 $EFC postgres "$PG" --checked-fence semantic; $EFC postgres "$PG" --fence-in-batch semantic

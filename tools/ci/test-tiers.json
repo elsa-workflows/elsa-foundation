@@ -7,7 +7,8 @@
   "slowTestMode": "report",
   "flakeTrackerIssue": 3263,
   "ownJobs": {
-    "essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj": "Architecture guards"
+    "essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj": "Architecture guards",
+    "essentials/tests/Workflows/Runtime/Graph/Tests/Elsa.Workflows.Runtime.Graph.Tests.csproj": "Kernel prototype gate"
   },
   "hostLaunchExemptions": [
     {
@@ -20,6 +21,11 @@
     }
   ],
   "projects": [
+    {
+      "project": "essentials/tests/Workflows/Runtime/Graph/Tests/Elsa.Workflows.Runtime.Graph.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
     {
       "project": "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
       "tier": "integration",

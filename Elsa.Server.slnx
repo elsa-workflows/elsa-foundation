@@ -262,7 +262,6 @@
     <Project Path="essentials/tests/ActorFoundation/Native/Run/Elsa.ActorFoundation.Native.Run.csproj" />
   </Folder>
   <Folder Name="/prototypes/kernel-model/models/">
-    <Project Path="prototypes/kernel-model/models/Graph/Kernel.Graph.csproj" />
     <Project Path="prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
     <Project Path="prototypes/kernel-model/models/Native.Activities/Kernel.Native.Activities.csproj" />
     <Project Path="prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj" />
@@ -570,6 +569,7 @@
     <Project Path="essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Workflows/Runtime/">
+    <Project Path="essentials/src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
@@ -945,6 +945,9 @@
   <Folder Name="/essentials/tests/Workflows/Runtime/Fixtures/" />
   <Folder Name="/essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/">
     <Project Path="essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/IndependentTriggers.Consumer.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Graph/">
+    <Project Path="essentials/tests/Workflows/Runtime/Graph/Tests/Elsa.Workflows.Runtime.Graph.Tests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/">
     <Project Path="essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />

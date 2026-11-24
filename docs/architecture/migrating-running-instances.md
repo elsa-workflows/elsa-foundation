@@ -26,7 +26,7 @@ Terms used here: a **frame** is the native model's record of one live activity (
 | A public `Migrate` command rebinds a compatible structured Native checkpoint with unchanged declarations through the in-memory Actor Foundation | Built and witnessed for the structured subset | [Native migration application](../../prototypes/kernel-model/README.md#apply-a-compatible-native-migration) |
 | Explicit frame or path mapping and per-activity state versions in the frame | Proposed | See the design below |
 
-The Flowchart's state carries no version of its own in the prototype: the extracted graph engine dropped main's private-state envelope ([Graph README](../../prototypes/kernel-model/models/Graph/README.md), "What was adapted"), so the native model's whole-state version covers it.
+The Flowchart's state carries no version of its own in the prototype: the extracted graph engine dropped main's private-state envelope ([Graph README](../../essentials/src/Workflows/Runtime/Graph/README.md), "What was adapted"), so the native model's whole-state version covers it.
 
 ## Proposed: state versions at two levels
 
