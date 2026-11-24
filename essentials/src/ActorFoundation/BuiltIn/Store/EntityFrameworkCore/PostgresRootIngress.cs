@@ -1,10 +1,19 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
 
-internal sealed class PostgresRootIngress(PostgresRootAdmission admission, string actorType) : Contract.IIngress
+internal sealed class PostgresRootIngress(PostgresRootAdmission admission, string actorType,
+    Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeTerminate = null) : Contract.IIngress
 {
+    private static readonly JsonSerializerOptions OperatorJson = new()
+    {
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        AllowDuplicateProperties = false
+    };
+
     public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -15,7 +24,10 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         if (Contract.Kinds.IsCommand(kind))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return new(Contract.AdmissionOutcome.Refused);
+            return kind == Contract.Kinds.Terminate && target is Contract.Target.Ref exact &&
+                PostgresRootAdmission.IsIssuedReferenceShape(exact.Actor.Id) && authorizeTerminate?.Invoke(scope, exact.Actor) == true
+                ? await TerminateAsync(scope, exact.Actor, id, payload, options, cancellationToken)
+                : new(Contract.AdmissionOutcome.Refused);
         }
         if (target is Contract.Target.Start start)
         {
@@ -51,6 +63,32 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         };
     }
 
+    private async ValueTask<Contract.Admission> TerminateAsync(Contract.BoundScope scope, Contract.ActorRef actor, string id,
+        string? payload, Contract.AddOptions? options, CancellationToken token)
+    {
+        if (!FoundationMetadataLimits.IsOutsideMessageId(id) || payload is null || payload.Length > 2_048)
+            return new(Contract.AdmissionOutcome.Refused);
+
+        Contract.OperatorCommand? command;
+        try { command = JsonSerializer.Deserialize<Contract.OperatorCommand>(payload, OperatorJson); }
+        catch (JsonException) { return new(Contract.AdmissionOutcome.Refused); }
+
+        if (command is not { ThenDelete: false, Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null })
+            return new(Contract.AdmissionOutcome.Refused);
+        if (command.ExpectedTarget is { } selected && selected != actor)
+            return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
+        if (command.Selection is not { Length: > 0 } selection)
+            return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
+        var receipt = await admission.AdmitRootOperatorAsync(scope.Tenant, actor.Id, id, Contract.Kinds.Terminate,
+            options?.DueAt, options?.KeepFor, token, selection);
+        return receipt switch
+        {
+            { Duplicate: true } => new(Contract.AdmissionOutcome.Duplicate, new Contract.ActorRef(receipt.Reference)),
+            { Duplicate: false } => new(Contract.AdmissionOutcome.Accepted, new Contract.ActorRef(receipt.Reference)),
+            _ => new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection)
+        };
+    }
+
     public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("Held requests are outside the ordinary generated-root preview.");
@@ -75,6 +113,21 @@ public sealed partial class EfStore
         if (!db.Database.IsNpgsql() || db.RequiredFormat != StoreFormat.Current)
             throw new NotSupportedException("Installation requires the ordinary PostgreSQL generated-root preview.");
         await PostgresRootAdmission.InstallAsync(db, cancellationToken, exclusiveFormat: true);
+    }
+
+    // The host authenticates the caller and authorizes termination of the supplied exact reference.
+    internal async ValueTask<Contract.IIngress> OpenSelectedRootIngressAsync(string actorType, TimeSpan deduplicationWindow,
+        Func<Contract.BoundScope, Contract.ActorRef, bool> authorizeTerminate, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(authorizeTerminate);
+        PostgresRootAdmission.RequireActorType(actorType);
+        ArgumentOutOfRangeException.ThrowIfLessThan(deduplicationWindow, TimeSpan.Zero);
+        if (!postgres || Engine is not null) throw new NotSupportedException("Selected root ingress requires PostgreSQL.");
+        await using var db = create();
+        if (!db.Database.IsNpgsql() || !db.UsesRootTerminalSelection)
+            throw new NotSupportedException("Selected root ingress requires the PostgreSQL selection profile.");
+        await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
+        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType, authorizeTerminate);
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Kernel.EntityFramework;
 
@@ -27,7 +28,7 @@ internal sealed partial class PostgresRootAdmission
             """, token);
 
     internal async Task<Receipt?> AdmitRootOperatorAsync(string tenant, string reference, string operation, string kind, long? due,
-        TimeSpan? keepFor, CancellationToken token)
+        TimeSpan? keepFor, CancellationToken token, string? runningSelection = null)
     {
         if (kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate) || !FoundationMetadataLimits.IsOutsideMessageId(operation))
             throw new ArgumentException("Expected a one-way exact-root operator command.");
@@ -37,53 +38,112 @@ internal sealed partial class PostgresRootAdmission
         var digest = FoundationRootCreator.OperationDigest(operation);
         await using var db = create();
         if (!db.UsesRootOperatorProtocol || kind == Kinds.Terminate && !db.UsesRootTermination) return null;
+        var selectedTermination = db.UsesRootTerminalSelection && kind == Kinds.Terminate;
+        if (selectedTermination != (runningSelection is not null)) return null;
+
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
-        await EfStore.RequireStoreVersionsAsync(db, token);
-        var address = await RootAddressAsync(db, tenant, reference, token);
-        if (address is null)
+        try
         {
-            await tx.RollbackAsync(token);
-            return null;
+            if (selectedTermination)
+            {
+                await PinSelectedOperatorSchemaAsync(db, token);
+                if (!PostgresRootSelection.MatchesRunning(await ReadJournalCursorAsync(db, token), runningSelection, tenant, reference))
+                    return null;
+            }
+            else
+                await EfStore.RequireStoreVersionsAsync(db, token);
+            var address = await RootAddressAsync(db, tenant, reference, token);
+            if (address is null)
+            {
+                await tx.RollbackAsync(token);
+                return null;
+            }
+            // Lock the selected checkpoint before reading its receipt. If the command already
+            // ended this actor, the receipt committed before the owner could consume it.
+            var selectedStatus = selectedTermination
+                ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
+                : null;
+            var prior = await db.Database.SqlQuery<string>($"""
+                SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts"
+                WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                """).SingleOrDefaultAsync(token);
+            if (prior is not null)
+            {
+                await tx.CommitAsync(token);
+                return selectedTermination && prior != reference ? null : new(prior, true);
+            }
+            var status = selectedTermination ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
+            if (status != InstanceStatus.Running)
+            {
+                await tx.RollbackAsync(token);
+                return null;
+            }
+            var receipt = await db.Database.SqlQuery<long>($"""
+                INSERT INTO "FoundationOperatorReceipts" AS r ("Tenant","Operation","Reference","Until")
+                VALUES ({tenant},{digest},{reference},floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
+                ON CONFLICT ("Tenant","Operation") DO UPDATE SET "Reference" = EXCLUDED."Reference",
+                    "Until" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs}
+                WHERE r."Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint RETURNING "Until" AS "Value"
+                """).ToListAsync(token);
+            if (receipt.Count == 0)
+            {
+                // A competing transaction recorded this operation while we qualified the requested root.
+                prior = await db.Database.SqlQuery<string>($"""
+                    SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
+                    """).SingleAsync(token);
+                await tx.CommitAsync(token);
+                return selectedTermination && prior != reference ? null : new(prior, true);
+            }
+            var actor = new InstanceRef(address.Id);
+            var id = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
+            var header = OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0));
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
+                VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0)
+                """, token);
+            await tx.CommitAsync(token);
+            return new(reference, false);
         }
-        var prior = await db.Database.SqlQuery<string>($"""
-            SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts"
-            WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+        catch (PostgresException error) when (selectedTermination && IsUnavailableSelectedSchema(error))
+        {
+            throw new StoreFormatException("The selected operator admission schema is unreadable.", error);
+        }
+    }
+
+    private static bool IsUnavailableSelectedSchema(PostgresException error) =>
+        error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn
+            or PostgresErrorCodes.InvalidSchemaName or PostgresErrorCodes.WrongObjectType;
+
+    private sealed record SelectedOperatorStore(int StoreSchema, int MessageProtocol, int JournalCodec, string Namespace);
+
+    private static async Task PinSelectedOperatorSchemaAsync(KernelDb db, CancellationToken token)
+    {
+        var marker = await db.Database.SqlQuery<SelectedOperatorStore>($"""
+            SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", ns.nspname AS "Namespace"
+            FROM "KernelStoreVersions" v
+            JOIN pg_catalog.pg_class c ON c.oid = v.tableoid
+            JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace
+            WHERE v."Id" = {StoreVersionEntity.MarkerId}
+            FOR SHARE OF v
             """).SingleOrDefaultAsync(token);
-        if (prior is not null)
-        {
-            await tx.CommitAsync(token);
-            return new(prior, true);
-        }
-        if (await AdmissionStatusAsync(db, address, tenant, reference, token) != InstanceStatus.Running)
-        {
-            await tx.RollbackAsync(token);
-            return null;
-        }
-        var receipt = await db.Database.SqlQuery<long>($"""
-            INSERT INTO "FoundationOperatorReceipts" AS r ("Tenant","Operation","Reference","Until")
-            VALUES ({tenant},{digest},{reference},floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs})
-            ON CONFLICT ("Tenant","Operation") DO UPDATE SET "Reference" = EXCLUDED."Reference",
-                "Until" = floor(extract(epoch from clock_timestamp()) * 1000)::bigint + {windowMs}
-            WHERE r."Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint RETURNING "Until" AS "Value"
-            """).ToListAsync(token);
-        if (receipt.Count == 0)
-        {
-            // A competing transaction recorded this operation while we qualified the requested root.
-            prior = await db.Database.SqlQuery<string>($"""
-                SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
-                """).SingleAsync(token);
-            await tx.CommitAsync(token);
-            return new(prior, true);
-        }
-        var actor = new InstanceRef(address.Id);
-        var id = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
-        var header = OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0));
+        EfStore.RequireSnapshotFormat(db.RequiredFormat, marker?.StoreSchema, marker?.MessageProtocol, marker?.JournalCodec);
+        var source = marker!.Namespace;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
-            VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0)
+            SELECT pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident({source}) || ',pg_temp', true)
             """, token);
-        await tx.CommitAsync(token);
-        return new(reference, false);
+        await db.Database.ExecuteSqlRawAsync("""
+            LOCK TABLE "FoundationRootIssuer", "FoundationRootBirths", "Instances", "FoundationOperatorReceipts", "Messages"
+            IN ACCESS SHARE MODE
+            """, token);
+        var sameSchema = await db.Database.SqlQuery<bool>($"""
+            SELECT count(*) = 6 AS "Value"
+            FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
+                ('"Instances"'), ('"FoundationOperatorReceipts"'), ('"Messages"')) required(name)
+            JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name)
+            JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = {source}
+            """).SingleAsync(token);
+        if (!sameSchema)
+            throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
     }
 
     // A candidate read. A subsequent owner must recheck the command and checkpoint at its fence before applying it.

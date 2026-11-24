@@ -7,7 +7,7 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    internal sealed record RootListItem(string Reference, string Type, InstanceStatus Status, long? EndedAt, long? TerminalRevision,
+    internal sealed record RootListItem(string Reference, string Type, InstanceStatus Status, long? EndedAt, long? TerminalRevision, bool SupportsSelection,
         string TypeData, IReadOnlyDictionary<string, string> Labels);
     internal sealed record RootListPage(IReadOnlyList<RootListItem> Items, long AsOf);
 
@@ -302,6 +302,6 @@ public sealed partial class EfStore
             : endedAt is null || terminalRevision is not > 0))
             throw new StoreFormatException("The actor list terminal mark is incomplete.");
         var header = DurableKeyJson.Read<RootHeader>(encodedHeader);
-        return new(reference, header.Model, (InstanceStatus)status, endedAt, terminalRevision, header.TypeData, header.Labels.ToDictionary(StringComparer.Ordinal));
+        return new(reference, header.Model, (InstanceStatus)status, endedAt, terminalRevision, qualified, header.TypeData, header.Labels.ToDictionary(StringComparer.Ordinal));
     }
 }
