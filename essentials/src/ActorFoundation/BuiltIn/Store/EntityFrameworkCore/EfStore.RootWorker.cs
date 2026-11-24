@@ -211,7 +211,8 @@ public sealed partial class EfStore
                 WHERE b."Tenant" = {Root.Tenant} AND b."Reference" = {Root.Reference} AND b."Actor" = {Root.Actor}
                     AND b."Creation" = 1 AND i."Partition" = {Root.Partition} AND NOT i."Retired"
                     AND (i."Status" = {(int)InstanceStatus.Finished} OR
-                        ({db.UsesRootTermination} AND i."Status" = {(int)InstanceStatus.Cancelled}) OR
+                        ({db.UsesRootTermination} AND i."Status" = {(int)InstanceStatus.Cancelled}
+                            AND starts_with(i."State", {TerminationRootStateFamily})) OR
                         ({db.UsesRootTimedJobSettlement} AND i."Status" = {(int)InstanceStatus.Faulted}
                             AND starts_with(i."State", {TimedRootStateFamily})))
                     AND i."FoundationTerminalAt" IS NOT NULL AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i

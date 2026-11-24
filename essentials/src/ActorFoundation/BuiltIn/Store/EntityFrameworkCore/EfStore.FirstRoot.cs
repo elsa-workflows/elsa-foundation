@@ -10,11 +10,13 @@ public sealed partial class EfStore
     private const int RootContentBytes = 16 * 1024 * 1024 - 24 * 1024;
 
     private const string PublicRootState = StoredState.Family + "4:public-root:";
+    internal const string TerminationRootStateFamily = StoredState.Family + "11:public-root-termination:";
     internal const string TimedRootStateFamily = StoredState.Family + "6:public-root-timed-jobs:";
     private static string RootStateFamily(KernelDb db) => db switch
     {
         { UsesRootValueProtocol: true } => StoredState.Family + "5:public-root-values:",
         { UsesRootTimedJobSettlement: true } => TimedRootStateFamily,
+        { UsesRootTermination: true } => TerminationRootStateFamily,
         { UsesRootReplyProtocol: true } => StoredState.Family + "7:public-root-replies:",
         _ => PublicRootState
     };

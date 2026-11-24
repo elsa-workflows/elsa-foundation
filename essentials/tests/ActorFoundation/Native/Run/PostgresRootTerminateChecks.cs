@@ -11,7 +11,7 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootTerminateChecks
 {
-    internal static async Task<int> RunAsync(bool inBatch)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch)
     {
         const string operation = "terminate-copy";
         const string definition = "before-upgraded-turn";
@@ -20,9 +20,12 @@ internal static class PostgresRootTerminateChecks
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         KernelDb Open() => KernelDb.ForPostgresRootTerminations(options);
-        EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch);
+        EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch)
+            { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var stop = timeout.Token;
+        await using (var db = Open())
+            Check(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the qualification uses an empty PostgreSQL database");
         var cold = Store();
         await cold.CreateAsync(1);
         var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
@@ -43,6 +46,7 @@ internal static class PostgresRootTerminateChecks
         Message held;
         long priorEpoch;
         int priorBytes;
+        string inbox;
         await using (var owner = await Own("writer", writer))
         {
             var start = await Drive(owner, image => image is { Revision: 1 });
@@ -57,7 +61,9 @@ internal static class PostgresRootTerminateChecks
             prior = await Drive(owner, image => image is { Revision: 3, Suspended: true });
             priorEpoch = ((Worker)owner).Epoch;
             priorBytes = await PhysicalBytes(prior.Actor.Id);
-            Check(Version(prior) == 13 && Json.Read<NativeState>(prior.State!).Inboxes!.Values.Single().Closed is null &&
+            var previousInbox = Json.Read<NativeState>(prior.State!).Inboxes!.Single();
+            inbox = previousInbox.Key;
+            Check(Version(prior) == 13 && previousInbox.Value.Closed is null &&
                 priorBytes is > payloadLength and < 16_457_728,
                 "the actual Native workflow checkpoints v13 near the limit with its invocation inbox open");
 
@@ -91,9 +97,10 @@ internal static class PostgresRootTerminateChecks
             var terminalState = Json.Read<NativeState>(ended.State!);
             var retained = terminalState.Frames.Values.Single(item => item.Node == "approval")
                 .State!.AsArray().Single()!.GetValue<string>();
+            var closed = terminalState.Inboxes!.Single();
             Check(ended is { Revision: 4, TerminalRevision: 4, TerminalAt: > 0 } && Version(ended) == native.StateVersion &&
                 reader.UpgradedOnTerminate && reader.OrdinaryTurns == 0 &&
-                terminalState.Inboxes!.Values.Single().Closed is not null &&
+                closed.Key == inbox && closed.Value.Closed == "cancelled" &&
                 retained.Length == payloadLength && retained.AsSpan().IndexOfAnyExcept('x') < 0,
                 "the first upgraded turn cancels the root and closes the real invocation inbox");
             var bytes = await PhysicalBytes(ended.Actor.Id);
@@ -103,17 +110,40 @@ internal static class PostgresRootTerminateChecks
             var replay = await Control(tenant, operation, Contract.Kinds.Terminate);
             Check(replay is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var original } && original == actor,
                 "replaying the operator id returns the original creation after completion");
+            Check(!(await HeldRow(held.InboxKey)).Done, "the withheld input is still pending at the terminal checkpoint");
+            await CheckDirectReplay("before the withheld approval is disposed");
             await owner.WokenAsync(null, stop);
             for (var pass = 0; pass < 8 && !(await HeldRow(held.InboxKey)).Done; pass++) await owner.RunAsync(stop);
             Check((await HeldRow(held.InboxKey)).Done && reader.OrdinaryTurns == 0 &&
                 (await cold.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop))?.Revision == 4,
                 "the withheld approval is disposed without an authored turn or a new revision");
+            await CheckDirectReplay("after the withheld approval is disposed");
             var history = await cold.ReadJournalOfAsync(0, ended.Actor.Id, 0, stop);
-            Check(history.Last().Revision == 4 && history.Count(row => row.Revision == 4) == 1 &&
-                !history.SelectMany(row => Json.Read<string[]>(row.Entries)).Contains("approved:later"),
-                "the journal records one terminal revision and no withheld approval");
+            var entries = history.SelectMany(row => Json.Read<string[]>(row.Entries)).ToArray();
+            Check(history.Last() is { Revision: 4, Entries: """["end"]""" } && history.Count(row => row.Revision == 4) == 1 &&
+                entries.Count(entry => entry == "approved:first") == 1 && !entries.Contains("approved:later"),
+                "the journal records the original approval once and the exact ending entry");
+            var legacyReader = new EfStore(() => KernelDb.ForPostgresRootOperators(options), postgres: true);
+            try
+            {
+                await legacyReader.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop);
+                throw new InvalidOperationException("The prior operator reader decoded a format-11 checkpoint.");
+            }
+            catch (StoreException error) when (error.Failure == Failure.Definite && error.Message == "Unsupported qualified actor checkpoint.")
+            {
+                Console.WriteLine("ok the prior reader refuses the persisted terminal checkpoint");
+            }
         }
         return 0;
+
+        async Task CheckDirectReplay(string phase)
+        {
+            var target = new Contract.Target.Ref(actor);
+            var old = await basic.SendAsync(tenant, target, held.Id, held.Kind, held.Payload, cancellationToken: stop);
+            var fresh = await basic.SendAsync(tenant, target, "new-approval", held.Kind, held.Payload, cancellationToken: stop);
+            Check(old.Outcome == Contract.AdmissionOutcome.Duplicate && fresh.Outcome == Contract.AdmissionOutcome.Refused,
+                $"replay keeps its receipt and fresh input is refused {phase}");
+        }
 
         async Task<Contract.Admission> Control(Contract.BoundScope scope, string id, string kind) =>
             await api.SendAsync(scope, new Contract.Target.Ref(actor), id, kind, cancellationToken: stop);

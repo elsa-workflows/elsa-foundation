@@ -89,7 +89,11 @@ internal sealed partial class PostgresRootAdmission
         {
             var terminal = status == InstanceStatus.Finished ||
                 status == InstanceStatus.Faulted && db.UsesRootTimedJobSettlement &&
-                await IsTimedFaultTerminalAsync(db, address, tenant, reference, cancellationToken);
+                await IsQualifiedTerminalAsync(db, address, tenant, reference, InstanceStatus.Faulted,
+                    EfStore.TimedRootStateFamily, cancellationToken) ||
+                status == InstanceStatus.Cancelled && db.UsesRootTermination &&
+                await IsQualifiedTerminalAsync(db, address, tenant, reference, InstanceStatus.Cancelled,
+                    EfStore.TerminationRootStateFamily, cancellationToken);
             if (terminal && await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "FoundationDirectReceipts"
                     WHERE "Reference" = {reference} AND "Operation" = {digest}
@@ -165,13 +169,13 @@ internal sealed partial class PostgresRootAdmission
     }
 
     // AdmissionStatusAsync already holds a share lock on this exact checkpoint until the receipt lookup ends.
-    private static Task<bool> IsTimedFaultTerminalAsync(KernelDb db, CreationAddress address, string tenant, string reference,
-        CancellationToken cancellationToken) =>
+    private static Task<bool> IsQualifiedTerminalAsync(KernelDb db, CreationAddress address, string tenant, string reference,
+        InstanceStatus status, string stateFamily, CancellationToken cancellationToken) =>
         db.Database.SqlQuery<bool>($"""
             SELECT EXISTS (SELECT 1 FROM "Instances"
                 WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
                     AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
-                    AND "Status" = {(int)InstanceStatus.Faulted} AND starts_with("State", {EfStore.TimedRootStateFamily})
+                    AND "Status" = {(int)status} AND starts_with("State", {stateFamily})
                     AND "FoundationTerminalAt" IS NOT NULL AND "FoundationTerminalRevision" = "Revision") AS "Value"
             """).SingleAsync(cancellationToken);
 
