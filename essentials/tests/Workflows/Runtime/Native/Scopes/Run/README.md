@@ -1,6 +1,6 @@
 # Ordinary native lexical-resource probe
 
-Build `dotnet build models/Native.Scopes.Run -c Release` from `prototypes/kernel-model`. Run `dotnet models/Native.Scopes.Run/bin/Release/net10.0/Kernel.Native.Scopes.Run.dll --list` for the inventory, then omit `--list` to execute it.
+Build `dotnet build essentials/tests/Workflows/Runtime/Native/Scopes/Run -c Release` from the repository root. Run `dotnet essentials/tests/Workflows/Runtime/Native/Scopes/Run/bin/Release/net10.0/Kernel.Native.Scopes.Run.dll --list` for the inventory, then omit `--list` to execute it.
 
 The 100 cases consist of 70 actual ordinary workflow schedules and 30 separately labelled serialized reader/codec fixtures. They qualify a private generic resource in the existing native checkpoint, evaluator and activity-frame ownership. They do not themselves qualify StateMachine guard/loop recovery or provide product/Studio support.
 
