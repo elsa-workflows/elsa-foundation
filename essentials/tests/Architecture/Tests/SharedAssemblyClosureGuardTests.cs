@@ -59,7 +59,7 @@ public sealed class SharedAssemblyClosureGuardTests
     [Fact]
     public void The_closure_scan_examines_real_elsa_shares()
     {
-        var workbench = SharedAssemblies(ReadNuplane("Elsa.Workbench"));
+        var workbench = SharedAssemblies(ReadNuplane("Elsa.Workbench.Host"));
         Assert.NotEmpty(Examined(workbench));
         Assert.Equal(workbench.Where(ProjectGraph.IsElsa), Examined(workbench));
 

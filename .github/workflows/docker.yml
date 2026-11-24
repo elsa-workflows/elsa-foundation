@@ -186,7 +186,7 @@ jobs:
     # Pinned to an exact release, not the floating @v1. This workflow pins the
     # BuildKit and Buildx versions the build runs on, and a frontend older than
     # that BuildKit fails the build outright -- see the `# syntax=` pin in
-    # apps/Elsa.Workbench/Dockerfile. On the floating tag an upstream
+    # apps/Elsa.Workbench.Host/Dockerfile. On the floating tag an upstream
     # release moves BuildKit under us and breaks main with no change of ours;
     # pinned, that becomes a deliberate bump where both pins move together.
     uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
@@ -197,7 +197,7 @@ jobs:
       output: image
       push: true
       context: .
-      file: apps/Elsa.Workbench/Dockerfile
+      file: apps/Elsa.Workbench.Host/Dockerfile
       # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
       build-args: |
         ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}

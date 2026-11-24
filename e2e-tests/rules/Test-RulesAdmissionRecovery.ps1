@@ -25,7 +25,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $assemblyItem = Get-Item -LiteralPath $AssemblyPath -ErrorAction Stop
 if ($assemblyItem.PSIsContainer -or $assemblyItem.Extension -ne '.dll') {
-    throw '-AssemblyPath must identify the qualified Elsa.Workbench.dll file.'
+    throw '-AssemblyPath must identify the qualified Elsa.Workbench.Host.dll file.'
 }
 $assemblyPath = [IO.Path]::GetFullPath($assemblyItem.FullName)
 $receiptItem = Get-Item -LiteralPath $DeploymentReceiptPath -ErrorAction Stop

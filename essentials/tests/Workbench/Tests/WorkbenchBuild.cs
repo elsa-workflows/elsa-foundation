@@ -7,23 +7,23 @@ public static class WorkbenchBuild
 {
     public static readonly string RepositoryRoot = FindRepositoryRoot();
 
-    private static readonly string SourceDirectory = Path.Combine(RepositoryRoot, "apps", "Elsa.Workbench");
+    private static readonly string SourceDirectory = Path.Combine(RepositoryRoot, "apps", "Elsa.Workbench.Host");
 
     public static string SourceFile(string fileName) => Path.Combine(SourceDirectory, fileName);
 
     /// <summary>
-    /// <c>Elsa.Workbench.dll</c> from the host's own <c>bin</c> folder, built with the same configuration and target
+    /// <c>Elsa.Workbench.Host.dll</c> from the host's own <c>bin</c> folder, built with the same configuration and target
     /// framework as this test assembly. The build-order project reference guarantees it exists.
     /// </summary>
     public static string AssemblyPath()
     {
         var configuration = typeof(WorkbenchBuild).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
         var targetFramework = Path.GetFileName(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory));
-        var path = Path.Combine(SourceDirectory, "bin", configuration, targetFramework, "Elsa.Workbench.dll");
+        var path = Path.Combine(SourceDirectory, "bin", configuration, targetFramework, "Elsa.Workbench.Host.dll");
 
         return File.Exists(path)
             ? path
-            : throw new FileNotFoundException($"Build apps/Elsa.Workbench ({configuration}) before running these tests.", path);
+            : throw new FileNotFoundException($"Build apps/Elsa.Workbench.Host ({configuration}) before running these tests.", path);
     }
 
     private static string FindRepositoryRoot()

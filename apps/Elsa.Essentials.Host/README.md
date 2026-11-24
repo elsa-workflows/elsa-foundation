@@ -6,7 +6,7 @@ The workflow-essentials flavor of the Elsa server. There are three hosts under `
 |---|---|---|
 | `Elsa.Foundation.Host` | No feature. Every feature arrives as a package through the Nuplane feed. | A bare host you compose yourself. |
 | `Elsa.Essentials.Host` | A curated set of workflow features, chosen by the maintainers. Add-ons still arrive through the feed. | Running workflows with Studio out of the box. |
-| `Elsa.Workbench` | Everything under development, including the extensions, plus test and QA instrumentation. | Developing and testing Elsa itself. |
+| `Elsa.Workbench.Host` | Everything under development, including the extensions, plus test and QA instrumentation. | Developing and testing Elsa itself. |
 
 ## What is curated
 

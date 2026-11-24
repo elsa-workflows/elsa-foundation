@@ -14,7 +14,7 @@ an ETL definition, publish native workflow definitions, and execute the resultin
 same immutable ETL selection is invoked from a Sequence and a Flowchart; each parent must finish
 its `RunEtl` activity and run the following `WriteLine` activity.
 
-Build `Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj` with the opt-in ETL module references
+Build `apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj` with the opt-in ETL module references
 and assembly discovery enabled, then run from the repository root:
 
 ```powershell
