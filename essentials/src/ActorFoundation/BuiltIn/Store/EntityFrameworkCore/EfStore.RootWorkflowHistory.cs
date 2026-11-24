@@ -16,6 +16,9 @@ public sealed partial class EfStore
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified workflow history requires PostgreSQL.");
         await using var db = create();
+        // The capability rule refuses before any lock or DDL.
+        if (!db.SupportsRootWorkflowHistory)
+            throw new StoreFormatException("This store profile does not carry workflow history.");
         await using var transaction = await db.Database.BeginTransactionAsync(token);
         await RequireStoreVersionsAsync(db, token, FormatLock.Shared);
         await RequirePreviewInstallSchemaAsync(db, token);
@@ -31,8 +34,6 @@ public sealed partial class EfStore
         if (installed) RequireHistoryVersion(versions[0]);
         // History reads the actor's own list row, so it requires the projector of this profile and not the Park metadata.
         var projection = ActorListProjection.Of(db);
-        if (!db.SupportsRootWorkflowHistory)
-            throw new StoreFormatException("This store profile does not carry workflow history.");
         var required = installed ? projection.WorkflowHistoryTriggers : projection.SourceTriggers;
         if (!await db.Database.SqlQuery<bool>($"""
             SELECT to_regclass('"FoundationActorList"') IS NOT NULL
@@ -103,7 +104,11 @@ public sealed partial class EfStore
         if (!db.SupportsRootWorkflowHistory)
             throw new StoreFormatException("This store profile does not carry workflow history.");
         var expected = db.RequiredFormat;
-        var triggers = ActorListProjection.Of(db).WorkflowHistoryTriggers;
+        var projection = ActorListProjection.Of(db);
+        var triggers = projection.WorkflowHistoryTriggers;
+        // On a qualified list the reader binds the list, the marker and the filter it calls to the history table's schema,
+        // as the list reader binds its own dependencies, so a relation or function earlier on the search path is refused.
+        var bound = projection.Qualified;
         var encodedType = DurableKeyJson.Write(type);
         var encodedDefinition = definition is null ? null : DurableKeyJson.Write(new KeyValuePair<string, string>("definition", definition));
         List<RootWorkflowHistoryRow> rows;
@@ -125,6 +130,13 @@ public sealed partial class EfStore
                                 WHERE oid = to_regclass('"FoundationWorkflowHistory"'))
                             AND (to_regclass('"Instances"') IS NULL OR source.tgrelid = to_regclass('"Instances"'))
                             AND source.tgname::text = ANY({triggers}) AND source.tgenabled IN ('O', 'A')
+                            AND (NOT {bound} OR 2 = (
+                                SELECT count(*) FROM pg_catalog.pg_class dependency
+                                WHERE dependency.relnamespace = relation.relnamespace AND dependency.oid IN (
+                                    to_regclass('"FoundationActorList"'), to_regclass('"KernelStoreVersions"')))
+                                AND EXISTS (SELECT 1 FROM pg_catalog.pg_proc filter
+                                    WHERE filter.oid = to_regprocedure('kernel_actor_list_filter(text)')
+                                        AND filter.pronamespace = relation.relnamespace))
                         GROUP BY source.tgrelid HAVING count(*) = {triggers.Length}
                     ) AS "TriggerEnabled"
                 ), page AS (

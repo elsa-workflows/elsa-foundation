@@ -154,11 +154,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         if (db.UsesRootParkOpening)
             await db.Database.ExecuteSqlRawAsync("""
                 ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkAt" bigint;
-                ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "FoundationKeptBy" smallint
-                    CHECK ("FoundationKeptBy" IS NULL OR (/*kept-reasons*/ AND "Done"))
-                """.Replace("/*kept-reasons*/", db.UsesRootParkArrivals
-                    ? """ "FoundationKeptBy" IN (0, 1) """
-                    : """ "FoundationKeptBy" = 0 """, StringComparison.Ordinal), cancellationToken);
+                ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "FoundationKeptBy" smallint /*kept-by-check*/
+                """.Replace("/*kept-by-check*/", EfStore.KeptByCheck, StringComparison.Ordinal)
+                .Replace("/*kept-reasons*/", EfStore.KeptReasons(db), StringComparison.Ordinal), cancellationToken);
         if (db.UsesRootParkArrivals)
             await EfStore.InstallRootParkArrivalReasonAsync(db, cancellationToken);
         if (db.UsesRootParkRecovery)
@@ -174,6 +172,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await InstallDirectReceiptsAsync(db, cancellationToken);
         if (db.UsesRootOperatorProtocol)
             await InstallOperatorReceiptsAsync(db, cancellationToken);
+        await EfStore.RequireRootDefinitionsAsync(db, cancellationToken);
         await ReadInstalledPartitionCountAsync(db, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }

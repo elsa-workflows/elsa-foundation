@@ -5,14 +5,14 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     internal static Task InstallRootParkReadModelAsync(KernelDb db, CancellationToken token) =>
-        db.Database.ExecuteSqlRawAsync("""
+        db.Database.ExecuteSqlRawAsync(ParkReadModelSql(db), token);
+
+    private static string ParkReadModelSql(KernelDb db) => """
             ALTER TABLE "FoundationActorList" ADD COLUMN IF NOT EXISTS "ParkAt" bigint,
                 ADD COLUMN IF NOT EXISTS "ParkFault" text /*park-revision-column*/;
             CREATE INDEX IF NOT EXISTS "IX_FoundationActorList_Parked" ON "FoundationActorList" ("Tenant", "Reference")
                 WHERE "ParkAt" IS NOT NULL;
-            CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Inspectable"
-                ON "Messages" ("Partition", "Target" COLLATE "C", "Seq", "Id" COLLATE "C")
-                WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND (NOT "Done" OR /*kept-reasons*/);
+            CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Inspectable" ON "Messages" /*inspectable*/;
             CREATE OR REPLACE FUNCTION kernel_project_root_park_metadata() RETURNS trigger LANGUAGE plpgsql AS $fn$
             DECLARE changed bigint;
             BEGIN
@@ -40,16 +40,15 @@ public sealed partial class EfStore
             WHERE p."Tenant" = i."FoundationTenant" AND p."Reference" = i."FoundationReference" AND NOT i."Retired"
                 AND (p."ParkAt", p."ParkFault" /*park-revision-old*/) IS DISTINCT FROM
                     (i."FoundationParkAt", CASE WHEN i."FoundationParkAt" IS NULL THEN NULL ELSE i."Fault" END /*park-revision-new*/);
-            """.Replace("/*kept-reasons*/", db.UsesRootParkArrivals
-                ? """ "FoundationKeptBy" IN (0, 1) """
-                : """ "FoundationKeptBy" = 0 """, StringComparison.Ordinal)
+            """.Replace("/*inspectable*/", InspectableIndex, StringComparison.Ordinal)
+            .Replace("/*kept-reasons*/", KeptReasons(db), StringComparison.Ordinal)
             // Recover selections name the opening revision, so its profile projects that revision with the Park time.
             .Replace("/*park-revision-column*/", db.UsesRootParkRecovery ? """, ADD COLUMN IF NOT EXISTS "ParkRevision" bigint""" : "", StringComparison.Ordinal)
             .Replace("/*park-revision-set*/", db.UsesRootParkRecovery ? """, "ParkRevision" = $5""" : "", StringComparison.Ordinal)
             .Replace("/*park-revision-value*/", db.UsesRootParkRecovery ? """, NEW."FoundationParkRevision" """ : "", StringComparison.Ordinal)
             .Replace("/*park-revision-backfill*/", db.UsesRootParkRecovery ? """, "ParkRevision" = i."FoundationParkRevision" """ : "", StringComparison.Ordinal)
             .Replace("/*park-revision-old*/", db.UsesRootParkRecovery ? """, p."ParkRevision" """ : "", StringComparison.Ordinal)
-            .Replace("/*park-revision-new*/", db.UsesRootParkRecovery ? """, i."FoundationParkRevision" """ : "", StringComparison.Ordinal), token);
+            .Replace("/*park-revision-new*/", db.UsesRootParkRecovery ? """, i."FoundationParkRevision" """ : "", StringComparison.Ordinal);
 
     internal static Task InstallRootParkArrivalReasonAsync(KernelDb db, CancellationToken token) =>
         db.Database.ExecuteSqlRawAsync("""
