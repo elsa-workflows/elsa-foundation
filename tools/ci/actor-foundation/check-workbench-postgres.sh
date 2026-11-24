@@ -41,7 +41,8 @@ for package in sorted(pins):
     reference.set('Version', workbench_versions[package])
     print(f'Compile kernel provider with Workbench {package} {workbench_versions[package]}')
 xml.write(provider, encoding='unicode')
-Path('expected-workbench-providers.json').write_text(json.dumps(workbench_versions))
+Path('expected-workbench-providers.json').write_text(
+    json.dumps({package: workbench_versions[package] for package in pins}))
 project=app/'Elsa.Workbench.csproj'
 text=project.read_text()
 if text.count('</Project>') != 1:
@@ -87,16 +88,17 @@ actual = dict(key.rsplit('/', 1) for key in json.loads(manifest.read_text())['li
 compile_entries = json.loads(compile_assets.read_text())['targets']['net10.0']
 compiled = {name: (version, compile_entries[key])
             for key in compile_entries for name, version in [key.rsplit('/', 1)]}
-critical = ('Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',
-    'Microsoft.EntityFrameworkCore.Sqlite', 'Microsoft.EntityFrameworkCore.SqlServer',
-    'Npgsql.EntityFrameworkCore.PostgreSQL', 'Npgsql', 'MySql.EntityFrameworkCore', 'Microsoft.Data.SqlClient')
-for package in sorted((compiled.keys() & expected.keys()) | set(critical)):
+runtime_required = {'Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',
+                    'Npgsql.EntityFrameworkCore.PostgreSQL', 'Npgsql'}
+if runtime_required - expected.keys():
+    raise SystemExit('Workbench and the provider must lock the PostgreSQL runtime dependencies.')
+for package in sorted(expected):
     version = expected[package]
     compile_version, assets = compiled.get(package, (None, {}))
-    has_runtime_assets = any(not path.endswith('/_._') for group in ('runtime', 'native', 'runtimeTargets')
+    has_runtime_assets = any(path.rsplit('/', 1)[-1] != '_._' for group in ('runtime', 'native', 'runtimeTargets')
                              for path in assets.get(group, {}))
-    requires_runtime = has_runtime_assets or package in critical or package in actual
-    if compile_version != version or requires_runtime and actual.get(package) != version:
+    requires_runtime = has_runtime_assets or package in runtime_required or package in actual
+    if compile_version != version or (requires_runtime and actual.get(package) != version):
         raise SystemExit(f'Provider version mismatch for {package}: Workbench locked {version}, '
                          f'compile {compile_version}, host runtime {actual.get(package)}')
     print(f'ok matching provider dependency {package} {version} (runtime {actual.get(package, "none")})')
