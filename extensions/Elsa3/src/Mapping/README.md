@@ -331,9 +331,6 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | `this` or `arguments` outside a function | `VF-IMP-007` | Read the value through `getVariable`, `getInput` or a local variable |
 | Changing `arguments[i]`, or a parameter, in a function that reads `arguments` | `VF-IMP-007` | Copy the value into a local `let` variable and change that. Elsa 3 kept them linked; Elsa 4 does not |
 
-A workflow that genuinely needs the current time or a fresh unique value cannot migrate until Elsa 4 has an explicit
-capability for them (#3026). Elsa 4 deliberately strips them from expressions to keep them deterministic.
-
 Known differences that convert without a diagnostic, because they depend on how the script is called or on the data:
 - `this` in a function called without a receiver was Elsa 3's global object; in Elsa 4 it is `undefined`.
 - With the converter's default `ApplyElsa3NullPolicies=true`, undefined object members retain their keys as null,

@@ -974,6 +974,14 @@ public sealed class Elsa3ExpressionRewriter(
         };
 
         /// <summary>
+        /// Globals the converter converts itself after the replaced-global check: a declaration that claims one of them
+        /// does not take it over (#5664).
+        /// </summary>
+        private static readonly HashSet<string> ConvertedGlobals = new(
+            PureGlobalCalls.Concat(JavaScriptBuiltInFunctions.Names).Concat(["toJson", "setOutcome", "setOutcomes", "Date"]),
+            StringComparer.Ordinal);
+
+        /// <summary>
         /// Globals Elsa 3 put into the engine that Elsa 4 does not have: CLR types and the optional lodash and moment
         /// libraries. Reading or constructing them would fail at run time (plan D-14). <c>Date</c> is native JavaScript
         /// and converts (spec 1223 FR-014).
@@ -1482,7 +1490,7 @@ public sealed class Elsa3ExpressionRewriter(
                 }
 
                 // An Elsa 3 custom function the host rebuilt as a prefixed Elsa 4 host function (#5664).
-                if (ReplacedGlobals.TryGetValue(callee.Name, out var replacements))
+                if (!ConvertedGlobals.Contains(callee.Name) && ReplacedGlobals.TryGetValue(callee.Name, out var replacements))
                 {
                     ConvertReplacedGlobal(call, callee, replacements);
                     return;

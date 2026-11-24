@@ -330,7 +330,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     /// </summary>
     [Theory]
     [InlineData("getConfiguration('Key')", "getConfiguration")]
-    [InlineData("getBusinessSettings()", "getBusinessSettings")]
+    [InlineData("getCustomer()", "getCustomer")]
     public async Task An_undeclared_host_function_keeps_the_refusal_with_the_declaration_route(string expression, string name)
     {
         var result = await ConvertTextAsync(expression);
@@ -345,22 +345,22 @@ public sealed class Elsa3JavaScriptHostFunctionTests
 
     // ---- #5664: an Elsa 3 custom function rebuilt as a prefixed Elsa 4 host function ----
 
-    private static readonly JavaScriptHostFunctionDeclaration BusinessSettings =
-        new("acme.getBusinessSettings", _ => JsonSerializer.SerializeToElement(new { currency = "EUR" }))
+    private static readonly JavaScriptHostFunctionDeclaration LookupCustomer =
+        new("acme.lookupCustomer", _ => JsonSerializer.SerializeToElement(new { name = "Ada" }))
         {
-            ReplacesGlobalFunctions = ["getBusinessSettings"],
+            ReplacesGlobalFunctions = ["lookupCustomer"],
         };
 
     [Fact]
     public async Task A_declared_global_is_rewritten_to_its_prefixed_host_function_and_runs()
     {
-        var result = await ConvertTextAsync("getBusinessSettings().currency", [BusinessSettings]);
+        var result = await ConvertTextAsync("lookupCustomer('c-1').name", [LookupCustomer]);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var converted = ReadExpression(result);
-        Assert.Equal("acme.getBusinessSettings().currency", converted.Source);
-        var value = await PortableJavaScript.EvaluateAsync(converted, configure: services => services.AddSingleton(BusinessSettings));
-        Assert.Equal("EUR", value.GetString());
+        Assert.Equal("acme.lookupCustomer('c-1').name", converted.Source);
+        var value = await PortableJavaScript.EvaluateAsync(converted, configure: services => services.AddSingleton(LookupCustomer));
+        Assert.Equal("Ada", value.GetString());
     }
 
     [Fact]
@@ -393,22 +393,36 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
+    /// <summary>A declaration does not take over a name the converter converts itself.</summary>
+    [Fact]
+    public async Task A_declaration_claiming_a_converted_name_keeps_the_conversion()
+    {
+        var claim = new JavaScriptHostFunctionDeclaration("acme.toJson", _ => default) { ReplacesGlobalFunctions = ["toJson", "newGuid"] };
+
+        var result = await ConvertTextAsync("toJson({ a: 1 }) + newGuid()", [claim]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("JSON.stringify({ a: 1 }) + newGuid()", ReadExpression(result).Source);
+    }
+
     [Fact]
     public async Task A_global_two_host_functions_replace_is_ambiguous()
     {
-        var other = new JavaScriptHostFunctionDeclaration("other.getBusinessSettings", _ => default) { ReplacesGlobalFunctions = ["getBusinessSettings"] };
+        var other = new JavaScriptHostFunctionDeclaration("other.lookupCustomer", _ => default) { ReplacesGlobalFunctions = ["lookupCustomer"] };
 
-        var result = await ConvertTextAsync("getBusinessSettings()", [BusinessSettings, other]);
+        var result = await ConvertTextAsync("lookupCustomer()", [LookupCustomer, other]);
 
         Assert.False(result.Succeeded);
         var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
-        Assert.Contains("'acme.getBusinessSettings', 'other.getBusinessSettings'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("'acme.lookupCustomer', 'other.lookupCustomer'", diagnostic.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task A_declared_global_that_is_also_a_generated_accessor_is_ambiguous()
     {
-        var result = await ConvertTextAsync("getBusinessSettings()", [BusinessSettings], new Elsa3Variable { Id = "v", Name = "BusinessSettings", TypeName = "String" });
+        var getCustomer = new JavaScriptHostFunctionDeclaration("acme.getCustomer", _ => default) { ReplacesGlobalFunctions = ["getCustomer"] };
+
+        var result = await ConvertTextAsync("getCustomer()", [getCustomer], new Elsa3Variable { Id = "v", Name = "Customer", TypeName = "String" });
 
         Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
@@ -417,7 +431,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [Fact]
     public async Task A_script_declaring_the_namespace_root_is_refused()
     {
-        var result = await ConvertTextAsync("const acme = 1; return getBusinessSettings();", [BusinessSettings]);
+        var result = await ConvertTextAsync("const acme = 1; return lookupCustomer();", [LookupCustomer]);
 
         Assert.False(result.Succeeded);
         var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
@@ -427,7 +441,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     [Fact]
     public async Task A_function_the_script_declares_itself_is_not_rewritten()
     {
-        var result = await ConvertTextAsync("function getBusinessSettings() { return 1; } return getBusinessSettings();", [BusinessSettings]);
+        var result = await ConvertTextAsync("function lookupCustomer() { return 1; } return lookupCustomer();", [LookupCustomer]);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         Assert.DoesNotContain("acme", ReadExpression(result).Source, StringComparison.Ordinal);
