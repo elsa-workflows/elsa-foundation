@@ -3091,10 +3091,22 @@ public static class Elsa3ImportDiagnosticCodes
     public const string VariableTypeUnregistered = "ELS3-VARIABLE-TYPE-UNREGISTERED";
 
     /// <summary>
-    /// A variable uses an Elsa 3 storage driver other than the default one (#5666): refused, because Elsa 4 cannot store a
-    /// variable outside the workflow instance yet (publication refuses it with VF-ACT-005), with guidance to use the default.
+    /// Warning: a variable, input or output used Elsa 3's Memory storage driver, which never persisted its value. It
+    /// converts to Elsa 4's default storage (elsa.json), so the value is now persisted with the workflow instance; the
+    /// migrator decides whether that is acceptable (docs/migration/elsa3-storage-drivers.md). Metadata: VariableName,
+    /// InputName or OutputName, StorageDriverType (the Elsa 3 driver type), ComponentKind (storage-driver) and
+    /// ComponentName (the same driver type, for the migration report's component inventory).
     /// </summary>
-    public const string VariableStorageDriverUnmapped = "ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED";
+    public const string MemoryStoragePersisted = "ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED";
+
+    /// <summary>
+    /// Warning: a variable, input or output used a custom Elsa 3 storage driver, which kept its value outside the workflow
+    /// instance. It converts to Elsa 4's default storage (elsa.json), so the value is now stored with the workflow
+    /// instance; the migrator plans an Elsa 4 solution if it must stay elsewhere (docs/migration/elsa3-storage-drivers.md).
+    /// Metadata: VariableName, InputName or OutputName, StorageDriverType (the Elsa 3 driver type), ComponentKind
+    /// (storage-driver) and ComponentName (the same driver type, for the migration report's component inventory).
+    /// </summary>
+    public const string CustomStorageDriverReplaced = "ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED";
 
     /// <summary>
     /// A script uses an Elsa 3 global that a host function replaces (#5664) other than in a direct call: aliased, passed as
@@ -3102,28 +3114,4 @@ public static class Elsa3ImportDiagnosticCodes
     /// function directly.
     /// </summary>
     public const string ReplacedFunctionReference = "ELS3-REPLACED-FUNCTION-REFERENCE";
-
-    /// <summary>
-    /// A reusable workflow's input uses an Elsa 3 storage driver that this Elsa 4 host cannot use for the input's type
-    /// (#5683): refused, with guidance to port the driver under its Elsa 3 type's full name as key, or to use the default.
-    /// </summary>
-    public const string InputStorageDriverUnregistered = "ELS3-INPUT-STORAGE-DRIVER-UNREGISTERED";
-
-    /// <summary>
-    /// A reusable workflow's output uses an Elsa 3 storage driver that this Elsa 4 host cannot use for the output's type
-    /// (#5683): refused, with guidance to port the driver under its Elsa 3 type's full name as key, or to use the default.
-    /// </summary>
-    public const string OutputStorageDriverUnregistered = "ELS3-OUTPUT-STORAGE-DRIVER-UNREGISTERED";
-
-    /// <summary>
-    /// The input of a workflow that is not reusable uses an Elsa 3 storage driver other than the default one (#5683):
-    /// refused, because Elsa 4 keeps a workflow's own inputs in the instance (#5698), with guidance to use the default.
-    /// </summary>
-    public const string InputStorageDriverUnsupported = "ELS3-INPUT-STORAGE-DRIVER-UNSUPPORTED";
-
-    /// <summary>
-    /// The output of a workflow that is not reusable uses an Elsa 3 storage driver other than the default one (#5683):
-    /// refused, because Elsa 4 keeps a workflow's own outputs in the instance (#5698), with guidance to use the default.
-    /// </summary>
-    public const string OutputStorageDriverUnsupported = "ELS3-OUTPUT-STORAGE-DRIVER-UNSUPPORTED";
 }
