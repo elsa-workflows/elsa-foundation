@@ -38,7 +38,8 @@ Modules should stay opt-in. A shell composes only the capabilities it needs, and
 
 ## Start here
 
-- The process entry point is [`Essentials/apps/Elsa.Workbench/Program.cs`](Essentials/apps/Elsa.Workbench/Program.cs); which features it composes is decided by [`Essentials/apps/Elsa.Workbench/shells.json`](Essentials/apps/Elsa.Workbench/shells.json).
+- The process entry point is [`apps/Elsa.Workbench.Host/Program.cs`](apps/Elsa.Workbench.Host/Program.cs); which features it composes is decided by [`apps/Elsa.Workbench.Host/shells.json`](apps/Elsa.Workbench.Host/shells.json).
+- Three hosts live under `apps/`; [`Elsa.Essentials.Host`'s README](apps/Elsa.Essentials.Host/README.md) says what each one is for.
 - [How a workflow executes](docs/how-a-workflow-executes.md) traces one request from that entry point to a durable checkpoint, file by file.
 - [AGENTS.md](AGENTS.md) is the provider-neutral entrypoint for AI agents and engineers.
 - [docs/README.md](docs/README.md) routes to glossary, skills, maps, reports, and architecture orientation.

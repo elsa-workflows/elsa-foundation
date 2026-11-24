@@ -31,7 +31,7 @@ public sealed partial class ProductionPathAgreementTests
 
     [Theory]
     [InlineData("essentials/src/Tasks/Elsa.Tasks/", true)]
-    [InlineData("apps/Elsa.Workbench/", true)]
+    [InlineData("apps/Elsa.Workbench.Host/", true)]
     [InlineData("extensions/Weaver/src/Core/", true)]
     [InlineData("essentials/tests/Tasks/Tests/", false)]
     [InlineData("extensions/Weaver/tests/Tests/", false)]

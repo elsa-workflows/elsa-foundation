@@ -43,7 +43,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class HostProvidedPackagesGuardTests
 {
     /// <summary>The hosts known to share assemblies; <see cref="Every_host_that_shares_assemblies_is_guarded"/> keeps this complete.</summary>
-    private static readonly string[] SharingHosts = ["Elsa.Foundation.Host", "Elsa.Workbench"];
+    private static readonly string[] SharingHosts = ["Elsa.Essentials.Host", "Elsa.Foundation.Host", "Elsa.Workbench.Host"];
 
     private const string WorkbenchSourceBuildVersion =
         "A source-built Workbench records its Elsa packages at their line's dev version (x.y.0-dev), which every Elsa feed " +
@@ -55,6 +55,11 @@ public sealed class HostProvidedPackagesGuardTests
         "every Elsa feed package's range excludes, so declaring this one would refuse every Elsa feed package that " +
         "depends on it. A build with computed versions, the CI image among them, declares it (ADR 0067, #1144, #2126).";
 
+    private const string EssentialsHostSourceBuildVersion =
+        "A source-built Elsa.Essentials.Host records its Elsa packages at their line's dev version (x.y.0-dev), which " +
+        "every Elsa feed package's range excludes, so declaring this one would refuse every Elsa feed add-on that " +
+        "depends on it. A build with computed versions, the CI image among them, declares it (ADR 0067, #1144, #2126).";
+
     /// <summary>
     /// Shared assemblies a host's source build deliberately leaves undeclared, per host, each with the reason. Nothing
     /// else may be shared without a declaration, and nothing at all by a build with computed versions.
@@ -62,7 +67,7 @@ public sealed class HostProvidedPackagesGuardTests
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> Exemptions =
         new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)
         {
-            ["Elsa.Workbench"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            ["Elsa.Workbench.Host"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Elsa.Activities.Design.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Activities.Runtime.Core"] = WorkbenchSourceBuildVersion,
@@ -106,6 +111,35 @@ public sealed class HostProvidedPackagesGuardTests
                 ["Elsa.Primitives"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Serialization.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Tasks.Core"] = FoundationHostSourceBuildVersion
+            },
+            // The Essentials host shares the Foundation host's set plus the domain contracts of the features it compiles in.
+            ["Elsa.Essentials.Host"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Elsa.Attention.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Caching.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Cluster.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Events.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Expressions.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Locking.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Mediator.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Persistence.EntityFramework"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Persistence.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Persistence.Schema"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Pipelines.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Primitives"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Serialization.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Tasks.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Activities.Design.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Activities.Runtime.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Api.Capabilities.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Expressions.JavaScript.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Foundation.Identity.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Http.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Tasks.Schedules"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Workflows.Design.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Workflows.Design.Persistence.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Workflows.Design.Validations.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Workflows.Runtime.Core"] = EssentialsHostSourceBuildVersion
             }
         };
 

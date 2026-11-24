@@ -438,7 +438,7 @@ def verify_upgrade(path: Path) -> dict:
             process["baselineSourceRevision"] != manifest.get("baselineSourceRevision") or
             process.get("baselineAssets") != manifest.get("baselineAssets")):
         raise ValueError("The recovered source observations do not match the declared baseline.")
-    if not process.get("binaries") or not any(binary["file"] == "Elsa.Workbench.dll" and
+    if not process.get("binaries") or not any(binary["file"] == "Elsa.Workbench.Host.dll" and
             binary["productVersion"].endswith("+" + source) for binary in process["binaries"]):
         raise ValueError("The upgrade has no source-bound production Workbench.")
     observations = process["observations"]
@@ -626,7 +626,7 @@ def verify_native_parent_upgrade(path: Path) -> dict:
                 process.get("sourceRevision") != source or process.get("testOnlyRecoveryProbePresent") is not False or
                 process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or
                 process.get("referenceReceiptSha256") != manifest["baselineAssets"].get("native-parents/api.json") or
-                not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source)
+                not any(binary["file"] == "Elsa.Workbench.Host.dll" and binary["productVersion"].endswith("+" + source)
                     for binary in process.get("binaries", process.get("observations", [{}])[0].get("binaries", [])))):
             raise ValueError("The native upgrade lacks its standard-host source or baseline binding.")
     observations = pending["observations"]
@@ -783,7 +783,7 @@ def verify_called_ack_upgrade(path: Path) -> dict:
                 case["inputGzipSha256"] != manifest["baselineAssets"].get("called-ack/" + cut + "-held.sqlite.gz") or
                 case["baselineApiSha256"] != manifest["baselineAssets"].get("called-ack/" + cut + "-held-api.json") or
                 case["markerSha256"] != manifest["baselineAssets"].get("called-ack/" + cut + "-marker.json") or
-                not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source) for binary in case["binaries"]) or
+                not any(binary["file"] == "Elsa.Workbench.Host.dll" and binary["productVersion"].endswith("+" + source) for binary in case["binaries"]) or
                 len({case["firstProcessId"], case["secondProcessId"], case["thirdProcessId"]}) != 3):
             raise ValueError("The actual called cut lost its baseline, host or three-process identity.")
         if (marker["phase"] != "called-control-before-acknowledgment" or
@@ -914,7 +914,7 @@ def verify_broadcast_upgrade(path: Path) -> dict:
         if (not re.fullmatch(r"[0-9a-f]{40}", case.get("baselineSourceRevision", "")) or case["baselineSourceRevision"] == source_revision or
                 case["baselineApiSha256"] != manifest["baselineAssets"].get("broadcast/" + cut + ".json") or
                 case["inputGzipSha256"] != manifest["baselineAssets"].get("broadcast/" + cut + ".sqlite.gz") or
-                not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source_revision) for binary in case["binaries"]) or
+                not any(binary["file"] == "Elsa.Workbench.Host.dll" and binary["productVersion"].endswith("+" + source_revision) for binary in case["binaries"]) or
                 len({case["firstProcessId"], case["secondProcessId"], case["thirdProcessId"]}) != 3):
             raise ValueError("The broadcast cut lacks its actual baseline or three-process host identity.")
         recovered = case["recoveredProof"]; current = recovered["source"]; before = original["source"]
@@ -1074,7 +1074,7 @@ def verify_controls_upgrade(path: Path) -> dict:
             not re.fullmatch(r"[0-9a-f]{40}", process.get("baselineSourceRevision", "")) or source == process["baselineSourceRevision"] or
             process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or process.get("baselineAssets") != manifest.get("baselineAssets") or
             process.get("testOnlyRecoveryProbePresent") is not False or len(process.get("processIds", [])) != 4 or len(set(process["processIds"])) != 4 or
-            not process.get("reader", {}).get("productVersion", "").endswith("+" + source) or not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source) for binary in process.get("binaries", []))):
+            not process.get("reader", {}).get("productVersion", "").endswith("+" + source) or not any(binary["file"] == "Elsa.Workbench.Host.dll" and binary["productVersion"].endswith("+" + source) for binary in process.get("binaries", []))):
         raise ValueError("The actual control upgrade lacks its distinct baseline/standard host/reader/process identity.")
     if tuple(stage["name"] for stage in process["stages"]) != stages: raise ValueError("The original compensation/sibling continuation stages are incomplete or reordered.")
     key = lambda value: base64.b64encode(value.encode("utf-16-le", errors="surrogatepass")).decode()
@@ -1216,7 +1216,7 @@ def verify_multi_instance_upgrade(path: Path) -> dict:
             not re.fullmatch(r"[0-9a-f]{40}", process.get("baselineSourceRevision", "")) or source == process["baselineSourceRevision"] or process.get("baselineAssets") != manifest.get("baselineAssets") or
             process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or process.get("testOnlyRecoveryProbePresent") is not False or
             len(process.get("processIds", [])) != 4 or len(set(process["processIds"])) != 4 or not process.get("reader", {}).get("productVersion", "").endswith("+" + source) or
-            not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source) for binary in process.get("binaries", []))):
+            not any(binary["file"] == "Elsa.Workbench.Host.dll" and binary["productVersion"].endswith("+" + source) for binary in process.get("binaries", []))):
         raise ValueError("The actual MI upgrade lacks its standard host, checked reader or original source identity.")
     if tuple(stage["name"] for stage in process["stages"]) != stages or [stage["completedCount"] for stage in process["stages"]] != [1, 2, 2, 3]:
         raise ValueError("The actual MI progress/restart stages are incomplete or reordered.")
