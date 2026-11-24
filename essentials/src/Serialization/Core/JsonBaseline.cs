@@ -25,6 +25,7 @@ public static class JsonBaseline
         options.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
         options.Encoder = Options.Encoder;
         if (!options.Converters.Any(converter => converter is RawJsonElementConverter)) options.Converters.Insert(0, new RawJsonElementConverter());
+        if (!options.Converters.Any(converter => converter is ValueTypeDescriptorJsonConverter)) options.Converters.Insert(0, new ValueTypeDescriptorJsonConverter());
     }
 
     private static JsonSerializerOptions Create()
@@ -40,6 +41,7 @@ public static class JsonBaseline
             TypeInfoResolver = new DefaultJsonTypeInfoResolver()
         };
         options.Converters.Add(new RawJsonElementConverter());
+        options.Converters.Add(new ValueTypeDescriptorJsonConverter());
         options.MakeReadOnly();
         _ = options.GetTypeInfo(typeof(object)); // Freeze the baseline's reflection resolver as well as its option setters.
         return options;

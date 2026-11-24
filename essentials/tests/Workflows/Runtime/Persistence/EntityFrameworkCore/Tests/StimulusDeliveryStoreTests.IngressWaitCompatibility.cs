@@ -194,6 +194,10 @@ public sealed partial class StimulusDeliveryStoreTests
         await harness.WaitActivities.SaveAsync(state with { TriggerRegistrations = [new(registration.RegistrationId, registration.InvocationId,
             registration.ResumeTargetKey, Type(storedSchema), registration.StimulusType, registration.StimulusHash,
             registration.DeduplicationPolicy, registration.Metadata)] });
+        var persisted = Assert.Single((await harness.WaitActivities.FindAsync("already-running", "wait-activity"))!.TriggerRegistrations!);
+        Assert.Equal(storedSchema is not null, persisted.PayloadType.Schema.HasValue);
+        if (storedSchema is not null)
+            Assert.Equal(Schema(storedSchema)!.Value.GetRawText(), persisted.PayloadType.Schema!.Value.GetRawText());
         var request = WithWaitCandidate(fixture.Request, new("http", "route", JsonSerializer.SerializeToElement(new { value = 42 }),
             new Dictionary<string, string>(), Type(sourceSchema), "actual-source"));
         if (equal)
@@ -282,7 +286,7 @@ public sealed partial class StimulusDeliveryStoreTests
             new(identity.CommandId, candidate.PayloadType!, candidate.ProviderId!, Now, identity.IdempotencyKey));
         var work = new RuntimeSchedulerWorkItem(identity.EnvelopeId, identity.WorkflowExecutionId, identity.CommandId,
             WorkflowExecutionCommandKind.ResumeBookmark, identity.EnvelopeId, identity.IdempotencyKey, Now, Now,
-            payload: JsonSerializer.SerializeToElement(payload));
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options));
         var handler = new WorkflowResumeBookmarkSchedulerWorkHandler(runtime.Services.GetRequiredService<IServiceScopeFactory>(), harness.Clock);
         await handler.HandleAsync(work);
         Assert.Equal(JsonSerializer.Serialize(state), JsonSerializer.Serialize(await harness.WaitActivities.FindAsync(bookmark.WorkflowExecutionId, bookmark.ActivityExecutionId)));

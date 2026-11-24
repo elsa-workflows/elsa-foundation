@@ -44,7 +44,7 @@ internal static class RuntimeArtifactJson
         var inline = data.InlineValue;
         if (data.Storage == DurableValueStorage.Inline && !inline.HasValue)
         {
-            // Match the selected serializer's spelling and last-member semantics, including legacy case aliases.
+            // Match the selected serializer's exact current spelling and last-member semantics.
             JsonElement? member = null;
             foreach (var property in document.RootElement.EnumerateObject())
                 if (string.Equals(property.Name, "inlineValue", options.PropertyNameCaseInsensitive
