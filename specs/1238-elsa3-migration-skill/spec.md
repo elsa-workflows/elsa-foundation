@@ -178,7 +178,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 
 - **FR-001**: The canonical skill MUST be one self-contained folder,
   `plugins/elsa3-migration/skills/elsa3-workflows-migration/`, holding `SKILL.md`, `migration-plan-template.md` and
-  `porting-catalog.md`. Nothing in it may refer to a file outside the folder for a step the user must take; links to
+  `porting-catalog.md`. No step the user must take may depend on a repository file outside the folder; links to
   the repository are for further reading only.
 - **FR-002**: `SKILL.md` MUST use the open agent-skill format (a `name` and `description` front matter, then plain
   markdown) and MUST read as ordinary documentation: no wording addressed to one AI model or vendor, and every step

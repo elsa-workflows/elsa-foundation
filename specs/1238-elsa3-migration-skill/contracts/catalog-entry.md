@@ -30,7 +30,7 @@ Cases appear in order 01–19. The marker comment `<!-- sample: case-NN -->` app
 
 ## Sample regions
 
-In `extensions/Elsa3/tests/Migration/Sample/**/*.cs`:
+In `extensions/Elsa3/tests/Migration/**/*.cs` (the sample and its tests):
 
 ```csharp
 // catalog:case-05 begin
@@ -38,7 +38,9 @@ In `extensions/Elsa3/tests/Migration/Sample/**/*.cs`:
 // catalog:case-05 end
 ```
 
-A region may appear once per case. The region text is compared after removing the common leading indentation.
+A case has exactly one region. Regions may nest or overlap (cases 1–5 share one activity); marker lines of other
+regions inside a region are removed before comparing. The region text is compared after removing the common
+leading indentation.
 
 ## Check (`tools/skills/check_migration_skill.py`)
 
@@ -46,8 +48,7 @@ Fails when:
 1. a catalog block marked `sample: case-NN` differs from region `case-NN`;
 2. a region has no catalog block, or a block has no region;
 3. a case number is missing, duplicated or out of order;
-4. any file in the skill folder contains a diagnostic code literal (`ELS3-…`, `VF-…` or another `UPPER-UPPER-NNN`
-   code pattern);
+4. any file in the skill folder contains a diagnostic code literal: a token starting with `ELS3-` or `VF-`;
 5. any file in the skill folder names an AI vendor or model.
 
 `--self-test` runs the check against built-in good and bad inputs.

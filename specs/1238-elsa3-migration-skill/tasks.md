@@ -1,0 +1,148 @@
+# Tasks: Elsa 3 to Elsa 4 migration skill and documentation
+
+**Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md),
+[contracts/](contracts/), [quickstart.md](quickstart.md).
+
+**Skill folder**: `plugins/elsa3-migration/skills/elsa3-workflows-migration/` (written `skill/` below).
+**Sample root**: `extensions/Elsa3/tests/Migration/` (written `Migration/` below).
+
+**Tests**: The sample's xunit tests (framework §2.23: they prove each *port* example behaves as the catalog says)
+and the check's `--self-test`. The skill text itself is verified by the walkthrough (T030–T032). No test framework
+beyond xunit.
+
+**Dependencies outside this spec**: T030–T032 need spec 1237's `inventory` and `assess` commands. T020 and T021
+need spec 1237's `report.json` schema agreed. Everything else can start once this spec is approved.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: can run in parallel (different files, no dependency on an incomplete task)
+- **[Story]**: US1 to US6 from spec.md
+
+---
+
+## Phase 1: Setup
+
+- [ ] T001 Create `Migration/Sample/Elsa3.Migration.Sample.csproj` (`IsPackable=false`, references only the Elsa 4
+  authoring projects the plan lists, CShells abstractions) and `Migration/Sample.Tests/Elsa3.Migration.Sample.Tests.csproj`
+  (xunit); add both to `Elsa.Server.slnx` under `/extensions/Elsa3/tests/Migration/`.
+- [ ] T002 Add the test project to the PR tier in `tools/ci/test-tiers.json`; run
+  `dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check`.
+- [ ] T003 Run `Elsa3MigrationBoundaryTests` and `ArchitectureGuardTests` with the new projects; if the folder or
+  `Elsa3.` prefix trips a guard, rename the projects (not the guard) and update plan P-4.
+
+---
+
+## Phase 2: Foundational — sample and check (blocks US3)
+
+Each task adds one marked region `// catalog:case-NN begin/end` and its tests. All live in `Migration/Sample/` and
+`Migration/Sample.Tests/`; tasks touching different files are [P].
+
+- [ ] T004 Feature registration (case 18): `AcmeFeature` as a `[ShellFeature]` `IShellFeature`; a test that the
+  feature registers the services the other cases need.
+- [ ] T005 [P] Base class, type name, inputs, outputs, completion (cases 1–5): `Acme.SendInvoice` with a result record,
+  `[ActivityInput]` with default, UI hint and `[Required]`, `[Output]`, `ActivityTransition.Complete`; a second
+  activity whose name cannot match, with `[ReplacesActivityType("Acme.Legacy.Notify")]`. Tests: result and default.
+- [ ] T006 [P] Outcomes (case 6): `Acme.Approve` with `[ActivityOutcome]`s; tests for each outcome.
+- [ ] T007 [P] Bookmarks (case 8, port part): `Acme.WaitForPayment` as a stateful activity that suspends and resumes on
+  a `[ResumeTarget]`; tests for suspend and resume.
+- [ ] T008 [P] Trigger (case 9): `Acme.InvoiceReceived` trigger activity and its trigger stimulus provider registered
+  in `AcmeFeature`; tests for trigger delivery and stimulus description.
+- [ ] T009 [P] Services (case 10): an activity taking `IInvoiceClient` by constructor; test with a fake.
+- [ ] T010 [P] Variables and workflow state (case 11, port part): `VariableReference<decimal>` read and write through
+  `context.Variables`; an `[AccessesWorkflowState]` activity setting an output; tests with fake step variables and
+  workflow state.
+- [ ] T011 [P] Background (case 12): an activity marked `[BackgroundExecutionSafe]` that honours the cancellation token
+  and keys its effect on the invocation id; test for cancellation.
+- [ ] T012 [P] Cancellation and faults (case 13): fault and cancel transitions; tests for each.
+- [ ] T013 [P] JavaScript host function (case 14): `acme.formatIban` declared in `AcmeFeature`; test calling the
+  implementation with JSON arguments.
+- [ ] T014 [P] Variable type (case 16): a descriptor provider registering `acme.Invoice`; test that the descriptor has
+  the dotted alias.
+- [ ] T015 [P] Tests (case 19): the region is one of the tests above, chosen as the example of building an activity
+  execution context and calling the activity.
+- [ ] T016 `tools/skills/check_migration_skill.py` per [contracts/catalog-entry.md](contracts/catalog-entry.md), with
+  `--self-test` covering every failure rule.
+- [ ] T017 Run the check (self-test, then real) in the CI step that runs the Python documentation guards in
+  `.github/workflows/ci.yml`, so a documentation-only change runs it.
+
+**Checkpoint**: sample builds, its tests pass, self-test passes.
+
+---
+
+## Phase 3: User Story 3 — the porting catalog (P1)
+
+- [ ] T018 [US3] Write `skill/porting-catalog.md`: an introduction (how to use a case, the verdicts, apply cases in
+  order), then cases 01–19 in the [entry shape](contracts/catalog-entry.md) with the FR-014 verdicts and the R-2
+  evidence turned into plain guidance. *Port* "after" blocks are copied from the sample regions; *redesign* parts name
+  the alternatives and offer no workaround code. Elsa 3 "before" examples are written for the catalog, synthetic.
+- [ ] T019 [US3] Run the check; fix until it passes. Review that every case's search finds the "before" example.
+  SC-006: rename an Elsa 4 member a region uses in a scratch commit, confirm the sample build or the check fails, then
+  drop the commit.
+
+**Checkpoint**: the catalog stands alone and is usable by hand.
+
+---
+
+## Phase 4: User Story 1 — the guided journey (P1)
+
+- [ ] T020 [US1] Write `skill/migration-plan-template.md` per [contracts/plan-template.md](contracts/plan-template.md)
+  and [data-model.md](data-model.md), with one example row per table using `Acme` names.
+- [ ] T021 [US1] Write `skill/SKILL.md`: front matter per [contracts/adapters.md](contracts/adapters.md); then, in
+  order, the privacy statement (T024), what the skill does and does not do (FR-021), "read the plan first" (FR-007),
+  the four stages (FR-008–FR-012, R-6 searches, the report fields of
+  [contracts/report-consumption.md](contracts/report-consumption.md)), the version check (R-4), the handoff
+  (FR-020), and the edge cases of the spec as plain rules. No diagnostic code literal; read code, message and
+  guidance from the report.
+- [ ] T022 [US1] Run the check on the skill folder (no diagnostic codes, no vendor names).
+
+## Phase 5: User Story 2 — readable without an AI (P1)
+
+- [ ] T023 [US2] Add the "Migrating from Elsa 3" section to `README.md`: what the migration does, the link to
+  `skill/SKILL.md`, that installing it as a skill is optional, how to install it (T027), and what it does not cover
+  (FR-021). At most about fifteen lines.
+
+## Phase 6: User Story 4 — privacy (P2)
+
+- [ ] T024 [US4] In `SKILL.md`, the opening privacy statement (FR-005, FR-006) and the rule to ask before each new raw
+  definition or source file, naming the file and the JSON path.
+
+## Phase 7: User Story 5 — contributor triggers (P2)
+
+- [ ] T025 [P] [US5] Add a "Changing the converter" section to `extensions/Elsa3/src/Mapping/README.md` (FR-018): a
+  converter change needs JTest suites for it (`extensions/Elsa3/tests/JTest/`) and a skill update (catalog, plan
+  template); an Elsa 4 activity authoring API change used by a *port* case needs the sample and catalog updated.
+- [ ] T026 [P] [US5] Add a one-line pointer to that section in `AGENTS.md`, and one line in `docs/skills/catalog.md`
+  saying that user-facing product skills live under `plugins/` and are not contributor workflows.
+
+## Phase 8: User Story 6 — install (P3)
+
+- [ ] T027 [P] [US6] Add `.claude-plugin/marketplace.json` and `plugins/elsa3-migration/.claude-plugin/plugin.json`
+  per [contracts/adapters.md](contracts/adapters.md), with the current `dotnet-elsa` version.
+- [ ] T028 [US6] Install the plugin from the repository marketplace in Claude Code and confirm the skill is listed;
+  copy the skill folder into a scratch workspace's `.agents/skills/` and confirm an agent lists it (quickstart).
+- [ ] T029 [US6] Make the `dotnet-elsa` release carry the plugin version: either the release step updates
+  `plugin.json` and `metadata.cli-version`, or the release checklist names the two fields. Pick the one the existing
+  release tooling supports; do not build new release tooling.
+
+---
+
+## Phase 9: Walkthrough and finish (needs spec 1237)
+
+- [ ] T030 Build a synthetic Elsa 3 export and Elsa 3 source (one custom activity, one JavaScript function, one variable
+  type, one storage driver) outside the repository; no customer material.
+- [ ] T031 SC-001: a reviewer with no AI follows the README and `SKILL.md`, runs the inventory and ports the activity.
+- [ ] T032 SC-002 and SC-005: run the skill with two different AI assistants; compare plans; stop and resume one
+  session mid-`prepare`. Fix the skill text where the plans differ. Post the evidence on the PR.
+- [ ] T033 Set `**Status**: Implemented` in `spec.md` in the last implementation PR.
+
+## Dependencies
+
+- Phase 1 → Phase 2 → US3 (T018 needs the regions).
+- US1 (T020, T021) needs spec 1237's report schema agreed; US4 edits the same file as T021 (sequence them).
+- US2 needs `SKILL.md` to exist (link target). US5 and US6 are independent of the rest.
+- Phase 9 needs spec 1237 implemented and everything above.
+
+## Implementation strategy
+
+Sample and check first, so the catalog is born verified. Then the catalog (usable by hand on its own), then the
+skill and plan template, then the docs and adapters. The walkthrough closes it once the tool exists.

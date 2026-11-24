@@ -107,6 +107,7 @@ tools/skills/check_migration_skill.py                # catalog ⇔ sample region
 README.md                                            # "Migrating from Elsa 3" section
 extensions/Elsa3/src/Mapping/README.md               # contributor trigger
 AGENTS.md                                            # one-line pointer
+docs/skills/catalog.md                               # one line: product skills live under plugins/
 tools/ci/test-tiers.json, Elsa.Server.slnx, .github/workflows/ci.yml   # registration
 ```
 
@@ -116,5 +117,5 @@ it exists to keep the migration catalog correct, not as a product feature.
 
 ## Complexity Tracking
 
-No gate violation. The one addition beyond the design, the compiled sample and its check, was decided with the
-coordinator (research R-3).
+No gate violation. The compiled sample and its check are the one addition beyond the migration journey itself; why
+they are needed is in research R-3.

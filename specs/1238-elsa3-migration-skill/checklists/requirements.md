@@ -33,5 +33,5 @@
 
 - The deliverable is documentation about an API, so the catalog table (FR-014) names Elsa 4 API concepts and the
   folder paths the design decided. That is the content being specified, not implementation leakage.
-- The two open points the design left (the skill's home and how catalog examples stay correct) were decided with
-  the coordinator before writing: one self-contained folder, and a compiled sample.
+- The two points the intake left open (the skill's home and how catalog examples stay correct) are settled in
+  research R-1 and R-3.
