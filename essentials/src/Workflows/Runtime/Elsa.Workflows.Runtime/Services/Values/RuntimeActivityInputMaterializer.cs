@@ -710,7 +710,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             NullPolicyDefaults.TryGetTypeDefault(TypeReferenceFactory.Close(elementType, input.Type.CollectionKind), out var defaultValue))
         {
             context.Warnings?.Report(new ExecutionWarning("VF-NULL-001", $"Input '{input.Key}' on '{nodeId}' used its type default because DefaultOnNull is enabled.", ExecutionWarningSeverity.Information));
-            return ValueEnvelope.Inline(value.Type, JsonSerializer.SerializeToElement(defaultValue, defaultValue!.GetType()), value.Policy);
+            return ValueEnvelope.Inline(value.Type, JsonSerializer.SerializeToElement(defaultValue, defaultValue!.GetType(), JsonBaseline.Options), value.Policy);
         }
         if (value.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull && !input.IsNullable)
             throw new InvalidOperationException($"VF-ACT-004: Input '{input.Key}' on executable node '{nodeId}' does not accept null or absence.");

@@ -253,7 +253,7 @@ public sealed class RuntimeInputBindingCompiler(
             if (!TryAuthoredDefault(variable.Type, out var defaultValue))
                 throw new ArgumentException($"VF-ACT-003: Variable '{variable.Name}' on '{nodeId}' requires a declared default.");
             initialBinding = new RuntimeInputBinding(variable.ReferenceKey, type, policy, RuntimeInputBindingSource.Literal,
-                literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(defaultValue, defaultValue!.GetType()), policy));
+                literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(defaultValue, defaultValue!.GetType(), JsonBaseline.Options), policy));
         }
 
         return new RuntimeVariableDeclaration(variable.ReferenceKey, variable.Name, type, policy, initialBinding);

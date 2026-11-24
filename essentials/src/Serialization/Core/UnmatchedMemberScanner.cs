@@ -31,6 +31,7 @@ public static class UnmatchedMemberScanner
 
     private static void Visit(JsonElement value, Type type, JsonConversionContract contract, string path, List<JsonConversionDiagnostic> result, JsonConversionContract.Operation operation, JsonConverter? customConverter = null)
     {
+        var declaredType = type;
         var temporalType = Nullable.GetUnderlyingType(type) ?? type;
         type = temporalType;
         if (value.ValueKind != JsonValueKind.Null && (temporalType == typeof(DateTime) || temporalType == typeof(DateTimeOffset)))
@@ -41,10 +42,14 @@ public static class UnmatchedMemberScanner
         }
         if (type == typeof(JsonElement) || type == typeof(object) || typeof(System.Text.Json.Nodes.JsonNode).IsAssignableFrom(type)) return;
         if (value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array)) return;
-        var info = operation.GetOptions(contract).GetTypeInfo(type);
+        var options = operation.GetOptions(contract);
+        var info = options.GetTypeInfo(type);
         if (customConverter is not null || info.Kind == JsonTypeInfoKind.None)
         {
             var converter = customConverter ?? info.Converter;
+            if (converter is JsonConverterFactory factory)
+                converter = factory.CreateConverter(declaredType, options)
+                    ?? throw new InvalidOperationException("A JSON member converter factory returned no converter.");
             if (converter is IJsonConversionMemberMatcher matcher && value.ValueKind == JsonValueKind.Object)
             {
                 foreach (var property in value.EnumerateObject())
@@ -87,7 +92,7 @@ public static class UnmatchedMemberScanner
                 x.TypeDiscriminator is int number && token.ValueKind == JsonValueKind.Number && token.TryGetInt32(out var actual) && actual == number);
             if (selected.DerivedType is not null) info = operation.GetOptions(contract).GetTypeInfo(selected.DerivedType);
         }
-        var comparison = contract.Options.PropertyNameCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var comparison = options.PropertyNameCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         foreach (var property in value.EnumerateObject())
         {
             if (property.Name == discriminator) continue;
@@ -95,13 +100,15 @@ public static class UnmatchedMemberScanner
             for (var index = 0; index < info.Properties.Count; index++)
             {
                 var candidate = info.Properties[index];
-                if (candidate.IsExtensionData || candidate.Set is null && candidate.Get is null ||
-                    !candidate.Name.Equals(property.Name, comparison)) continue;
+                if (candidate.IsExtensionData || !candidate.Name.Equals(property.Name, comparison)) continue;
                 member = candidate;
                 break;
             }
             if (member is not null)
             {
+                // Ignored/read-only names are known to the reader, but their values are not converted.
+                // Constructor parameters and Populate members still participate even without a setter.
+                if (!ReadsMember(member, info)) continue;
                 // Scalar values have no members to inspect. Instant tokens are checked here;
                 // other scalar fitting still belongs to the actual deserializer below the scan.
                 var scalar = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
@@ -116,6 +123,14 @@ public static class UnmatchedMemberScanner
             if (info.Properties.Any(x => x.IsExtensionData)) continue;
             Unmatched(MemberPath(path, property.Name), type, contract, result);
         }
+    }
+
+    private static bool ReadsMember(JsonPropertyInfo member, JsonTypeInfo owner)
+    {
+        if (member.Get is null && member.Set is null) return false;
+        if (member.Set is not null || member.AssociatedParameter is not null) return true;
+        return (member.ObjectCreationHandling ?? owner.PreferredPropertyObjectCreationHandling ?? owner.Options.PreferredObjectCreationHandling)
+            == JsonObjectCreationHandling.Populate;
     }
 
     private static string MemberPath(string path, string name) => path + "[" + JsonSerializer.Serialize(name, JsonBaseline.Options) + "]";

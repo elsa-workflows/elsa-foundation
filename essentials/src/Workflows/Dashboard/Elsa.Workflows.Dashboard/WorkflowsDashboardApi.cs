@@ -41,6 +41,8 @@ public static class WorkflowsDashboardApi
                 "GET", "/_elsa/workflows/dashboard/runs", "GetWorkflowRunHealth",
                 typeof(WorkflowRunHealthSnapshot), StatusCodes.Status200OK, null, HandleWorkflowRunHealthAsync,
                 name: "ElsaWorkflowsDashboardGetWorkflowRunHealth")
+            .AddEndpointMetadata(new EndpointParameterMetadata("from", EndpointBindingSource.Query, typeof(DateTimeOffset), true))
+            .AddEndpointMetadata(new EndpointParameterMetadata("to", EndpointBindingSource.Query, typeof(DateTimeOffset), true))
             .RequirePermission(WorkflowsDashboardPermissions.Read);
     }
 

@@ -66,6 +66,79 @@ public sealed class JsonConversionContractTests
     }
 
     [Fact]
+    public void Scanner_skips_ignored_and_unbound_read_only_values_without_false_warnings()
+    {
+        const string raw = """{"ignoredAt":"2026-10-28T09:15:00","ignoredNested":{"unknown":1},"readOnlyAt":"2026-10-28T09:15:00","readOnlyNested":{"startAt":"2026-10-28T09:15:00","unknown":1},"accepted":3}""";
+        var input = Element(raw);
+        var contract = JsonConversionContract.For(typeof(IgnoredReadMembers));
+        var warnings = new List<JsonConversionDiagnostic>();
+        Assert.Empty(UnmatchedMemberScanner.Scan(input, typeof(IgnoredReadMembers), contract));
+        var value = (IgnoredReadMembers)contract.Read(input, typeof(IgnoredReadMembers), warnings.Add)!;
+        Assert.Empty(warnings);
+        Assert.Equal(3, value.Accepted);
+        Assert.Equal(default, value.IgnoredAt);
+        Assert.Null(value.IgnoredNested);
+        Assert.Equal(default, value.ReadOnlyAt);
+        Assert.Equal(default, value.ReadOnlyNested.StartAt);
+        Assert.Equal(raw, input.GetRawText());
+        var unmatched = Assert.Throws<JsonConversionException>(() => contract.Read(Element("""{"unknown":1}"""), typeof(IgnoredReadMembers)));
+        Assert.Equal("json-unmatched-member-refused", unmatched.Code);
+        Assert.Equal("$[\"unknown\"]", unmatched.Path);
+    }
+
+    [Fact]
+    public void Constructor_associated_getters_still_validate_dates_and_unmatched_members()
+    {
+        var contract = JsonConversionContract.For(typeof(ConstructorReadMembers));
+        var valid = Element("""{"startAt":"2026-10-28T09:15:00+01:00","order":{"customerName":"Ada"}}""");
+        var warnings = new List<JsonConversionDiagnostic>();
+        Assert.Empty(UnmatchedMemberScanner.Scan(valid, typeof(ConstructorReadMembers), contract));
+        var value = (ConstructorReadMembers)contract.Read(valid, typeof(ConstructorReadMembers), warnings.Add)!;
+        Assert.Equal(new DateTime(2026, 10, 28, 8, 15, 0, DateTimeKind.Utc), value.StartAt);
+        Assert.Equal("Ada", value.Order.CustomerName);
+        Assert.Empty(warnings);
+        var dateError = Assert.Throws<JsonConversionException>(() => UnmatchedMemberScanner.Scan(
+            Element("""{"startAt":"2026-10-28T09:15:00"}"""), typeof(ConstructorReadMembers), contract));
+        Assert.Equal("json-datetime-offset-missing", dateError.Code);
+        Assert.Equal("$[\"startAt\"]", dateError.Path);
+        var unmatched = Assert.Throws<JsonConversionException>(() => UnmatchedMemberScanner.Scan(
+            Element("""{"order":{"unknown":1}}"""), typeof(ConstructorReadMembers), contract));
+        Assert.Equal("json-unmatched-member-refused", unmatched.Code);
+        Assert.Equal("$[\"order\"][\"unknown\"]", unmatched.Path);
+    }
+
+    [Theory]
+    [InlineData(typeof(MemberPopulateReadMembers))]
+    [InlineData(typeof(TypePopulateReadMembers))]
+    public void Populate_getters_still_scan_and_populate_their_read_values(Type type)
+    {
+        var contract = JsonConversionContract.For(type);
+        var valid = Element("""{"orders":[{"customerName":"Ada"}]}""");
+        var warnings = new List<JsonConversionDiagnostic>();
+        Assert.Empty(UnmatchedMemberScanner.Scan(valid, type, contract));
+        var value = contract.Read(valid, type, warnings.Add)!;
+        var orders = Assert.IsType<List<Order>>(type.GetProperty("Orders")!.GetValue(value));
+        Assert.Equal("Ada", Assert.Single(orders).CustomerName);
+        Assert.Empty(warnings);
+        var unmatched = Assert.Throws<JsonConversionException>(() => UnmatchedMemberScanner.Scan(
+            Element("""{"orders":[{"unknown":1}]}"""), type, contract));
+        Assert.Equal("json-unmatched-member-refused", unmatched.Code);
+        Assert.Equal("$[\"orders\"][0][\"unknown\"]", unmatched.Path);
+    }
+
+    [Fact]
+    public void Explicit_replace_overrides_type_populate_for_an_unbound_getter()
+    {
+        var input = Element("""{"orders":[{"unknown":1}]}""");
+        var contract = JsonConversionContract.For(typeof(ReplaceReadMembers));
+        var warnings = new List<JsonConversionDiagnostic>();
+        Assert.Empty(UnmatchedMemberScanner.Scan(input, typeof(ReplaceReadMembers), contract));
+        var value = (ReplaceReadMembers)contract.Read(input, typeof(ReplaceReadMembers), warnings.Add)!;
+        Assert.Empty(value.Orders);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
     public void Nested_type_contract_and_annotated_names_match_the_actual_converter()
     {
         var input = Element("{\"nested\":{\"CUSTOMER_ID\":\"x\"}}");
@@ -93,6 +166,67 @@ public sealed class JsonConversionContractTests
         Assert.Equal("json-unmatched-coverage-unavailable", warning.Code);
         Assert.Contains(nameof(CustomOrderConverter), warning.Converter);
         Assert.NotNull(contract.Read(input, typeof(CustomHolder)));
+    }
+
+    [Theory]
+    [InlineData("{\"value\":{\"child\":{\"customer_name\":\"Ann\"},\"unexpected\":1}}", "$[\"value\"][\"unexpected\"]")]
+    [InlineData("{\"value\":{\"child\":{\"customer_name\":\"Ann\",\"unexpected\":1}}}", "$[\"value\"][\"child\"][\"unexpected\"]")]
+    public void Property_factory_matcher_enforces_parent_and_child_strict_contracts(string json, string expectedPath)
+    {
+        var type = typeof(PropertyMatchedFactoryHolder<StrictMatchedChild>);
+        var contract = JsonConversionContract.For(type);
+        var input = Element(json);
+        var error = Assert.Throws<JsonConversionException>(() => contract.Read(input, type));
+        Assert.Equal("json-unmatched-member-refused", error.Code);
+        Assert.Equal(expectedPath, error.Path);
+        Assert.Equal(json, input.GetRawText());
+    }
+
+    [Fact]
+    public void Property_factory_matcher_honors_child_scoped_naming_and_case()
+    {
+        const string raw = """{ "Name":"Ren\u00e9", "N":1.0, "nil":null }""";
+        var input = Element($$"""{ "value": { "child": { "CUSTOMER_NAME":"Ada", "RAW_DATA":{{raw}} } } }""");
+        var type = typeof(PropertyMatchedFactoryHolder<InsensitiveMatchedChild>);
+        var contract = JsonConversionContract.For(type);
+        var warnings = new List<JsonConversionDiagnostic>();
+        var value = (PropertyMatchedFactoryHolder<InsensitiveMatchedChild>)contract.Read(input, type, warnings.Add)!;
+        Assert.Empty(warnings);
+        Assert.Equal("Ada", value.Value!.Child.CustomerName);
+        Assert.Equal(raw, value.Value.Child.RawData.GetRawText());
+        var written = contract.Write(value, type).GetProperty("value").GetProperty("child");
+        Assert.Equal("Ada", written.GetProperty("customer_name").GetString());
+        Assert.Equal(raw, written.GetProperty("raw_data").GetRawText());
+    }
+
+    [Fact]
+    public void Property_factory_without_a_matcher_retains_unavailable_coverage()
+    {
+        var type = typeof(OpaqueFactoryHolder);
+        var contract = JsonConversionContract.For(type);
+        var warnings = new List<JsonConversionDiagnostic>();
+        Assert.NotNull(contract.Read(Element("""{"value":{"alternate":1}}"""), type, warnings.Add));
+        var warning = Assert.Single(warnings);
+        Assert.Equal("json-unmatched-coverage-unavailable", warning.Code);
+        Assert.Contains(nameof(CustomOrderConverter), warning.Converter);
+        Assert.Equal("$[\"value\"]", warning.Path);
+    }
+
+    [Fact]
+    public void Nullable_property_factory_matcher_uses_the_declared_type_and_active_options()
+    {
+        var type = typeof(NullableFactoryHolder);
+        var contract = JsonConversionContract.For(type);
+        var warnings = new List<JsonConversionDiagnostic>();
+        var value = (NullableFactoryHolder)contract.Read(Element("""{"value":{"WIRE_NUMBER":7}}"""), type, warnings.Add)!;
+        Assert.Equal(7, value.Value!.Value.Number);
+        Assert.Empty(warnings);
+        value = (NullableFactoryHolder)contract.Read(Element("""{"value":null}"""), type, warnings.Add)!;
+        Assert.Null(value.Value);
+        Assert.Empty(warnings);
+        var error = Assert.Throws<JsonConversionException>(() => contract.Read(Element("""{"value":{"WIRE_NUMBER":7,"unknown":1}}"""), type));
+        Assert.Equal("json-unmatched-member-refused", error.Code);
+        Assert.Equal("$[\"value\"][\"unknown\"]", error.Path);
     }
 
     [Theory]
@@ -247,6 +381,79 @@ public sealed class JsonConversionContractTests
     private sealed class RequiredOrder { public required string Name { get; set; } }
     private sealed class AnnotatedNumber { [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] public int Number { get; set; } }
     private sealed class CustomHolder { [JsonConverter(typeof(CustomOrderConverter))] public Order? Value { get; set; } }
+    [JsonConversion(RefuseUnmatchedMembers = true)]
+    private sealed class IgnoredReadMembers
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenReading)] public DateTime IgnoredAt { get; set; }
+        [JsonIgnore] public ScopedDate? IgnoredNested { get; set; }
+        public DateTime ReadOnlyAt { get; }
+        public ScopedDate ReadOnlyNested { get; } = new();
+        public int Accepted { get; set; }
+    }
+    [JsonConversion(RefuseUnmatchedMembers = true)]
+    private sealed class ConstructorReadMembers(DateTime startAt, Order order)
+    {
+        public DateTime StartAt { get; } = startAt;
+        public Order Order { get; } = order;
+    }
+    [JsonConversion(RefuseUnmatchedMembers = true)]
+    private sealed class MemberPopulateReadMembers
+    {
+        [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)] public List<Order> Orders { get; } = [];
+    }
+    [JsonConversion(RefuseUnmatchedMembers = true), JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
+    private sealed class TypePopulateReadMembers { public List<Order> Orders { get; } = []; }
+    [JsonConversion(RefuseUnmatchedMembers = true), JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
+    private sealed class ReplaceReadMembers
+    {
+        [JsonObjectCreationHandling(JsonObjectCreationHandling.Replace)] public List<Order> Orders { get; } = [];
+    }
+    [JsonConversion(RefuseUnmatchedMembers = true)]
+    private sealed class PropertyMatchedFactoryHolder<T>
+    {
+        [JsonConverter(typeof(MatchedChildEnvelopeConverterFactory))] public MatchedChildEnvelope<T>? Value { get; set; }
+    }
+    [JsonConversion(RefuseUnmatchedMembers = true)]
+    private sealed class OpaqueFactoryHolder { [JsonConverter(typeof(OpaqueOrderConverterFactory))] public Order? Value { get; set; } }
+    private sealed class OpaqueOrderConverterFactory : JsonConverterFactory
+    {
+        public OpaqueOrderConverterFactory() { }
+        public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(Order);
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) => new CustomOrderConverter();
+    }
+    private readonly record struct NullableMatchedValue(int Number);
+    [JsonConversion(CaseInsensitive = true, RefuseUnmatchedMembers = true)]
+    private sealed class NullableFactoryHolder
+    {
+        [JsonConverter(typeof(NullableMatchedValueConverterFactory))] public NullableMatchedValue? Value { get; set; }
+    }
+    private sealed class NullableMatchedValueConverterFactory : JsonConverterFactory
+    {
+        public NullableMatchedValueConverterFactory() { }
+        public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(NullableMatchedValue?);
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) =>
+            typeToConvert == typeof(NullableMatchedValue?) ? new NullableMatchedValueConverter(options.PropertyNameCaseInsensitive)
+                : throw new InvalidOperationException("The member factory needs its nullable declared type.");
+    }
+    private sealed class NullableMatchedValueConverter(bool caseInsensitive) : JsonConverter<NullableMatchedValue?>, IJsonConversionMemberMatcher
+    {
+        public bool TryGetMemberType(string name, out Type memberType)
+        {
+            memberType = typeof(int);
+            return name.Equals("wire_number", caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        }
+        public override NullableMatchedValue? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null) return null;
+            using var document = JsonDocument.ParseValue(ref reader);
+            return new NullableMatchedValue(document.RootElement.EnumerateObject().First(property => TryGetMemberType(property.Name, out _)).Value.GetInt32());
+        }
+        public override void Write(Utf8JsonWriter writer, NullableMatchedValue? value, JsonSerializerOptions options)
+        {
+            if (value is null) { writer.WriteNullValue(); return; }
+            writer.WriteStartObject(); writer.WriteNumber("wire_number", value.Value.Number); writer.WriteEndObject();
+        }
+    }
     [JsonConversion(NamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower, RefuseUnmatchedMembers = true)]
     private sealed class StrictMatchedChild { public string? CustomerName { get; set; } public JsonElement RawData { get; set; } }
     [JsonConversion(NamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower, CaseInsensitive = true)]
