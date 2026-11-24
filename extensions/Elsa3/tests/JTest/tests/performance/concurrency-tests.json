@@ -5,6 +5,9 @@
         "description": "Executes a workflow that bulk dispatches a bunch of workflows; quickly returns the correlation ID, and then polls for successful completion of all instances."
     },
     "globals": {
+        "executeInput": {
+            "ConcurrencyCount": "{{ $.globals.concurrencyCount }}"
+        },
         "definitionId": "f4e543514bd28e61",
         "concurrencyCount": 300
     },
@@ -34,47 +37,41 @@
             "name": "Act - Execute workflow",
             "steps": [
                 {
-                    "type": "http",
+                    "type": "use",
                     "name": "Execute",
-                    "url": "{{ $.env['elsaApi:baseUrl'] }}/elsa/api/workflow-definitions/{{ $.globals.definitionId }}/execute",
-                    "method": "POST",
-                    "body": {
-                        "input": {
-                            "ConcurrencyCount": "{{ $.globals.concurrencyCount }}"
-                        }
+                    "template": "elsa-execute-workflow-definition",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.definitionId }}",
+                        "input": "{{ $.globals.executeInput }}"
                     },
-                    "headers": [
-                        {
-                            "name": "Authorization",
-                            "value": "{{ $.globals.authHeader }}"
-                        }
-                    ],
                     "assert": [
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.body.workflowState.status }}",
+                            "actualValue": "{{ $.this.workflowStatus }}",
                             "expectedValue": "Finished",
                             "description": "Workflow state is finished"
                         },
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.body.workflowState.subStatus }}",
+                            "actualValue": "{{ $.this.workflowSubStatus }}",
                             "expectedValue": "Finished",
                             "description": "Workflow sub-state is finished"
                         },
                         {
                             "op": "exists",
-                            "actualValue": "{{ $.this.body.workflowState.correlationId }}",
+                            "actualValue": "{{ $.this.correlationId }}",
                             "description": "Correlation ID exists"
                         },
                         {
                             "op": "exists",
-                            "actualValue": "{{ $.this.body.workflowState.output.DispatchCorrelationIdentifier }}",
+                            "actualValue": "{{ $.this.output.DispatchCorrelationIdentifier }}",
                             "description": "Dispatch Correlation ID exists"
                         }
                     ],
                     "save": {
-                        "$.globals.dispatchCorrelationId": "{{ $.this.body.workflowState.output.DispatchCorrelationIdentifier }}"
+                        "$.globals.dispatchCorrelationId": "{{ $.this.output.DispatchCorrelationIdentifier }}"
                     }
                 }
             ]
@@ -95,26 +92,18 @@
                     },
                     "steps": [
                         {
-                            "type": "http",
+                            "type": "use",
                             "name": "Search completed dispatched workflow instances",
-                            "url": "{{ $.env['elsaApi:baseUrl'] }}/elsa/api/workflow-instances",
-                            "method": "GET",
-                            "headers": [
-                                {
-                                    "name": "Authorization",
-                                    "value": "{{$.globals.authHeader}}"
-                                }
-                            ],
-                            "body": {
-                                "page": 0,
-                                "pageSize": 10,
+                            "template": "elsa-count-workflow-instances",
+                            "with": {
+                                "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                                "authHeader": "{{$.globals.authHeader}}",
                                 "correlationId": "{{ $.globals.dispatchCorrelationId }}",
-                                "isSystem": false,
-                                "status": "Finished",
-                                "subStatus": "Finished"
+                                "workflowStatus": "Finished",
+                                "workflowSubStatus": "Finished"
                             },
                             "save": {
-                                "$.globals.completedInstanceCount": "{{ $.this.body.totalCount }}"
+                                "$.globals.completedInstanceCount": "{{ $.this.count }}"
                             }
                         }
                     ]

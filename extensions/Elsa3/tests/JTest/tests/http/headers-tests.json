@@ -150,6 +150,7 @@
                     "name": "Assert HttpEndpoint activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -205,6 +206,7 @@
                     "name": "Assert HttpResponse activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"

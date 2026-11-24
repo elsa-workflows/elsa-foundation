@@ -162,6 +162,7 @@
                     "name": "Assert state of SetOutput activity",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.subWorkflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"

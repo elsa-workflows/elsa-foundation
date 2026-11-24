@@ -40,44 +40,42 @@
             "name": "Act & Assert - Execute workflow",
             "steps": [
                 {
-                    "type": "http",
+                    "type": "use",
                     "name": "Execute workflow",
-                    "url": "{{ $.env['elsaApi:baseUrl'] }}/elsa/api/workflow-definitions/{{ $.globals.definitionId }}/execute",
-                    "method": "POST",
-                    "file": "{{ $.globals.bigDataFilePath }}",
-                    "headers": [
-                        {
-                            "name": "Authorization",
-                            "value": "{{ $.globals.authHeader }}"
-                        }
-                    ],
+                    "template": "elsa-execute-workflow-definition-from-file",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.definitionId }}",
+                        "requestFile": "{{ $.globals.bigDataFilePath }}"
+                    },
                     "assert": [
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.body.workflowState.status }}",
+                            "actualValue": "{{ $.this.workflowStatus }}",
                             "expectedValue": "Finished",
                             "description": "Workflow state is finished"
                         },
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.body.workflowState.subStatus }}",
+                            "actualValue": "{{ $.this.workflowSubStatus }}",
                             "expectedValue": "Finished",
                             "description": "Workflow sub-state is finished"
                         },
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.body.workflowState.output.OutputData.itemCount }}",
+                            "actualValue": "{{ $.this.output.OutputData.itemCount }}",
                             "expectedValue": "{{ $.globals.expectedItemCount }}",
                             "description": "Assert that big data is returned as part of workflow execution log"
                         },
                         {
-                          "op": "exists",
-                          "actualValue": "{{ $.this.body.workflowState.id }}",
-                          "description": "Instance ID is returned"
+                            "op": "exists",
+                            "actualValue": "{{ $.this.workflowInstanceId }}",
+                            "description": "Instance ID is returned"
                         }
                     ],
                     "save": {
-                        "$.globals.instanceId": "{{ $.this.body.workflowState.id }}"
+                        "$.globals.instanceId": "{{ $.this.workflowInstanceId }}"
                     }
                 },
                 {

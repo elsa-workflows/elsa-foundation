@@ -109,21 +109,21 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 **Independent test**: Elsa 3 rerun green; the diff of each suite shows only values moved behind parameters.
 
-- [ ] T019 [US2] List every Elsa 3-specific value in `JTest/tests/**` that the template contract cannot absorb : direct
+- [X] T019 [US2] List every Elsa 3-specific value in `JTest/tests/**` that the template contract cannot absorb : direct
   Elsa 3 API calls in `http` steps (the `events` suite and three `performance` suites call
   `/elsa/api/workflow-definitions/{id}/execute` and `/elsa/api/workflow-instances`), response fields read from those
   steps, reads inside template outputs beyond the projected fields (for example
   `instance.workflowState.activityExecutionContexts[0].properties.Variables[...]`), status words the translation table
   does not cover, and Elsa 3 generated identifiers; include the keys suites read inside `activityState` and `outputs`, which the Elsa 4
   templates must supply (contracts/templates.md); write the list to `JTest/ledger/refactor-scope.md`.
-- [ ] T020 [US2] For each Elsa 4 template that needs a parameter its Elsa 3 version lacks (for example the workflow
+- [X] T020 [US2] For each Elsa 4 template that needs a parameter its Elsa 3 version lacks (for example the workflow
   instance id for `elsa-activity-instance-get`, contracts/templates.md), add the parameter to the Elsa 3 template in
   `JTest/templates-elsa3/` without changing its outputs; for each direct API call or internal read listed in T019, add a new
   Elsa 3 template in `JTest/templates-elsa3/` that returns the value with a stated meaning.
-- [ ] T021 [US2] Move each listed value behind a template output, an environment value in `JTest/environments/elsa3.json`
+- [X] T021 [US2] Move each listed value behind a template output, an environment value in `JTest/environments/elsa3.json`
   or a suite parameter, and pass any new template parameters, in `JTest/tests/**`; no expected business value or
   assertion changes (FR-010).
-- [ ] T022 [US2] Rerun the 39 suites of the acceptance set on a fresh 3.6.3 container; the same suites pass as after T018 (SC-002 part 1);
+- [X] T022 [US2] Rerun the 39 suites of the acceptance set on a fresh 3.6.3 container; the same suites pass as after T018 (SC-002 part 1);
   record the run.
 
 **Checkpoint**: the suite files are frozen for the Elsa 4 work; later edits go through T029.

@@ -202,6 +202,7 @@
                     "name": "Assert activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -250,6 +251,7 @@
                     "name": "Assert ForEach activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -302,6 +304,7 @@
                     "name": "Assert ForEach body WriteLine 'Item1' activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.writeLineJournalEntries[0].activityInstanceId }}"
@@ -324,6 +327,7 @@
                     "name": "Assert ForEach body WriteLine 'Item2' activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.writeLineJournalEntries[1].activityInstanceId }}"
@@ -372,6 +376,7 @@
                     "name": "Assert ForLoop_OuterBoundInclusive_TRUE activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -434,6 +439,7 @@
                     "name": "Assert ForLoop_OuterBoundInclusive_TRUE body WriteLine 'Step0' activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.writeLineJournalEntries[0].activityInstanceId }}"
@@ -456,6 +462,7 @@
                     "name": "Assert ForLoop_OuterBoundInclusive_TRUE body WriteLine 'Step1' activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.writeLineJournalEntries[1].activityInstanceId }}"
@@ -478,6 +485,7 @@
                     "name": "Assert ForLoop_OuterBoundInclusive_TRUE body WriteLine 'Step2' activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.writeLineJournalEntries[2].activityInstanceId }}"
@@ -526,6 +534,7 @@
                     "name": "Assert ForLoop_OuterBoundInclusive_FALSE activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -588,6 +597,7 @@
                     "name": "Assert ForLoop_OuterBoundInclusive_FALSE body WriteLine 'Step0' activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.writeLineJournalEntries[0].activityInstanceId }}"
@@ -610,6 +620,7 @@
                     "name": "Assert ForLoop_OuterBoundInclusive_FALSE body WriteLine 'Step1' activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.writeLineJournalEntries[1].activityInstanceId }}"
@@ -658,6 +669,7 @@
                     "name": "Assert WhileLoop activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -724,6 +736,7 @@
                     "name": "Assert ParallelForEach activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -795,6 +808,7 @@
                     "name": "Assert activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -856,6 +870,7 @@
                     "name": "Assert activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"

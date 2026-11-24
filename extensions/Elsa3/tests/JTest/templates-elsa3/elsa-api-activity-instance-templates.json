@@ -51,6 +51,7 @@
                         "with": {
                             "baseUrl": "{{ $.baseUrl }}",
                             "authHeader": "{{ $.authHeader }}",
+                            "workflowInstanceId": "{{ $.workflowInstanceId }}",
                             "activityInstanceId": "{{ $.instanceId }}"
                         },
                         "save": {
@@ -85,6 +86,11 @@
                         "type": "string",
                         "required": true,
                         "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true,
+                        "description": "The workflow instance the activity ran in; Elsa 3 needs only the activity instance id"
                     },
                     "activityInstanceId": {
                         "type": "string",

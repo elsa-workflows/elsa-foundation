@@ -120,10 +120,22 @@
                         {
                             "op": "exists",
                             "actualValue": "{{ $.this.instance }}"
-                        },
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get workflow instance input and output",
+                    "template": "elsa-get-workflow-instance-input-output",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.subWorkflowInstanceId }}"
+                    },
+                    "assert": [
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.instance.workflowState.input.ShouldFault }}",
+                            "actualValue": "{{ $.this.input.ShouldFault }}",
                             "expectedValue": "{{ $.globals.subWorkflowInputItems[0].ShouldFault }}"
                         }
                     ]

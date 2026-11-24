@@ -167,6 +167,7 @@
                     "name": "Assert HttpEndpoint activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -224,6 +225,7 @@
                     "name": "Assert SetVariable activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -281,6 +283,7 @@
                     "name": "Assert WriteHttpResponse activity instance state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -330,25 +333,37 @@
                         {
                             "op": "exists",
                             "actualValue": "{{ $.this.instance }}"
-                        },
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get workflow instance variables",
+                    "template": "elsa-get-workflow-instance-variables",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.globals.workflowInstanceId }}"
+                    },
+                    "assert": [
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.httpRequestBody }}'].testProperty1 }}",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.httpRequestBody }}'].testProperty1 }}",
                             "expectedValue": "{{ $.globals.requestBody.testProperty1 }}"
                         },
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.httpRequestHeaders }}']['{{ $.globals.customRequestHeader.name }}'] }}",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.httpRequestHeaders }}']['{{ $.globals.customRequestHeader.name }}'] }}",
                             "expectedValue": "{{ $.globals.customRequestHeader.value }}"
                         },
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.queryArguments }}'].queryParam }}",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.queryArguments }}'].queryParam }}",
                             "expectedValue": "abc"
                         },
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.httpResponseBody }}'].testProperty1 }}",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.httpResponseBody }}'].testProperty1 }}",
                             "expectedValue": "{{ $.globals.requestBody.testProperty1 }}"
                         }
                     ]

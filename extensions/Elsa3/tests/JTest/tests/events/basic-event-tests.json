@@ -4,6 +4,9 @@
         "name": "Test case - Can publish and listen to event"
     },
     "globals": {
+        "executeInput": {
+            "InputData": "{{ $.globals.eventPayload }}"
+        },
         "eventPublisherDefinitionId": "5b805c0f98b60b08",
         "eventListenerDefinitionId": "c6fae2759f0fb6e8",
         "eventPayload": {
@@ -36,42 +39,36 @@
             "name": "Act & Assert - Execute workflow",
             "steps": [
                 {
-                    "type": "http",
+                    "type": "use",
                     "name": "Execute",
-                    "url": "{{ $.env['elsaApi:baseUrl'] }}/elsa/api/workflow-definitions/{{ $.globals.eventPublisherDefinitionId }}/execute",
-                    "method": "POST",
-                    "body": {
-                        "input": {
-                            "InputData": "{{ $.globals.eventPayload }}"
-                        }
+                    "template": "elsa-execute-workflow-definition",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowDefinitionId": "{{ $.globals.eventPublisherDefinitionId }}",
+                        "input": "{{ $.globals.executeInput }}"
                     },
-                    "headers": [
-                        {
-                            "name": "Authorization",
-                            "value": "{{ $.globals.authHeader }}"
-                        }
-                    ],
                     "assert": [
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.body.workflowState.status }}",
+                            "actualValue": "{{ $.this.workflowStatus }}",
                             "expectedValue": "Finished",
                             "description": "Workflow state is finished"
                         },
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.body.workflowState.subStatus }}",
+                            "actualValue": "{{ $.this.workflowSubStatus }}",
                             "expectedValue": "Finished",
                             "description": "Workflow sub-state is finished"
                         },
                         {
                             "op": "exists",
-                            "actualValue": "{{ $.this.body.workflowState.output.EventListenerCorrelationIdentifier }}",
+                            "actualValue": "{{ $.this.output.EventListenerCorrelationIdentifier }}",
                             "description": "EventListenerCorrelationIdentifier exists in output"
                         }
                     ],
                     "save": {
-                        "$.globals.eventListenerCorrelationId": "{{ $.this.body.workflowState.output.EventListenerCorrelationIdentifier }}"
+                        "$.globals.eventListenerCorrelationId": "{{ $.this.output.EventListenerCorrelationIdentifier }}"
                     }
                 },
                 {
@@ -96,7 +93,7 @@
                 {
                     "type": "use",
                     "name": "Get event listener workflow instance details",
-                    "template": "elsa-get-workflow-instance",
+                    "template": "elsa-get-workflow-instance-input-output",
                     "with": {
                         "workflowInstanceId": "{{ $.globals.eventListenerWorkflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
@@ -105,11 +102,11 @@
                     "assert": [
                         {
                             "op": "exists",
-                            "actualValue": "{{ $.this.instance.workflowState.output.Result }}"                            
+                            "actualValue": "{{ $.this.output.Result }}"
                         },
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.instance.workflowState.output.Result.message }}",
+                            "actualValue": "{{ $.this.output.Result.message }}",
                             "expectedValue": "{{ $.globals.eventPayload.message }}"
                         }
                     ]

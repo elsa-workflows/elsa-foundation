@@ -11,6 +11,10 @@ One row per run, newest last; a failed run is never removed (spec 1235 FR-021, d
 | 5 | Elsa 3 | 5e6cba1fa4 | as run 1 | `environments/elsa3.json` (channels empty) | 2.0.3 | `import-and-publish-workflows.json` on a fresh container | 34/34 datasets passed | - | Setup for run 6. |
 | 6 | Elsa 3 | 5e6cba1fa4 | as run 1 | `environments/elsa3.json` (channels empty) | 2.0.3 | T018: the 39 acceptance suites (Q13, Q15) after the T017 fixes | 39 suites, 38 passed; 166/167 cases. Failed: `javascript/script-handler-functions` case `getConfiguration` (B14) | - | Every other suite passes, including the four fixed ones and `commit-after-every-activity`. |
 | 7 | Elsa 3 | working tree after 5e6cba1fa4 (committed in the next commit) | as run 1 | as run 6 | 2.0.3 | `javascript/script-handler-functions-tests.json` with its `getConfiguration` cases removed, same container as run 6 | 2/2 cases passed | - | With run 6: all 39 acceptance suites pass on 3.6.3 (SC-001). |
+| 8 | Elsa 3 | engine-neutral refactor, working tree (committed as the T019–T022 commit) | as run 1 | as run 6 | 2.0.3 | `jtest validate`, then `import-and-publish-workflows.json` on a fresh container | 42/42 valid; 34/34 datasets | - | Setup for run 9. |
+| 9 | Elsa 3 | as run 8, first refactor | as run 1 | as run 6 | 2.0.3 | 39 acceptance suites | 36 passed; 162/165 cases. Failed: `events`, `commit-after-every-activity`, `concurrency` (execute input arrived as `null`; one variable read from the stored instance) | - | Refactor defect, fixed before run 11 (`refactor-scope.md` Notes). |
+| 10 | Elsa 3 | as run 8, final refactor | as run 1 | as run 6 | 2.0.3 | `jtest validate`, then `import-and-publish-workflows.json` on a fresh container | 42/42 valid; 34/34 datasets | - | Setup for run 11. |
+| 11 | Elsa 3 | as run 10 | as run 1 | as run 6 | 2.0.3 | T022: the 39 acceptance suites after the engine-neutral refactor | 39/39 suites, 165/165 cases | - | Same suites pass as after T018 (SC-002 part 1). The suite files are frozen for the Elsa 4 work. |
 
 ## Notes
 

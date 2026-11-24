@@ -105,32 +105,44 @@
                         {
                             "op": "exists",
                             "actualValue": "{{ $.this.instance }}"
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get workflow instance variables",
+                    "template": "elsa-get-workflow-instance-variables",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.workflowInstanceId }}"
+                    },
+                    "assert": [
+                        {
+                            "op": "notexists",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.memory.httpRequestBody }}'] }}"
                         },
                         {
                             "op": "notexists",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.httpRequestBody }}'] }}"
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.memory.httpResponse }}']}}"
                         },
                         {
                             "op": "notexists",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.httpResponse }}']}}"
-                        },
-                        {
-                            "op": "notexists",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.subWorkflowInputVariable }}'] }}",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.memory.subWorkflowInputVariable }}'] }}",
                             "description": "We must assert current behaviour, that no matter the storage driver type; any variables defined in sub workflows are never returned by get-instance API"
                         },
                         {
                             "op": "notexists",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.subWorkflowInputVariable }}'] }}",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.workflowInstance.subWorkflowInputVariable }}'] }}",
                             "description": "We must assert current behaviour, that no matter the storage driver type; any variables defined in sub workflows are never returned by get-instance API"
                         },
                         {
                             "op": "notexists",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.httpRequestBody }}'] }}"
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.workflowInstance.httpRequestBody }}'] }}"
                         },
                         {
                             "op": "notexists",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.httpResponse }}'] }}"
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.workflowInstance.httpResponse }}'] }}"
                         }
                     ]
                 }
@@ -197,34 +209,46 @@
                         {
                             "op": "exists",
                             "actualValue": "{{ $.this.instance }}"
-                        },
+                        }
+                    ]
+                },
+                {
+                    "type": "use",
+                    "name": "Get workflow instance variables",
+                    "template": "elsa-get-workflow-instance-variables",
+                    "with": {
+                        "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
+                        "authHeader": "{{ $.globals.authHeader }}",
+                        "workflowInstanceId": "{{ $.workflowInstanceId }}"
+                    },
+                    "assert": [
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.httpRequestBody }}'].testProperty1 }}",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.workflowInstance.httpRequestBody }}'].testProperty1 }}",
                             "expectedValue": "{{ $.globals.requestBody.testProperty1 }}"
                         },
                         {
                             "op": "equals",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.httpResponse }}'].testProperty1 }}",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.workflowInstance.httpResponse }}'].testProperty1 }}",
                             "expectedValue": "{{ $.globals.requestBody.testProperty1 }}"
                         },
                         {
                             "op": "notexists",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.subWorkflowInputVariable }}'] }}",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.memory.subWorkflowInputVariable }}'] }}",
                             "description": "We must assert current behaviour, that no matter the storage driver type; any variables defined in sub workflows are never returned by get-instance API"
                         },
                         {
                             "op": "notexists",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.workflowInstance.subWorkflowInputVariable }}'] }}",
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.workflowInstance.subWorkflowInputVariable }}'] }}",
                             "description": "We must assert current behaviour, that no matter the storage driver type; any variables defined in sub workflows are never returned by get-instance API"
                         },
                         {
                             "op": "notexists",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.httpRequestBody }}'] }}"
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.memory.httpRequestBody }}'] }}"
                         },
                         {
                             "op": "notexists",
-                            "actualValue": "{{ $.this.instance.workflowState.activityExecutionContexts[0].properties.Variables['{{ $.globals.variableIds.memory.httpResponse }}']}}"
+                            "actualValue": "{{ $.this.variables['{{ $.globals.variableIds.memory.httpResponse }}']}}"
                         }
                     ]
                 }

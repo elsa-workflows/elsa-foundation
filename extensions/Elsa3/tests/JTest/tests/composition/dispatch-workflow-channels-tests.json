@@ -157,6 +157,7 @@
                     "name": "Assert data successfully passed through sub-workflow",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.globals.dispatchWorkflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"

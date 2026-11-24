@@ -156,6 +156,7 @@
                     "name": "Assert HttpResponse has expected state - but because of bug only the Event status 'Running' is incorrect",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -200,6 +201,7 @@
                     "name": "Assert SetVariable has expected state; dispatch workflow is awaited and Output can be used",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.setVariableActivityInstance }}"
@@ -318,6 +320,7 @@
                     "name": "Assert HttpResponse has expected state",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.activityInstanceId }}"
@@ -360,6 +363,7 @@
                     "name": "Assert SetVariable has expected state; dispatch workflow is NOT awaited, hence output cannot be used",
                     "template": "elsa-activity-instance-get",
                     "with": {
+                        "workflowInstanceId": "{{ $.dispatchWorkflowInstanceId }}",
                         "baseUrl": "{{ $.env['elsaApi:baseUrl'] }}",
                         "authHeader": "{{ $.globals.authHeader }}",
                         "activityInstanceId": "{{ $.setVariableActivityInstance }}"
