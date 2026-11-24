@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "e443c968896290e112340ae07dd25661d18a637a",
+  "last_publish_commit": "1c523dfe8d0986e568f183448970d9e617298954",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -144,8 +144,8 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Durable",
-      "version": "4.0.4-preview",
-      "commit": "e443c968896290e112340ae07dd25661d18a637a"
+      "version": "4.0.5-preview",
+      "commit": "1c523dfe8d0986e568f183448970d9e617298954"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Hosting",
@@ -164,8 +164,8 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
-      "version": "4.0.7-preview",
-      "commit": "e443c968896290e112340ae07dd25661d18a637a"
+      "version": "4.0.8-preview",
+      "commit": "1c523dfe8d0986e568f183448970d9e617298954"
     },
     {
       "package_id": "Elsa.ActorFoundation.Contracts",
@@ -1229,8 +1229,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.WorkflowActor",
-      "version": "4.0.1-preview",
-      "commit": "2edf80f6a7f7072d95fd3622d313ba9f9a2ee5f5"
+      "version": "4.0.2-preview",
+      "commit": "1c523dfe8d0986e568f183448970d9e617298954"
     },
     {
       "package_id": "Elsa3.Activities.Design.Import",
