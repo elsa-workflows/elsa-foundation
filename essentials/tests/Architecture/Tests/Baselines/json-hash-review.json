@@ -1266,9 +1266,15 @@
         "essentials/src/Activities/Runtime/Core/Models/ActivityContract.cs"
       ],
       "goldenEvidence": [
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/legacy-null-compatibility.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerGoldenTests.cs",
+        "essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs",
         "essentials/tests/Workflows/Runtime/Tests/S13IntegrationHashGoldenTests.cs",
+        "specs/1207-json-data-integrity-baseline/evidence/generate-publishing-schema-presence-inputs.py",
         "specs/1207-json-data-integrity-baseline/evidence/generate-s13-integration-hash-vectors.py",
-        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json"
+        "specs/1207-json-data-integrity-baseline/evidence/publishing-schema-presence-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/test_publishing_schema_presence_inputs.py"
       ],
       "sites": [
         {
@@ -6375,10 +6381,15 @@
         "essentials/src/Workflows/Runtime/Core/Models/ActivityTemplateHasher.cs"
       ],
       "goldenEvidence": [
+        "essentials/tests/Workflows/Publishing/Api/Tests/ScopedActivityResultHashTests.cs",
+        "essentials/tests/Workflows/Publishing/Api/Tests/WholeValueBindingHashTests.cs",
         "essentials/tests/Workflows/Publishing/Releases/Runtime/Tests/ActivityTemplateHasherTests.cs",
+        "specs/1207-json-data-integrity-baseline/evidence/generate-publishing-schema-presence-inputs.py",
         "specs/1207-json-data-integrity-baseline/evidence/generate-template-hash-vectors.py",
+        "specs/1207-json-data-integrity-baseline/evidence/publishing-schema-presence-vectors.json",
         "specs/1207-json-data-integrity-baseline/evidence/template-hash-inputs.json",
-        "specs/1207-json-data-integrity-baseline/evidence/template-hash-vectors.json"
+        "specs/1207-json-data-integrity-baseline/evidence/template-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/test_publishing_schema_presence_inputs.py"
       ],
       "sites": [
         {
@@ -6925,11 +6936,16 @@
         "essentials/src/Workflows/Runtime/Core/Models/RuntimeJsonHashProjection.cs"
       ],
       "goldenEvidence": [
+        "essentials/tests/Workflows/Publishing/Api/Tests/ScopedActivityResultHashTests.cs",
+        "essentials/tests/Workflows/Publishing/Api/Tests/WholeValueBindingHashTests.cs",
         "essentials/tests/Workflows/Runtime/Tests/RuntimeCheckpointHashGoldenTests.cs",
         "essentials/tests/Workflows/Runtime/Tests/S13IntegrationHashGoldenTests.cs",
         "specs/1207-json-data-integrity-baseline/evidence/checkpoint-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/generate-publishing-schema-presence-inputs.py",
         "specs/1207-json-data-integrity-baseline/evidence/generate-s13-integration-hash-vectors.py",
-        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json"
+        "specs/1207-json-data-integrity-baseline/evidence/publishing-schema-presence-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/test_publishing_schema_presence_inputs.py"
       ],
       "sites": [
         {
@@ -7990,6 +8006,7 @@
         "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableHasher.cs"
       ],
       "goldenEvidence": [
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/legacy-null-compatibility.json",
         "essentials/tests/Workflows/Publishing/Api/Tests/ScopedActivityResultHashTests.cs",
         "essentials/tests/Workflows/Publishing/Api/Tests/WholeValueBindingHashTests.cs",
         "essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerGoldenTests.cs",
@@ -7999,7 +8016,10 @@
         "specs/1207-json-data-integrity-baseline/evidence/compiler-hash-inputs.json",
         "specs/1207-json-data-integrity-baseline/evidence/compiler-hash-vectors.json",
         "specs/1207-json-data-integrity-baseline/evidence/generate-compiler-hash-vectors.py",
-        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json"
+        "specs/1207-json-data-integrity-baseline/evidence/generate-publishing-schema-presence-inputs.py",
+        "specs/1207-json-data-integrity-baseline/evidence/publishing-schema-presence-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/test_publishing_schema_presence_inputs.py"
       ],
       "sites": [
         {
@@ -8020,16 +8040,26 @@
         "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableHasher.cs"
       ],
       "goldenEvidence": [
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/declared-input-contract.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/dependency-set.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/javascript-expression.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/literal-input.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/nested-child-slots.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/sequence-with-container-variables.json",
         "essentials/tests/Workflows/Publishing/Api/Tests/ScopedActivityResultHashTests.cs",
         "essentials/tests/Workflows/Publishing/Api/Tests/WholeValueBindingHashTests.cs",
         "essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerGoldenTests.cs",
+        "essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs",
         "essentials/tests/Workflows/Runtime/Tests/S13IntegrationHashGoldenTests.cs",
         "essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableHashContractTests.NullPolicies.cs",
         "essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableHashContractTests.cs",
         "specs/1207-json-data-integrity-baseline/evidence/compiler-hash-inputs.json",
         "specs/1207-json-data-integrity-baseline/evidence/compiler-hash-vectors.json",
         "specs/1207-json-data-integrity-baseline/evidence/generate-compiler-hash-vectors.py",
-        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json"
+        "specs/1207-json-data-integrity-baseline/evidence/generate-publishing-schema-presence-inputs.py",
+        "specs/1207-json-data-integrity-baseline/evidence/publishing-schema-presence-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/test_publishing_schema_presence_inputs.py"
       ],
       "sites": [
         {
@@ -8050,6 +8080,7 @@
         "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableHasher.cs"
       ],
       "goldenEvidence": [
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/legacy-null-compatibility.json",
         "essentials/tests/Workflows/Publishing/Api/Tests/ScopedActivityResultHashTests.cs",
         "essentials/tests/Workflows/Publishing/Api/Tests/WholeValueBindingHashTests.cs",
         "essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerGoldenTests.cs",
@@ -8059,7 +8090,10 @@
         "specs/1207-json-data-integrity-baseline/evidence/compiler-hash-inputs.json",
         "specs/1207-json-data-integrity-baseline/evidence/compiler-hash-vectors.json",
         "specs/1207-json-data-integrity-baseline/evidence/generate-compiler-hash-vectors.py",
-        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json"
+        "specs/1207-json-data-integrity-baseline/evidence/generate-publishing-schema-presence-inputs.py",
+        "specs/1207-json-data-integrity-baseline/evidence/publishing-schema-presence-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/test_publishing_schema_presence_inputs.py"
       ],
       "sites": [
         {
@@ -8080,16 +8114,26 @@
         "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableHasher.cs"
       ],
       "goldenEvidence": [
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/declared-input-contract.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/dependency-set.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/javascript-expression.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/literal-input.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/nested-child-slots.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/sequence-with-container-variables.json",
         "essentials/tests/Workflows/Publishing/Api/Tests/ScopedActivityResultHashTests.cs",
         "essentials/tests/Workflows/Publishing/Api/Tests/WholeValueBindingHashTests.cs",
         "essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerGoldenTests.cs",
+        "essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs",
         "essentials/tests/Workflows/Runtime/Tests/S13IntegrationHashGoldenTests.cs",
         "essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableHashContractTests.NullPolicies.cs",
         "essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableHashContractTests.cs",
         "specs/1207-json-data-integrity-baseline/evidence/compiler-hash-inputs.json",
         "specs/1207-json-data-integrity-baseline/evidence/compiler-hash-vectors.json",
         "specs/1207-json-data-integrity-baseline/evidence/generate-compiler-hash-vectors.py",
-        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json"
+        "specs/1207-json-data-integrity-baseline/evidence/generate-publishing-schema-presence-inputs.py",
+        "specs/1207-json-data-integrity-baseline/evidence/publishing-schema-presence-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/test_publishing_schema_presence_inputs.py"
       ],
       "sites": [
         {
@@ -8110,16 +8154,26 @@
         "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableHasher.cs"
       ],
       "goldenEvidence": [
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/declared-input-contract.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/dependency-set.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/javascript-expression.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/literal-input.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/nested-child-slots.json",
+        "essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/sequence-with-container-variables.json",
         "essentials/tests/Workflows/Publishing/Api/Tests/ScopedActivityResultHashTests.cs",
         "essentials/tests/Workflows/Publishing/Api/Tests/WholeValueBindingHashTests.cs",
         "essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerGoldenTests.cs",
+        "essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs",
         "essentials/tests/Workflows/Runtime/Tests/S13IntegrationHashGoldenTests.cs",
         "essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableHashContractTests.NullPolicies.cs",
         "essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableHashContractTests.cs",
         "specs/1207-json-data-integrity-baseline/evidence/compiler-hash-inputs.json",
         "specs/1207-json-data-integrity-baseline/evidence/compiler-hash-vectors.json",
         "specs/1207-json-data-integrity-baseline/evidence/generate-compiler-hash-vectors.py",
-        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json"
+        "specs/1207-json-data-integrity-baseline/evidence/generate-publishing-schema-presence-inputs.py",
+        "specs/1207-json-data-integrity-baseline/evidence/publishing-schema-presence-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/s13-integration-hash-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/test_publishing_schema_presence_inputs.py"
       ],
       "sites": [
         {
@@ -8401,7 +8455,10 @@
       ],
       "goldenEvidence": [
         "essentials/tests/Workflows/Publishing/Api/Tests/WholeValueBindingHashTests.cs",
-        "essentials/tests/Workflows/Runtime/Tests/MemberReadMaterializationTests.cs"
+        "essentials/tests/Workflows/Runtime/Tests/MemberReadMaterializationTests.cs",
+        "specs/1207-json-data-integrity-baseline/evidence/generate-publishing-schema-presence-inputs.py",
+        "specs/1207-json-data-integrity-baseline/evidence/publishing-schema-presence-vectors.json",
+        "specs/1207-json-data-integrity-baseline/evidence/test_publishing_schema_presence_inputs.py"
       ],
       "sites": [
         {
