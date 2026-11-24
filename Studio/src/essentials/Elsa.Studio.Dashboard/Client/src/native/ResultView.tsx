@@ -76,7 +76,7 @@ export function ResultView({ result, visualization, stale = false, outdated = fa
   </>;
   const refreshDetails = <>
     {result.generatedAt ? <p>Last successful refresh: <time dateTime={result.generatedAt}>{formatStudioDate(result.generatedAt)}</time></p> : null}
-    {result.periods?.map(period => <p key={period.role}>{period.role}: <time dateTime={period.from}>{formatStudioDate(period.from)}</time> to <time dateTime={period.to}>{formatStudioDate(period.to)}</time> ({period.timeZone}; end exclusive)</p>)}
+    {result.periods?.map(period => <p key={period.role}>{period.role}: <time dateTime={period.from}>{formatStudioDate(period.from)}</time> to <time dateTime={period.to}>{formatStudioDate(period.to)}</time> (query zone: {period.timeZone}; end exclusive)</p>)}
   </>;
   return <section className="named-result" aria-label={visualization.label || "Question results"}>
     <div className="named-result-provenance">

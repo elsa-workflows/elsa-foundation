@@ -30,7 +30,7 @@ it("converts typed instants, refresh and period dates live while retaining raw a
   const cells = container.querySelectorAll("tbody td");
   expect(cells[0].textContent).toBe(expected("Europe/Amsterdam", "+02:00"));
   expect(cells[1].textContent).toBe(instant); expect(cells[2].textContent).toBe("2026-07-15");
-  expect(container.textContent).toContain("America/New_York; end exclusive");
+  expect(container.textContent).toContain("query zone: America/New_York; end exclusive");
   flushSync(() => setStudioTimeZonePreference("UTC"));
   expect(cells[0].textContent).toBe(expected("UTC", "+00:00"));
   for (const date of [dates[0], dates[1]]) expect(date.textContent).toBe(expected("UTC", "+00:00"));
