@@ -2,7 +2,7 @@
 set -euo pipefail
 
 runner=essentials/tests/ActorFoundation/Store/EntityFramework
-legacy_runner=prototypes/kernel-model/ef/Kernel.Ef.Conformance
+legacy_runner=ef/Kernel.Ef.Conformance
 output=bin/Release/net10.0/Kernel.Ef.Conformance.dll
 repo=$(git -C "$(dirname "$0")" -c core.fsmonitor=false rev-parse --show-toplevel)
 old_revision=08caf14c0e3248e1ddc2caac6643be70c3b9921f
@@ -39,21 +39,21 @@ build_driver() {
         # The disposable driver and its database guard are the only additions to the archived test project.
         project=$legacy_runner
         build_root="$destination/prototypes/kernel-model"
-        cp "$source/$runner/FormatRehearsalProcess.cs" "$source/prototypes/kernel-model/models/Native.Run/PostgresFixtureDatabase.cs" "$destination/$project/"
-        cat > "$destination/$project/Program.cs" <<'CS'
+        cp "$source/$runner/FormatRehearsalProcess.cs" "$source/prototypes/kernel-model/models/Native.Run/PostgresFixtureDatabase.cs" "$build_root/$project/"
+        cat > "$build_root/$project/Program.cs" <<'CS'
 using Kernel.Ef.Conformance;
 return await FormatRehearsalProcess.RunAsync(args);
 CS
     fi
-    (cd "$build_root" && dotnet build "$destination/$project" -c Release -p:RestoreLockedMode=true) > "$logs/$name-build.log" 2>&1
-    printf '%s %s %s\n' "$name" "$revision" "$(git -c core.fsmonitor=false hash-object "$destination/$project/bin/Release/net10.0/Kernel.EntityFramework.dll")"
+    (cd "$build_root" && dotnet build "$project" -c Release -p:RestoreLockedMode=true) > "$logs/$name-build.log" 2>&1
+    printf '%s %s %s\n' "$name" "$revision" "$(git -c core.fsmonitor=false hash-object "$build_root/$project/bin/Release/net10.0/Kernel.EntityFramework.dll")"
 }
 
 build_driver new "$new_revision"
 build_driver old "$old_revision"
 build_driver floor "$floor_revision"
-old="$scratch/old/$legacy_runner/$output"
-floor="$scratch/floor/$legacy_runner/$output"
+old="$scratch/old/prototypes/kernel-model/$legacy_runner/$output"
+floor="$scratch/floor/prototypes/kernel-model/$legacy_runner/$output"
 new="$source/$runner/$output"
 [[ $(git -c core.fsmonitor=false hash-object "$(dirname "$old")/Kernel.EntityFramework.dll") != $(git -c core.fsmonitor=false hash-object "$(dirname "$new")/Kernel.EntityFramework.dll") ]]
 
