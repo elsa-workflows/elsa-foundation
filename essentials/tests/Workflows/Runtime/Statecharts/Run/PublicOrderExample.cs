@@ -27,8 +27,9 @@ internal static class PublicOrderExample
         var scope = EmbeddedTenant.Bind("orders");
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var token = budget.Token;
-        var ingress = new InMemoryIngress(store, new Requests("orders-ingress"), "orders-ingress");
-        Contract.IActorReads reads = new ActorList(store, 16);
+        var fixture = new InMemoryActorFixture(store, "orders-ingress", 16);
+        var ingress = fixture.Ingress;
+        var reads = fixture.Reads;
         var runtime = new PublicRuntime(ingress, reads);
         var registry = new WorkflowRegistry().Add(OrderStatechart.Build(omitStockRelease));
         using var work = new StringWriter();
@@ -122,7 +123,7 @@ internal static class PublicOrderExample
         }
 
         Worker OrderWorker(string node) =>
-            new Worker(node, 0, store, ingress.CreateActorType(new PublicWorkflow([new NativeExecutionModel(registry)])),
+            new Worker(node, 0, store, fixture.Bind(new PublicWorkflow([new NativeExecutionModel(registry)])),
                 new WorkerOptions { Monotonic = () => now - start });
 
         async Task<IScopeActivation> ActivateAsync(Worker worker) =>

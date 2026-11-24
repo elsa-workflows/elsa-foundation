@@ -66,7 +66,7 @@ Each answer is an owner card.
 
 These invariants widen the sketch's S1 to S4
 ([plan step 3](../reports/clean-slate-kernel/design-sketch-draft-5.md#plan)), which the prototype's witness already
-checks ([Statecharts.Run](../../essentials/tests/ActorFoundation/Statecharts/Run/README.md)). K7 runs them in the
+checks ([Statecharts.Run](../../essentials/tests/Workflows/Runtime/Statecharts/Run/README.md)). K7 runs them in the
 simulation under its faults, in Embedded and Cluster, at `Full` history. Each mutation must be caught.
 
 | Invariant | Rule | Mutations |

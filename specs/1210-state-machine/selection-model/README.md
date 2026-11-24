@@ -10,11 +10,11 @@ node --test specs/1210-state-machine/selection-model/selection.test.mjs
 node specs/1210-state-machine/selection-model/negative-controls.mjs
 ```
 
-The [.NET runner](../../../essentials/tests/ActorFoundation/Statecharts/Run/README.md) can export common
+The [.NET runner](../../../essentials/tests/Workflows/Runtime/Statecharts/Run/README.md) can export common
 logical fixtures for an independent comparison, after its focused build:
 
 ```sh
-dotnet essentials/tests/ActorFoundation/Statecharts/Run/bin/Release/net10.0/Kernel.Statecharts.Run.dll --selection-export > /tmp/statechart-selection.json
+dotnet essentials/tests/Workflows/Runtime/Statecharts/Run/bin/Release/net10.0/Kernel.Statecharts.Run.dll --selection-export > /tmp/statechart-selection.json
 node specs/1210-state-machine/selection-model/compare-dotnet.mjs /tmp/statechart-selection.json
 ```
 

@@ -270,9 +270,6 @@
   <Folder Name="/essentials/tests/ActorFoundation/Legacy/">
     <Project Path="essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
   </Folder>
-  <Folder Name="/essentials/tests/ActorFoundation/Statecharts/">
-    <Project Path="essentials/tests/ActorFoundation/Statecharts/Run/Elsa.ActorFoundation.Statecharts.Run.csproj" />
-  </Folder>
   <Folder Name="/essentials/tests/ActorFoundation/Store/">
     <Project Path="essentials/tests/ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
     <Project Path="essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
@@ -950,6 +947,9 @@
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Native/">
     <Project Path="essentials/tests/Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Statecharts/">
+    <Project Path="essentials/tests/Workflows/Runtime/Statecharts/Run/Elsa.Workflows.Runtime.Statecharts.Run.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/Native/Scopes/">
     <Project Path="essentials/tests/Workflows/Runtime/Native/Scopes/Run/Elsa.Workflows.Runtime.Native.Scopes.Run.csproj" />

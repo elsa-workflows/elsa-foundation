@@ -79,7 +79,7 @@ The actual [Compensate](../../../Essentials/src/Activities/Compensation/Activiti
 [Confirm](../../../Essentials/src/Activities/Compensation/Activities/Confirm.cs) use normal ancestor notifications.
 The private kernel Native prototype currently has no compensation implementation or equivalent ancestor port;
 at the stated basis its [StateMachine final path](../../../prototypes/kernel-model/models/Statecharts.Native/StateMachine.cs)
-completed with default `Done`. The later [private mapping profile](../../../essentials/tests/ActorFoundation/Statecharts/Run/README.md#private-final-outcome-transport)
+completed with default `Done`. The later [private mapping profile](../../../essentials/tests/Workflows/Runtime/Statecharts/Run/README.md#private-final-outcome-transport)
 proves named single-outcome transport through ordinary Native completion, not the product declared-outcome
 references/publication contract of OD45 or this composition. B7b alone supplies neither. Reuse the authoritative mechanisms on the selected runtime and qualify the bridge before adoption;
 copying a compensation journal/engine into the spike would not prove that integration.

@@ -607,7 +607,7 @@ Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database and run from `protot
 ```
 
 The Embedded processes use Balanced persistence and run the same Native order chart as the
-[public in-memory example](../../essentials/tests/ActorFoundation/Statecharts/Run/README.md#order-statemachine-on-the-public-actor-foundation).
+[public in-memory example](../../essentials/tests/Workflows/Runtime/Statecharts/Run/README.md#order-statemachine-on-the-public-actor-foundation).
 The first process starts the order through `WorkflowRuntime`. A declined payment enters
 `ReleasingShipment` and runs the shipment release activity. The process admits the shipment acknowledgement
 through the public Foundation ingress and exits before offering it to the machine.

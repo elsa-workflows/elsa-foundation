@@ -15,7 +15,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Compile Include="../../../../../prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs" Link="Wire.cs" />
     <Compile Include="../../Simulation/Models.cs" Link="Models.cs" />
-    <Compile Include="../../Statecharts/Run/OrderStatechart.cs" Link="OrderStatechart.cs" />
+    <Compile Include="../../../Workflows/Runtime/Statecharts/Run/OrderStatechart.cs" Link="OrderStatechart.cs" />
     <ProjectReference Include="../../../../../prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj" />
     <ProjectReference Include="../../../Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
