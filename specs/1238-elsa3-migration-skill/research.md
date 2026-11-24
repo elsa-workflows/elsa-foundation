@@ -39,7 +39,7 @@ read by several agents and renders as an ordinary document on GitHub.
 | 12 | `ActivityKind.Job/Task`, `RunAsynchronously` | `[BackgroundExecutionSafe]` + author-chosen placement (ADR 0093) | Ports when eligible; otherwise the activity runs in the foreground. |
 | 13 | Cancel signal, exceptions → incidents | Cancellation token; fault and cancel transitions | Direct; no per-activity cancel callback. |
 | 14 | `ConfigureEngine(engine.SetValue(...))`, `EvaluatingJavaScript` handler | `JavaScriptHostFunctionDeclaration("prefix.name", …)` naming the replaced Elsa 3 global | Direct when effect-free and JSON in and out; a function with effects becomes an activity. The converter rewrites direct calls of a declared global only (`lookupCustomer(x)` → `acme.lookupCustomer(x)`); a global assigned or passed as a callback is not rewritten and fails at run time, so the catalog says to make it a direct call first. The catalog also states the conversion's rules in prose: one declaration per global; the global must not clash with a generated variable or input accessor; scripts must not declare the prefix themselves; functions the converter already converts keep that conversion. |
-| 15 | `ILiquidFilter` + `AddLiquidFilter`, expression descriptor providers | Liquid filters closed (`ILiquidFilter` internal) | Redesign as a host function or an activity. |
+| 15 | `ILiquidFilter` + `AddLiquidFilter`, expression descriptor providers | Liquid filters closed (`ILiquidFilter` internal); `IExpressionDescriptorProvider` and `IPortableExpressionHandler` are public | Liquid filters: redesign as a host function or an activity. A new syntax: named with its extension points, no example; Elsa 3 projects that add a whole expression language are rare, so no compiled example is built for it. |
 | 16 | `AddVariableTypeAndAlias<T>(alias)` | `IVariableTypeDescriptorProvider` with a dotted alias | Direct. |
 | 17 | `IStorageDriver` + `AddStorageDriver` | Publication refuses non-default variable storage | Redesign: default durable storage. |
 | 18 | `FeatureBase` + `UseXxx()` | `[ShellFeature]` `IShellFeature` in a Nuplane package, enabled in `appsettings.json` | Direct. |
@@ -63,29 +63,38 @@ copied by every AI that follows the catalog. Only a build catches that without r
 
 ## R-4 Versions
 
-**Decision**: `plugin.json` `version` and `SKILL.md` `metadata.cli-version` carry the `dotnet-elsa` version the skill
-is released with; `SKILL.md` names the report schema versions it reads. On another schema version the skill stops
-and names the matching release.
+**Decision**: The skill gates only on the report's integer schema version, which it lists; on any other it stops and
+tells the user to update the skill. The Elsa 4 version the user targets is recorded in the plan and selects the
+migration image tag. `plugin.json` carries no version, so a marketplace install follows the repository's commits.
 
-**Rationale**: The skill and the report are released together; the cheapest safe behaviour on a mismatch is to stop.
+**Rationale**: Package versions are computed per commit (`PackageVersioning.props`), so no file can name "the" tool
+version, and a marketplace install follows the default branch rather than a release. Spec 1237 ships the tool and
+the skill separately and versions the report by schema. The user's target version is a real choice they make once,
+and it must match the engine image they go live on.
 
-**Alternatives considered**: Reading any schema version leniently: silent misreads of a changed report.
+**Alternatives considered**: Stamping the tool version into `plugin.json` and the skill front matter at release:
+there is no release step to do it, and it would go stale on every commit. Reading any schema version leniently:
+silent misreads of a changed report.
 
 ## R-5 Where the check runs
 
-**Decision**: `tools/skills/check_migration_skill.py`, in the CI step that runs the Python documentation guards, so a
-documentation-only change to the catalog runs it. The sample's build and tests run in the PR tier like any test
-project.
+**Decision**: `tools/skills/check_migration_skill.py` runs (self-test, then real) as its own step next to
+`Check catalog and module README links` in `.github/workflows/ci.yml`. `plugins/**/*.md` joins the documentation-only
+paths in `tools/ci/change_scope.py`, so a catalog edit gets the fast run. The sample's build and tests run in the PR
+tier like any test project.
 
-**Rationale**: A documentation-only PR skips the .NET build (`docs/contributing/merging.md`); the check is pure text
-and must still run. An API change is a code change, so the build runs and breaks the sample.
+**Rationale**: That job runs on every PR, including documentation-only ones that skip the .NET build
+(`docs/contributing/merging.md`); without the change-scope entry, a catalog typo fix would trigger every shard. An
+API change is a code change, so the full build runs and breaks the sample.
 
 **Alternatives considered**: An xunit test reading the catalog: it would not run on a documentation-only PR.
 
 ## R-6 Matching components to source
 
-**Decision**: The skill's focused searches follow Elsa 3's naming: an activity type `Ns.Type` is found by
-`[Activity("Ns", "Type"` or `[Activity("Ns"` on a class named `Type`, or by namespace `Ns` with class `Type`; a
+**Decision**: The skill's focused searches follow Elsa 3's naming. An activity type `Ns.Type` is found by: a class
+named `Type` in namespace `Ns`; `[Activity("Ns"` on a class named `Type` (the second string argument of the common
+three-argument form is the category, not the type); `Type = "Type"` in an activity attribute; or the five-argument
+form `[Activity("Ns", "Type", <version>, ...)]`. A
 JavaScript function by `SetValue("name"`; a variable type by `AddVariableTypeAndAlias<` with the alias; a storage
 driver by the type name before the comma in its assembly-qualified name.
 

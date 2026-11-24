@@ -8,7 +8,7 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 
 | Field | Content | Rule |
 |---|---|---|
-| Skill release | The `dotnet-elsa` version the plan was started with | Set once; a different installed version is reported. |
+| Elsa 4 version | The essentials version the user targets; the migration image tag | Set at inventory; changing it means rerunning the assessment. |
 | Stage | `inventory` → `prepare` → `test-migration` → `handoff` | Moves forward only; a new finding in `test-migration` sends one component back to `porting`, not the stage. |
 | Export | Path of the Elsa 3 export | Required from `inventory`. |
 | Source locations | Folders or repositories of Elsa 3 source | Added when asked (FR-009). |
@@ -16,7 +16,6 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 | Features | Elsa 4 feature name → package → components | Every feature must appear in `appsettings.json` (FR-011). |
 | Components | One row per inventory item | See below. |
 | Accepted refusals | Definition, finding code, reason, date | Only the user adds a row. |
-| Migration image | The image tag the runs use | Matches the skill release (FR-022). |
 | Last report | Path of the last `report.json` and the `docker run` command | Updated after every run. |
 
 ### Component row

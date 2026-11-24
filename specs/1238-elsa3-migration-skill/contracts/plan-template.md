@@ -5,7 +5,7 @@
 ```markdown
 # Elsa 3 to Elsa 4 migration plan
 
-Skill release: <dotnet-elsa version>
+Elsa 4 version: <version> (the migration and engine image tag)
 Stage: inventory | prepare | test-migration | handoff
 Export: <path>
 Last report: <path> (<command>, <date>)

@@ -23,12 +23,12 @@ Adapters carry metadata only. The skill's content lives in the skill folder.
 ```json
 {
   "name": "elsa3-migration",
-  "version": "<dotnet-elsa version>",
   "description": "Migrate Elsa 3 workflows and custom components to Elsa 4."
 }
 ```
 
-The plugin declares no custom skill path: its default `skills/` folder holds exactly one skill,
+The plugin has no version field, so an install follows the repository's commits (research R-4). It declares no
+custom skill path: its default `skills/` folder holds exactly one skill,
 `elsa3-workflows-migration/`.
 
 ## `SKILL.md` front matter
@@ -37,8 +37,6 @@ The plugin declares no custom skill path: its default `skills/` folder holds exa
 ---
 name: elsa3-workflows-migration
 description: Migrate Elsa 3 workflow definitions and custom Elsa 3 code (activities, JavaScript functions, variable types, storage drivers) to Elsa 4 with a local test migration. Use when someone moves from Elsa 3 to Elsa 4.
-metadata:
-  cli-version: "<dotnet-elsa version>"
 ---
 ```
 

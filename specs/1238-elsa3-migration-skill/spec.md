@@ -153,8 +153,10 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 
 ### Edge Cases
 
-- The report's schema version or CLI version is one the skill does not know: the skill stops and names the skill
-  release that matches, instead of guessing.
+- The report's schema version is one the skill does not read: the skill stops and tells the user to update the
+  skill, instead of guessing.
+- The tool refuses to run (bad input, a package or setting it cannot load) and writes no report: the skill shows the
+  tool's reason, records it in the plan and stops until the user fixes the input.
 - A component the report names is not found in the source the user gave: the plan records it as not found, and the
   skill asks for more source or records the user's decision to redesign or drop the definitions that use it.
 - A component exists in the source but no definition uses it: it is not migrated (inventory comes only from the
@@ -191,16 +193,15 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - **FR-003**: The adapters MUST hold metadata only: a repository-root `.claude-plugin/marketplace.json` that lists
   one plugin whose source is `plugins/elsa3-migration/`, and that plugin's `.claude-plugin/plugin.json`. Users of
   agents that read `.agents/skills/` copy the skill folder. No adapter repeats the skill's content.
-- **FR-004**: The skill MUST be released with the `dotnet-elsa` command-line tool and the essentials images: the
-  plugin version and the skill's front matter name the tool version it is released with, and the skill states the
-  report schema versions it reads.
+- **FR-004**: The skill MUST state the report schema versions it reads and stop on any other. It is not tied to a tool
+  release: the plan records the Elsa 4 version the user targets, and that version is the tag of the migration image
+  the skill runs (FR-022) and of the essentials engine image the user later goes live on.
 
 **Privacy**
 
 - **FR-005**: Before reading any file, the skill MUST tell the user what can reach the AI provider: the redacted
-  report by default; raw definitions and source files only after the user agrees, each time it is a new file.
-- **FR-006**: The skill MUST rely on the report being complete without an AI and redacted by default (spec 1237). It
-  MUST NOT ask the user to turn redaction off.
+  report; raw definitions and source files only after the user agrees, each time it is a new file.
+- **FR-006**: The skill MUST rely on the report being complete without an AI and always redacted (spec 1237).
 
 **The journey**
 
@@ -232,7 +233,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - **FR-022**: **Running the tool.** The command-line tool runs inside the Elsa 3 migration image (spec 1237); the
   skill starts it with `docker run`, mounting the export, the packages folder, the `appsettings.json` and the output
   folder, and records the command in the plan. Before the first run of a session, the skill MUST check that Docker is
-  available and that the migration image tagged with the tool version the skill is released with (FR-004) can be
+  available and that the migration image tagged with the plan's Elsa 4 version (FR-004) can be
   pulled. When either fails, it stops, says what is missing, and runs nothing. When the tool refuses to run, the skill
   shows the tool's reason and stops.
 
@@ -259,7 +260,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   | 12 | Background and task activities | The background-execution-safe marker; the workflow author chooses background placement (spec 1230) | port when the activity meets the eligibility criteria |
   | 13 | Cancellation and faults | The cancellation token; fault and cancel transitions; no per-activity cancel callback | port |
   | 14 | JavaScript functions | A JavaScript host function declaration with a `prefix.name`, effect-free, JSON in and out, that names the Elsa 3 global it replaces; the converter rewrites direct calls only, so other references to the global are turned into direct calls in the Elsa 3 definition first | port; redesign as an activity when the function has effects |
-  | 15 | Liquid filters and other expression additions | None: Liquid filters and expression languages are closed to modules | redesign: a JavaScript host function or an activity |
+  | 15 | Liquid filters and other expression additions | Liquid filters: none, filter registration is closed to modules. A new expression syntax: the public expression descriptor and portable expression handler extension points | redesign (Liquid filters: a JavaScript host function or an activity); a new syntax is named with its extension points but carries no example |
   | 16 | Variable type registration | A variable type descriptor provider registering the type under a dotted alias | port |
   | 17 | Storage drivers | None per variable: workflow variables use the default durable storage | redesign |
   | 18 | Feature registration | An Elsa 4 shell feature in a Nuplane package, enabled in `appsettings.json`; activities are discovered from the feature's assembly | port |
@@ -274,7 +275,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   a marked region of the sample. The sample is synthetic and carries no customer code or data.
 - **FR-017**: A check MUST fail when a *port* case's "after" example differs from its marked region in the sample,
   when a marked region has no catalog case, or when the skill folder contains a diagnostic code literal. It runs in
-  the existing documentation guards, so a documentation-only change runs it too.
+  CI next to the catalog link check, and changes to the skill folder's markdown count as documentation-only, so a
+  catalog edit runs the check without the full build.
 - **FR-018**: The Elsa 3 mapping README MUST state that a converter change also needs JTest suites for it and an
   update to the migration skill (porting catalog, plan template), and that a change to an Elsa 4 activity authoring
   API used by a *port* case needs the sample and catalog updated. `AGENTS.md` MUST carry a one-line pointer to that

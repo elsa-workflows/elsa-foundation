@@ -63,8 +63,9 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
   execution context and calling the activity.
 - [ ] T016 `tools/skills/check_migration_skill.py` per [contracts/catalog-entry.md](contracts/catalog-entry.md), with
   `--self-test` covering every failure rule.
-- [ ] T017 Run the check (self-test, then real) in the CI step that runs the Python documentation guards in
-  `.github/workflows/ci.yml`, so a documentation-only change runs it.
+- [ ] T017 Add a step running the check (self-test, then real) next to `Check catalog and module README links` in
+  `.github/workflows/ci.yml`, and add `plugins/**/*.md` to the documentation-only paths in `tools/ci/change_scope.py`
+  with a case in its `--self-test`.
 
 **Checkpoint**: sample builds, its tests pass, self-test passes.
 
@@ -89,7 +90,8 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 - [ ] T020 [US1] Write `skill/migration-plan-template.md` per [contracts/plan-template.md](contracts/plan-template.md)
   and [data-model.md](data-model.md), with one example row per table using `Acme` names.
 - [ ] T021 [US1] Write `skill/SKILL.md`: front matter per [contracts/adapters.md](contracts/adapters.md); then, in
-  order, the privacy statement (T024), what the skill does and does not do (FR-021), "read the plan first" (FR-007),
+  order, the privacy statement (FR-005, FR-006: what reaches the AI provider; ask before each new raw definition or
+  source file, naming the file and the JSON path), what the skill does and does not do (FR-021), "read the plan first" (FR-007),
   the prerequisite check and `docker run` invocation (FR-022), the four stages (FR-008–FR-012, R-6 searches, the report fields of
   [contracts/report-consumption.md](contracts/report-consumption.md)), the version check (R-4), the handoff
   (FR-020), and the edge cases of the spec as plain rules. No diagnostic code literal; read code, message and
@@ -104,7 +106,7 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 
 ## Phase 6: User Story 4 — privacy (P2)
 
-- [ ] T024 [US4] In `SKILL.md`, the opening privacy statement (FR-005, FR-006) and the rule to ask before each new raw
+- [ ] T024 [US4] Review the privacy statement T021 wrote against US4's scenarios: it comes first, and it asks before each new raw
   definition or source file, naming the file and the JSON path.
 
 ## Phase 7: User Story 5 — contributor triggers (P2)
@@ -118,12 +120,9 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 ## Phase 8: User Story 6 — install (P3)
 
 - [ ] T027 [P] [US6] Add `.claude-plugin/marketplace.json` and `plugins/elsa3-migration/.claude-plugin/plugin.json`
-  per [contracts/adapters.md](contracts/adapters.md), with the current `dotnet-elsa` version.
+  per [contracts/adapters.md](contracts/adapters.md) (no version field).
 - [ ] T028 [US6] Install the plugin from the repository marketplace in Claude Code and confirm the skill is listed;
   copy the skill folder into a scratch workspace's `.agents/skills/` and confirm an agent lists it (quickstart).
-- [ ] T029 [US6] Make the `dotnet-elsa` release carry the plugin version: either the release step updates
-  `plugin.json` and `metadata.cli-version`, or the release checklist names the two fields. Pick the one the existing
-  release tooling supports; do not build new release tooling.
 
 ---
 
