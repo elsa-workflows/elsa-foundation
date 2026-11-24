@@ -178,7 +178,7 @@ cannot produce with the same meaning fails the template with the output named (F
   converter workaround (FR-016, FR-017).
 - [X] T035 [US3] For each suite whose definition contains a join, decide from the failure whether the join is what stops
   it; mark `blocked: JOIN` with the construct and failure only then (FR-018), and keep the rest in the main run.
-- [ ] T036 [US3] **Approval gate** for adjustments: for a definition that needs an adjusted copy, add it under
+- [X] T036 [US3] **Approval gate** for adjustments: for a definition that needs an adjusted copy, add it under
   `JTest/adjusted/` with the exact change and reason in `JTest/ledger/dispositions.md`, get the coordinator's
   approval, and run the Elsa 4 host with the adjusted copy in place of the original via the reconciliation `Files`
   list (FR-014, FR-015).
