@@ -488,7 +488,7 @@ research* sections describe what is wrong today (with one concrete example), wha
 done, and where each participant can start their own research (ADRs, code, specs, the case that surfaced it). They
 carry no proposed solution, design direction, recommendation or assumption about the outcome: those are kick-off
 inputs and analyses, so that the participants shape the scope together. An initiative that the first stable release
-needs carries the `ga-blocker` label.
+needs carries the `ga-release` label.
 
 ```markdown
 Last synced <date> by the coordinator. Newer updates are in the comments below.
