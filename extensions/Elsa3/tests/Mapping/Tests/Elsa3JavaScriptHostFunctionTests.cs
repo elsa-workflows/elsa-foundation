@@ -393,6 +393,27 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
+    /// <summary>
+    /// A claimed converted name stays native, so a reusable script's write through it is still found: String runs the
+    /// argument's toString, which changes the variable.
+    /// </summary>
+    [Fact]
+    public async Task A_reusable_script_writing_through_a_claimed_converted_name_is_refused()
+    {
+        var claim = new JavaScriptHostFunctionDeclaration("acme.String", _ => default) { ReplacesGlobalFunctions = ["String"] };
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script",
+            Literal("const o = getVariable('Order'); String({ toString() { o.Status = 'Paid'; return ''; } }); return 1;"))));
+
+        var result = await ConversionServices.ConvertAsync(
+            RealActivityCatalog.Create(),
+            ConversionServices.Definition(root, variables: [new Elsa3Variable { Id = "order-id", Name = "Order", TypeName = "Object" }]),
+            isReusable: true,
+            configure: services => services.AddSingleton(claim));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+    }
+
     /// <summary>A declaration does not take over a name the converter converts itself.</summary>
     [Fact]
     public async Task A_declaration_claiming_a_converted_name_keeps_the_conversion()
@@ -426,6 +447,21 @@ public sealed class Elsa3JavaScriptHostFunctionTests
 
         Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+    }
+
+    /// <summary>Two variables whose generated accessor is the same name: Elsa 3 generated it, so the clash stands.</summary>
+    [Fact]
+    public async Task A_declared_global_that_is_also_an_ambiguous_generated_accessor_is_ambiguous()
+    {
+        var getCustomer = new JavaScriptHostFunctionDeclaration("acme.getCustomer", _ => default) { ReplacesGlobalFunctions = ["getCustomer"] };
+
+        var result = await ConvertTextAsync("getCustomer()", [getCustomer],
+            new Elsa3Variable { Id = "v1", Name = "customer", TypeName = "String" },
+            new Elsa3Variable { Id = "v2", Name = "Customer", TypeName = "String" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference &&
+            diagnostic.Message.Contains("replaced Elsa 3 function", StringComparison.Ordinal));
     }
 
     [Fact]

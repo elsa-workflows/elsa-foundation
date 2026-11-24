@@ -2011,7 +2011,7 @@ public sealed class Elsa3ExpressionRewriter(
         public bool ReusableScriptMayWrite(Script script) =>
             new Elsa3ReusableVariableWriteAnalyzer(CachedScope, IsSessionVariable,
                 name => TryGetAccessorName(name, "get", out var accessor) ? accessor : null,
-                ReplacedGlobals.ContainsKey).MayWrite(script);
+                name => !ConvertedGlobals.Contains(name) && ReplacedGlobals.ContainsKey(name)).MayWrite(script);
 
         /// <summary>
         /// A Run JavaScript body reads a loop's item or index through args, as a copy: Elsa 4 freezes a loop value in a body
@@ -2210,9 +2210,10 @@ public sealed class Elsa3ExpressionRewriter(
                 return;
             }
 
-            // Elsa 3 registered custom functions and generated accessors in an order its source does not fix (R-3).
+            // Elsa 3 registered custom functions and generated accessors in an order its source does not fix (R-3): any
+            // accessor Elsa 3 generated under the name, resolvable or not (two variables, an activity output), clashes.
             if ((TryGetAccessorName(callee.Name, "get", out var accessor) || TryGetAccessorName(callee.Name, "set", out accessor)) &&
-                resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor)).Succeeded)
+                !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor)).NoSource)
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
                     Elsa3ImportDiagnosticCodes.AmbiguousReference,
@@ -2890,6 +2891,15 @@ public sealed class Elsa3ExpressionParameterResolution
         return new(binding, null, variableName) { ScriptValueKind = scriptValueKind };
     }
     public static Elsa3ExpressionParameterResolution Failure(Elsa3ExpressionRewriteIssue issue) => new(null, issue);
+
+    /// <summary>
+    /// Whether the reference has no Elsa 3 source at all, as opposed to a source that is ambiguous or refused: a
+    /// <c>get{Name}()</c> that Elsa 3 generated for no variable, input or activity output.
+    /// </summary>
+    internal bool NoSource { get; private init; }
+
+    /// <summary>A failure because nothing in the Elsa 3 definition is the reference's source.</summary>
+    internal static Elsa3ExpressionParameterResolution NotFound(Elsa3ExpressionRewriteIssue issue) => new(null, issue) { NoSource = true };
 }
 
 public sealed record Elsa3ExpressionRewriteIssue(string Code, string Message, string Guidance);
