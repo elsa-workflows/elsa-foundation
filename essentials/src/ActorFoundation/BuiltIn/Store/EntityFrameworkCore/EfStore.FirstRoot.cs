@@ -170,7 +170,8 @@ public sealed partial class EfStore
                     AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
                     AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationParkRevision" = OLD."FoundationParkRevision"
                     AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
-                    AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault")
+                    AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
+                    AND NEW."History" IS NOT DISTINCT FROM OLD."History")
                 """ : "false", StringComparison.Ordinal)
             .Replace("/*root-park-journal*/", db.UsesRootParkArrivals ? """
                 (i."Status" = 2 AND NOT i."Retired" AND NEW."Partition" = i."Partition" AND NEW."Revision" = i."Revision" + 1

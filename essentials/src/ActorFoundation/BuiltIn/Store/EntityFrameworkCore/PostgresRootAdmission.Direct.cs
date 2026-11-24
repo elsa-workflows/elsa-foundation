@@ -94,8 +94,9 @@ internal sealed partial class PostgresRootAdmission
         }
         var acceptsParkArrival = db.UsesRootParkArrivals && status == InstanceStatus.Faulted &&
             await db.Database.SqlQuery<bool>($"""
-                SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {address.Id} AND "FoundationTenant" = {tenant}
-                    AND "FoundationReference" = {reference} AND "FoundationParkAt" IS NOT NULL) AS "Value"
+                SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
+                    AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
+                    AND "FoundationParkAt" IS NOT NULL) AS "Value"
                 """).SingleAsync(cancellationToken);
         if (status != InstanceStatus.Running && !acceptsParkArrival)
         {

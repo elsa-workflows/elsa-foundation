@@ -107,7 +107,8 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
             {
                 ParkKeepReason.Consumed => DeliveryState.Consumed,
                 ParkKeepReason.Arrived => DeliveryState.Arrived,
-                _ => DeliveryState.Pending
+                null => DeliveryState.Pending,
+                _ => throw new StoreFormatException("The root inbox has an unsupported kept reason.")
             }, row.Attempts, row.Size)).ToArray();
         PageToken? next = null;
         if (snapshot.Rows.Count > _pageSize)
