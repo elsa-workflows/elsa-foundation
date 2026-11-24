@@ -257,14 +257,16 @@ it, and read every variable's starting value back; compare each with Elsa 3's ru
   into it, publish and run the workflow, and read the value back.
 - **FR-007**: Every starting-value kind of FR-003 and every refusal of FR-004 MUST have a test. As of 2026-11-24 they
   are in `extensions/Elsa3/tests/Mapping/Tests/`: `Elsa3VariableStartingValueTests` covers the strict refusals and the
-  refused non-JSON text on an unknown type
+  refused starting value on an unknown type that is not a JSON object or array, `42` included
   (`A_starting_value_that_cannot_start_as_in_Elsa_3_is_refused_with_how_to_fix_it`), a refusal stopping the whole
   definition (`A_workflow_variable_whose_value_cannot_start_refuses_the_definition`,
   `A_container_variable_whose_value_cannot_start_refuses_the_definition`) and an unknown type's JSON starting value
   (`An_unknown_type_ObjectDictionary_HttpHeaders_or_Object_converts_to_Any`). `Elsa3VariableCustomComponentTests`
   covers the conversion as Any with the info (`A_workflow_variable_of_an_unregistered_type_converts_as_Any_with_an_info`,
   `A_container_variable_of_an_unregistered_type_converts_with_an_info`,
-  `The_info_names_the_type_Elsa_4_does_not_register`).
+  `The_info_names_the_type_Elsa_4_does_not_register`), and the info together with a JSON starting value
+  (`An_unregistered_type_with_a_JSON_starting_value_starts_as_that_JSON_with_the_info`) or with the refusal
+  (`An_unregistered_type_with_a_starting_value_that_is_not_JSON_reports_the_info_and_is_refused`).
 - **FR-008**: The Mapping README's migration story MUST describe how variable starting values convert.
 
 ### Key Entities
