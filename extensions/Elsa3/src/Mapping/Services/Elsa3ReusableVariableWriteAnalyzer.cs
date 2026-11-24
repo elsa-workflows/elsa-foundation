@@ -11,10 +11,15 @@ namespace Elsa3.Mapping.Services;
 /// helper calls can therefore be followed without rewriting the same source range twice. Values record ownership,
 /// local container identity and local functions; merely reading or returning a workflow value is not a write.
 /// </summary>
+/// <param name="replacedGlobal">
+/// Whether a global is an Elsa 3 function a registered host function replaces (#5664): like a built-in, it receives
+/// its arguments as JSON and cannot change them.
+/// </param>
 internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     Func<Node, HashSet<string>?> scopeOf,
     Func<Elsa3AmbientReferenceKind, string, bool> isSessionVariable,
-    Func<string, string?> generatedAccessor)
+    Func<string, string?> generatedAccessor,
+    Func<string, bool>? replacedGlobal = null)
 {
     private readonly record struct Binding(HashSet<string> Scope, string Name);
     private sealed record Value(bool Session, ImmutableHashSet<Node> Objects, ImmutableHashSet<Node> Functions)
@@ -1540,7 +1545,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 if (arguments.Length > 0) Serialize(arguments[0]);
                 return Value.Local;
             }
-            if (JavaScriptBuiltInFunctions.Names.Contains(host.Name))
+            if (JavaScriptBuiltInFunctions.Names.Contains(host.Name) || replacedGlobal?.Invoke(host.Name) == true)
             {
                 // Faithful host helpers materialize all arguments as JSON (JavaScriptHostFunctions.Argument),
                 // then parse string/number data in .NET. They do not invoke a JS toString/valueOf hook, but argument

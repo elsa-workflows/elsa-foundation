@@ -1230,10 +1230,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         if (inputVariables.Length == 1)
             return Resolve(Elsa3AmbientReferenceKind.WorkflowRequest, inputVariables[0].Name);
 
-        return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+        return Elsa3ExpressionParameterResolution.NotFound(new Elsa3ExpressionRewriteIssue(
             Elsa3ImportDiagnosticCodes.ForbiddenCapability,
             $"JavaScript calls unknown or unapproved host function 'get{name}'.",
-            "Declare the variable or workflow input it reads, or replace the call with deterministic language syntax, before import."));
+            $"If it reads a variable or workflow input, declare that variable or input before import. {Elsa3ExpressionRewriter.UndeclaredFunctionGuidance($"get{name}")}"));
 
         static bool HasAccessor(string declared, string accessor) =>
             Elsa3JavaScriptNames.IsAccessorName(declared) &&

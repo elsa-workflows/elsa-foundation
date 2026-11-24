@@ -216,18 +216,13 @@ public sealed class RuntimeInputBindingCompiler(
     internal RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
     {
         var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
-        // The built-in JSON driver encodes into the checkpoint itself. It is not an external
-        // storage profile; Studio advertises this driver for durable variable declarations.
-        var storageProfile = StringComparer.Ordinal.Equals(variable.StorageDriverType, WellKnownRuntimeDurableValueStorageDrivers.Json)
-            ? null
-            : variable.StorageDriverType;
+        // The built-in JSON driver encodes into the checkpoint itself; Studio advertises it for durable variable
+        // declarations. Variable frames do not store values through any other driver yet (#5698).
+        if (!UnsupportedStorageDriverDiagnostics.IsBuiltIn(variable.StorageDriverType))
+            throw UnsupportedStorageDriverDiagnostics.Variable(nodeId, variable.ReferenceKey, variable.StorageDriverType!);
+        string? storageProfile = null;
         var policy = ValuePolicyCombiner.ToProtectionPolicy(
             ValuePolicyCombiner.FromAuthoredStorage(storageProfile));
-        if (policy.Storage != DurableValueStorage.Inline)
-        {
-            throw new ArgumentException(
-                $"VF-ACT-005: Variable '{variable.ReferenceKey}' on activity node '{nodeId}' selects external storage profile '{variable.StorageDriverType}', but canonical variable-frame externalization is not implemented. Publication is refused instead of accepting an unusable declaration.");
-        }
         RuntimeInputBinding? initialBinding = null;
         if (RuntimeInputBindingCompiler.IsSecretBinding(variable.Default))
             throw SecretBindingDiagnostics.VariableDefaultRefused(nodeId, variable.ReferenceKey);

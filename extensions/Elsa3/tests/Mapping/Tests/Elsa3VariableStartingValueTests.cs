@@ -173,8 +173,8 @@ public sealed class Elsa3VariableStartingValueTests
     [Fact]
     public void A_custom_driver_with_the_same_type_name_is_not_the_Elsa_3_default()
     {
-        Assert.False(Elsa3VariableMapper.IsDefaultStorageDriver("Acme.WorkflowInstanceStorageDriver, Acme"));
-        Assert.True(Elsa3VariableMapper.IsDefaultStorageDriver("WorkflowInstanceStorageDriver"));
+        Assert.Equal(Elsa3StorageDriverCorrections.DriverKind.Custom, Elsa3StorageDriverCorrections.Classify("Acme.WorkflowInstanceStorageDriver, Acme"));
+        Assert.Equal(Elsa3StorageDriverCorrections.DriverKind.WorkflowInstance, Elsa3StorageDriverCorrections.Classify("WorkflowInstanceStorageDriver"));
     }
 
     public static TheoryData<string, string, string, string> Refusals => new()

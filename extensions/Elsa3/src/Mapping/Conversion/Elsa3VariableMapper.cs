@@ -6,12 +6,16 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Core.Options;
+using Elsa3.Mapping.Services;
 using Elsa3.Models;
 
 namespace Elsa3.Mapping.Conversion;
 
-/// <summary>Why a variable's starting value is refused, and how to fix it in the Elsa 3 workflow.</summary>
-internal sealed record Elsa3VariableRefusal(string Message, string Guidance, string? Code = null);
+/// <summary>Why a variable is refused, and how to fix it in the Elsa 3 workflow; <paramref name="Code"/> is the diagnostic code.</summary>
+internal sealed record Elsa3VariableRefusal(string Message, string Guidance, string Code = Elsa3ActivityDiagnosticCodes.VariableValueUnconvertible);
+
+/// <summary>Something a migrator should know about a variable that converts: what changed, and what to do about it.</summary>
+internal sealed record Elsa3VariableNotice(string Message, string Guidance);
 
 /// <summary>
 /// Maps an Elsa 3 variable declaration to an Elsa 4 <see cref="VariableDefinition"/> (spec 264). Elsa 3 stored a
@@ -45,6 +49,14 @@ internal static class Elsa3VariableMapper
         ["HttpHeaders"] = """{"Accept": ["application/json"]}"""
     };
 
+    /// <summary>
+    /// Elsa 3's JSON and dynamic types, by their bare names. Each is JSON, so Any holds it faithfully: no type is missing.
+    /// </summary>
+    private static readonly IReadOnlySet<string> JsonTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "JsonElement", "JsonNode", "JsonObject", "JsonArray", "ExpandoObject"
+    };
+
     /// <summary>Maps a variable whose starting value <see cref="TryMap"/> accepts; synthesized variables have none.</summary>
     public static VariableDefinition Map(IWellKnownTypeRegistry wellKnownTypeRegistry, IObjectConverter objectConverter, Elsa3Variable source, IVariableTypeDescriptorCatalog? typeDescriptors = null) =>
         TryMap(wellKnownTypeRegistry, objectConverter, source, out var variable, out var refusal, typeDescriptors)
@@ -52,17 +64,24 @@ internal static class Elsa3VariableMapper
             : throw new InvalidOperationException(refusal!.Message);
 
     /// <summary>
-    /// Whether <paramref name="storageDriverTypeName"/> is Elsa 3's default storage driver, which kept the value with the
-    /// workflow instance: Elsa 4's default, so no storage driver. Elsa 4 cannot resolve the Elsa 3 type, and would read its
-    /// fallback alias as an external storage profile it refuses.
+    /// The info a variable whose Elsa 3 type Elsa 4 does not register gets (#5666): it converts as Any, and keeps its type
+    /// once an Elsa 4 feature registers the type. <c>null</c> for a type Elsa 4 knows, and for a shape that is Any
+    /// whatever is registered (a nested collection, a collection of dictionaries).
     /// </summary>
-    internal static bool IsDefaultStorageDriver(string storageDriverTypeName)
+    internal static Elsa3VariableNotice? DescribeUnregisteredType(IWellKnownTypeRegistry wellKnownTypeRegistry, Elsa3Variable source)
     {
-        var typeName = storageDriverTypeName.Split(',')[0].Trim();
-        return typeName is "Elsa.Workflows.WorkflowInstanceStorageDriver" or "WorkflowInstanceStorageDriver";
+        var typeName = string.IsNullOrWhiteSpace(source.TypeName) ? Elsa3ObjectTypeName : source.TypeName.Trim();
+        if (Resolve(wellKnownTypeRegistry, typeName, source.IsArray).UnregisteredType is not { } unregistered)
+            return null;
+
+        var which = string.Equals(unregistered, typeName, StringComparison.Ordinal) ? "which" : $"whose element type '{unregistered}'";
+        return new(
+            $"Variable '{source.Name}' has the Elsa 3 type '{typeName}', {which} is not registered in Elsa 4, so its Elsa 4 type is Any. It stays Any until an Elsa 4 feature registers the type and the workflow is converted again.",
+            "To keep the type, have an Elsa 4 feature register its CLR type (module types take dotted aliases), then convert the workflow again. " +
+            "The converter looks the Elsa 3 name up in Elsa 4's type registry, as an alias or as the full name of a registered type, and otherwise loads it as an assembly-qualified CLR name.");
     }
 
-    /// <summary>Maps <paramref name="source"/>, or returns <c>false</c> with the refusal when its starting value cannot start as it did in Elsa 3.</summary>
+    /// <summary>Maps <paramref name="source"/>, or returns <c>false</c> with the refusal when it cannot be converted: a resource type, or a starting value that cannot start as it did in Elsa 3.</summary>
     public static bool TryMap(
         IWellKnownTypeRegistry wellKnownTypeRegistry,
         IObjectConverter objectConverter,
@@ -75,11 +94,9 @@ internal static class Elsa3VariableMapper
     {
         var typeName = string.IsNullOrWhiteSpace(source.TypeName) ? Elsa3ObjectTypeName : source.TypeName.Trim();
         var shape = Resolve(wellKnownTypeRegistry, typeName, source.IsArray);
-        var storageDriverType = !string.IsNullOrWhiteSpace(source.StorageDriverTypeName) && !IsDefaultStorageDriver(source.StorageDriverTypeName)
-            ? wellKnownTypeRegistry.GetAliasOrDefault(LegacyClrTypeResolver.Resolve(wellKnownTypeRegistry, source.StorageDriverTypeName))
-            : null;
-
-        variable = new VariableDefinition(source.Id, source.Name, shape.Type, storageDriverType, Default: null);
+        // Every Elsa 3 storage driver converts to Elsa 4's default storage (elsa.json); the normalizer reports a Memory or
+        // custom driver as a correction (Elsa3StorageDriverCorrections).
+        variable = new VariableDefinition(source.Id, source.Name, shape.Type, StorageDriverType: null, Default: null);
         refusal = null;
 
         // A resource (a file, a stream, raw bytes) has nothing faithful to hold, so it is refused with or without a starting
@@ -224,7 +241,7 @@ internal static class Elsa3VariableMapper
         if (isCollection)
         {
             if (!TryResolveKnown(registry, elementName, out var elementType, out var elementAlias))
-                return new(ShapeKind.Unknown, new TypeReference(AnyAlias), null);
+                return new(ShapeKind.Unknown, new TypeReference(AnyAlias), null, UnregisteredType: InnermostUnregistered(registry, elementName));
             return new(
                 ShapeKind.Collection,
                 new TypeReference(elementAlias, kind),
@@ -239,8 +256,28 @@ internal static class Elsa3VariableMapper
             return new(ShapeKind.Scalar, TypeReferenceFactory.FromClrType(scalarType, registry.GetAliasOrDefault), scalarType);
 
         // A type Elsa 4's registry does not know runs as Any.
-        return new(ShapeKind.Unknown, new TypeReference(AnyAlias), null);
+        return new(ShapeKind.Unknown, new TypeReference(AnyAlias), null, UnregisteredType: IsUnregistered(registry, typeName) ? typeName : null);
     }
+
+    /// <summary>
+    /// The innermost element of a collection whose element Elsa 4 does not know, when that element is itself unregistered.
+    /// <c>null</c> when only the nesting is unsupported (<c>List&lt;List&lt;String&gt;&gt;</c>, <c>ObjectDictionary[]</c>):
+    /// registering a type would not change that.
+    /// </summary>
+    private static string? InnermostUnregistered(IWellKnownTypeRegistry registry, string elementName)
+    {
+        // Each step strips a List<> or [] from a non-empty name, so the loop ends.
+        while (TryReadCollection(elementName, out var inner, out _))
+            elementName = inner;
+        return IsUnregistered(registry, elementName) ? elementName : null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="typeName"/> is unregistered: not Object, an Elsa 3 dictionary or JSON type, or a type Elsa 4's
+    /// registry knows.
+    /// </summary>
+    private static bool IsUnregistered(IWellKnownTypeRegistry registry, string typeName) =>
+        !IsObjectAlias(typeName) && !DictionaryTypes.ContainsKey(typeName) && !JsonTypes.Contains(typeName) && !TryResolveKnown(registry, typeName, out _, out _);
 
     /// <summary>Whether <paramref name="typeName"/>, or the element of a collection of it, is a <see cref="ResourceTypes">resource</see>.</summary>
     private static bool IsResource(string typeName)
@@ -369,5 +406,6 @@ internal static class Elsa3VariableMapper
     private enum ShapeKind { Text, Scalar, Collection, Dictionary, Unknown, Resource }
 
     /// <param name="ClrType">The CLR type the starting value converts to; <c>null</c> when it is kept as parsed JSON (a dictionary) or the type is unknown.</param>
-    private sealed record VariableShape(ShapeKind Kind, TypeReference Type, Type? ClrType, bool ElementIsText = true, string? Example = null);
+    /// <param name="UnregisteredType">For an unknown shape, the Elsa 3 type name Elsa 4 does not register; <c>null</c> when only the nesting is unsupported.</param>
+    private sealed record VariableShape(ShapeKind Kind, TypeReference Type, Type? ClrType, bool ElementIsText = true, string? Example = null, string? UnregisteredType = null);
 }
