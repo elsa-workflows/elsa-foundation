@@ -1242,6 +1242,7 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
     await showActivityData();
     await vi.waitFor(() => {
+      expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
       const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
         .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
       expect(incidentCount).toBe("1");
