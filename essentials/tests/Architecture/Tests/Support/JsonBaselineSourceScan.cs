@@ -21,6 +21,7 @@ internal static class JsonBaselineSourceScan
                 ? trusted.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
                 : [typeof(object).Assembly.Location, typeof(Enumerable).Assembly.Location])
             .Append(typeof(System.Text.Json.JsonSerializerOptions).Assembly.Location)
+            .Append(typeof(Elsa.Serialization.Core.JsonBaseline).Assembly.Location)
             .Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase);
         return CSharpCompilation.Create("JsonBaselineConstructionTargets", references: paths.Select(path => MetadataReference.CreateFromFile(path)),
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
@@ -91,8 +92,18 @@ internal static class JsonBaselineSourceScan
             var type = Model().GetTypeInfo(expression).Type;
             return type is null || type.TypeKind is TypeKind.Error or TypeKind.Dynamic ? null : IsFrameworkOptions(type);
         }
-        bool NullProfile(ExpressionSyntax expression, SyntaxNode site) => IsNullProfile(expression, site, Model);
-        bool ProfileExpression(ExpressionSyntax expression, SyntaxNode site) => IsProfileExpression(expression, site, Model);
+        NullableFlowView? nullableFlow = null;
+        bool NullProfile(ExpressionSyntax expression, SyntaxNode site)
+        {
+            var semantic = Model();
+            // ! affects annotations, never the runtime value. Ask the compiler about a view
+            // without those suppressions so null assignments, branch joins and alias copies
+            // keep their actual null state, including the operand of the serializer argument.
+            var flow = nullableFlow ??= new NullableFlowView(root, semantic);
+            var selected = flow.Select(expression);
+            return IsNullProfile(selected, selected, () => flow.Model);
+        }
+        bool ProfileExpression(ExpressionSyntax expression, SyntaxNode site) => IsProfileExpression(expression, site, NullProfile);
         var constructionTargets = new Dictionary<ImplicitObjectCreationExpressionSyntax, bool>();
         foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
             if (OptionsType(creation.Type.ToString()) && !BaselineCopy(creation.ArgumentList) && KnownOptionsType(creation) != false)
@@ -521,9 +532,9 @@ internal static class JsonBaselineSourceScan
         .Where(type => type.BaseList?.Types.Any(parent => parent.Type.ToString().EndsWith("JsonSerializerContext", StringComparison.Ordinal)) == true)
         .Select(type => type.Identifier.ValueText).ToHashSet(StringComparer.Ordinal);
 
-    private static bool IsProfileExpression(ExpressionSyntax expression, SyntaxNode site, Func<SemanticModel>? model = null)
+    private static bool IsProfileExpression(ExpressionSyntax expression, SyntaxNode site, Func<ExpressionSyntax, SyntaxNode, bool> nullProfile)
     {
-        if (IsNullProfile(expression, site, model)) return false;
+        if (nullProfile(expression, site)) return false;
         var type = DeclaredType(expression, site);
         if (type is not null)
         {
@@ -565,6 +576,42 @@ internal static class JsonBaselineSourceScan
         if (method is null) return false;
         var initializer = method.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault(variable => variable.Identifier.ValueText == name.Identifier.ValueText)?.Initializer?.Value;
         return initializer is not null && IsNullProfile(initializer, site, model, visited);
+    }
+
+    private sealed class NullableFlowView
+    {
+        private const string Annotation = "json-baseline-original-expression";
+        private readonly IReadOnlyDictionary<string, ExpressionSyntax>? expressions;
+        internal SemanticModel Model { get; }
+
+        internal NullableFlowView(SyntaxNode root, SemanticModel model)
+        {
+            Model = model;
+            if (!root.DescendantNodes().Any(node => node.IsKind(SyntaxKind.SuppressNullableWarningExpression))) return;
+            var rewritten = new SuppressionRewriter().Visit(root)!;
+            var tree = root.SyntaxTree.WithRootAndOptions(rewritten, root.SyntaxTree.Options);
+            Model = model.Compilation.ReplaceSyntaxTree(root.SyntaxTree, tree).GetSemanticModel(tree, ignoreAccessibility: true);
+            expressions = tree.GetRoot().DescendantNodesAndSelf().OfType<ExpressionSyntax>()
+                .SelectMany(expression => expression.GetAnnotations(Annotation).Select(annotation => (annotation.Data!, expression)))
+                .ToDictionary(pair => pair.Item1, pair => pair.expression, StringComparer.Ordinal);
+        }
+
+        internal ExpressionSyntax Select(ExpressionSyntax expression) => expressions is null ? expression :
+            expressions.TryGetValue(Key(expression), out var selected) ? selected :
+                throw new InvalidOperationException("A JSON profile expression lost its compiler null-flow identity.");
+
+        private static string Key(SyntaxNode node) => node.SpanStart + ":" + node.Span.Length;
+
+        private sealed class SuppressionRewriter : CSharpSyntaxRewriter
+        {
+            public override SyntaxNode? Visit(SyntaxNode? node)
+            {
+                if (node is null) return null;
+                var result = node is PostfixUnaryExpressionSyntax suppression && suppression.IsKind(SyntaxKind.SuppressNullableWarningExpression)
+                    ? Visit(suppression.Operand)!.WithTriviaFrom(suppression) : base.Visit(node)!;
+                return node is ExpressionSyntax ? result.WithAdditionalAnnotations(new SyntaxAnnotation(Annotation, Key(node))) : result;
+            }
+        }
     }
 
     private static bool CapturedNullBefore(IdentifierNameSyntax name, SyntaxNode site, SemanticModel model)
