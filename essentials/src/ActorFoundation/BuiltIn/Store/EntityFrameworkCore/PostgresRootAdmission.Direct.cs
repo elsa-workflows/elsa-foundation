@@ -100,14 +100,12 @@ internal sealed partial class PostgresRootAdmission
                 """).SingleAsync(cancellationToken);
         if (status != InstanceStatus.Running && !acceptsParkArrival)
         {
+            // A Faulted or Cancelled checkpoint ends only in a family that ends that status, under the family's prefix.
             var terminal = status == InstanceStatus.Finished ||
                 status == InstanceStatus.Faulted && db.UsesRootParkOpening ||
-                status == InstanceStatus.Faulted && db.UsesRootTimedJobSettlement &&
-                await IsQualifiedTerminalAsync(db, address, tenant, reference, InstanceStatus.Faulted,
-                    EfStore.TimedRootStateFamily, cancellationToken) ||
-                status == InstanceStatus.Cancelled && db.UsesRootTermination &&
-                await IsQualifiedTerminalAsync(db, address, tenant, reference, InstanceStatus.Cancelled,
-                    EfStore.RootTerminationStateFamily(db), cancellationToken);
+                status is (InstanceStatus.Faulted or InstanceStatus.Cancelled) && db.RootStateFamily.Ends(status.Value) &&
+                await IsQualifiedTerminalAsync(db, address, tenant, reference, status.Value,
+                    db.RootStateFamily.Prefix, cancellationToken);
             if (terminal && await HasReceiptAsync()) return await DuplicateAsync();
             return await RefuseAsync(DirectResult.Refused);
         }
