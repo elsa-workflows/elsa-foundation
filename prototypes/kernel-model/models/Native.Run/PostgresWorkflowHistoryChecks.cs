@@ -83,6 +83,7 @@ internal static class PostgresWorkflowHistoryChecks
         await Drive(baseline, 1);
         await Drive(neighbor, 1, PostgresMultiRootClient.Secondary);
         var without = await CountCheckpoint(baseline);
+        await CheckInstallSchema();
         await store.InstallRootWorkflowHistoryAsync(ct);
         await store.InstallRootWorkflowHistoryAsync(ct);
         Check((await runs.ListAsync(scope, query, cancellationToken: ct)).Items.Count == 0 &&
@@ -252,6 +253,26 @@ internal static class PostgresWorkflowHistoryChecks
             await RequireFormatRefusal(() => runs.ListAsync(scope, query, cancellationToken: ct).AsTask());
             await db.Database.ExecuteSqlRawAsync("""UPDATE "KernelStoreVersions" SET "StoreSchema" = "StoreSchema" - 1 """, ct);
             Check(await ReadPhysical(actor) == prior, "an incompatible projection format refuses reads, setup and writes");
+        }
+        async Task CheckInstallSchema()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA fixture_history_setup", ct);
+            var schema = await db.Database.SqlQueryRaw<string>("SELECT current_schema() AS \"Value\"").SingleAsync(ct);
+            using var identifiers = new NpgsqlCommandBuilder();
+            var shadowConnection = new NpgsqlConnectionStringBuilder(connection)
+            {
+                SearchPath = "fixture_history_setup," + identifiers.QuoteIdentifier(schema)
+            }.ConnectionString;
+            var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(shadowConnection).Options;
+            var shadow = Store(() => new KernelDb(shadowOptions));
+            await RequireFormatRefusal(() => shadow.InstallPreviewRootSchemaAsync(ct));
+            await RequireFormatRefusal(() => shadow.InstallRootWorkflowHistoryAsync(ct));
+            Check(await db.Database.SqlQueryRaw<bool>("""
+                SELECT to_regclass('fixture_history_setup."FoundationRootIssuer"') IS NULL
+                    AND to_regclass('fixture_history_setup."FoundationActorList"') IS NULL
+                    AND to_regclass('fixture_history_setup."FoundationWorkflowHistoryFormat"') IS NULL AS "Value"
+                """).SingleAsync(ct), "setup refuses a different creation schema without creating preview relations");
+            await db.Database.ExecuteSqlRawAsync("DROP SCHEMA fixture_history_setup", ct);
         }
         async Task CheckTrigger()
         {

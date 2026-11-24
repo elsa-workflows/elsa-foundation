@@ -28,10 +28,8 @@ public sealed partial class EfStore
             throw new StoreFormatException("PostgreSQL preview installation requires the store relations in the active schema.");
     }
 
-    internal static async Task InstallRootActorListAsync(KernelDb db, CancellationToken cancellationToken)
-    {
-        await RequirePreviewInstallSchemaAsync(db, cancellationToken);
-        await db.Database.ExecuteSqlRawAsync("""
+    internal static Task InstallRootActorListAsync(KernelDb db, CancellationToken cancellationToken) =>
+        db.Database.ExecuteSqlRawAsync("""
             -- Keep the original header for decoding in .NET. PostgreSQL jsonb cannot represent a NUL.
             -- Escape both NUL and literal backslashes injectively before using jsonb for comparisons.
             -- The scanner consumes complete JSON escapes, including a backslash paired with another.
@@ -83,7 +81,6 @@ public sealed partial class EfStore
             END
             $install$;
             """, cancellationToken);
-    }
 
     internal async Task<(RootListItem Item, long AsOf)?> ReadRootActorAsync(string tenant, string reference,
         CancellationToken cancellationToken)

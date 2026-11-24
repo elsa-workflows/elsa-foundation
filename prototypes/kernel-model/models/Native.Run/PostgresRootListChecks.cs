@@ -192,16 +192,6 @@ internal static class PostgresRootListChecks
         var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(shadowConnection).Options;
         var shadowStore = new EfStore(() => KernelDb.ForPostgresRootOperators(shadowOptions), postgres: true, fenceInBatch: inBatch);
         var shadowReads = await shadowStore.OpenPreviewRootReadsAsync(pageSize: 2, cancellationToken: ct);
-        try
-        {
-            await shadowStore.InstallPreviewRootSchemaAsync(ct);
-            throw new InvalidOperationException("Setup accepted a split creation schema.");
-        }
-        catch (StoreFormatException error) when (error.Message.Contains("active schema", StringComparison.Ordinal)) { }
-        Check(await db.Database.SqlQueryRaw<bool>("""
-            SELECT to_regclass('fixture_list_shadow."FoundationRootIssuer"') IS NULL
-                AND to_regclass('fixture_list_shadow."FoundationActorList"') IS NULL AS "Value"
-            """).SingleAsync(ct), "installation refuses a different creation schema without creating preview relations");
         Check((await shadowReads.ListAsync(blue, query, cancellationToken: ct)).Items.Count == 2 &&
             await shadowReads.GetAsync(blue, completed, ct) is { Header.Status: ActorStatus.Finished },
             "an earlier schema's same-named function leaves the installed projection readable");
