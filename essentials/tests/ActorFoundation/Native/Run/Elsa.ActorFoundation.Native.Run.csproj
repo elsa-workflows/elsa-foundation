@@ -18,6 +18,7 @@
     <Compile Include="../../Store/EntityFramework/RelationalTimedJobChecks.cs" Link="RelationalTimedJobChecks.cs" />
     <ProjectReference Include="../../../Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj" />
     <ProjectReference Include="../../../Workflows/Runtime/Native/Migration/SqliteFixture/Elsa.Workflows.Runtime.Native.Migration.SqliteFixture.csproj" />
+    <ProjectReference Include="../../../Workflows/Runtime/Native/Migration/SelectionFixture/Elsa.Workflows.Runtime.Native.Migration.SelectionFixture.csproj" />
     <ProjectReference Include="../../../Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
     <ProjectReference Include="../../../Workflows/Runtime/Native/RetentionFixture/Elsa.Workflows.Runtime.Native.RetentionFixture.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />

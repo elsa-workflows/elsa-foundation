@@ -154,6 +154,8 @@ if (args is ["pg-root-park-opening", var parkWriter and ("owned" or "ef"), var p
     return await PostgresRootParkOpeningChecks.RunAsync(parkWriter == "owned", parkFence == "in-batch");
 if (args is ["pg-root-retention", var policyWriter and ("owned" or "ef"), var policyFence and ("in-batch" or "checked")])
     return await PostgresRootRetentionChecks.RunAsync(policyWriter == "owned", policyFence == "in-batch");
+if (args is ["pg-root-plan-selection", var planWriter and ("owned" or "ef"), var planFence and ("in-batch" or "checked")])
+    return await PostgresRootPlanSelectionChecks.RunAsync(planWriter == "owned", planFence == "in-batch");
 if (args is ["pg-root-then-delete", var thenWriter and ("owned" or "ef"), var thenFence and ("in-batch" or "checked")])
     return await PostgresRootThenDeleteChecks.RunAsync(thenWriter == "owned", thenFence == "in-batch");
 if (args is ["pg-root-retirement", var retirementWriter and ("owned" or "ef"), var retirementFence and ("in-batch" or "checked")])
