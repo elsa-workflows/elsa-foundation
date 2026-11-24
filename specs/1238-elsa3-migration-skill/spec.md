@@ -199,9 +199,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   one plugin whose source is `plugins/elsa3-migration/`, and that plugin's `.claude-plugin/plugin.json`. Users of
   agents that read `.agents/skills/` copy the skill folder. No adapter repeats the skill's content.
 - **FR-004**: The skill MUST state the report schema versions it reads and stop on any other. It is not tied to a tool
-  release: the plan records the tag of the essentials engine image the user targets (a build tag, not a package version), and
-  the migration image with that same tag is the one
-  the skill runs (FR-022) and of the essentials engine image the user later goes live on.
+  release: the plan records the tag of the essentials engine image the user will go live on (a build tag, not a
+  package version), and the skill runs the migration image with that same tag (FR-022).
 
 **Privacy**
 
