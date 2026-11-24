@@ -311,7 +311,7 @@ internal static class PostgresRootThenDeleteChecks
     }
 
     // Seed an actual Native inbox receipt during fixture setup. The termination and protection hooks are unmodified.
-    private sealed class SeededReceipt(NativeExecutionModel model, Func<Contract.ActorRef, bool> retain) :
+    internal sealed class SeededReceipt(NativeExecutionModel model, Func<Contract.ActorRef, bool> retain) :
         PublicModel.IExecutionModel, PublicModel.IModelMetadata
     {
         public string Key => model.Key;

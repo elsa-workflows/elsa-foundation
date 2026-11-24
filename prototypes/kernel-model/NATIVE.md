@@ -713,9 +713,18 @@ Release with a locked restore and run `pg-root-then-delete owned checked`
 against an empty PostgreSQL database. The test seeds a receipt in Native
 state and uses the real Native cancellation and protection logic.
 
-Both profiles qualify generated roots with no attached work. Descendant and
-job cascades, automated retention and held operator replies have separate
-acceptance cases.
+The opt-in format-16 retention fixture runs the existing WorkflowActor retention
+pass over the PostgreSQL instance list, one page at a time. The trusted host
+admission derives a reserved operation id from the exact tenant, generated
+creation and terminal mark. An interrupted scan can replay its admission
+receipts with newly sealed selections. The worker uses the policy in force at
+delivery and checks model protection against the committed checkpoint before
+it retires an eligible root. Build Native.Run in Release with a locked restore
+and run `pg-root-retention owned checked` against an empty PostgreSQL database.
+
+These profiles qualify generated roots with no attached work. Descendant and job
+cascades, parked work, retention scheduling and held operator replies have
+separate acceptance cases.
 
 ## 10. Private durable lexical-resource probe
 

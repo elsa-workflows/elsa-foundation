@@ -33,9 +33,10 @@ internal sealed partial class ActorAdapter
     {
         Kind: Durable.Kinds.Suspend or Durable.Kinds.Resume or Durable.Kinds.Terminate or Durable.Kinds.Delete,
         InboxScope: Durable.InboxKey.FoundationOccurrenceScope, StorageId: not null, TargetCreation: 1, KeepUntil: not null,
-        Operator: { Selection: null, RetentionDelete: false, RecoverMode: null, RecoverHandles: null },
+        Operator: { Selection: null, RecoverMode: null, RecoverHandles: null },
         Start: null, Payload: null, ReplyTo: null, EventMatch: null, Sender: null, SenderCreation: 0, ActorAuthored: false, JobGeneration: 0
     } && (message.Kind == Durable.Kinds.Delete ? message.Operator.QualifiedTerminal is not null : message.Operator.QualifiedTerminal is null)
+        && (!message.Operator.RetentionDelete || message.Kind == Durable.Kinds.Delete)
         && (message.Operator.RootThenDelete ? message.Kind == Durable.Kinds.Terminate && message.Operator.DeleteTarget is not null
             : message.Operator.DeleteTarget is null);
 
@@ -53,7 +54,11 @@ internal sealed partial class ActorAdapter
         if (header.Terminal is null)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
 
-        var protection = DeletionRefusal(RootHeader(row), row.State, input.Services.Now);
+        var current = RootHeader(row);
+        var now = input.Services.Now;
+        if (command.RetentionDelete && !RetentionElapsed(current, header.Terminal.At, now))
+            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "NotEligible");
+        var protection = DeletionRefusal(current, row.State, now);
         if (protection is not null)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, protection);
         var marker = Durable.CreationProtocol.Retire(row);

@@ -227,9 +227,14 @@ internal sealed partial class PostgresRootAdmission
         return rows.Select(row => DecodeDirect(row, reference, db.UsesRootReplyProtocol)).ToArray();
     }
 
-    internal static bool MatchesDirectOccurrence(string reference, string operation, string occurrence)
+    internal static bool MatchesDirectOccurrence(string reference, string operation, string occurrence, bool retentionDelete = false)
     {
-        if (!IsIssuedReferenceShape(reference) || operation is null || !FoundationMetadataLimits.IsOutsideMessageId(operation)) return false;
+        if (!IsIssuedReferenceShape(reference) || operation is null) return false;
+        if (retentionDelete
+            ? !operation.StartsWith(RetentionOperationPrefix, StringComparison.Ordinal) ||
+                !FoundationRootCreator.IsGeneratedReference(operation[RetentionOperationPrefix.Length..])
+            : !FoundationMetadataLimits.IsOutsideMessageId(operation))
+            return false;
         var prefix = $"{reference}/{FoundationRootCreator.OperationDigest(operation)}/";
         if (occurrence.Length != prefix.Length + 32 || !occurrence.StartsWith(prefix, StringComparison.Ordinal)) return false;
         var suffix = occurrence.AsSpan(prefix.Length);
