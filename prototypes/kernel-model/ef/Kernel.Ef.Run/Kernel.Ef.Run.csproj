@@ -10,7 +10,7 @@
     <Compile Include="../../../../essentials/tests/ActorFoundation/Simulation/Models.cs" Link="Models.cs" />
     <Compile Include="../../../../essentials/tests/ActorFoundation/Simulation/Correlation.cs" Link="Correlation.cs" />
     <ProjectReference Include="../Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
-    <ProjectReference Include="../../src/Kernel.Workflows/Kernel.Workflows.csproj" />
+    <ProjectReference Include="../../../../essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
     <ProjectReference Include="../../../../essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
   </ItemGroup>
   <ItemGroup>

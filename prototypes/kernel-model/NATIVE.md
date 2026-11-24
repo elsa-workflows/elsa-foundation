@@ -15,7 +15,7 @@ it. The simulation's check N6 is new. The seeds and costs below are the branch's
 **Round 4 (FINDINGS.md section 24).** The names are round 4's: an instance's step is a *turn* (`ITurn`), off-step
 work is a *background job* (`StartJob`, `IJob`, `job-finished`, the row's `jobs`), and the runtime's call into a
 partition is a *pass*. `src/Kernel` is now three projects: `src/Kernel.Runtime`, `src/Kernel.Durable` and
-`src/Kernel.Workflows`; a file named below without a path is in one of them. Seeds, counts and costs are unchanged.
+`../../essentials/tests/ActorFoundation/Legacy/Workflows`; a file named below without a path is in one of them. Seeds, counts and costs are unchanged.
 
 **Round 4, the graph engine (FINDINGS.md section 26).** The Flowchart runs on `models/Graph`, main's Flowchart engine
 extracted as a library: paths, arrivals, dead paths and gateways (section 1); a Flowchart cost row (section 5); the
@@ -72,7 +72,7 @@ and since round 5 C the two outbound activities that carry an effect key: SendHt
 `Idempotency-Key` header) and SendEmail (`[External]`; the key is the local part of the `Message-ID`).
 
 **Effect keys (round 5 C).** `ActivityContext.EffectKey` is `EffectKey.For(instance, node, iterationPath, attempt)` of
-`src/Kernel.Workflows`: **`{instance origin}/{node}/{iteration path}/{attempt}`**, the owner's shape of 16 November,
+`../../essentials/tests/ActorFoundation/Legacy/Workflows`: **`{instance origin}/{node}/{iteration path}/{attempt}`**, the owner's shape of 16 November,
 from committed facts only. The instance origin is the instance id (fixed at creation; the key never reads partitions
 or positions) with its creation. The node is the activity's stable id in the definition, the one the model already
 uses. The **iteration path** (`ActivityContext.IterationPath`, `Burst.IterationPath`) says which activation of the

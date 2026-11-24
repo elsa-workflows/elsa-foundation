@@ -299,7 +299,7 @@ SQL returns database time through a left join, including the empty-inbox result.
 There is no poll predicate on `KeepUntil`, target status, suspension, job state, attempts or trial.
 
 After the poll, the [owner loop](../../prototypes/kernel-model/src/Kernel.Durable/Worker.cs) and
-[workflow actor](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs) do the remaining work:
+[workflow actor](../../essentials/tests/ActorFoundation/Legacy/Workflows/WorkflowInstance.cs) do the remaining work:
 
 - Deliver future timers only when due, even if they entered memory inside the horizon.
 - Hold suspended instances' ordinary messages while allowing their control commands through.

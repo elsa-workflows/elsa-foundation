@@ -40,7 +40,7 @@ the release placement of standalone Jobs.
   (`Worker.cs`, the `MaxAttempts` check before `_type.Park`). The older rule, an error result with the instance going on
   (FINDINGS section 7), survives only as the mutation `Flaw.JobPoisonAsError`
   ([Addresses.cs](../../essentials/src/ActorFoundation/BuiltIn/Runtime/Addresses.cs)), which the simulation must catch.
-- **The effect key.** `EffectKey.For` in [EffectKey.cs](../../prototypes/kernel-model/src/Kernel.Workflows/EffectKey.cs)
+- **The effect key.** `EffectKey.For` in [EffectKey.cs](../../essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs)
   (layer 3), checked by the simulation's N7 ([NATIVE.md](../../prototypes/kernel-model/NATIVE.md), section 6) and
   described in [ownership and fencing](ownership-and-fencing.md#side-effects).
 - **Reply addresses.** `Requests` and `IReplyTransport` in
@@ -107,7 +107,7 @@ written it does not, and this page claims no bound for it:
 
 1. **Children on the queue row.** A job actor started with `Start` is a kernel child: its id lands in the queue's
    `InstanceRow.Children` ([Store.cs](../../prototypes/kernel-model/src/Kernel.Durable/Store.cs),
-   `ChildRegistry` in [WorkflowInstance.cs](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs)),
+   `ChildRegistry` in [WorkflowInstance.cs](../../essentials/tests/ActorFoundation/Legacy/Workflows/WorkflowInstance.cs)),
    which the queue rewrites at every commit. Job actors need a start that places them in the queue's partition
    without registering them as children; the turn contract has none today.
 2. **Ready jobs as held inbox rows.** Selecting matching `job.ready` messages and leaving the rest means holding them in
