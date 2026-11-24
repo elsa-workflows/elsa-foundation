@@ -39,7 +39,7 @@ port=${port##*:}
 sentinel="$scratch/caller-identity.sqlite"
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__IsDevelopmentOrDemo=false
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__ConnectionString="Data Source=$sentinel"
-for profile in ordinary jobs; do
+for profile in ordinary jobs timed timeout; do
   database="workbench_core_preview_$profile"
   docker exec "$container" createdb -U postgres "$database"
   export KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=$port;Username=postgres;Password=$POSTGRES_PASSWORD;Database=$database;SSL Mode=Disable;GSS Encryption Mode=Disable"
@@ -48,7 +48,7 @@ for profile in ordinary jobs; do
     if [[ "$profile" == ordinary ]]; then
       "$client" pg-workbench-core-preview "$phase" "$receipt"
     else
-      "$client" pg-workbench-core-preview "$phase" "$receipt" jobs
+      "$client" pg-workbench-core-preview "$phase" "$receipt" "$profile"
     fi
     if [[ -e "$sentinel" ]]; then
       echo "Workbench inherited the caller's identity database configuration." >&2

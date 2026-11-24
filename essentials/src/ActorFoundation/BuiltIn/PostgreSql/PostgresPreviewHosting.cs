@@ -13,6 +13,9 @@ public static class PostgresPreviewHosting
     /// <summary>Selects the preview format for a dedicated PostgreSQL database with one outstanding untimed Native job per generated root.</summary>
     public static KernelDb CreateNativeJobContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootJobs(options);
 
+    /// <summary>Selects a dedicated PostgreSQL preview format with one outstanding timed Native job per generated root.</summary>
+    public static KernelDb CreateTimedNativeJobContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootTimedJobPreview(options);
+
     /// <summary>
     /// Starts one runtime node for a public actor type. Each node opens its own store and uses the installed
     /// partition count. Configure the same actor type and definitions on every node sharing the store.
@@ -41,8 +44,8 @@ public static class PostgresPreviewHosting
         bool nativeJobs;
         await using (var db = create())
         {
-            nativeJobs = db.UsesRootJobPreview;
-            if (!db.Database.IsNpgsql() || (db.RequiredFormat != StoreFormat.Current && !nativeJobs))
+            nativeJobs = db.UsesRootJobProtocol;
+            if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
                 throw new NotSupportedException("Hosting requires the ordinary or Native job PostgreSQL Core Preview format.");
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             partitions = await PostgresRootAdmission.ReadInstalledPartitionCountAsync(db, cancellationToken);
@@ -53,7 +56,8 @@ public static class PostgresPreviewHosting
         var scope = store.BindWorkerNode();
         var watchdog = new Watchdog(Defaults.Lease, endProcess);
         var watched = watchdog.Watch(store);
-        var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actor, rootJobHandle: store.RootJobHandle);
+        var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actor, rootJobHandle: store.RootJobHandle,
+            rootTimedJobClock: store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null);
         var host = DurableHost.ForNode(node, watched, adapter, partitions);
         var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
             beforeRelease: host.DrainEnteredTurnsAsync);

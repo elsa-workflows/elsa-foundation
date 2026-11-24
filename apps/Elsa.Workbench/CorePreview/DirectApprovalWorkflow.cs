@@ -7,7 +7,11 @@ internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComp
 {
     internal const string Definition = "direct-approval";
     internal const string JobDefinition = "direct-approval-with-job";
+    internal const string TimedDefinition = "direct-approval-with-timed-job";
+    internal const string TimeoutDefinition = "direct-approval-with-timeout";
+    internal const string TimeoutBoundary = "catch-timeout";
     internal const string JobNode = "approval-job";
+    internal const string SuccessorJobNode = "approval-follow-up";
     internal const string JobResult = "approval processed";
     internal const string WaitEntry = "awaiting-approval:";
     public DirectApprovalWorkflow() { }
@@ -16,6 +20,37 @@ internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComp
 
     internal static Workflow BuildWithJob() => Wf.Workflow(JobDefinition, Wf.Sequence("main",
         Wf.Node<DirectApprovalWorkflow>("approve"), Wf.Node<ProcessApproval>(JobNode)));
+
+    internal static Workflow BuildWithTimedJob(bool timesOut = false)
+    {
+        var work = new Node(JobNode, timesOut ? typeof(WaitForCancellation) : typeof(ProcessApproval))
+        {
+            JobTimeout = TimeSpan.FromSeconds(timesOut ? 2 : 20)
+        };
+        var approve = Wf.Node<DirectApprovalWorkflow>("approve");
+        if (timesOut)
+            return Wf.Workflow(TimeoutDefinition, Wf.Sequence("main", approve, Wf.Node<CatchTimeout>(TimeoutBoundary).With(work)));
+
+        var followUp = new Node(SuccessorJobNode, typeof(ProcessApproval)) { JobTimeout = TimeSpan.FromSeconds(20) };
+        return Wf.Workflow(TimedDefinition, Wf.Sequence("main", approve, work, followUp));
+    }
+
+    [Background]
+    public sealed class WaitForCancellation : Activity<string>
+    {
+        protected override async ValueTask<Transition> ExecuteAsync(ActivityContext context)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, context.CancellationToken);
+            return Complete(JobResult);
+        }
+    }
+
+    public sealed class CatchTimeout : CompositeActivity
+    {
+        protected override void Execute(CompositeContext context) => context.Schedule(context.Children.Single());
+        protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete(result: child.Result);
+        protected override void OnChildFaulted(CompositeContext context, ChildFaulted child) => context.Complete(result: Values.From(child.Fault.Message));
+    }
 
     [Background]
     public sealed class ProcessApproval : Activity<string>

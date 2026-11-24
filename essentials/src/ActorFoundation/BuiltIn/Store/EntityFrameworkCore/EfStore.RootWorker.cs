@@ -98,9 +98,9 @@ public sealed partial class EfStore
             if (_ordinaryRoots is not null)
                 throw new InvalidOperationException("The PostgreSQL owner is already bound.");
             if (db.UsesRootJobProtocol != RootJobsEnabled || db.UsesRootTimedJobIssuance != RootTimedJobIssuanceEnabled ||
-                db.UsesRootTimedJobSettlement != RootTimedJobSettlementEnabled)
+                db.UsesRootTimedJobSettlement != RootTimedJobSettlementEnabled || db.UsesRootTimedJobPreview != RootTimedJobPreviewEnabled)
                 throw new StoreFormatException("The PostgreSQL owner must initialize its job capability before binding to the job profile.");
-            if (RootTimedJobs && (scope.Discover || scope.Actors.Length != 1))
+            if (RootTimedJobs && !RootTimedJobPreviewEnabled && (scope.Discover || scope.Actors.Length != 1))
                 throw new NotSupportedException("The timed job fixture binds exactly one generated root.");
             if (db.UsesRootValueProtocol != RootValuesEnabled)
                 throw new StoreFormatException("The PostgreSQL owner must initialize its value capability before binding to the value qualification profile.");
@@ -254,7 +254,7 @@ public sealed partial class EfStore
     }
 
     private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions,
-        bool JobProfile, bool TimedJobIssuance, bool TimedJobSettlement, bool ValueProfile, IReadOnlySet<string> DeferredJournal)
+        bool JobProfile, bool TimedJobIssuance, bool TimedJobSettlement, bool TimedJobPreview, bool ValueProfile, IReadOnlySet<string> DeferredJournal)
         : QualifiedRootCheckpoint(0)
     {
         internal override long RevisionFor(string actor) => Revisions[actor];
@@ -267,7 +267,8 @@ public sealed partial class EfStore
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             if (db.UsesRootJobProtocol != JobProfile || db.UsesRootTimedJobIssuance != TimedJobIssuance ||
-                db.UsesRootTimedJobSettlement != TimedJobSettlement || db.UsesRootValueProtocol != ValueProfile) return false;
+                db.UsesRootTimedJobSettlement != TimedJobSettlement || db.UsesRootTimedJobPreview != TimedJobPreview ||
+                db.UsesRootValueProtocol != ValueProfile) return false;
             foreach (var command in Commands)
                 if (!await command.BindCheckpointAsync(db, cancellationToken)) return false;
             return true;
@@ -340,7 +341,7 @@ public sealed partial class EfStore
             commands.Add(checkpoint);
         }
         return (batch with { Turns = turns, Seen = [], Trial = [] },
-            new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootTimedJobSettlementEnabled, RootValuesEnabled, deferred));
+            new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootTimedJobSettlementEnabled, RootTimedJobPreviewEnabled, RootValuesEnabled, deferred));
     }
 
     private static bool InputsMatch(WorkerRoot root, TurnCommit turn, bool jobs = false) =>
@@ -406,8 +407,8 @@ public sealed partial class EfStore
             change.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
 
         if (RootTimedJobIssuanceEnabled && turn.Expected is not null ||
-            RootTimedJobs && turn.Expected is null && !RootJobTicket.StartsTimedPair(turn.Sent, root.Actor, row.Model)) throw RootShape();
-        var wires = RootTimedJobs ? turn.Sent.Select(EncodeRootTimedJob).ToArray() :
+            RootTimedJobs && !RootTimedJobPreviewEnabled && turn.Expected is null && !RootJobTicket.StartsTimedPair(turn.Sent, root.Actor, row.Model)) throw RootShape();
+        var wires = RootTimedJobs ? EncodeRootTimedSends(turn.Sent) :
             turn.Sent.Select((message, index) => RootJobsEnabled && message.Kind == Kinds.Job
                 ? EncodeRootJob(message, root, row.Model) : EncodeRootSelf(root, row.Revision, index, message)).ToArray();
         var jobState = RootJobsEnabled ? new RootJobState(row.Jobs, row.NextJobGeneration) : null;
@@ -422,6 +423,7 @@ public sealed partial class EfStore
             var creator = await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History) throw RootShape();
+            if (RootTimedJobPreviewEnabled) RequireRootTimedIssuance(turn, row);
             if (RootJobsEnabled) ValidateRootJobChange(null, row, [], turn.Sent, turn.FoundationRootJobCompletion, RootTimedJobs);
             return WithSends(PrepareFirstRoot(root.Tenant, root.Reference, creator, fence, state, row.StateVersion,
                 change.TypeData, change.Labels, turn.Journal, jobState, row.Status, header.TerminalGrowth));
@@ -434,14 +436,14 @@ public sealed partial class EfStore
         if (row.Model != current.Model || row.Definition != current.Definition || row.History != current.History ||
             change is null && (header.Header.TypeData != current.TypeData || header.Header.Labels.Count != current.Labels.Count ||
                 current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
-        if (RootTimedJobSettlementEnabled)
+        if (RootTimedJobSettlementEnabled && (!RootTimedJobPreviewEnabled || turn.Consumed.Any(key => key.Scope == -1 || key.Scope > 0)))
             return await PrepareRootTimedTurnAsync(root, turn, row, state, current, fence, wires, cancellationToken);
         await using var db = create();
         await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         var ids = turn.Done.Concat(turn.Consumed).Select(key => key.Scope > 0 ? StoredJobId(key) : key.Id).ToArray();
         var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
-            (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope || RootJobsEnabled && m.InboxScope == RootJobScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
+            (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope || RootJobsEnabled && !RootTimedJobPreviewEnabled && m.InboxScope == RootJobScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
         var inputs = records.Select(record => DecodeRootInput(db, record, root.Reference, RootSelfIssuer, RootJobsEnabled)).ToArray();
         if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;
         if (turn.FoundationRootOperator is { } command)
@@ -462,7 +464,9 @@ public sealed partial class EfStore
                 row.StateVersion, header.Header.TypeData, header.Header.Labels, null, operatorSuspension: row.Suspended, terminalGrowth: header.TerminalGrowth);
         }
         if (row.Suspended != current.Suspended || inputs.Any(input => input.Operator is not null)) throw RootShape();
-        if (RootJobsEnabled) ValidateRootJobChange(current, row, inputs, turn.Sent, turn.FoundationRootJobCompletion);
+        if (RootTimedJobPreviewEnabled)
+            RequireRootTimedIssuance(turn, row);
+        if (RootJobsEnabled) ValidateRootJobChange(current, row, inputs, turn.Sent, turn.FoundationRootJobCompletion, RootTimedJobs);
         return WithSends(PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
             row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, recalls?.Select(key => key.Id).ToArray(),
             jobState: jobState, jobCompletion: turn.FoundationRootJobCompletion, values: values, terminalGrowth: header.TerminalGrowth));

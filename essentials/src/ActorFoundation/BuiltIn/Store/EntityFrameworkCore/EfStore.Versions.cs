@@ -47,6 +47,8 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootRetention => Current with { MessageProtocol = 16 };
     internal static StoreFormat RootOperatorReplies => Current with { MessageProtocol = 17 };
 
+    internal static StoreFormat RootTimedJobPreview => Current with { MessageProtocol = 18 };
+
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
 }

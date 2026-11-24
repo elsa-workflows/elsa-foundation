@@ -313,28 +313,40 @@ Run from the repository root with Docker available:
 bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release
 ```
 
-The receipt builds the ordinary Workbench executable, provisions separate disposable PostgreSQL 17
-databases for the ordinary and Native background-job profiles, and starts Workbench on ephemeral
-loopback ports. Both profiles check that disabled Workbench opens no preview connection, and that a
-host using the other preview format refuses startup. A first process saves an approval wait and stops.
-A second process takes the same actor at a later epoch. Replaying the first approval leaves state and
-journal unchanged. Sending a new approval finishes the ordinary workflow. In the Native job profile,
-the new approval issues an untimed background job and the next revision records its result and
-workflow completion. Each generated root supports one outstanding untimed job. The receipt checks
-the ticket insertion, result, journal and physical ticket removal.
-The client prints PostgreSQL wire trips for each enabled phase, including host lifetime and public
-client operations. Schema setup and direct observations bypass the meter. Set `PG_VERSION=16` to
-repeat with PostgreSQL 16, or pass `Debug` to qualify a Debug build.
+The receipt builds the normal Workbench executable and uses disposable PostgreSQL 17 databases and
+ephemeral loopback ports. It exercises the ordinary, untimed job, timed completion and deadline
+outcomes. Disabled Workbench opens no preview connection, and each enabled lane refuses to start
+an owner with a different format. The first process saves an approval wait and stops. A different
+process takes the same actor at a higher epoch. Replaying the first approval leaves checkpoint bytes
+and the journal unchanged. A new approval advances the workflow. In the timed profile the approval
+atomically issues the ticket and deadline, the owner records the chosen outcome, and a separate
+Native turn applies it. The completion workflow also starts a successor job in the first result's commit.
+The timeout workflow catches its job fault and finishes. The timed profile
+also runs an ordinary job-free workflow on the same node.
+
+The receipt checks the job insertion, result, journal and physical ticket removal. The client prints
+PostgreSQL wire trips for each enabled phase, including host lifetime and public client operations.
+Schema setup and direct observations bypass the meter. Set `PG_VERSION=16` to repeat with
+PostgreSQL 16, or pass `Debug` to qualify a Debug build.
 
 For an existing dedicated PostgreSQL preview database, set `Elsa__CorePreview__Enabled=true` and
-supply `ConnectionStrings__KernelCorePreview` in trusted host configuration. Add
-`Elsa__CorePreview__NativeJobs=true` for a separate database initialized with
-`PostgresPreviewHosting.CreateNativeJobContext(options)`. Use that context with `EfStore.CreateAsync`
-and `InstallPreviewRootSchemaAsync` during setup, and with `OpenPreviewRootIngressAsync` and
-`OpenPreviewRootReadsAsync` for the client. Use `direct-approval-with-job` as the workflow definition
-for this path. Workbench validates the installed store format at startup. Run one Workbench process
-against the preview database. The host still routes existing workflow and Studio endpoints to their
-current runtime. Timed jobs and Park recovery remain separate qualification work.
+supply `ConnectionStrings__KernelCorePreview` in trusted host configuration. Choose the job setting
+that matches the format used to provision the database.
+
+| Workbench setting | Factory for the dedicated database | Workflow definitions |
+|---|---|---|
+| Ordinary | `new KernelDb(options)` | `direct-approval` |
+| `Elsa__CorePreview__NativeJobs=true` | `PostgresPreviewHosting.CreateNativeJobContext(options)` | `direct-approval`, `direct-approval-with-job` |
+| `Elsa__CorePreview__TimedNativeJobs=true` | `PostgresPreviewHosting.CreateTimedNativeJobContext(options)` | `direct-approval`, `direct-approval-with-timed-job`, `direct-approval-with-timeout` |
+
+Use the same context for `EfStore.CreateAsync`, `InstallPreviewRootSchemaAsync`,
+`OpenPreviewRootIngressAsync` and `OpenPreviewRootReadsAsync`. Each job profile supports one outstanding
+job of its type per generated root. The timed host uses message protocol 18. The older fixed-root
+timed qualification keeps its own protocol 9. Provision a dedicated database for each format. Workbench
+checks the installed format before registering an owner. Run one Workbench process at a time against
+the preview database. Existing workflow and Studio endpoints still use their current runtime.
+The restart demo stops while the approval wait is open. Takeover during a timed job and Park recovery
+retain their separate qualification.
 
 ### Standalone CLI
 
@@ -386,7 +398,8 @@ A host can use `EfStore.OpenPreviewRootReadsAsync` to open `IActorReads` for an 
 PostgreSQL generated-root store. Compose the store with the public `new KernelDb(options)` PostgreSQL context.
 The trusted hosting layer supplies the caller's `BoundScope`. The provider supplies point, list and journal reads
 with bookmarks that cross process restarts. The Native job profile uses
-`PostgresPreviewHosting.CreateNativeJobContext(options)` for the same read API. The remaining
+`PostgresPreviewHosting.CreateNativeJobContext(options)` and the timed preview uses
+`PostgresPreviewHosting.CreateTimedNativeJobContext(options)` for the same read API. The remaining
 qualification profiles use their corresponding internal contexts.
 
 The preview's public `IActorReads.GetAsync` and `ListAsync` use a persisted, tenant-indexed projection of generated roots. PostgreSQL

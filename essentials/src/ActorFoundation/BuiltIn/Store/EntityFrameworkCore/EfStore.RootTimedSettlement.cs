@@ -45,14 +45,19 @@ public sealed partial class EfStore
         return row.Id == StoredJobId(message.InboxKey) && row.Payload == message.Payload ? message : throw RootShape();
     }
 
+    private static void RequireRootTimedIssuance(TurnCommit turn, InstanceRow row)
+    {
+        if (row.Status == InstanceStatus.Faulted || turn.Sent.Count != 0 && !RootJobTicket.StartsTimedPair(turn.Sent, row.Id, row.Model))
+            throw RootShape();
+    }
+
     private async Task<PreparedRoot?> PrepareRootTimedTurnAsync(WorkerRoot root, TurnCommit turn, InstanceRow row, string? state,
         RootImage current, PartitionFence fence, Message[] wires, CancellationToken token)
     {
         if (turn.Done.Count != 0 || turn.FoundationSelfRecalls is not null || turn.FoundationRootOperator is not null ||
             row.Suspended || current.Suspended || turn.Consumed.Count is < 1 or > 2 ||
             turn.Consumed.Distinct().Count() != turn.Consumed.Count ||
-            JobRegistry.Read(current.Jobs) is not [var job] ||
-            row.NextJobGeneration != current.NextJobGeneration) throw RootShape();
+            JobRegistry.Read(current.Jobs) is not [var job]) throw RootShape();
         var ids = turn.Consumed.Select(StoredJobId).ToArray();
         await using var db = create();
         var rows = await db.Messages.AsNoTracking().Where(message => message.Target == root.Actor && message.Partition == root.Partition &&
@@ -65,15 +70,23 @@ public sealed partial class EfStore
         {
             if (!recorded.FoundationJobResult || recorded.JobGeneration != job.Generation ||
                 recorded.Read<JobFinished>() is not { } result || result.Key != job.Key ||
-                row.Status == InstanceStatus.Faulted && result is not { Error: "timeout", Result: null } ||
-                row.Jobs is not null || wires.Length != 0 || completion is not null) throw RootShape();
+                row.Status == InstanceStatus.Faulted && result is not { Error: "timeout", Result: null } || completion is not null)
+                throw RootShape();
+            if (RootTimedJobPreviewEnabled && turn.Sent.Count != 0)
+            {
+                // Consuming the authenticated result frees this root's one job slot in the same commit.
+                RequireRootTimedIssuance(turn, row);
+                ValidateRootJobChange(current with { Jobs = null }, row, [], turn.Sent, null, timed: true);
+            }
+            else if (row.Jobs is not null || wires.Length != 0 || row.NextJobGeneration != current.NextJobGeneration)
+                throw RootShape();
         }
         else
         {
             if (inputs is not [var deadline, var original] || RootJobTicket.Read(original, row.Id, row.Model, timed: true) is not { } ticket ||
                 original.JobGeneration != job.Generation || ticket.Key != job.Key || deadline != RootJobTicket.Deadline(row.Id, ticket) ||
                 row.Status != InstanceStatus.Running || state != current.State || row.StateVersion != current.StateVersion ||
-                row.Jobs != current.Jobs || turn.FoundationHeader is not null || turn.Journal is not null ||
+                row.Jobs != current.Jobs || row.NextJobGeneration != current.NextJobGeneration || turn.FoundationHeader is not null || turn.Journal is not null ||
                 turn.Sent is not [var emitted]) throw RootShape();
             var payload = Json.Write(new JobFinished(ticket.Key, null, "timeout"));
             if (completion is not null)

@@ -20,13 +20,19 @@ internal static class WorkbenchCorePreview
 
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
         var nativeJobs = configuration.GetValue<bool>("Elsa:CorePreview:NativeJobs");
+        var timedJobs = configuration.GetValue<bool>("Elsa:CorePreview:TimedNativeJobs");
+        if (nativeJobs && timedJobs)
+            throw new InvalidOperationException("Choose one Native job format for the Core Preview database.");
         var workflows = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
         if (nativeJobs) workflows.Add(DirectApprovalWorkflow.BuildWithJob());
+        if (timedJobs)
+            workflows.Add(DirectApprovalWorkflow.BuildWithTimedJob()).Add(DirectApprovalWorkflow.BuildWithTimedJob(timesOut: true));
         var model = new NativeExecutionModel(workflows);
         var actor = new WorkflowActor([model]);
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
         services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node, actor, Environment.FailFast));
 
-        KernelDb Open() => nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);
+        KernelDb Open() => timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(options) :
+            nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);
     }
 }
