@@ -26,8 +26,17 @@ internal static class WorkbenchCorePreview
         var workflows = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
         if (nativeJobs) workflows.Add(DirectApprovalWorkflow.BuildWithJob());
         if (timedJobs)
+        {
             workflows.Add(DirectApprovalWorkflow.BuildWithTimedJob()).Add(DirectApprovalWorkflow.BuildWithTimedJob(timesOut: true))
                 .Add(DirectApprovalWorkflow.BuildWithTimedTakeover());
+            var releaseFile = configuration["Elsa:CorePreview:TimedJobReleaseFile"];
+            if (!string.IsNullOrWhiteSpace(releaseFile))
+            {
+                if (!Path.IsPathFullyQualified(releaseFile))
+                    throw new InvalidOperationException("The Core Preview job release file requires an absolute path.");
+                workflows.Add(DirectApprovalWorkflow.BuildWithTimedTakeover(releaseFile));
+            }
+        }
         var model = new NativeExecutionModel(workflows);
         var actor = new WorkflowActor([model]);
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";

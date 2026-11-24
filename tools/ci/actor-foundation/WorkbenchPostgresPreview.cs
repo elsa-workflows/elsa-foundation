@@ -31,22 +31,28 @@ internal static class WorkbenchPostgresPreview
     private sealed record ActiveJob(long Epoch, string Owner, string State, string Registry,
         string TicketId, long TicketSeq, string TicketPayload, string DeadlineId, long DeadlineSeq, string DeadlinePayload,
         long Deadline, long Now);
+    private sealed record JobEntry(string Actor, string EffectKey);
     private sealed record ReplayRows(string Checkpoint, string Messages, string Receipts);
 
     internal static async Task RunAsync(string[] arguments, string? executable = null)
     {
         if (arguments is not [var phase and ("birth" or "restart" or "disabled"), var receiptPath, .. var profileArguments] ||
-            profileArguments is not ([] or ["jobs" or "timed" or "timeout" or "takeover"]))
-            throw new ArgumentException("Expected birth, restart or disabled, a receipt file and optional jobs, timed, timeout or takeover profile.");
+            profileArguments is not ([] or ["jobs" or "timed" or "timeout" or "takeover" or "takeover-complete"]))
+            throw new ArgumentException("Expected birth, restart or disabled, a receipt file and optional jobs, timed, timeout, takeover or takeover-complete profile.");
         var profile = profileArguments.SingleOrDefault();
-        var takeover = profile == "takeover";
-        var timed = profile is "timed" or "timeout" or "takeover";
+        var completesTakeover = profile == "takeover-complete";
+        var takeover = profile == "takeover" || completesTakeover;
+        var timed = takeover || profile is "timed" or "timeout";
         var timesOut = profile is "timeout" or "takeover";
         var nativeJobs = profile is not null;
         var ticketScope = timed ? TimedJobScope : JobTicketScope;
 
         if ((phase == "disabled" || takeover) && executable is null)
             throw new ArgumentException("The disabled and takeover checks require a Workbench executable.");
+
+        var releaseFile = completesTakeover ? Path.GetFullPath(receiptPath + ".release") : null;
+        if (releaseFile is not null && File.Exists(releaseFile))
+            throw new ArgumentException("Use a fresh receipt and release file for the takeover-complete lane.");
 
         PrintVersion(typeof(DbContext).Assembly);
         PrintVersion(typeof(NpgsqlDbContextOptionsBuilderExtensions).Assembly);
@@ -68,7 +74,8 @@ internal static class WorkbenchPostgresPreview
         settings.Port = wire.LocalPort;
         if (phase == "disabled")
         {
-            using var disabled = WorkbenchProcess.Start(executable!, settings.ConnectionString, enabled: false, profile);
+            if (completesTakeover) await CheckEntryBeforeListeningAsync();
+            using var disabled = WorkbenchProcess.Start(executable!, settings.ConnectionString, enabled: false, profile, releaseFile);
             try
             {
                 await disabled.WaitReadyAsync(token);
@@ -115,7 +122,7 @@ internal static class WorkbenchPostgresPreview
         var store = new EfStore(Open, postgres: true);
         var ingress = await store.OpenPreviewRootIngressAsync(WorkflowActorType.ActorType, TimeSpan.FromHours(1), token);
         var reads = await store.OpenPreviewRootReadsAsync(64, token);
-        var definition = takeover ? DirectApprovalWorkflow.BuildWithTimedTakeover() :
+        var definition = takeover ? DirectApprovalWorkflow.BuildWithTimedTakeover(releaseFile) :
             timed ? DirectApprovalWorkflow.BuildWithTimedJob(timesOut) :
             nativeJobs ? DirectApprovalWorkflow.BuildWithJob() : DirectApprovalWorkflow.Build();
         var registry = new WorkflowRegistry().Add(definition);
@@ -140,7 +147,7 @@ internal static class WorkbenchPostgresPreview
         }
         var node = $"workbench-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
         using var host = executable is null ? CreateFixtureHost() : null;
-        var workbench = executable is null ? null : WorkbenchProcess.Start(executable, settings.ConnectionString, enabled: true, profile);
+        var workbench = executable is null ? null : WorkbenchProcess.Start(executable, settings.ConnectionString, enabled: true, profile, releaseFile);
         var ownerPid = workbench?.Id ?? Environment.ProcessId;
         var nodePrefix = workbench is null ? node : $"workbench-core-preview-{ownerPid}-";
         Receipt? receipt = null;
@@ -198,26 +205,50 @@ internal static class WorkbenchPostgresPreview
                     // This profile requires the real Workbench executable. The old process is the only owner until killed.
                     var former = workbench!;
                     workbench = null;
+                    JobEntry originalEntry;
                     using (former)
                     {
-                        Require(await former.WaitForJobEntryAsync(token) == actor.Id,
+                        originalEntry = await former.WaitForJobEntryAsync(token);
+                        Require(originalEntry.Actor == actor.Id && !string.IsNullOrWhiteSpace(originalEntry.EffectKey),
                             "the original Workbench entered the selected actor's timed job");
                         cut = await ReadActiveJob(actor) ?? throw new InvalidOperationException("The entered job has no preserved ticket and deadline.");
                         Require(cut.Owner == waiting.Owner && cut.Epoch == waiting.Epoch && cut.Deadline > cut.Now,
                             "revision three contains the active job on the original epoch with time left");
+                        using var ticket = JsonDocument.Parse(cut.TicketPayload);
+                        var argumentsJson = ticket.RootElement.GetProperty("Arguments").GetString()
+                            ?? throw new InvalidOperationException("The active job has no invocation arguments.");
+                        using var invocation = JsonDocument.Parse(argumentsJson);
+                        var nativeJson = invocation.RootElement.GetProperty("Arguments").GetString()
+                            ?? throw new InvalidOperationException("The workflow job has no Native arguments.");
+                        var job = JsonSerializer.Deserialize<BackgroundArgs>(nativeJson);
+                        Require(invocation.RootElement.GetProperty("Model").GetString() == NativeExecutionModel.ModelKey &&
+                            job is not null && job.Workflow == definition.Id && job.Node == DirectApprovalWorkflow.JobNode &&
+                            job.EffectKey == originalEntry.EffectKey &&
+                            job.Inputs[nameof(DirectApprovalWorkflow.WaitForTakeover.ReleaseFile)]?.GetValue<string>() == releaseFile,
+                            "the entered callback and release signal match the durable job recipe");
                         await former.CrashAsync(token);
                         var interrupted = await ReadActiveJob(actor);
                         Require(interrupted is not null && (interrupted with { Now = cut.Now }) == cut && interrupted.Now < cut.Deadline,
                             "abrupt exit leaves the original fence, checkpoint, ticket and deadline intact before timeout");
                     }
 
-                    workbench = WorkbenchProcess.Start(executable!, settings.ConnectionString, enabled: true, profile);
+                    workbench = WorkbenchProcess.Start(executable!, settings.ConnectionString, enabled: true, profile, releaseFile);
                     Require(workbench.Id != ownerPid, "a different Workbench process starts after the owner exits");
                     ownerPid = workbench.Id;
                     nodePrefix = $"workbench-core-preview-{ownerPid}-";
                     await workbench.WaitReadyAsync(token);
+                    if (releaseFile is not null)
+                    {
+                        Require(await workbench.WaitForJobEntryAsync(token) == originalEntry,
+                            "the replacement entered the same actor's recovered job with its original effect key");
+                        var resumed = await ReadActiveJob(actor);
+                        Require(resumed is not null && resumed.Epoch > cut.Epoch && resumed.Owner.StartsWith(nodePrefix, StringComparison.Ordinal) &&
+                            (resumed with { Epoch = cut.Epoch, Owner = cut.Owner, Now = cut.Now }) == cut && resumed.Now < cut.Deadline,
+                            "the higher-epoch callback uses the original checkpoint, ticket and deadline before release");
+                        using var release = new FileStream(releaseFile, FileMode.CreateNew, FileAccess.Write);
+                    }
                 }
-                var chained = timed && !timesOut;
+                var chained = profile == "timed";
                 var finalRevision = chained ? 7L : timed ? 5L : nativeJobs ? 4L : 3L;
                 var completion = await WaitFor(actor, finalRevision);
                 if (cut is not null)
@@ -279,7 +310,9 @@ internal static class WorkbenchPostgresPreview
                             SELECT count(*) = {jobCount} AND count(DISTINCT w."Generation") = {jobCount} AND bool_and(
                                 w."Generation" >= 0 AND w."Generation" < {jobCount} AND w."Due" = 0
                                 AND c."Revision" = 4 + 2 * w."Generation" AND c."Status" = 0
-                                AND c."Epoch" = {completion.Epoch} AND c."At" >= {cut?.Deadline ?? 0}
+                                AND c."Epoch" = {completion.Epoch} AND CASE WHEN {completesTakeover}
+                                    THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint < {cut?.Deadline ?? 0}
+                                    ELSE c."At" >= {cut?.Deadline ?? 0} END
                                 AND (w."Payload"::jsonb ->> 'Error') IS NOT DISTINCT FROM {error}
                                 AND CASE WHEN {timesOut} THEN (w."Payload"::jsonb ->> 'Result') IS NULL
                                     ELSE ((w."Payload"::jsonb ->> 'Result')::jsonb ->> 'Result') IS NOT DISTINCT FROM {DirectApprovalWorkflow.JobResult}
@@ -290,6 +323,7 @@ internal static class WorkbenchPostgresPreview
                             WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id} AND w."Kind" = 'job-finished'
                             """).SingleAsync(token);
                         Require(result, cut is null ? "each timed generation recorded the expected result in its own running checkpoint"
+                            : completesTakeover ? "only the replacement recorded successful completion before the original database deadline"
                             : "only the new owner recorded a timeout at or after the original database deadline");
                         if (cut is not null)
                         {
@@ -439,14 +473,46 @@ internal static class WorkbenchPostgresPreview
         }
     }
 
+    private static async Task CheckEntryBeforeListeningAsync()
+    {
+        var output = new WorkbenchOutput();
+        using var lines = new StringReader($"{DirectApprovalWorkflow.ActiveJobEntry}test-actor test-effect\ninfo: Now listening on: http://127.0.0.1:32100\n");
+        await output.ReadAsync(lines);
+        Require(output.Entry.Task.IsCompletedSuccessfully && output.Entry.Task.Result == new JobEntry("test-actor", "test-effect") &&
+            output.Listening.Task.IsCompletedSuccessfully && output.Listening.Task.Result == "http://127.0.0.1:32100",
+            "the Workbench output reader retains a callback entry before the listening banner");
+    }
+
+    private sealed class WorkbenchOutput
+    {
+        internal readonly TaskCompletionSource<JobEntry> Entry = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource<string> Listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal async Task ReadAsync(TextReader reader)
+        {
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                if (line.StartsWith(DirectApprovalWorkflow.ActiveJobEntry, StringComparison.Ordinal) &&
+                    line[DirectApprovalWorkflow.ActiveJobEntry.Length..].Split(' ', 2) is [var actor, var key])
+                    Entry.TrySetResult(new(actor, key));
+                const string listening = "Now listening on: ";
+                var offset = line.IndexOf(listening, StringComparison.Ordinal);
+                if (offset >= 0)
+                    Listening.TrySetResult(line[(offset + listening.Length)..]);
+            }
+        }
+    }
+
     private sealed class WorkbenchProcess(Process process, DirectoryInfo workspace, Task<string> log) : IDisposable
     {
-        private readonly TaskCompletionSource<string> jobEntry = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly WorkbenchOutput output = new();
+        private Task? stdout;
 
         internal int Id => process.Id;
-        internal Task<string> WaitForJobEntryAsync(CancellationToken token) => jobEntry.Task.WaitAsync(token);
+        internal Task<JobEntry> WaitForJobEntryAsync(CancellationToken token) =>
+            WaitForOutputAsync(output.Entry.Task, "entering the timed job", token);
 
-        internal static WorkbenchProcess Start(string executable, string connection, bool enabled, string? profile)
+        internal static WorkbenchProcess Start(string executable, string connection, bool enabled, string? profile, string? releaseFile)
         {
             var binary = Path.GetFullPath(executable);
             var workspace = Directory.CreateTempSubdirectory("elsa-workbench-core-preview-");
@@ -478,8 +544,10 @@ internal static class WorkbenchPostgresPreview
                 start.Environment["Elsa__CorePreview__Enabled"] = "true";
             if (profile == "jobs")
                 start.Environment["Elsa__CorePreview__NativeJobs"] = "true";
-            if (profile is "timed" or "timeout" or "takeover")
+            if (profile is "timed" or "timeout" or "takeover" or "takeover-complete")
                 start.Environment["Elsa__CorePreview__TimedNativeJobs"] = "true";
+            if (releaseFile is not null)
+                start.Environment["Elsa__CorePreview__TimedJobReleaseFile"] = releaseFile;
             start.Environment["ConnectionStrings__KernelCorePreview"] = connection;
             var process = Process.Start(start) ?? throw new InvalidOperationException("Workbench did not start.");
             return new WorkbenchProcess(process, workspace, process.StandardError.ReadToEndAsync());
@@ -487,28 +555,20 @@ internal static class WorkbenchPostgresPreview
 
         internal async Task WaitReadyAsync(CancellationToken token)
         {
-            while (await process.StandardOutput.ReadLineAsync(token) is { } line)
-            {
-                // Kestrel emits this after hosted services have finished starting.
-                const string listening = "Now listening on: ";
-                var offset = line.IndexOf(listening, StringComparison.Ordinal);
-                if (offset < 0)
-                    continue;
-
-                _ = ReadRuntimeOutputAsync();
-                using var client = new HttpClient();
-                using var response = await client.GetAsync(line[(offset + listening.Length)..], token);
-                Require(response.IsSuccessStatusCode, "the normal Workbench root responds");
-                return;
-            }
-            throw new InvalidOperationException($"Workbench exited before listening. {await log.WaitAsync(token)}");
+            // Kestrel emits this after hosted services have finished starting. The owner can enter a recovered job first.
+            var address = await WaitForOutputAsync(output.Listening.Task, "listening", token);
+            using var client = new HttpClient();
+            using var response = await client.GetAsync(address, token);
+            Require(response.IsSuccessStatusCode, "the normal Workbench root responds");
         }
 
-        private async Task ReadRuntimeOutputAsync()
+        private async Task<T> WaitForOutputAsync<T>(Task<T> signal, string expected, CancellationToken token)
         {
-            while (await process.StandardOutput.ReadLineAsync() is { } line)
-                if (line.StartsWith(DirectApprovalWorkflow.ActiveJobEntry, StringComparison.Ordinal))
-                    jobEntry.TrySetResult(line[DirectApprovalWorkflow.ActiveJobEntry.Length..]);
+            var read = stdout ??= output.ReadAsync(process.StandardOutput);
+            await Task.WhenAny(signal, read).WaitAsync(token);
+            if (signal.IsCompletedSuccessfully) return signal.Result;
+            await read;
+            throw new InvalidOperationException($"Workbench exited before {expected}. {await log.WaitAsync(token)}");
         }
 
         internal async Task CrashAsync(CancellationToken token)
@@ -516,6 +576,7 @@ internal static class WorkbenchPostgresPreview
             Require(!process.HasExited, "the entered Workbench process is still running before abrupt exit");
             process.Kill();
             await process.WaitForExitAsync(token);
+            if (stdout is not null) await stdout.WaitAsync(token);
             Require(process.ExitCode != 0, "the entered owner exited abruptly");
         }
 
@@ -529,6 +590,7 @@ internal static class WorkbenchPostgresPreview
             }
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             await process.WaitForExitAsync(deadline.Token);
+            if (stdout is not null) await stdout.WaitAsync(deadline.Token);
             Require(process.ExitCode == 0, $"Workbench exited cleanly (exit {process.ExitCode})");
         }
 
@@ -589,7 +651,7 @@ internal static class WorkbenchPostgresPreview
 
     private static KernelDb OpenProfile(DbContextOptions<KernelDb> options, string? profile) => profile switch
     {
-        "timed" or "timeout" or "takeover" => PostgresPreviewHosting.CreateTimedNativeJobContext(options),
+        "timed" or "timeout" or "takeover" or "takeover-complete" => PostgresPreviewHosting.CreateTimedNativeJobContext(options),
         "jobs" => PostgresPreviewHosting.CreateNativeJobContext(options),
         _ => new(options)
     };

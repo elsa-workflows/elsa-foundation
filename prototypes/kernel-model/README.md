@@ -315,7 +315,7 @@ bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release
 
 The receipt builds the normal Workbench executable and uses disposable PostgreSQL 17 databases and
 ephemeral loopback ports. It exercises the ordinary, untimed job, timed completion, deadline and
-active-job takeover cases. Disabled Workbench opens no preview connection, and each enabled lane refuses to start
+both active-job takeover outcomes. Disabled Workbench opens no preview connection, and each enabled lane refuses to start
 an owner with a different format. The first process saves an approval wait and stops. A different
 process takes the same actor at a higher epoch. Replaying the first approval leaves checkpoint bytes
 and the journal unchanged. A new approval advances the workflow. In the timed profile the approval
@@ -345,18 +345,24 @@ job of its type per generated root. The timed host uses message protocol 18. The
 timed qualification keeps its own protocol 9. Provision a dedicated database for each format. Workbench
 checks the installed format before registering an owner. Run one Workbench process at a time against
 the preview database. Existing workflow and Studio endpoints still use their current runtime.
-The first restart in each lane stops while the approval wait is open. Run the active-job takeover on its own:
+The first restart in each lane stops while the approval wait is open. Run either active-job takeover lane on its own:
 
 ```bash
 PG_PREVIEW_PROFILE=takeover bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release
+PG_PREVIEW_PROFILE=takeover-complete bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release
 ```
 
-This lane starts `direct-approval-with-timed-takeover` and exits the second Workbench process after its
-timed callback enters, with the ticket and deadline still present. A third process takes the partition
-at a higher epoch and records one timeout using the unchanged deadline. The Native workflow catches
-it and finishes. Replay of the job-starting approval leaves the final checkpoint and journal unchanged.
-This covers abrupt exit and the deadline outcome. Graceful shutdown with an active job and Park recovery
-retain their separate qualification.
+Both lanes exit the second Workbench process after its timed callback enters. A third process takes the
+partition at a higher epoch and consumes the original ticket and deadline. `takeover` records one timeout
+using the original deadline. `takeover-complete` waits until the replacement callback enters with the same
+effect key, then creates a release file. The replacement records one success before the original deadline.
+Replay of the job-starting approval leaves the final checkpoint, journal, inbox and receipts unchanged.
+
+The launcher creates a dedicated temporary location for the release file. To run that completion workflow
+manually in the timed preview, set `Elsa__CorePreview__TimedJobReleaseFile` to the same absolute path on
+both hosts, use `direct-approval-with-timed-takeover-completion` and create the file only after the replacement
+enters the callback. Use one job in this demo. Graceful shutdown with an active job and Park recovery retain
+their separate qualification.
 
 ### Standalone CLI
 
