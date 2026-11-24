@@ -18,7 +18,7 @@ namespace Elsa.Workbench.Qualification;
 
 internal static class WorkbenchPostgresPreview
 {
-    private sealed record Receipt(string Actor, string Bookmark, string Frame, string StateHash, long Epoch, int Process);
+    private sealed record Receipt(string Actor, string Bookmark, string Frame, string StateHash, string JournalHash, long Epoch, int Process);
     private sealed record Checkpoint(long Revision, string State, long Epoch, string? Owner);
 
     internal static async Task RunAsync(string[] arguments)
@@ -39,6 +39,7 @@ internal static class WorkbenchPostgresPreview
             settings.SslMode != SslMode.Disable || settings.GssEncryptionMode != GssEncryptionMode.Disable)
             throw new ArgumentException("Use an explicit plaintext loopback PostgreSQL database and port for the wire meter.");
 
+        var scope = EmbeddedTenant.Bind("workbench-preview");
         var observationOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings.ConnectionString).Options;
         KernelDb OpenObservation() => new(observationOptions);
         if (phase == "birth")
@@ -50,12 +51,22 @@ internal static class WorkbenchPostgresPreview
             await setup.InstallPreviewRootSchemaAsync(token);
         }
 
+        Receipt? previous = null;
+        if (phase == "restart")
+        {
+            previous = JsonSerializer.Deserialize<Receipt>(await File.ReadAllTextAsync(receiptPath, token))
+                ?? throw new InvalidOperationException("A birth receipt is required.");
+            var checkpoint = await Read(new(previous.Actor));
+            Require(checkpoint is { Revision: 2, Owner: null } && checkpoint.Epoch == previous.Epoch &&
+                previous.Process != Environment.ProcessId && StateHash(checkpoint.State) == previous.StateHash,
+                "the receipt matches the stopped waiting actor before owner startup");
+        }
+
         var wire = Wire.Start("postgres", $"Host={settings.Host};Port={settings.Port}");
         settings.Port = wire.LocalPort;
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings.ConnectionString).Options;
         KernelDb Open() => new(options);
         var store = new EfStore(Open, postgres: true);
-        var scope = EmbeddedTenant.Bind("workbench-preview");
         var ingress = await store.OpenPreviewRootIngressAsync(WorkflowActorType.ActorType, TimeSpan.FromHours(1), token);
         var reads = await store.OpenPreviewRootReadsAsync(64, token);
         var definition = DirectApprovalWorkflow.Build();
@@ -68,14 +79,16 @@ internal static class WorkbenchPostgresPreview
         using var host = builder.Build();
         await host.StartAsync(token);
         Receipt? receipt = null;
+        Contract.ActorRef actor;
+        Checkpoint last;
         try
         {
-            if (phase == "birth")
+            if (previous is null)
             {
                 var runtime = new WorkflowRuntime(ingress, reads);
                 var start = await runtime.StartAsync(scope, "approval-start", NativeExecutionModel.Start(definition.Id), cancellationToken: token);
                 Require(start is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: not null }, "public start admitted the Native workflow");
-                var actor = start.Actor!.Value;
+                actor = start.Actor!.Value;
                 await WaitFor(actor, 1);
                 var initial = await reads.TailAsync(scope, actor, cancellationToken: token);
                 var frame = initial.Items.Select(Entry).Single(entry => entry.StartsWith(DirectApprovalWorkflow.WaitEntry, StringComparison.Ordinal))
@@ -87,13 +100,12 @@ internal static class WorkbenchPostgresPreview
                 var journal = await reads.TailAsync(scope, actor, cancellationToken: token);
                 Require(journal.Next is not null && journal.Items.Count(entry => Entry(entry) == "approved:approval-1" && entry.Revision == 2) == 1,
                     "the public journal records the first approval once");
-                receipt = new(actor.Id, journal.Next!.Value.Value, frame, StateHash(waiting.State), waiting.Epoch, Environment.ProcessId);
+                receipt = new(actor.Id, journal.Next!.Value.Value, frame, StateHash(waiting.State), JournalHash(journal), waiting.Epoch, Environment.ProcessId);
+                last = waiting;
             }
             else
             {
-                var previous = JsonSerializer.Deserialize<Receipt>(await File.ReadAllTextAsync(receiptPath, token))
-                    ?? throw new InvalidOperationException("A birth receipt is required.");
-                var actor = new Contract.ActorRef(previous.Actor);
+                actor = new(previous.Actor);
                 var bookmark = new Contract.PageToken(previous.Bookmark);
                 var waiting = await WaitFor(actor, 2);
                 Require(waiting.Epoch > previous.Epoch && Environment.ProcessId != previous.Process && StateHash(waiting.State) == previous.StateHash,
@@ -103,9 +115,10 @@ internal static class WorkbenchPostgresPreview
                 Require(await Approve(actor, "approval-1", "changed", previous.Frame) == Contract.AdmissionOutcome.Duplicate,
                     "replaying the first approval returns Duplicate");
                 var unchanged = await Read(actor);
-                Require(unchanged is not null && unchanged.Revision == 2 && unchanged.State == waiting.State &&
+                var history = await reads.TailAsync(scope, actor, cancellationToken: token);
+                Require(unchanged == waiting && JournalHash(history) == previous.JournalHash &&
                     (await reads.TailAsync(scope, actor, bookmark, token)).Items.Count == 0,
-                    "the replay leaves checkpoint bytes and journal unchanged");
+                    "the replay leaves checkpoint bytes and the full journal unchanged");
                 Require(await Approve(actor, "approval-2", "Grace", previous.Frame) == Contract.AdmissionOutcome.Accepted,
                     "a new approval was admitted");
                 var completion = await WaitFor(actor, 3);
@@ -115,6 +128,7 @@ internal static class WorkbenchPostgresPreview
                 var suffix = await reads.TailAsync(scope, actor, bookmark, token);
                 Require(suffix.Items.Count(entry => Entry(entry) == "approved:approval-2") == 1 && suffix.Items.All(entry => entry.Revision == 3),
                     "the saved bookmark returns the one resumed approval at revision three");
+                last = completion;
             }
         }
         finally
@@ -123,9 +137,11 @@ internal static class WorkbenchPostgresPreview
             await host.StopAsync(shutdown.Token);
         }
 
+        Require(await Read(actor) == (last with { Owner = null }),
+            "StopAsync clears the partition owner at the same epoch before host disposal");
         if (receipt is not null)
             await File.WriteAllTextAsync(receiptPath, JsonSerializer.Serialize(receipt), token);
-        Require(wire.Trips > 0 && wire.Connections > 0, "the meter observed the preview provider connections");
+        Require(wire.Trips > 0 && wire.Connections > 0 && wire.ProtocolRequests > 0, "the meter observed the preview provider traffic");
         Console.WriteLine($"wire {phase} {wire.Trips} round trips, {wire.ProtocolRequests} protocol groups, {wire.Connections} connections");
         Console.WriteLine($"ok Workbench process {Environment.ProcessId} {phase} stopped");
 
@@ -172,6 +188,9 @@ internal static class WorkbenchPostgresPreview
         Require(checkpoint.State.StartsWith(prefix, StringComparison.Ordinal), "the state uses the ordinary preview framing");
         return JsonSerializer.Deserialize<NativeState>(checkpoint.State[prefix.Length..])!;
     }
+
+    private static string JournalHash(Contract.Page<Contract.JournalEntry> page) =>
+        StateHash(JsonSerializer.Serialize(page.Items));
 
     private static string StateHash(string state) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(state)));
 
