@@ -33,6 +33,7 @@ internal static class PostgresRootTerminateChecks
             { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var stop = timeout.Token;
+        await using var contenders = new AdmissionSchedule(stop);
         await using (var db = Open())
             Check(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the qualification uses an empty PostgreSQL database");
         var cold = Store();
@@ -194,8 +195,8 @@ internal static class PostgresRootTerminateChecks
 
             latePause = new CommandPause("""SELECT "Status" AS "Value" FROM "Instances" """.TrimEnd());
             var delayed = await SelectedRuntime(connection, latePause);
-            lateReceipt = delayed.TerminateAsync(tenant, operation, selected, cancellationToken: stop).AsTask();
-            await latePause.Reached.Task.WaitAsync(stop);
+            lateReceipt = contenders.Start(token => delayed.TerminateAsync(tenant, operation, selected, cancellationToken: token));
+            await latePause.WaitUntilPausedAsync(lateReceipt, stop);
 
             await using var db = Open();
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA operator_parallel", stop);
@@ -207,14 +208,14 @@ internal static class PostgresRootTerminateChecks
             };
             var firstPause = new CommandPause("""INSERT INTO "Messages" """.TrimEnd());
             var first = await SelectedRuntime(secondaryRoute.ConnectionString, firstPause);
-            var original = first.TerminateAsync(tenant, operation, selected, cancellationToken: stop).AsTask();
-            await firstPause.Reached.Task.WaitAsync(stop);
+            var original = contenders.Start(token => first.TerminateAsync(tenant, operation, selected, cancellationToken: token));
+            await firstPause.WaitUntilPausedAsync(original, stop);
 
             var otherPause = new CommandPause("""INSERT INTO "FoundationOperatorReceipts" """.TrimEnd());
             var competingRuntime = await SelectedRuntime(connection, otherPause);
             authorized = other;
-            var competingOperation = competingRuntime.TerminateAsync(tenant, operation, competing!, cancellationToken: stop).AsTask();
-            await otherPause.Reached.Task.WaitAsync(stop);
+            var competingOperation = contenders.Start(token => competingRuntime.TerminateAsync(tenant, operation, competing!, cancellationToken: token));
+            await otherPause.WaitUntilPausedAsync(competingOperation, stop);
 
             await db.Database.ExecuteSqlRawAsync("""
                 CREATE TABLE operator_parallel."Messages" (LIKE "Messages" INCLUDING ALL)
@@ -470,6 +471,27 @@ internal static class PostgresRootTerminateChecks
                     INSERT INTO selection_shadow."FoundationRootIssuer" SELECT true, decode(repeat('23', 32), 'hex'), 1;
                     """, stop);
             await RequireUnavailable(async () => { _ = await shadow.OpenPreviewRootReadsAsync(cancellationToken: stop); });
+
+            await using var formatDb = Open();
+            await formatDb.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationOperatorReceipts" RENAME TO "HiddenOperatorReceipts" """, stop);
+            try
+            {
+                await RequireUnavailable(async () => { _ = await Control(tenant, operation, Contract.Kinds.Terminate); });
+            }
+            finally
+            {
+                await formatDb.Database.ExecuteSqlRawAsync("""ALTER TABLE "HiddenOperatorReceipts" RENAME TO "FoundationOperatorReceipts" """, stop);
+            }
+
+            await formatDb.Database.ExecuteSqlRawAsync("""ALTER TABLE "KernelStoreVersions" RENAME TO "HiddenStoreVersions" """, stop);
+            try
+            {
+                await RequireUnavailable(async () => { _ = await Control(tenant, operation, Contract.Kinds.Terminate); });
+            }
+            finally
+            {
+                await formatDb.Database.ExecuteSqlRawAsync("""ALTER TABLE "HiddenStoreVersions" RENAME TO "KernelStoreVersions" """, stop);
+            }
         }
 
         async Task RequireWriterRefusal(Contract.ActorRef reference)
@@ -634,11 +656,42 @@ internal static class PostgresRootTerminateChecks
         }
     }
 
+    private sealed class AdmissionSchedule(CancellationToken stop) : IAsyncDisposable
+    {
+        private readonly CancellationTokenSource _cancellation = CancellationTokenSource.CreateLinkedTokenSource(stop);
+        private readonly List<Task<Contract.Admission>> _requests = [];
+
+        internal Task<Contract.Admission> Start(Func<CancellationToken, ValueTask<Contract.Admission>> request)
+        {
+            var task = request(_cancellation.Token).AsTask();
+            _requests.Add(task);
+            return task;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            using var cancellation = _cancellation;
+            await cancellation.CancelAsync();
+            try { await Task.WhenAll(_requests); }
+            catch (Exception) when (cancellation.IsCancellationRequested)
+            {
+                // The fixture awaits each successful branch. On failure, drain every branch before releasing the fixture.
+            }
+        }
+    }
+
     private sealed class CommandPause(string statement) : DbCommandInterceptor
     {
         private int _paused;
-        internal TaskCompletionSource Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private TaskCompletionSource Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal async Task WaitUntilPausedAsync(Task request, CancellationToken token)
+        {
+            if (await Task.WhenAny(Reached.Task, request).WaitAsync(token) == Reached.Task) return;
+            await request;
+            throw new InvalidOperationException("The request completed without reaching its expected pause.");
+        }
 
         public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken token = default) =>

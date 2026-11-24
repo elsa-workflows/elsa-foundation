@@ -45,7 +45,14 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal static async Task<FoundationReadCursor> OpenJournalCursorAsync(KernelDb db, CancellationToken cancellationToken)
     {
         await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
-        return await ReadJournalCursorAsync(db, cancellationToken);
+        try
+        {
+            return await ReadJournalCursorAsync(db, cancellationToken);
+        }
+        catch (PostgresException error) when (db.UsesRootTerminalSelection && IsUnavailableSelectedSchema(error))
+        {
+            throw new StoreFormatException("The selection issuer schema is unreadable.", error);
+        }
     }
 
     private static async Task<FoundationReadCursor> ReadJournalCursorAsync(KernelDb db, CancellationToken cancellationToken)

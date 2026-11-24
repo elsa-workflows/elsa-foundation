@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Kernel.EntityFramework;
 
@@ -43,9 +44,16 @@ internal sealed partial class PostgresRootAdmission
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
         if (selectedTermination)
         {
-            await PinSelectedOperatorSchemaAsync(db, token);
-            if (!PostgresRootSelection.MatchesRunning(await ReadJournalCursorAsync(db, token), runningSelection, tenant, reference))
-                return null;
+            try
+            {
+                await PinSelectedOperatorSchemaAsync(db, token);
+                if (!PostgresRootSelection.MatchesRunning(await ReadJournalCursorAsync(db, token), runningSelection, tenant, reference))
+                    return null;
+            }
+            catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
+            {
+                throw new StoreFormatException("The selected operator admission schema is unreadable.", error);
+            }
         }
         else
             await EfStore.RequireStoreVersionsAsync(db, token);
@@ -101,6 +109,10 @@ internal sealed partial class PostgresRootAdmission
         await tx.CommitAsync(token);
         return new(reference, false);
     }
+
+    private static bool IsUnavailableSelectedSchema(PostgresException error) =>
+        error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn
+            or PostgresErrorCodes.InvalidSchemaName or PostgresErrorCodes.WrongObjectType;
 
     private sealed record SelectedOperatorStore(int StoreSchema, int MessageProtocol, int JournalCodec, string Namespace);
 
