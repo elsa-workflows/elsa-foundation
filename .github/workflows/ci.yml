@@ -1923,13 +1923,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
       - name: Build
         run: |
-          for p in sim models/Native.Run models/Native.Recovery.Run models/Statecharts.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
+          for p in sim models/Native.Run models/Native.Recovery.Run models/Statecharts.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1976,7 +1976,7 @@ jobs:
       - name: Store conformance, in memory and EF on SQLite in both fence modes
         run: |
           dotnet conformance/Kernel.Store.Conformance.Run/$BIN/Kernel.Store.Conformance.Run.dll semantic
-          EFC="dotnet ef/Kernel.Ef.Conformance/$BIN/Kernel.Ef.Conformance.dll"
+          EFC="dotnet ../../essentials/tests/ActorFoundation/Store/EntityFramework/$BIN/Kernel.Ef.Conformance.dll"
           $EFC sqlite --checked-fence semantic
           $EFC sqlite --fence-in-batch semantic
 
@@ -2203,13 +2203,13 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
       - name: Build provider runners
         id: build
         run: |
-          for project in ef/Kernel.Ef.Conformance ef/Kernel.Ef.Run; do
+          for project in ../../essentials/tests/ActorFoundation/Store/EntityFramework ef/Kernel.Ef.Run; do
             dotnet restore "$project" --locked-mode
             dotnet build "$project" -c Release --no-restore
           done
@@ -2222,7 +2222,7 @@ jobs:
           failed=0
           for writer in ef owned; do
             for fence in checked-fence fence-in-batch; do
-              dotnet "ef/Kernel.Ef.Conformance/$BIN/Kernel.Ef.Conformance.dll" mysql "$server" "--$writer-commit" "--$fence" semantic || failed=1
+              dotnet "../../essentials/tests/ActorFoundation/Store/EntityFramework/$BIN/Kernel.Ef.Conformance.dll" mysql "$server" "--$writer-commit" "--$fence" semantic || failed=1
             done
           done
           exit "$failed"
