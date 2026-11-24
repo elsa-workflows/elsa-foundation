@@ -40,5 +40,12 @@ if (args.Contains("--migration-plan-reads"))
     catch (InvalidOperationException error) { Console.Error.WriteLine(error.Message); return 1; }
 }
 
-Console.Error.WriteLine("Choose --native-migration-validation, --native-migration-apply, --migration-plan-actor, --migration-plan-dispatch, --migration-plan-reads, or --migration-plan-runner.");
+if (args.Contains("--retention-pass-check"))
+{
+    var failed = false;
+    await RetentionPassChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+
+Console.Error.WriteLine("Choose --native-migration-validation, --native-migration-apply, --migration-plan-actor, --migration-plan-dispatch, --migration-plan-reads, --migration-plan-runner, or --retention-pass-check.");
 return 2;

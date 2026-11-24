@@ -1782,7 +1782,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/Workflows/Runtime/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/Workflows/Runtime/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Migration/Run/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
@@ -1790,7 +1790,7 @@ jobs:
       # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
       - name: Build
         run: |
-          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Native/Migration/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1803,6 +1803,7 @@ jobs:
           $SIM --seeds 10000
           $SIM --native --seeds 10000
           $SIM --lease-check
+          dotnet ../../essentials/tests/Workflows/Runtime/Native/Migration/Run/$BIN/Elsa.Workflows.Runtime.Native.Migration.Run.dll --retention-pass-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
           $SIM --placement-check
@@ -1923,13 +1924,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Recovery/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Native/Migration/Run/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
       - name: Build
         run: |
-          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ../../essentials/tests/Workflows/Runtime/Native/Recovery/Run ../../essentials/tests/Workflows/Runtime/Native/Migration/Run ../../essentials/tests/Workflows/Runtime/Statecharts/Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1955,6 +1956,7 @@ jobs:
           code=0; out=$($SIM --job-trial-check --flaw NoResetAfterFailedCommit 2>&1) || code=$?
           if [ "$code" -ne 1 ] || ! grep -Fq "the job did not retry with a fresh physical attempt" <<<"$out"; then printf 'Unexpected job-trial control (exit %s): %s\n' "$code" "$out"; exit 1; fi
           $SIM --lease-check
+          dotnet ../../essentials/tests/Workflows/Runtime/Native/Migration/Run/$BIN/Elsa.Workflows.Runtime.Native.Migration.Run.dll --retention-pass-check
           $SIM --landed-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
           $SIM --placement-check

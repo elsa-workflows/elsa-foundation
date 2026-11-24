@@ -2,7 +2,7 @@ using Kernel.Foundation.InMemory;
 using Kernel.WorkflowActor;
 using Contract = Kernel.Foundation.Contracts;
 
-namespace Kernel.Sim;
+namespace Elsa.Workflows.Runtime.Native.Migration;
 
 internal static class RetentionPassChecks
 {
@@ -14,12 +14,13 @@ internal static class RetentionPassChecks
         var extended = TimeSpan.FromMilliseconds(10);
         var blue = ContractScopes.Bind("retention-blue");
         var red = ContractScopes.Bind("retention-red");
-        var store = new InMemoryStore(1, () => now) { IngressDeduplicationWindow = TimeSpan.FromMilliseconds(100) };
+        var store = InMemoryActorFixture.CreateWithDeduplicationWindow(() => now, TimeSpan.FromMilliseconds(100));
         var actorType = new Probe();
-        var ingress = new InMemoryIngress(store, new Requests("retention-pass"), "retention-pass");
-        Contract.IActorReads reads = new ActorList(store, pageSize);
-        var retention = new RetentionPass(reads, actorType.Type, Window, ingress.AdmitRetentionDeleteAsync);
-        var owner = new Worker("retention-pass-owner", 0, store, new ActorAdapter(store, actorType, retentionWindow: Window),
+        var fixture = new InMemoryActorFixture(store, "retention-pass", pageSize);
+        var ingress = fixture.Ingress;
+        var reads = fixture.Reads;
+        var retention = new RetentionPass(reads, actorType.Type, Window, fixture.AdmitRetentionDeleteAsync);
+        var owner = new Worker("retention-pass-owner", 0, store, fixture.Bind(actorType, Window),
             new WorkerOptions { Monotonic = () => now - endedAt });
         await using var active = await new DurableHost([owner]).ActivateAsync(0)
             ?? throw new InvalidOperationException("Expected a live retention fixture owner.");
@@ -90,7 +91,7 @@ internal static class RetentionPassChecks
         using var interrupt = new CancellationTokenSource();
         var interrupting = new RetentionPass(reads, actorType.Type, Window, async (scope, actor, selection, token) =>
         {
-            var receipt = await ingress.AdmitRetentionDeleteAsync(scope, actor, selection, token);
+            var receipt = await fixture.AdmitRetentionDeleteAsync(scope, actor, selection, token);
             interrupt.Cancel();
             return receipt;
         });
@@ -195,16 +196,8 @@ internal static class RetentionPassChecks
             }
         }
 
-        IEnumerable<(string Tenant, Contract.ActorRef Actor, string Id)> Pending() => store.Messages.Values
-            .Where(row => !row.Done && row.Message.Operator?.RetentionDelete == true)
-            .Select(row => (row.Tenant!, new Contract.ActorRef(store.FoundationIdentity(row.Message.Target.Id, row.Message.TargetCreation!.Value).Reference),
-                row.Message.Id));
-
-        int Markers(Contract.ActorRef reference, Contract.BoundScope scope)
-        {
-            var id = store.FoundationTarget(scope.Tenant, reference.Id)?.Id;
-            return store.Journal.Values.Count(row => row.Instance == id && row.Revision == -1);
-        }
+        IEnumerable<(string Tenant, Contract.ActorRef Actor, string Id)> Pending() => fixture.PendingRetentionDeletes();
+        int Markers(Contract.ActorRef reference, Contract.BoundScope scope) => fixture.CountRetirementMarkers(scope, reference);
     }
 
     private sealed class Probe : Contract.IActorType

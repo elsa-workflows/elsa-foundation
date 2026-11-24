@@ -259,9 +259,8 @@ if (args.Contains("--workflow-run-history-check"))
 }
 if (args.Contains("--retention-pass-check"))
 {
-    var failed = false;
-    await RetentionPassChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
-    return failed ? 1 : 0;
+    Console.Error.WriteLine("Run this check with essentials/tests/Workflows/Runtime/Native/Migration/Run.");
+    return 2;
 }
 if (args.Contains("--retention-delete-check"))
 {
