@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "066e86ed7f221dc6165174f4e2973283d8206ad5",
+  "last_publish_commit": "2edf80f6a7f7072d95fd3622d313ba9f9a2ee5f5",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -1229,8 +1229,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.WorkflowActor",
-      "version": "4.0.0-preview",
-      "commit": "066e86ed7f221dc6165174f4e2973283d8206ad5"
+      "version": "4.0.1-preview",
+      "commit": "2edf80f6a7f7072d95fd3622d313ba9f9a2ee5f5"
     },
     {
       "package_id": "Elsa3.Activities.Design.Import",
