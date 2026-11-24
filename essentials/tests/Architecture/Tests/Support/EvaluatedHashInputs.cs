@@ -23,7 +23,9 @@ internal sealed class EvaluatedHashInputs(string configuration)
         var result = Path.Join(Path.GetTempPath(), "elsa-s9-msbuild-" + Guid.NewGuid().ToString("N") + ".json");
         try
         {
-            var common = new[] { "msbuild", project, "-nologo", "-verbosity:quiet", "-property:Configuration=" + configuration };
+            // No node reuse: a lingering worker node inherits the redirected stdout/stderr pipes, so the
+            // reads never end even though dotnet exited (observed on Windows as an unbounded hang).
+            var common = new[] { "msbuild", project, "-nologo", "-verbosity:quiet", "-nodeReuse:false", "-property:Configuration=" + configuration };
             // Resolve through PATH so an installed build-slot wrapper remains in force. The shared
             // helper clears inherited testhost MSBuild variables and bounds/cleans up the process.
             var startDirectory = Path.GetDirectoryName(project)!;
