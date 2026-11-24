@@ -47,7 +47,7 @@ suite is blocked only when the join is what stops it on Elsa 4.
 - The setup suite misses two definitions (above). That case is excluded from acceptance (spec Q13): the two
   definitions and `performance/baseline-dispatch-tests.json` are copied but neither run nor bucketed.
 - `storage-drivers-variables-root-workflow.json` is version 2 (all others are 1). The Elsa 3 import numbers it 1 and
-  `storage-drivers/variables` expects 1; Elsa 4 keeps 2, so the expected version is engine-specific.
+  `storage-drivers/variables` expects 1; Elsa 4 keeps 2. It is patched to version 1 in the copy (spec Q14).
 - `performance/big-data-tests.json` asserts on counts inside a 6 MB value; Elsa 4 captures it only as a bounded
   snapshot, so the suite is expected to be `blocked: value capture` (spec FR-024).
 - The `events` suite and three `performance` suites call the Elsa 3 API directly instead of through a template and

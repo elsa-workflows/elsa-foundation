@@ -104,7 +104,7 @@ extensions/Elsa3/tests/JTest/
 ├── templates-elsa4/                   # same names, parameters and outputs
 ├── test-files/                        # corpus
 ├── tests/                             # corpus: 42 suites
-├── workflow-definitions/              # corpus: 36 originals, never edited
+├── workflow-definitions/              # corpus: 36 originals; only the approved version patch (spec Q14)
 ├── adjusted/                          # approved adjusted copies
 └── ledger/
     ├── suites.md

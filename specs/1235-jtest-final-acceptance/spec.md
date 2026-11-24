@@ -222,7 +222,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
 
 ### Key Entities
 
-- **Corpus copy**: the unchanged original at its source commit plus the reviewed diffs on top of it.
+- **Corpus copy**: the unchanged original at its source commit plus the reviewed diffs on top of it (including the
+  approved version patch of Q14).
 - **Suite**: one JTest file, its definitions, its result per engine, and any blocked mark with its reason.
 - **Template set**: the Elsa 3 or Elsa 4 implementation of the same named templates.
 - **Definition disposition**: the bucket, the adjusted copy or refusal, and the suites it affects.
@@ -234,6 +235,7 @@ blocks it, and J-001 through J-005 are open in the tasks.
 |---|---|---|
 | Q1 | Which material is the complete corpus? | The JTest-Nexxbiz repository at `b1cde13`. 36 definitions and 42 suites. |
 | Q13 | What about the baseline-dispatch performance case, whose definitions the setup suite never imports? | Excluded from acceptance: `performance-baseline-dispatch.json` and `performance-baseline-dispatch-sub.json` and their only suite, `performance/baseline-dispatch-tests.json`, are copied with the corpus but neither run nor bucketed. The acceptance set is 34 definitions and 41 suites. |
+| Q14 | The storage-drivers root definition says version 2, the Elsa 3 import numbers it 1 and its suite expects 1, while Elsa 4 keeps 2. How is that settled? | The definition is patched to version 1 in the corpus copy. Elsa 3 ignores the file's version on import, so its behaviour is unchanged, and Elsa 4 then publishes `1.0.0`, which the suite expects. It is the one approved edit to an original definition; any other edit to an original needs the same coordinator approval and must leave Elsa 3 behaviour unchanged. |
 | Q2 | Where does the suite live? | In the Elsa 3 converter test area, because the flow is reconcile-then-run. A broader Elsa 4-native workflow-regression suite is a later, separate piece of work. |
 | Q3 | Can the corpus be committed? | Yes, unchanged; it carries no secrets. |
 | Q4 | What is the Elsa 3 baseline? | The suite assertions, made green on an Elsa server built from elsa-core tag `3.6.3` (the pinned baseline version). No paired dual-host runs. |

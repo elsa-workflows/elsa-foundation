@@ -89,7 +89,8 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   corpus definitions use that no suite covers in the *Notes* section of `JTest/ledger/baseline-failures.md`.
 - [ ] T016 [US1] **Approval gate**: post the classified list on the PR and get the coordinator's approval of the whole
   list; record the approval link in `JTest/ledger/baseline-failures.md`.
-- [ ] T017 [US1] Apply the approved fixes to `JTest/tests/` and `JTest/templates/`,
+- [ ] T017 [US1] Apply the approved fixes to `JTest/tests/` and `JTest/templates/`, and set `"version": 1` in
+  `JTest/workflow-definitions/storage-drivers-variables-root-workflow.json` (spec Q14, approved),
   one commit, with the ledger row named per change; mark 3.6.3-defect suites `blocked: 3.6.3 defect <defect>` in
   `JTest/ledger/suites.md` (FR-008).
 - [ ] T018 [US1] Rerun all suites on a fresh container and confirm every unblocked suite passes (SC-001); record the
@@ -105,8 +106,7 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 **Independent test**: Elsa 3 rerun green; the diff of each suite shows only values moved behind parameters.
 
-- [ ] T019 [US2] List every Elsa 3-specific value in `JTest/tests/**` that the template contract cannot absorb (including
-  expected definition versions, which differ between engines, contracts/templates.md): direct
+- [ ] T019 [US2] List every Elsa 3-specific value in `JTest/tests/**` that the template contract cannot absorb : direct
   Elsa 3 API calls in `http` steps (the `events` suite and three `performance` suites call
   `/elsa/api/workflow-definitions/{id}/execute` and `/elsa/api/workflow-instances`), response fields read from those
   steps, reads inside template outputs beyond the projected fields (for example
