@@ -239,8 +239,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   guidance from the report, and it reads the categories and buckets the report defines (spec 1237). The skill folder
   contains no diagnostic code literal; examples use a placeholder such as `<code>`.
 
-- **FR-022**: **Running the tool.** The command-line tool runs inside the Elsa 3 migration image (spec 1237), whose
-  entry point is the tool's migration command group. The skill starts it with `docker run` as spec 1237's
+- **FR-022**: **Running the tool.** The command-line tool runs inside the Elsa 3 migration image that spec 1237 names
+  (`elsaworkflows/elsa-elsa3-migration`, tagged like the essentials engine image it is built from), whose entry point is the tool's migration command group. The skill starts it with `docker run` as spec 1237's
   command-line contract shows, without network access: the export and the output folder for every run, plus the
   packages folder and the `appsettings.json` for `assess`. It records the command in the plan. Before the first run of a session, the skill MUST check that Docker is
   available and that the migration image tagged with the plan's Elsa 4 version (FR-004) can be

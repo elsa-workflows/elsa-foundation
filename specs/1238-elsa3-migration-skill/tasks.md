@@ -10,7 +10,7 @@
 and the check's `--self-test`. The skill text itself is verified by the walkthrough (T029–T031). No test framework
 beyond xunit.
 
-**Dependencies outside this spec**: T021 needs the migration image's published name, which spec 1237 owns. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
+**Dependencies outside this spec**: T021 takes the migration image's name and tags from spec 1237. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
 need spec 1237's `report.json` schema agreed. Everything else can start once this spec is approved.
 
 ## Format: `[ID] [P?] [Story] Description`
