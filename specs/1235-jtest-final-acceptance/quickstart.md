@@ -31,7 +31,7 @@ docker stop elsa3-jtest
 ## Elsa 4
 
 Delete the Workbench's SQLite store, start the Workbench with the reconciliation enabled for the run (the exact
-configuration override is fixed by task T012 and written into the suite README), then:
+configuration override is fixed by task T007 and written into the suite README), then:
 
 ```powershell
 $env:ELSA_API_BASE_URL = 'http://localhost:5095'; $env:ELSA_EXECUTOR_BASE_URL = 'http://localhost:5095/workflows/http'
