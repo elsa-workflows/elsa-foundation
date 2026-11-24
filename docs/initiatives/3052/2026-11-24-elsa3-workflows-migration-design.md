@@ -53,19 +53,22 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
 
 ### The CLI: `dotnet elsa elsa3-migration workflows inventory|assess`
 
-- A command group in the existing `dotnet-elsa` tool, built on its worker (ADR 0076).
+- A command group of the `dotnet-elsa` CLI, built on its worker (ADR 0076).
   - `Elsa.Cli` reaches a second frozen entry point by type name. That entry point lives under `extensions/Elsa3/`,
     so the essentials take no reference on Elsa 3 and Elsa 3 stays behind the import boundary.
+- **It runs inside the Elsa 3 migration image** (see *Essentials images*). The skill starts it with `docker run`,
+  mounting the export, the user's packages folder, their `appsettings.json` and the output folder. The test
+  migration therefore runs on exactly the composition the user later goes live on, minus the Elsa 3 additions.
+  - The CLI ships no Elsa 4 closure of its own. Docker on the user's machine is a prerequisite; the skill checks it
+    first.
+  - There is no `--host` option: a user with their own Elsa 4 host brings their features as packages, like everyone
+    else.
 - Not a product anyone deploys. The skill drives it.
-- **`inventory <export> [--out <dir>]`** runs in the CLI's reference closure with default settings.
+- **`inventory <export> [--out <dir>]`** runs on the image's composition with default settings.
 - **`assess <export> --packages <folder of .nupkg> --settings <appsettings.json> [--out <dir>]`** loads the user's
-  feature packages through Nuplane, exactly as the image does. `--host <build output>` remains for users with their
-  own Elsa 4 host.
-- **Reference closure** = the **Elsa 3 migration image's** composition: the essentials engine plus the Elsa 3
-  converter and import features (see *Essentials images*). Neither the skill nor the user configures these.
-- **`--host` fails loudly.** When the user's own host closure lacks the Elsa 3 converter or import assemblies, the
-  worker cannot reach its entry point. The CLI then refuses with exit code 2 and a message naming the packages and
-  features to add. It never falls back to a partial run.
+  feature packages through Nuplane, exactly as the engine image does.
+- Neither the skill nor the user configures the Elsa 3 converter and import features; the migration image bakes
+  them in.
 - **Composition is real:** features are composed the way a shell does it, with no web host, CShells runtime or HTTP.
   The run uses the same `appsettings.json` merge the image uses.
 - **No dry-run seam:** the CLI runs the **real** import and `PublishWorkflow` pipeline on **in-memory SQLite** and
@@ -82,7 +85,8 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
   - `converted/` holds Elsa 4 definitions in the JSON workflow reconciliation format, marked "not published".
   - Refused definitions appear only in the report.
   - The CLI prints the output path.
-- **Exit codes:** 0 clean, 1 findings, 2 refused to run (bad input, a closure it cannot boot).
+- **Exit codes:** 0 clean, 1 findings, 2 refused to run (bad input, a user package or setting the composition
+  cannot boot).
 
 ### The report
 
@@ -118,7 +122,8 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
   its EF ledger and the publishing bridge.
   - Its Dockerfile is maintained under `extensions/Elsa3/`, so Elsa 3 stays behind the import boundary and can be
     retired with the extension.
-  - Its composition is the essentials feature list plus an Elsa 3 addition list. It is the CLI's reference closure.
+  - Its composition is the essentials feature list plus an Elsa 3 addition list, and it contains the `dotnet-elsa`
+    CLI. Its entry point is the `elsa3-migration` command group; it starts no web host.
 - The essentials feature list is defined once and feeds the engine image, and through it the migration image.
 - **Acceptance:** the S-15 JTest acceptance set passes against the essentials engine image. S-15 itself stays on the
   Workbench, unchanged.
@@ -133,6 +138,7 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
     which file to read, so installing it as a skill is optional.
 - Lives in this repository in a user-facing folder, separate from the contributor skills in `.claude/skills/`. It is
   released with the `dotnet-elsa` CLI and the essentials images.
+- **Prerequisite check:** Docker is available and the migration image matching the CLI version can be pulled.
 - **Privacy is stated up front.** Before reading anything, the skill tells the user what can reach the model
   provider.
   - `report.json` is complete without an AI and redacted by default: codes, JSON paths, type and function names, but
@@ -197,7 +203,7 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
 | 0 | #5664 converter maps Elsa 3 functions to prefixed host functions | — | PR #5667 |
 | 0 | #5666 converter diagnoses unregistered variable types and unmapped storage drivers | — | in progress |
 | 1 | **Essentials images**: engine and designer-only Studio, one feature list, JTest acceptance | — | to define |
-| 2 | **Workflows migration CLI**: `elsa3-migration workflows inventory\|assess`, the Elsa 3 migration image (`extensions/Elsa3/`, `FROM` essentials), in-memory SQLite, report, `converted/` | 1 (engine image), #5664, #5666 | to define |
+| 2 | **Workflows migration CLI**: `elsa3-migration workflows inventory\|assess`, running inside the Elsa 3 migration image (`extensions/Elsa3/`, `FROM` essentials), in-memory SQLite, report, `converted/` | 1 (engine image), #5664, #5666 | to define |
 | 3 | **Migration skill and docs**: plan template, porting catalog, provider-neutral skill, README section, contributor triggers | 2 (report schema) | to define |
 
 All three specs can be defined in parallel now. Implementation follows the dependency order.
