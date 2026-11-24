@@ -143,6 +143,27 @@ public sealed record ActivityDataSelectionAnalysis(
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ActivityBindingConversionPreview? BindingConversion { get; init; }
+
+    /// <summary>
+    /// The analysis an Activity Data picker discloses. A <see cref="ActivitySerializedShapeState.Declared"/> source
+    /// shape carries advisory declared-type members for expression completion; the picker receives it as the
+    /// unbound Unknown answer without members, keeping the declared type only for a whole-value query.
+    /// </summary>
+    /// <param name="memberPath">The member path the analysis was queried with.</param>
+    public ActivityDataSelectionAnalysis WithoutDeclaredMembers(ImmutableArray<string> memberPath) =>
+        Sources.Any(source => source.Shape.State == ActivitySerializedShapeState.Declared)
+            ? this with { Sources = [.. Sources.Select(source => source.Shape.State != ActivitySerializedShapeState.Declared ? source : source with
+            {
+                Shape = new(ActivitySerializedShapeState.Unknown, ActivitySerializedValueKind.Unknown,
+                    memberPath.IsDefaultOrEmpty ? source.Shape.Type : null, source.Shape.SourceContractRevision, string.Empty, string.Empty)
+                {
+                    ReasonCode = "activity.shape.serialization-profile-unbound",
+                    IsNullable = source.Shape.IsNullable,
+                    IsSensitive = source.Shape.IsSensitive,
+                    IsCredential = source.Shape.IsCredential
+                }
+            })] }
+            : this;
 }
 
 /// <summary>

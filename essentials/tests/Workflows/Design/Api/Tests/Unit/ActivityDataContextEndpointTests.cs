@@ -361,6 +361,33 @@ public sealed class ActivityDataContextEndpointTests
         Assert.Null(second.Body.Analysis);
     }
 
+    [Fact]
+    public async Task The_picker_receives_a_declared_variable_shape_as_unknown_without_members()
+    {
+        using var host = new Host(services =>
+        {
+            services.Configure<WorkflowDesignValidatorOptions>(options => options.MemberReads = true);
+            services.AddSingleton<IActivitySerializedShapeSource>(new DeclaredShape());
+        });
+        var snapshot = new WorkflowDefinitionStateView([new("customer", "customer", new("shop.address"), null, null)],
+            Sequence(Node("producer"), Node("consumer")));
+
+        var whole = await host.Invoke(host.Request() with { Snapshot = snapshot });
+        var member = await host.Invoke(host.Request() with { Snapshot = snapshot, Query = new() {
+            Source = new(new VariableReference("customer", "workflow"), "Variable"), MemberPath = ["city"] } });
+
+        Assert.Equal("supported", whole.Body.State);
+        var source = Assert.Single(whole.Body.Analysis!.Sources, source => source.Id.EndsWith(":customer", StringComparison.Ordinal));
+        Assert.Equal(ActivitySerializedShapeState.Unknown, source.Shape.State);
+        Assert.Equal(ActivitySerializedValueKind.Unknown, source.Shape.Kind);
+        Assert.Equal("activity.shape.serialization-profile-unbound", source.Shape.ReasonCode);
+        Assert.Equal(new TypeReference("shop.address"), source.Shape.Type);
+        Assert.Empty(source.Shape.Members);
+        var selected = Assert.Single(member.Body.Analysis!.Sources);
+        Assert.Equal(ActivitySerializedShapeState.Unknown, selected.Shape.State);
+        Assert.Null(selected.Shape.Type);
+    }
+
     private static ActivityNode Node(string id) => new(id, "test", [], []);
     private static readonly JsonSerializerOptions Web = CreateWeb();
     private static JsonSerializerOptions CreateWeb()
@@ -515,6 +542,21 @@ public sealed class ActivityDataContextEndpointTests
         public Task<IReadOnlyList<WorkflowDefinitionDraft>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+    private sealed class DeclaredShape : IActivitySerializedShapeSource
+    {
+        public ValueTask<ActivitySerializedShape?> DescribeResultAsync(IActivityDefinitionVersion admittedVersion, string projectionKey, ImmutableArray<string> memberPath,
+            ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) => ValueTask.FromResult<ActivitySerializedShape?>(null);
+        public ValueTask<ActivitySerializedShape?> DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity, ImmutableArray<string> memberPath,
+            ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivitySerializedShape?>(memberPath.IsEmpty
+                ? new(ActivitySerializedShapeState.Declared, ActivitySerializedValueKind.Object, declaredType, ownerContractIdentity, "profile", "metadata")
+                {
+                    ReasonCode = "activity.shape.declared-type",
+                    Members = [new("city", "City", new(ActivitySerializedShapeState.Known, ActivitySerializedValueKind.Scalar, new("String"), ownerContractIdentity, "profile", "metadata"))]
+                }
+                : new(ActivitySerializedShapeState.Declared, ActivitySerializedValueKind.Scalar, new("String"), ownerContractIdentity, "profile", "metadata")
+                    { ReasonCode = "activity.shape.declared-type" });
     }
     private sealed class CallbackShape(Action callback) : IActivitySerializedShapeSource
     {

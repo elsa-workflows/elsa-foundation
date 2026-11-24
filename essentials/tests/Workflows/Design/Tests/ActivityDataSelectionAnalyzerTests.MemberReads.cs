@@ -294,6 +294,40 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.Empty(result.Findings);
     }
 
+    [Fact]
+    public async Task A_declared_variable_shape_produces_no_findings_and_stays_deferred()
+    {
+        using var provider = Provider(services =>
+        {
+            MemberReadsOn(services);
+            services.AddSingleton<IActivitySerializedShapeSource>(new DeclaredVariableShape());
+        });
+
+        foreach (var path in new[] { "city", "cty" })
+        {
+            var stored = await Analyzer(provider).AnalyzeAsync(VariableDocument(Input(VariableMember("customer", "workflow", [path]))));
+            var offered = await Analyzer(provider).AnalyzeAsync(VariableDocument(), new("consumer", "CustomerId"),
+                new() { Source = new(new VariableReference("customer", "workflow"), "Variable"), MemberPath = [path] });
+
+            Assert.Empty(stored.Findings);
+            Assert.Empty(stored.MemberReads);
+            Assert.Empty(offered.Findings);
+            Assert.NotNull(Assert.Single(offered.Sources).Binding);
+        }
+    }
+
+    [Fact]
+    public async Task A_declared_shape_larger_than_the_response_budget_stays_declared()
+    {
+        using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(new DeclaredVariableShape()));
+
+        var result = await Analyzer(provider).AnalyzeAsync(VariableDocument(), new("consumer", "CustomerId"), new() { ShapeLimits = new(4, 1) });
+
+        var source = Assert.Single(result.Sources, source => source.Id.EndsWith(":customer", StringComparison.Ordinal));
+        Assert.Equal(ActivitySerializedShapeState.Declared, source.Shape.State);
+        Assert.Single(source.Shape.Members);
+    }
+
     private static ActivityDataSelectionDocument VariableDocument(params ArgumentState[] inputs) =>
         Document(Sequence(Node("consumer", inputs))) with { Variables = [Variable("customer", "Customer")] };
 
@@ -334,5 +368,30 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         public ValueTask<ActivitySerializedShape?> DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity,
             ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<ActivitySerializedShape?>(null);
+    }
+
+    // Answers a variable's declared type the way the CLR source does: Declared members for the declared names only.
+    private sealed class DeclaredVariableShape : IActivitySerializedShapeSource
+    {
+        public ValueTask<ActivitySerializedShape?> DescribeResultAsync(IActivityDefinitionVersion admittedVersion, string projectionKey,
+            ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivitySerializedShape?>(null);
+
+        public ValueTask<ActivitySerializedShape?> DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity,
+            ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivitySerializedShape?>(memberPath switch
+            {
+                [] => Declared(ActivitySerializedValueKind.Object, declaredType, ownerContractIdentity) with
+                {
+                    Members = [new("city", "City", Declared(ActivitySerializedValueKind.Scalar, new("String"), ownerContractIdentity)),
+                        new("zipCode", "Zip code", Declared(ActivitySerializedValueKind.Scalar, new("String"), ownerContractIdentity))]
+                },
+                ["city"] or ["zipCode"] => Declared(ActivitySerializedValueKind.Scalar, new("String"), ownerContractIdentity),
+                _ => new(ActivitySerializedShapeState.Unknown, ActivitySerializedValueKind.Unknown, null, ownerContractIdentity, "", "")
+                    { ReasonCode = "activity.shape.serialization-profile-unbound" }
+            });
+
+        private static ActivitySerializedShape Declared(ActivitySerializedValueKind kind, TypeReference type, string owner) =>
+            new(ActivitySerializedShapeState.Declared, kind, type, owner, "profile", "metadata") { ReasonCode = "activity.shape.declared-type" };
     }
 }

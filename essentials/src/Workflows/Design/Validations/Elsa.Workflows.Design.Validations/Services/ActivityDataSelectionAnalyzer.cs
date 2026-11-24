@@ -667,7 +667,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
             var element = Child(shape.Element);
             var mapValue = Child(shape.MapValue);
             return shape with { Members = members.ToImmutable(), Element = element, MapValue = mapValue,
-                State = truncated ? ActivitySerializedShapeState.Truncated : shape.State,
+                // A truncated Declared shape stays Declared: its members remain advisory, never trusted as known.
+                State = truncated && shape.State != ActivitySerializedShapeState.Declared ? ActivitySerializedShapeState.Truncated : shape.State,
                 ReasonCode = truncated ? "ResponseLimit" : shape.ReasonCode };
         }
     }
