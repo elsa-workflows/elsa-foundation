@@ -25,12 +25,18 @@ public sealed class JsonHttpContentParserTests
         Assert.True(target.IsInstanceOfType(parsed), $"Expected {target}, received {parsed?.GetType()}.");
     }
 
+    // The refusal is the contract; its type is the BCL converter's. JsonValue's converter reads any
+    // element and then refuses a container with InvalidOperationException, not the JsonException family.
     [Theory]
-    [InlineData(typeof(JsonObject), "[]")]
-    [InlineData(typeof(JsonArray), "{}")]
-    [InlineData(typeof(JsonValue), "{}")]
-    public async Task Explicit_mutable_JSON_targets_refuse_incompatible_shapes(Type target, string raw) =>
-        await Assert.ThrowsAnyAsync<JsonException>(() => Parser().ReadAsync(Context(raw, target)));
+    [InlineData(typeof(JsonObject), "[]", typeof(JsonException))]
+    [InlineData(typeof(JsonArray), "{}", typeof(JsonException))]
+    [InlineData(typeof(JsonValue), "{}", typeof(InvalidOperationException))]
+    public async Task Explicit_mutable_JSON_targets_refuse_incompatible_shapes(Type target, string raw, Type refusal)
+    {
+        var error = await Record.ExceptionAsync(() => Parser().ReadAsync(Context(raw, target)));
+        Assert.NotNull(error);
+        Assert.IsAssignableFrom(refusal, error);
+    }
 
     [Fact]
     public async Task Explicit_mutable_JSON_null_keeps_its_existing_null_result() =>
