@@ -9,6 +9,7 @@ using Elsa.Foundation.Hosting;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Modularity.Api.ModuleManagement;
 using Elsa.Modularity.EntityFramework.Extensions;
+using Elsa.Workflows.Runtime.Distributed.Placement;
 using Nuplane.Admin;
 using Nuplane.Reconciliation;
 
@@ -41,6 +42,9 @@ builder.AddFoundationNuplane();
 // Cluster membership (a cluster of one unless Elsa:Cluster:Membership enables the durable provider), the schema readability
 // report the EF modules finalize their versions against, and the Data Protection key ring (#2143, #2151, #2191).
 builder.Services.AddEfSchemaReadability();
+// What each shell's workflow runtime can activate, so this member's report carries a runnability entry per shell that runs the
+// distributed runtime; without it, peers read a durable-membership member as able to run nothing.
+builder.Services.AddWorkflowRuntimeRunnabilityReport();
 builder.Services.AddConfiguredClusterMembership(configuration);
 builder.Services.AddConfiguredDataProtection(configuration);
 

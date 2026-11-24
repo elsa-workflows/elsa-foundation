@@ -19,7 +19,7 @@
           },
           "FoundationIdentityOpenIddict": {
             "IsDevelopmentOrDemo": false,
-            "Issuer": "https://localhost:7243/",
+            "Issuer": "https://localhost:7262/",
             "ConnectionString": "Data Source=elsa-identity.db"
           },
           "WorkflowsRuntimeApi": {

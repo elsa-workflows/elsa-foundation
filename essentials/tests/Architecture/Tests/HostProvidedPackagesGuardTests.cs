@@ -112,7 +112,7 @@ public sealed class HostProvidedPackagesGuardTests
                 ["Elsa.Serialization.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Tasks.Core"] = FoundationHostSourceBuildVersion
             },
-            // The Essentials host shares exactly the Foundation host's set: its compiled-in features change nothing it shares.
+            // The Essentials host shares the Foundation host's set plus the domain contracts of the features it compiles in.
             ["Elsa.Essentials.Host"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Elsa.Attention.Core"] = EssentialsHostSourceBuildVersion,
@@ -128,7 +128,18 @@ public sealed class HostProvidedPackagesGuardTests
                 ["Elsa.Pipelines.Core"] = EssentialsHostSourceBuildVersion,
                 ["Elsa.Primitives"] = EssentialsHostSourceBuildVersion,
                 ["Elsa.Serialization.Core"] = EssentialsHostSourceBuildVersion,
-                ["Elsa.Tasks.Core"] = EssentialsHostSourceBuildVersion
+                ["Elsa.Tasks.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Activities.Design.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Activities.Runtime.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Api.Capabilities.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Expressions.JavaScript.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Foundation.Identity.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Http.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Tasks.Schedules"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Workflows.Design.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Workflows.Design.Persistence.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Workflows.Design.Validations.Core"] = EssentialsHostSourceBuildVersion,
+                ["Elsa.Workflows.Runtime.Core"] = EssentialsHostSourceBuildVersion
             }
         };
 
