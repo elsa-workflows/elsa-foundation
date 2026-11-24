@@ -124,7 +124,7 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
 
   Text is never split on commas. `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` refuses, with the exact fix, a starting
   value that:
-  - is not a JSON array for a collection (the guidance shows the array the author most likely meant: `a, b` →
+  - is not a JSON array for a collection whose element type Elsa 4 knows (the guidance shows the array the author most likely meant: `a, b` →
     `["a","b"]`);
   - has an item that does not convert to the element type;
   - is not a JSON object for a dictionary;

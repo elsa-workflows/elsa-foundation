@@ -234,7 +234,8 @@ it, and read every variable's starting value back; compare each with Elsa 3's ru
   carry it as authored data that publication accepts, never as an expression.
 - **FR-003**: The starting value in Elsa 4 MUST follow Elsa 3's rule in Root cause for each kind of variable type. A
   collection's starting value MUST be a JSON array and a dictionary's a JSON object; text is never split on commas
-  (clarification 2026-10-22).
+  (clarification 2026-10-22). The array rule is for a collection whose element type Elsa 4 knows; any other collection
+  converts as Any under FR-004 (clarification 2026-11-24).
 - **FR-004**: The converter MUST refuse a variable whose Elsa 3 starting value cannot be converted to its type in
   strict mode, with a stable diagnostic that names the variable and gives guidance in Elsa 3 terms. That Elsa 4's type
   registry does not know a variable's type is never on its own a reason to refuse it: such a variable converts as Any.
