@@ -28,8 +28,10 @@ internal static class WorkbenchPostgresPreview
 
     private sealed record Receipt(string Actor, string Bookmark, string Frame, string StateHash, string JournalHash, long Epoch, int Process);
     private sealed record Checkpoint(long Revision, string State, long Epoch, string? Owner);
-    private sealed record ActiveJob(long Epoch, string Owner, string State, string TicketId, string DeadlineId,
+    private sealed record ActiveJob(long Epoch, string Owner, string State, string Registry,
+        string TicketId, long TicketSeq, string TicketPayload, string DeadlineId, long DeadlineSeq, string DeadlinePayload,
         long Deadline, long Now);
+    private sealed record ReplayRows(string Messages, string Receipts);
 
     internal static async Task RunAsync(string[] arguments, string? executable = null)
     {
@@ -292,24 +294,39 @@ internal static class WorkbenchPostgresPreview
                         if (cut is not null)
                         {
                             var exactPair = await observation.Database.SqlQuery<bool>($"""
-                                SELECT count(*) = 2 AND
-                                    count(*) FILTER (WHERE d."Id" = {cut.TicketId} AND d."Due" = 0) = 1 AND
-                                    count(*) FILTER (WHERE d."Id" = {cut.DeadlineId} AND d."Due" = {cut.Deadline}) = 1 AS "Value"
-                                FROM "WorkbenchJobRemovalWitness" d JOIN "WorkbenchCheckpointWitness" c ON c."Partition" = d."Partition"
-                                    AND c."Target" = d."Target" AND c."Transaction" = d."Transaction"
-                                JOIN "Instances" i ON i."Partition" = d."Partition" AND i."Id" = d."Target"
-                                WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
-                                    AND c."Revision" = 4 AND c."Epoch" = {completion.Epoch}
+                                WITH target AS (
+                                    SELECT i."Id", i."Partition" FROM "Instances" i
+                                    WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
+                                ), removals AS (
+                                    SELECT d.*, c."Revision", c."Epoch", c."Registry"
+                                    FROM "WorkbenchJobRemovalWitness" d JOIN target i ON i."Partition" = d."Partition" AND i."Id" = d."Target"
+                                    LEFT JOIN "WorkbenchCheckpointWitness" c ON c."Partition" = d."Partition"
+                                        AND c."Target" = d."Target" AND c."Transaction" = d."Transaction"
+                                    WHERE d."Kind" IN ('kernel.job', 'kernel.job-deadline')
+                                )
+                                SELECT (SELECT count(*) FROM "WorkbenchJobWitness" w
+                                        JOIN target i ON i."Partition" = w."Partition" AND i."Id" = w."Target"
+                                        WHERE w."Kind" IN ('kernel.job', 'kernel.job-deadline')) = 2
+                                    AND count(*) = 2 AND bool_and((d."Revision" = 4 AND d."Epoch" = {completion.Epoch}
+                                        AND d."Registry" = {cut.Registry} AND d."Generation" = 0) IS TRUE)
+                                    AND count(*) FILTER (WHERE d."Id" = {cut.TicketId} AND d."Seq" = {cut.TicketSeq}
+                                        AND d."Due" = 0 AND d."Payload" = {cut.TicketPayload}) = 1
+                                    AND count(*) FILTER (WHERE d."Id" = {cut.DeadlineId} AND d."Seq" = {cut.DeadlineSeq}
+                                        AND d."Due" = {cut.Deadline} AND d."Payload" = {cut.DeadlinePayload}) = 1 AS "Value"
+                                FROM removals d
                                 """).SingleAsync(token);
-                            Require(exactPair, "settlement consumes the original ticket and unchanged deadline in the timeout transaction");
+                            Require(exactPair, "the original ticket and unchanged deadline are the only pair inserted and removed");
                         }
                     }
                 }
                 if (cut is not null)
                 {
+                    var completeJournal = JournalHash(await reads.TailAsync(scope, actor, cancellationToken: token));
+                    var beforeReplay = await ReadReplayRows(actor);
                     Require(await Approve(actor, "approval-2", "changed again", previous.Frame) == Contract.AdmissionOutcome.Duplicate &&
-                        await Read(actor) == completion && JournalHash(await reads.TailAsync(scope, actor, bookmark, token)) == JournalHash(suffix),
-                        "replaying the job-starting approval after takeover leaves completion unchanged");
+                        await Read(actor) == completion && await ReadReplayRows(actor) == beforeReplay &&
+                        JournalHash(await reads.TailAsync(scope, actor, cancellationToken: token)) == completeJournal,
+                        "replaying the job-starting approval leaves the checkpoint, full journal, inbox and receipts unchanged");
                 }
                 last = completion;
             }
@@ -378,7 +395,9 @@ internal static class WorkbenchPostgresPreview
         {
             await using var db = OpenObservation();
             return await db.Database.SqlQuery<ActiveJob>($"""
-                SELECT p."Epoch", p."Owner", i."State", j."Id" AS "TicketId", d."Id" AS "DeadlineId", d."Due" AS "Deadline",
+                SELECT p."Epoch", p."Owner", i."State", i."Jobs" AS "Registry",
+                    j."Id" AS "TicketId", j."Seq" AS "TicketSeq", j."Payload" AS "TicketPayload",
+                    d."Id" AS "DeadlineId", d."Seq" AS "DeadlineSeq", d."Payload" AS "DeadlinePayload", d."Due" AS "Deadline",
                     floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Now"
                 FROM "Instances" i JOIN "Partitions" p ON p."Id" = i."Partition"
                 JOIN "Messages" j ON j."Partition" = i."Partition" AND j."Target" = i."Id"
@@ -390,6 +409,18 @@ internal static class WorkbenchPostgresPreview
                     AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Partition" = i."Partition" AND m."Target" = i."Id"
                         AND m."InboxScope" = {TimedJobScope} AND m."Kind" = 'job-finished')
                 """).SingleOrDefaultAsync(token);
+        }
+
+        async Task<ReplayRows> ReadReplayRows(Contract.ActorRef actor)
+        {
+            await using var db = OpenObservation();
+            return await db.Database.SqlQuery<ReplayRows>($"""
+                SELECT coalesce((SELECT jsonb_agg(to_jsonb(m) ORDER BY m."Seq", m."Id") FROM "Messages" m
+                            WHERE m."Partition" = i."Partition" AND m."Target" = i."Id"), '[]'::jsonb)::text AS "Messages",
+                    coalesce((SELECT jsonb_agg(to_jsonb(r) ORDER BY r."Operation") FROM "FoundationDirectReceipts" r
+                            WHERE r."Reference" = i."FoundationReference"), '[]'::jsonb)::text AS "Receipts"
+                FROM "Instances" i WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
+                """).SingleAsync(token);
         }
 
         async Task<Checkpoint> WaitFor(Contract.ActorRef actor, long revision)
@@ -517,8 +548,9 @@ internal static class WorkbenchPostgresPreview
     {
         var sql = FormattableString.Invariant($"""
             CREATE TABLE "WorkbenchJobWitness" ("Partition" int, "Target" text, "Generation" bigint, "Transaction" xid, "Kind" text, "Due" bigint, "Payload" text);
-            CREATE TABLE "WorkbenchJobRemovalWitness" ("Partition" int, "Target" text, "Id" text, "Due" bigint, "Transaction" xid);
-            CREATE TABLE "WorkbenchCheckpointWitness" ("Partition" int, "Target" text, "Revision" bigint, "Status" integer, "Transaction" xid, "Epoch" bigint, "At" bigint);
+            CREATE TABLE "WorkbenchJobRemovalWitness" ("Partition" int, "Target" text, "Id" text, "Kind" text, "Seq" bigint,
+                "Payload" text, "Generation" bigint, "Due" bigint, "Transaction" xid);
+            CREATE TABLE "WorkbenchCheckpointWitness" ("Partition" int, "Target" text, "Revision" bigint, "Status" integer, "Transaction" xid, "Epoch" bigint, "At" bigint, "Registry" text);
             CREATE FUNCTION capture_workbench_job() RETURNS trigger LANGUAGE plpgsql AS $fn$
             BEGIN
                 IF NEW."InboxScope" = {ticketScope} THEN
@@ -531,7 +563,8 @@ internal static class WorkbenchPostgresPreview
             CREATE FUNCTION capture_workbench_job_removal() RETURNS trigger LANGUAGE plpgsql AS $fn$
             BEGIN
                 IF OLD."InboxScope" = {ticketScope} THEN
-                    INSERT INTO "WorkbenchJobRemovalWitness" VALUES (OLD."Partition", OLD."Target", OLD."Id", OLD."Due", pg_current_xact_id()::xid);
+                    INSERT INTO "WorkbenchJobRemovalWitness" VALUES (OLD."Partition", OLD."Target", OLD."Id", OLD."Kind", OLD."Seq",
+                        OLD."Payload", OLD."JobGeneration", OLD."Due", pg_current_xact_id()::xid);
                 END IF;
                 RETURN OLD;
             END;
@@ -542,7 +575,7 @@ internal static class WorkbenchPostgresPreview
             BEGIN
                 INSERT INTO "WorkbenchCheckpointWitness"
                     SELECT NEW."Partition", NEW."Id", NEW."Revision", NEW."Status", NEW.xmin, p."Epoch",
-                        floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                        floor(extract(epoch from clock_timestamp()) * 1000)::bigint, NEW."Jobs"
                     FROM "Partitions" p WHERE p."Id" = NEW."Partition";
                 RETURN NEW;
             END;
