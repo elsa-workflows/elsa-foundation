@@ -11,6 +11,8 @@ internal interface IRootDispatchHeaders
     Durable.FoundationDispatchHeader Checkpoint(Durable.InstanceRow row);
     bool RequiresCommittedTerminal { get; }
     bool KeepsParkInputs { get; }
+    bool KeepsParkArrivals { get; }
+    bool RecoversPark { get; }
 }
 
 internal sealed partial class ActorAdapter
@@ -44,6 +46,42 @@ internal sealed partial class ActorAdapter
         && (!message.Operator.RetentionDelete || message.Kind == Durable.Kinds.Delete)
         && (message.Operator.RootThenDelete ? message.Kind == Durable.Kinds.Terminate && message.Operator.DeleteTarget is not null
             : message.Operator.DeleteTarget is null);
+
+    private bool IsRootRecover(Durable.Message message) => roots?.RecoversPark == true && message is
+    {
+        Kind: Contract.Kinds.Recover, InboxScope: Durable.InboxKey.FoundationOccurrenceScope, StorageId: not null, TargetCreation: 1,
+        KeepUntil: not null, ReplyTo: null, Start: null, Payload: null, EventMatch: null, Sender: null, SenderCreation: 0,
+        ActorAuthored: false, JobGeneration: 0,
+        Operator: { Selection: null, RecoverMode: Durable.ParkRecoveryMode.Resume, RecoverHandles: null, QualifiedTerminal: null,
+            DeleteTarget: null, RootThenDelete: false, RetentionDelete: false, RootHeldReply: false, RootParkMark: not null, RootParkWindow: >= 0, RootParkFacts: not null }
+    };
+
+    // One page of a qualified root's kept set resolves in one fenced commit: the store restores the arrivals and clears the
+    // fault input. Any other case keeps the Park, consumes the command and journals a refusal at the next revision.
+    private Durable.TurnOutcome RecoverRootPark(Durable.TurnInput input, Durable.InstanceRow row, Durable.Delivery recover)
+    {
+        var message = recover.Message;
+        var facts = message.Operator!.RootParkFacts!;
+        var reason = message.Target.Id != row.Id || row.Creation != 1 ? "target"
+            : row is not { Status: Durable.InstanceStatus.Faulted, Retired: false, Suspended: false } ||
+                facts.Mark != message.Operator.RootParkMark ? "selection"
+            : !RestoresNothing(row) ? "plan" : !facts.FitsPage ? "page" : null;
+        var revision = checked(row.Revision + 1);
+        var next = reason is null ? row with { Status = Durable.InstanceStatus.Running, Fault = null, Revision = revision } : row with { Revision = revision };
+        return new(input.Actor)
+        {
+            Expected = row.Revision, Row = next, Revision = revision, Status = next.Status, Consumed = [recover],
+            Journal = reason is null
+                ? Durable.Json.Write(new { Outcome = "recovered", Operation = message.Id, Restored = facts.Arrived, Cleared = facts.Consumed, AlreadyRearmed = 0 })
+                : Durable.Json.Write(new { Outcome = "refused", Operation = message.Id, Reason = reason })
+        };
+    }
+
+    private bool RestoresNothing(Durable.InstanceRow row)
+    {
+        try { return actor.RestoreWaits(RootHeader(row), row.State) is { Timers.Count: 0, Jobs.Count: 0, Subscriptions.Count: 0 }; }
+        catch (Exception) { return false; }
+    }
 
     private Durable.TurnOutcome? SettleRootDeletion(Durable.TurnInput input)
     {

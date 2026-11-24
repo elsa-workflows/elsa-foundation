@@ -68,6 +68,7 @@ internal static class PostgresWorkflowHistoryChecks
             try { await api.TailAsync(scope, first.Items[0].Ref, saved, ct); throw new InvalidOperationException("Accepted a history bookmark on the journal."); }
             catch (ArgumentException error) when (error.ParamName == "from") { }
             Check(true, "history bookmarks bind filters and read kind");
+            await CheckRenamedSourcePin();
             return 0;
         }
 
@@ -341,6 +342,56 @@ internal static class PostgresWorkflowHistoryChecks
             Check((await runs.ListAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
                 "a complete trigger chain in another schema cannot certify the renamed history source");
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FixtureArchivedOwner" RENAME TO "Instances" """, ct);
+        }
+        async Task CheckRenamedSourcePin()
+        {
+            var schema = await db.Database.SqlQueryRaw<string>("SELECT current_schema() AS \"Value\"").SingleAsync(ct);
+            using var identifiers = new NpgsqlCommandBuilder();
+            var quoted = identifiers.QuoteIdentifier(schema);
+            await RequireFormatRefusal(() => store.OpenPreviewRootIngressAsync(Actor.ActorType, TimeSpan.FromHours(1), ct).AsTask());
+            Check(true, "with the source renamed, ingress still opens only on the strict admission source");
+            await db.Database.ExecuteSqlRawAsync("""CREATE VIEW "Instances" AS SELECT 1 AS id""", ct);
+            try { await RequireFormatRefusal(() => admission.OpenJournalCursorAsync(ct)); }
+            finally { await db.Database.ExecuteSqlRawAsync("""DROP VIEW "Instances" """, CancellationToken.None); }
+            Check(true, "with the source renamed, a view named as the source in the store schema refuses the read issuer");
+            // The actor list anchors the read issuer: a store without it is refused at open until the installer runs again.
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FoundationActorList" RENAME TO "FixtureActorList" """, ct);
+            try { await RequireFormatRefusal(() => admission.OpenJournalCursorAsync(ct)); }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FixtureActorList" RENAME TO "FoundationActorList" """,
+                    CancellationToken.None);
+            }
+            Check(true, "a store without its actor list refuses the read issuer until the installer runs again");
+            await RequireShadowRefusal("""CREATE TABLE fixture_history_source."Instances" (id integer);""",
+                "with the source renamed, a checkpoint relation from another schema still refuses the read issuer");
+            await RequireShadowRefusal($"""
+                CREATE TABLE fixture_history_source."KernelStoreVersions" (LIKE {quoted}."KernelStoreVersions" INCLUDING ALL);
+                INSERT INTO fixture_history_source."KernelStoreVersions" SELECT * FROM {quoted}."KernelStoreVersions";
+                CREATE TABLE fixture_history_source."FoundationRootIssuer" (LIKE {quoted}."FoundationRootIssuer" INCLUDING ALL);
+                INSERT INTO fixture_history_source."FoundationRootIssuer"
+                    SELECT true, sha256('fixture-shadow-issuer'::bytea), "Partitions" FROM {quoted}."FoundationRootIssuer";
+                """, "with the source renamed, a store marker and issuer from another schema refuse the read issuer");
+
+            async Task RequireShadowRefusal(string setup, string label)
+            {
+                await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA fixture_history_source; " + setup, ct);
+                try
+                {
+                    var shadow = new NpgsqlConnectionStringBuilder(connection)
+                    {
+                        SearchPath = "fixture_history_source," + quoted
+                    }.ConnectionString;
+                    var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(shadow).Options;
+                    await RequireFormatRefusal(() => new PostgresRootAdmission(() => new KernelDb(shadowOptions), TimeSpan.FromHours(1))
+                        .OpenJournalCursorAsync(ct));
+                    Check(true, label);
+                }
+                finally
+                {
+                    await db.Database.ExecuteSqlRawAsync("DROP SCHEMA fixture_history_source CASCADE", CancellationToken.None);
+                }
+            }
         }
         async Task RequireSourceRefusal()
         {

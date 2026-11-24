@@ -37,6 +37,7 @@ public sealed partial class EfStore
     internal sealed record RootImage(CreationAddress Actor, string Model, string Definition, string TypeData,
         IReadOnlyDictionary<string, string> Labels, string? State, int StateVersion, long Revision)
     {
+        internal string? Fault { get; init; }
         internal string? Jobs { get; init; }
         internal long? NextJobGeneration { get; init; }
         internal History History { get; init; }
@@ -136,8 +137,8 @@ public sealed partial class EfStore
                 IF TG_OP = 'UPDATE' AND NEW."FoundationWriteRevision" = OLD."Revision" + 1
                     AND NEW."Revision" = NEW."FoundationWriteRevision"
                     AND NEW."FoundationReference" = OLD."FoundationReference" AND NEW."FoundationTenant" = OLD."FoundationTenant"
-                    AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired"
-                    AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR
+                    AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired" /*root-park-generation*/
+                    AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR /*root-park-continues*/ OR /*root-park-recover*/ OR
                         (/*root-retirement*/ AND NEW."Retired" AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL /*root-retirement-wire*/
                             AND ((OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
                                 AND NEW."FoundationTerminalRevision" = OLD."FoundationTerminalRevision"
@@ -155,16 +156,74 @@ public sealed partial class EfStore
             BEGIN
                 IF EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance" AND i."FoundationReference" IS NOT NULL
                     AND (i."Partition" <> NEW."Partition" OR NEW."Revision" <> i."Revision" + 1 OR i."Status" <> 0 OR i."Retired")
-                    AND NOT (/*root-retirement*/ AND i."Retired" AND i."Partition" = NEW."Partition" AND NEW."Revision" = -1
+                    AND NOT (/*root-park-journal*/ OR (/*root-retirement*/ AND i."Retired" AND i."Partition" = NEW."Partition" AND NEW."Revision" = -1
                         AND NEW."Entries" = '["delete"]' AND NOT EXISTS (
-                            SELECT 1 FROM "Journal" j WHERE j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = -1)))
+                            SELECT 1 FROM "Journal" j WHERE j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = -1))))
                 THEN RAISE EXCEPTION 'Qualified actor journal requires the next running checkpoint revision' USING ERRCODE = '23514'; END IF;
+                /*root-park-recovered-journal*/
                 RETURN NEW;
             END
             $fn$;
             CREATE OR REPLACE TRIGGER kernel_require_root_journal_revision BEFORE INSERT ON "Journal"
             FOR EACH ROW EXECUTE FUNCTION kernel_require_root_journal_revision();
-            """.Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
+            """.Replace("/*root-park-continues*/", db.UsesRootParkArrivals ? """
+                (OLD."Status" = 2 AND NEW."Status" = OLD."Status" AND NOT NEW."Retired"
+                    AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
+                    AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationParkRevision" = OLD."FoundationParkRevision"
+                    AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
+                    AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
+                    AND NEW."History" IS NOT DISTINCT FROM OLD."History")
+                """ : "false", StringComparison.Ordinal)
+            .Replace("/*root-park-journal*/", db.UsesRootParkArrivals ? """
+                (i."Status" = 2 AND NOT i."Retired" AND NEW."Partition" = i."Partition" AND NEW."Revision" = i."Revision" + 1
+                    AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0
+                    AND (NEW."Entries" = '["parked"]' /*root-park-recover-journal*/))
+                """ : "false", StringComparison.Ordinal)
+            // Only a recover leaves Faulted for Running. It clears the Park mark and moves the release generation by one.
+            // A recover outcome at the new revision binds the write: "recovered" only with that transition, "refused"
+            // only with the row unchanged apart from its revision.
+            .Replace("/*root-park-generation*/", db.UsesRootParkRecovery ? """
+                AND (NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" OR (OLD."Status" = 2 AND NEW."Status" = 0
+                    AND NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" + 1))
+                AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
+                    AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/
+                    AND CASE WHEN j."Entries" LIKE '{{"Outcome":"recovered",%' THEN NOT (OLD."Status" = 2 AND NEW."Status" = 0)
+                        ELSE j."Entries" LIKE '{{"Outcome":"refused",%' AND ROW(NEW."Status", NEW."Retired", NEW."Suspended", NEW."State",
+                            NEW."StateVersion", NEW."FoundationHeader", NEW."Fault", NEW."History", NEW."Jobs", NEW."Children", NEW."Parent",
+                            NEW."FoundationParkAt", NEW."FoundationParkRevision", NEW."FoundationParkGeneration",
+                            NEW."FoundationTerminalRevision", NEW."FoundationTerminalAt", NEW."Model", NEW."Definition",
+                            NEW."NextJobGeneration", NEW."CustomHandles" /*new-wire*/)
+                        IS DISTINCT FROM ROW(OLD."Status", OLD."Retired", OLD."Suspended", OLD."State",
+                            OLD."StateVersion", OLD."FoundationHeader", OLD."Fault", OLD."History", OLD."Jobs", OLD."Children", OLD."Parent",
+                            OLD."FoundationParkAt", OLD."FoundationParkRevision", OLD."FoundationParkGeneration",
+                            OLD."FoundationTerminalRevision", OLD."FoundationTerminalAt", OLD."Model", OLD."Definition",
+                            OLD."NextJobGeneration", OLD."CustomHandles" /*old-wire*/) END)
+                """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
+                // The state wire column exists only on stable-body profiles.
+                .Replace("/*new-wire*/", db.UsesRootStableBody ? """, NEW."FoundationStateWire" """ : "", StringComparison.Ordinal)
+                .Replace("/*old-wire*/", db.UsesRootStableBody ? """, OLD."FoundationStateWire" """ : "", StringComparison.Ordinal) : "", StringComparison.Ordinal)
+            .Replace("/*root-park-recover*/", db.UsesRootParkRecovery ? """
+                (OLD."Status" = 2 AND NEW."Status" = 0 AND NOT NEW."Retired" AND NOT OLD."Suspended" AND NOT NEW."Suspended"
+                    AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
+                    AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL AND NEW."Fault" IS NULL
+                    AND NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" + 1
+                    AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
+                    AND NEW."History" IS NOT DISTINCT FROM OLD."History"
+                    AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
+                        AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/ AND j."Entries" LIKE '{{"Outcome":"recovered",%'))
+                """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal) : "false", StringComparison.Ordinal)
+            // A recovered entry is journaled only on the parked root it resolves.
+            .Replace("/*root-park-recovered-journal*/", db.UsesRootParkRecovery ? """
+                IF NEW."Entries" LIKE '{{"Outcome":"recovered",%' AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance"
+                    AND i."FoundationReference" IS NOT NULL AND NOT (i."Status" = 2 AND NOT i."Retired" AND NOT i."Suspended"
+                        AND i."Partition" = NEW."Partition" AND NEW."Revision" = i."Revision" + 1
+                        AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0))
+                THEN RAISE EXCEPTION 'A recovered journal entry requires the parked checkpoint it resolves' USING ERRCODE = '23514'; END IF;
+                """ : "", StringComparison.Ordinal)
+            .Replace("/*root-park-recover-journal*/", db.UsesRootParkRecovery
+                // The raw command is formatted, so the literal brace is doubled.
+                ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" : "", StringComparison.Ordinal)
+            .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
             .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal), cancellationToken);
@@ -265,7 +324,7 @@ public sealed partial class EfStore
 
     private sealed record PhysicalRoot(string Id, long Creation, string State, byte[]? Wire, int StateVersion, long Revision, string Header,
         History History, InstanceStatus Status, bool Suspended, long? TerminalRevision, long? TerminalAt, long AsOf,
-        string? Jobs, long? NextJobGeneration);
+        string? Jobs, long? NextJobGeneration, string? Fault);
 
     internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
@@ -279,7 +338,7 @@ public sealed partial class EfStore
             SELECT i."Id", b."Creation", i."State", /*root-wire*/ AS "Wire", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
                 i."History", i."Status", i."Suspended", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
                 floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
-                i."Jobs", i."NextJobGeneration"
+                i."Jobs", i."NextJobGeneration", i."Fault"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Reference" = i."FoundationReference"
                 AND b."Actor" = i."Id" AND b."Tenant" = i."FoundationTenant"
             WHERE i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference} AND i."Partition" = b."Partition" AND NOT i."Retired"
@@ -310,6 +369,7 @@ public sealed partial class EfStore
             header.Labels.ToDictionary(StringComparer.Ordinal), state, physical.StateVersion, physical.Revision)
             {
                 History = physical.History, Status = physical.Status, Suspended = physical.Suspended, TerminalRevision = physical.TerminalRevision,
+                Fault = db.UsesRootParkArrivals && physical.Fault is not null ? DurableKeyJson.Read<string>(physical.Fault) : null,
                 TerminalAt = physical.TerminalAt, AsOf = physical.AsOf, Jobs = physical.Jobs, NextJobGeneration = physical.NextJobGeneration
             };
     }

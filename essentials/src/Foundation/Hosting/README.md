@@ -43,6 +43,7 @@ if (moduleManagement.Enabled)
 ```
 
 The module-management endpoints need `AddNuplaneAdmin()` and the host's `ManualReconcileCoordinator` and `INuplaneAdminOperations` shared with shells, as `Elsa.Foundation.Host` composes them.
+
 ## Cross-domain contributions
 
 This package implements a contributor contract from another domain:

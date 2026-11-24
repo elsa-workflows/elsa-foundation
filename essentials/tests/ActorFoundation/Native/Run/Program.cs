@@ -26,6 +26,7 @@ if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
 }
 if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, .. var readsProfile] && readsProfile is ([] or ["timed"]))
     return await PostgresCorePreviewReadSeed.RunAsync(originalRoot, seedFile, timed: readsProfile.Length != 0);
+if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
 if (args is ["pg-root-operators", "admit"])
     return await PostgresRootOperatorChecks.RunAsync(null);
 if (args is ["pg-root-operators", var defaultOperatorPhase and ("read" or "resume"), var operatorA, var operatorB, var operatorC])
@@ -152,10 +153,16 @@ if (args is ["pg-root-inbox", var inboxWriter and ("owned" or "ef"), var inboxFe
     return await PostgresRootInboxChecks.RunAsync(inboxWriter == "owned", inboxFence == "in-batch", inboxProfile == "operators");
 if (args is ["pg-held-operator", var heldOperatorWriter and ("owned" or "ef"), var heldOperatorFence and ("in-batch" or "checked")])
     return await PostgresHeldOperatorChecks.RunAsync(heldOperatorWriter == "owned", heldOperatorFence == "in-batch");
+if (args is ["pg-root-park-arrivals", var arrivalWriter and ("owned" or "ef"), var arrivalFence and ("checked" or "in-batch")])
+    return await PostgresRootParkOpeningChecks.RunAsync(arrivalWriter == "owned", arrivalFence == "in-batch", inspection: true, arrivals: true);
+if (args is ["pg-root-park-recovery", var recoverWriter and ("owned" or "ef"), var recoverFence and ("checked" or "in-batch")])
+    return await PostgresRootParkOpeningChecks.RunAsync(recoverWriter == "owned", recoverFence == "in-batch", recovery: true);
 if (args is ["pg-root-park-opening", var parkWriter and ("owned" or "ef"), var parkFence and ("checked" or "in-batch")])
     return await PostgresRootParkOpeningChecks.RunAsync(parkWriter == "owned", parkFence == "in-batch");
 if (args is ["pg-root-park-inspection", var parkReadWriter and ("owned" or "ef"), var parkReadFence and ("checked" or "in-batch")])
     return await PostgresRootParkOpeningChecks.RunAsync(parkReadWriter == "owned", parkReadFence == "in-batch", inspection: true);
+if (args is ["pg-root-composition", var compositionWriter and ("owned" or "ef"), var compositionFence and ("checked" or "in-batch")])
+    return await PostgresRootCompositionChecks.RunAsync(compositionWriter == "owned", compositionFence == "in-batch");
 if (args is ["pg-root-retention", var policyWriter and ("owned" or "ef"), var policyFence and ("in-batch" or "checked")])
     return await PostgresRootRetentionChecks.RunAsync(policyWriter == "owned", policyFence == "in-batch");
 if (args is ["pg-root-plan-selection", var planWriter and ("owned" or "ef"), var planFence and ("in-batch" or "checked")])
