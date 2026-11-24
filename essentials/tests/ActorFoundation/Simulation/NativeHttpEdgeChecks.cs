@@ -88,6 +88,8 @@ internal static partial class NativeHttpEdgeChecks
             .Add(Wf.Workflow("ship-computed", Wf.Sequence("main", Wf.HttpEndpoint("start", "ship-computed").Capture("order", "Body"),
                 Wf.Respond("computed-waiting", "waiting"), Wf.HttpEndpoint("cancel", Binding.Expr("'orders/' + order.id + '/cancel'")),
                 Wf.Respond("computed-cancelled", Binding.Expr("'computed ' + order.id"))), ("order", null)))
+            .Add(Wf.Workflow("fetch", Wf.Sequence("main", Wf.HttpEndpoint("start", "fetch/{*url}"),
+                Wf.Respond("fetched", Binding.Expr("'fetch ' + $start.RouteValues.url")))))
             .Add(Wf.Workflow("bad-headers", Wf.Sequence("main",
                 Wf.HttpEndpoint("start", "bad-headers"),
                 Wf.Respond("refused", "never sent", headers: Binding.Literal(new JsonObject { ["Content-Type"] = "text/html" })))));
@@ -289,6 +291,9 @@ internal static partial class NativeHttpEdgeChecks
                     Require(shipping.StatusCode == HttpStatusCode.Accepted, $"Order '{order}' ships again.");
             var absolute = await RawPostAsync($"{client.BaseAddress!.GetLeftPart(UriPartial.Authority)}/orders/%2541/cancel");
             var stepped = await RawPostAsync("orders/x/../A/cancel");
+            var url = await RawPostAsync("fetch/https://example.com/orders/1");
+            Require(url is { Status: 200, Body: "fetch https://example.com/orders/1" },
+                $"An origin-form path that holds '://' is matched as it is, here by a catch-all start. Observed {url.Status} '{url.Body}'.");
             Require(absolute is { Status: 200, Body: "cancelled %41 by %41" } && stepped is { Status: 200, Body: "cancelled A by A" },
                 $"An absolute-form target is decoded once too, and a literal '..' step is removed as Kestrel removes it. Observed {absolute.Status} '{absolute.Body}', {stepped.Status} '{stepped.Body}'.");
             using (var computed = new HttpRequestMessage(HttpMethod.Post, "ship-computed") { Content = JsonContent.Create(new { id = "Zz" }) })
@@ -330,7 +335,7 @@ internal static partial class NativeHttpEdgeChecks
             using var socket = new System.Net.Sockets.TcpClient();
             await socket.ConnectAsync(address.Host, address.Port, token);
             await using var stream = socket.GetStream();
-            var target = path.Contains("://", StringComparison.Ordinal) ? path : "/" + path;     // an absolute-form target as given
+            var target = path.StartsWith("http://", StringComparison.Ordinal) ? path : "/" + path;     // an absolute-form target as given
             var head = $"POST {target} HTTP/1.1\r\nHost: {address.Authority}\r\n{string.Concat(headerLines.Select(line => line + "\r\n"))}Content-Length: 0\r\nConnection: close\r\n\r\n";
             await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(head), token);
             using var reader = new StreamReader(stream);
@@ -344,7 +349,7 @@ internal static partial class NativeHttpEdgeChecks
                 for (var at = 0; at < payload.Length;)
                 {
                     var line = payload.IndexOf("\r\n", at, StringComparison.Ordinal);
-                    var size = Convert.ToInt32(payload[at..line], 16);
+                    var size = Convert.ToInt32(payload[at..line].Split(';', 2)[0].Trim(), 16);     // without any chunk extension
                     if (size == 0) break;
                     decoded.Append(payload, line + 2, size);
                     at = line + 2 + size + 2;
@@ -434,7 +439,7 @@ internal static partial class NativeHttpEdgeChecks
     private static string SentPath(string target)
     {
         var path = target.Split('?', 2)[0];
-        if (path.IndexOf("://", StringComparison.Ordinal) is var scheme and >= 0)
+        if (path is not ['/', ..] && path.IndexOf("://", StringComparison.Ordinal) is var scheme and >= 0)
             path = path.IndexOf('/', scheme + 3) is var start and >= 0 ? path[start..] : "/";
         var kept = new List<string>();
         foreach (var segment in path.Split('/'))
