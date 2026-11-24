@@ -22,6 +22,8 @@ namespace Elsa.Workbench.Qualification;
 
 internal static class WorkbenchPostgresPreview
 {
+    private const int JobTicketScope = -6;
+
     private sealed record Receipt(string Actor, string Bookmark, string Frame, string StateHash, string JournalHash, long Epoch, int Process);
     private sealed record Checkpoint(long Revision, string State, long Epoch, string? Owner);
 
@@ -194,7 +196,7 @@ internal static class WorkbenchPostgresPreview
                     var settled = await observation.Database.SqlQuery<bool>($"""
                         SELECT i."Jobs" IS NULL AND i."NextJobGeneration" = 1 AND NOT EXISTS (
                             SELECT 1 FROM "Messages" m WHERE m."Partition" = i."Partition" AND m."Target" = i."Id"
-                                AND (m."InboxScope" = {EfStore.RootJobScope} OR NOT m."Done")
+                                AND (m."InboxScope" = {JobTicketScope} OR NOT m."Done")
                         ) AS "Value" FROM "Instances" i
                         WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
                         """).SingleAsync(token);
@@ -354,19 +356,22 @@ internal static class WorkbenchPostgresPreview
     }
 
     // Preserve the physical insertion witness after the owner deletes the ticket during normal result settlement.
-    private static Task<int> InstallJobWitnessAsync(KernelDb db, CancellationToken token) =>
-        db.Database.ExecuteSqlRawAsync("""
+    private static Task<int> InstallJobWitnessAsync(KernelDb db, CancellationToken token)
+    {
+        var sql = FormattableString.Invariant($"""
             CREATE TABLE "WorkbenchJobWitness" ("Partition" int, "Target" text, "Generation" bigint, "Transaction" xid);
             CREATE FUNCTION capture_workbench_job() RETURNS trigger LANGUAGE plpgsql AS $fn$
             BEGIN
-                IF NEW."InboxScope" = -6 THEN
+                IF NEW."InboxScope" = {JobTicketScope} THEN
                     INSERT INTO "WorkbenchJobWitness" VALUES (NEW."Partition", NEW."Target", NEW."JobGeneration", NEW.xmin);
                 END IF;
                 RETURN NEW;
             END;
             $fn$;
             CREATE TRIGGER capture_workbench_job AFTER INSERT ON "Messages" FOR EACH ROW EXECUTE FUNCTION capture_workbench_job();
-            """, token);
+            """);
+        return db.Database.ExecuteSqlRawAsync(sql, token);
+    }
 
     private static KernelDb OpenProfile(DbContextOptions<KernelDb> options, bool nativeJobs) =>
         nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);
