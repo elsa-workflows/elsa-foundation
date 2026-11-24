@@ -77,8 +77,11 @@ instead of returning a result, and it is registered only by `Elsa3JsonReconcilia
   `Elsa3ReconciliationDiagnosticCodes`, plus `ELS3-UNTYPED-RESULT` and `ELS3-SCRIPT-OUTCOME-*`.
 - Component names travel only in message text: rewrite issues carry no metadata
   (`Elsa3ExpressionRewriteIssue(Code, Message, Guidance)`), and a call of an unknown function shares the
-  forbidden-capability code with refused capabilities (`Elsa3ExpressionRewriter.cs`). FR-016a adds `ComponentName`
-  metadata and a code of its own for that call.
+  forbidden-capability code with refused capabilities (`Elsa3ExpressionRewriter.cs`). The converter's member-name matching
+  decides per name whether a host function may take it over (`CanBeMatched`): an undeclared custom global and some
+  refused Elsa 3 built-ins can be, names on its never-matched list or names that clash with a generated accessor
+  cannot. FR-016a adds `ComponentName` metadata, and gives every matchable call a component code of its own;
+  unmatchable calls and forbidden capabilities keep the forbidden-capability code.
 - Guidance strings are constant literals, while some messages interpolate. One example is the strict-mode parse
   message, which embeds the parser's error description, and that description can quote script text
   (`Elsa3ExpressionRewriter.cs`, the sloppy-mode message).

@@ -46,7 +46,8 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 - [ ] T002 [P] Build the fixture export in `MTests/Fixtures/export/`, with:
   - clean definitions;
   - an unmapped custom activity used by three definitions;
-  - an undeclared JavaScript function;
+  - an undeclared JavaScript function, a matchable refused Elsa 3 built-in (`getConfig()`), and an unmatchable call;
+  - a definition with no published version;
   - an unregistered variable type, a variable on a custom storage driver, and one on the Elsa 3 memory driver;
   - a reusable definition with two users;
   - a definition whose reusable dependency is refused;
@@ -64,7 +65,8 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   identities that the report may name (FR-019): definition ids and names, including the dispatch target's id, type
   names and function names.
 - [ ] T003 [P] Build the fixture feature package project in `MTests/Fixtures/AcmeFeature/`. It registers the custom
-  activity under its Elsa 3 type name, an `acme.`-prefixed JavaScript host function and a variable type alias. Pack it
+  activity under its Elsa 3 type name, `acme.`-prefixed JavaScript host functions for the undeclared function and for `getConfig`, and a variable type
+  alias. Pack it
   to a `.nupkg` in the test setup, and add its `appsettings.json`.
 
 ## Phase 2: Foundational (blocks every story)
@@ -83,9 +85,11 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   component diagnostic: unmapped activity types, undeclared and replaced-function references, unregistered variable
   types and custom storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. Where
   `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` already carries `ComponentName`, leave it; test that the inventory
-  lists both the custom driver and the memory driver as storage-driver components. Give a call of an
-  undeclared JavaScript function a code of its own, separate from the forbidden-capability code, and update the
-  mapping README and the affected converter tests. The report builder reads `componentName` only from that metadata.
+  lists both the custom driver and the memory driver as storage-driver components. Give every call the
+  converter reports as matchable (`CanBeMatched`: an undeclared custom global or a refused built-in a host function may
+  take over) a `javascript-function` component code of its own, separate from the forbidden-capability code, which
+  unmatchable calls and forbidden capabilities keep. Update the mapping README and the affected converter tests, and
+  test the three fixture calls. The report builder reads `componentName` only from that metadata.
 - [ ] T005 Extract `Elsa3ImportRun` from `Elsa3FolderImportTask` in
   `extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Services/`. It returns the plan items, the skips with
   their cause and code, the publication outcomes and the publish diagnostics. Move the registration of its collaborators
@@ -177,7 +181,8 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   It refuses with `input-missing`, `input-empty` and `input-unreadable`. Test it with the fixture.
 - [ ] T017 [US1] Add `Tooling/VersionSelection.cs` (FR-012). It selects the latest published version plus the versions
   that reusable references pin, lists the versions not converted, supports `--all-versions`, and adds the Info finding
-  (`ELS3-MIGRATION-NO-PUBLISHED-VERSION`) for a definition with no published version. It keeps every input that shares
+  (`ELS3-MIGRATION-NO-PUBLISHED-VERSION`) for a definition with no published version, which the tests and the T021
+  golden file assert. It keeps every input that shares
   a selected version id, or a selected definition id and version, so that duplicates still reach the duplicate-input
   refusal. Test each fixture case, the duplicate case included.
 - [ ] T018 [US1] Wire the entry point: read, select, run `Elsa3ImportRun`, and collect every diagnostic with its stage.

@@ -291,8 +291,10 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED`, also Reconsider and also a `storage-driver` component, whose
   `ComponentName` is the trimmed Elsa 3 memory driver type: the user chose it in Elsa 3, and the migration has to
   decide what replaces it. An Elsa 4 publication error that carries
-  no structured metadata is never used to name a component. A call of an undeclared JavaScript function gets
-  its own code, separate from the forbidden-capability code it otherwise shares, so that refused capabilities (forbidden globals) do not count as
+  no structured metadata is never used to name a component. A JavaScript call the converter reports as
+  matchable (a registered prefixed host function may take the name over: an undeclared custom global, or a refused
+  Elsa 3 built-in such as `getConfig`) gets a `javascript-function` component code of its own, with `ComponentName`.
+  Calls the converter reports as unmatchable, and forbidden capabilities, keep the forbidden-capability code and are not
   components.
 - **FR-016**: Every Must fix finding MUST carry one of three remedies:
   - `patch-definition`: change the Elsa 3 definition;
