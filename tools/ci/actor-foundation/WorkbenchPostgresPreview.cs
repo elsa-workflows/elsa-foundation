@@ -242,13 +242,14 @@ internal static class WorkbenchPostgresPreview
                     if (timed)
                     {
                         var error = timesOut ? "timeout" : null;
-                        var completed = timesOut ? null : DirectApprovalWorkflow.JobResult;
                         var result = await observation.Database.SqlQuery<bool>($"""
                             SELECT count(*) = {jobCount} AND count(DISTINCT w."Generation") = {jobCount} AND bool_and(
                                 w."Generation" >= 0 AND w."Generation" < {jobCount} AND w."Due" = 0
                                 AND c."Revision" = 4 + 2 * w."Generation" AND c."Status" = 0
                                 AND (w."Payload"::jsonb ->> 'Error') IS NOT DISTINCT FROM {error}
-                                AND ((w."Payload"::jsonb ->> 'Result')::jsonb ->> 'Result') IS NOT DISTINCT FROM {completed}) AS "Value"
+                                AND CASE WHEN {timesOut} THEN (w."Payload"::jsonb ->> 'Result') IS NULL
+                                    ELSE ((w."Payload"::jsonb ->> 'Result')::jsonb ->> 'Result') IS NOT DISTINCT FROM {DirectApprovalWorkflow.JobResult}
+                                END) AS "Value"
                             FROM "WorkbenchJobWitness" w JOIN "Instances" i ON i."Partition" = w."Partition" AND i."Id" = w."Target"
                             JOIN "WorkbenchCheckpointWitness" c ON c."Partition" = w."Partition" AND c."Target" = w."Target"
                                 AND c."Transaction" = w."Transaction"
