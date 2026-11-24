@@ -14800,6 +14800,133 @@
       ]
     },
     {
+      "path": "essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj",
+      "name": "Elsa.ActorFoundation.Legacy.Workflows",
+      "kind": "test",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "Legacy.Workflows",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Model.Contracts",
+          "path": "essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Durable",
+          "path": "prototypes/kernel-model/src/Kernel.Durable/Kernel.Durable.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/ActorFoundation/Native/Run/Elsa.ActorFoundation.Native.Run.csproj",
+      "name": "Elsa.ActorFoundation.Native.Run",
+      "kind": "test",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "Native.Run",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Hosting",
+          "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.EntityFramework",
+          "path": "prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Native.Legacy",
+          "path": "prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Statecharts.Native",
+          "path": "prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Foundation.Postgres",
+          "path": "prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Foundation.InMemory",
+          "path": "prototypes/kernel-model/src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.WorkflowActor",
+          "path": "prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj",
+      "name": "Elsa.ActorFoundation.Simulation",
+      "kind": "test",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "Simulation",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Workflows",
+          "path": "essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.TestSupport",
+          "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Native.Legacy",
+          "path": "prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Statecharts",
+          "path": "prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Foundation.InMemory",
+          "path": "prototypes/kernel-model/src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.WorkflowActor",
+          "path": "prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj"
+        }
+      ]
+    },
+    {
       "path": "essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj",
       "name": "Elsa.ActorFoundation.Store.Conformance",
       "kind": "test",
@@ -14813,13 +14940,13 @@
       "edges": [
         {
           "type": "internal",
-          "id": "Elsa.ActorFoundation.TestSupport",
-          "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
+          "id": "Kernel.Workflows",
+          "path": "essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj"
         },
         {
           "type": "internal",
-          "id": "Kernel.Workflows",
-          "path": "prototypes/kernel-model/src/Kernel.Workflows/Kernel.Workflows.csproj"
+          "id": "Elsa.ActorFoundation.TestSupport",
+          "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
         }
       ]
     },
