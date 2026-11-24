@@ -29,8 +29,8 @@ Each warning carries structured metadata, so tools never parse the message:
 
 - `VariableName`, `InputName` or `OutputName`: the member;
 - `StorageDriverType`: the Elsa 3 driver type as exported, trimmed (for example `Acme.BlobStorageDriver, Acme`);
-- `ComponentName`: the same driver type, on the custom-driver warning only. The migration report lists it as a custom
-  component. The Memory driver is built into Elsa 3, so it is not a component to rebuild.
+- `ComponentKind`: `storage-driver`, and `ComponentName`: the same driver type. The migration report and the migration
+  skill find storage drivers through these two keys, Memory and custom alike.
 
 Both codes are `ELS3-BEHAVIOUR-*` warnings. The workflow converts and publishes, and the migration report files the
 warning under *Reconsider*: the run goes on, but the owner has a decision to make before the workflow runs in

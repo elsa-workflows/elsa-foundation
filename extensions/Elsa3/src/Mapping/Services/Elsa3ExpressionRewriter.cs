@@ -3094,7 +3094,8 @@ public static class Elsa3ImportDiagnosticCodes
     /// Warning: a variable, input or output used Elsa 3's Memory storage driver, which never persisted its value. It
     /// converts to Elsa 4's default storage (elsa.json), so the value is now persisted with the workflow instance; the
     /// migrator decides whether that is acceptable (docs/migration/elsa3-storage-drivers.md). Metadata: VariableName,
-    /// InputName or OutputName, and StorageDriverType (the Elsa 3 driver type).
+    /// InputName or OutputName, StorageDriverType (the Elsa 3 driver type), ComponentKind (storage-driver) and
+    /// ComponentName (the same driver type, for the migration report's component inventory).
     /// </summary>
     public const string MemoryStoragePersisted = "ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED";
 
@@ -3102,8 +3103,8 @@ public static class Elsa3ImportDiagnosticCodes
     /// Warning: a variable, input or output used a custom Elsa 3 storage driver, which kept its value outside the workflow
     /// instance. It converts to Elsa 4's default storage (elsa.json), so the value is now stored with the workflow
     /// instance; the migrator plans an Elsa 4 solution if it must stay elsewhere (docs/migration/elsa3-storage-drivers.md).
-    /// Metadata: VariableName, InputName or OutputName, StorageDriverType (the Elsa 3 driver type) and ComponentName (the
-    /// same driver type, for the migration report's component inventory).
+    /// Metadata: VariableName, InputName or OutputName, StorageDriverType (the Elsa 3 driver type), ComponentKind
+    /// (storage-driver) and ComponentName (the same driver type, for the migration report's component inventory).
     /// </summary>
     public const string CustomStorageDriverReplaced = "ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED";
 

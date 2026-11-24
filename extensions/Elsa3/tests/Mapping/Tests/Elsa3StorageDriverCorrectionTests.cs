@@ -73,7 +73,8 @@ public sealed class Elsa3StorageDriverCorrectionTests
         Assert.Equal(Path(member), warning.Path);
         Assert.Equal("report", warning.Metadata[$"{member}Name"]);
         Assert.Equal(MemoryDriver, warning.Metadata["StorageDriverType"]);
-        Assert.False(warning.Metadata.ContainsKey("ComponentName"));
+        Assert.Equal("storage-driver", warning.Metadata["ComponentKind"]);
+        Assert.Equal(MemoryDriver, warning.Metadata["ComponentName"]);
         Assert.Contains($"{member} 'report' used the Elsa 3 Memory storage driver", warning.Message);
         Assert.Contains("now persisted with the workflow instance", warning.Message);
         Assert.Contains("must never be persisted", warning.Guidance);
@@ -101,6 +102,7 @@ public sealed class Elsa3StorageDriverCorrectionTests
         Assert.Equal(Path(member), warning.Path);
         Assert.Equal("report", warning.Metadata[$"{member}Name"]);
         Assert.Equal(CustomDriver, warning.Metadata["StorageDriverType"]);
+        Assert.Equal("storage-driver", warning.Metadata["ComponentKind"]);
         Assert.Equal(CustomDriver, warning.Metadata["ComponentName"]);
         Assert.Contains($"{member} 'report' used the custom Elsa 3 storage driver '{CustomDriver}'", warning.Message);
         Assert.Contains("now stored with the workflow instance", warning.Message);

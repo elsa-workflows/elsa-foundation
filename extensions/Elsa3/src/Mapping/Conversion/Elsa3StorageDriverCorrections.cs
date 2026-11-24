@@ -24,8 +24,14 @@ internal static class Elsa3StorageDriverCorrections
     /// <summary>The metadata key holding the Elsa 3 driver type (trimmed, assembly-qualified as exported).</summary>
     public const string StorageDriverTypeKey = "StorageDriverType";
 
-    /// <summary>The metadata key naming a custom component for the migration report's component inventory (spec 1237 FR-016a).</summary>
+    /// <summary>The metadata key naming the component for the migration report's inventory and the migration skill (spec 1237 FR-016a, spec 1238).</summary>
     public const string ComponentNameKey = "ComponentName";
+
+    /// <summary>The metadata key holding the component's kind; for a storage driver <see cref="StorageDriverComponentKind"/>.</summary>
+    public const string ComponentKindKey = "ComponentKind";
+
+    /// <summary>The component kind of an Elsa 3 storage driver, Memory or custom.</summary>
+    public const string StorageDriverComponentKind = "storage-driver";
 
     /// <summary>What an Elsa 3 storage driver did with the value.</summary>
     internal enum DriverKind
@@ -70,7 +76,9 @@ internal static class Elsa3StorageDriverCorrections
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [$"{memberKind}Name"] = memberName,
-            [StorageDriverTypeKey] = driver
+            [StorageDriverTypeKey] = driver,
+            [ComponentKindKey] = StorageDriverComponentKind,
+            [ComponentNameKey] = driver
         };
 
         if (kind == DriverKind.Memory)
@@ -82,7 +90,6 @@ internal static class Elsa3StorageDriverCorrections
                 $"change the workflow so the {noun} does not hold it; otherwise the default storage is fine. {Guide} walks through the choices.",
                 metadata);
 
-        metadata[ComponentNameKey] = driver;
         return new(
             Elsa3ImportDiagnosticCodes.CustomStorageDriverReplaced,
             $"{memberKind} '{memberName}' used the custom Elsa 3 storage driver '{driver}', which kept its value outside the workflow instance. " +
