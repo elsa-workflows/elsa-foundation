@@ -245,10 +245,14 @@
         "dependencies": {
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
           "Kernel.Durable": "[1.0.0, )",
+          "Microsoft.Data.SqlClient": "[7.0.2, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.10, )",
           "MySql.EntityFrameworkCore": "[10.0.9, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.0, )"
+          "Npgsql": "[10.0.3, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.0, )",
+          "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.3, )",
+          "System.Security.Cryptography.Pkcs": "[9.0.21, )"
         }
       },
       "Kernel.Store.Conformance": {

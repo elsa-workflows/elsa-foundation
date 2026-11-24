@@ -135,20 +135,19 @@
     <PackageVersion Include="OpenIddict.Abstractions" Version="7.5.0" />
     <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
     <!--
-      Transitive pin: no project references SQLitePCLRaw.bundle_e_sqlite3 directly. It is the native
-      SQLite bundle that Microsoft.Data.Sqlite pulls in; pinned here so the native provider version
+      The native SQLite bundle that Microsoft.Data.Sqlite pulls in. Pinned here so the native provider version
       is deliberate rather than whatever the graph resolves. Without it the graph resolves 2.1.11,
       whose SQLitePCLRaw.lib.e_sqlite3 carries a high-severity advisory (GHSA-2m69-gcr7-jv3q).
-      See the Microsoft.OpenApi note above.
+      The kernel EF provider also references the bundle directly so standalone prototype projects inherit the floor.
     -->
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="System.CommandLine" Version="2.0.8" />
     <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="10.0.8" />
     <!--
-      Transitive pin (see Microsoft.OpenApi above): no project references System.Security.Cryptography.Pkcs
-      directly; Microsoft.Data.SqlClient pulls in 9.0.13, which carries CVE-2026-84008 (GHSA-846f-f764-76mx,
+      Microsoft.Data.SqlClient pulls in 9.0.13, which carries CVE-2026-84008 (GHSA-846f-f764-76mx,
       a .NET denial of service). 9.0.21 is the first patched 9.0.x build (#3707). Deleting this pin lets the
-      graph resolve the vulnerable build again.
+      graph resolve the vulnerable build again. The kernel EF provider also declares this dependency
+      so standalone prototype projects inherit the floor.
     -->
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
