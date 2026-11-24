@@ -9,11 +9,12 @@ Push-Location $env:TEMP; dotnet tool update --global JTest.Cli; Pop-Location
 
 ## Elsa 3.6.3 baseline
 
-Build the baseline image once, from a checkout of elsa-core at tag `3.6.3`:
+Build the baseline image once, from elsa-core tag `3.6.3` as committed. Use the Git URL as the build context, not a
+Windows working tree: with `core.autocrlf` on, `docker/entrypoint.sh` would get CRLF line endings and the container
+would not start.
 
 ```powershell
-git -C <elsa-core> checkout 3.6.3
-docker build -f <elsa-core>/docker/ElsaServer.Dockerfile -t elsa-server:3.6.3-jtest <elsa-core>
+docker build -f docker/ElsaServer.Dockerfile -t elsa-server:3.6.3-jtest https://github.com/elsa-workflows/elsa-core.git#3.6.3
 ```
 
 Start a fresh container and run the setup suite, then the suites:

@@ -14,7 +14,8 @@ repository unless they name the corpus.
 
 ## R-2 Elsa 3.6.3 baseline server
 
-- **Decision**: Build `docker/ElsaServer.Dockerfile` from elsa-core release tag `3.6.3` (tag object `d6a57f5f`, commit `7eac7de6`) and run it
+- **Decision**: Build `docker/ElsaServer.Dockerfile` from elsa-core release tag `3.6.3` (tag object `d6a57f5f`, commit `7eac7de6`), using the tag's
+  committed bytes as the build context (a Windows working tree turns `docker/entrypoint.sh` into CRLF), and run it
   as the original pipeline ran its image: `ASPNETCORE_ENVIRONMENT=Development`, `HTTP_PORTS=8080`, `HTTP__BASEURL`
   set to the published base URL, health check on the root returning `Healthy`. Record the image digest per run.
 - **Rationale**: The release tag is the exact pinned baseline version, built from source rather than taken from a

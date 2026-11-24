@@ -67,8 +67,8 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 **Independent test**: run the corpus against the 3.6.3 container and read `JTest/ledger/suites.md`.
 
-- [ ] T008 [US1] Build the baseline image from elsa-core tag `3.6.3` (`docker/ElsaServer.Dockerfile`) as in
-  quickstart.md, find its development admin credentials, and record the build command and image digest in
+- [ ] T008 [US1] Build the baseline image from elsa-core tag `3.6.3` (`docker/ElsaServer.Dockerfile`) from the tag's
+  committed bytes (the Git URL build context in quickstart.md; a Windows working tree breaks `entrypoint.sh`), find its development admin credentials, and record the build command and image digest in
   `JTest/README.md` (FR-006).
 - [ ] T009 [US1] Install or update `JTest.Cli` to the latest release and run
   `jtest validate "tests/**/*"` from `JTest/`; record the version and any invalid file in `JTest/ledger/runs.md`.
