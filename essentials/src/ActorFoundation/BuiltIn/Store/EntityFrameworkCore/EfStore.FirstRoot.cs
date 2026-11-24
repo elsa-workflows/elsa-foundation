@@ -18,7 +18,7 @@ public sealed partial class EfStore
         return db.UsesRootStableBody;
     }
 
-    private const int RootContentBytes = 16 * 1024 * 1024 - 24 * 1024;
+    internal const int RootContentBytes = 16 * 1024 * 1024 - 24 * 1024;
 
     // The capability set chooses the one prefix (RootStateFamily.Of).
     private static string RootStatePrefix(KernelDb db) => db.RootStateFamily.Prefix;
@@ -67,7 +67,7 @@ public sealed partial class EfStore
                 ? RootTerminalHeaderBytes(Creator.Start!.Model, Creator.Start.Definition) : 0;
             var reserve = Math.Max(0, terminalHeader - Encoding.UTF8.GetByteCount(Header));
             var bytes = db.UsesRootStableBody
-                ? StableContentBytes(RootStatePrefix(db), state, Header, Wire, reserve, Row.Status == InstanceStatus.Running ? Growth : 0)
+                ? StableContentBytes(RootStatePrefix(db), state, Header, Wire, Row.Jobs, reserve, Row.Status == InstanceStatus.Running ? Growth : 0)
                 : await MeasureRootContentAsync(db, RootStatePrefix(db).Length + escape.Length + reserve, state, Header,
                     Row.Jobs, cancellationToken);
             if (bytes > RootContentBytes) throw new StoreException(Failure.Definite, RootContentFailure);
@@ -275,7 +275,7 @@ public sealed partial class EfStore
 
     private const string RootContentFailure = "The encoded PostgreSQL checkpoint exceeds its storage budget.";
 
-    private static ValueTask<long> MeasureRootContentAsync(KernelDb db, int framing, string state, string header,
+    internal static ValueTask<long> MeasureRootContentAsync(KernelDb db, int framing, string state, string header,
         string? jobs, CancellationToken cancellationToken, bool comparePriorSize = false)
     {
         // The known framing is ASCII. The remaining 24 KiB covers bounded identifiers and scalars.
@@ -304,11 +304,12 @@ public sealed partial class EfStore
             sql.Format.Replace("/*root-wire*/", $$""" "FoundationStateWire" = {{{sql.ArgumentCount}}}, """, StringComparison.Ordinal),
             [.. sql.GetArguments(), wire]) : sql;
 
-    private static long StableContentBytes(string family, string stored, string header, byte[]? wire, int reserve, long growth)
+    // The exact stable-body row content. Jobs count as in MeasureRootContentAsync; only a job-protocol set writes them.
+    internal static long StableContentBytes(string family, string stored, string header, byte[]? wire, string? jobs, int reserve, long growth)
     {
         if (growth < 0 || growth > RootContentBytes) return (long)RootContentBytes + 1;
         return (long)family.Length + stored.Length + Encoding.UTF8.GetByteCount(header) +
-            (wire?.Length ?? 0) + reserve + growth;
+            (wire?.Length ?? 0) + (jobs is null ? 0 : Encoding.UTF8.GetByteCount(jobs)) + reserve + growth;
     }
 
     private sealed record PhysicalRoot(string Id, long Creation, string State, byte[]? Wire, int StateVersion, long Revision, string Header,

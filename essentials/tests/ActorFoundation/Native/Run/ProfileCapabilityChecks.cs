@@ -155,6 +155,42 @@ internal static class ProfileCapabilityChecks
         var mapped = RootProfiles.Formats.Values.Aggregate(RootCapabilities.None, (all, next) => all | next);
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
+        // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
+        // carrier of its capability holds.
+        foreach (var (name, _, format, _) in profiles)
+            Check(RootProfiles.MissingPrerequisites(RootProfiles.Formats[format]) == RootCapabilities.None,
+                $"{name} is closed under the prerequisite map");
+        foreach (var (capability, needs) in RootProfiles.Prerequisites)
+            Check(needs != RootCapabilities.None && (needs & capability) == 0 &&
+                RootProfiles.Formats.Values.Where(set => set.HasFlag(capability)).All(set => set.HasFlag(needs)),
+                $"{capability} needs {needs}, which every shipped set with {capability} carries");
+        // An unshipped composition must be closed: stable body without termination would write a shipped prefix over the wire layout.
+        var unshipped = StoreFormat.Current with { MessageProtocol = 96 };
+        foreach (var (composition, missing) in new (RootCapabilities Set, RootCapabilities Missing)[]
+                 {
+                     (RootCapabilities.StableBody, RootCapabilities.Termination),
+                     (RootCapabilities.StableBody | RootCapabilities.Termination, RootCapabilities.OperatorProtocol),
+                     (RootCapabilities.ParkInspection, RootCapabilities.ParkOpening),
+                     (RootCapabilities.TimedJobPreview | RootCapabilities.JobProtocol, RootCapabilities.TimedJobSettlement),
+                     (RootProfiles.Formats[StoreFormat.RootStableBody] | RootCapabilities.OperatorReplies, RootCapabilities.TerminalSelection)
+                 })
+        {
+            try
+            {
+                KernelDb.ForUnshippedComposition(options, unshipped, composition).Dispose();
+                Check(false, $"an unclosed composition {composition} was refused");
+            }
+            catch (ArgumentException error) when (error is not ArgumentOutOfRangeException)
+            {
+                Check(RootProfiles.MissingPrerequisites(composition) == missing && error.Message.Contains(missing.ToString(), StringComparison.Ordinal),
+                    $"an unclosed composition {composition} is refused for lacking {missing}");
+            }
+        }
+        using (var closed = KernelDb.ForUnshippedComposition(options, unshipped,
+                   RootProfiles.Formats[StoreFormat.RootTerminalSelection] | RootProfiles.Formats[StoreFormat.RootTimedJobPreview] |
+                   RootCapabilities.ReplyProtocol | RootCapabilities.OperatorReplies))
+            Check(closed.RootStateFamily.Prefix == "!kernel-state/13:public-root-composed:timed-jobs+stable-body+replies:",
+                "a closed composition with held operator replies and no retention is accepted");
         for (var i = 0; i < keys.Count; i++)
             for (var j = i + 1; j < keys.Count; j++)
                 if (Equals(keys[i].Key, keys[j].Key)) Check(false, $"{keys[i].Name} and {keys[j].Name} share a model cache key");

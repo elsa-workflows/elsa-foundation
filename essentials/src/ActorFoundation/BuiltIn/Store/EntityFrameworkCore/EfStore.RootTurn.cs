@@ -18,7 +18,7 @@ public sealed partial class EfStore
             var terminalHeader = db.UsesRootTermination && Status == InstanceStatus.Running
                 ? RootTerminalHeaderBytes(Current.Model, Current.Definition) : 0;
             var reserve = Math.Max(0, terminalHeader - System.Text.Encoding.UTF8.GetByteCount(Header));
-            var projectedBytes = db.UsesRootStableBody ? StableContentBytes(family, State, Header, Wire, reserve, Status == InstanceStatus.Running ? Growth : 0)
+            var projectedBytes = db.UsesRootStableBody ? StableContentBytes(family, State, Header, Wire, jobs, reserve, Status == InstanceStatus.Running ? Growth : 0)
                 : await MeasureRootContentAsync(db, family.Length + reserve, State, Header, jobs, cancellationToken,
                     comparePriorSize: true);
             var overBudget = projectedBytes > RootContentBytes;

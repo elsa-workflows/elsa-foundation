@@ -128,6 +128,34 @@ internal static class RootProfiles
 
     internal static RootCapabilities CapabilitiesOf(StoreFormat format) =>
         Formats.TryGetValue(format, out var capabilities) ? capabilities : throw new ArgumentOutOfRangeException(nameof(format), format, "No kernel store profile has this format.");
+
+    // What each capability needs, as the shipped chains carry it. Every shipped set is closed under this map
+    // (profile-capabilities checks it), and an unshipped composition must be closed too.
+    internal static IReadOnlyDictionary<RootCapabilities, RootCapabilities> Prerequisites { get; } = new Dictionary<RootCapabilities, RootCapabilities>
+    {
+        [RootCapabilities.Timers] = RootCapabilities.SelfProtocol,
+        [RootCapabilities.Termination] = RootCapabilities.OperatorProtocol,
+        [RootCapabilities.StableBody] = RootCapabilities.Termination,
+        [RootCapabilities.TerminalSelection] = RootCapabilities.StableBody,
+        [RootCapabilities.Retirement] = RootCapabilities.TerminalSelection,
+        [RootCapabilities.TerminateThenDelete] = RootCapabilities.Retirement,
+        [RootCapabilities.Retention] = RootCapabilities.TerminateThenDelete,
+        // A held reply needs a selected command. Admission also refuses a held Delete without retirement and a held
+        // retention delete, so the shipped Retention chain beneath format 17 is not a prerequisite.
+        [RootCapabilities.OperatorReplies] = RootCapabilities.TerminalSelection,
+        [RootCapabilities.JobPreview] = RootCapabilities.JobProtocol,
+        [RootCapabilities.TimedJobIssuance] = RootCapabilities.JobProtocol,
+        [RootCapabilities.TimedJobSettlement] = RootCapabilities.JobProtocol,
+        [RootCapabilities.TimedJobPreview] = RootCapabilities.TimedJobSettlement,
+        [RootCapabilities.ParkInspection] = RootCapabilities.ParkOpening,
+        [RootCapabilities.ParkArrivals] = RootCapabilities.ParkInspection,
+        [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol
+    };
+
+    // The prerequisites of the set's members that the set lacks. None means the set is closed.
+    internal static RootCapabilities MissingPrerequisites(RootCapabilities capabilities) => Prerequisites
+        .Where(entry => (capabilities & entry.Key) != 0)
+        .Aggregate(RootCapabilities.None, (missing, entry) => missing | (entry.Value & ~capabilities));
 }
 
 // The state family of a capability set: the prefix its qualified root writers put before each checkpoint state, which
