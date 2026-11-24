@@ -284,6 +284,13 @@ internal static partial class NativeHttpEdgeChecks
                     "Escaped ids are decoded exactly once: %2541 is order '%41', not order 'A', and A%2F42 is order 'A/42'.");
             var dots = await RawPostAsync("orders/%2E%2E/cancel");
             Require(dots.Status == 404, $"A '..' segment sent as the client wrote it is no id for the matcher. Observed {dots.Status}.");
+            foreach (var order in new[] { "%41", "A" })
+                using (var shipping = await PostAsync($"orders/{Uri.EscapeDataString(order)}/ship"))
+                    Require(shipping.StatusCode == HttpStatusCode.Accepted, $"Order '{order}' ships again.");
+            var absolute = await RawPostAsync($"{client.BaseAddress!.GetLeftPart(UriPartial.Authority)}/orders/%2541/cancel");
+            var stepped = await RawPostAsync("orders/x/../A/cancel");
+            Require(absolute is { Status: 200, Body: "cancelled %41 by %41" } && stepped is { Status: 200, Body: "cancelled A by A" },
+                $"An absolute-form target is decoded once too, and a literal '..' step is removed as Kestrel removes it. Observed {absolute.Status} '{absolute.Body}', {stepped.Status} '{stepped.Body}'.");
             using (var computed = new HttpRequestMessage(HttpMethod.Post, "ship-computed") { Content = JsonContent.Create(new { id = "Zz" }) })
                 Require((await client.SendAsync(computed, token)).StatusCode == HttpStatusCode.OK, "A workflow waits on a cancel path it computes.");
             using (var computedCancel = await PostAsync("orders/Zz/cancel"))
@@ -323,14 +330,28 @@ internal static partial class NativeHttpEdgeChecks
             using var socket = new System.Net.Sockets.TcpClient();
             await socket.ConnectAsync(address.Host, address.Port, token);
             await using var stream = socket.GetStream();
-            var head = $"POST /{path} HTTP/1.1\r\nHost: {address.Authority}\r\n{string.Concat(headerLines.Select(line => line + "\r\n"))}Content-Length: 0\r\nConnection: close\r\n\r\n";
+            var target = path.Contains("://", StringComparison.Ordinal) ? path : "/" + path;     // an absolute-form target as given
+            var head = $"POST {target} HTTP/1.1\r\nHost: {address.Authority}\r\n{string.Concat(headerLines.Select(line => line + "\r\n"))}Content-Length: 0\r\nConnection: close\r\n\r\n";
             await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(head), token);
             using var reader = new StreamReader(stream);
             var text = await reader.ReadToEndAsync(token);
             var status = int.Parse(text.Split(' ', 3)[1]);
-            var payload = text[(text.IndexOf("\r\n\r\n", StringComparison.Ordinal) + 4)..];
-            var body = payload.IndexOf('{') is >= 0 and var from ? payload[from..(payload.LastIndexOf('}') + 1)] : payload;     // past any chunk framing
-            return (status, body);
+            var split = text.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+            var payload = text[(split + 4)..];
+            if (text[..split].Contains("Transfer-Encoding: chunked", StringComparison.OrdinalIgnoreCase))
+            {
+                var decoded = new System.Text.StringBuilder();
+                for (var at = 0; at < payload.Length;)
+                {
+                    var line = payload.IndexOf("\r\n", at, StringComparison.Ordinal);
+                    var size = Convert.ToInt32(payload[at..line], 16);
+                    if (size == 0) break;
+                    decoded.Append(payload, line + 2, size);
+                    at = line + 2 + size + 2;
+                }
+                payload = decoded.ToString();
+            }
+            return (status, payload);
         }
 
         async Task<HttpResponseMessage> PostApprovalRetryAsync(string name)
@@ -370,7 +391,7 @@ internal static partial class NativeHttpEdgeChecks
         catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: refused.OverBound ? StatusCodes.Status431RequestHeaderFieldsTooLarge : 400); }
         // The route templates are matched on the path as the client sent it, so that the matcher decodes it once: Request.Path
         // is already decoded but for %2F, and a value of '%41' sent as %2541 would be decoded twice.
-        var sent = context.Features.Get<IHttpRequestFeature>()?.RawTarget is ['/', ..] target ? target.Split('?', 2)[0] : request.Path.ToUriComponent();
+        var sent = SentPath(context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? request.Path.ToUriComponent());
         var match = HttpRouteMatcher.Match(routes, request.Method, sent);
         Kernel.Native.HttpRequest message;
         try { message = new Kernel.Native.HttpRequest(request.Method, request.Path, body) { Query = query, Headers = headers, RouteValues = match.Values }; }
@@ -405,6 +426,21 @@ internal static partial class NativeHttpEdgeChecks
             { Error: null, Item: null } => Results.NoContent(),
             _ => Results.StatusCode(500)
         };
+    }
+
+    // The path of the request target as the client sent it: without the scheme and authority of an absolute-form target
+    // and without the query, and with the literal '.' and '..' segments removed as Kestrel removes them (RFC 3986,
+    // 5.2.4); an escaped %2E%2E stays a segment, which the matcher takes for no value.
+    private static string SentPath(string target)
+    {
+        var path = target.Split('?', 2)[0];
+        if (path.IndexOf("://", StringComparison.Ordinal) is var scheme and >= 0)
+            path = path.IndexOf('/', scheme + 3) is var start and >= 0 ? path[start..] : "/";
+        var kept = new List<string>();
+        foreach (var segment in path.Split('/'))
+            if (segment == "..") { if (kept.Count > 1) kept.RemoveAt(kept.Count - 1); }
+            else if (segment != ".") kept.Add(segment);
+        return string.Join('/', kept);
     }
 
     private static List<KeyValuePair<string, string>> QueryPairs(string? queryString)
