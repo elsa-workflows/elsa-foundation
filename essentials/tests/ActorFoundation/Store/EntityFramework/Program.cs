@@ -10,7 +10,7 @@ using MySql.Data.MySqlClient;
 using Npgsql;
 
 // The store conformance suite against the Entity Framework store. EfStore.cs and Engines.cs are used as they are.
-//   dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite semantic
+//   dotnet ../../essentials/tests/ActorFoundation/Store/EntityFramework/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite semantic
 //   dotnet ... postgres "Host=localhost;Port=<port>;Username=postgres;Password=kernel" [--fence-in-batch|--checked-fence] [--m5] semantic|stress|cost ...
 //   dotnet ... sqlserver "Server=localhost,<port>;User Id=sa;Password=...;TrustServerCertificate=True" [--fence-in-batch|--checked-fence] [--rcsi-off] semantic ...
 //   dotnet ... mysql "server=localhost;port=<port>;uid=root;pwd=kernel" [--fence-in-batch|--checked-fence] [--rc] semantic ...
@@ -99,7 +99,7 @@ switch (args)
 }
 
 /// <summary>The suite's plug for <see cref="EfStore"/>: SQLite in a file; PostgreSQL, SQL Server or MySQL in a database of its own per store.</summary>
-sealed class EfProvider(string engine, string? server, string[] flags) : IStoreProvider
+internal sealed class EfProvider(string engine, string? server, string[] flags) : IStoreProvider
 {
     // The fence flag, else the engine's default (EfStore.FenceInBatch).
     private bool FenceInBatch => flags.Contains("--fence-in-batch") || !flags.Contains("--checked-fence") && (Dialect()?.FenceInBatchByDefault(Commit != CommitSql.EntityFramework) ?? true);
@@ -450,7 +450,7 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
 /// What Entity Framework sends, as FINDINGS section 5 counts it. PostgreSQL: a command or a COMMIT is a round trip;
 /// BEGIN rides with the first command. SQLite: BEGIN, each command and COMMIT are each one call into the engine.
 /// </summary>
-sealed class Counting(bool pg) : DbCommandInterceptor, ICostCounter
+internal sealed class Counting(bool pg) : DbCommandInterceptor, ICostCounter
 {
     public sealed class TransactionCounting : DbTransactionInterceptor
     {

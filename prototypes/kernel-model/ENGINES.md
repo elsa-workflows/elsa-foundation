@@ -34,8 +34,8 @@ nuget.org on 12 November 2026.
 ```
 dotnet build ef/Kernel.Ef.Run -c Release
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x stress|cost|probe|block|definite|deadlock <engine> "<connection>" [key=value ...]
-dotnet build ef/Kernel.Ef.Conformance -c Release
-dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite|postgres|sqlserver|mysql ["<server>"] [--fence-in-batch|--checked-fence] [--m5] [--rcsi-off] [--rc] <suite command>   # "<server>" for the server engines only; no fence flag: the engine's default (FINDINGS 25.1); suite command: semantic, semantic-broken, stress, stress-broken, cost
+dotnet build ../../essentials/tests/ActorFoundation/Store/EntityFramework -c Release
+dotnet ../../essentials/tests/ActorFoundation/Store/EntityFramework/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite|postgres|sqlserver|mysql ["<server>"] [--fence-in-batch|--checked-fence] [--m5] [--rcsi-off] [--rc] <suite command>   # "<server>" for the server engines only; no fence flag: the engine's default (FINDINGS 25.1); suite command: semantic, semantic-broken, stress, stress-broken, cost
 ```
 
 ### Watchdog cancellation under a database lock
@@ -189,7 +189,7 @@ creation binding and one inbox row in one transaction. An independent client can
 and read the pending creator after the writer exits. Receipt expiry permits a new life, and each
 earlier reference continues to name its original creation.
 
-Run `ef/Kernel.Ef.Conformance` with `postgres "<server connection>" root-admission` for the concurrent
+Run `../../essentials/tests/ActorFoundation/Store/EntityFramework` with `postgres "<server connection>" root-admission` for the concurrent
 admission, rollback, expiry, tenant and physical inbox cases. The preview uses ordinary PostgreSQL
 text for a representable input and a reversible envelope for text containing NUL or unpaired UTF-16
 units. It refuses an encoded row above the storage budget before its transaction commits.
@@ -221,7 +221,7 @@ This increment covers ordinary direct inputs and checkpoint-only actor turns.
 ### The store conformance suite. Run
 
 `../../essentials/tests/ActorFoundation/Store/Conformance` (merged from `6097f0174b`), 46 semantic cases, against the merged store with
-the fixes. The runner `ef/Kernel.Ef.Conformance` now takes SQL Server and MySQL.
+the fixes. The runner `../../essentials/tests/ActorFoundation/Store/EntityFramework` now takes SQL Server and MySQL.
 
 | Store | Required | Reference |
 |---|---|---|

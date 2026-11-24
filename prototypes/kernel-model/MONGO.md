@@ -24,7 +24,7 @@ partition is a *pass*. `src/Kernel` is now three projects: `src/Kernel.Runtime`,
 | `conformance/Kernel.Store.Conformance.Run` | The suite against `InMemoryStore`, the reference |
 | `mongo/Kernel.Mongo` | `MongoStore : IKernelStore` (MongoDB.Driver 3.9; needs a replica set and MongoDB 8.0) |
 | `mongo/Kernel.Mongo.Run` | The suite's plug for MongoDB, a TCP proxy that cuts connections, probes |
-| `ef/Kernel.Ef.Conformance` | The suite's plug for `EfStore`, SQLite and PostgreSQL |
+| `../../essentials/tests/ActorFoundation/Store/EntityFramework` | The suite's plug for `EfStore`, SQLite and PostgreSQL |
 
 ### The plug
 

@@ -27,7 +27,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `models/Native.Run` | Native smoke tests, cost and memory measurement, PostgreSQL Core Preview |
 | `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |
-| `ef/Kernel.Ef.Conformance` | The conformance suite against the EF store, every engine |
+| `../../essentials/tests/ActorFoundation/Store/EntityFramework` | The conformance suite against the EF store, every engine |
 | `../../essentials/tests/ActorFoundation/Store/Conformance` | The store conformance suite: semantic cases, the stress test, the cost runs, for any provider |
 | `conformance/Kernel.Store.Conformance.Run` | The suite against the in-memory store |
 | `conformance/Kernel.Runtime.Conformance` | The runtime conformance suite: semantic cases, the fence broken on purpose, the stress test, for any actor runtime |
@@ -50,7 +50,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 One project at a time (they share `obj/` folders through project references):
 
 ```
-for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
+for p in sim models/Native.Run ef/Kernel.Ef.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
@@ -544,7 +544,7 @@ public preview budget has its own command.
 
 Orderly shutdown of an idle set host releases the owned fences together. The runtime conformance runner's
 `set-release` case covers a cancelled drain, overlapping stop calls and the fixed-host path. To check the full
-1,024-row release and a stale epoch on SQLite, run `dotnet run -c Release --project ef/Kernel.Ef.Conformance --
+1,024-row release and a stale epoch on SQLite, run `dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Store/EntityFramework --
 sqlite release-set --owned-commit --fence-in-batch` from `prototypes/kernel-model`. The same check accepts
 `--checked-fence`.
 
@@ -958,7 +958,7 @@ $RTC stress 20 2000; $RTC stress-broken 10 1000
 
 ```
 dotnet conformance/Kernel.Store.Conformance.Run/bin/Release/net10.0/Kernel.Store.Conformance.Run.dll semantic     # in memory
-EFC="dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll"
+EFC="dotnet ../../essentials/tests/ActorFoundation/Store/EntityFramework/bin/Release/net10.0/Kernel.Ef.Conformance.dll"
 $EFC sqlite [--fence-in-batch|--checked-fence] [--ef-commit|--owned-commit] semantic   # no flag: the engine's default fence, below; the owned commit (COMMIT-SQL.md)
 $EFC postgres "$PG" [--fence-in-batch|--checked-fence] [--m5] semantic # --m5: E1 switched off; it changes nothing on the owned commit (COMMIT-SQL.md), and failed the fence cases on EF's
 $EFC <engine> ... --checked-fence semantic-broken fence                # the fence broken on purpose: the three fence cases must fail (exit 0)
@@ -979,8 +979,8 @@ $MOR "$MO" probe crash|limits
 Place the format command before the fence option. From `prototypes/kernel-model`, for example:
 
 ```sh
-dotnet run -c Release --project ef/Kernel.Ef.Conformance -- sqlite version-services --checked-fence
-dotnet run -c Release --project ef/Kernel.Ef.Conformance -- postgres "$PG" version-services --checked-fence
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Store/EntityFramework -- sqlite version-services --checked-fence
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Store/EntityFramework -- postgres "$PG" version-services --checked-fence
 ```
 
 Repeat with `--fence-in-batch`. Use a disposable server for network providers. SQLite uses a temporary file.
@@ -995,7 +995,7 @@ From `prototypes/kernel-model`, use an isolated TLS-enabled MySQL test server wi
 connection. Build the EF conformance runner with a locked restore, then run:
 
 ```sh
-dotnet run -c Release --project ef/Kernel.Ef.Conformance -- mysql "$MY" lease-cancellation --owned-commit --checked-fence
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Store/EntityFramework -- mysql "$MY" lease-cancellation --owned-commit --checked-fence
 ```
 
 Repeat with `--fence-in-batch`. This check injects a throwing cancellation callback at heartbeat connection
@@ -1128,7 +1128,7 @@ MySQL prepares the two additive columns on a separate connection while the migra
 An interrupted preparation can be retried. Reopening requires a reader for the resulting three-part format.
 
 To check a real PostgreSQL predecessor, build its Native runner and this checkout's Native and EF conformance
-runners in Release. Run `bash ef/Kernel.Ef.Conformance/check-generation-profiles.sh /absolute/path/to/old/Kernel.Native.Run.dll`
+runners in Release. Run `bash ../../essentials/tests/ActorFoundation/Store/EntityFramework/check-generation-profiles.sh /absolute/path/to/old/Kernel.Native.Run.dll`
 from this prototype. The script uses a disposable PostgreSQL 17 container and three fresh databases. It starts each
 workflow with the old executable and completes the same wait or pending private input after the schema upgrade.
 
@@ -1142,7 +1142,7 @@ the qualified relational writer.
 From `prototypes/kernel-model`, run this with Docker and the locked .NET SDK.
 
 ```sh
-bash ef/Kernel.Ef.Conformance/check-mixed-version-rehearsal.sh
+bash ../../essentials/tests/ActorFoundation/Store/EntityFramework/check-mixed-version-rehearsal.sh
 ```
 
 The script builds its process driver against archived runtime sources at schema-2 revision `08caf14c0e`, schema-3

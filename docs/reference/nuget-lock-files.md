@@ -57,7 +57,8 @@ so that mismatch, and the warning it produced, are both gone; the pin and the lo
 with no lock file does not fail: NuGet writes one and carries on, unlocked. So
 `essentials/tests/Architecture/Tests/NuGetLockFileTests.cs` fails for any project in `Elsa.Server.slnx` without a committed
 lock file beside it, for two projects sharing a directory (and so one lock file), and for a committed lock file with no
-project beside it. The solution rule covers `Kernel.Durable` and `Kernel.Workflows` under `prototypes/kernel-model/`.
+project beside it. The solution rule also covers `Kernel.Durable`, `Kernel.Workflows` and `Kernel.EntityFramework`
+under `prototypes/kernel-model/`.
 Other prototype projects use their prototype's build and package configuration and may commit a lock file beside
 their `.csproj` for reproducible standalone restores. An orphan lock file under `prototypes/` still fails.
 

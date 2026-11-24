@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>Kernel.EntityFramework</RootNamespace>
+    <IsPackable>false</IsPackable>
     <NoWarn>$(NoWarn);EF1002</NoWarn>
   </PropertyGroup>
   <ItemGroup>

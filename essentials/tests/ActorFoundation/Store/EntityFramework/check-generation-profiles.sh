@@ -2,9 +2,10 @@
 # Supply a schema-2 Release runner. The current checkout must also have both runners built.
 set -euo pipefail
 old=${1:?Supply the absolute path to the predecessor Kernel.Native.Run.dll}
-root=$(cd "$(dirname "$0")/../.." && pwd)
+runner=$(cd "$(dirname "$0")" && pwd)
+root=$(cd "$runner/../../../../../prototypes/kernel-model" && pwd)
 new="$root/models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll"
-upgrade="$root/ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll"
+upgrade="$runner/bin/Release/net10.0/Kernel.Ef.Conformance.dll"
 [[ -f "$old" && -f "$new" && -f "$upgrade" ]]
 export POSTGRES_PASSWORD
 POSTGRES_PASSWORD=$(openssl rand -hex 24)

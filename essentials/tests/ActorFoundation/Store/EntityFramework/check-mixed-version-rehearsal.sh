@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-project=ef/Kernel.Ef.Conformance
-dll="$project/bin/Release/net10.0/Kernel.Ef.Conformance.dll"
-root=$(cd "$(dirname "$0")/../.." && pwd)
-repo=$(git -C "$root" -c core.fsmonitor=false rev-parse --show-toplevel)
+runner=essentials/tests/ActorFoundation/Store/EntityFramework
+legacy_runner=prototypes/kernel-model/ef/Kernel.Ef.Conformance
+output=bin/Release/net10.0/Kernel.Ef.Conformance.dll
+repo=$(git -C "$(dirname "$0")" -c core.fsmonitor=false rev-parse --show-toplevel)
 old_revision=08caf14c0e3248e1ddc2caac6643be70c3b9921f
 floor_revision=6f38d986481115e4cbb86bd09ca3b9120b17047a
 logs=$(mktemp -d "${1:-${TMPDIR:-/tmp}}/kernel-mixed-version.XXXXXXXX")
@@ -27,32 +27,32 @@ trap cleanup EXIT
 echo "logs $logs"
 
 new_revision=$(git -C "$repo" -c core.fsmonitor=false rev-parse HEAD)
-source="$scratch/new/prototypes/kernel-model"
+source="$scratch/new"
 build_driver() {
     local name=$1 revision=$2
     local destination="$scratch/$name"
     mkdir -p "$destination"
     git -C "$repo" -c core.fsmonitor=false archive "$revision" | tar -xf - -C "$destination"
-    local tree="$destination/prototypes/kernel-model"
+    local project=$runner
     if [[ "$name" != new ]]; then
         # The disposable driver and its database guard are the only additions to the archived test project.
-        cp "$source/$project/FormatRehearsalProcess.cs" "$source/models/Native.Run/PostgresFixtureDatabase.cs" "$tree/$project/"
-        cat > "$tree/$project/Program.cs" <<'CS'
+        project=$legacy_runner
+        cp "$source/$runner/FormatRehearsalProcess.cs" "$source/prototypes/kernel-model/models/Native.Run/PostgresFixtureDatabase.cs" "$destination/$project/"
+        cat > "$destination/$project/Program.cs" <<'CS'
 using Kernel.Ef.Conformance;
 return await FormatRehearsalProcess.RunAsync(args);
 CS
     fi
-    (cd "$tree" && dotnet build "$project" -c Release -p:RestoreLockedMode=true) > "$logs/$name-build.log" 2>&1
-    printf '%s %s %s\n' "$name" "$revision" "$(git -c core.fsmonitor=false hash-object "$tree/$project/bin/Release/net10.0/Kernel.EntityFramework.dll")"
+    (cd "$destination" && dotnet build "$project" -c Release -p:RestoreLockedMode=true) > "$logs/$name-build.log" 2>&1
+    printf '%s %s %s\n' "$name" "$revision" "$(git -c core.fsmonitor=false hash-object "$destination/$project/bin/Release/net10.0/Kernel.EntityFramework.dll")"
 }
 
-cd "$root"
 build_driver new "$new_revision"
 build_driver old "$old_revision"
 build_driver floor "$floor_revision"
-old="$scratch/old/prototypes/kernel-model/$dll"
-floor="$scratch/floor/prototypes/kernel-model/$dll"
-new="$source/$dll"
+old="$scratch/old/$legacy_runner/$output"
+floor="$scratch/floor/$legacy_runner/$output"
+new="$source/$runner/$output"
 [[ $(git -c core.fsmonitor=false hash-object "$(dirname "$old")/Kernel.EntityFramework.dll") != $(git -c core.fsmonitor=false hash-object "$(dirname "$new")/Kernel.EntityFramework.dll") ]]
 
 export POSTGRES_PASSWORD
