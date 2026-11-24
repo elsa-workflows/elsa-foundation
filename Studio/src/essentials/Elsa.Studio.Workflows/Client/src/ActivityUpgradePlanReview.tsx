@@ -122,7 +122,7 @@ function StageCard({
   number: number;
   steps: ActivityUpgradeStep[];
 }) {
-  
+
   const status = normalizeStageStatus(stage.status);
   return <li className={`au-stage is-${status.toLowerCase()}`}>
     <header>
@@ -150,7 +150,7 @@ function StageCard({
 }
 
 function DiagnosticList({ diagnostics, compact = false }: { diagnostics: ActivityUpgradeDiagnostic[]; compact?: boolean }) {
-  
+
   if (!diagnostics.length) return compact ? null : <div className="au-diagnostics is-empty" role="status">No plan-level diagnostics.</div>;
   return <section className={`au-diagnostics${compact ? " is-compact" : ""}`} aria-label={compact ? "Stage diagnostics" : "Plan diagnostics"}>
     <h3>{compact ? "Stage diagnostics" : "Plan diagnostics"}</h3>

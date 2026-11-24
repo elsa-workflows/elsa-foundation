@@ -113,7 +113,7 @@ function DashboardWidgetBody({ widget, snapshot, settings, size }: {
   settings: unknown;
   size: StudioDashboardWidgetSize;
 }) {
-  
+
   if (widget.isEmpty?.(snapshot, settings)) {
     return (
       <div className="dashboard-widget-empty" role="status">
@@ -161,7 +161,7 @@ class WidgetBodyBoundary extends React.Component<{
 function formatTime(value: number) { return formatStudioDate(value); }
 
 function WidgetSettings({ api, widget, value, onSave, onClose }: { api: ElsaStudioModuleApi; widget: StudioDashboardWidgetContribution; value: unknown; onSave(value: unknown): void; onClose(): void }) {
-  
+
   const definition = widget.settings!;
   const [draft, setDraft] = useState<Record<string, unknown>>(() => ({ ...(value as Record<string, unknown>) }));
   const [validationError, setValidationError] = useState<string | null>(null);

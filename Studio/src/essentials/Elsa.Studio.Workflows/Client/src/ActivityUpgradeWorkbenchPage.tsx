@@ -66,7 +66,7 @@ export function ActivityUpgradeWorkbenchPage({
   context: StudioEndpointContext;
   navigateToStudioPath?(path: string): void;
 }) {
-  
+
   // A plan can finish while this screen's workspace tab is in the background; recording it in the
   // address then waits for the tab to return instead of taking over the active tab's address.
   const whenActive = useStudioWorkspaceWhenActive();
@@ -395,7 +395,7 @@ function UpgradeSelection({
   onRemoveRoot(kind: ActivityUpgradeRootKind, id: string): void;
   onReview(): void;
 }) {
-  
+
   return <section className="au-selection" aria-labelledby="activity-upgrade-selection">
     <header><span>1</span><div><h2 id="activity-upgrade-selection">Exact replacement and roots</h2><p>Each root is added individually. An immutable root asks the backend to plan a new clone; it is never rewritten.</p></div></header>
     <div className="au-replacement-grid">
@@ -434,7 +434,7 @@ function OutcomeUnknown({
   onCheck(): void;
   onRetry(): void;
 }) {
-  
+
   return <section className="au-outcome" role="alert" aria-labelledby="activity-upgrade-outcome">
     <AlertTriangle size={22} aria-hidden />
     <div><h2 id="activity-upgrade-outcome">Upgrade status unconfirmed</h2><p>{outcome.state === "not-found" ? "No result is available yet. You can retry this stage with the original request ID." : outcome.state === "rejected" ? "The durable receipt rejected the operation. The reviewed evidence remains visible." : "Studio will query the durable receipt before any retry. No second mutation request is sent while status is Preparing or unavailable."}</p><code>{outcome.receiptId}</code></div>
@@ -471,7 +471,7 @@ function PublicationHandoff({
   onChange(draftId: string, value: string): void;
   onRefresh(): void;
 }) {
-  
+
   return <section className="au-handoff" aria-labelledby="activity-upgrade-handoff">
     <header><span>Publication handoff</span><h2 id="activity-upgrade-handoff">Awaiting separately reviewed publication</h2><p>Publish each exact child draft in its normal editor. Then enter the actual immutable version returned by publication to create a successor plan.</p></header>
     <div className="ad-inline-status" role="status" aria-live="polite">Publication handoff ready for {result.awaitingPublications.length} exact child draft{result.awaitingPublications.length === 1 ? "" : "s"}. No draft was published automatically.</div>
@@ -481,7 +481,7 @@ function PublicationHandoff({
 }
 
 function HandoffRow({ handoff, planId, value, onOpenDraft, onChange }: { handoff: ActivityUpgradePublicationHandoff; planId: string; value: string; onOpenDraft(path: string): void; onChange(value: string): void }) {
-  
+
   const href = handoff.draftKind === "ActivityDraft"
     ? `/workflows/activity-definitions?definition=${encodeURIComponent(handoff.definitionId)}&section=editor&draft=${encodeURIComponent(handoff.draftId)}&returnPlan=${encodeURIComponent(planId)}`
     : `/workflows/definitions?definition=${encodeURIComponent(handoff.definitionId)}&draft=${encodeURIComponent(handoff.draftId)}&returnPlan=${encodeURIComponent(planId)}`;

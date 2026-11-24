@@ -40,7 +40,7 @@ export function ActivityDefinitionForkDialog({
   onClose(): void;
   onApplied(receipt: ActivityDefinitionForkReceipt): void;
 }) {
-  
+
   const recommendation = definition.lifecycle.recommendation!;
   const capabilitiesQuery = useActivityAuthoringCapabilities(context);
   const choices = useMemo(

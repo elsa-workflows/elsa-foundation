@@ -105,7 +105,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
   sourceReferenceId: string | null;
   onSelectReference(sourceReferenceId: string | null): void;
 }) {
-  
+
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [data, setData] = useState<ExecutableInspectionData | null>(null);
@@ -360,7 +360,7 @@ export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, frame
   selectedNodeId: string | null;
   onSelectNode(nodeId: string | null): void;
 }) {
-  
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const canvas = useMemo(
     () => buildExecutableInspectorCanvas(graph, activityCatalog, detail.chosenReference?.layout ?? [], frames, onNavigateToScope, selectedNodeId),
@@ -713,7 +713,7 @@ function SourceDefinitionAction({ reference, sourceDefinition, onOpen }: {
   sourceDefinition: SourceDefinitionState;
   onOpen(): void;
 }) {
-  
+
   const disabledReason = getSourceDefinitionDisabledReason(reference, sourceDefinition);
 
   return (
@@ -746,7 +746,7 @@ function SourceDriftCaption({ reference, sourceDefinition, hasDraftEquivalence }
   sourceDefinition: SourceDefinitionState;
   hasDraftEquivalence: boolean;
 }) {
-  
+
   if (!reference) return null;
   if (sourceDefinition.status === "absent") {
     return <p className="wf-instance-note">This workflow definition is not available in this environment. The artifact renders from its own Execution Material and carried layout.</p>;

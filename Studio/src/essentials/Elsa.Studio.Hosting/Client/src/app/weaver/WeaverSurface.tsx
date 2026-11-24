@@ -49,7 +49,7 @@ export function WeaverSurface({
   incomingPrompt?: (StudioWeaverPromptRequest & { id: string }) | null;
   onPromptConsumed?(id: string): void;
 }) {
-  
+
   const session = useWeaverSession({ api, surface, client, subscribeStream });
   const resultRenderers = useMemo(() => api.weaver.resultRenderers.list(), [api]);
   const resultControls = useMemo(() => api.weaver.resultControls?.list() ?? [], [api]);
@@ -276,7 +276,7 @@ function WeaverAutoApplyMenu({
   statusId?: string;
   onChange(mode: WeaverAutoApplyMode): void;
 }) {
-  
+
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const menuId = useId();

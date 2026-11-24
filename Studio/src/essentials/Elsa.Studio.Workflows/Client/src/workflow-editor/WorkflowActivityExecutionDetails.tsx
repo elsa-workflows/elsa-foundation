@@ -56,7 +56,7 @@ function CompensatesRow({ forwardActivityExecutionId, stepName, onSelectEvidence
   stepName?: string;
   onSelectEvidence?(evidenceId: string): void;
 }) {
-  
+
   const target = stepName ? `${stepName} (occurrence ${forwardActivityExecutionId})` : `occurrence ${forwardActivityExecutionId}`;
   return (
     <p className="wf-activity-compensates">
@@ -411,7 +411,7 @@ export function WorkflowActivityExecutionDetails({
 }
 
 function ActivityBoundaryDetails({ context, inspection, activityLabel }: { context: StudioEndpointContext; inspection: ActivityExecutionInspection; activityLabel: string }) {
-  
+
   const [open, setOpen] = useState(false);
 
   return (
@@ -432,7 +432,7 @@ function ActivityBoundaryDetails({ context, inspection, activityLabel }: { conte
 }
 
 function WorkflowActivityOutcomeEvidence({ state }: { state: ActivityExecutionInspectionState }) {
-  
+
   if (state.status === "idle") return null;
   const outcomeNames = state.status === "ready" ? state.inspection?.outcomeNames ?? [] : [];
   const presentation = state.status === "ready"
@@ -481,7 +481,7 @@ function ActivityMetadataValue({
   onCopied(label: string): void;
   onCopyFailed(label: string): void;
 }) {
-  
+
   const content = code ? <code title={value}>{value}</code> : <span title={value}>{value}</span>;
 
   return (
@@ -515,7 +515,7 @@ function WorkflowActivityInputEvidence({
   expressionEditors: StudioExpressionEditorContribution[];
   focusInputKey: string | null;
 }) {
-  
+
   if (state.status === "idle") return null;
 
   const evaluations = state.status === "ready"
@@ -740,7 +740,7 @@ function AuthoredInputSource({
   protectedSource: boolean;
   expressionEditors: StudioExpressionEditorContribution[];
 }) {
-  
+
   if (protectedSource) {
     return <p>{isProtectedSourceAccess(sourceAccess) ? "Authored source is hidden by source permissions." : "Authored source is protected because this input is sensitive."}</p>;
   }
@@ -823,7 +823,7 @@ function resolveExpressionSourceRenderer(
 }
 
 function GenericExpressionSource({ expressionType, value, expanded = false }: { expressionType: string; value: unknown; expanded?: boolean }) {
-  
+
   const text = formatSnapshotPayload(value);
   const bounded = text.length > 4_000 ? `${text.slice(0, 3_997)}...` : text;
   return (
@@ -882,7 +882,7 @@ function WorkflowActivityValueEvidence({
   failureText: string;
   emptyText: string;
 }) {
-  
+
   if (state.status === "idle") return null;
 
   if (state.status === "loading") {

@@ -73,7 +73,7 @@ export function WorkflowExecutionTimeline({ activities, activityCatalog, executa
 }
 
 function WorkflowStatusPill({ status }: { status: string }) {
-  
+
   const normalized = status.toLowerCase();
   const label = normalized === "completed" ? "OK" : status;
   return <span className="wf-status-badge wf-timeline-pill" data-status={normalized}>{label}</span>;

@@ -97,7 +97,7 @@ export function ActivityDefinitionTestRunDialog({
   restoreFocus?(): void;
   onOpenRun(path: string): void;
 }) {
-  
+
   const titleId = useId();
   const pollTimerRef = useRef<number | null>(null);
   const prepareExactRevisionRef = useRef(prepareExactRevision);
@@ -464,7 +464,7 @@ function ActivityTestRunEvidence({
   history: ActivityDraftTestRunView[];
   onOpenRun(path: string): void;
 }) {
-  
+
   const copy = stageCopy(stage);
   const resultTitleId = useId();
   const [detailsOpen, setDetailsOpen] = useState(false);

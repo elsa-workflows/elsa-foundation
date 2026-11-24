@@ -38,7 +38,7 @@ type LabelOf = (executableNodeId: string) => string | undefined;
  * write history filtered to lost updates); without it the badge only reports, as the shared warning status chip.
  */
 export function LostUpdateBadge({ count, onSelect, label }: { count: number; onSelect?: () => void; label?: string }) {
-  
+
   if (count <= 0) return null;
   const text = label ?? (count === 1 ? "1 lost update" : `${count} lost updates`);
   const content = <><AlertTriangle size={12} aria-hidden="true" /> {text}</>;
@@ -58,7 +58,7 @@ export function VariableValueState({ label, value, evidence, note, stateLabel }:
   /** Replaces the state's generic name, for a value kept for a purpose of its own (a recorded completion's write). */
   stateLabel?: string;
 }) {
-  
+
   const presentation = presentValueState(value);
   return (
     <div className="wf-variable-value-state" data-tone={presentation.tone}>
@@ -140,7 +140,7 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
   inspection: Pick<ActivityExecutionInspection, "variableWrites" | "recordedCompletion" | "subStatus" | "valueSnapshots"> & { status?: string | null };
   labelOf?: LabelOf;
 }) {
-  
+
   const headingId = useId();
   const records = variableWriteDiagnostics(inspection);
   const recorded = inspection.recordedCompletion;

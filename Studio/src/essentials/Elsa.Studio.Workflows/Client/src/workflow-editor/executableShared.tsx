@@ -9,7 +9,7 @@ import type { ExecutableRunState } from "./editorTypes";
 import { copyTextToClipboard, formatReferenceScope, getExecutableReferenceStatus } from "./editorHelpers";
 
 export function ExecutableRunStatusLine({ status, run, compact = false }: { status: string; run: ExecutableRunState | null; compact?: boolean }) {
-  
+
   const openRun = () => {
     if (!run?.workflowExecutionId) return;
     window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(run.workflowExecutionId)}`));

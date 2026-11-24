@@ -366,7 +366,7 @@ function RejectedReason({
   reason: string;
   activityLabels?: ValidationActivityLabels;
 }) {
-  
+
   const humanized = activityLabels?.humanizeMessage(reason) ?? { message: reason };
   return (
     <div className="wf-runtime-reason" title={reason}>

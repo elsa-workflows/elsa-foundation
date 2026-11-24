@@ -145,7 +145,7 @@ function NotificationList({ entries, controller, navigate, now, headingRef, onCl
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   onClose(): void;
 }) {
-  
+
   const listRef = useRef<HTMLUListElement>(null);
   const focusedRemovalIndex = useRef<number | null>(null);
   // Relative times are computed while rendering; tick so an open sheet does not show stale ages.

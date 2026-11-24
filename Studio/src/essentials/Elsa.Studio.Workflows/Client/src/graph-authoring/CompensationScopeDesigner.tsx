@@ -108,7 +108,7 @@ export function CompensationScopeDesigner({
   operator,
   children
 }: CompensationScopeDesignerProps) {
-  
+
   const steps = readCompensationSteps(owner);
   const problems = readOnly ? new Map<number, string>() : compensationStepProblems(steps);
   const nodesById = new Map(nodes.map(node => [node.id, node]));
@@ -617,7 +617,7 @@ function StateChip({
   label: string;
   onSelect?(): void;
 }) {
-  
+
   const content = <><StateIcon state={state} /> <span>{label}</span></>;
   const prefix = kind === "forward" ? "Forward" : "Recovery";
   return onSelect ? (
@@ -630,7 +630,7 @@ function StateChip({
 }
 
 function StateIcon({ state }: { state: CompensationForwardState | CompensationRecoveryState }) {
-  
+
   switch (state) {
     case "Completed": return <Check size={12} aria-hidden="true" />;
     case "Faulted":
@@ -655,7 +655,7 @@ function StateIcon({ state }: { state: CompensationForwardState | CompensationRe
 }
 
 function PhaseIcon({ phase }: { phase: CompensationScopeRuntime["phase"] }) {
-  
+
   switch (phase) {
     case "Compensated":
     case "Compensating": return <Undo2 size={14} aria-hidden="true" />;
@@ -671,7 +671,7 @@ function PhaseIcon({ phase }: { phase: CompensationScopeRuntime["phase"] }) {
 // Spec 260: where the rows come from. A live scope's rows come from its journal; a completed scope's journal is no longer
 // kept, so its rows, like those of a host without the journal, are derived from run data.
 function SourceNote({ runtime }: { runtime: CompensationScopeRuntime }) {
-  
+
   if (runtime.source === "journal") return <p className="wf-compensation-source" role="note">From the scope's journal.</p>;
   if (runtime.source !== "derived" || !runtime.journalUnavailable) return null;
   return (
@@ -721,7 +721,7 @@ function OperatorHistory({
 }
 
 function HistoryIcon({ kind }: { kind: CompensationOperatorHistoryEntry["kind"] }) {
-  
+
   switch (kind) {
     case "Retry": return <RotateCw size={12} aria-hidden="true" />;
     case "Abandoned": return <OctagonX size={12} aria-hidden="true" />;

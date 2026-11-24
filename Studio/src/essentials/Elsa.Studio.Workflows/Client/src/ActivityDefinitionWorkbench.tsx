@@ -54,7 +54,7 @@ export function ActivityDefinitionWorkbench({ agentWorkspace = false, context, d
   onNavigate(next: RouteState, replace?: boolean): void;
   onPlanUpgrade(kind: "ActivityDraft" | "ActivityVersion", id: string): void;
 }) {
-  
+
   const queryClient = useQueryClient();
   const requestedSection = selectedDraftId ? "drafts" : selectedVersionId ? "versions" : normalizeSection(section);
   const [draftCursorStack, setDraftCursorStack] = useState<(string | null)[]>([null]);
@@ -299,7 +299,7 @@ export function ActivityDefinitionWorkbench({ agentWorkspace = false, context, d
 }
 
 function IdentityDetails({ detail, provider }: { detail: ActivityDefinitionManagementView; provider: string }) {
-  
+
   return <dl className="ad-identity-strip">
     {isActivityDefinitionEnumValue(detail.definition.contentAuthority.kind, "Design") && detail.definition.category ? <div><dt>Category</dt><dd>{detail.definition.category}</dd></div> : null}
     <div><dt>Activity Type Key</dt><dd><code>{detail.definition.activityTypeKey}</code></dd></div>
@@ -313,7 +313,7 @@ function IdentityDetails({ detail, provider }: { detail: ActivityDefinitionManag
 }
 
 function DesignedOverview({ detail, activeDrafts, onOpen, onOpenWorkflows }: { detail: ActivityDefinitionManagementView; activeDrafts: number | null; onOpen(section: Section): void; onOpenWorkflows?(): void }) {
-  
+
   const recommendation = detail.lifecycle.recommendation;
   const available = isActivityDefinitionEnumValue(recommendation?.lifecycle, "Active");
   return <div className="ad-designed-overview">
@@ -395,7 +395,7 @@ function ChildCollectionState({ query, privacyFailure, empty, onRetry }: { query
 }
 
 function ExactSelectionState({ kind, selected, query, failure }: { kind: "draft" | "version"; selected: boolean; query: ReturnType<typeof useActivityDefinitionDraft> | ReturnType<typeof useActivityDefinitionVersion>; failure: ReturnType<typeof classifyActivityDefinitionReadFailure> | null }) {
-  
+
   if (!selected) return null;
   if (query.isPending) return <StudioLoadingStatus>Loading the exact selected {kind}…</StudioLoadingStatus>;
   if (failure) return <div className="ad-inline-error" role="alert">The exact selected {kind} could not be confirmed. No unconfirmed identity is shown.</div>;
@@ -403,7 +403,7 @@ function ExactSelectionState({ kind, selected, query, failure }: { kind: "draft"
 }
 
 function CursorPager({ page, data, onPrevious, onNext }: { page: number; data: { hasMore: boolean; continuation?: string | null } | undefined; onPrevious(): void; onNext(): void }) {
-  
+
   if (!data || (page <= 1 && !data.hasMore)) return null;
   return <div className="ad-child-pager"><button type="button" onClick={onPrevious} disabled={page <= 1}><ChevronLeft size={15} aria-hidden /> Previous</button><span>Page {page}</span><button type="button" onClick={onNext} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={15} aria-hidden /></button></div>;
 }
@@ -468,7 +468,7 @@ function HistoricalContract({ types = [], contract, compact = false }: { types?:
 }
 
 function HistoricalMembers({ title, members, compact }: { title: string; compact: boolean; members: Array<{ key: string; name: string; detail: string; compactDetail: string }> }) {
-  
+
   return <section>{compact ? <h3>{title}</h3> : <h4>{title}</h4>}{members.length ? <ul>{members.map(member => <li key={member.key}><strong>{member.name}</strong>{compact ? <span>{member.compactDetail}</span> : <><code>{member.key}</code><span>{member.detail}</span></>}</li>)}</ul> : <p>None</p>}</section>;
 }
 

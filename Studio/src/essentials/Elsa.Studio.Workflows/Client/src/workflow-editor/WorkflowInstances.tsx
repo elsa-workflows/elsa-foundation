@@ -680,7 +680,7 @@ function RunFilterInput({ label, value, type = "text", onChange }: {
   type?: "text" | "datetime-local";
   onChange(value: string): void;
 }) {
-  
+
   return (
     <StudioField className="wf-run-filter-field" label={label}><input aria-label={`Workflow run ${label.toLowerCase()}`} type={type} value={value} onChange={event => onChange(event.target.value)} /></StudioField>
   );
@@ -840,7 +840,7 @@ export function formatCurrentIncidentHealth(instance: Pick<WorkflowInstanceSumma
 }
 
 function CurrentIncidentHealthLabel({ instance }: { instance: WorkflowInstanceSummary }) {
-  
+
   const available = typeof instance.activeIncidentCount === "number" && typeof instance.blockingIncidentCount === "number";
   const health = !available
     ? "unavailable"
@@ -897,7 +897,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   navigate(path: string): void;
   onRunTitleChange?(title: string): void;
 }) {
-  
+
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [loadedData, setData] = useState<WorkflowInstanceWorkbenchData | null>(null);
@@ -2476,7 +2476,7 @@ function WorkflowInstanceCanvas({
   journals?: CompensationJournals;
   operator?: CompensationOperatorControls;
 }) {
-  
+
   const scopeKey = getInstanceScopeKey(frames);
   const [flowInstance, setFlowInstance] = useState<WorkflowRunFlowInstance | null>(null);
   const journalOf = journals?.get;
@@ -2614,7 +2614,7 @@ function ReadOnlyWorkflowFlow({
   onSelectEvidence(evidenceId: string | null): void;
   focusRequestId: number;
 }) {
-  
+
   const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(nodes);
 
   return (
@@ -3474,7 +3474,7 @@ export function getIncidentInputLabel(
 }
 
 function IncidentStackTrace({ incident }: { incident: IncidentStateSummary }) {
-  
+
   const stackTrace = getIncidentStackTrace(incident);
   if (!stackTrace) return null;
 
@@ -3607,7 +3607,7 @@ function NamedIdentity({
   id: string;
   secondary?: string | null;
 }) {
-  
+
   const identity = resolveNamedIdentity(name, id, [secondary]);
   const secondaryText = identity.secondaryIds.join(" · ") || null;
   return (
@@ -3625,7 +3625,7 @@ function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId, activity
   activityCatalog?: ActivityCatalogItem[];
   executableGraph?: ExecutableActivityGraph | null;
 }) {
-  
+
   if (!graphNodeIds) return null;
 
   const unmatchedActivities = details.activities.filter(activity => {

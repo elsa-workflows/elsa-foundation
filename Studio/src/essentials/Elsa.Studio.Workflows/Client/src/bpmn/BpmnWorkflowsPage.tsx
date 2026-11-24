@@ -18,7 +18,7 @@ const runPath = (id: string) => `/workflows/bpmn/runs/${encodeURIComponent(id)}`
 function readLocation() { return { path: window.location.pathname, search: window.location.search }; }
 
 export function BpmnWorkflowsPage({ session, view, navigate }: Props) {
-  
+
   const [location, setLocation] = useState(readLocation);
   useEffect(() => { const sync = () => setLocation(readLocation()); window.addEventListener("popstate", sync); return () => window.removeEventListener("popstate", sync); }, []);
   const client = createBpmnRuntimeClient(session);
@@ -82,7 +82,7 @@ function BpmnCatalog({ client, session, view, artifactId, open }: { client: Clie
 }
 
 function ProcessRow({ client, session, publication, canStart, open }: { client: Client; session: StudioBackendSession; publication: BpmnPublication; canStart: boolean; open(path: string): void }) {
-  
+
   const command = useBpmnCommand(client, { kind: "start", sourceReferenceId: publication.sourceReferenceId }, () => undefined);
   const name = publication.displayName?.trim() || "BPMN process";
   return <tr><td><strong>{name}</strong><WorkflowListIdentifiers name={name} kind="BPMN process" identifiers={[

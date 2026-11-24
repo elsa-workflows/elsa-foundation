@@ -564,7 +564,7 @@ function collectExecutableIdentifiers(executable: WorkflowExecutableSummary): Wo
 }
 
 function WorkflowExecutableOrigins({ executable, definitionNames }: { executable: WorkflowExecutableSummary; definitionNames: ReadonlyMap<string, string> }) {
-  
+
   const definitionIds = getExecutableDefinitionIds(executable);
 
   const openSourceDefinition = (definitionId: string) => {

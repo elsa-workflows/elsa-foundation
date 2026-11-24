@@ -691,7 +691,7 @@ function SourceVersionRow({
   disabled: boolean;
   onChange(checked: boolean): void;
 }) {
-  
+
   const selectable = isElsa3ReusableImportItemSelectable(item);
   return (
     <article className="elsa3-import-row" data-selectable={selectable}>
@@ -760,7 +760,7 @@ function DiagnosticList({
   diagnostics: Elsa3MigrationDiagnostic[];
   compact?: boolean;
 }) {
-  
+
   return (
     <section className={compact ? "elsa3-import-compact-diagnostics" : "elsa3-import-diagnostics"} aria-label="Structured Elsa 3 import diagnostics">
       {!compact ? <h2>Structured diagnostics</h2> : null}
@@ -870,7 +870,7 @@ function ImportReceipt({
 }
 
 function PublicationState({ publication }: { publication: Elsa3ReusableImportPublication }) {
-  
+
   const status = importPublicationStatus(publication.status);
   const published = isPublishedImportStatus(publication.status);
   return (
@@ -895,7 +895,7 @@ function PublicationState({ publication }: { publication: Elsa3ReusableImportPub
 }
 
 function ConversionWarnings({ warnings }: { warnings: Elsa3MigrationDiagnostic[] }) {
-  
+
   return (
     <section className="elsa3-import-warning" aria-label="Conversion warnings">
       <h3>Conversion warnings</h3>

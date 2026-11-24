@@ -1061,7 +1061,7 @@ function ResultFolderBreadcrumb({
   definition: WorkflowDefinitionSummary;
   onSelect(selection: WorkflowFolderSelection): void;
 }) {
-  
+
   const hasFolderProjection = Object.prototype.hasOwnProperty.call(definition, "folderId");
   const crumbs = definition.folderBreadcrumb ?? [];
   const isProjectedUnfiled = hasFolderProjection && definition.folderId === null && crumbs.length === 0;

@@ -265,7 +265,7 @@ function DependencyRow({
   selected: boolean;
   onSelect(): void;
 }) {
-  
+
   const sourceHref = exactOwnerHref(item);
   return <tr className={selected ? "is-selected" : ""} aria-selected={selected} {...studioRowInteraction<HTMLTableRowElement>(onSelect)}>
     <td data-label={direction === "inbound" ? "Used in" : "Version"}><strong>{referenceLabel(item.owner)}</strong><code>{referenceIdentity(item.owner)}</code></td>
@@ -277,7 +277,7 @@ function DependencyRow({
 }
 
 function DependencyPath({ item }: { item: ActivityDefinitionDependencyItem }) {
-  
+
   const path = item.path.length ? item.path : [item.owner, item.dependency];
   const cycle = path.length > 1 && referenceIdentity(path[0]) === referenceIdentity(path[path.length - 1]);
   return <section className="ad-dependency-path" aria-labelledby="dependency-path-title">
