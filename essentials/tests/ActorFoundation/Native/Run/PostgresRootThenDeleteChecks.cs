@@ -3,6 +3,7 @@ using Kernel.EntityFramework;
 using Kernel.Native.Preview;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 using PublicModel = Kernel.Model.Contracts;
 using PublicActor = Kernel.WorkflowActor.WorkflowActor;
@@ -36,27 +37,33 @@ internal static class PostgresRootThenDeleteChecks
             (scope, _) => allowTerminate && ReferenceEquals(scope, tenant), stop,
             (scope, _) => allowDelete && ReferenceEquals(scope, tenant));
         var runtime = new WorkflowRuntime(ingress, reads);
-        var registry = new WorkflowRegistry().Add(Wf.Workflow("wait", Wf.Node<PostgresRootTerminateChecks.InvocationWait>("receive")));
+        var registry = new WorkflowRegistry()
+            .Add(Wf.Workflow("wait", Wf.Node<PostgresRootTerminateChecks.InvocationWait>("receive")))
+            .Add(Wf.Workflow("approve", Wf.Node<PostgresFlowchartPreview.Approval>("approve")));
         var actorType = new PublicActor([new SeededReceipt(new NativeExecutionModel(registry), reference => reference == protectedTarget)]);
 
         var remove = await Start("remove");
         var keep = await Start("keep");
         protectedTarget = keep;
         var endsFirst = await Start("ends-first");
+        var finishesNaturally = await Start("naturally-finished", "approve");
         EfStore.RootImage removable;
         EfStore.RootImage protectedImage;
         EfStore.RootImage later;
+        EfStore.RootImage beforeFinish;
         long originalEpoch;
         await using (var owner = await Own("original"))
         {
             removable = await Drive(owner, remove, InstanceStatus.Running);
             protectedImage = await Drive(owner, keep, InstanceStatus.Running);
             later = await Drive(owner, endsFirst, InstanceStatus.Running);
+            beforeFinish = await Drive(owner, finishesNaturally, InstanceStatus.Running);
             originalEpoch = ((Worker)owner).Epoch;
         }
         var selected = (await reads.GetAsync(tenant, remove, stop))!;
         var selectedKeep = (await reads.GetAsync(tenant, keep, stop))!;
         var selectedLate = (await reads.GetAsync(tenant, endsFirst, stop))!;
+        var selectedBeforeFinish = (await reads.GetAsync(tenant, finishesNaturally, stop))!;
         Check(Json.Read<NativeState>(protectedImage.State!).Inboxes!.Values.Single().Receipts.ContainsKey("retained"),
             "the actual Native checkpoint has a retained receipt");
         Check((await Then("remove", selected)).Outcome == Contract.AdmissionOutcome.Refused,
@@ -79,29 +86,59 @@ internal static class PostgresRootThenDeleteChecks
             (await Then("remove-late", selectedLate)).Outcome == Contract.AdmissionOutcome.Accepted,
             "the earlier Terminate and the selected ThenDelete are admitted before the owner runs");
 
-        await RejectMarkerAfterTermination(removable);
+        await CheckWireFraming(removable);
+        await VerifyRollback(removable, retainWire: false);
+        await VerifyRollback(removable, retainWire: true);
+        EfStore.RootImage endedBeforeDelivery;
+        EfStore.RootImage finishedBeforeAdmission;
         await using (var owner = await Own("successor"))
         {
             Check(((Worker)owner).Epoch > originalEpoch, "a newer owner processes the admitted operations");
+            endedBeforeDelivery = await Drive(owner, endsFirst, InstanceStatus.Cancelled);
+            var approval = Json.Read<NativeState>(beforeFinish.State!).Frames.Values.Single(frame => frame.Node == "approve").Id;
+            Check((await ingress.SendAsync(tenant, new Contract.Target.Ref(finishesNaturally), "natural-approval", CompositeSignal.Kind,
+                Json.Write(new CompositeSignal(approval, "approve", "Ada")), cancellationToken: stop)).Outcome ==
+                    Contract.AdmissionOutcome.Accepted, "the ordinary Native completion input is admitted");
+            finishedBeforeAdmission = await Drive(owner, finishesNaturally, InstanceStatus.Finished);
+            Check((await Then("finished-remove", selectedBeforeFinish)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "the earlier running selection still admits ThenDelete after the exact root finishes naturally");
             while (await reads.GetAsync(tenant, remove, stop) is not null ||
                    await reads.GetAsync(tenant, keep, stop) is not { Header.Status: Contract.ActorStatus.Cancelled } ||
-                   await reads.GetAsync(tenant, endsFirst, stop) is not null)
+                   await reads.GetAsync(tenant, endsFirst, stop) is not null ||
+                   await reads.GetAsync(tenant, finishesNaturally, stop) is not null)
                 await Next(owner);
+
+            var protectedEnd = (await cold.ReadFirstRootAsync(tenant.Tenant, keep.Id, stop))!;
+            Check((await Then("keep-after-end", selectedKeep)).Outcome == Contract.AdmissionOutcome.Accepted,
+                "the earlier selection admits another authorized request to the protected ended root");
+            while (await admission.ReadDueRootOperatorAsync(tenant.Tenant, keep.Id, stop) is not null)
+                await Next(owner);
+            var unchanged = (await cold.ReadFirstRootAsync(tenant.Tenant, keep.Id, stop))!;
+            Check(unchanged.Revision == protectedEnd.Revision && unchanged.TerminalAt == protectedEnd.TerminalAt &&
+                  unchanged.State == protectedEnd.State,
+                "the ended-root decision respects retained Native receipt protection");
         }
 
         await using (var db = Open())
         {
             var marker = await ReadMarker(db, removable.Actor.Id);
             var lateMarker = await ReadMarker(db, later.Actor.Id);
+            var finishedMarker = await ReadMarker(db, beforeFinish.Actor.Id);
             var history = await cold.ReadJournalOfAsync(0, removable.Actor.Id, 0, stop);
             var lateHistory = await cold.ReadJournalOfAsync(0, later.Actor.Id, 0, stop);
-            Check(marker is { Retired: true, Status: InstanceStatus.Cancelled, State: "null", TerminalAt: > 0 } &&
+            Check(marker is { Retired: true, Status: InstanceStatus.Cancelled, State: "null", WireBytes: null, Header: null, TerminalAt: > 0 } &&
                 marker.Revision == removable.Revision + 1 && marker.TerminalRevision == marker.Revision &&
                 history is [{ Revision: -1, Entries: """["delete"]""" }],
                 "an unprotected live root retires in one revision and leaves only a deletion marker");
             Check(lateMarker is { Retired: true, Status: InstanceStatus.Cancelled } && lateMarker.Revision == later.Revision + 2 &&
-                lateMarker.TerminalRevision == later.Revision + 1 && lateHistory is [{ Revision: -1 }],
-                "an actor ended before delivery retires while preserving the earlier terminal mark");
+                lateMarker.TerminalRevision == endedBeforeDelivery.TerminalRevision && lateMarker.TerminalAt == endedBeforeDelivery.TerminalAt &&
+                lateHistory is [{ Revision: -1 }],
+                "an actor ended before delivery retires while preserving both fields of the earlier terminal mark");
+            Check(finishedMarker is { Retired: true, Status: InstanceStatus.Finished, WireBytes: null } &&
+                finishedMarker.Revision == finishedBeforeAdmission.Revision + 1 &&
+                finishedMarker.TerminalRevision == finishedBeforeAdmission.TerminalRevision &&
+                finishedMarker.TerminalAt == finishedBeforeAdmission.TerminalAt,
+                "an actor ended before admission keeps its finished status and both fields of the terminal mark");
         }
         var retained = (await cold.ReadFirstRootAsync(tenant.Tenant, keep.Id, stop))!;
         var inbox = Json.Read<NativeState>(retained.State!).Inboxes!.Values.Single();
@@ -115,7 +152,25 @@ internal static class PostgresRootThenDeleteChecks
             "the retired root replays its original admission and refuses a fresh operation");
         return 0;
 
-        async Task RejectMarkerAfterTermination(EfStore.RootImage current)
+        async Task CheckWireFraming(EfStore.RootImage current)
+        {
+            await using var db = Open();
+            var row = await db.Messages.AsNoTracking().SingleAsync(message => message.Target == current.Actor.Id && !message.Done, stop);
+            Check(row.Start is not null && !row.Start.StartsWith("!kernel-operator/1:", StringComparison.Ordinal) &&
+                PostgresRootAdmission.DecodeOperator(row, remove.Id, true, true, true).Operator?.RootThenDelete == true,
+                "the combined command has its own envelope and the new reader recognizes it");
+            try
+            {
+                PostgresRootAdmission.DecodeOperator(row, remove.Id, true, true, false);
+                throw new InvalidOperationException("The earlier format accepted the combined command.");
+            }
+            catch (StoreException error) when (error.Failure == Failure.Definite)
+            {
+                Console.WriteLine("ok the prior-format decoder configuration rejects that persisted envelope");
+            }
+        }
+
+        async Task VerifyRollback(EfStore.RootImage current, bool retainWire)
         {
             var command = (await admission.ReadDueRootOperatorAsync(tenant.Tenant, remove.Id, stop))!;
             var store = Store();
@@ -130,22 +185,40 @@ internal static class PostgresRootThenDeleteChecks
             try
             {
                 await using var db = Open();
-                await db.Database.ExecuteSqlRawAsync("""
+                await db.Database.ExecuteSqlRawAsync(retainWire ? """
+                    CREATE FUNCTION fixture_retain_retirement_wire() RETURNS trigger LANGUAGE plpgsql AS $fn$
+                    BEGIN NEW."FoundationStateWire" = OLD."FoundationStateWire"; RETURN NEW; END
+                    $fn$;
+                    CREATE TRIGGER fixture_retain_retirement_wire BEFORE UPDATE ON "Instances"
+                    FOR EACH ROW WHEN (NEW."Retired") EXECUTE FUNCTION fixture_retain_retirement_wire();
+                    """ : """
                     CREATE FUNCTION fixture_skip_termination_marker() RETURNS trigger LANGUAGE plpgsql AS $fn$
                     BEGIN RETURN NULL; END
                     $fn$;
                     CREATE TRIGGER fixture_skip_termination_marker BEFORE INSERT ON "Journal"
                     FOR EACH ROW WHEN (NEW."Revision" = -1) EXECUTE FUNCTION fixture_skip_termination_marker();
                     """, stop);
-                var result = await store.CommitAsync(new(0, lease.Epoch, lease.Position, Defaults.Lease, false, [turn], [], []), stop);
+                var stopped = false;
+                try
+                {
+                    var result = await store.CommitAsync(new(0, lease.Epoch, lease.Position, Defaults.Lease, false, [turn], [], []), stop);
+                    stopped = !retainWire && !result.Landed;
+                }
+                catch (StoreException error) when (retainWire && error.Failure == Failure.Definite &&
+                    error.InnerException?.GetBaseException() is PostgresException
+                        { SqlState: PostgresErrorCodes.CheckViolation, MessageText: "Qualified actor checkpoint requires a qualified update" })
+                {
+                    stopped = true;
+                }
                 var after = await cold.ReadFirstRootAsync(tenant.Tenant, remove.Id, stop);
-                Check(!result.Landed && after is { Status: InstanceStatus.Running, TerminalRevision: null, TerminalAt: null } &&
+                Check(stopped && after is { Status: InstanceStatus.Running, TerminalRevision: null, TerminalAt: null } &&
                     after.Revision == current.Revision && after.State == current.State &&
                     (await reads.GetAsync(tenant, remove, stop))?.Header.Status == Contract.ActorStatus.Running &&
                     (await admission.ReadDueRootOperatorAsync(tenant.Tenant, remove.Id, stop)) == command &&
                     (await cold.ReadJournalOfAsync(0, current.Actor.Id, 0, stop)).SequenceEqual(history) &&
                     await db.Partitions.Select(partition => partition.Position).SingleAsync(stop) == lease.Position,
-                    "a suppressed deletion marker rolls back termination, checkpoint, operator input, journal, projection and fence");
+                    retainWire ? "the checkpoint guard rejects a retirement that keeps the binary state"
+                        : "a suppressed deletion marker rolls back termination, checkpoint, operator input, journal, projection and fence");
             }
             finally
             {
@@ -154,13 +227,15 @@ internal static class PostgresRootThenDeleteChecks
                 await db.Database.ExecuteSqlRawAsync("""
                     DROP TRIGGER IF EXISTS fixture_skip_termination_marker ON "Journal";
                     DROP FUNCTION IF EXISTS fixture_skip_termination_marker();
+                    DROP TRIGGER IF EXISTS fixture_retain_retirement_wire ON "Instances";
+                    DROP FUNCTION IF EXISTS fixture_retain_retirement_wire();
                     """, cleanup.Token);
                 await store.ReleaseAsync(0, lease.Epoch, cleanup.Token);
             }
         }
 
-        async Task<Contract.ActorRef> Start(string id) =>
-            (await runtime.StartAsync(tenant, id, NativeExecutionModel.Start("wait"), cancellationToken: stop)).Actor!.Value;
+        async Task<Contract.ActorRef> Start(string id, string definition = "wait") =>
+            (await runtime.StartAsync(tenant, id, NativeExecutionModel.Start(definition), cancellationToken: stop)).Actor!.Value;
 
         ValueTask<Contract.Admission> Then(string id, Contract.ActorView at) =>
             runtime.TerminateThenDeleteAsync(tenant, id, at, stop);
@@ -191,12 +266,13 @@ internal static class PostgresRootThenDeleteChecks
         }
 
         Task<PhysicalMarker> ReadMarker(KernelDb db, string id) => db.Database.SqlQuery<PhysicalMarker>($"""
-            SELECT "State", "Retired", "Status", "Revision", "FoundationTerminalRevision" AS "TerminalRevision", "FoundationTerminalAt" AS "TerminalAt"
+            SELECT "State", octet_length("FoundationStateWire") AS "WireBytes", "FoundationHeader" AS "Header",
+                "Retired", "Status", "Revision", "FoundationTerminalRevision" AS "TerminalRevision", "FoundationTerminalAt" AS "TerminalAt"
             FROM "Instances" WHERE "Id" = {id}
             """).SingleAsync(stop);
     }
 
-    private sealed record PhysicalMarker(string State, bool Retired, InstanceStatus Status, long Revision, long? TerminalRevision, long? TerminalAt);
+    private sealed record PhysicalMarker(string State, int? WireBytes, string? Header, bool Retired, InstanceStatus Status, long Revision, long? TerminalRevision, long? TerminalAt);
 
     private static void Check(bool pass, string description)
     {

@@ -8,17 +8,16 @@ namespace Kernel.EntityFramework;
 internal sealed partial class PostgresRootAdmission
 {
     private const string OperatorPrefix = "!kernel-operator/1:";
+    private const string TerminateThenDeletePrefix = "!kernel-operator/2:";
     private sealed record StoredOperator(string Reference, string Operation, long Creation, string Kind,
         [property: JsonRequired] bool ExplicitZeroDue)
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public FoundationTerminalStamp? Terminal { get; init; }
-
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public bool ThenDelete { get; init; }
     }
     internal const string OperatorOccurrencePrefix = "operator/";
-    internal static bool IsStoredOperator(string? header) => header?.StartsWith(OperatorPrefix, StringComparison.Ordinal) == true;
+    internal static bool IsStoredOperator(string? header) => header is not null &&
+        (header.StartsWith(OperatorPrefix, StringComparison.Ordinal) || header.StartsWith(TerminateThenDeletePrefix, StringComparison.Ordinal));
     internal static bool IsOperatorOccurrence(InboxKey key) => key.Scope == InboxKey.FoundationOccurrenceScope && key.Match is null &&
         key.Id.StartsWith(OperatorOccurrencePrefix, StringComparison.Ordinal);
 
@@ -91,7 +90,10 @@ internal sealed partial class PostgresRootAdmission
             }
             if (!deletion)
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
-            if (deletion ? !exactTerminal : selectedStatus != InstanceStatus.Running)
+            var eligible = deletion ? exactTerminal
+                : thenDelete ? selectedStatus is InstanceStatus.Running or InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled
+                : selectedStatus == InstanceStatus.Running;
+            if (!eligible)
             {
                 await tx.RollbackAsync(token);
                 return null;
@@ -114,7 +116,8 @@ internal sealed partial class PostgresRootAdmission
             }
             var actor = new InstanceRef(address.Id);
             var id = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
-            var header = OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0) { Terminal = terminal, ThenDelete = thenDelete });
+            var header = (thenDelete ? TerminateThenDeletePrefix : OperatorPrefix) +
+                DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0) { Terminal = terminal });
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
                 VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0)
@@ -215,18 +218,20 @@ internal sealed partial class PostgresRootAdmission
             row.Kind == Kinds.Terminate && !terminations || row.Kind == Kinds.Delete && !retirements || row.EventMatch is not null || row.Payload is not null || row.ReplyTo is not null || row.Sender is not null ||
             row.JobGeneration != 0 || row.KeepUntil is not { } until)
             throw new StoreException(Failure.Definite, "Unexpected stored one-way operator envelope.");
+        var thenDelete = row.Start!.StartsWith(TerminateThenDeletePrefix, StringComparison.Ordinal);
+        var prefix = thenDelete ? TerminateThenDeletePrefix : OperatorPrefix;
         StoredOperator? header;
-        try { header = DurableKeyJson.Read<StoredOperator>(row.Start![OperatorPrefix.Length..]); }
+        try { header = DurableKeyJson.Read<StoredOperator>(row.Start[prefix.Length..]); }
         catch (JsonException error) { throw new StoreException(Failure.Definite, "Invalid stored operator framing.", error); }
         if (header is null) throw new StoreException(Failure.Definite, "Invalid stored operator framing.");
         if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != row.Kind ||
             (row.Kind == Kinds.Delete ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
-            header.ThenDelete && (!terminateThenDelete || row.Kind != Kinds.Terminate) ||
+            thenDelete && (!terminateThenDelete || row.Kind != Kinds.Terminate) ||
             header.ExplicitZeroDue && row.Due != 0 || !MatchesDirectOccurrence(reference, header.Operation, row.Id[OperatorOccurrencePrefix.Length..]))
             throw new StoreException(Failure.Definite, "The operator occurrence differs from its bound reference and operation.");
         var suffix = row.Id.LastIndexOf('/');
         return FoundationIngressAddress.Occurrence(header.Operation, row.Id[..suffix], row.Id[(suffix + 1)..],
-            new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, null, new(null) { QualifiedTerminal = header.Terminal, DeleteTarget = header.ThenDelete ? reference : null, RootThenDelete = header.ThenDelete });
+            new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, null, new(null) { QualifiedTerminal = header.Terminal, DeleteTarget = thenDelete ? reference : null, RootThenDelete = thenDelete });
     }
 
     internal async Task<int> SweepOperatorReceiptsAsync(CancellationToken token)
