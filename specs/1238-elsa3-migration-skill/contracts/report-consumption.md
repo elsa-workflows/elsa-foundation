@@ -26,5 +26,4 @@ reason on standard error (spec 1237's command-line contract) and stops (FR-022).
 
 A storage-driver finding is a Reconsider finding (no remedy) that names the Elsa 3 driver, memory or custom, as a
 storage-driver component; the skill answers it with the case 17 interview, not with a port. The memory driver's
-finding must carry that component kind too, or the skill cannot tell it from other Reconsider findings without a
-code.
+finding carries that component kind too, so the skill needs no code to recognise it.
