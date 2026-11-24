@@ -9,6 +9,7 @@ public sealed class JsonBaselineArchitectureTests
     [Theory]
     [InlineData("RuntimeInputBindingCompiler.cs")]
     [InlineData("RuntimeActivityInputMaterializer.cs")]
+    [InlineData("Elsa3ValueFlowLowerer.cs")]
     public void Type_default_writers_require_the_baseline_and_cannot_join_the_legacy_list(string path)
     {
         const string source = "class C { void M(object defaultValue) { JsonSerializer.SerializeToElement(defaultValue, defaultValue!.GetType()); } }";

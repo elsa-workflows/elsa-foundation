@@ -10,6 +10,8 @@ internal sealed class EvaluatedHashInputs(string configuration)
     private readonly Dictionary<string, IReadOnlySet<string>> compileSources = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> intermediateRoots = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IReadOnlyDictionary<string, string>> packageSources = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IReadOnlyDictionary<string, SdkCompileReferences.Asset>> compileReferences = new(StringComparer.Ordinal);
+    private readonly SdkCompileReferences sdkReferences = new();
     private readonly HashSet<string> evaluating = new(StringComparer.Ordinal);
 
     internal IReadOnlyList<string> Read(string project)
@@ -24,7 +26,10 @@ internal sealed class EvaluatedHashInputs(string configuration)
             // Resolve through PATH so an installed build-slot wrapper remains in force. The shared
             // helper clears inherited testhost MSBuild variables and bounds/cleans up the process.
             var startDirectory = Path.GetDirectoryName(project)!;
-            var (code, text) = ChildProcess.Run("dotnet", [.. common, "-getProperty:MSBuildAllProjects,IntermediateOutputPath,ProjectAssetsFile", "-getItem:Compile,AdditionalFiles,EditorConfigFiles,Analyzer,ProjectReference"], workingDirectory: startDirectory, timeout: TimeSpan.FromMinutes(5));
+            // Resolve final compiler inputs using existing project outputs. This target does not
+            // invoke Csc; BuildProjectReferences=false makes referenced projects return GetTargetPath.
+            var (code, text) = ChildProcess.Run("dotnet", [.. common, "-target:FindReferenceAssembliesForReferences", "-property:BuildProjectReferences=false",
+                "-getProperty:MSBuildAllProjects,IntermediateOutputPath,ProjectAssetsFile", "-getItem:Compile,AdditionalFiles,EditorConfigFiles,Analyzer,ProjectReference,ReferencePathWithRefAssemblies"], workingDirectory: startDirectory, timeout: TimeSpan.FromMinutes(5));
             if (code != 0) throw new InvalidOperationException($"SDK input evaluation failed for {project}: {text}");
             var beginning = text.IndexOf('{');
             if (beginning < 0) throw new InvalidOperationException($"SDK input evaluation returned no JSON for {project}.");
@@ -35,6 +40,7 @@ internal sealed class EvaluatedHashInputs(string configuration)
             var assetsFile = document.RootElement.GetProperty("Properties").GetProperty("ProjectAssetsFile").GetString();
             if (string.IsNullOrWhiteSpace(assetsFile)) throw new InvalidOperationException("SDK omitted restored assets for " + project);
             packageSources[project] = JsonHashExternalSources.Read(Path.GetFullPath(assetsFile, startDirectory), compileSources[project]);
+            compileReferences[project] = sdkReferences.Read(document.RootElement);
             var intermediate = document.RootElement.GetProperty("Properties").GetProperty("IntermediateOutputPath").GetString();
             if (string.IsNullOrWhiteSpace(intermediate)) throw new InvalidOperationException($"SDK input evaluation omitted IntermediateOutputPath for {project}.");
             intermediateRoots[project] = Path.GetFullPath(intermediate, startDirectory);
@@ -42,7 +48,8 @@ internal sealed class EvaluatedHashInputs(string configuration)
             if (importCode != 0) throw new InvalidOperationException($"SDK import evaluation failed for {project}: {importOutput}");
             var settings = ParseImports(File.ReadAllText(imports));
             var selection = SelectedGlobalJson(startDirectory);
-            var own = Parse(document.RootElement, project, selection is null ? settings : [.. settings, selection]);
+            var own = Parse(document.RootElement, project, selection is null ? settings : [.. settings, selection])
+                .Concat(compileReferences[project].Values.Select(reference => reference.Path)).Distinct(StringComparer.Ordinal).ToArray();
             var dependencies = document.RootElement.GetProperty("Items").GetProperty("ProjectReference").EnumerateArray()
                 .Select(item => item.GetProperty("FullPath").GetString()!).ToArray();
             var closed = Close(own, dependencies.Select(Read));
@@ -59,6 +66,7 @@ internal sealed class EvaluatedHashInputs(string configuration)
     internal IReadOnlySet<string> CompileSources(string project) { _ = Read(project); return compileSources[Path.GetFullPath(project)]; }
     internal string IntermediateRoot(string project) { _ = Read(project); return intermediateRoots[Path.GetFullPath(project)]; }
     internal IReadOnlyDictionary<string, string> PackageSources(string project) { _ = Read(project); return packageSources[Path.GetFullPath(project)]; }
+    internal IReadOnlyDictionary<string, SdkCompileReferences.Asset> CompileReferences(string project) { _ = Read(project); return compileReferences[Path.GetFullPath(project)]; }
 
     internal static IReadOnlyList<string> Close(IReadOnlyList<string> own, IEnumerable<IReadOnlyList<string>> dependencies) =>
         own.Concat(dependencies.SelectMany(files => files)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();

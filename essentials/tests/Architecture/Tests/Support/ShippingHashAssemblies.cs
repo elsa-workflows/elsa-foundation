@@ -10,7 +10,8 @@ namespace Elsa.Architecture.Tests;
 internal sealed class ShippingHashAssemblies : IDisposable
 {
     internal sealed record Project(string Path, string AssemblyPath, string? ImageSha256 = null, Guid? ImageMvid = null,
-        IReadOnlySet<string>? CompileSources = null, string? IntermediateRoot = null, IReadOnlyDictionary<string, string>? PackageSources = null);
+        IReadOnlySet<string>? CompileSources = null, string? IntermediateRoot = null, IReadOnlyDictionary<string, string>? PackageSources = null,
+        IReadOnlyDictionary<string, SdkCompileReferences.Asset>? CompileReferences = null);
     internal IReadOnlyList<Project> Projects { get; }
     internal IReadOnlyList<Assembly> Assemblies { get; }
     internal IReadOnlyList<string> Errors { get; }
@@ -35,7 +36,8 @@ internal sealed class ShippingHashAssemblies : IDisposable
             ImageMvid = ImageMvid(project.AssemblyPath),
             CompileSources = evaluatedInputs is null ? evaluator.CompileSources(project.Path) : null,
             IntermediateRoot = evaluatedInputs is null ? evaluator.IntermediateRoot(project.Path) : null,
-            PackageSources = evaluatedInputs is null ? evaluator.PackageSources(project.Path) : null
+            PackageSources = evaluatedInputs is null ? evaluator.PackageSources(project.Path) : null,
+            CompileReferences = evaluatedInputs is null ? evaluator.CompileReferences(project.Path) : null
         }).ToArray();
         var paths = projects.Where(project => File.Exists(project.AssemblyPath))
             .GroupBy(project => AssemblyName.GetAssemblyName(project.AssemblyPath).Name!, StringComparer.Ordinal)

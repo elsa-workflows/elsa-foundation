@@ -5,6 +5,7 @@ using System.Runtime.Loader;
 using System.Buffers.Binary;
 using System.Text;
 using System.Security.Cryptography;
+using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -19,6 +20,7 @@ internal sealed class JsonBaselineConstructionContexts
     private readonly IReadOnlyDictionary<string, string> images;
     private readonly IReadOnlyDictionary<string, Assembly> bindings;
     private readonly IReadOnlyDictionary<string, string?> imageHashes;
+    private readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, SdkCompileReferences.Asset>?> compileReferences;
     private readonly IReadOnlyList<SyntaxNode> snapshotRoots;
     private readonly IReadOnlyDictionary<string, CSharpParseOptions> parseOptions;
     private readonly Dictionary<string, IReadOnlyList<SyntaxNode>> parsedRoots = new(StringComparer.Ordinal);
@@ -79,6 +81,7 @@ internal sealed class JsonBaselineConstructionContexts
         snapshotRoots = roots;
         images = projects.ToDictionary(project => Path.GetFullPath(project.Path), project => project.AssemblyPath, StringComparer.Ordinal);
         imageHashes = projects.ToDictionary(project => Path.GetFullPath(project.Path), project => project.ImageSha256, StringComparer.Ordinal);
+        compileReferences = projects.ToDictionary(project => Path.GetFullPath(project.Path), project => project.CompileReferences, StringComparer.Ordinal);
         var shippingByName = shippingAssemblies?.GroupBy(assembly => assembly.GetName().Name!, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         bindings = shippingAssemblies is null ? new Dictionary<string, Assembly>() : projects.ToDictionary(project => Path.GetFullPath(project.Path), project =>
@@ -156,7 +159,7 @@ internal sealed class JsonBaselineConstructionContexts
             // This is the SDK's actual per-project generated source, not a guessed ambient import set.
             if (File.Exists(globals)) trees.Add(CSharpSyntaxTree.ParseText(File.ReadAllText(globals), parseOptions[project], path: globals));
             compilation = CSharpCompilation.Create(Path.GetFileNameWithoutExtension(image), trees,
-                References(image, bindings.GetValueOrDefault(project), imageHashes[project]),
+                References(image, bindings.GetValueOrDefault(project), imageHashes[project], compileReferences[project]),
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
                     nullableContextOptions: NullableContextOptions.Enable));
             compilations.Add(project, compilation);
@@ -242,8 +245,28 @@ internal sealed class JsonBaselineConstructionContexts
             .Where(Path.IsPathRooted).Select(Path.GetFullPath).ToHashSet(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
     }
 
-    private IReadOnlyList<MetadataReference> References(string image, Assembly? owner, string? ownerSha256)
+    private IReadOnlyList<MetadataReference> References(string image, Assembly? owner, string? ownerSha256,
+        IReadOnlyDictionary<string, SdkCompileReferences.Asset>? sdkReferences)
     {
+        var own = Reference(image, owner);
+        if (ownerSha256 is not null && own.Sha256 != ownerSha256)
+            throw new InvalidOperationException("A JSON construction owner differs from its shipping image witness: " + image);
+        if (sdkReferences is not null)
+        {
+            if (sdkReferences.Count == 0) throw new InvalidOperationException("An SDK construction context has no compiler reference evidence: " + image);
+            // Use the complete compiler selection, including framework reference assemblies.
+            // A transitive PE may request an older package than the SDK selected. Runtime ALC
+            // unification is not compiler evidence and cannot substitute another version here.
+            return sdkReferences.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair =>
+            {
+                var asset = pair.Value;
+                var selected = Reference(asset.Path, binding: null, requested: new AssemblyName(asset.Identity));
+                if (selected.Sha256 != asset.Sha256 || selected.Mvid != asset.Mvid)
+                    throw new InvalidOperationException("An SDK compiler reference differs from its evaluated image witness: " + asset.Path);
+                return selected.Metadata.WithProperties(new MetadataReferenceProperties(MetadataImageKind.Assembly,
+                    asset.Aliases.ToImmutableArray(), asset.EmbedInteropTypes));
+            }).ToArray();
+        }
         var platform = (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string trusted
             ? trusted.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries) : [typeof(object).Assembly.Location])
             .Where(File.Exists).ToArray();
@@ -258,9 +281,6 @@ internal sealed class JsonBaselineConstructionContexts
         var pending = new Queue<(ReferenceImage Image, Assembly? Binding)>();
         var inspected = new HashSet<(string Path, AssemblyLoadContext? Context)>();
         var output = Path.GetDirectoryName(image)!;
-        var own = Reference(image, owner);
-        if (ownerSha256 is not null && own.Sha256 != ownerSha256)
-            throw new InvalidOperationException("A JSON construction owner differs from its shipping image witness: " + image);
         pending.Enqueue((own, owner));
         while (pending.TryDequeue(out var current))
         {

@@ -9,6 +9,93 @@ namespace Elsa.Architecture.Tests;
 public sealed class JsonBaselineConstructionContextTests
 {
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SDK_selected_compile_images_allow_only_evidenced_unification_and_ignore_a_foreign_runtime_ABI(bool unify)
+    {
+        var name = "S9SdkTargets_" + Guid.NewGuid().ToString("N");
+        var firstParameter = unify ? "object business" : "System.Text.Json.JsonSerializerOptions options";
+        using var fixture = new Sources("using External; public class C { public static object Make() => new Holder(new()); }",
+            "[assembly: System.Reflection.AssemblyVersion(\"1.0.0.0\")] namespace External; public class Holder { public Holder(" + firstParameter + ") {} }",
+            external: true, dependencyName: name);
+        var first = File.ReadAllBytes(fixture.DependencyImage);
+        var secondSource = Path.Join(fixture.RepositoryRoot, "SdkSecond.cs");
+        File.WriteAllText(secondSource, "[assembly: System.Reflection.AssemblyVersion(\"2.0.0.0\")] namespace External; public class Holder { public Holder(" +
+            (unify ? "System.Text.Json.JsonSerializerOptions options" : "object business") + ") {} }");
+        var second = FixtureCompiler.CompilePortable(name, secondSource);
+        var secondPath = Path.Join(fixture.RepositoryRoot, "SdkSecond.dll"); File.WriteAllBytes(secondPath, second.Image);
+        var selected = unify ? secondPath : fixture.DependencyImage;
+        var references = CompilerReferencePaths().Append(selected).ToList();
+        if (unify)
+        {
+            // A transitive binary retains its original 1.0 request. The root's SDK selected
+            // 2.0; choosing the old dependency would incorrectly bind new() to object.
+            var middleSource = Path.Join(fixture.RepositoryRoot, "Middle.cs");
+            File.WriteAllText(middleSource, "public class Middle { public External.Holder Value => new External.Holder(new object()); }");
+            var middle = FixtureCompiler.CompilePortableWithReferenceImages("SdkMiddle", [first], middleSource);
+            var middlePath = Path.Join(fixture.RepositoryRoot, "SdkMiddle.dll"); File.WriteAllBytes(middlePath, middle.Image);
+            references.Add(middlePath);
+            File.WriteAllText(fixture.Source, "using External; public class C { public static object Make() => new Holder(new()); public static object OldEdge() => new Middle(); }");
+            var root = FixtureCompiler.CompilePortableWithReferenceImages("Owner", [second.Image, middle.Image], fixture.Source);
+            File.WriteAllBytes(fixture.Image, root.Image); File.WriteAllBytes(Path.ChangeExtension(fixture.Image, ".pdb"), root.Symbols);
+        }
+        var binding = new FixtureBindingContext(name, secondPath, fromStream: false);
+        try
+        {
+            var owner = binding.LoadFromAssemblyPath(fixture.Image);
+            _ = binding.LoadFromAssemblyPath(secondPath); // A higher runtime version is never compiler evidence.
+            var roots = fixture.Roots();
+            var record = fixture.Record(roots) with { CompileReferences = SdkReferenceSelection(references) };
+            Assert.Equal(unify ? new Version(2, 0, 0, 0) : new Version(1, 0, 0, 0), new AssemblyName(record.CompileReferences[name].Identity).Version);
+            var contexts = new JsonBaselineConstructionContexts(roots, [record], "Debug", [owner]);
+            Assert.Equal("construction", Assert.Single(JsonBaselineSourceScan.Scan(roots[0], roots, contexts)).Setting);
+            Assert.Equal(0, binding.Resolutions);
+        }
+        finally { binding.Unload(); }
+    }
+
+    [Fact]
+    public void SDK_reference_bytes_cannot_change_after_the_evaluated_selection_witness()
+    {
+        var name = "S9SdkWitness_" + Guid.NewGuid().ToString("N");
+        using var fixture = new Sources("using External; public class C { public static object Make() => new Holder(new()); }",
+            "namespace External; public class Holder { public Holder(System.Text.Json.JsonSerializerOptions options) {} }", external: true, dependencyName: name);
+        var roots = fixture.Roots();
+        var record = fixture.Record(roots) with { CompileReferences = SdkReferenceSelection(CompilerReferencePaths().Append(fixture.DependencyImage)) };
+        File.WriteAllText(fixture.Linked, "namespace External; public class Holder { public Holder(object business) {} }");
+        File.WriteAllBytes(fixture.DependencyImage, FixtureCompiler.CompilePortable(name, fixture.Linked).Image);
+        var contexts = new JsonBaselineConstructionContexts(roots, [record], "Debug");
+        Assert.Throws<InvalidOperationException>(() => JsonBaselineSourceScan.Scan(roots[0], roots, contexts));
+    }
+
+    [Fact]
+    public void SDK_reference_aliases_are_used_by_the_actual_construction_model()
+    {
+        var name = "S9SdkAlias_" + Guid.NewGuid().ToString("N");
+        using var fixture = new Sources("using External; public class C { public static object Make() => new Holder(new()); }",
+            "namespace External; public class Holder { public Holder(System.Text.Json.JsonSerializerOptions options) {} }", external: true, dependencyName: name);
+        var roots = fixture.Roots();
+        var record = fixture.Record(roots) with { CompileReferences = SdkReferenceSelection(CompilerReferencePaths().Append(fixture.DependencyImage), fixture.DependencyImage) };
+        var contexts = new JsonBaselineConstructionContexts(roots, [record], "Debug");
+        var changed = CSharpSyntaxTree.ParseText("extern alias owned; public class C { public static object Make() => new owned::External.Holder(new()); }", path: fixture.Source).GetRoot();
+        Assert.Equal("construction", Assert.Single(JsonBaselineSourceScan.Scan(changed, roots, contexts)).Setting);
+    }
+
+    private static string[] CompilerReferencePaths() =>
+        [typeof(object).Assembly.Location, typeof(System.Text.Json.JsonSerializerOptions).Assembly.Location,
+            Path.Join(Path.GetDirectoryName(typeof(object).Assembly.Location), "System.Runtime.dll")];
+
+    private static IReadOnlyDictionary<string, SdkCompileReferences.Asset> SdkReferenceSelection(IEnumerable<string> paths, string? aliasPath = null)
+    {
+        using var evaluated = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Items = new { ReferencePathWithRefAssemblies = paths.Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(path => new { FullPath = path, Aliases = path == aliasPath ? "owned" : "", EmbedInteropTypes = "false" }).ToArray() }
+        }));
+        return new SdkCompileReferences().Read(evaluated.RootElement);
+    }
+
+    [Theory]
     [InlineData("owner-context")]
     [InlineData("wrong-version")]
     [InlineData("unresolved-context")]
