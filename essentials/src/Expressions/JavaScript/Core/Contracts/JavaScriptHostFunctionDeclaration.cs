@@ -49,16 +49,47 @@ public sealed record JavaScriptHostFunctionCall(
 /// <b>Effects.</b> None: every registered function is effect-free under ADR 0045 §5 D-6, and calling one adds no commit
 /// boundary. The effectful declaration ships with the boundary that acts on it (#4831).
 /// </para>
+/// <para>
+/// <b>Replaced functions.</b> A function rebuilt from an unprefixed global function of another system or earlier
+/// generation, for example an Elsa 3 custom function <c>getBusinessSettings</c>, names it in
+/// <see cref="ReplacesGlobalFunctions"/>: the Elsa 3 converter then rewrites calls to that global into calls to this
+/// function (#5664), the way <c>[ReplacesActivityType]</c> maps an activity.
+/// </para>
 /// </summary>
 /// <param name="Name">The name the script calls: <c>namespace.member</c>, or a built-in's own name.</param>
 /// <param name="Implementation">The .NET implementation; JSON values in and out.</param>
 /// <param name="ReadsVariables">Whether the function reads workflow variables (an opaque read).</param>
 public sealed record JavaScriptHostFunctionDeclaration(string Name, JavaScriptHostFunction Implementation, bool ReadsVariables = false)
 {
+    private readonly IReadOnlyList<string> _replacesGlobalFunctions = [];
+
     public string Name { get; } = !string.IsNullOrWhiteSpace(Name)
         ? Name
         : throw new ArgumentException("A host function declaration needs a name.", nameof(Name));
 
     public JavaScriptHostFunction Implementation { get; } = Implementation
         ?? throw new ArgumentNullException(nameof(Implementation), $"Host function '{Name}' needs an implementation.");
+
+    /// <summary>
+    /// The unprefixed global functions this function replaces, for example <c>getBusinessSettings</c> for
+    /// <c>nexxbiz.getBusinessSettings</c>: the same contract, now under a namespace prefix. Each is a plain name without
+    /// a namespace; empty when the function replaces none.
+    /// </summary>
+    public IReadOnlyList<string> ReplacesGlobalFunctions
+    {
+        get => _replacesGlobalFunctions;
+        init
+        {
+            ArgumentNullException.ThrowIfNull(value, nameof(ReplacesGlobalFunctions));
+            foreach (var replaced in value)
+            {
+                if (string.IsNullOrWhiteSpace(replaced) || replaced.Trim() != replaced || replaced.Contains('.', StringComparison.Ordinal))
+                    throw new ArgumentException(
+                        $"Host function '{Name}' declares it replaces '{replaced}', which is not a plain global function name. Name the replaced function without a namespace, for example 'getSettings'.",
+                        nameof(ReplacesGlobalFunctions));
+            }
+
+            _replacesGlobalFunctions = value.ToArray();
+        }
+    }
 }

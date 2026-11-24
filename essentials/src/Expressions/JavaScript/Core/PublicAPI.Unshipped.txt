@@ -35,6 +35,8 @@ Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Equ
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Name.get -> string!
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.ReadsVariables.get -> bool
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.ReadsVariables.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.ReplacesGlobalFunctions.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.ReplacesGlobalFunctions.init -> void
 override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Equals(object? obj) -> bool
 override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.GetHashCode() -> int
 override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.ToString() -> string!

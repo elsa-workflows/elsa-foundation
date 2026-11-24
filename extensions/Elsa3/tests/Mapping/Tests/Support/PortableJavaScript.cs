@@ -19,12 +19,14 @@ internal static class PortableJavaScript
         ExpressionDefinition definition,
         IReadOnlyDictionary<string, JsonElement>? args = null,
         IExpressionVariableReader? reader = null,
-        bool undefinedAsNull = false)
+        bool undefinedAsNull = false,
+        Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         new ExpressionsFeature().ConfigureServices(services);
         new JavaScriptFeature().ConfigureServices(services);
         new JintFeature().ConfigureServices(services);
+        configure?.Invoke(services);
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();

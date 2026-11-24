@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Services;
 using Elsa3.Mapping.Tests.Support;
 using Elsa3.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa3.Mapping.Tests.Elsa3BuiltInConversionTests;
 
@@ -322,20 +324,111 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Contains($"'{named}'", diagnostic.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task An_unknown_host_function_keeps_the_generic_refusal()
+    /// <summary>
+    /// An undeclared function keeps VF-IMP-005, with guidance naming the declaration route (#5664), whether the call
+    /// reaches the generic refusal (it has arguments) or the generated-accessor lookup (a get… call without arguments).
+    /// </summary>
+    [Theory]
+    [InlineData("getConfiguration('Key')", "getConfiguration")]
+    [InlineData("getBusinessSettings()", "getBusinessSettings")]
+    public async Task An_undeclared_host_function_keeps_the_refusal_with_the_declaration_route(string expression, string name)
     {
-        var result = await ConvertTextAsync("getConfiguration('Key')");
+        var result = await ConvertTextAsync(expression);
 
-        Assert.Contains(result.Diagnostics, diagnostic =>
-            diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
-            diagnostic.Message.Contains("unknown or unapproved host function 'getConfiguration'", StringComparison.Ordinal));
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains($"unknown or unapproved host function '{name}'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains($"'acme.{name}'", diagnostic.Guidance, StringComparison.Ordinal);
+        Assert.Contains("ReplacesGlobalFunctions", diagnostic.Guidance, StringComparison.Ordinal);
+        Assert.DoesNotContain("deterministic", diagnostic.Guidance, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---- #5664: an Elsa 3 custom function rebuilt as a prefixed Elsa 4 host function ----
+
+    private static readonly JavaScriptHostFunctionDeclaration BusinessSettings =
+        new("nexxbiz.getBusinessSettings", _ => JsonSerializer.SerializeToElement(new { currency = "EUR" }))
+        {
+            ReplacesGlobalFunctions = ["getBusinessSettings"],
+        };
+
+    [Fact]
+    public async Task A_declared_global_is_rewritten_to_its_prefixed_host_function_and_runs()
+    {
+        var result = await ConvertTextAsync("getBusinessSettings().currency", [BusinessSettings]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var converted = ReadExpression(result);
+        Assert.Equal("nexxbiz.getBusinessSettings().currency", converted.Source);
+        var value = await PortableJavaScript.EvaluateAsync(converted, configure: services => services.AddSingleton(BusinessSettings));
+        Assert.Equal("EUR", value.GetString());
+    }
+
+    [Fact]
+    public async Task A_declared_global_call_converts_its_arguments()
+    {
+        var lookup = new JavaScriptHostFunctionDeclaration("nexxbiz.lookup", call => call.Arguments[0]) { ReplacesGlobalFunctions = ["lookup"] };
+
+        var result = await ConvertTextAsync("lookup(getVariable('Key'))", [lookup], new Elsa3Variable { Id = "v", Name = "Key", TypeName = "String" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("nexxbiz.lookup(variables.Key)", ReadExpression(result).Source);
+    }
+
+    [Fact]
+    public async Task A_global_two_host_functions_replace_is_ambiguous()
+    {
+        var other = new JavaScriptHostFunctionDeclaration("acme.getBusinessSettings", _ => default) { ReplacesGlobalFunctions = ["getBusinessSettings"] };
+
+        var result = await ConvertTextAsync("getBusinessSettings()", [BusinessSettings, other]);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+        Assert.Contains("'acme.getBusinessSettings', 'nexxbiz.getBusinessSettings'", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_declared_global_that_is_also_a_generated_accessor_is_ambiguous()
+    {
+        var result = await ConvertTextAsync("getBusinessSettings()", [BusinessSettings], new Elsa3Variable { Id = "v", Name = "BusinessSettings", TypeName = "String" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+    }
+
+    [Fact]
+    public async Task A_script_declaring_the_namespace_root_is_refused()
+    {
+        var result = await ConvertTextAsync("const nexxbiz = 1; return getBusinessSettings();", [BusinessSettings]);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+        Assert.Contains("'nexxbiz'", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_function_the_script_declares_itself_is_not_rewritten()
+    {
+        var result = await ConvertTextAsync("function getBusinessSettings() { return 1; } return getBusinessSettings();", [BusinessSettings]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain("nexxbiz", ReadExpression(result).Source, StringComparison.Ordinal);
     }
 
     private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertTextAsync(string expression, params Elsa3Variable[] variables) =>
+        ConvertTextAsync(expression, [], variables);
+
+    private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertTextAsync(
+        string expression,
+        IReadOnlyList<JavaScriptHostFunctionDeclaration> hostFunctions,
+        params Elsa3Variable[] variables) =>
         ConversionServices.ConvertAsync(
             RealActivityCatalog.Create(),
-            ConversionServices.Definition(Sequence("root", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", expression)))), variables: variables));
+            ConversionServices.Definition(Sequence("root", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", expression)))), variables: variables),
+            configure: services =>
+            {
+                foreach (var hostFunction in hostFunctions)
+                    services.AddSingleton(hostFunction);
+            });
 
     private static ExpressionDefinition ReadExpression(Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition> result)
     {
