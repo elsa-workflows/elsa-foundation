@@ -516,6 +516,12 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime.native.migration.selectionfixture": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.native.migration.sqlitefixture": {
         "type": "Project",
         "dependencies": {
@@ -577,6 +583,7 @@
           "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.TestSupport": "[1.0.0, )",
+          "Elsa.Workflows.Runtime.Native.Migration.SelectionFixture": "[1.0.0, )",
           "Elsa.Workflows.Runtime.Native.Migration.SqliteFixture": "[1.0.0, )",
           "Elsa.Workflows.Runtime.Native.RetentionFixture": "[1.0.0, )",
           "Elsa.Workflows.Runtime.Statecharts.OrderFixture": "[1.0.0, )",
