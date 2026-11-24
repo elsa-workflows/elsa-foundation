@@ -16,7 +16,7 @@ namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 /// <c>Elsa:Persistence:DefaultResource</c>, the shell's own default resource, a feature's <c>Bindings</c> entry, and a feature's
 /// own <c>Provider</c> setting.
 /// </summary>
-public static class OpenIddictPlatformProviders
+internal static class OpenIddictPlatformProviders
 {
     /// <summary>
     /// The distinct providers, as configured, of the enabled EF consumers of <paramref name="shell"/>. A consumer selected by a

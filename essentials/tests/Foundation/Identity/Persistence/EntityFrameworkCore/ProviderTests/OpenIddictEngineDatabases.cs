@@ -5,7 +5,7 @@ using Testcontainers.MsSql;
 using Testcontainers.PostgreSql;
 using Xunit;
 
-namespace Elsa.Modularity.ProviderTests;
+namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests;
 
 /// <summary>
 /// One database server per engine, shared by that engine's suites, which run one after another in its collection; every test takes
@@ -14,11 +14,11 @@ namespace Elsa.Modularity.ProviderTests;
 /// </summary>
 public abstract class OpenIddictEngineDatabase(string provider, string engine) : IAsyncLifetime
 {
-    public const string RequireVariable = "ELSA_WORKBENCH_OPENIDDICT_REQUIRE_NATIVE_PROVIDERS";
+    public const string RequireVariable = "ELSA_OPENIDDICT_EF_REQUIRE_NATIVE_PROVIDERS";
     private IAsyncDisposable? _container;
     private string? _serverConnectionString;
 
-    /// <summary>The engine's name as Workbench's <c>Provider</c> setting takes it.</summary>
+    /// <summary>The engine's name as the store's <c>Provider</c> setting takes it.</summary>
     public string Provider { get; } = provider;
 
     public string? SkipReason { get; private set; }
@@ -64,7 +64,7 @@ public abstract class OpenIddictEngineDatabase(string provider, string engine) :
 
 public sealed class PostgreSqlOpenIddictDatabase() : OpenIddictEngineDatabase("PostgreSql", "PostgreSQL")
 {
-    public const string Collection = "workbench-openiddict-postgresql";
+    public const string Collection = "openiddict-store-postgresql";
 
     protected override async Task<(IAsyncDisposable, string)> StartAsync()
     {
@@ -87,7 +87,7 @@ public sealed class PostgreSqlOpenIddictDatabase() : OpenIddictEngineDatabase("P
 
 public sealed class SqlServerOpenIddictDatabase() : OpenIddictEngineDatabase("SqlServer", "SQL Server")
 {
-    public const string Collection = "workbench-openiddict-sqlserver";
+    public const string Collection = "openiddict-store-sqlserver";
 
     protected override async Task<(IAsyncDisposable, string)> StartAsync()
     {

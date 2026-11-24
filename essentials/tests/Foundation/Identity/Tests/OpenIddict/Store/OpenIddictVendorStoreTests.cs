@@ -1,4 +1,3 @@
-using Elsa.Workbench;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict;
@@ -8,15 +7,15 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
 using Xunit;
-using static Elsa.Modularity.Tests.WorkbenchOpenIddictTestHost;
+using static Elsa.Foundation.Identity.Tests.OpenIddict.Store.OpenIddictStoreTestHost;
 
-namespace Elsa.Modularity.Tests;
+namespace Elsa.Foundation.Identity.Tests.OpenIddict.Store;
 
 /// <summary>Proves the host-owned OpenIddict vendor choice remains executable after removing Elsa's wrapper.</summary>
-public sealed class WorkbenchOpenIddictVendorTests
+public sealed class OpenIddictVendorStoreTests
 {
     [Fact]
-    public async Task Workbench_vendor_registration_creates_and_reads_an_openiddict_token()
+    public async Task Vendor_registration_creates_and_reads_an_openiddict_token()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -32,7 +31,7 @@ public sealed class WorkbenchOpenIddictVendorTests
         Assert.True(database.IsInMemory());
         Assert.True(await database.CanConnectAsync());
 
-        var id = await CreateTokenAsync(scope.ServiceProvider, "workbench-user");
+        var id = await CreateTokenAsync(scope.ServiceProvider, "store-user");
 
         Assert.False(string.IsNullOrWhiteSpace(id));
         var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>();
@@ -40,9 +39,9 @@ public sealed class WorkbenchOpenIddictVendorTests
     }
 
     [Fact]
-    public async Task Workbench_vendor_registration_migrates_and_reopens_durable_sqlite_store()
+    public async Task Vendor_registration_migrates_and_reopens_durable_sqlite_store()
     {
-        var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-");
+        var directory = Directory.CreateTempSubdirectory("elsa-openiddict-store-");
         try
         {
             var databasePath = Path.Combine(directory.FullName, "tokens.db");
@@ -57,7 +56,7 @@ public sealed class WorkbenchOpenIddictVendorTests
     [Fact]
     public async Task Shared_elsa_resource_does_not_redirect_the_host_owned_openiddict_store()
     {
-        var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-resource-");
+        var directory = Directory.CreateTempSubdirectory("elsa-openiddict-store-resource-");
         try
         {
             var databasePath = Path.Combine(directory.FullName, "tokens.db");
@@ -81,9 +80,9 @@ public sealed class WorkbenchOpenIddictVendorTests
     }
 
     [Fact]
-    public async Task Workbench_vendor_registration_honors_disabled_auto_migration()
+    public async Task Vendor_registration_honors_disabled_auto_migration()
     {
-        var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-");
+        var directory = Directory.CreateTempSubdirectory("elsa-openiddict-store-");
         try
         {
             var configuration = DurableConfiguration(Path.Combine(directory.FullName, "tokens.db"), autoMigrate: false);
@@ -109,7 +108,7 @@ public sealed class WorkbenchOpenIddictVendorTests
     [Fact]
     public async Task Migration_policy_honours_an_AutoMigrate_set_in_code()
     {
-        var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-code-");
+        var directory = Directory.CreateTempSubdirectory("elsa-openiddict-store-code-");
         try
         {
             await using var provider = CreateProvider(
@@ -139,7 +138,7 @@ public sealed class WorkbenchOpenIddictVendorTests
     [InlineData(false, 0, 1)]
     public async Task Migration_policy_migrates_the_durable_store_as_its_AutoMigrate_asks(bool autoMigrate, int applied, int pending)
     {
-        var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-policy-");
+        var directory = Directory.CreateTempSubdirectory("elsa-openiddict-store-policy-");
         try
         {
             await using var provider = CreateProvider(DurableConfiguration(Path.Join(directory.FullName, "tokens.db"), autoMigrate), withMigrationPolicy: true);
@@ -163,7 +162,7 @@ public sealed class WorkbenchOpenIddictVendorTests
     [Fact]
     public async Task Migration_policy_reports_a_stale_sqlite_lock_older_than_the_configured_bound()
     {
-        var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-lock-");
+        var directory = Directory.CreateTempSubdirectory("elsa-openiddict-store-lock-");
         try
         {
             var databasePath = Path.Join(directory.FullName, "tokens.db");
@@ -205,7 +204,7 @@ public sealed class WorkbenchOpenIddictVendorTests
             var database = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database;
             Assert.True(database.IsSqlite());
             Assert.Single(await database.GetAppliedMigrationsAsync());
-            id = await CreateTokenAsync(scope.ServiceProvider, "durable-workbench-user");
+            id = await CreateTokenAsync(scope.ServiceProvider, "durable-user");
         }
 
         Assert.True(File.Exists(databasePath));

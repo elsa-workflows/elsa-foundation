@@ -329,12 +329,12 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         using var content = ContentRoot.For("Elsa.Workbench");
         using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench"), content.Arguments(durableMembership: false));
 
-        var hosted = built.Host.Services.GetServices<IHostedService>().Select(service => service.GetType()).ToList();
+        var hosted = HostedServiceNames(built.Host.Services);
 
-        Assert.Contains(typeof(OpenIddictStoreMigrator), hosted);
-        Assert.Contains(typeof(OpenIddictIdentityStoreInitializer), hosted);
+        Assert.Contains(OpenIddictStoreMigrator, hosted);
+        Assert.Contains(OpenIddictStoreInitializer, hosted);
         Assert.True(
-            hosted.IndexOf(typeof(OpenIddictIdentityStoreInitializer)) < hosted.IndexOf(typeof(OpenIddictStoreMigrator)),
+            hosted.IndexOf(OpenIddictStoreInitializer) < hosted.IndexOf(OpenIddictStoreMigrator),
             "The migration policy starts before the vendor initializer, which would then migrate the store itself.");
     }
 
@@ -409,16 +409,26 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         ];
         using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench"), arguments);
 
-        var hosted = built.Host.Services.GetServices<IHostedService>().Select(service => service.GetType()).ToList();
+        var hosted = HostedServiceNames(built.Host.Services);
         using var scope = built.Host.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>();
 
         Assert.IsType<OpenIddictIdentityPostgreSqlDbContext>(store);
-        Assert.Contains(typeof(OpenIddictPruningService), hosted);
+        Assert.Contains(OpenIddictTokenPruner, hosted);
         Assert.True(
-            hosted.IndexOf(typeof(OpenIddictStoreMigrator)) < hosted.IndexOf(typeof(OpenIddictPruningService)),
+            hosted.IndexOf(OpenIddictStoreMigrator) < hosted.IndexOf(OpenIddictTokenPruner),
             "The prune starts before the migration policy has migrated the store.");
     }
+
+    // The OpenIddict store's hosted services are internal to its package, so they are named here rather than referenced.
+    private const string OpenIddictStoreNamespace = "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.";
+    private const string OpenIddictStoreInitializer = OpenIddictStoreNamespace + "OpenIddictIdentityStoreInitializer";
+    private const string OpenIddictStoreMigrator = OpenIddictStoreNamespace + "OpenIddictStoreMigrator";
+    private const string OpenIddictTokenPruner = OpenIddictStoreNamespace + "OpenIddictTokenPruner";
+
+    /// <summary>The full names of the host's hosted services, in registration order.</summary>
+    private static List<string?> HostedServiceNames(IServiceProvider root) =>
+        root.GetServices<IHostedService>().Select(service => service.GetType().FullName).ToList();
 
     /// <summary>The service types the host registered as non-keyed singletons, of an Elsa or Nuplane assembly and closed, which a shell is built with copies of.</summary>
     private static Type[] SingletonServiceTypes(IServiceProvider root) => root.GetRequiredService<IRootServiceCollectionAccessor>().Services

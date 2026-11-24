@@ -12,9 +12,9 @@ namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 /// The OpenIddict feature itself remains provider-neutral and shell-composable; this host chooses the vendor
 /// persistence implementation and owns its startup lifecycle explicitly.
 /// </summary>
-public static class OpenIddictVendorStoreRegistration
+internal static class OpenIddictVendorStoreRegistration
 {
-    public static IServiceCollection AddOpenIddictVendorStore(
+    internal static IServiceCollection AddOpenIddictVendorStore(
         this IServiceCollection services,
         IConfiguration configuration)
     {

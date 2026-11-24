@@ -1,5 +1,4 @@
 using System.Reflection;
-using Elsa.Workbench;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,17 +9,17 @@ using Microsoft.Extensions.Time.Testing;
 using OpenIddict.Abstractions;
 using Xunit;
 
-namespace Elsa.Modularity.Tests;
+namespace Elsa.Foundation.Identity.Tests.OpenIddict.Store;
 
 /// <summary>
-/// Every access and refresh token is a row of Workbench's OpenIddict store, and nothing else deletes one. The prune removes the
+/// Every access and refresh token is a row of the OpenIddict store, and nothing else deletes one. The prune removes the
 /// expired and redeemed entries, tokens and authorizations, once they are older than the configured age, on every node.
 /// </summary>
-public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
+public sealed class OpenIddictStorePruningTests : IAsyncLifetime
 {
     private static readonly TimeSpan Interval = new OpenIddictPruningOptions().Interval;
 
-    private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-prune-");
+    private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("elsa-openiddict-store-prune-");
     private readonly FakeTimeProvider _time = new(DateTimeOffset.UtcNow);
     private readonly CapturingLogger _log = new();
     private ServiceProvider _provider = null!;
@@ -29,14 +28,14 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _provider = CreateProvider(Durable());
-        await WorkbenchOpenIddictTestHost.StartAsync(_provider);
+        await OpenIddictStoreTestHost.StartAsync(_provider);
         _scenario = new OpenIddictPruneScenario(_provider, _time);
     }
 
     public async Task DisposeAsync()
     {
         await _provider.DisposeAsync();
-        WorkbenchOpenIddictTestHost.ClearStorePool(Path.Join(_directory.FullName, "tokens.db"));
+        OpenIddictStoreTestHost.ClearStorePool(Path.Join(_directory.FullName, "tokens.db"));
         _directory.Delete(recursive: true);
     }
 
@@ -137,10 +136,10 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
     [Fact]
     public async Task A_failed_prune_is_logged_and_does_not_stop_the_host()
     {
-        var unmigrated = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-unmigrated-");
+        var unmigrated = Directory.CreateTempSubdirectory("elsa-openiddict-store-unmigrated-");
         try
         {
-            await using var provider = CreateProvider(WorkbenchOpenIddictTestHost.DurableConfiguration(Path.Join(unmigrated.FullName, "tokens.db"), autoMigrate: false));
+            await using var provider = CreateProvider(OpenIddictStoreTestHost.DurableConfiguration(Path.Join(unmigrated.FullName, "tokens.db"), autoMigrate: false));
 
             await Service(provider).PruneAsync(CancellationToken.None);
 
@@ -148,7 +147,7 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
         }
         finally
         {
-            WorkbenchOpenIddictTestHost.ClearStorePool(Path.Join(unmigrated.FullName, "tokens.db"));
+            OpenIddictStoreTestHost.ClearStorePool(Path.Join(unmigrated.FullName, "tokens.db"));
             unmigrated.Delete(recursive: true);
         }
     }
@@ -202,13 +201,13 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
     /// <summary>The durable store every node of the test shares, with the prune settings given.</summary>
     private IConfiguration Durable(params (string Key, string Value)[] prune) =>
         new ConfigurationBuilder()
-            .AddConfiguration(WorkbenchOpenIddictTestHost.DurableConfiguration(Path.Join(_directory.FullName, "tokens.db"), autoMigrate: true))
+            .AddConfiguration(OpenIddictStoreTestHost.DurableConfiguration(Path.Join(_directory.FullName, "tokens.db"), autoMigrate: true))
             .AddInMemoryCollection(prune.Select(setting => KeyValuePair.Create<string, string?>($"{OpenIddictPruningOptions.SectionPath}:{setting.Key}", setting.Value)))
             .Build();
 
     /// <summary>A node: the store the host runs, and the prune registered beside it the way <c>Program.cs</c> registers it, on the test's clock and log.</summary>
     private ServiceProvider CreateProvider(IConfiguration configuration, Action<IServiceCollection>? replace = null) =>
-        WorkbenchOpenIddictTestHost.CreateProvider(configuration, withMigrationPolicy: true, services =>
+        OpenIddictStoreTestHost.CreateProvider(configuration, withMigrationPolicy: true, services =>
         {
             services.AddSingleton<TimeProvider>(_time);
             services.AddSingleton<ILoggerFactory>(_log);
@@ -216,8 +215,8 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
             replace?.Invoke(services);
         });
 
-    private OpenIddictPruningService Service(IServiceProvider? provider = null) =>
-        (provider ?? _provider).GetServices<IHostedService>().OfType<OpenIddictPruningService>().Single();
+    private OpenIddictTokenPruner Service(IServiceProvider? provider = null) =>
+        (provider ?? _provider).GetServices<IHostedService>().OfType<OpenIddictTokenPruner>().Single();
 
     private static async Task WaitUntilAsync(Func<Task<bool>> condition)
     {

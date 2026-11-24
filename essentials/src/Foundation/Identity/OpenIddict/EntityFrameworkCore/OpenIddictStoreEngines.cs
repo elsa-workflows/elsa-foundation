@@ -18,7 +18,7 @@ namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 /// (<see cref="EfRelationalProviderBinding"/>), so the token store can sit in the database every node shares: access-token validation
 /// reads the token's row, so a token issued on one node is only valid on another when both read one store.
 /// </summary>
-public static class OpenIddictStoreProvider
+internal static class OpenIddictStoreEngines
 {
     /// <summary>The module name its migrations history table is named for, as every Elsa EF module's is.</summary>
     public const string Module = "OpenIddict";
@@ -41,7 +41,7 @@ public static class OpenIddictStoreProvider
     /// in-memory demo store, and otherwise the engine's own context, whose migrations are the engine's own. The host's start refuses
     /// a <c>Provider</c> that is not supported, and warns of the settings that leave the store per node.
     /// </summary>
-    public static IServiceCollection AddOpenIddictStoreProvider(this IServiceCollection services, IConfiguration configuration)
+    internal static IServiceCollection AddOpenIddictStoreEngines(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<OpenIddictStoreOptions>()
             .Bind(configuration.GetSection(OpenIddictStoreOptions.SectionPath))
@@ -136,10 +136,10 @@ public sealed class OpenIddictStoreOptions
 }
 
 /// <summary>Fails the host's start for a <see cref="OpenIddictStoreOptions.Provider"/> the store cannot use, MySQL included, instead of its first use.</summary>
-public sealed class OpenIddictStoreOptionsValidator : IValidateOptions<OpenIddictStoreOptions>
+internal sealed class OpenIddictStoreOptionsValidator : IValidateOptions<OpenIddictStoreOptions>
 {
     public ValidateOptionsResult Validate(string? name, OpenIddictStoreOptions options) =>
-        OpenIddictStoreProvider.Refusal(options.Provider) is { } refusal ? ValidateOptionsResult.Fail(refusal) : ValidateOptionsResult.Success;
+        OpenIddictStoreEngines.Refusal(options.Provider) is { } refusal ? ValidateOptionsResult.Fail(refusal) : ValidateOptionsResult.Success;
 }
 
 /// <summary>
@@ -153,7 +153,7 @@ public sealed class OpenIddictStoreOptionsValidator : IValidateOptions<OpenIddic
 /// per-feature <c>Provider</c> settings. That needs the host's loaded features, so it is read once the host has started, not while it
 /// is starting; a consumer a shell enables later, or a setting changed after the start, is not seen.
 /// </remarks>
-public sealed class OpenIddictStoreNotices(
+internal sealed class OpenIddictStoreNotices(
     IOptions<OpenIddictIdentityOptions> identity,
     IOptions<OpenIddictStoreOptions> store,
     IConfiguration configuration,
@@ -208,7 +208,7 @@ public sealed class OpenIddictStoreNotices(
         if (others.Length == 0)
             return;
 
-        var shareable = others.FirstOrDefault(provider => OpenIddictStoreProvider.Refusal(provider) is null);
+        var shareable = others.FirstOrDefault(provider => OpenIddictStoreEngines.Refusal(provider) is null);
         if (shareable is null)
             logger.LogWarning(
                 "The platform's persistence provider is {Platform}, which the OpenIddict token store does not support, so the token store is still a per-node SQLite file: a token issued on one node is not valid on another. Sharing it needs a SQL Server or PostgreSQL database, selected with {Setting}.",

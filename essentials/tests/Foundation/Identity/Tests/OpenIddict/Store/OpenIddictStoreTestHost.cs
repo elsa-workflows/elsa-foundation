@@ -1,17 +1,16 @@
-using Elsa.Workbench;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
 
-namespace Elsa.Modularity.Tests;
+namespace Elsa.Foundation.Identity.Tests.OpenIddict.Store;
 
 /// <summary>
-/// A node of Workbench's OpenIddict store as the host composes it, and its start, shared by the store's tests on SQLite and, linked
+/// A node of the OpenIddict store as the host composes it, and its start, shared by the store's tests on SQLite and, linked
 /// into the provider tests, on the native engines.
 /// </summary>
-internal static class WorkbenchOpenIddictTestHost
+internal static class OpenIddictStoreTestHost
 {
     internal static IConfiguration DurableConfiguration(string databasePath, bool autoMigrate) =>
         new ConfigurationBuilder()
@@ -37,7 +36,7 @@ internal static class WorkbenchOpenIddictTestHost
         services.AddSingleton(configuration);
         services.AddLogging();
         services.AddOpenIddictVendorStore(configuration);
-        services.AddOpenIddictStoreProvider(configuration);
+        services.AddOpenIddictStoreEngines(configuration);
         if (withMigrationPolicy)
             services.AddOpenIddictMigrationPolicy(configuration);
         configure?.Invoke(services);
