@@ -254,7 +254,7 @@
   </Folder>
   <Folder Name="/essentials/tests/ActorFoundation/Store/">
     <Project Path="essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
-    <Project Path="essentials/tests/ActorFoundation/Store/EntityFramework/Elsa.ActorFoundation.Store.EntityFramework.Conformance.csproj" />
+    <Project Path="essentials/tests/ActorFoundation/Store/EntityFramework/Elsa.ActorFoundation.Store.EntityFramework.csproj" />
   </Folder>
   <Folder Name="/prototypes/kernel-model/ef/">
     <Project Path="prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
