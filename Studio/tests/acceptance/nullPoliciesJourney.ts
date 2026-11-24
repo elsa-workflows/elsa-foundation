@@ -143,13 +143,16 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
 
     const workflow = await api<{ definition: { id: string }; draft: { id: string } }>("/design/workflows/definitions", "POST", {
-      name: `Null admission ${info.project.name} ${Date.now()}`, state: { variables: [], inputs: [
+      name: `Null admission ${info.project.name} ${Date.now()}`, initialState: { variables: [], inputs: [
         { referenceKey: "topic", name: "topic", displayName: "Topic", type: type("String"), isRequired: true },
         { referenceKey: "count", name: "count", displayName: "Count", type: type("Int32"), isRequired: false },
         { referenceKey: "memo", name: "memo", displayName: "Memo", type: type("String"), isRequired: false }
       ], outputs: [], rootActivity: root([line()]) }, layout: [], activityPresentation: []
     });
     registerWorkflow(workflow.definition.id);
+    const admissionDraft = await api<{ state: { rootActivity: Node; inputs: { referenceKey: string }[] } }>(`/design/workflows/drafts/${workflow.draft.id}`);
+    expect(admissionDraft.state.rootActivity.nodeId).toBe("root");
+    expect(admissionDraft.state.inputs.map(input => input.referenceKey)).toEqual(["topic", "count", "memo"]);
     await page.goto(`/workflows/definitions?definition=${workflow.definition.id}&section=editor&draft=${workflow.draft.id}`);
     await page.getByRole("button", { name: "Test Run", exact: true }).click();
     const start = page.getByRole("button", { name: "Start Test Run", exact: true });
@@ -218,11 +221,14 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     const body = "void args.order; return { customer: { privateKey: undefined }, n: NaN, items: [1, , undefined] };";
     const js = (id: string, protectedInput: boolean): Node => ({ nodeId: id, activityVersionId: script, inputs: [literal("script", body), { ...literal("arguments", { order: {} }), isSensitive: protectedInput }], outputs: [] });
     const diagnostics = await api<{ definition: { id: string }; draft: { id: string } }>("/design/workflows/definitions", "POST", {
-      name: `Null diagnostics ${info.project.name} ${Date.now()}`, state: { variables: [{ referenceKey: "count", name: "count", type: type("Int32") }], inputs: [], outputs: [],
+      name: `Null diagnostics ${info.project.name} ${Date.now()}`, initialState: { variables: [{ referenceKey: "count", name: "count", type: type("Int32") }], inputs: [], outputs: [],
         strategyOptions: { nullHandling: { defaultOnNull: true, undefinedAsNull: false } },
         rootActivity: root([{ nodeId: "substitute-input", activityVersionId: publishEvent, inputs: [literal("EventName", "s2-no-subscriber"), literal("IsLocalEvent", null)], outputs: [] }, { nodeId: "substitute", activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueType: type("Any"), variable: { referenceKey: "count", declaringScopeId: "workflow" } }, inputs: [literal("value", null)], outputs: [] }, js("boundary", false), js("protected-boundary", true)]) }, layout: [], activityPresentation: []
     });
     registerWorkflow(diagnostics.definition.id);
+    const diagnosticsDraft = await api<{ state: { rootActivity: Node; strategyOptions: { nullHandling: { defaultOnNull: boolean; undefinedAsNull: boolean } } } }>(`/design/workflows/drafts/${diagnostics.draft.id}`);
+    expect(diagnosticsDraft.state.rootActivity.nodeId).toBe("root");
+    expect(diagnosticsDraft.state.strategyOptions.nullHandling).toEqual({ defaultOnNull: true, undefinedAsNull: false });
     const diagVersion = await api<{ id: string }>(`/design/workflows/drafts/${diagnostics.draft.id}/promote`, "POST", { operationKey: crypto.randomUUID() });
     const diagPublication = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${diagVersion.id}/publish`, "POST", {});
     const run = await api<{ workflowExecutionId: string }>(`/runtime/workflows/executables/${diagPublication.artifactId}/execute`, "POST", { sourceReferenceId: diagPublication.sourceReferenceId });
