@@ -9,6 +9,7 @@ internal sealed class EvaluatedHashInputs(string configuration)
     private readonly Dictionary<string, IReadOnlyList<string>> cache = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IReadOnlySet<string>> compileSources = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> intermediateRoots = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IReadOnlyDictionary<string, string>> packageSources = new(StringComparer.Ordinal);
     private readonly HashSet<string> evaluating = new(StringComparer.Ordinal);
 
     internal IReadOnlyList<string> Read(string project)
@@ -23,7 +24,7 @@ internal sealed class EvaluatedHashInputs(string configuration)
             // Resolve through PATH so an installed build-slot wrapper remains in force. The shared
             // helper clears inherited testhost MSBuild variables and bounds/cleans up the process.
             var startDirectory = Path.GetDirectoryName(project)!;
-            var (code, text) = ChildProcess.Run("dotnet", [.. common, "-getProperty:MSBuildAllProjects,IntermediateOutputPath", "-getItem:Compile,AdditionalFiles,EditorConfigFiles,Analyzer,ProjectReference"], workingDirectory: startDirectory, timeout: TimeSpan.FromMinutes(5));
+            var (code, text) = ChildProcess.Run("dotnet", [.. common, "-getProperty:MSBuildAllProjects,IntermediateOutputPath,ProjectAssetsFile", "-getItem:Compile,AdditionalFiles,EditorConfigFiles,Analyzer,ProjectReference"], workingDirectory: startDirectory, timeout: TimeSpan.FromMinutes(5));
             if (code != 0) throw new InvalidOperationException($"SDK input evaluation failed for {project}: {text}");
             var beginning = text.IndexOf('{');
             if (beginning < 0) throw new InvalidOperationException($"SDK input evaluation returned no JSON for {project}.");
@@ -31,6 +32,9 @@ internal sealed class EvaluatedHashInputs(string configuration)
             compileSources[project] = document.RootElement.GetProperty("Items").GetProperty("Compile").EnumerateArray()
                 .Select(item => Path.GetFullPath(item.GetProperty("FullPath").GetString()!))
                 .ToHashSet(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            var assetsFile = document.RootElement.GetProperty("Properties").GetProperty("ProjectAssetsFile").GetString();
+            if (string.IsNullOrWhiteSpace(assetsFile)) throw new InvalidOperationException("SDK omitted restored assets for " + project);
+            packageSources[project] = JsonHashExternalSources.Read(Path.GetFullPath(assetsFile, startDirectory), compileSources[project]);
             var intermediate = document.RootElement.GetProperty("Properties").GetProperty("IntermediateOutputPath").GetString();
             if (string.IsNullOrWhiteSpace(intermediate)) throw new InvalidOperationException($"SDK input evaluation omitted IntermediateOutputPath for {project}.");
             intermediateRoots[project] = Path.GetFullPath(intermediate, startDirectory);
@@ -54,6 +58,7 @@ internal sealed class EvaluatedHashInputs(string configuration)
 
     internal IReadOnlySet<string> CompileSources(string project) { _ = Read(project); return compileSources[Path.GetFullPath(project)]; }
     internal string IntermediateRoot(string project) { _ = Read(project); return intermediateRoots[Path.GetFullPath(project)]; }
+    internal IReadOnlyDictionary<string, string> PackageSources(string project) { _ = Read(project); return packageSources[Path.GetFullPath(project)]; }
 
     internal static IReadOnlyList<string> Close(IReadOnlyList<string> own, IEnumerable<IReadOnlyList<string>> dependencies) =>
         own.Concat(dependencies.SelectMany(files => files)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
@@ -61,6 +66,8 @@ internal sealed class EvaluatedHashInputs(string configuration)
     internal static IReadOnlyList<string> Parse(JsonElement root, string project, IReadOnlyList<string> imports)
     {
         var files = new HashSet<string>(imports, StringComparer.Ordinal) { Path.GetFullPath(project) };
+        if (root.GetProperty("Properties").TryGetProperty("ProjectAssetsFile", out var assets) && !string.IsNullOrWhiteSpace(assets.GetString()))
+            files.Add(Path.GetFullPath(assets.GetString()!, Path.GetDirectoryName(Path.GetFullPath(project))!));
         foreach (var import in root.GetProperty("Properties").GetProperty("MSBuildAllProjects").GetString()!.Split(';', StringSplitOptions.RemoveEmptyEntries))
             files.Add(Path.GetFullPath(import));
         var items = root.GetProperty("Items");

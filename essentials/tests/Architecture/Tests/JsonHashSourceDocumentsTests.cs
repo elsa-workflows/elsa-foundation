@@ -4,6 +4,20 @@ namespace Elsa.Architecture.Tests;
 
 public sealed class JsonHashSourceDocumentsTests
 {
+    [Fact]
+    public void Portable_source_formatting_never_substitutes_for_the_exact_PDB_checksum()
+    {
+        using var fixture = new Sources();
+        const string source = "public static class Recipe {\r\n public static int Run() => 1;\r\n}\r\n";
+        var image = fixture.Build(source);
+        var map = JsonHashSourceDocuments.Read(image, fixture.Root);
+        Assert.Empty(map.Errors);
+        Assert.NotNull(Assert.Single(map.Documents.Values).PortableSha256);
+        File.WriteAllText(Path.Join(fixture.Root, "Recipe.cs"), source.Replace("\r\n", "\n", StringComparison.Ordinal));
+        Assert.Contains(JsonHashSourceDocuments.Read(image, fixture.Root).Errors,
+            error => error.StartsWith("PDB source checksum mismatch", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(4096)]

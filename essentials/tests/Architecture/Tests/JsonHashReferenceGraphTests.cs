@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using Elsa.Serialization.Core;
 using Xunit;
 
@@ -6,6 +8,31 @@ namespace Elsa.Architecture.Tests;
 
 public sealed class JsonHashReferenceGraphTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Authority_authentication_does_not_retain_disposed_collectible_inspection_contexts(bool actualAuthority)
+    {
+        var reference = AuthenticateCollectible(actualAuthority);
+        for (var attempt = 0; attempt < 10 && reference.IsAlive; attempt++)
+        {
+            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+        }
+        Assert.False(reference.IsAlive, "Hash authority authentication must not keep an inspected Studio/private assembly alive.");
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference AuthenticateCollectible(bool actualAuthority)
+    {
+        var context = new AssemblyLoadContext("S9AuthorityLifetime" + Guid.NewGuid().ToString("N"), isCollectible: true);
+        var assembly = actualAuthority ? context.LoadFromAssemblyPath(typeof(JsonHashInput).Assembly.Location)
+            : context.LoadFromStream(new MemoryStream(FixtureCompiler.Compile("NotHashAuthority" + Guid.NewGuid().ToString("N"), "public sealed class Other { }")));
+        Assert.Equal(actualAuthority, JsonHashReferenceGraph.IsHashAuthorityAssembly(assembly));
+        var reference = new WeakReference(context);
+        context.Unload();
+        return reference;
+    }
+
     private const string Source = """
         using System;
         using System.Text;
@@ -147,6 +174,67 @@ public sealed class JsonHashReferenceGraphTests
         var entry = Assert.Single(graph.Definitions.Values, item => item.Type == "HashFixture.Recipes" && item.Name == method);
         var closure = graph.ReachableDefinitions(entry.Identity);
         Assert.Contains(graph.References, item => closure.Contains(item.Owner) && item.Role == "digest-primitive");
+    }
+
+    [Fact]
+    public void Incremental_closure_keeps_all_edges_while_expanding_each_shared_dependency_once()
+    {
+        var graph = Fixture.Value;
+        var helper = graph.Definitions.Values.Single(d => d.Type == "HashFixture.Recipes" && d.Name == "PhysicalHelper").Identity;
+        var wrapper = graph.Definitions.Values.Single(d => d.Type == "HashFixture.Recipes" && d.Name == "JsonViaWrapper").Identity;
+        var first = graph.InspectClosure(helper);
+        var expanded = first.InternalDefinitions.Concat(first.ExternalLeaves).ToHashSet(StringComparer.Ordinal);
+        var delta = graph.InspectClosure(wrapper, alreadyExpanded: expanded);
+        var complete = graph.InspectClosure(wrapper);
+        Assert.DoesNotContain(helper, delta.InternalDefinitions);
+        Assert.True(complete.InternalDefinitions.ToHashSet(StringComparer.Ordinal).SetEquals(first.InternalDefinitions.Concat(delta.InternalDefinitions)));
+        Assert.True(complete.ExternalLeaves.ToHashSet(StringComparer.Ordinal).SetEquals(first.ExternalLeaves.Concat(delta.ExternalLeaves)));
+        Assert.True(complete.References.ToHashSet().SetEquals(first.References.Concat(delta.References)));
+        Assert.True(complete.Bindings.ToHashSet().SetEquals(first.Bindings.Concat(delta.Bindings)));
+    }
+
+    [Fact]
+    public void A_stopped_boundary_remains_unexpanded_and_can_be_reviewed_as_an_explicit_root()
+    {
+        var graph = Fixture.Value;
+        var helper = graph.Definitions.Values.Single(d => d.Type == "HashFixture.Recipes" && d.Name == "PhysicalHelper").Identity;
+        var wrapper = graph.Definitions.Values.Single(d => d.Type == "HashFixture.Recipes" && d.Name == "JsonViaWrapper").Identity;
+        var stopped = graph.InspectClosure(wrapper, new HashSet<string> { helper });
+        var expanded = stopped.InternalDefinitions.Concat(stopped.ExternalLeaves).ToHashSet(StringComparer.Ordinal);
+        Assert.Contains(helper, stopped.Boundaries);
+        Assert.DoesNotContain(helper, expanded);
+        var authority = graph.InspectClosure(helper, new HashSet<string> { helper }, expanded);
+        Assert.Contains(helper, authority.InternalDefinitions);
+        Assert.Contains(authority.References, reference => reference.Role == "digest-primitive");
+    }
+
+    [Theory]
+    [InlineData("Dispatch")]
+    [InlineData("VirtualDispatch")]
+    [InlineData("ThreeLevelDispatch")]
+    [InlineData("Field")]
+    [InlineData("Property")]
+    [InlineData("Factory")]
+    [InlineData("TwoStageFactory")]
+    [InlineData("ConfigureViaInterface")]
+    [InlineData("ExternalInterface")]
+    [InlineData("ExternalVirtual")]
+    [InlineData("ExternalGeneric")]
+    public void Incremental_dispatch_and_delegate_closures_agree_with_the_complete_graph(string name)
+    {
+        var graph = Fixture.Value;
+        var entry = graph.Definitions.Values.Single(d => d.Type == "HashFixture.Recipes" && d.Name == name).Identity;
+        var complete = graph.InspectClosure(entry);
+        foreach (var seed in complete.InternalDefinitions.Where(identity => identity != entry).Take(3))
+        {
+            var initial = graph.InspectClosure(seed);
+            var expanded = initial.InternalDefinitions.Concat(initial.ExternalLeaves).ToHashSet(StringComparer.Ordinal);
+            var delta = graph.InspectClosure(entry, alreadyExpanded: expanded);
+            Assert.True(complete.InternalDefinitions.Concat(initial.InternalDefinitions).ToHashSet(StringComparer.Ordinal)
+                .SetEquals(initial.InternalDefinitions.Concat(delta.InternalDefinitions)), name + ": definitions");
+            Assert.True(complete.References.Concat(initial.References).ToHashSet().SetEquals(initial.References.Concat(delta.References)), name + ": references");
+            Assert.True(complete.Bindings.Concat(initial.Bindings).ToHashSet().SetEquals(initial.Bindings.Concat(delta.Bindings)), name + ": bindings");
+        }
     }
 
     [Fact]

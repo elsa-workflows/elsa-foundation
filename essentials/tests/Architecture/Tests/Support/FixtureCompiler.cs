@@ -68,14 +68,31 @@ internal static class FixtureCompiler
         => CompilePortable(assemblyName, embedSources: false, sources);
 
     internal static PortableImage CompilePortable(string assemblyName, bool embedSources, params string[] sources)
+        => CompilePortableCore(assemblyName, embedSources, [], sources);
+
+    internal static PortableImage CompilePortable(string assemblyName, IEnumerable<Assembly> references, params string[] sources)
+        => CompilePortableCore(assemblyName, false, references, sources);
+
+    internal static PortableImage CompilePortableConfigured(string assemblyName, IEnumerable<Assembly> references, IEnumerable<string> symbols, params string[] sources)
+        => CompilePortableCore(assemblyName, false, references, sources, symbols);
+
+    internal static PortableImage CompilePortableWithReferenceImages(string assemblyName, IEnumerable<byte[]> referenceImages, params string[] sources)
+        => CompilePortableCore(assemblyName, false, [], sources, imageReferences: referenceImages);
+
+    private static PortableImage CompilePortableCore(string assemblyName, bool embedSources, IEnumerable<Assembly> references, string[] sources,
+        IEnumerable<string>? preprocessorSymbols = null, IEnumerable<byte[]>? imageReferences = null)
     {
         var trees = sources.Select(path =>
         {
             using var stream = File.OpenRead(path);
             return CSharpSyntaxTree.ParseText(SourceText.From(stream, Encoding.UTF8, SourceHashAlgorithm.Sha256, canBeEmbedded: embedSources),
-                new CSharpParseOptions(LanguageVersion.Latest), path);
+                new CSharpParseOptions(LanguageVersion.Latest, preprocessorSymbols: preprocessorSymbols), path);
         }).ToArray();
-        var compilation = CSharpCompilation.Create(assemblyName, trees, Platform.Value.References,
+        var (platformPaths, platformReferences) = Platform.Value;
+        var extra = references.Select(assembly => assembly.Location).Where(path => !platformPaths.Contains(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Select(path => MetadataReference.CreateFromFile(path));
+        var compilation = CSharpCompilation.Create(assemblyName, trees,
+            [.. platformReferences, .. extra, .. (imageReferences ?? []).Select(image => MetadataReference.CreateFromImage(image))],
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Debug));
         using var image = new MemoryStream();
         using var symbols = new MemoryStream();

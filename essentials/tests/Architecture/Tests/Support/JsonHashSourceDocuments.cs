@@ -4,22 +4,27 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Elsa.Architecture.Tests;
 
 /// <summary>Build-authenticated source documents; filenames never stand in for a matching PDB or source checksum.</summary>
 internal sealed class JsonHashSourceDocuments
 {
-    internal sealed record Document(string Path, string Sha256, string Origin = "checkout", byte[]? EmbeddedSource = null);
+    internal sealed record Document(string Path, string Sha256, string Origin = "checkout", byte[]? EmbeddedSource = null,
+        string? PortableSha256 = null);
     internal sealed record Method(int Token, int? KickoffToken, IReadOnlyList<string> Documents);
     internal IReadOnlyDictionary<string, Document> Documents { get; }
     internal IReadOnlyDictionary<int, Method> Methods { get; }
+    internal IReadOnlyDictionary<int, IReadOnlyList<string>> TypeDocuments { get; }
     internal IReadOnlyList<string> Errors { get; }
     internal Guid ImageMvid { get; }
 
-    private JsonHashSourceDocuments(Dictionary<string, Document> documents, Dictionary<int, Method> methods, List<string> errors, Guid imageMvid = default)
+    private JsonHashSourceDocuments(Dictionary<string, Document> documents, Dictionary<int, Method> methods, List<string> errors, Guid imageMvid = default,
+        Dictionary<int, IReadOnlyList<string>>? typeDocuments = null)
     {
         Documents = documents; Methods = methods; Errors = errors; ImageMvid = imageMvid;
+        TypeDocuments = typeDocuments ?? [];
     }
 
     internal static JsonHashSourceDocuments Read(string image, string repoRoot, IReadOnlyDictionary<string, string>? pathMaps = null,
@@ -28,6 +33,7 @@ internal sealed class JsonHashSourceDocuments
         var documents = new Dictionary<string, Document>(StringComparer.Ordinal);
         var methods = new Dictionary<int, Method>();
         var errors = new List<string>();
+        var typeDocuments = new Dictionary<int, IReadOnlyList<string>>();
         var mvid = Guid.Empty;
         var symbols = Path.ChangeExtension(image, ".pdb");
         if (!File.Exists(symbols)) return new(documents, methods, [$"Missing portable PDB for {image}."]);
@@ -93,7 +99,7 @@ internal sealed class JsonHashSourceDocuments
                 { errors.Add($"PDB source checksum mismatch or unsupported checksum for {path}."); continue; }
                 var relative = origin == "external-compile" ? path : Path.GetRelativePath(repoRoot, path).Replace('\\', '/');
                 documents[relative] = new(relative, Convert.ToHexStringLower(SHA256.HashData(bytes)), origin,
-                    origin == "embedded-generated" ? bytes : null);
+                    origin == "embedded-generated" ? bytes : null, PortableDigest(bytes));
                 handles[handle] = relative;
             }
             foreach (var handle in metadata.MethodDefinitions)
@@ -107,12 +113,58 @@ internal sealed class JsonHashSourceDocuments
                 var token = MetadataTokens.GetToken(handle);
                 methods[token] = new(token, kickoff.IsNil ? null : MetadataTokens.GetToken(kickoff), used.Select(document => handles[document]).Order(StringComparer.Ordinal).ToArray());
             }
+            // The compiler's type-document relation supplements method sequence points. In C# it is
+            // emitted for top-level types, with nested methods contributing to that same source union.
+            // https://github.com/dotnet/runtime/blob/main/docs/design/specs/PortablePdb-Metadata.md#type-definition-document-c-and-vb-compilers
+            var groups = new Dictionary<TypeDefinitionHandle, HashSet<string>>();
+            var roots = new Dictionary<TypeDefinitionHandle, TypeDefinitionHandle>();
+            foreach (var handle in metadata.TypeDefinitions)
+            {
+                var root = handle;
+                while (!metadata.GetTypeDefinition(root).GetDeclaringType().IsNil) root = metadata.GetTypeDefinition(root).GetDeclaringType();
+                roots[handle] = root;
+                if (!groups.TryGetValue(root, out var paths)) groups[root] = paths = new(StringComparer.Ordinal);
+                foreach (var method in metadata.GetTypeDefinition(handle).GetMethods())
+                    if (methods.TryGetValue(MetadataTokens.GetToken(method), out var entry)) paths.UnionWith(entry.Documents);
+                foreach (var customHandle in pdb.GetCustomDebugInformation(handle))
+                {
+                    var custom = pdb.GetCustomDebugInformation(customHandle);
+                    if (pdb.GetGuid(custom.Kind) != new Guid("932e74bc-dba9-4478-8d46-0f32a7bab3d3")) continue;
+                    var blob = pdb.GetBlobReader(custom.Value);
+                    while (blob.RemainingBytes > 0)
+                    {
+                        var row = blob.ReadCompressedInteger();
+                        if (row <= 0 || row > pdb.Documents.Count) throw new BadImageFormatException("Invalid type source document row.");
+                        if (!handles.TryGetValue(MetadataTokens.DocumentHandle(row), out var path))
+                        { errors.Add($"Unverified declaring-type source document for type 0x{MetadataTokens.GetToken(handle):x8} in {image}."); continue; }
+                        paths.Add(path);
+                    }
+                }
+            }
+            var complete = groups.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<string>)pair.Value.Order(StringComparer.Ordinal).ToArray());
+            foreach (var (handle, root) in roots) typeDocuments[MetadataTokens.GetToken(handle)] = complete[root];
         }
         catch (Exception error) when (error is BadImageFormatException or IOException or InvalidOperationException or ArgumentException or NotSupportedException or UnauthorizedAccessException)
         {
             errors.Add($"Cannot verify source provenance for {image}: {error.GetType().Name}: {error.Message}");
         }
-        return new(documents, methods, errors, mvid);
+        return new(documents, methods, errors, mvid, typeDocuments);
+    }
+
+    private static string PortableDigest(byte[] authenticatedBytes)
+    {
+        // Called only after the exact PDB checksum matches these same bytes. Keep that checksum above;
+        // normalize source formatting, never compiled literals or the carried JSON value.
+        var bytes = authenticatedBytes.AsSpan();
+        Encoding encoding = new UTF8Encoding(false, true);
+        var prefix = 0;
+        if (bytes.StartsWith(new byte[] { 0xff, 0xfe, 0, 0 })) { encoding = new UTF32Encoding(false, false, true); prefix = 4; }
+        else if (bytes.StartsWith(new byte[] { 0, 0, 0xfe, 0xff })) { encoding = new UTF32Encoding(true, false, true); prefix = 4; }
+        else if (bytes.StartsWith(new byte[] { 0xff, 0xfe })) { encoding = new UnicodeEncoding(false, false, true); prefix = 2; }
+        else if (bytes.StartsWith(new byte[] { 0xfe, 0xff })) { encoding = new UnicodeEncoding(true, false, true); prefix = 2; }
+        else if (bytes.StartsWith(new byte[] { 0xef, 0xbb, 0xbf })) prefix = 3;
+        var text = encoding.GetString(bytes[prefix..]).Replace("\r\n", "\n", StringComparison.Ordinal);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     }
 
     private static string? ResolveExternal(string recorded, string repoRoot, IReadOnlySet<string>? compileSources)

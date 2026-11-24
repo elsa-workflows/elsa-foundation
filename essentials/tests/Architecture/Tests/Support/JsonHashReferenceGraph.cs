@@ -1,11 +1,31 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 
 namespace Elsa.Architecture.Tests;
 
 /// <summary>Resolved compiled references for a reviewed hash recipe; syntax spelling never grants an exception.</summary>
 internal sealed class JsonHashReferenceGraph
 {
+    internal static string ContractIdentity(Type type) => TypeIdentity(type);
+    internal static string CallableIdentity(MethodBase method) => DefinitionIdentity(method);
+    private sealed record AuthorityImage(bool IsExact);
+    private static readonly ConditionalWeakTable<Assembly, AuthorityImage> AuthorityImages = new();
+    private static readonly Lazy<byte[]> AuthorityDigest = new(() => SHA256.HashData(File.ReadAllBytes(typeof(Elsa.Serialization.Core.JsonHashInput).Assembly.Location)));
+
+    internal static bool IsHashAuthorityAssembly(Assembly assembly) => AuthorityImages.GetValue(assembly, candidate =>
+    {
+        var expected = typeof(Elsa.Serialization.Core.JsonHashInput).Assembly;
+        if (candidate.FullName != expected.FullName || candidate.ManifestModule.ModuleVersionId != expected.ManifestModule.ModuleVersionId ||
+            string.IsNullOrEmpty(candidate.Location) || !File.Exists(candidate.Location)) return new(false);
+        return new(SHA256.HashData(File.ReadAllBytes(candidate.Location)).AsSpan().SequenceEqual(AuthorityDigest.Value));
+    }).IsExact;
+
+    internal static bool IsHashAuthorityType(Type type, bool includeNested = false) =>
+        (type.FullName == typeof(Elsa.Serialization.Core.JsonHashInput).FullName || includeNested &&
+            type.FullName?.StartsWith(typeof(Elsa.Serialization.Core.JsonHashInput).FullName + "+", StringComparison.Ordinal) == true) &&
+        IsHashAuthorityAssembly(type.Assembly);
     private static readonly Lazy<Type?> NonCryptographicAlgorithm = new(() =>
         System.Type.GetType("System.IO.Hashing.NonCryptographicHashAlgorithm, System.IO.Hashing", throwOnError: false));
     internal sealed record Reference(string Owner, string Target, string Operation, int Occurrence, int Offset,
@@ -46,13 +66,14 @@ internal sealed class JsonHashReferenceGraph
     }
 
     /// <summary>Closes methods, dispatch and delegate-field initializers without claiming to infer arbitrary JSON dataflow.</summary>
-    internal IReadOnlySet<string> ReachableDefinitions(string entry, IReadOnlySet<string>? boundaries = null)
+    internal IReadOnlySet<string> ReachableDefinitions(string entry, IReadOnlySet<string>? boundaries = null, IReadOnlySet<string>? alreadyExpanded = null)
     {
         var found = new HashSet<string>(StringComparer.Ordinal);
         var pending = new Stack<string>();
         pending.Push(entry);
         while (pending.TryPop(out var identity))
         {
+            if (alreadyExpanded?.Contains(identity) == true) continue;
             if (!found.Add(identity)) continue;
             if (identity != entry && boundaries?.Contains(identity) == true) continue;
             if (dispatch.TryGetValue(identity, out var implementations))
@@ -102,9 +123,9 @@ internal sealed class JsonHashReferenceGraph
 
     private IEnumerable<string> CallerOwners(string target) => IncomingReferences(target).References.Select(reference => reference.Owner).Distinct(StringComparer.Ordinal);
 
-    internal Closure InspectClosure(string entry, IReadOnlySet<string>? boundaries = null)
+    internal Closure InspectClosure(string entry, IReadOnlySet<string>? boundaries = null, IReadOnlySet<string>? alreadyExpanded = null)
     {
-        var reached = ReachableDefinitions(entry, boundaries);
+        var reached = ReachableDefinitions(entry, boundaries, alreadyExpanded);
         var stopped = reached.Where(identity => identity != entry && boundaries?.Contains(identity) == true).ToHashSet(StringComparer.Ordinal);
         var owners = reached.Where(identity => Definitions.ContainsKey(identity) && !stopped.Contains(identity)).ToHashSet(StringComparer.Ordinal);
         var bindings = new List<Binding>();
@@ -264,7 +285,7 @@ internal sealed class JsonHashReferenceGraph
     private static string Role(MemberInfo member)
     {
         var type = member as Type ?? member.DeclaringType;
-        if (type == typeof(Elsa.Serialization.Core.JsonHashInput))
+        if (type is not null && IsHashAuthorityType(type))
             return "json-hash-input";
         if (type is not null && IsDigestType(type)) return member is Type ? "digest-type" : "digest-primitive";
         return "ordinary";

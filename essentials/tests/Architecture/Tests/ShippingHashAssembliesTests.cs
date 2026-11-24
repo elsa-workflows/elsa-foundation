@@ -90,7 +90,7 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
                 sourceErrors.AddRange(sources.Errors);
                 foreach (var document in sources.Documents.Values)
                     yield return new { Project = Path.GetRelativePath(RepoPaths.RepoRoot, project.Path).Replace('\\', '/'), project.ImageMvid,
-                        document.Path, document.Sha256, document.Origin, document.EmbeddedSource };
+                        document.Path, document.Sha256, document.PortableSha256, document.Origin, document.EmbeddedSource };
             }
         }
 
@@ -221,6 +221,7 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
             File.SetLastWriteTimeUtc(project, DateTime.UtcNow.AddMinutes(-3));
             File.SetLastWriteTimeUtc(producer, DateTime.UtcNow.AddMinutes(-2));
             File.SetLastWriteTimeUtc(binary, DateTime.UtcNow.AddMinutes(-1));
+            RestoreFixture(project);
             var closed = new EvaluatedHashInputs(Configuration).Read(project);
             Assert.Contains(producerProject, closed);
             Assert.Contains(producer, closed);
@@ -247,6 +248,7 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
             File.WriteAllText(Path.Join(root, "Directory.Packages.props"), "<Project />");
             File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
             File.WriteAllText(selection, File.ReadAllText(Path.Join(RepoPaths.RepoRoot, "global.json")));
+            RestoreFixture(project);
             var inputs = new EvaluatedHashInputs(Configuration).Read(project);
             Assert.Contains(selection, inputs);
             File.WriteAllBytes(binary, FixtureCompiler.Compile("Elsa.SdkSelection", "public class Consumer { }"));
@@ -319,6 +321,16 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
             }
         }
         finally { compiler.Unload(); Remove(root); }
+    }
+
+    private static void RestoreFixture(string project)
+    {
+        var root = Path.GetDirectoryName(project)!;
+        var config = Path.Join(root, "NuGet.Config");
+        File.WriteAllText(config, "<configuration><packageSources><clear /></packageSources></configuration>");
+        var (code, output) = ChildProcess.Dotnet(["restore", project, "--configfile", config, "-p:NuGetAudit=false", "-m:1", "-nr:false"],
+            workingDirectory: root, timeout: TimeSpan.FromMinutes(5));
+        Assert.True(code == 0, output);
     }
 
     private static string NewRoot()
