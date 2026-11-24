@@ -1,7 +1,8 @@
 # GA test drive: three owner decisions for the kernel
 
 24 November 2026, `main` at `92bc067918`. Part of [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229).
-Draft for the owner. Read from the source only; nothing was run and no code changes.
+**Decided by the owner on 24 November 2026:** card 1 option A, card 2 option A, card 3 option B. Each card ends with its
+decision. Read from the source only; nothing was run and no code changes.
 
 The GA test drive's gap map (`core-preview-map.md` in this folder, landing with
 [#5701](https://github.com/elsa-workflows/elsa-foundation/pull/5701)) found that no designer-built
@@ -9,13 +10,13 @@ HTTP workflow runs on the Core Preview yet. A parallel session is adding query s
 and duplicate-route refusal to the Native model. Three gaps need an owner decision first, because they touch the
 foundation contract or the side-effect rules:
 
-| # | Decision | Recommendation | Milestone | Contract change | Size |
+| # | Decision | Owner's decision (24 November) | Milestone | Contract change | Size |
 |---|---|---|---|---|---|
-| 1 | Route templates (`/orders/{id}`) | **A.** Start routes subscribe on the template key; a mid-flow wait subscribes on its resolved path | K8 | None | M |
-| 2 | The `SendHttpRequest` response | **A.** Run it as a Background job whose result completes the activity | K6 | None | M |
-| 3 | The release 1 activity list | **A.** 24 of 34 toolbox activities run; 10 are hidden through the host availability baseline | K6, K10 | None | L, in small PRs |
+| 1 | Route templates (`/orders/{id}`) | **A**, as recommended. Start routes subscribe on the template key; a mid-flow wait subscribes on its resolved path | K8 | None | M |
+| 2 | The `SendHttpRequest` response | **A**, as recommended. Run it as a Background job whose result completes the activity | K6 | None | M |
+| 3 | The release 1 activity list | **B**; A was recommended. 26 of 34 toolbox activities run, Timer and Cron on a layer 3 schedule actor; 8 are hidden through the host availability baseline | K6, K10 | None | L, in small PRs |
 
-None of the recommended options changes the accepted K2 contracts
+None of the decided options changes the accepted K2 contracts
 ([foundation contract](../../architecture/foundation-contract.md)). Each card names the one option that would.
 
 ## 1. Route templates
@@ -112,6 +113,11 @@ Option A, in K8, with an acceptance case: W3's `/orders/{id}/enrich` starts with
 W5's `/orders/{id}/cancel` resumes only the waiting W4 for that order; and a conflicting publish is refused.
 Size M: about 400 to 600 lines with tests, after the parallel session's work lands.
 
+### Decision
+
+Owner, 24 November 2026: **option A**, resolved waits, as recommended. Its acceptance case is in the K8 row of the
+[program plan](../../program-goals/clean-slate-kernel.md#milestones).
+
 ## 2. The `SendHttpRequest` response
 
 ### Today
@@ -199,6 +205,11 @@ an acceptance case: W3 reads a downstream 500 on its status port, hits its timeo
 across a job re-run after an owner loss. The Workbench host composes the HTTP client for the job body, which closes
 the map's "no outbound sender" gap. Size M: about 400 to 600 lines with tests.
 
+### Decision
+
+Owner, 24 November 2026: **option A**, a Background job, as recommended. Its acceptance case is in the K6 row of the
+[program plan](../../program-goals/clean-slate-kernel.md#milestones).
+
 ## 3. The release 1 activity list
 
 ### How hiding works today
@@ -262,12 +273,13 @@ engine and is not counted; the Native model has it as `SetVariable`. "Native" me
 | 28 | BpmnProcess | Bpmn | Hide | ❌ | BPMN is a release 1 non-goal ([ADR 0099](../../adr/0099-clean-slate-execution-kernel.md#non-goals-for-release-1)) |
 | 29 | BpmnDecision | Bpmn | Hide | ❌ | Same |
 | 30 | RunBpmn | Bpmn | Hide | ❌ | Same |
-| 31 | Timer | Scheduling | Hide | ❌ | Recurring start trigger; needs a schedule actor that no milestone holds |
-| 32 | Cron | Scheduling | Hide | ❌ | Same |
+| 31 | Timer | Scheduling | Run (decision B) | New | Recurring start trigger on the layer 3 schedule actor |
+| 32 | Cron | Scheduling | Run (decision B) | New | Same |
 | 33 | CreateUserTask | Primitives | Hide | ❌ | A wait plus a resume, as Event is, but its user-task store and API sit on the old core |
 | 34 | ReadLine | Primitives | Hide | ❌ | Console input has no meaning on a server host |
 
-**Count:** 24 run (14 in the Native model today, 10 to port) and 10 are hidden.
+**Count, as decided (option B):** 26 run and 8 are hidden. Of the 26, 14 are in the Native model today, 10 are ports,
+and Timer and Cron are new on the schedule actor. Option A, the recommendation, had 24 run and 10 hidden.
 
 ### Options
 
@@ -297,6 +309,21 @@ Fault are S; GraphActivity with Complete is M; Inline and RunJavaScript follow K
 `kernel-unsupported` set land with the definitions-to-kernel path. K10 adds a journey: on a kernel host the toolbox
 shows the 24, and publishing a definition with `CompensationScope` is refused with the node named. Size L in all,
 about ten PRs.
+
+### Decision
+
+Owner, 24 November 2026: **option B**, A plus Timer and Cron. The recommendation was A.
+
+- **26 run, 8 hidden.** The hidden set is the three compensation activities, the three BPMN activities,
+  CreateUserTask and ReadLine.
+- **The schedule actor.** Timer and Cron run on a layer 3 schedule actor: one self-timer per schedule, publishing to
+  the workflow's start key at each occurrence. It uses the contract as it stands. K6 carries its restart and
+  duplicate-firing cases. It adds one M-sized slice.
+- **The rest is as in A.** The ports land in K6. The `kernel-unsupported` set and the publish refusal land with the
+  definitions-to-kernel path, and the K10 journey shows the 26.
+
+The acceptance cases are in the K6 and K10 rows of the
+[program plan](../../program-goals/clean-slate-kernel.md#milestones).
 
 ## Sources
 
