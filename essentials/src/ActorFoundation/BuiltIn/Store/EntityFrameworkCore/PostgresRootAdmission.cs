@@ -60,7 +60,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     {
         if (!db.Database.IsNpgsql()) throw new InvalidOperationException("Root admission requires PostgreSQL.");
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        await EfStore.LockCompatibleStoreFormatAsync(db, cancellationToken, exclusiveFormat);
+        await EfStore.LockCompatibleStoreFormatAsync(db, cancellationToken, exclusiveFormat || db.UsesRootTerminalSelection);
         await EfStore.RequirePreviewInstallSchemaAsync(db, cancellationToken);
         // A second Embedded process can open the same preview database while the first is installing.
         await db.Database.ExecuteSqlRawAsync("""
@@ -92,6 +92,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         if (db.UsesRootValueProtocol)
             await EfStore.InstallRootValuesAsync(db, cancellationToken);
         await EfStore.InstallRootActorListAsync(db, cancellationToken);
+        if (db.UsesRootTerminalSelection)
+            await EfStore.InstallRootTerminalMarksAsync(db, cancellationToken);
         if (db.UsesRootSelfProtocol)
             await EfStore.InstallRootSelfAsync(db, cancellationToken);
         await InstallDirectReceiptsAsync(db, cancellationToken);
