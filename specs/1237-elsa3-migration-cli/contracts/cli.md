@@ -10,13 +10,13 @@ dotnet elsa elsa3-migration workflows assess <export> --packages <dir> --setting
 ```
 
 A typical start, with the paths mounted at the engine image's own mount points plus `/app/export` and `/app/out`.
-The image is tagged with the essentials version, which is also the version of the `dotnet-elsa` inside it:
+The image is `elsaworkflows/elsa-elsa3-migration`, tagged like the essentials engine image it is built from:
 
 ```text
 docker run --rm --network none \
   -v "$PWD/export:/app/export:ro" -v "$PWD/nupkgs:/app/packages:ro" \
   -v "$PWD/appsettings.json:/app/config/appsettings.json:ro" -v "$PWD/migration:/app/out" \
-  <migration image>:<version> workflows assess /app/export --packages /app/packages \
+  elsaworkflows/elsa-elsa3-migration:<essentials tag> workflows assess /app/export --packages /app/packages \
   --settings /app/config/appsettings.json
 ```
 
@@ -28,9 +28,9 @@ docker run --rm --network none \
 | `--packages` | A folder of `.nupkg` files, read as a directory feed. Required for `assess`. Unlike the persistence group's `--packages` (an install root of extracted packages), it never names an install root. |
 | `--settings` | An `appsettings.json`, merged as the essentials engine image merges it. Required for `assess`. |
 
-The image sets `ELSA3_MIGRATION_HOST=/app/Elsa.Essentials.Server`. The front end reads it as the host the worker runs
-in. When it is unset or does not point at a host with `.runtimeconfig.json` and `.deps.json`, the run is refused with
-`entry-point-missing`.
+The image sets `ELSA3_MIGRATION_HOST=/app` and `ELSA3_MIGRATION_IMAGE_VERSION=<essentials tag>`. The front end
+resolves the host directory as the persistence group resolves `--host`. When the variable is unset or the directory has
+no single `.runtimeconfig.json` and `.deps.json` pair, the run is refused with `entry-point-missing`.
 
 ## Exit codes
 

@@ -8,7 +8,7 @@ the Elsa 3 migration image at the version of the essentials images you will go l
 ```bash
 docker run --rm --network none \
   -v "$PWD/my-elsa3-export:/app/export:ro" -v "$PWD/migration:/app/out" \
-  <migration image>:<version> workflows inventory /app/export
+  elsaworkflows/elsa-elsa3-migration:<essentials tag> workflows inventory /app/export
 ```
 
 The last line printed is the output path. Open `./migration/report.html`, or read `./migration/report.json`.
@@ -23,7 +23,7 @@ The last line printed is the output path. Open `./migration/report.html`, or rea
 docker run --rm --network none \
   -v "$PWD/my-elsa3-export:/app/export:ro" -v "$PWD/nupkgs:/app/packages:ro" \
   -v "$PWD/appsettings.json:/app/config/appsettings.json:ro" -v "$PWD/migration:/app/out" \
-  <migration image>:<version> workflows assess /app/export \
+  elsaworkflows/elsa-elsa3-migration:<essentials tag> workflows assess /app/export \
   --packages /app/packages --settings /app/config/appsettings.json
 ```
 

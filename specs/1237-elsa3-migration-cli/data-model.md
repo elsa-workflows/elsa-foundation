@@ -8,7 +8,7 @@ This page explains the entities and their rules.
 | Field | Meaning |
 |---|---|
 | `schemaVersion` | Integer, `1`. FR-020 says when it changes. |
-| `tool` | `{ name, version }` of `dotnet-elsa`. |
+| `tool` | `{ name, version }`: `dotnet-elsa` and its own informational version. |
 | `command` | `inventory` or `assess`. |
 | `exitCode` | `0` or `1`, the exit code the run returns (FR-004). A refused run writes no report. |
 | `redacted` | Always `true` (FR-019). It lets a consumer check the privacy promise without trusting the version alone. |
@@ -39,7 +39,7 @@ export root, use `/` separators, and are ordinal-sorted. A zip entry path is use
 | `category` | `mustFix`, `reconsider` or `takeIntoAccount` (FR-015). |
 | `remedy` | For `mustFix` only: `patch-definition`, `build-component` or `none` (FR-016). |
 | `componentKind` | For component codes only: `activity`, `javascript-function`, `variable-type` or `storage-driver`. |
-| `componentName` | The Elsa 3 name, for component codes only. |
+| `componentName` | The Elsa 3 name, for component codes only, read from the diagnostic's `ComponentName` metadata (FR-016a). |
 | `stage` | `input`, `conversion`, `import` or `publish`. |
 | `path` | JSON path into the Elsa 3 definition, or `null` for publish findings that have none. |
 | `nodeId` | Activity node id, when known. |
@@ -76,8 +76,7 @@ only from findings whose code has a component kind (spec FR-018 item 2), so an u
 
 ## Run section
 
-`imageVersion` (the informational version of `Elsa.Essentials.Composition` in the image, which is the essentials
-engine version), `packages [{ id, version }]`
+`imageVersion` (the essentials image tag the migration image was built from, baked as `ELSA3_MIGRATION_IMAGE_VERSION`), `packages [{ id, version }]`
 (the user's packages only), `features [name]`,
 `settingKeys [key]` (sorted, values never written), `persistenceOverridden` (boolean, FR-009).
 
@@ -91,7 +90,7 @@ converter's, the import's and reconciliation's codes, and the tooling's own `ELS
 `ELS3-MIGRATION-NO-PUBLISHED-VERSION` (Info). `fixedText` is the
 report text for a code the converter does not own. Every Elsa 3 code needs an entry, whatever its severity. An Elsa 4
 code with no entry gets `patch-definition` and a default fixed text. Every skip is reported as an `error` finding. Codes with an `ELS3-BEHAVIOUR-` prefix are
-`reconsider` by severity rule and need no remedy. Every component code needs a kind. The completeness test enforces both rules. `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` has remedy
+`reconsider` by severity rule; their entries still carry a remedy, used only if one is ever emitted at Error. Every component code needs a kind. The completeness test enforces both rules. `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` has remedy
 `patch-definition`: the blocked definition is fixed by fixing its root, whose own finding carries the real remedy.
 That keeps a blocked definition out of `incompatible`.
 

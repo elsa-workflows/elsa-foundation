@@ -221,8 +221,10 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   features are the converter (`Elsa3Mapping`), the collection import for reusables, the import's EF ledger and the
   publishing bridge, with their dependencies. Neither the user nor the skill configures them.
 - **FR-007**: The image MUST contain the `dotnet-elsa` CLI, and its entry point MUST be the `elsa3-migration` command
-  group. It starts no web host. It is published with the essentials images and tagged with their version, which is also the
-  version of the `dotnet-elsa` it contains, so a consumer pulls the migration image tagged with its CLI version.
+  group. It starts no web host. It is published as `elsaworkflows/elsa-elsa3-migration`, next to the essentials images, with the
+  same tags as the essentials engine image, and each tag is built `FROM` the engine image with that tag. The
+  `dotnet-elsa` inside is the one built from the same commit. A consumer pulls the migration image by the essentials
+  tag it goes live on. The report records both the image tag and the tool's own version.
 
 **Composition and persistence**
 
@@ -268,6 +270,11 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 
   A definition **goes smoothly** when it has no finding other than routine ones. A code is routine when the code table
   marks it so: an Info the converter adds to every definition, such as the null-policy record.
+- **FR-016a**: A component finding MUST name its component from structured diagnostic data, never by parsing a
+  message. The converter attaches a `ComponentName` metadata entry (the Elsa 3 activity type, function name, variable
+  type name or storage driver type) to every component diagnostic. A call of an undeclared JavaScript function gets
+  its own code, separate from the forbidden-capability code it otherwise shares, so that only missing functions count as
+  components.
 - **FR-016**: Every Must fix finding MUST carry one of three remedies:
   - `patch-definition`: change the Elsa 3 definition;
   - `build-component`: supply the missing Elsa 4 component;
@@ -379,8 +386,9 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   the engine gap of Q2 is fixed.
 - **SC-005 - Redaction**: The sentinel test finds no sentinel in `report.json` or `report.html`.
 - **SC-006 - Determinism**: Two runs over the same input produce byte-identical `report.json` and `migrated/`.
-- **SC-007 - Assess resolves**: With the fixture feature package, `assess` clears exactly the findings that the
-  package addresses, and nothing else changes.
+- **SC-007 - Assess resolves**: With the fixture feature package, `assess` clears every finding that names one of the
+  package's components, and adds no finding unrelated to them. The fixture is built so that the definitions it unblocks
+  publish clean.
 - **SC-008 - Offline**: A run with container networking disabled produces the same output as one with networking
   enabled.
 
@@ -397,6 +405,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **Converter diagnostic for non-call references.** A declared global that a script references without calling it is
   not rewritten, and it fails at run time. The converter refuses it as `ELS3-REPLACED-FUNCTION-REFERENCE` (Q11). That
   is a converter change outside this specification, and this specification adds its entry to the code table.
+- **Component metadata in the converter** (FR-016a): `ComponentName` metadata on component diagnostics, and a code of
+  its own for a call of an undeclared JavaScript function. This specification makes that converter change (T004b).
 - **ADR 0076 amendment**: the worker may reach one further named frozen entry point per command group, each a
   compatibility surface. Until the amendment is agreed, this specification stays provisional.
 - **Engine gap**: the engine's JSON activity reconciliation refuses source-owned activity content that depends on other

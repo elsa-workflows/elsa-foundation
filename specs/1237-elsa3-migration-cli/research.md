@@ -63,6 +63,10 @@ instead of returning a result, and it is registered only by `Elsa3JsonReconcilia
 - Code constants: `Elsa3ActivityDiagnosticCodes` (`ELS3-ACTIVITY-*`, `ELS3-BEHAVIOUR-*`), `Elsa3ImportDiagnosticCodes`
   (`VF-IMP-001` to `012`, in `Mapping/Services/Elsa3ExpressionRewriter.cs`), `Elsa3MigrationDiagnosticCodes`,
   `Elsa3ReconciliationDiagnosticCodes`, plus `ELS3-UNTYPED-RESULT` and `ELS3-SCRIPT-OUTCOME-*`.
+- Component names travel only in message text: rewrite issues carry no metadata
+  (`Elsa3ExpressionRewriteIssue(Code, Message, Guidance)`), and a call of an unknown function shares the
+  forbidden-capability code with refused capabilities (`Elsa3ExpressionRewriter.cs`). FR-016a adds `ComponentName`
+  metadata and a code of its own for that call.
 - Guidance strings are constant literals, while some messages interpolate. One example is the strict-mode parse
   message, which embeds the parser's error description, and that description can quote script text
   (`Elsa3ExpressionRewriter.cs`, the sloppy-mode message).
@@ -130,14 +134,17 @@ composition and the merged settings, as specification 1236 defines the merge. It
 `EssentialsFeatureList.Read(<root>/composition)` and merges settings with `AddEssentialsConfiguration` (the
 image's baked `appsettings.json`, then the `--settings` file). It runs every shell initializer except
 `RunShellTasksInitializer`, and runs the startup tasks alone, in their dependency order, through a new startup-only
-member on `ITaskManager`. That is a small essentials change. It makes the features of the run-scoped package set discoverable through CShells' Nuplane feature discovery
-(`AddCShells().WithNuplaneFeatureDiscovery()`, as `essentials/tests/Modularity/Tests/NuplaneHostTestComposition.cs`
-does), because `EssentialsFeatureAssemblies.All` lists only the essentials features' assemblies, and the Elsa 3
-additions and a user's packages arrive as Nuplane packages. It resolves services from the shell's provider.
+member on `ITaskManager`. That is a small essentials change. It makes the features of the run-scoped package set discoverable, because `EssentialsFeatureAssemblies.All` lists
+only the essentials features' assemblies, while the Elsa 3 additions and a user's packages arrive as Nuplane packages.
+CShells' own Nuplane discovery reads a DI catalog that a Nuplane-integrated host fills, and the worker loads packages
+through static `NuplaneHostIntegratedLoader` calls instead. So the tooling registers a feature-assembly provider
+(`RegisterFeatureAssemblyProvider`) over the assemblies of the worker-loaded package load contexts, found through
+`AssemblyLoadContext.All`, as `EfToolingHost` finds its assemblies. It resolves services from the shell's provider.
 
 `<root>` is a request field, `compositionRoot`, which defaults to `/app`. Tests lay out a composition folder, baked
-settings and an empty `migrated/` skeleton under a temporary root, because the essentials list composes JSON workflow
-reconciliation over `<root>/migrated/workflows`, which must exist. Background
+settings and an empty `migrated/` skeleton under a temporary root. The essentials list bakes JSON workflow and activity
+reconciliation over the absolute paths `/app/migrated/workflows` and `/app/migrated/activities/activities.json`, so the
+test's baked settings override both paths to `<root>/migrated/...`. Background
 hosted services, background tasks and recurring tasks never start, so there is no trigger runtime, scheduler or
 recurring work. The Elsa 3 folder import feature is not
 composed. The engine image refuses to start without some secret settings (specification 1236, *Required settings*).
@@ -184,14 +191,17 @@ The CLI runs inside an image built `FROM` the essentials engine image at the sam
   specification.
 - The tooling project references `Elsa.Essentials.Composition` with `Private=false` and `PrivateAssets="all"`, so the
   packed tooling package neither carries the library nor depends on it. The library is not packed.
-- The Dockerfile sets `ELSA3_MIGRATION_HOST=/app/Elsa.Essentials.Server`, which the front end reads as the host
-  directory and name (the worker's `HostDirectory`, `HostName` and deps file), as the persistence group reads them from
-  `--host`.
-- `run.imageVersion` is the informational version of `Elsa.Essentials.Composition` in `/app`, the engine's version.
-- `dotnet-elsa` is installed at the image's version. The entry point is `dotnet-elsa elsa3-migration`, with the worker
+- The Dockerfile sets `ELSA3_MIGRATION_HOST=/app`. The front end resolves it with `HostLayout.Resolve`, exactly as the
+  persistence group resolves `--host` (a directory holding one `*.runtimeconfig.json` and `*.deps.json` pair), and maps
+  that resolver's refusals to `entry-point-missing`.
+- Image tags are build numbers, not package versions (`.github/workflows/docker.yml`), and every packable project has
+  its own computed version (`PackageVersioning.props`). So the Dockerfile takes the essentials image tag as a build
+  argument and bakes it as `ELSA3_MIGRATION_IMAGE_VERSION`. The front end passes it, and its own informational
+  version, to the entry point as `imageVersion` and `toolVersion`. They become `run.imageVersion` and `tool.version`.
+- `dotnet-elsa` is installed in the version computed for the same commit. The entry point is `dotnet-elsa elsa3-migration`, with the worker
   pointed at the engine host's build output in `/app`. No web host starts.
-- The image is published with the essentials images and carries their version tag, which is also the version of the
-  `dotnet-elsa` inside it.
+- The image is published as `elsaworkflows/elsa-elsa3-migration`, with the essentials engine's tags; each tag is built `FROM` the engine
+  image with that tag.
 - Mount points follow the engine's: `/app/config/appsettings.json` and `/app/packages` hold the user's settings and
   packages, as on the engine. `/app/export` (read-only) holds the export, and `/app/out` the output. The engine later
   mounts the output's `migrated/` at `/app/migrated`.

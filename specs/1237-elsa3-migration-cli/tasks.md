@@ -77,6 +77,11 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   Models, Mapping, Import (`ReusableActivityImportDiagnosticCodes`) and Reconciliation, and fails on any code without
   an entry or without a remedy, whatever its severity. It reflects over the tooling's own code class too. It also greps the Elsa 3 sources for `"ELS3-`, `"VF-IMP-` and `"ELS3-REUSABLE-`
   string literals outside the constant classes, and fails on any (FR-016, FR-019).
+- [ ] T004b Make the converter carry component names as data (FR-016a). Add a `ComponentName` metadata key to every
+  component diagnostic: unmapped activity types, undeclared and replaced-function references, unregistered variable
+  types and unmapped storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. Give a call of an
+  undeclared JavaScript function a code of its own, separate from the forbidden-capability code, and update the
+  mapping README and the affected converter tests. The report builder reads `componentName` only from that metadata.
 - [ ] T005 Extract `Elsa3ImportRun` from `Elsa3FolderImportTask` in
   `extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Services/`. It returns the plan items, the skips with
   their cause and code, the publication outcomes and the publish diagnostics. Move the registration of its collaborators
@@ -101,8 +106,8 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 - [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It builds a generic host that is never started, with one
   shell composed through `Elsa.Essentials.Composition`: `EssentialsFeatureList.Read(<compositionRoot>/composition)`,
   `EssentialsFeatureAssemblies.All`, and `AddEssentialsConfiguration` with the image's baked `appsettings.json` and the
-  `--settings` file. It adds CShells' Nuplane feature discovery over the run-scoped package set, so the addition-list
-  features and a user's features are discoverable. It points the OpenIddict store at the run's database and gives Data
+  `--settings` file. It registers a feature-assembly provider over the worker-loaded package load contexts
+  (`AssemblyLoadContext.All`), so the addition-list features and a user's features are discoverable. It points the OpenIddict store at the run's database and gives Data
   Protection an ephemeral key ring. It runs every shell initializer except `RunShellTasksInitializer`, runs the startup tasks through
   the T009a member, starts no background hosted service, and registers the import run through `Elsa3ImportRunRegistration.Add` without the
   reconciliation feature. It sets every enabled EF feature to SQLite on
@@ -114,7 +119,8 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   - no background hosted service, `IBackgroundTask` or recurring task starts;
   - the addition list is read after the essentials list;
   - an addition-list feature and a T003 feature both resolve;
-  - the tests use a temporary composition root with baked settings and an empty `migrated/` skeleton;
+  - the tests use a temporary composition root with baked settings and an empty `migrated/` skeleton, and override the
+    JSON reconciliation paths to that root;
   - a run with no settings composes, and no generated value appears in the output;
   - no file appears outside a temporary `--out`.
 
@@ -151,9 +157,10 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   `Elsa.Essentials.Composition` dependency.
 - [ ] T014 [US3] Add `extensions/Elsa3/docker/Dockerfile`, using specification 1236's base contract (R-7). It is
   `FROM` the essentials engine image at the same version. It copies `elsa3.features.json` to `/app/composition/` and
-  the addition and tooling packages to `/app/elsa3/packages/`, sets `ELSA3_MIGRATION_HOST=/app/Elsa.Essentials.Server`, installs `dotnet-elsa` at the same version, and sets the
+  the addition and tooling packages to `/app/elsa3/packages/`, sets `ELSA3_MIGRATION_HOST=/app` and `ELSA3_MIGRATION_IMAGE_VERSION` from a build argument holding the
+  essentials tag, installs `dotnet-elsa` at the same version, and sets the
   entry point to `dotnet-elsa elsa3-migration`, with the worker pointed at the engine host's build output in `/app`. It
-  starts no web host. Add the image to the workflow that publishes the essentials images, tagged with their version.
+  starts no web host. Add the image, `elsaworkflows/elsa-elsa3-migration`, to the workflow that publishes the essentials images, with the engine's tags.
 - [ ] T015 [US3] Add the image test: the image builds; its composition is the essentials feature list plus the addition
   list; `--help` lists the group; and the essentials engine image contains no assembly whose name contains `Elsa3`.
 
@@ -166,7 +173,9 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   It refuses with `input-missing`, `input-empty` and `input-unreadable`. Test it with the fixture.
 - [ ] T017 [US1] Add `Tooling/VersionSelection.cs` (FR-012). It selects the latest published version plus the versions
   that reusable references pin, lists the versions not converted, supports `--all-versions`, and adds the Info finding
-  (`ELS3-MIGRATION-NO-PUBLISHED-VERSION`) for a definition with no published version. Test each fixture case.
+  (`ELS3-MIGRATION-NO-PUBLISHED-VERSION`) for a definition with no published version. It keeps every input that shares
+  a selected version id, or a selected definition id and version, so that duplicates still reach the duplicate-input
+  refusal. Test each fixture case, the duplicate case included.
 - [ ] T018 [US1] Wire the entry point: read, select, run `Elsa3ImportRun`, and collect every diagnostic with its stage.
   Publish stops at the first error and marks `publishStoppedHere` (FR-013, FR-014).
 - [ ] T019 [US1] Add `Tooling/ReportBuilder.cs`. It provides:
@@ -214,8 +223,8 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   no partial run. Name the feature, package or setting key, never a value. Test with a fixture package whose feature
   throws during configuration.
 - [ ] T027 [US2] Add the assess integration test (SC-007). Run the fixture export with the T003 package and its
-  settings. Exactly the findings for the custom activity, the function and the variable type disappear, and every other
-  finding is unchanged.
+  settings. Every finding that names the custom activity, the function or the variable type disappears, and no finding
+  unrelated to them is added. The definitions it unblocks publish clean.
 
 ## Phase 7: User Story 5 - Redacted, versioned report (P2)
 
