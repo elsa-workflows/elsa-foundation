@@ -4,6 +4,8 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
+    private sealed record LockedRoot(string Header, long ContentBytes);
+
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
         string State, string Header, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
         bool? OperatorSuspension, RootJobState? JobState, RootJobCompletion? JobCompletion, bool TimedJob,
@@ -13,11 +15,15 @@ public sealed partial class EfStore
         {
             var family = RootStateFamily(db);
             var jobs = JobState is null ? Current.Jobs : JobState.Jobs;
-            RequireRootContent(family.Length, State, Header, jobs);
+            var contentBytes = await MeasureRootContentAsync(db, family.Length, State, Header, jobs, cancellationToken);
+            var overBudget = contentBytes > RootContentBytes;
 
             var home = new InstanceRef(Current.Actor.Id).Partition;
-            var headers = await db.Database.SqlQuery<string>($"""
-                SELECT i."FoundationHeader" AS "Value" FROM "Instances" i JOIN "FoundationRootBirths" b
+            var locked = await db.Database.SqlQuery<LockedRoot>($"""
+                SELECT i."FoundationHeader" AS "Header", CASE WHEN {overBudget}
+                    THEN octet_length(i."State")::bigint + octet_length(i."FoundationHeader") + coalesce(octet_length(i."Jobs"), 0)
+                    ELSE 0 END AS "ContentBytes"
+                FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Reference" = i."FoundationReference" AND b."Tenant" = i."FoundationTenant"
                     AND b."Actor" = i."Id" AND b."Partition" = i."Partition"
                 WHERE b."Reference" = {Reference} AND b."Tenant" = {Tenant} AND b."Creation" = {Current.Actor.Creation}
@@ -27,9 +33,14 @@ public sealed partial class EfStore
                     AND i."Jobs" IS NOT DISTINCT FROM {Current.Jobs} AND i."NextJobGeneration" IS NOT DISTINCT FROM {Current.NextJobGeneration}
                 FOR UPDATE OF i
                 """).ToListAsync(cancellationToken);
-            if (headers.Count != 1) return false;
-            var old = DurableKeyJson.Read<RootHeader>(headers[0]);
+            if (locked is not [var prior]) return false;
+            var old = DurableKeyJson.Read<RootHeader>(prior.Header);
             if (old.Model != Current.Model || old.Definition != Current.Definition) return false;
+
+            // Predecessors omitted the framing and job registry. A row above today's
+            // budget can still settle input if the same locked revision does not grow.
+            if (overBudget && contentBytes > prior.ContentBytes)
+                throw new StoreException(Failure.Definite, RootContentFailure);
 
             if (OperatorSuspension is not null && !db.UsesRootOperatorProtocol) return false;
             if (TimedJob)

@@ -206,7 +206,10 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
     {
         await using var fixture = (Provided)await CreateAsync(1, new());
         Console.WriteLine(Name);
-        await RootCheckpointLimitChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        if (flags.Contains("--job-registry"))
+            await RootCheckpointLimitChecks.RunJobs(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        else
+            await RootCheckpointLimitChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient(), flags.Contains("--mixed-text"));
     }
 
     internal async Task CheckFirstRootAsync()
@@ -232,7 +235,8 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
             _ => builder.UseSqlite(connection),
         };
         var options = builder.AddInterceptors(interceptors).Options;
-        return () => new KernelDb(options);
+        return engine == "postgres" && flags.Contains("--job-registry")
+            ? () => KernelDb.ForPostgresRootJobs(options) : () => new KernelDb(options);
     }
 
     private EfStore Store(Func<KernelDb> create, bool fenceInBatch, bool unfenced = false) => new(create, engine != "sqlite", fenceInBatch)

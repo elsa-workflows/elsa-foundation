@@ -495,6 +495,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         while (true)
         {
             try { return await CommitOnceAsync(batch, waits, careful, sentAt, root, cancellationToken); }
+            catch (OversizedRootBirth)
+            {
+                if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new Committed(false, 0, []);
+                throw;
+            }
             catch (PostgresException error) when (error.SqlState == PgCommitWindow.Expired)
             {
                 throw new StoreException(Failure.WindowExpired, "Database commit window expired.", error);
@@ -559,6 +564,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         if (OwnedCommit) return await CommitOwnedAsync(batch, waits, sentAt, root, cancellationToken);      // EfStore.Owned.cs
         await using var db = create();
+        if (root is not null) await root.CheckBeforeWriteAsync(db, cancellationToken);
         foreach(var turn in batch.Turns.Where(t=>t.Row is {} r && t.Instance!=r.Id))
         {
             db.AliasGuards.Add(turn.Row!.Id,turn.Instance);

@@ -7,7 +7,7 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     // The generic load treats this as an unknown state family and leaves its bytes intact.
-    internal const int RootContentBytes = 16 * 1024 * 1024 - 24 * 1024;
+    private const int RootContentBytes = 16 * 1024 * 1024 - 24 * 1024;
 
     private const string PublicRootState = StoredState.Family + "4:public-root:";
     internal const string TimedRootStateFamily = StoredState.Family + "6:public-root-timed-jobs:";
@@ -37,17 +37,24 @@ public sealed partial class EfStore
     private abstract record QualifiedRootCheckpoint(long JournalRevision)
     {
         internal virtual long RevisionFor(string actor) => JournalRevision;
+        internal virtual ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken) => ValueTask.CompletedTask;
         internal abstract Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken);
     }
 
     private sealed record FirstRootCheckpoint(string Tenant, string Reference, Message Creator, InstanceRow Row, string Header) : QualifiedRootCheckpoint(1)
     {
+        internal override async ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken)
+        {
+            var (escape, state) = StoredState.EncodingParts(Row);
+            var bytes = await MeasureRootContentAsync(db, RootStateFamily(db).Length + escape.Length, state, Header, Row.Jobs, cancellationToken);
+            if (bytes > RootContentBytes) throw new OversizedRootBirth();
+        }
+
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             // The existing transaction owns the fence. Return the exact deleted envelope for application-side
             // comparison. A missing bind or changed envelope returns false and rolls back all effects.
             var family = RootStateFamily(db);
-            RequireRootContent(family.Length, StoredState.Encode(Row), Header, Row.Jobs);
             var fingerprint = CreationProtocol.Fingerprint(Creator.Start, Creator.Kind, Creator.Payload);
             var finished = Row.Status == InstanceStatus.Finished;
             var candidates = await db.Messages.FromSqlInterpolated($"""
@@ -169,14 +176,25 @@ public sealed partial class EfStore
         return (storedState, header);
     }
 
-    private static void RequireRootContent(int familyBytes, string state, string header, string? jobs)
+    private const string RootContentFailure = "The encoded PostgreSQL checkpoint exceeds its storage budget.";
+
+    private sealed class OversizedRootBirth() : StoreException(Failure.Definite, RootContentFailure);
+
+    private static ValueTask<long> MeasureRootContentAsync(KernelDb db, int framing, string state, string header,
+        string? jobs, CancellationToken cancellationToken)
     {
-        // All state family prefixes are ASCII. The budget's remaining 24 KiB covers the
-        // bounded identifiers and scalar columns. Charge the text actually stored here.
-        var contentBytes = (long)familyBytes + Encoding.UTF8.GetByteCount(state) + Encoding.UTF8.GetByteCount(header)
-            + (jobs is null ? 0 : Encoding.UTF8.GetByteCount(jobs));
-        if (contentBytes > RootContentBytes)
-            throw new StoreException(Failure.Definite, "The encoded PostgreSQL checkpoint exceeds its storage budget.");
+        // The known framing is ASCII. The remaining 24 KiB covers bounded identifiers and scalars.
+        // ASCII stores the same way in all PostgreSQL encodings. For small non-ASCII values,
+        // four bytes per code unit are enough to prove the row fits without querying the server.
+        var units = (long)state.Length + header.Length + (jobs?.Length ?? 0);
+        if (framing + 4 * units <= RootContentBytes)
+            return new(framing + 4 * units);
+        if (Encoding.UTF8.GetByteCount(state) == state.Length && Encoding.UTF8.GetByteCount(header) == header.Length &&
+            (jobs is null || Encoding.UTF8.GetByteCount(jobs) == jobs.Length))
+            return new(framing + units);
+        return new(db.Database.SqlQuery<long>($"""
+            SELECT {framing}::bigint + octet_length({state}) + octet_length({header}) + coalesce(octet_length({jobs}::text), 0) AS "Value"
+            """).SingleAsync(cancellationToken));
     }
 
     private sealed record PhysicalRoot(string Id, long Creation, string State, int StateVersion, long Revision, string Header,

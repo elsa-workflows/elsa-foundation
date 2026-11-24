@@ -40,6 +40,7 @@ public sealed partial class EfStore
     {
         var dialect = RequireDialect();
         await using var db = create();
+        if (root is not null) await root.CheckBeforeWriteAsync(db, cancellationToken);
         db.Database.AutoSavepointsEnabled = false;
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
         var commands = new List<OwnedCommand>();
