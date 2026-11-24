@@ -29,8 +29,8 @@ the release placement of standalone Jobs.
 ## What is built
 
 - **Background jobs inside an instance.** `StartJob` writes a ticket (`Kinds.Job` in
-  [Messages.cs](../../prototypes/kernel-model/src/Kernel.Durable/Messages.cs); `JobTicket(Model, Key, Arguments)` in
-  [Worker.cs](../../prototypes/kernel-model/src/Kernel.Durable/Worker.cs)). The owner calls the actor type's
+  [Messages.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Messages.cs); `JobTicket(Model, Key, Arguments)` in
+  [Worker.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Worker.cs)). The owner calls the actor type's
   `ExecuteJobAsync` outside the turn (`Worker.DriveJob`) with a `JobContext(Instance, Key, Arguments, Creation)`, on
   `WorkerOptions.JobScheduler` when the host sets one ([FINDINGS](../../prototypes/kernel-model/FINDINGS.md) section 27,
   R14). The outcome comes back as `job-finished` with a result or an error. A result is handled ahead of other messages,
@@ -39,12 +39,12 @@ the release placement of standalone Jobs.
 - **Job poison (decision 9).** Tickets are tried like messages. A ticket past the attempt threshold parks its instance
   (`Worker.cs`, the `MaxAttempts` check before `_type.Park`). The older rule, an error result with the instance going on
   (FINDINGS section 7), survives only as the mutation `Flaw.JobPoisonAsError`
-  ([Addresses.cs](../../prototypes/kernel-model/src/Kernel.Runtime/Addresses.cs)), which the simulation must catch.
-- **The effect key.** `EffectKey.For` in [EffectKey.cs](../../prototypes/kernel-model/src/Kernel.Workflows/EffectKey.cs)
+  ([Addresses.cs](../../essentials/src/ActorFoundation/BuiltIn/Runtime/Addresses.cs)), which the simulation must catch.
+- **The effect key.** `EffectKey.For` in [EffectKey.cs](../../essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs)
   (layer 3), checked by the simulation's N7 ([NATIVE.md](../../prototypes/kernel-model/NATIVE.md), section 6) and
   described in [ownership and fencing](ownership-and-fencing.md#side-effects).
 - **Reply addresses.** `Requests` and `IReplyTransport` in
-  [Replies.cs](../../prototypes/kernel-model/src/Kernel.Durable/Replies.cs): a request waits for a reply that an
+  [Replies.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Replies.cs): a request waits for a reply that an
   instance emits, released by default after the commit of the turn that wrote it, up to its deadline.
 - **The local lease guard** ([LEASE.md](../../prototypes/kernel-model/LEASE.md)): an owner starts no new turn or job
   body after its conservative local lease deadline.
@@ -106,8 +106,8 @@ Every commit rewrites an actor's whole row, so the queue shard is only cheap if 
 written it does not, and this page claims no bound for it:
 
 1. **Children on the queue row.** A job actor started with `Start` is a kernel child: its id lands in the queue's
-   `InstanceRow.Children` ([Store.cs](../../prototypes/kernel-model/src/Kernel.Durable/Store.cs),
-   `ChildRegistry` in [WorkflowInstance.cs](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs)),
+   `InstanceRow.Children` ([Store.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs),
+   `ChildRegistry` in [WorkflowInstance.cs](../../essentials/tests/ActorFoundation/Legacy/Workflows/WorkflowInstance.cs)),
    which the queue rewrites at every commit. Job actors need a start that places them in the queue's partition
    without registering them as children; the turn contract has none today.
 2. **Ready jobs as held inbox rows.** Selecting matching `job.ready` messages and leaving the rest means holding them in

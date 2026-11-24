@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Kernel.Runtime</RootNamespace>
+    <AssemblyName>Kernel.Runtime</AssemblyName>
+    <PackageId>Elsa.ActorFoundation.BuiltIn.Runtime</PackageId>
+    <Description>Placement, scope activation and wake hints for the built-in Actor Foundation.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

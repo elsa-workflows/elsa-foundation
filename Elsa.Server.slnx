@@ -238,6 +238,40 @@
   <Folder Name="/essentials/src/">
     <Project Path="essentials/src/Git/Elsa.Git.csproj" />
   </Folder>
+  <Folder Name="/essentials/src/ActorFoundation/">
+    <Project Path="essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
+    <Project Path="essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+  </Folder>
+  <Folder Name="/essentials/src/ActorFoundation/BuiltIn/">
+    <Project Path="essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj" />
+    <Project Path="essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
+    <Project Path="essentials/src/ActorFoundation/BuiltIn/Durable/Elsa.ActorFoundation.BuiltIn.Durable.csproj" />
+    <Project Path="essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
+  </Folder>
+  <Folder Name="/essentials/src/ActorFoundation/BuiltIn/Store/">
+    <Project Path="essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj" />
+  </Folder>
+  <Folder Name="/essentials/src/ActorFoundation/Model/">
+    <Project Path="essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/ActorFoundation/">
+    <Project Path="essentials/tests/ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj" />
+    <Project Path="essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/ActorFoundation/Native/">
+    <Project Path="essentials/tests/ActorFoundation/Native/Run/Elsa.ActorFoundation.Native.Run.csproj" />
+  </Folder>
+  <Folder Name="/prototypes/kernel-model/models/">
+    <Project Path="prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/ActorFoundation/Legacy/">
+    <Project Path="essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/ActorFoundation/Store/">
+    <Project Path="essentials/tests/ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
+    <Project Path="essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
+    <Project Path="essentials/tests/ActorFoundation/Store/EntityFramework/Elsa.ActorFoundation.Store.EntityFramework.csproj" />
+  </Folder>
   <Folder Name="/essentials/src/Activities/">
     <Project Path="essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
     <Project Path="essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
@@ -524,7 +558,13 @@
   <Folder Name="/essentials/src/Workflows/Runtime/Inspection/">
     <Project Path="essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj" />
   </Folder>
+  <Folder Name="/essentials/src/Workflows/Runtime/Native/">
+    <Project Path="essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />
+    <Project Path="essentials/src/Workflows/Runtime/Native/Activities/Elsa.Workflows.Runtime.Native.Activities.csproj" />
+  </Folder>
   <Folder Name="/essentials/src/Workflows/Runtime/">
+    <Project Path="essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
+    <Project Path="essentials/src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <Project Path="essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
@@ -900,6 +940,29 @@
   <Folder Name="/essentials/tests/Workflows/Runtime/Fixtures/" />
   <Folder Name="/essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/">
     <Project Path="essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/IndependentTriggers.Consumer.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Graph/">
+    <Project Path="essentials/tests/Workflows/Runtime/Graph/Tests/Elsa.Workflows.Runtime.Graph.Tests.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Native/">
+    <Project Path="essentials/tests/Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
+    <Project Path="essentials/tests/Workflows/Runtime/Native/RetentionFixture/Elsa.Workflows.Runtime.Native.RetentionFixture.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Statecharts/">
+    <Project Path="essentials/tests/Workflows/Runtime/Statecharts/Native/Elsa.Workflows.Runtime.Statecharts.Native.csproj" />
+    <Project Path="essentials/tests/Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj" />
+    <Project Path="essentials/tests/Workflows/Runtime/Statecharts/Run/Elsa.Workflows.Runtime.Statecharts.Run.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Native/Migration/">
+    <Project Path="essentials/tests/Workflows/Runtime/Native/Migration/Run/Elsa.Workflows.Runtime.Native.Migration.Run.csproj" />
+    <Project Path="essentials/tests/Workflows/Runtime/Native/Migration/SelectionFixture/Elsa.Workflows.Runtime.Native.Migration.SelectionFixture.csproj" />
+    <Project Path="essentials/tests/Workflows/Runtime/Native/Migration/SqliteFixture/Elsa.Workflows.Runtime.Native.Migration.SqliteFixture.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Native/Scopes/">
+    <Project Path="essentials/tests/Workflows/Runtime/Native/Scopes/Run/Elsa.Workflows.Runtime.Native.Scopes.Run.csproj" />
+  </Folder>
+  <Folder Name="/essentials/tests/Workflows/Runtime/Native/Recovery/">
+    <Project Path="essentials/tests/Workflows/Runtime/Native/Recovery/Run/Elsa.Workflows.Runtime.Native.Recovery.Run.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Workflows/Runtime/">
     <Project Path="essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />

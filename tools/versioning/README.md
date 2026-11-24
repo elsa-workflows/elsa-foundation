@@ -237,8 +237,8 @@ packages to be exactly the affected set, each at its computed version with its c
 - **Pushes** go in dependency order, each package after every package of the set its nuspec depends on, and the
   publish stops at the first failure, so no package is pushed with a range on a version the feed does not hold as
   computed. No push skips a duplicate (FR-011). A 409 is settled by the input fingerprint of the feed's copy (FR-018):
-  the same fingerprint means an earlier run pushed it and did not record it, so it counts as published; another
-  fingerprint, or one that cannot be read, fails the publish and leaves the feed's copy alone. 200, 201 and 202 are
+  an equal fingerprint establishes the same build inputs. The public bytes must also match the signed candidate or
+  carry their own verified original provenance and SBOM. A different or unreadable fingerprint fails publication. 200, 201 and 202 are
   a push taken; any other answer, or none, is a failure.
 - **The write-back** records what reached the feed, even when the publish stopped part way, and nothing else (FR-006,
   FR-014): each package's entry names the version and the commit built — for a package the feed already held, the
@@ -247,12 +247,15 @@ packages to be exactly the affected set, each at its computed version with its c
   named, or an orphan for the bootstrap, pushed without force with the checkout's `GITHUB_TOKEN` (FR-017). A rejected
   push fails the run.
 
-A run that dies between its pushes and its write-back, or whose write-back is rejected, leaves packages on the feed that
+Once the remote publish-state exists, an interrupted or rejected write-back can leave packages on the feed that
 the record does not name. The next run from `main` computes the same versions for them, the feed rejects them, and
-the equal fingerprints record them, with nobody intervening. The next run must see the same inputs for those
+matching fingerprints and verified original or identical candidate bytes allow automatic recovery. For a confirmed
+unsigned pre-cutover package with different bytes, use the [historical recovery procedure](#verify-a-foundation-preview-package).
+The next run must see the same inputs for those
 packages; if a later commit changed one of them before any run recorded it, the feed's copy no longer matches and
-the publish fails as a collision for the repair workflow (FR-019, #2083). A bootstrap that stops part way records what
-it pushed, so `publish-state` exists and the next push to `main` publishes the rest at their first versions.
+the publish fails as a collision for [operator repair](#repair) (FR-019, #2083). A bootstrap that stops part way **after a successful write-back**
+leaves `publish-state` in place, and the next push to `main` publishes the remainder at their first versions.
+If an initial PUT was accepted but read-back or the first write-back failed while the remote record is absent, follow the [first-bootstrap recovery procedure](#verify-a-foundation-preview-package).
 
 The workflow serializes every run from `main`, from its plan to its write-back, on the concurrency group
 `publish-state`, and never cancels one in progress (FR-020); anything else that writes `publish-state` joins that
@@ -268,6 +271,12 @@ feed and `--remote` at a scratch repository, which then holds the record.
 The publisher's `repair` command settles by hand what a publish cannot settle itself (spec 150 FR-019). It takes a
 reason and exactly one of two modes. Its manual workflow, `publish-repair.yml`, was deleted with the lean CI (20 Nov
 2026; its last run was on 30 Sep), so a repair now runs the command below from a checkout of `main`.
+
+Before a local repair against the official feed, the release maintainer pauses new runs of the Packages workflow,
+lets active and queued publishers finish, and confirms that no other operator is writing `publish-state`.
+Re-read the remote record and public version after the drain, coordinate the local repair with the other maintainers,
+and run it only if that exact ID and version still need repair. Confirm the resulting remote record before enabling
+Packages again. Run the normal main publisher if a push arrived while it was paused.
 
 ```bash
 dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- repair \
@@ -330,3 +339,40 @@ The manual, default read-only exact20 recovery path for consolidation M4 is docu
 the normal publishers. This incident path does not change the normal computation/repair rules above. The incident is
 closed: its workflow, `publish-exact20-recovery.yml`, was deleted with the lean CI (20 Nov 2026), and `recover-exact20
 --execute` only runs from that workflow, so only the read-only preflight remains.
+
+## Verify a Foundation preview package
+
+Download the exact ID and version from the [Foundation Feedz service index](https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json).
+Starting with versions produced by the evidence-enabled Packages workflow, a GitHub-authenticated reader with public read access,
+Python 3 and GitHub CLI 2.102.0 or later can obtain the signed CycloneDX 1.6 inventory from a checkout of this repository:
+
+```sh
+python3 tools/versioning/package-evidence/verify.py "$PACKAGE" --output package.cdx.json
+```
+
+The verifier checks SLSA build provenance and the CycloneDX predicate for the downloaded SHA-256. Both must originate
+from this repository’s `.github/workflows/packages.yml` on `refs/heads/main`, at the commit in the package’s nuspec.
+The inventory root binds the same file hash, ID and version. Its metadata names the original Actions run and build
+attempt. The reader pairs the two signed predicates by the exact producer invocation and chooses the earliest verified pair. GitHub indexes attestations by digest, independently of the lifetime of the Actions artifact. The inventory
+contains one component per packed file with its SHA-256. Under each restore target it distinguishes declared dependency
+ranges, the producer’s resolved transitive graph and excluded producer-only inputs. A tool also lists its shipped
+`.deps.json` runtime closure. Template project declarations retain their original ranges. Generate a separate SBOM
+from the final restored/published application to capture a consumer’s runtime choices.
+
+Only affected packages generate new evidence. The build validates inventory schemas and the original locked restore.
+A main publish or authorized bootstrap reuses a verified pair for an identical digest, or signs the package bytes and inventory in the original producing attempt before the first push. If the signer failed before signing a new digest, choose **Re-run all jobs** to rebuild and sign together. The publisher pins the upload ID and rehashes every package against the signing job’s manifest before the first push. The existing state
+and CI gates still determine whether a package can be published. A feed acknowledgment is followed by an anonymous
+download and digest check before write-back. On a duplicate with the expected input fingerprint, identical bytes use the
+same evidence. If a previous producer published different ZIP bytes for those inputs, its own signatures must verify.
+A failed verification stops the publish and preserves earlier verified successes. Previously recorded versions keep
+their existing evidence status; an older version without signatures will fail the verifier.
+
+Before rollout, compare the most recent Packages publish summary with the feed and the matching record. If an earlier
+unsigned push landed without write-back, verify its original artifact and feed identity, then use the existing
+[operator repair procedure](#repair) to settle that historical entry. The verifier explicitly identifies this case.
+The one-off bootstrap keeps its empty-feed precondition. If initial PUTs were accepted and verification or the first
+write-back failed, inspect the remote record. If it exists, the next normal main publish can resume. If it is absent, recover the original Packages run and retry its public byte/attestation verification. A new
+bootstrap will refuse the existing equal version. Have the owner apply the existing bootstrap feed-cleanup procedure
+only for the confirmed unrecorded bootstrap versions before authorizing a new bootstrap. The current Elsa 4 preview feed is already
+bootstrapped. Stable release composition
+and promotion are tracked in [#2085](https://github.com/elsa-workflows/elsa-foundation/issues/2085).

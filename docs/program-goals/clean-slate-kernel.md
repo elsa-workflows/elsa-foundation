@@ -20,6 +20,72 @@ Replace Elsa 4's runtime core with the kernel that the prototype (`prototypes/ke
 scope of [ADR 0099 section 10](../adr/0099-clean-slate-execution-kernel.md#10-release-1-scope). Out of scope for this
 plan: the ADR's non-goals for release 1, and anything not named there.
 
+### Trimmed scope (owner, 24 November 2026)
+
+Sipke trimmed the program to the **Actor Foundation** and the **Elsa engine**. He set the goal as end-to-end delivery
+through gate 4, the default switch, and gate 5, old-core removal, with his decision at each gate
+([owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7142657677)). This section
+replaces the release 1 scope of ADR 0099 section 10 where the two differ,
+until the ADR is amended to match. Milestone acceptance, including K13's "K1 to
+K12 accepted on main", is measured against the rows as trimmed here.
+
+His decisions:
+
+- **Actor Foundation:** the foundation contract and the Built-in Actor Foundation. This covers the durable layer,
+  store, runtime, hosting, placement, node lease and K5 graceful stop of entered jobs.
+- **Elsa engine:** the workflow instance actor, the Native model and activities, and Graph/Flowchart.
+- **Providers:** PostgreSQL and SQLite, with one composed shipped format on both. It carries the operator, job and Park
+  capabilities, self-sends and timers, direct held replies and workflow history. Values by reference is cut by
+  the K11 answer below. That answer supersedes the earlier composition decision to ship it
+  ([composition decisions](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7135533849)).
+- **Kept:** K8 synchronous HTTP; K9 read models and the API read path; K10 Studio on the projector; the rest of K11
+  (admission and its ingress threshold, retention and delete, basic trace context and metrics, parked-work inspection);
+  and K12 qualification for the trimmed scope.
+- **Cut, moved after the release:**
+  - the StateMachine engine with invariants S1 to S4;
+  - Park operations beyond the one-page recover: the multi-page drain, discard (including expiry as an automatic
+    discard) and retry selection. The drain prototype is kept as a deferred draft,
+    [#5692](https://github.com/elsa-workflows/elsa-foundation/pull/5692);
+  - the K11 extras: traces and metrics beyond the basics, the migration-plan runner with its plan-outcome read model,
+    and values by reference.
+
+Claude's reading of these decisions, which the owner can correct:
+
+- Terminate and delete of a parked root stay in scope, because a parked root must be endable. The design defines both
+  as bounded drains. Until the multi-page drain ships, they are bounded to one page as recover is, and a Park larger
+  than one page is refused with a recorded reason. As a result, a Park that keeps more than one page cannot be
+  recovered, terminated, deleted or discarded before the release. Claude brings this to the owner as a decision
+  before the parked-root terminate slice, composition slice S5 of the
+  [composition decisions](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7135533849).
+- K10's StateMachine journeys go with the StateMachine engine.
+- Instance migration moves after the release with the plan runner. In this plan and in the built source, the runner
+  is the only sender of `Migrate`. The one-instance migration through the runtime API that
+  [migrating running instances](../architecture/migrating-running-instances.md) describes moves with it. This reading
+  also moves ADR 0099 section 10's "simple instance migration".
+- Work for SQL Server and MySQL moves after the release. That includes:
+  - condition RP;
+  - the SQL Server and MySQL legs of NL-C1;
+  - MySQL TLS cancellation;
+  - the `max_allowed_packet` start refusal;
+  - SQL Server's UTF-16 state sizing;
+  - the Entra qualification that the resume handoff ties to the SQL Server integration;
+  - the SQL Server and MySQL legs of the deadlock acceptance cases.
+
+  MongoDB stays on its existing owner hold.
+
+Rows that mix kept and cut work keep only their kept part until the release:
+
+- K4 runs on PostgreSQL and SQLite.
+- K7 is Flowchart G1 to G5.
+- K9 drops the plan-outcome read model.
+- K10 drops the StateMachine journeys.
+- K11's "parked-work inspect, retry and discard" keeps inspection and the one-page recover. The Kept list's
+  "parked-work inspection" means the same.
+- FC-C4 is judged on the instance list and the retention worker.
+- The `pad=` values-by-reference run in "Release 1 qualification" moves after the release.
+- So do the StateMachine demo increment and the #3815 carry-over row.
+- Any other row, case or condition below that names only cut work also applies after the release.
+
 ## How the work lands
 
 - One concern per PR, about 500 changed lines or fewer, stacked where they depend on each other. Mechanical moves and
@@ -49,6 +115,16 @@ and a separate [abrupt owner loss demo](https://github.com/elsa-workflows/elsa-f
 partition. The program issue records the verified revisions and the remaining release work.
 [Owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091776914)
 
+The [Workbench opt-in](../../prototypes/kernel-model/README.md#workbench-opt-in) runs the same Native workflow
+through normal application startup. The receipt checks the default path without any preview database connections
+and drives two enabled Workbench processes through restart and replay.
+
+For the shipped Core Preview, the EF Core edge from [ADR 0099](../adr/0099-clean-slate-execution-kernel.md) lives in
+`Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore` and its consumer `Elsa.ActorFoundation.BuiltIn.PostgreSql`.
+The architecture guard checks the exact EF package set of both projects in Debug and Release. The provider carries
+the four relational engines. The PostgreSQL package uses the ordinary PostgreSQL preview configuration. The Actor
+Foundation contracts, placement, durable runtime and generic node lifetime remain provider-neutral.
+
 A separate two-process PostgreSQL Cluster demo runs a public Native workflow over 1,024 virtual partitions. It
 checkpoints roots on different partitions in one transaction. After the peer stops, replay leaves the journal
 unchanged and the surviving owner completes the workflow after the second approval.
@@ -60,7 +136,7 @@ once. [Flowchart run instructions](../../prototypes/kernel-model/README.md#flowc
 
 The in-memory Embedded order StateMachine waits for payment, resumes under a replacement owner, and follows
 the approved or declined path in Balanced and Durable. The declined path waits for separate shipment and stock release
-acknowledgements. [StateMachine run instructions](../../prototypes/kernel-model/models/Statecharts.Run/README.md#order-statemachine-on-the-public-actor-foundation)
+acknowledgements. [StateMachine run instructions](../../essentials/tests/Workflows/Runtime/Statecharts/Run/README.md#order-statemachine-on-the-public-actor-foundation)
 
 A later operator increment can demonstrate inspecting and recovering a parked workflow. Publish demo readiness and
 milestone acceptance separately. Full Flowchart, provider and operator qualification follow the milestones below.
@@ -103,15 +179,15 @@ each condition.
 
 | Id | Condition | Milestones | Cases | Status | Evidence owed | Evidence |
 |---|---|---|---|---|---|---|
-| C1 | Complete terminal checkpoint | K3, K4, K6 | TG-1, TG-2, PC-5 | K3 verified, K4 and K6 open | Qualify the post-stamp row including model clocks, bounded fault and identity fields, protected multi-page ThenDelete, provider encodings, and an upgraded near-limit row terminated before its next ordinary turn, with a supported termination or version fallback where the upgraded shape exceeds the cap. A provider-encoding fixture may also distinguish PC-5's former registries-as-stored mutation at K4. | The [in-memory terminal reserve](https://github.com/elsa-workflows/elsa-foundation/pull/5317) covers the exact-fit state, bounded fault, maximum legal TypeData and four labels. The real [paged ThenDelete](https://github.com/elsa-workflows/elsa-foundation/pull/5408) and [mixed child-and-job cascade](https://github.com/elsa-workflows/elsa-foundation/pull/5412) qualify the K3 transitions. Provider accounting and the upgraded Native checkpoint still have their own runs. |
+| C1 | Complete terminal checkpoint | K3, K4, K6 | TG-1, TG-2, PC-5 | K3 verified, K4 and K6 open | Qualify the post-stamp row including model clocks, bounded fault and identity fields, protected multi-page ThenDelete, provider encodings, and an upgraded near-limit row terminated before its next ordinary turn, with a supported termination or version fallback where the upgraded shape exceeds the cap. A provider-encoding fixture may also distinguish PC-5's former registries-as-stored mutation at K4. | The [in-memory terminal reserve](https://github.com/elsa-workflows/elsa-foundation/pull/5317) covers the exact-fit state, bounded fault, maximum legal TypeData and four labels. The real [paged ThenDelete](https://github.com/elsa-workflows/elsa-foundation/pull/5408) and [mixed child-and-job cascade](https://github.com/elsa-workflows/elsa-foundation/pull/5412) qualify the K3 transitions. The [Native version receipt](../../prototypes/kernel-model/NATIVE.md#termination-before-the-first-upgraded-turn) qualifies the in-memory v13-to-v14 pre-turn terminate, the upgrade byte reservation and the explicit unavailable-model fallback for an expanding test model. [PostgreSQL checkpoint enforcement](https://github.com/elsa-workflows/elsa-foundation/pull/5634) covers the physical content cap in the preview, and the [format-11 Native receipt](../../prototypes/kernel-model/NATIVE.md#termination-before-the-first-upgraded-turn) covers pre-turn termination and the explicit expanding-state fallback. [PostgreSQL format 12](../../prototypes/kernel-model/NATIVE.md#termination-before-the-first-upgraded-turn) qualifies the header and state-body projection on the opt-in store. Format 13 point and list reads select the committed terminal mark. Protected ThenDelete on PostgreSQL, the remaining providers and shipped deployment qualification stay open. |
 | C2 | Receipt and coverage transactions | K3, K4, K11 | EI-1 runs (c) and (g), CC-1, MX-1 run (e), SB-5 | K3 verified, K4 and K11 open | Race provider-equal requests and registrations, return an existing receipt even when a candidate partition is full, preserve `CatchUpId` across takeover, and return "gone" for an old incarnation (see RP). | K3 evidence for [incarnation and duplicate identity](https://github.com/elsa-workflows/elsa-foundation/pull/5330), [match commit order and event-id namespace](https://github.com/elsa-workflows/elsa-foundation/pull/5382), [keeping registration](https://github.com/elsa-workflows/elsa-foundation/pull/5392), and the [catch-up chain through takeover, sweep and lost answers](https://github.com/elsa-workflows/elsa-foundation/pull/5413). Real collation races, admission pressure and operator replay qualify at their assigned milestones. |
 | C3 | Work and provider budgets | K4, K12 | OA-1, BA-1, MW-1 | OA-1 and BA-1 open. MongoDB MW-1 deferred. | Measure Open's 9,728-byte keeping charge, the 4 MiB step budget, singleton progress, bytes read and written (so a byte-limited step never first reads 170 maximum-sized payloads), and tenant fairness. When MongoDB qualification resumes, verify sweep progress across 340 covered keys followed by eligible work (coverage removed, then the cursor wraps). | |
 | C4 | Worker and operator transitions | K3, K4, K6, K11 | CJ-1, CJ-2, TT-1, WJ-1, KP-1 | K3 verified, K4, K6 and K11 open | Exercise CJ-1/2, TT-1, WJ-1 and KP-1 through the actual Worker, stores and operator path. Observe durable discards, generations under Hold, physical job-entry withholding and eventual delivery of a publication suffix. | In-memory Worker evidence for [idempotent job cancel](https://github.com/elsa-workflows/elsa-foundation/pull/5354), [job generations under Hold](https://github.com/elsa-workflows/elsa-foundation/pull/5363), [cohort and ordinary poison ties](https://github.com/elsa-workflows/elsa-foundation/pull/5400), [job entry during Terminate](https://github.com/elsa-workflows/elsa-foundation/pull/5399), and [publication suffix recovery](https://github.com/elsa-workflows/elsa-foundation/pull/5414). |
 | C5 | Fixtures and provider boundaries | K3, K4, K6 | EM-1, EM-2, EM-3, EM-4, TR-5, PC-4, SB-7 | K3 verified, K4 and K6 open | Derive attainable sizes from the actual producer and provider, check real parent-bound child ownership, distinguish byte-cut, empty and insert-only steps, and exercise the corrected cross-key digest oracle. | K3 source evidence for [typed and composed limits](https://github.com/elsa-workflows/elsa-foundation/pull/5317), [cross-key delivery identity](https://github.com/elsa-workflows/elsa-foundation/pull/5330), [wide Park pages](https://github.com/elsa-workflows/elsa-foundation/pull/5424), [parent-bound cascade delivery](https://github.com/elsa-workflows/elsa-foundation/pull/5383), [100,000-wait publication](https://github.com/elsa-workflows/elsa-foundation/pull/5466), [step failure counters](https://github.com/elsa-workflows/elsa-foundation/pull/5474), and the [sequential 10,001-child termination](https://github.com/elsa-workflows/elsa-foundation/pull/5476). Provider-size and statement-byte cases stay at K4. The authored Native workload stays at K6. |
-| HA | Handle-accumulation follow-up | K6 | NT-2 (TG-1 run (c), TG-2's third run), and the K6 follow-up | Open | Document what an operator can do when repeated growth parks a parent. Test pending and already-consumed handles separately and decide whether Native should prune stale ones. Preserve the terminal projection either way ([register](../architecture/decisions.md#the-gate-2-seventh-review-round-18-november)). | |
+| HA | Handle-accumulation follow-up | K6 | NT-2 (TG-1 run (c), TG-2's third run), and the K6 follow-up | Authored Native handle lifecycle and near-envelope termination verified in memory. Provider encoding remains at K4. | Qualify TG-1(c) and TG-2's third run on the supported path. The terminal projection counts all stored handles. New public detached starts omit unused creator IDs. Existing handles stay because older checkpoints cannot distinguish detached from attached handles. The Native guide records operator options for repeated growth Park. | [#5511](https://github.com/elsa-workflows/elsa-foundation/pull/5511) tested pending and consumed creators separately and attached termination. The [detached creator check](../../prototypes/kernel-model/NATIVE.md#detached-creator-handles) passed all 16 assertions on `ef676e13`, in Balanced and Durable. The [authored envelope check](../../prototypes/kernel-model/NATIVE.md#termination-at-the-checkpoint-limit) qualifies TG-1(c1), TG-1(c2) and TG-2's third run in both persistence modes, with restored legacy handle metadata and the real Native turns. |
 | RP | The reserved event-id prefix under the real collations | K4 | MX-1 run (e) | Open | The outside publish's `InvalidEventId` refusal compares under the pinned collation on SQL Server and MySQL, and refuses a caller event id led by a fullwidth `～` (U+FF5E) and one led by a character the collation ignores. | |
 | FC-C1 | The foundation clock's promise | K2 | FC-4 | Closed | State the clock's properties on the contract page (done: milliseconds since the Unix epoch, one source per foundation or node clocks within a stated skew bound, a reading may step back, a timer is due when the delivering node's reading reaches `dueAt`) and give FC-4 a bound to check on the built-in foundation ([foundation contract review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)). | [#4935](https://github.com/elsa-workflows/elsa-foundation/pull/4935), [#4937](https://github.com/elsa-workflows/elsa-foundation/pull/4937). The built-in store shares one clock, with zero skew between its nodes. FC-4 checks the fixed turn reading, a backward step after poll and delivery at the due reading after takeover. |
-| FC-C2 | `RequestAsync(Event(key))` with no live waiter | K2, K8 | FC-6 | K2 verified, K8 open | K2 defines the at-once "no waiter" answer (done on the contract page). Owner card of 20 November ([register](../architecture/decisions.md#owner-decisions-20-november)): "no waiter" means the request published nothing, no wait consumes it now or later and keeping waits never see it, so a retry is safe; a caller who wants the event kept uses `SendAsync(Event(key))` with `KeepFor`. A start subscription on the key counts as a live waiter, so "no waiter" means no live wait and no start subscription matched (a coordinator design choice, 20 November). K8 runs it under the HTTP error and timeout contract and maps it ([foundation contract review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)). | [#4938](https://github.com/elsa-workflows/elsa-foundation/pull/4938), [#4954](https://github.com/elsa-workflows/elsa-foundation/pull/4954), [#4955](https://github.com/elsa-workflows/elsa-foundation/pull/4955). The bound request returns immediately, leaves no publication and can reuse its id when a bound start subscription appears. HTTP response qualification is due at K8. |
+| FC-C2 | `RequestAsync(Event(key))` with no live waiter | K2, K8 | FC-6 | K2 and in-memory HTTP mapping verified. Physical-provider path open. | K2 defines the at-once "no waiter" answer (done on the contract page). Owner card of 20 November ([register](../architecture/decisions.md#owner-decisions-20-november)): "no waiter" means the request published nothing, no wait consumes it now or later and keeping waits never see it, so a retry is safe; a caller who wants the event kept uses `SendAsync(Event(key))` with `KeepFor`. A start subscription on the key counts as a live waiter, so "no waiter" means no live wait and no start subscription matched (a coordinator design choice, 20 November). K8 runs it under the HTTP error and timeout contract and maps it ([foundation contract review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)). | [#4938](https://github.com/elsa-workflows/elsa-foundation/pull/4938), [#4954](https://github.com/elsa-workflows/elsa-foundation/pull/4954), [#4955](https://github.com/elsa-workflows/elsa-foundation/pull/4955). The bound request returns immediately, leaves no publication and can reuse its id when a bound start subscription appears. The [in-memory HTTP check](../../prototypes/kernel-model/NATIVE.md#http-over-the-public-actor-foundation) returns 404 with no publication, delivery or caller registration even with `KeepFor`, then retries the same id with a new payload after the wait commits. |
 | FC-C3 | A turn's command kinds | K2 | FC-9 | Closed | A turn may send `Terminate` to its own registered children only, and every other command kind from a turn is refused at the commit (stated on the contract page). Owner card of 20 November ([register](../architecture/decisions.md#owner-decisions-20-november)): the commit checks only the parent's child registry, and a `Terminate` that reaches a child that has already ended is the ordinary delivery to an ended actor and changes nothing; the refusal is an FC-9 case on the built-in foundation ([foundation contract review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)). | [#4941](https://github.com/elsa-workflows/elsa-foundation/pull/4941), [#4960](https://github.com/elsa-workflows/elsa-foundation/pull/4960). Commit refusals roll back all staged effects. An actor's terminate to its running child reaches the actor. The same command to its finished child is consumed without a turn or a checkpoint change. |
 | FC-C4 | `ActorHeader.StartedAt` | K9 | FC-11 | Open | Confirm the instance list, the migration plan's selection and the retention worker are served from the header plus four labels; otherwise add `StartedAt` beside `EndedAt` ([foundation contract review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7010917998)). | |
 | NL-C1 | Read committed for the take, and a locking-read mutation per engine | K1b, K4 | NL-9 | Open | The take's transaction runs at read committed on every engine, whatever the store's configured isolation, so the owners' plain read holds no lock past its statement. On each engine NL-9's locking-read mutation must deadlock and the ordered take must not: on SQL Server the take at REPEATABLE READ, with and without RCSI; on MySQL REPEATABLE READ with the node read as a subquery of the update, which is a locking read there; on PostgreSQL the node read taken `FOR SHARE`. K1b slice 6 builds the evidence. Owner card of 20 November ([register](../architecture/decisions.md#owner-decisions-20-november)); it replaces the coordinator's narrowing of 19 November in the [K1b README](../../prototypes/kernel-model/experiments/K1b.NodeLease/README.md) ([node lease delta verdict](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7006654424)). | |
@@ -185,7 +261,7 @@ verify the resulting main and post the receipt on #4229. [Owner's K3 delivery au
 | The fenced job-result conversion (`{ticket id}/result` in the ticket's scope, minted only by layer 2, skipped for a ticket being cancelled), the result-size check where the job returns ("result too large"), and the reader side: `SuppliedCompletion` and `DiscardedInput` accept a minted `/result` row, and `RemainingJobs` clears its entry; a parked row's late-input consumption keeps the registry entry of an undone current-generation ticket and of a current-generation result row, cleared only by a running row's model turn or a resolution; the Open's disposition lookup probing a job's `{ticket id}/result` row when its ticket is done or absent, so a pending or kept current-generation result means no restart; the lookup row for a kept `Arrived` current-generation ticket (restart under g + 1, recorded before any page decides what is obsolete) (fifth review R5-M4, cases JC-1 and JC-2) | [Observability](../architecture/observability.md#recover) |
 | The poison comparison in the cohort order while a recover drain is open or the `Cohort` mark is set, for a job ticket on the poison-input path; a meet or publish ticket's step-failure park outside that deferral (fifth review R5-M6, cases PP-1, PP-2 and SB-7) | [Observability](../architecture/observability.md#resolving-a-park-a-bounded-drain) |
 | The progress gate on handoff and the credit (a page admitted only while the current owner's u < `P_page` and its bytes < `B_credit` = 4 MiB of stored bytes with payloads, restoring at most `P_page` − u rows within the byte credit, except that a page with u = 0 always restores its first row, whatever its size; the bound: restored rows not `Done` ≤ `P_page` plus the rows the model holds or has held and not since consumed, bytes ≤ `B_credit` plus those rows' bytes plus one oversized row; ticket kinds (job, meet, publish) count as handed off once restored and are outside the credit and the bound), reset at ownership loss; the `PayloadLength` column on the message row, written at insert; the `elsa.kernel.drain.pending` gauges (fifth review R5-M3, cases HC-1 to HC-3) | [Observability](../architecture/observability.md#resolving-a-park-a-bounded-drain) |
-| Simulation: invariant 17 widened so that at quiescence no `Cascade` obligation is `Discharging` on any row or marker and no `kernel.cascade` is pending (today `sim/Checks.cs` 676–680 checks only `Children`) | Observability |
+| Simulation: invariant 17 widened so that at quiescence no `Cascade` obligation is `Discharging` on any row or marker and no `kernel.cascade` is pending (today [Checks.cs](../../essentials/tests/ActorFoundation/Simulation/Checks.cs) 676–680 checks only `Children`) | Observability |
 | A turn's publish ticket in the delivery header's framing (version, length-prefixed qualified key, generated event id and keep window, presence flag, payload bytes verbatim), so an admitted publish's ticket is at most `C` plus the payload limit, under the row cap; a generated event id, `~` and the ticket's issued id, at most `N` + 130 bytes, counted inside `C`; on a provider whose composite key limits the event row, a turn's `Publish` checks its key jointly with the generated id, 256 units with the caller key on SQL Server (proposed; fifth review R5-M1, seventh review R7-M1, case EM-4) | [Observability](../architecture/observability.md#resolving-a-park-a-bounded-drain), [storage model](../architecture/storage-model.md#inbox-identity-and-public-names) |
 | Event matching without a clock: publish tickets for every publish with a subscription cursor and a paged match step (`P_page` subscriptions per step, a one-lease step deadline costing an attempt only without progress), `Messages.AcceptedAt` on them, `Events.KeepUntil` = `AcceptedAt` plus the window, `Events.Ticket` and `Events.Match`; `Events.Incarnation`, a random 16-byte value the kernel generates on every provider (a condition, K4), returned by the insert-or-read and named by the receipt, with the version-2 digests, and every step after a turn's first step and every replay of a ticket with an incarnation reading the event row by `(key, id, incarnation)` (sixth review R6-B2); an outside publish's event row inserted by insert-or-read under provider equality with its header-only ticket (`pub:` + SHA-256 of `(Q(t, key), id, incarnation)`, partition high-water rule, standard dedupe window); turn and caller event ids disjoint: a turn's event id starts with the reserved `~`, and the outside publish refuses `InvalidEventId`, with nothing written, any caller event id provider-equal under `Events.Id`'s pinned equality to an id starting with `~` (owner decision, 18 November (seventh review), R7-M1, case MX-1, with MX-1's `mx1-ticket-first`, `mx1-distinct`, `mx1-outside-first` and `mx1-owner-change` executed in this repair (`experiments/Review7.Blockers`, #4803); the comparison under the pinned collation on SQL Server and MySQL is gate 2 condition [RP](#gate-2-conditions)); `Subscriptions.RegisteredAt` written once (MongoDB `$setOnInsert`) and `Subscriptions.Incarnation`; `CatchUpCover (Incarnation, CatchUpId, Key, P0)` with `P0` = max(`RegisteredAt`, `H` + 1 ms), indexed by `(Key, P0)`, at most one entry per incarnation, and a meet chain's successor keys `meet:` + SHA-256 of `(CatchUpId, step)`, each registration's chain with its own `CatchUpId` and keys (a condition, K3) (sixth review R6-M1, R6-M2); the `B_step` = 4 MiB delivery allowance per match and meet step, at least one delivery per step (sixth review R6-M4); `EventHorizon (tenant, H)` and, on MongoDB, `eventConflict (tenant, hash of key)` and the sweep cursor in the horizon document, read through `(tenant, KeepUntil, Match)` (a condition, K4), wrapping only when exhausted (its cost measured at K12) (sixth review R6-M3); a sweep in filter-then-limit batches of `P_page` by `KeepUntil` through `Events (tenant, KeepUntil)`, each batch locking its tenant's horizon row; registrations taking their tenants' horizon share locks first in tenant-id order, at read committed with a statement snapshot after the locks; MongoDB `TransientTransactionError` and `UnknownTransactionCommitResult` retries, each re-running the fence; per-ticket isolation in the meet path, `MaxAttempts` parking the instance or the publisher, start-subscription and outside dead letters with `elsa.kernel.events.ticket_failures`, a dead-letter read model and a replay command (K11); the start registrar's catch-up as a `meet:` ticket (proposed; fifth review R5-M2, cases SB-4 to SB-9; sixth review cases EI-1, EI-2, CC-1, OA-1, MW-1 and BA-1, with PI-1's schedules in `experiments/Review6.Blockers`, #4798, run again at K3 with a crash between the event and message sweep batches, and provider-equal spellings at K4; the outside publish's insert-or-read answers a duplicate with its existing receipt first, and the high-water check applies only to a new insertion (proposed, K4); a condition at K4: MongoDB's 16-byte `Subscriptions.Incarnation` comes from the kernel or driver; gate 2 conditions [C2 and C3](#gate-2-conditions)) | [Observability](../architecture/observability.md#recover), [storage model](../architecture/storage-model.md#values-and-embedded-shape) |
 | The transition and fixture conditions: gate 2 conditions [C4 and C5](#gate-2-conditions) (non-blocking, each at its milestones) | [Observability](../architecture/observability.md#seventh-review-counterexamples-and-answers) |
@@ -271,14 +347,14 @@ records it, and nothing retries it. Built and run in the prototype except where 
 | The turn that wrote the response writes nothing else, so it has no commit (Ephemeral, or nothing to write) | The response, at once (run: NATIVE.md section 4, case 5) |
 | The owner resets on the receiving node while the request waits | 503 at once (run) |
 | The owning process dies after `COMMIT` and before the release, and it is also the receiving node | A dropped connection, with the process (reasoned) |
-| The owner is on another node and is lost before its turn commits | The delivery keeps `ReplyTo` on its durable row (`ReplyTo` in `EfStore.cs`, written by the owned insert in `EfStore.Owned.cs`). The new owner runs the turn again; if that commit lands within the reply deadline, the response goes to the reply address, otherwise the caller gets 504 at the deadline (reasoned: the field is built, the takeover path is not run end to end) |
-| The owner is on another node and is lost after its turn commits, before the release | 504 at the reply deadline, the route's timeout (reasoned: no signal from the owner reaches the receiving node) |
+| The owner is on another node and is lost before its turn commits | The delivery keeps `ReplyTo` on its durable row (`ReplyTo` in `EfStore.cs`, written by the owned insert in `EfStore.Owned.cs`). The new owner runs the turn again; the caller receives the response when the commit lands and the carrier reaches the live receiver before its deadline. Otherwise the caller gets 504 at the deadline ([run on PostgreSQL](../../prototypes/kernel-model/NATIVE.md#postgresql-http-across-abrupt-owner-loss) with a fixture-local reply link) |
+| The owner is on another node and is lost after its turn commits, before the release | 504 at the reply deadline, the route's timeout ([run on PostgreSQL](../../prototypes/kernel-model/NATIVE.md#postgresql-http-across-abrupt-owner-loss) with a separate receiver process) |
 | The turn that wrote the response parks | 500 at once; the held response is dropped (owner, 17 November) |
 | The client disconnects or times out | Nothing; the workflow is not cancelled. A route option that maps a disconnect to a cancel is proposed and not built (NATIVE.md section 4, "Not done") |
 
 In every case the workflow's committed state is unaffected and continues under its owner. A turn that runs again
-before the reply deadline answers the waiting caller through `ReplyTo`; output after the caller has had its answer, or
-after the deadline, reaches no caller. A caller never receives two responses. For a turn that writes, the caller never
+can answer the waiting caller through `ReplyTo` if its carrier arrives before the deadline. The receiver drops
+output after the caller has had its answer or after the deadline. A caller never receives two responses. For a turn that writes, the caller never
 receives a response whose commit did not land, unless the route opted out.
 
 ## Kernel schema and protocol compatibility (proposed)
@@ -311,6 +387,11 @@ before the upgrade. Before release no user data exists, so developers regenerate
 must refuse before it processes any row, and the upgraded node keeps running. Then start an old-version owner that
 already holds partitions, and run the migration that raises a family version: the migration must refuse while that
 owner's node row is live. Record the floor this produces.
+
+The [PostgreSQL prototype rehearsal](../../prototypes/kernel-model/README.md#postgresql-different-version-rehearsal)
+uses separate runtime builds and checks the physical rows after each refusal. Its tested rollback floor
+is `6f38d98648` for the ordinary relational format (3, 2, 1). Shipped provider profiles and the published
+release floor remain K12 qualification items.
 
 ## Gate 2 review: counterexamples and answers
 
@@ -510,6 +591,41 @@ The foundation's turned state and delivery proof at K3 is in memory. K4 owns the
 The K6 handle follow-up and the remaining Gate 2 conditions keep their milestones in the table above.
 
 
+### K4 relational qualification
+
+At `756b7093`, the full existing owned-SQL semantic suite ran on SQLite, PostgreSQL 17, SQL Server 2022 with RCSI,
+and MySQL 8.4 at REPEATABLE READ, in both fence modes. It recorded 882 passes, 22 capability skips, zero required
+failures and zero reference differences. The corrected held-lock case then passed on all eight combinations in
+[#5585](https://github.com/elsa-workflows/elsa-foundation/pull/5585). That case observes an engine-reported lock wait
+or a SQLite transient under the hold, then checks the single journal row after release.
+
+The [owned-SQL stress workload](../../prototypes/kernel-model/README.md#stress-and-cost-on-the-ef-engines) ran on
+`ef676e13` with `seconds=40` and `messages=5000` per case. The network engines used isolated databases
+and ended worker sessions during the run. SQLite has no server sessions. Its WAL run uses owner stalls and takeovers.
+
+| Engine | Checked fence | In-batch fence |
+|---|---|---|
+| PostgreSQL 17 | Passed, 1,287 sessions ended | Passed, 1,257 sessions ended |
+| SQL Server 2022, RCSI | Passed, 1,697 sessions ended, zero deadlocks | Passed, 1,483 sessions ended, zero deadlocks |
+| MySQL 8.4, REPEATABLE READ, TLS | Initial run exited 134 in Connector/NET. An isolated rerun passed with 984 sessions ended. | Passed, 1,554 sessions ended |
+| SQLite WAL | Passed, 1,309 owner stalls | Passed, 1,289 owner stalls |
+
+MySQL connection-loss qualification stays open despite the successful retry. The first checked run exited in the locked Connector/NET 26.10.0 TLS
+cancellation callback. The stack cannot distinguish the application deadline from the driver's connection-timeout
+timer. Before acceptance, qualify a driver fix with TLS and finite timeouts. The application can contain its own
+cancellation callbacks while keeping the node-lease deadlines. Retain the provider failure separately from the
+store's successful end-state runs. [Completed run receipt](https://github.com/elsa-workflows/elsa-foundation/pull/5586#issuecomment-7115032721)
+· [Initial failure](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7114915253)
+· [Connector/NET report](https://bugs.mysql.com/bug.php?id=115572)
+
+The [relational store format checks](../../prototypes/kernel-model/README.md#relational-store-format-checks)
+cover higher and lower mismatches for all three families at ownership take, journal and projection access and
+sweep. Rejected operations leave the committed state untouched. These checks retain the separate K12 rehearsal
+with running software versions and a recorded rollback floor.
+
+K4 remains open for the remaining physical K3 cases and production provider integration, including the upgrade
+path. MongoDB remains on the owner hold.
+
 ### FC-8 on providers
 
 At K4, run the counted trial-clear cases on each storage provider. After the selected callback exits, validate
@@ -532,9 +648,13 @@ at a higher epoch. The cold owner's store poll excludes both rows after the firs
 The [timed settlement fixture](../../prototypes/kernel-model/README.md#timed-native-job-settlement-qualification)
 checks both completion and deadline across ownership changes and applies one recorded result through Native.
 Public production activation, Worker inline promotion and the remaining provider runs still need K4 qualification.
-The [current-owner trial schedule](../../prototypes/kernel-model/sim/ContractJobTrialChecks.cs)
-also needs physical evidence. A timed job settles as a timeout while its callback is still unwinding, and
-trial isolation keeps a competing command pending until the callback exits. MongoDB-specific checks are deferred.
+The [current-owner trial schedule](../../essentials/tests/ActorFoundation/Simulation/ContractJobTrialChecks.cs)
+also covers timeout while the callback is still unwinding. The [relational Worker fixture](../../prototypes/kernel-model/README.md#run-the-same-schedule-on-the-relational-providers)
+checks that part on SQLite, PostgreSQL, SQL Server and MySQL with an unrelated actor's admitted start. The
+job's timeout lands while its callback is still active, with no model entry for the unrelated start. That
+start commits once after the current callback exits, even while the displaced callback is still active.
+The timeout checkpoint, inbox and journal stay unchanged after both Workers run again. The public
+qualified-command schedule remains open. MongoDB-specific checks are deferred.
 
 ### K11 foundation contract cases
 
@@ -557,6 +677,14 @@ ones on developers' machines. So there are no live runs to carry over, no data m
   create them again.
 - **Rollback** is a revert of the switch PR, followed by the same database reset. There is no data rollback, because
   no user data exists.
+
+### K9 PostgreSQL pending inbox
+
+The [pending-inbox fixture](../../prototypes/kernel-model/NATIVE.md#postgresql-pending-inbox-inspection)
+reads generated direct-input roots through `IActorReads.InboxAsync`, including selected operator commands.
+It pages without loading actor state or sending message bodies to the read client. It qualifies the live
+metadata slice. Parked work, recoverable handles, the plan-outcome projection, shipped runtime routing and
+FC-C4 retain their separate acceptance cases.
 
 ## Owner answers of 17 November
 

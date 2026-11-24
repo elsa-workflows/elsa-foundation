@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Native/Elsa.Workflows.Runtime.Statecharts.Native.csproj" />
+  </ItemGroup>
+</Project>

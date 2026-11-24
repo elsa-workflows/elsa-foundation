@@ -37,6 +37,20 @@ Status labels used below: **Measured** (a run in WRITES.md or the dated folder s
 probe), **Recommended, unmeasured** (reasoned from PostgreSQL's documented behaviour and the table's write pattern;
 the kernel was not run with it), **Open** (needs a decision or a run).
 
+## Releasing an open fence after owner exit
+
+A lease expiring does not release a row lock from an open transaction. The
+[verified TLS process-exit fixture](ENGINES.md#postgresql-process-exit-while-holding-a-fence)
+compares `client_connection_check_interval` at 100 ms and at its default of zero. Once the database
+sees the lost client socket, the enabled check aborts the blocked query, rolls the transaction back
+and releases the fence. With the check disabled, a blocked query can keep that fence past lease
+expiry. Record the setting used by owner sessions when qualifying takeover.
+
+The connection check depends on PostgreSQL's operating system reporting the disconnected client.
+A network partition can leave both endpoints believing the connection is open. Qualify that failure
+separately, including the deployment's TCP keepalive settings.
+[PostgreSQL TCP settings](https://www.postgresql.org/docs/16/runtime-config-connection.html#RUNTIME-CONFIG-CONNECTION-TCP)
+
 ## What each table does to PostgreSQL
 
 | Table | Write pattern | Why it matters | Measured per landed commit, Full history, small state (13 Nov stress) |
@@ -266,7 +280,7 @@ Use a fresh database for each of the four `inline|reference` and `reused|changin
 `SSL Mode=Disable`, then run from `prototypes/kernel-model`.
 
 ```sh
-dotnet run -c Release --project models/Native.Run -- pg-root-value-volume reference reused pad=4096 turns=64
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-root-value-volume reference reused pad=4096 turns=64
 ```
 
 ## Partitioned inbox: fit report

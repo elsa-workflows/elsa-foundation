@@ -16,6 +16,7 @@
         <DefineConstants>$(DefineConstants);ELSA_DASHBOARD_QUALIFICATION</DefineConstants>
     </PropertyGroup>
     <ItemGroup Condition="'$(ElsaDashboardQualification)' == 'true'">
+        <Compile Include="../../tools/ci/actor-foundation/PreviewReadQualificationFeature.cs" Link="Qualification/PreviewReadQualificationFeature.cs" />
         <Compile Include="../../tools/ux-acceptance/DashboardQualificationBootstrap.cs" Link="Qualification/DashboardQualificationBootstrap.cs" />
         <Compile Include="../../tools/ux-acceptance/HistoryQualificationControls.cs" Link="Qualification/HistoryQualificationControls.cs" />
         <Compile Include="../../tools/ux-acceptance/ActivityPlaybackQualificationControls.cs" Link="Qualification/ActivityPlaybackQualificationControls.cs" />
@@ -183,6 +184,10 @@
 		-->
 		<ProjectReference Include="../../essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj" />
 		<ProjectReference Include="../../essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
+		<ProjectReference Include="../../essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
+		<ProjectReference Include="../../essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+		<ProjectReference Include="../../essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />
+		<ProjectReference Include="../../essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
 		<ProjectReference Include="../../essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
 		<!--
 			Hosts the WorkflowsRuntimeAttention and WorkflowsRuntimeTracing features. Tracing swaps the no-op

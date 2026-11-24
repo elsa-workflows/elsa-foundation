@@ -1134,6 +1134,59 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.actorfoundation.builtin.durable": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.actorfoundation.builtin.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.actorfoundation.builtin.postgresql": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.actorfoundation.builtin.runtime": {
+        "type": "Project"
+      },
+      "elsa.actorfoundation.builtin.store.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Durable": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Microsoft.Data.SqlClient": "[7.0.2, )",
+          "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.10, )",
+          "MySql.EntityFrameworkCore": "[10.0.9, )",
+          "Npgsql": "[10.0.3, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.0, )",
+          "SQLitePCLRaw.bundle_e_sqlite3": "[3.0.3, )",
+          "System.Security.Cryptography.Pkcs": "[9.0.21, )"
+        }
+      },
+      "elsa.actorfoundation.contracts": {
+        "type": "Project"
+      },
+      "elsa.actorfoundation.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.actorfoundation.model.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "elsa.agent": {
         "type": "Project",
         "dependencies": {
@@ -2464,6 +2517,8 @@
           "Elsa.Activities.Runtime": "[4.0.0-dev, )",
           "Elsa.Activities.Scheduling": "[4.0.0-dev, )",
           "Elsa.Activities.Sequence": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.BuiltIn.PostgreSql": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
           "Elsa.Agent": "[4.0.0-dev, )",
           "Elsa.Agent.Anthropic": "[4.0.0-dev, )",
           "Elsa.Agent.Api": "[4.0.0-dev, )",
@@ -2585,11 +2640,13 @@
           "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Http": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.JavaScript": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Native.Model": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Reconciliation": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.ReferenceGarbageCollection": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Resumption": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Scheduling": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.InMemory": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
@@ -2920,6 +2977,9 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
       },
+      "elsa.workflows.runtime.graph": {
+        "type": "Project"
+      },
       "elsa.workflows.runtime.http": {
         "type": "Project",
         "dependencies": {
@@ -2952,6 +3012,21 @@
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+        }
+      },
+      "elsa.workflows.runtime.native.activities": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.native.model": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Graph": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Native.Activities": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.persistence.entityframeworkcore": {
@@ -3016,6 +3091,13 @@
           "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       },
       "Acornima": {
