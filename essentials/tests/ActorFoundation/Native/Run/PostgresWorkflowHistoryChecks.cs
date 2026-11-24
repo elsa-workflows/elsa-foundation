@@ -346,25 +346,42 @@ internal static class PostgresWorkflowHistoryChecks
         async Task CheckRenamedSourcePin()
         {
             var schema = await db.Database.SqlQueryRaw<string>("SELECT current_schema() AS \"Value\"").SingleAsync(ct);
-            await db.Database.ExecuteSqlRawAsync("""
-                CREATE SCHEMA fixture_history_source;
-                CREATE TABLE fixture_history_source."Instances" (id integer);
-                """, ct);
-            try
+            using var identifiers = new NpgsqlCommandBuilder();
+            var quoted = identifiers.QuoteIdentifier(schema);
+            await RequireFormatRefusal(() => store.OpenPreviewRootIngressAsync(Actor.ActorType, TimeSpan.FromHours(1), ct).AsTask());
+            Check(true, "with the source renamed, ingress still opens only on the strict admission source");
+            await db.Database.ExecuteSqlRawAsync("""CREATE VIEW "Instances" AS SELECT 1 AS id""", ct);
+            try { await RequireFormatRefusal(() => admission.OpenJournalCursorAsync(ct)); }
+            finally { await db.Database.ExecuteSqlRawAsync("""DROP VIEW "Instances" """, CancellationToken.None); }
+            Check(true, "with the source renamed, a view named as the source in the store schema refuses the read issuer");
+            await RequireShadowRefusal("""CREATE TABLE fixture_history_source."Instances" (id integer);""",
+                "with the source renamed, a checkpoint relation from another schema still refuses the read issuer");
+            await RequireShadowRefusal($"""
+                CREATE TABLE fixture_history_source."KernelStoreVersions" (LIKE {quoted}."KernelStoreVersions" INCLUDING ALL);
+                INSERT INTO fixture_history_source."KernelStoreVersions" SELECT * FROM {quoted}."KernelStoreVersions";
+                CREATE TABLE fixture_history_source."FoundationRootIssuer" (LIKE {quoted}."FoundationRootIssuer" INCLUDING ALL);
+                INSERT INTO fixture_history_source."FoundationRootIssuer"
+                    SELECT true, sha256('fixture-shadow-issuer'::bytea), "Partitions" FROM {quoted}."FoundationRootIssuer";
+                """, "with the source renamed, a store marker and issuer from another schema refuse the read issuer");
+
+            async Task RequireShadowRefusal(string setup, string label)
             {
-                using var identifiers = new NpgsqlCommandBuilder();
-                var shadow = new NpgsqlConnectionStringBuilder(connection)
+                await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA fixture_history_source; " + setup, ct);
+                try
                 {
-                    SearchPath = "fixture_history_source," + identifiers.QuoteIdentifier(schema)
-                }.ConnectionString;
-                var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(shadow).Options;
-                await RequireFormatRefusal(() => new PostgresRootAdmission(() => new KernelDb(shadowOptions), TimeSpan.FromHours(1))
-                    .OpenJournalCursorAsync(ct));
-                Check(true, "with the source renamed, a checkpoint relation from another schema still refuses the read issuer");
-            }
-            finally
-            {
-                await db.Database.ExecuteSqlRawAsync("DROP SCHEMA fixture_history_source CASCADE", CancellationToken.None);
+                    var shadow = new NpgsqlConnectionStringBuilder(connection)
+                    {
+                        SearchPath = "fixture_history_source," + quoted
+                    }.ConnectionString;
+                    var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(shadow).Options;
+                    await RequireFormatRefusal(() => new PostgresRootAdmission(() => new KernelDb(shadowOptions), TimeSpan.FromHours(1))
+                        .OpenJournalCursorAsync(ct));
+                    Check(true, label);
+                }
+                finally
+                {
+                    await db.Database.ExecuteSqlRawAsync("DROP SCHEMA fixture_history_source CASCADE", CancellationToken.None);
+                }
             }
         }
         async Task RequireSourceRefusal()

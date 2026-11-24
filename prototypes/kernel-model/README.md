@@ -460,7 +460,9 @@ The chronology route uses inclusive UTC bounds at the precision of the caller's 
 timestamp descending and exact reference ascending. It joins the timestamp and actor-list projections. Reads
 check both format markers and the trigger chain on the current owner relation in the same statement. A canonical
 replacement must have all the required triggers. A rename with no canonical replacement can still serve the
-existing projection from the same installation schema. Re-enable a trigger only if owner writes were quiesced throughout the disabled interval or
+existing projection from the same installation schema. The read cursor then takes its issuer only from the schema
+that holds the store marker and the actor list, and refuses an `"Instances"` that is not a table there. Admission
+and ingress still require the source. Re-enable a trigger only if owner writes were quiesced throughout the disabled interval or
 after an explicit rebuild from authoritative data. Missed silent checkpoint timestamps cannot be reconstructed
 from a later checkpoint or from the public journal. The generic actor list still shows prior roots, which enter chronological history
 on their first checkpoint observed after installation. Physical workflow retirement, legacy timestamps and
