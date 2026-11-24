@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3052-jtest-final-acceptance`
 
-**Status**: Draft
+**Status**: Approved
 
 **Input**: Prove the Elsa 3 to Elsa 4 conversion against the complete JTest corpus: the Elsa 3 workflow definitions are
 imported and converted by startup reconciliation, then the JTest suites written for those definitions run against

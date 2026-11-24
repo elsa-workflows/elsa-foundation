@@ -27,7 +27,7 @@
 ## Readiness
 
 - [x] Intake questions answered by the coordinator and recorded.
-- [ ] Coordinator approval of the specification, plan and tasks.
+- [x] Coordinator approval of the specification, plan and tasks.
 - [x] Plan and tasks retain J-001 to J-005 and V-001 to V-003 (T039 to T043, T049 to T051).
 
 ## Notes
