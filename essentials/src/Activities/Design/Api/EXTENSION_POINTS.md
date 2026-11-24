@@ -113,7 +113,8 @@ attributes/converters or install Runtime aliases to discover fields.
 `ClrActivitySerializedShapeSource`, registered scoped by CLR reconciliation with `TryAddEnumerable`, is
 the shipped implementation *(cross-domain — CLR reconciliation)*. It binds exact metadata assets and
 the unchanged activity-value profile independently of old catalog hashes, includes typed `$result`
-without named Output rows, and reports profile-unbound declared input/variable types honestly. Shared
+without named Output rows, describes a single declared input/variable type's members as advisory
+`Declared` shapes, and reports every other declared type as profile-unbound. Shared
 Workflows Design analysis consumes these facts in API and endpoint-free hosts.
 
 ### Mandatory shared draft analysis

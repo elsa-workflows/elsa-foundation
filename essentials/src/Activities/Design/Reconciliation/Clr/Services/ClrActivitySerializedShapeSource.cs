@@ -158,11 +158,24 @@ internal sealed class ClrActivitySerializedShapeSource(
         var descriptors = types.GetDescriptors().Where(x => x.Alias == declaredType.Alias && x.SupportedCollectionKinds.Contains(declaredType.CollectionKind)).ToArray();
         if (admitted.Length != 1 || descriptors.Length != 1)
             return Answer(Unknown(null, ownerContractIdentity, "activity.shape.type-not-admitted"));
-        // Type admission is not serialization authority. Request seeding uses default JSON options
-        // for CLR values and preserves caller JsonElement keys; variables can retain JSON from other
-        // writers. The alias cannot establish literal member names under the activity-value profile.
-        return Answer(Unknown(memberPath.IsEmpty ? declaredType : null, ownerContractIdentity,
-            "activity.shape.serialization-profile-unbound"));
+        // Type admission is not serialization authority: request seeding and other writers can store
+        // JSON with other member names. A single declared type is therefore described as Declared, an
+        // advisory shape for authoring help that validation treats as unknown. Every other case keeps
+        // the unbound answer.
+        var unbound = Unknown(memberPath.IsEmpty ? declaredType : null, ownerContractIdentity, "activity.shape.serialization-profile-unbound");
+        if (declaredType.CollectionKind != CollectionKind.Single)
+            return Answer(unbound);
+        try
+        {
+            var shape = new ClrSerializedShapeReader(ownerContractIdentity, limits, cancellationToken).Read(descriptors[0].ClrType, declaredType, memberPath);
+            return Answer(shape.State is ActivitySerializedShapeState.Known or ActivitySerializedShapeState.Truncated
+                ? shape with { State = ActivitySerializedShapeState.Declared, ReasonCode = "activity.shape.declared-type" }
+                : unbound);
+        }
+        catch (Exception exception) when (MetadataFailure(exception))
+        {
+            return Answer(unbound);
+        }
     }
 
     private static ActivitySerializedShape Unavailable(string revision, string reason) =>

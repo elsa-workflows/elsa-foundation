@@ -208,28 +208,65 @@ public sealed class ActivitySerializedShapeSourceTests
     }
 
     [Fact]
-    public async Task Declared_type_admission_retains_whole_type_without_inventing_a_serialized_profile_or_selected_type()
+    public async Task Declared_type_describes_members_under_the_activity_value_profile()
     {
         using var host = new Host([Descriptor("shop.address", typeof(SerializedAddress))]);
-        var reference = new TypeReference("shop.address", CollectionKind.Dictionary);
-        var shape = await host.Source.DescribeDeclaredTypeAsync(reference, "workflow:draft:revision:input", [], new());
-        Assert.Equal(reference, shape!.Type);
-        Assert.Equal(ActivitySerializedShapeState.Unknown, shape.State);
-        Assert.Equal("activity.shape.serialization-profile-unbound", shape.ReasonCode);
-        Assert.Equal(ActivitySerializedValueKind.Unknown, shape.Kind);
-        Assert.Empty(shape.Members);
-        Assert.Null(shape.MapValue);
-        Assert.Null(shape.IsNullable);
-        Assert.Equal(ActivitySerializedPresence.Unknown, shape.Presence);
-        Assert.Empty(shape.ProfileRevision);
-        Assert.Equal("workflow:draft:revision:input", shape.SourceContractRevision);
-        var selected = (await host.Source.DescribeDeclaredTypeAsync(reference, "owner", ["any.key", "city"], new()))!;
-        Assert.Null(selected.Type);
-        Assert.Null(selected.IsNullable);
-        Assert.Equal(ActivitySerializedPresence.Unknown, selected.Presence);
+        var shape = (await host.Source.DescribeDeclaredTypeAsync(new("shop.address"), "owner", [], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Declared, shape.State);
+        Assert.Equal("activity.shape.declared-type", shape.ReasonCode);
+        Assert.Equal(ActivitySerializedValueKind.Object, shape.Kind);
+        Assert.Equal(new TypeReference("shop.address"), shape.Type);
+        Assert.Equal(["city", "zipCode"], shape.Members.Select(x => x.SerializedName).Order());
+        Assert.Equal(ActivityValueJsonProfile.Revision, shape.ProfileRevision);
+        Assert.Equal("owner", shape.SourceContractRevision);
+        var city = (await host.Source.DescribeDeclaredTypeAsync(new("shop.address"), "owner", ["city"], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Declared, city.State);
+        Assert.Equal(ActivitySerializedValueKind.Scalar, city.Kind);
         var unknown = await host.Source.DescribeDeclaredTypeAsync(new(typeof(MetadataOnlyPayload).FullName!), "owner", [], new());
         Assert.Equal("activity.shape.type-not-admitted", unknown!.ReasonCode);
         Assert.Equal(0, host.RuntimeRegistryResolutionCount);
+    }
+
+    [Fact]
+    public async Task Declared_type_keeps_the_unbound_answer_when_no_members_can_be_described()
+    {
+        using var host = new Host([Descriptor("shop.address", typeof(SerializedAddress)),
+            Descriptor("shop.converted", typeof(ConverterPayload))]);
+        var missing = (await host.Source.DescribeDeclaredTypeAsync(new("shop.address"), "owner", ["missing"], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Unknown, missing.State);
+        Assert.Equal("activity.shape.serialization-profile-unbound", missing.ReasonCode);
+        Assert.Null(missing.Type);
+        var dictionary = new TypeReference("shop.address", CollectionKind.Dictionary);
+        var map = (await host.Source.DescribeDeclaredTypeAsync(dictionary, "workflow:draft:revision:input", [], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Unknown, map.State);
+        Assert.Equal("activity.shape.serialization-profile-unbound", map.ReasonCode);
+        Assert.Equal(dictionary, map.Type);
+        Assert.Equal(ActivitySerializedValueKind.Unknown, map.Kind);
+        Assert.Empty(map.Members);
+        Assert.Null(map.MapValue);
+        Assert.Empty(map.ProfileRevision);
+        Assert.Equal("workflow:draft:revision:input", map.SourceContractRevision);
+        var selected = (await host.Source.DescribeDeclaredTypeAsync(dictionary, "owner", ["any.key", "city"], new()))!;
+        Assert.Null(selected.Type);
+        Assert.Equal(ActivitySerializedPresence.Unknown, selected.Presence);
+        var opaque = (await host.Source.DescribeDeclaredTypeAsync(new("shop.converted"), "owner", [], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Unknown, opaque.State);
+        Assert.Equal("activity.shape.serialization-profile-unbound", opaque.ReasonCode);
+        Assert.Empty(opaque.Members);
+    }
+
+    [Fact]
+    public async Task Declared_recursive_and_scalar_types_stay_bounded_and_member_free()
+    {
+        using var host = new Host([Descriptor("shop.recursive", typeof(SerializedRecursive)), Descriptor("String", typeof(string))]);
+        var recursive = (await host.Source.DescribeDeclaredTypeAsync(new("shop.recursive"), "owner", [], new(3, 5)))!;
+        Assert.Equal(ActivitySerializedShapeState.Declared, recursive.State);
+        Assert.InRange(CountMembers(recursive), 0, 5);
+        Assert.InRange(Depth(recursive), 0, 3);
+        var scalar = (await host.Source.DescribeDeclaredTypeAsync(new("String"), "owner", [], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Declared, scalar.State);
+        Assert.Equal(ActivitySerializedValueKind.Scalar, scalar.Kind);
+        Assert.Empty(scalar.Members);
     }
 
     [Fact]
@@ -328,7 +365,7 @@ public sealed class ActivitySerializedShapeSourceTests
     }
 
     [Fact]
-    public async Task Changing_CLR_binding_behind_selectable_alias_does_not_establish_a_serialized_profile()
+    public async Task Changing_CLR_binding_behind_selectable_alias_changes_the_declared_members()
     {
         using var first = new Host([Descriptor("shop.payload", typeof(SerializedAddress))]);
         using var second = new Host([Descriptor("shop.payload", typeof(SerializedCustomer))]);
@@ -336,16 +373,14 @@ public sealed class ActivitySerializedShapeSourceTests
         var left = (await first.Source.DescribeDeclaredTypeAsync(new("shop.payload"), "same-owner", [], new()))!;
         var right = (await second.Source.DescribeDeclaredTypeAsync(new("shop.payload"), "same-owner", [], new()))!;
         Assert.Equal(left.SourceContractRevision, right.SourceContractRevision);
-        Assert.Equal(ActivitySerializedShapeState.Unknown, left.State);
-        Assert.Equal(ActivitySerializedShapeState.Unknown, right.State);
-        Assert.Equal("activity.shape.serialization-profile-unbound", left.ReasonCode);
-        Assert.Empty(left.Members);
-        Assert.Empty(right.Members);
-        Assert.Equal(JsonSerializer.Serialize(left), JsonSerializer.Serialize(right));
+        Assert.Equal(ActivitySerializedShapeState.Declared, left.State);
+        Assert.Equal(ActivitySerializedShapeState.Declared, right.State);
+        Assert.Equal(["city", "zipCode"], left.Members.Select(x => x.SerializedName).Order());
+        Assert.NotEqual(left.Members.Select(x => x.SerializedName).Order(), right.Members.Select(x => x.SerializedName).Order());
     }
 
     [Fact]
-    public async Task Default_CLR_activity_profile_and_preserved_caller_JSON_keys_do_not_share_member_name_authority()
+    public async Task Declared_member_names_follow_the_activity_value_profile_and_not_other_writers()
     {
         using var host = new Host([Descriptor("shop.address", typeof(SerializedAddress))]);
         var value = new SerializedAddress { City = "Paris" };
@@ -355,9 +390,13 @@ public sealed class ActivitySerializedShapeSourceTests
         Assert.True(defaultJson.TryGetProperty("City", out _));
         Assert.True(activityJson.TryGetProperty("city", out _));
         Assert.True(caller.RootElement.Clone().TryGetProperty("CITY", out _));
-        foreach (var path in new[] { "City", "city", "CITY" })
+        var declared = (await host.Source.DescribeDeclaredTypeAsync(new("shop.address"), "owner", ["city"], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Declared, declared.State);
+        Assert.Equal("activity.shape.declared-type", declared.ReasonCode);
+        foreach (var path in new[] { "City", "CITY" })
         {
             var selection = (await host.Source.DescribeDeclaredTypeAsync(new("shop.address"), "owner", [path], new()))!;
+            Assert.Equal(ActivitySerializedShapeState.Unknown, selection.State);
             Assert.Equal("activity.shape.serialization-profile-unbound", selection.ReasonCode);
             Assert.Null(selection.Type);
             Assert.Empty(selection.Members);

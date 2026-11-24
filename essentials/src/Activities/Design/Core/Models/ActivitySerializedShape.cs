@@ -9,7 +9,12 @@ public enum ActivitySerializedShapeState
     Known,
     Unknown,
     Truncated,
-    Unavailable
+    Unavailable,
+    /// <summary>
+    /// The shape describes the declared type's members. The names come from the declared type and are not proven
+    /// for the stored value, so a consumer that validates must treat this state as unknown.
+    /// </summary>
+    Declared
 }
 
 /// <summary>The serialized JSON shape, independent of its CLR alias and value representation.</summary>
