@@ -11,7 +11,7 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
-      "kernel.graph": {
+      "elsa.workflows.runtime.graph": {
         "type": "Project"
       },
       "kernel.native": {
@@ -19,7 +19,7 @@
         "dependencies": {
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
-          "Kernel.Graph": "[1.0.0, )",
+          "Elsa.Workflows.Runtime.Graph": "[4.0.0-dev, )",
           "Kernel.Native.Activities": "[1.0.0, )"
         }
       },

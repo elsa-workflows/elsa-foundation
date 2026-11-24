@@ -1,13 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <IsPackable>false</IsPackable>
-  </PropertyGroup>
   <!-- The graph engine: main's Flowchart engine (Essentials/src/Activities/Flowchart), lifted out of the Elsa runtime.
        No reference to the kernel, to Elsa or to any package: the native model and tests are its hosts. -->
   <PropertyGroup>
     <RootNamespace>Kernel.Graph</RootNamespace>
+    <AssemblyName>Kernel.Graph</AssemblyName>
+    <PackageId>Elsa.Workflows.Runtime.Graph</PackageId>
+    <Description>Graph execution paths, gateway policies and joins for Native Flowchart.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Graph.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

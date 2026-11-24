@@ -2993,6 +2993,9 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
       },
+      "elsa.workflows.runtime.graph": {
+        "type": "Project"
+      },
       "elsa.workflows.runtime.http": {
         "type": "Project",
         "dependencies": {

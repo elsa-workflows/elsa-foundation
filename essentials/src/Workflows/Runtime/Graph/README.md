@@ -3,7 +3,7 @@
 Main's Elsa 4 Flowchart engine, lifted out of the Elsa runtime (owner decision, 12 November; design sketch draft 5,
 "Containers and their semantics"). Token flow: execution paths with iteration keys, arrivals at joins, BPMN's
 gateway kinds as policies, dead paths, and the dead-path join as the default (`FlowchartOptions.JoinPolicyKind`),
-with the reachability join kept beside it. No reference to the kernel, to Elsa or to any package.
+with the reachability join kept beside it. No runtime or NuGet dependency.
 
 Copied from `Essentials/src/Activities/Flowchart` at `a3eb06e851`. Type names, file layout, messages and state shapes
 are main's, so that the two can be compared file by file (the first commit of the PR that added this folder is the
@@ -48,14 +48,17 @@ a public policy routes different targets into different scopes. Other untaken ta
 
 ## The corpus
 
-`models/Graph.Tests` runs main's conformance corpus and join tests against this engine through `GraphHarness`, a
+The Graph suite runs the conformance corpus and join tests against this engine through `GraphHarness`, a
 host that does what main's workflow execution harness does for a Flowchart: probe leaves with a fixed outcome,
 children run first in, first out, execution ids from a pool, the state carried between callbacks as main stages it.
 That includes main's two determinism byte-locks (dead-path and reachability): the persisted state is byte-identical
 to main's, so the extracted engine makes the same state mutations in the same order.
+[Graph tests](https://github.com/elsa-workflows/elsa-foundation/tree/main/essentials/tests/Workflows/Runtime/Graph/Tests)
+
+Run from the repository root.
 
 ```
-dotnet test models/Graph.Tests -c Release
+dotnet test essentials/tests/Workflows/Runtime/Graph/Tests -c Release
 ```
 
 What the port does not assert, because it belongs to Elsa's runtime: incident ids and activity execution statuses

@@ -7,7 +7,7 @@
 Status: the design of the kernel model after round 4 stage A, which split the merged kernel into three layer projects
 and renamed step to turn and off-step work (run) to background job, at the owner's decisions of 12 November. Stage A
 changed no behaviour: every gate gives the numbers it gave before (FINDINGS section 24). Round 4's graph engine
-(FINDINGS section 26) puts the native Flowchart on main's Flowchart engine (`models/Graph`) and adds the graph
+(FINDINGS section 26) puts the native Flowchart on main's Flowchart engine ([Graph](../../essentials/src/Workflows/Runtime/Graph)) and adds the graph
 invariants G1 to G5 to the simulation; it changes no kernel behaviour and no round trip. Round 4's runtimes (FINDINGS
 section 27) add the built-in runtime on a clock (`RuntimeNode`), the Orleans adapter and the runtime conformance suite,
 and change layer 2 where the seam needed it: the historical R1 idle-lease contract, a new activation is woken (R4), and a
@@ -48,7 +48,7 @@ native model.
 |---|---|---|
 | 1. Actor runtime | Placement of scopes on nodes, activation and deactivation, one pass at a time per scope, wake-ups between nodes. No guarantee about messages or state | `../../essentials/src/ActorFoundation/BuiltIn/Runtime`: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal (`IWakeSignal`, `InProcessWakeSignal`), membership (`IMembership`, `Cluster`), and `PartitionRuntime`, the built-in runtime (fair share from `node` heartbeats, activations, passes). Also `InstanceRef`, `Flaw` and `Defaults` |
 | 2. Durable actors | The durable inbox, a turn's state and messages committed atomically, the fence, timers, background jobs, events, poison, the journal, live output | [Built-in Durable](../../essentials/src/ActorFoundation/BuiltIn/Durable): `Worker` (one partition's `IScopeActivation`), `DurableHost` (the `IScopeHost`), the seam to layer 3 (`IActorType`, `TurnInput`, `TurnOutcome`, `Delivery`, `DurableTurn`, `ITurnServices`), `IKernelStore` and `InMemoryStore`, `Projector`, `Requests` and `IReplyTransport`, messages and kinds |
-| 3. Actor types | What an actor does with its messages | `../../essentials/tests/ActorFoundation/Legacy/Workflows`: `WorkflowInstance`, the one actor type (definition and version, status, parent and children, cancel of a tree, suspend, resume, terminate, rebind, delete, the history envelope), and the execution-model contract it runs (`IExecutionModel`, `ITurn`). Models: the simulation's toy models, `NativeModel` (its Flowchart runs on the graph engine of `models/Graph`, main's Flowchart engine) |
+| 3. Actor types | What an actor does with its messages | `../../essentials/tests/ActorFoundation/Legacy/Workflows`: `WorkflowInstance`, the one actor type (definition and version, status, parent and children, cancel of a tree, suspend, resume, terminate, rebind, delete, the history envelope), and the execution-model contract it runs (`IExecutionModel`, `ITurn`). Models: the simulation's toy models, `NativeModel` (its Flowchart runs on the graph engine of [Graph](../../essentials/src/Workflows/Runtime/Graph), main's Flowchart engine) |
 
 Dependencies point downward only: `Kernel.Workflows` references `Kernel.Durable`, which references `Kernel.Runtime`,
 which references nothing. Where a clean cut would have changed behaviour or round trips, the code keeps what it had and

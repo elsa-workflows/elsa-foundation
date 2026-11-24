@@ -109,7 +109,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
             if ! changed=$(git diff --name-only "$GITHUB_SHA^1" "$GITHUB_SHA"); then
               kernel=true
-            elif grep -Eq '^(prototypes/kernel-model/|essentials/(src|tests)/ActorFoundation/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+            elif grep -Eq '^(prototypes/kernel-model/|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/Graph/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
               kernel=true
             fi
           fi
@@ -1782,7 +1782,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/ActorFoundation/Statecharts/Run/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/ActorFoundation/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
@@ -1790,7 +1790,7 @@ jobs:
       # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
       - name: Build
         run: |
-          for p in ../../essentials/tests/ActorFoundation/Simulation models/Native.Recovery.Run ../../essentials/tests/ActorFoundation/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation models/Native.Recovery.Run ../../essentials/tests/ActorFoundation/Statecharts/Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1891,7 +1891,7 @@ jobs:
         run: dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll semantic placement
 
       - name: Graph engine corpus
-        run: dotnet test models/Graph.Tests -c Release --no-build
+        run: dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build
 
       - name: Gate script self-test
         working-directory: .
@@ -1923,13 +1923,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json', 'essentials/tests/ActorFoundation/Statecharts/Run/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json', 'essentials/tests/ActorFoundation/Statecharts/Run/packages.lock.json', 'essentials/tests/Workflows/Runtime/Graph/Tests/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
       - name: Build
         run: |
-          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run models/Native.Recovery.Run ../../essentials/tests/ActorFoundation/Statecharts/Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run models/Native.Recovery.Run ../../essentials/tests/ActorFoundation/Statecharts/Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run ../../essentials/tests/Workflows/Runtime/Graph/Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -2001,7 +2001,7 @@ jobs:
           $NAT cost sqlite
 
       - name: Graph engine corpus
-        run: dotnet test models/Graph.Tests -c Release --no-build
+        run: dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build
 
   # K1 slice 7: the count of 4,096. The sim's --count only sizes the store's rows (PARTITIONS.md, slice 7), so it runs
   # here at reduced seeds; the integrated runtime suite qualifies 4,096 end to end. Estimate on a 4-core runner: build

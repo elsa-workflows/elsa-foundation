@@ -17,7 +17,7 @@ work is a *background job* (`StartJob`, `IJob`, `job-finished`, the row's `jobs`
 partition is a *pass*. `src/Kernel` is now three projects: `src/Kernel.Runtime`, `src/Kernel.Durable` and
 `../../essentials/tests/ActorFoundation/Legacy/Workflows`; a file named below without a path is in one of them. Seeds, counts and costs are unchanged.
 
-**Round 4, the graph engine (FINDINGS.md section 26).** The Flowchart runs on `models/Graph`, main's Flowchart engine
+**Round 4, the graph engine (FINDINGS.md section 26).** The Flowchart runs on [the Graph engine](../../essentials/src/Workflows/Runtime/Graph), main's Flowchart engine
 extracted as a library: paths, arrivals, dead paths and gateways (section 1); a Flowchart cost row (section 5); the
 graph invariants G1 to G5, the workflow `n-graph` and four graph flaws in the simulation (section 6). An All join
 after a decision fires now; it did not before (run, both ways).
@@ -27,7 +27,7 @@ Every claim says how it is known: **run** means a command below produced it; **r
 | Path | What |
 |---|---|
 | `models/Native` | The authoring surface, the activities (the Flowchart hosts the graph engine), the model (`NativeModel.cs`), the live channel and HTTP host (`Live.cs`) |
-| `models/Graph`, `models/Graph.Tests` | The graph engine (main's Flowchart engine) and main's conformance corpus against it (`dotnet test models/Graph.Tests -c Release`) |
+| [the Graph engine](../../essentials/src/Workflows/Runtime/Graph), `../../essentials/tests/Workflows/Runtime/Graph/Tests` | The graph engine (main's Flowchart engine) and main's conformance corpus against it (`dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release`) |
 | `../../essentials/tests/ActorFoundation/Native/Run` | Smoke tests of every activity and the HTTP cases, the cost measurement, the in-memory cost |
 | `../../essentials/tests/ActorFoundation/Simulation/NativeWorkflows.cs`, `../../essentials/tests/ActorFoundation/Simulation/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N7 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
 
@@ -65,7 +65,7 @@ Kept from Elsa 4 (see `docs/reports/elsa-4-activity-contract-parity-2026-07.md`)
 - `[Background]` is Elsa 4's background placement for a leaf; `[External]` is the side-effect profile External.
 
 Ported activities (run: `smoke` exercises each in Ephemeral, Balanced and Durable): WriteLine, SetVariable, Sequence,
-If, Flowchart (on the graph engine of `models/Graph`: gateways, implicit dead-path joins), Parallel (threshold join), ForEach (iteration scope with
+If, Flowchart (on the graph engine of [the Graph engine](../../essentials/src/Workflows/Runtime/Graph): gateways, implicit dead-path joins), Parallel (threshold join), ForEach (iteration scope with
 `CurrentItem`, `CurrentIndex`), While, Delay, Event, PublishEvent, DispatchWorkflow (with and without waiting),
 HttpEndpoint, WriteHttpResponse, CallService (slow external work, `[Background]`), SendNotification (`[External]`),
 and since round 5 C the two outbound activities that carry an effect key: SendHttpRequest (`[External]`; the key is the
@@ -156,7 +156,7 @@ What changed, and why:
 | A stateful activity's inputs are evaluated again on resume, not taken from a pinned snapshot | No snapshot to store. The activities that wait keep what they need in their state |
 | Sequence is stateless: the next child follows from the position of the one that completed | Smaller state |
 | `If` children fill named slots (Then, Else); its outcome is True or False either way | The same activity works inside a flowchart |
-| The Flowchart runs on the graph engine (`models/Graph`, main's Flowchart engine): paths, arrivals, dead paths. A node with several inbound connections is a join decided by the dead-path join (main's default); gateways (`Gateway`) are explicit; a first-wins loser is cancelled. A run starts at one node, main's: the pending start trigger when it is a child of the Flowchart, else the start node (the first child without inbound connections); other unconnected children do not start, and a trigger below one of them is not reached (main refuses that placement when a workflow is published; the prototype has no publish step). Unlike main, the trigger counts only while it is undelivered (a Flowchart run again by a loop starts at the start node), and no node carries main's trigger flag, so loop-closing connections are classified from the start node only | Before, without dead paths, an All join after a decision never fired and the flowchart completed without it (run: `smoke`, "an All join after a decision", then 'left no no', now 'left yes yes') |
+| The Flowchart runs on the graph engine ([the Graph engine](../../essentials/src/Workflows/Runtime/Graph), main's Flowchart engine): paths, arrivals, dead paths. A node with several inbound connections is a join decided by the dead-path join (main's default); gateways (`Gateway`) are explicit; a first-wins loser is cancelled. A run starts at one node, main's: the pending start trigger when it is a child of the Flowchart, else the start node (the first child without inbound connections); other unconnected children do not start, and a trigger below one of them is not reached (main refuses that placement when a workflow is published; the prototype has no publish step). Unlike main, the trigger counts only while it is undelivered (a Flowchart run again by a loop starts at the start node), and no node carries main's trigger flag, so loop-closing connections are classified from the start node only | Before, without dead paths, an All join after a decision never fired and the flowchart completed without it (run: `smoke`, "an All join after a decision", then 'left no no', now 'left yes yes') |
 | No DI, no services in activities. The host gates Background work and performs External effects | Enough for the spike; the activity map's DI would come back unchanged |
 | A tiny expression language (`Expression.cs`), compiled to closures once per text | Instead of JavaScript |
 | `Cancel` maps to completion with outcome Cancelled | There is no cancel callback on composites yet |
@@ -475,7 +475,7 @@ The checks bite (run: `--native-mutations`, each flaw alone, first failing seed)
 | `FlatRetryGeneration` (round 5 C) | Every retry successor is generation 1, so the second retry of one activation shares the first's key | Not caught by the sweep: the mix has no retry, and the gate allows it (`--allow-uncaught FlatRetryGeneration`). `Native.Recovery.Run --effect-keys` shows it bite: `leaf=retry1` twice where the sound model gives `leaf=retry1`, `leaf=retry2` |
 | `FreshTurnSwapsLoopKeys` (round 5 C) | A turn that is not a redelivery swaps a While's first two iterations in the key; the replay after a lost first attempt derives the right keys, so the wrong, valid keys live only in turns that never landed | N7 (the lost-turn half), seed 269: `0/j17: h1 with '"i=1"' was sent under two keys, 0/j17/h1/loop=2/0 and 0/j17/h1/loop=1/0: a sending used another activation's key`; the first attempt was lost, its replay sent the right key, and no other half can see a key that lands once. Since K1 slice 7 it is first caught at seed 3589 (`2/j13`, the same check): the set worlds, with four partitions and one worker per node, make a lost first attempt of a While's early iterations rarer, so the PR gate runs the native mutations at 12,000 seeds, over three times that |
 
-The four graph flaws are the engine's (`FlowchartOptions.Flaws`, marked MUTATION in `models/Graph`), the four the
+The four graph flaws are the engine's (`FlowchartOptions.Flaws`, marked MUTATION in [the Graph engine](../../essentials/src/Workflows/Runtime/Graph)), the four the
 design sketch's plan names; the mutation check fails one that another check catches first. G4 has no mutation of its
 own: no flaw of the plan aims at it, so that it bites is not shown. The round-4 seeds are those of the mix with `n-graph` in it, which
 moves every seed; the five older flaws' first seeds and messages above are round 4's (`InFlightInMemory` is now caught first by N5, not N1).
