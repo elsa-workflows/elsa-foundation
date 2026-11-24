@@ -60,6 +60,21 @@ internal static class HttpRouteChecks
             [new Connection("in", "check"), new Connection("check", "accepted", "True"), new Connection("check", "refused", "False"),
                 new Connection("lookup", "found")]),
             ("order", null)));
+        // A loop entered from an endpoint that is not the start node (a stray node is listed first): the engine classifies
+        // its loop-closing edge from the entry, as it does when the entry is the start node, so the outcome cannot depend on
+        // how the nodes are named. The engine refuses a loop back to a node with another inbound connection as ambiguous,
+        // so here the same refusal is the right answer in every variant; misclassified, one naming of it ran.
+        const string shape = "plain";
+        foreach (var stray in new[] { false, true })
+        foreach (var (head, tail) in new[] { ("a-head", "b-tail"), ("b-head", "a-tail") })
+        {
+            Node[] nodes = [Wf.HttpEndpoint("in", $"loop/{shape}/{stray}/{head}"), Wf.If(head, Binding.Expr("n < 3")),
+                Wf.Set(tail, "n", Binding.Expr("n + 1")), Wf.Respond("out", Binding.Expr("'n=' + n"))];
+            registry.Add(Wf.Workflow($"loop-{shape}-{stray}-{head}", Wf.Flowchart("flow",
+                stray ? [Wf.WriteLine("stray", "listed first"), .. nodes] : nodes,
+                [new Connection("in", head), new Connection(head, tail, "True"), new Connection(tail, head), new Connection(head, "out", "False")]),
+                ("n", 0)));
+        }
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
         {
             var owner = new Owner("routes", 0, new InMemoryStore(1, () => Environment.TickCount64), registry, new Network());
@@ -72,6 +87,15 @@ internal static class HttpRouteChecks
             check(accepted is { StatusCode: 201 } && accepted.Body?.GetValue<string>() == "accepted 7" && refused is { StatusCode: 400 } &&
                   found is { StatusCode: 200 } && found.Body?.GetValue<string>() == "found 9",
                 $"{mode}: each entry HttpEndpoint of a designer-shaped Flowchart starts it there, and the branch it takes answers ({accepted.StatusCode}, {refused.StatusCode}, {found.StatusCode})");
+            var loops = new Dictionary<string, string>();
+            foreach (var stray in new[] { false, true })
+            foreach (var head in new[] { "a-head", "b-head" })
+            {
+                var answer = await owner.Http.SendAsync(new HttpRequest("POST", $"loop/{shape}/{stray}/{head}"), worker, mode, () => owner.PumpAsync());
+                loops[$"{shape}/{stray}/{head}"] = $"{answer.StatusCode} {answer.Body}";
+            }
+            check(loops["plain/False/a-head"].StartsWith("500", StringComparison.Ordinal) && loops.Values.All(outcome => outcome == loops["plain/False/a-head"]),
+                $"{mode}: a loop entered from a second entry is classified as from the start node, whatever its node ids ({string.Join(", ", loops.Select(l => l.Key + ": " + l.Value))})");
         }
     }
 }

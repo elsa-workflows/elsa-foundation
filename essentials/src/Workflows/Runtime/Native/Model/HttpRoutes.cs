@@ -39,8 +39,7 @@ public sealed class HttpRoutes
         if (root.Type != typeof(Flowchart)) return [root];
         try { _ = Flowchart.GraphOf(root); }
         catch (Exception refused) when (refused is FlowchartExecutionException or ArgumentException) { return []; }
-        var targets = root.Connections.Select(connection => connection.Target).ToHashSet(StringComparer.Ordinal);
-        return root.Children.Where(child => !targets.Contains(child.Id));
+        return root.Children.Where(child => Flowchart.IsEntry(root, child));
     }
 
     private static string Method(Node node) => node.Inputs.GetValueOrDefault("Method") is LiteralBinding { Value: { } m } ? m.GetValue<string>() : "POST";
