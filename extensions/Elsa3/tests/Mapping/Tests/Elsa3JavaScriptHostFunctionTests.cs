@@ -483,6 +483,71 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.DoesNotContain("acme", ReadExpression(result).Source, StringComparison.Ordinal);
     }
 
+    // ---- #5691: a replaced global used other than in a direct call ----
+
+    /// <summary>
+    /// Only a direct call is rewritten, so an alias, a callback, a stored function, a shorthand property, a typeof test or
+    /// a construction is refused once per name, with guidance to call the function directly.
+    /// </summary>
+    [Theory]
+    [InlineData("(() => { const find = lookupCustomer; return find('c-1'); })()")]
+    [InlineData("['c-1'].map(lookupCustomer)")]
+    [InlineData("(() => { const helpers = {}; helpers.find = lookupCustomer; return helpers.find('c-1'); })()")]
+    [InlineData("({ lookupCustomer }).lookupCustomer('c-1')")]
+    [InlineData("typeof lookupCustomer")]
+    [InlineData("new lookupCustomer('c-1')")]
+    [InlineData("lookupCustomer('c-1') && [lookupCustomer, lookupCustomer]")]
+    public async Task A_declared_global_used_other_than_in_a_direct_call_is_refused(string expression)
+    {
+        var result = await ConvertTextAsync(expression, [LookupCustomer]);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.ReplacedFunctionReference, diagnostic.Code);
+        Assert.Contains("'lookupCustomer' as a value", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("'acme.lookupCustomer'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("lookupCustomer(item)", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    /// <summary>A property name, a member name or a script's own binding is not a reference to the replaced global.</summary>
+    [Theory]
+    [InlineData("({ lookupCustomer: 1 }).lookupCustomer")]
+    [InlineData("(() => { const lookupCustomer = id => id; return ['c-1'].map(lookupCustomer); })()")]
+    [InlineData("['c-1'].map(id => lookupCustomer(id).name)")]
+    public async Task A_name_that_is_not_a_reference_to_the_declared_global_converts(string expression)
+    {
+        var result = await ConvertTextAsync(expression, [LookupCustomer]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    /// <summary>Without a declaration the name is not a replaced global, so no reference diagnostic is reported.</summary>
+    [Fact]
+    public async Task An_undeclared_global_used_as_a_value_gets_no_replaced_reference_diagnostic()
+    {
+        var result = await ConvertTextAsync("['c-1'].map(lookupCustomer)");
+
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ReplacedFunctionReference);
+    }
+
+    /// <summary>A write to the name, directly or through a destructuring target, is an undeclared write, not a reference.</summary>
+    [Theory]
+    [InlineData("(() => { lookupCustomer = null; return 1; })()")]
+    [InlineData("(() => { lookupCustomer++; return 1; })()")]
+    [InlineData("(() => { [lookupCustomer] = [1]; return 1; })()")]
+    [InlineData("(() => { ({ lookupCustomer } = { lookupCustomer: 1 }); return 1; })()")]
+    [InlineData("(() => { ({ a: [lookupCustomer = 2] } = { a: [] }); return 1; })()")]
+    [InlineData("(() => { [...lookupCustomer] = [1]; return 1; })()")]
+    [InlineData("(() => { for ([lookupCustomer] of [[1]]) {} return 1; })()")]
+    public async Task A_write_to_a_declared_global_is_an_undeclared_write(string expression)
+    {
+        var result = await ConvertTextAsync(expression, [LookupCustomer]);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.UnsupportedShape, diagnostic.Code);
+    }
+
     private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertTextAsync(string expression, params Elsa3Variable[] variables) =>
         ConvertTextAsync(expression, [], variables);
 
