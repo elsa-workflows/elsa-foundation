@@ -424,7 +424,6 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
             switch (provider.Engine)
             {
                 case "sqlite":
-                    SqliteConnection.ClearAllPools();
                     try { File.Delete(file!); } catch (IOException) { }
                     return;
                 case "postgres": NpgsqlConnection.ClearAllPools(); break;
