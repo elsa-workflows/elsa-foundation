@@ -408,6 +408,13 @@
         "resolved": "0.8.8",
         "contentHash": "UIDFkA5DC3en3tOJ3Mof11yBx9kUQLsaeo/oFdvN6Bbkr9E9+VCqfIadHci8cu+I51K2Sl7XYWVl2R/mA75NBQ=="
       },
+      "elsa.actorfoundation.builtin.durable": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "elsa.actorfoundation.builtin.hosting": {
         "type": "Project",
         "dependencies": {
@@ -417,27 +424,11 @@
       "elsa.actorfoundation.builtin.runtime": {
         "type": "Project"
       },
-      "elsa.actorfoundation.contracts": {
-        "type": "Project"
-      },
-      "elsa.actorfoundation.model.contracts": {
+      "elsa.actorfoundation.builtin.store.entityframeworkcore": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
-        }
-      },
-      "kernel.durable": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.BuiltIn.Runtime": "[4.0.0-dev, )",
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
-        }
-      },
-      "kernel.entityframework": {
-        "type": "Project",
-        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Durable": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
-          "Kernel.Durable": "[1.0.0, )",
           "Microsoft.Data.SqlClient": "[7.0.2, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.10, )",
@@ -448,11 +439,20 @@
           "System.Security.Cryptography.Pkcs": "[9.0.21, )"
         }
       },
+      "elsa.actorfoundation.contracts": {
+        "type": "Project"
+      },
+      "elsa.actorfoundation.model.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "Kernel.Workflows": {
         "type": "Project",
         "dependencies": {
-          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )",
-          "Kernel.Durable": "[1.0.0, )"
+          "Elsa.ActorFoundation.BuiltIn.Durable": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       }
     }

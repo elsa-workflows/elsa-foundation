@@ -24,7 +24,7 @@ work extends the owner's 13 November Park decision; the owner adopted the extens
 
 ## What is built
 
-- **No trace context.** `Message` in [Messages.cs](../../prototypes/kernel-model/src/Kernel.Durable/Messages.cs) has no
+- **No trace context.** `Message` in [Messages.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Messages.cs) has no
   headers; the sketch's `message` table lists `headers`, and its contract says the kernel owns trace headers on
   messages.
 - **No metric instruments.** The harnesses count commands, round trips, takes, resets and deadlocks
@@ -37,8 +37,8 @@ work extends the owner's 13 November Park decision; the owner adopted the extens
 - **Control kinds** `kernel.suspend`, `kernel.resume`, `kernel.terminate`, `kernel.delete` (`Kinds` in Messages.cs). The
   actor type handles each alone and in order; no model sees them.
 - **The inputs of projector lag:** the partition position and the projection cursor (`IKernelStore.ProjectedAsync` in
-  [Store.cs](../../prototypes/kernel-model/src/Kernel.Durable/Store.cs)), and the viewer's tail read
-  ([Viewer.cs](../../prototypes/kernel-model/src/Kernel.Durable/Viewer.cs)).
+  [Store.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs)), and the viewer's tail read
+  ([Viewer.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Viewer.cs)).
 - **Releasing a partition:** `IKernelStore.ReleaseAsync` and `Worker.ReleaseAsync`, used by balancing.
 - **Not built:** recovery or discard of parked work, inbox inspection, an operator API, a handover command. The
   [native intervention experiment](../../prototypes/kernel-model/models/Native.Recovery.Run/README.md) retries a fault
@@ -155,7 +155,7 @@ Restore and recovery, the remaining resolution kinds and the physical providers 
    within their window, have no `KeptBy` and are never restored, so none is applied twice (invariant 4).
 
    **Rows are told apart by the kept reason and by their full key, never by id.** The store keys a message by
-   `(Id, Scope, Match)` ([Messages.cs](../../prototypes/kernel-model/src/Kernel.Durable/Messages.cs), `InboxKey`), so
+   `(Id, Scope, Match)` ([Messages.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Messages.cs), `InboxKey`), so
    two rows can share a wire id: a private delivery and an ordinary one, or two event matches. The conformance suite
    creates such twins and consumes them one at a time
    ([PhysicalRetirementChecks.cs](../../essentials/tests/ActorFoundation/Store/Conformance/PhysicalRetirementChecks.cs)).
@@ -759,7 +759,7 @@ Park decision.
   payload, creations and `seq`, so an authenticated kind still passes its check: a child completion to a
   creation-qualified parent needs its terminal-notice id, `Sender` and creations (`WorkflowInstance.cs`, the
   `ChildFinished` check), and a copy under a new id would be refused by `CreationProtocol.Refuse`
-  ([Creation.cs](../../prototypes/kernel-model/src/Kernel.Durable/Creation.cs)). Nothing is handed over in memory
+  ([Creation.cs](../../essentials/src/ActorFoundation/BuiltIn/Durable/Creation.cs)). Nothing is handed over in memory
   ahead of the disk, so invariant 9 holds.
 - **Eligibility during a recover drain: released rows only.** The instance runs from the open commit. While the
   recover Resolution is open, the owner gives the instance a row only when the row is a control kind (below) or its

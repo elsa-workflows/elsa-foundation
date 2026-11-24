@@ -8,7 +8,7 @@ Release 1 remains Embedded and Cluster, with the same Native structured containe
 
 ## What exists and what is proposed
 
-The prototype's [IKernelStore](../../../prototypes/kernel-model/src/Kernel.Durable/Store.cs) combines commit, lease ownership, inbox/event routing, membership and projection operations. [IActorRuntime](../../../essentials/src/ActorFoundation/BuiltIn/Runtime/Seam.cs) places and activates scopes. EF Core and MongoDB implement the current store; see [Storage model](../../architecture/storage-model.md) for the physical inventory and [Ownership and fencing](../../architecture/ownership-and-fencing.md) for its protocol. Those remain the as-built references.
+The prototype's [IKernelStore](../../../essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs) combines commit, lease ownership, inbox/event routing, membership and projection operations. [IActorRuntime](../../../essentials/src/ActorFoundation/BuiltIn/Runtime/Seam.cs) places and activates scopes. EF Core and MongoDB implement the current store; see [Storage model](../../architecture/storage-model.md) for the physical inventory and [Ownership and fencing](../../architecture/ownership-and-fencing.md) for its protocol. Those remain the as-built references.
 
 The proposed separation is by guarantees, not SQL statements. It does not rename or split either prototype interface. A storage provider implements the four logical contracts as a whole unit, not four independent systems of authoritative state. A relational provider can implement all four in one provider family, sharing transactions where available.
 

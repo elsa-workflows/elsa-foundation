@@ -18,14 +18,22 @@ mkdir "$scratch/source"
 git -C "$repo" -c core.fsmonitor=false archive "$revision" | tar -xf - -C "$scratch/source"
 cd "$scratch/source"
 echo "Workbench preview source $revision"
-python3 - <<'PY'
+provider_project=essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj
+postgres_host_project=essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj
+if [[ ! -f "$provider_project" ]]; then
+  provider_project=prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj
+  postgres_host_project=prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj
+fi
+provider_dir=${provider_project%/*}
+python3 - "$provider_project" "$postgres_host_project" <<'PY'
 import json
 from pathlib import Path
+import sys
 import xml.etree.ElementTree as ET
 
 app = Path('apps/Elsa.Workbench')
 locked = json.loads((app / 'packages.lock.json').read_text())['dependencies']['net10.0']
-provider = Path('prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj')
+provider, postgres_host = map(Path, sys.argv[1:])
 workbench_versions = {package: info['resolved'] for package, info in locked.items() if 'resolved' in info}
 provider_packages = {ref.attrib['Include'] for ref in ET.parse(provider).findall('.//PackageReference')}
 provider_packages.update({'Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',
@@ -53,7 +61,7 @@ if not all((native_runner / name).is_file() for name in ('DirectApprovalWorkflow
 project.write_text(text.replace('</Project>', f'''
   <ItemGroup>
     <ProjectReference Include="../../essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
-    <ProjectReference Include="../../prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj" />
+    <ProjectReference Include="../../{postgres_host}" />
     <ProjectReference Include="../../prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
     <ProjectReference Include="../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <Compile Include="../../tools/ci/actor-foundation/WorkbenchPostgresPreview.cs" Link="Qualification/WorkbenchPostgresPreview.cs" />
@@ -77,20 +85,21 @@ if (args is ["--qualify-workbench-postgres", .. var previewArguments])
 ''' + entry))
 PY
 # The composition is temporary. Restore the provider's committed closure first.
-dotnet restore prototypes/kernel-model/ef/Kernel.EntityFramework --locked-mode
+dotnet restore "$provider_project" --locked-mode
 dotnet restore apps/Elsa.Workbench /p:RestoreLockedMode=false
-git -C "$repo" -c core.fsmonitor=false show "$revision:prototypes/kernel-model/ef/Kernel.EntityFramework/packages.lock.json" |
-  cmp - prototypes/kernel-model/ef/Kernel.EntityFramework/packages.lock.json
+git -C "$repo" -c core.fsmonitor=false show "$revision:$provider_dir/packages.lock.json" |
+  cmp - "$provider_dir/packages.lock.json"
 dotnet build -c Release --no-restore apps/Elsa.Workbench
 workbench=apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll
 
-python3 - <<'PYDEPS'
+python3 - "$provider_dir" <<'PYDEPS'
 import json
 from pathlib import Path
+import sys
 
 expected = json.loads(Path('expected-workbench-providers.json').read_text())
 manifest = Path('apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.deps.json')
-compile_assets = Path('prototypes/kernel-model/ef/Kernel.EntityFramework/obj/project.assets.json')
+compile_assets = Path(sys.argv[1]) / 'obj/project.assets.json'
 actual = dict(key.rsplit('/', 1) for key in json.loads(manifest.read_text())['libraries'])
 if 'Kernel.Foundation.InMemory' in actual:
     raise SystemExit('The PostgreSQL preview must not load the in-memory ingress assembly.')
