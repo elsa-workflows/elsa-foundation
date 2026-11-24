@@ -434,6 +434,310 @@ def generate():
                          ('empty',dict(variables=[],rootActivity=None,inputs=[],outputs=[],strategyOptions=None))]:
         add('authoring-snapshot/' + label, 'Elsa.Workflows.Design.Api', 'Elsa.Workflows.Design.Api.Services.WorkflowAuthoringRevision', 'Snapshot',
             [dict(json=value)], dict(variables=[],rootActivity=None,inputs=[],outputs=[],strategyOptions=None), returnField='Item2')
+    # Byte-facing verifiers must recognize canonical JSON while retaining physical byte-length checks.
+    base_digest = hashlib.sha256(helper.canonical(helper.load_json(variants[0][1])).encode()).hexdigest()
+    release = 'Elsa.Workflows.Publishing.Releases.Runtime'
+    for label, raw in variants:
+        actual_digest = hashlib.sha256(helper.canonical(helper.load_json(raw)).encode()).hexdigest()
+        rows.append(dict(name='http-page-body-verify/' + label, assembly='Elsa.Etl.Runtime', type='Elsa.Etl.Runtime.Http.EtlHttpPageCache',
+            method='FixedTimeEqualsSha256', arguments=[dict(utf8=raw),dict(text=base_digest)], expected=actual_digest == base_digest))
+        page = dict(descriptor=dict(pageSequence=7, requestHash='request', body=dict(key='body',contentHash=base_digest,byteLength=len(variants[0][1].encode())),recordCount=1,nextContinuation=None),
+            decodedPage=None,provenance=dict(attemptId='attempt',fence=3,responseReceivedAtUtc='2026-01-15T08:00:00+00:00'),rawBody=base64.b64encode(variants[0][1].encode()).decode())
+        rows.append(dict(name='http-page-same-body/' + label, assembly='Elsa.Etl.Runtime', type='Elsa.Etl.Runtime.Http.EtlHttpPageCache',
+            method='SameBody', arguments=[dict(json=page),dict(utf8=raw)], expected=actual_digest == base_digest))
+        descriptor = dict(kind='test',identity='identity-é',codec='test-json',codecVersion=1,payloadDigest='sha256:' + base_digest,byteLength=len(raw.encode()))
+        rows.append(dict(name='release-matches-bytes/' + label,assembly=release,type=release + '.RuntimeCapturedContentCache',method='MatchesBytes',
+            arguments=[dict(json=descriptor),dict(utf8=raw)],expected=actual_digest == base_digest))
+        payload = ('{"formatVersion":1,"content":' + raw.strip(' \t\r\n') + '}').encode()
+        digest = hashlib.sha256(helper.canonical(dict(formatVersion=helper.Number('1'),content=helper.load_json(raw))).encode()).hexdigest()
+        add('release-runtime-encode/' + label,release,release + '.ReleaseRuntimeArtifactCodec','Encode',
+            [dict(rawJson=raw),dict(text='test'),dict(text='identity-é'),dict(text='test-json'),dict(json=None),dict(json=None),dict(json=1)],
+            dict(formatVersion=1,content=helper.load_json(raw)),'sha256:',returnProperty='Descriptor.PayloadDigest',
+            returnMembers=dict(Descriptor=dict(kind='test',identity='identity-é',codec='test-json',codecVersion=1,payloadDigest='sha256:' + digest,byteLength=len(payload)),OwnerVersion=None))
+    for label, raw, expected_hash, length_delta in [('malformed','{',base_digest,0),('wrong-hash',variants[0][1],'0'*64,0),('wrong-length',variants[0][1],base_digest,1)]:
+        descriptor=dict(kind='test',identity='identity',codec='test-json',codecVersion=1,payloadDigest='sha256:' + expected_hash,byteLength=len(raw.encode()) + length_delta)
+        rows.append(dict(name='release-matches-bytes/' + label,assembly=release,type=release + '.RuntimeCapturedContentCache',method='MatchesBytes',arguments=[dict(json=descriptor),dict(utf8=raw)],expected=False))
+        if length_delta == 0:
+            rows.append(dict(name='http-page-body-verify/' + label,assembly='Elsa.Etl.Runtime',type='Elsa.Etl.Runtime.Http.EtlHttpPageCache',method='FixedTimeEqualsSha256',arguments=[dict(utf8=raw),dict(text=expected_hash)],expected=False))
+    # Every signal collection participates, including ordered logs, nullable attributes and exact long counters.
+    start, end = '2026-07-15T09:30:00+02:00', '2026-07-15T09:30:01+02:00'
+    attrs = {'OwnerKey':'René','missing':None}
+    telemetry = dict(resources=[dict(id='resource-é',serviceName='service-é',serviceInstanceId=None,telemetrySdkLanguage='dotnet',attributes=attrs,lastSeen=end,status=1)],
+        instruments=[dict(id='instrument-é',resourceId='resource-é',name='duration',unit='ms',description=None,kind=2,attributes=attrs)],
+        traces=[dict(traceId='trace-é',rootSpanId=None,name='trace-name',startTime=start,endTime=end,duration='00:00:01',status=1,resourceIds=['resource-é'],workflowInstanceIds=['run-é'],spanCount=1)],
+        spans=[dict(id='span-row',traceId='trace-é',spanId='span-é',parentSpanId=None,resourceId='resource-é',name='step',kind='server',startTime=start,endTime=end,status=1,statusDescription=None,attributes=attrs,
+            events=[dict(name='event-é',timestamp=end,attributes=attrs)],links=[dict(traceId='linked-trace',spanId='linked-span',attributes=attrs)])],
+        metricPoints=[dict(id='point-é',instrumentId='instrument-é',instrumentName='duration',resourceId='resource-é',timestamp=end,value=1.25,sum=None,count=9007199254740993,attributes=attrs,traceId=None,spanId='span-é')],
+        logs=[dict(id='log-a',resourceId='resource-é',timestamp=end,severityText='INFO',severityNumber=9,body='René <雪>',traceId='trace-é',spanId=None,attributes=attrs),
+              dict(id='log-b',resourceId='resource-é',timestamp=end,severityText='WARN',severityNumber=13,body='second',traceId=None,spanId=None,attributes={})])
+    def telemetry_projection(value, family):
+        result = opaque(value)
+        for field in ['lastSeen','startTime','endTime','timestamp','duration']:
+            if field in value: result[field]=value[field]
+        if 'attributes' in value:result['attributes']={opaque(key):opaque(item) for key,item in value['attributes'].items()}
+        if 'status' in value:result['status']=(['Unknown','Active','Stale'] if family=='resources' else ['Unset','Ok','Error'])[value['status']]
+        if family=='instruments':result['kind']=['Gauge','Sum','Histogram'][value['kind']]
+        if 'events' in value:result['events']=[telemetry_projection(item,'events') for item in value['events']]
+        if 'links' in value:result['links']=[telemetry_projection(item,'links') for item in value['links']]
+        return result
+    instance=dict(constructorArguments=dict(scopeFactory=dict(emptyScopeFactory=True),options=dict(optionsValue=dict(json={})),binding=dict(json=dict(tenantId='tenant',scopeId='scope',sourceId='source')),
+        sourceRegistry=dict(clrNull=True),observer=dict(clrNull=True),timeProvider=dict(clrNull=True),keyBatchSize=dict(json=500)))
+    import copy
+    for label in ['base','log-order','metadata-case','metric-number','no-logs']:
+        value=copy.deepcopy(telemetry)
+        if label=='log-order':value['logs'].reverse()
+        if label=='metadata-case':value['resources'][0]['attributes']={'ownerKey':'René','missing':None}
+        if label=='metric-number':value['metricPoints'][0]['value']=1.5
+        if label=='no-logs':value['logs']=[]
+        projected={family:[telemetry_projection(item,family) for item in values] for family,values in value.items()}
+        add('opentelemetry-batch/' + label,'Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore',
+            'Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores.EfOpenTelemetryStore','Fingerprint',[dict(json=value)],projected,instance=instance)
+    # The authoring owner hashes its normalized wire profile, including its own enum converters.
+    data_type = dict(alias='Any',collectionKind='Single')
+    for label, raw in variants:
+        marker='__S9_EXACT_RAW__'
+        argument=dict(referenceKey='argument-é',value=dict(value=marker,expressionType='Literal'),autoEvaluate=False,evaluatorType=None,storageDriverType=None,isSensitive=None,conversion=None)
+        variable=dict(referenceKey='variable-é',name='OwnerValue',type=data_type,storageDriverType=None,default_=dict(value=marker,expressionType='Literal'))
+        variable['default']=variable.pop('default_')
+        input_definition=dict(referenceKey='input-é',name='Amount',type=data_type,storageDriverType=None,displayName='Amount',category=None,isNullable=True,
+            isBrowsable=True,isSerializable=True,description='Raw data input',order=1.25,uiHint='json-editor',propertyInfo=marker,uiSpecifications=marker,isRequired=True,
+            defaultValue=marker,defaultSyntax='Literal',isSensitive=True)
+        output_definition=dict(referenceKey='output-é',name='Result',type=data_type,storageDriverType=None,displayName='Result',category=None,isNullable=True,
+            isBrowsable=True,isSerializable=True,description='Raw data output',order=2.5,uiHint='json-editor',propertyInfo=marker,uiSpecifications=marker,isRequired=False,sourceRepresentation=None)
+        root=dict(nodeId='root-é',activityVersionId='',inputs=[argument],outputs=[],structure=None,intrinsic=dict(kind='return',valueType=data_type,variable=None))
+        projected=dict(variables=[variable],rootActivity=root,inputs=[input_definition],outputs=[output_definition],
+            strategyOptions=dict(activationStrategyType='default',incidentStrategy=dict(alias='fault',version='1.0.0'),persistenceMode='Balanced'))
+        wire_text=json.dumps(projected,ensure_ascii=True,separators=(',',':')).replace(json.dumps(marker),raw)
+        expected_wire=helper.load_json(wire_text)
+        actual=json.loads(json.dumps(projected));actual['rootActivity']['intrinsic']['kind']=3
+        input_text=json.dumps(actual,ensure_ascii=True,separators=(',',':')).replace(json.dumps(marker),raw)
+        add('authoring-snapshot-rich/' + label,'Elsa.Workflows.Design.Api','Elsa.Workflows.Design.Api.Services.WorkflowAuthoringRevision','Snapshot',
+            [dict(typedJson=input_text)],expected_wire,returnField='Item2',returnFieldsJson=dict(Item1=input_text),returnRawPaths={
+                path:raw.strip(' \t\r\n') for path in ['Item1.Variables[0].Default.Value','Item1.RootActivity.Inputs[0].Value.Value',
+                    'Item1.Inputs[0].PropertyInfo','Item1.Inputs[0].UISpecifications','Item1.Inputs[0].DefaultValue',
+                    'Item1.Outputs[0].PropertyInfo','Item1.Outputs[0].UISpecifications']})
+    # ETL identity framing and the two retained-row JSON digest owners are pinned separately.
+    def etl_frame(parts):
+        result=b''
+        for part in parts:
+            data=None if part is None else part.encode('utf-16-le',errors='surrogatepass')
+            result+=struct.pack('<i',-1 if data is None else len(data)) + (data or b'')
+        return result
+    for label, parts in [('empty',[]),('null',[None]),('empty-string',['']),('unicode',['René','雪']),
+        ('framing-a',['a|b','c']),('framing-b',['a','b|c']),('lone-a',[chr(0xD800)]),('lone-b',[chr(0xD801)])]:
+        frame=etl_frame(parts)
+        rows.append(dict(name='etl-identity-frame/' + label,assembly='Elsa.Etl.Core',type='Elsa.Etl.Core.Runtime.EtlRuntimeIdentity',method='Hash',
+            arguments=[dict(arrayArguments=[dict(clrNull=True) if part is None else dict(utf16=[ord(char) for char in part]) for part in parts])],
+            frameHex=frame.hex(),expected=hashlib.sha256(frame).hexdigest()))
+    for label, raw in [*variants,('root-null','null')]:
+        data=helper.load_json(raw)
+        for family, owner, method in [('etl-metadata-digest','Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EfEtlRuntimeStore','MetadataDigest'),
+                                      ('etl-definition-digest','Elsa.Etl.Persistence.EntityFrameworkCore.Stores.EtlDefinitionRecordCodec','HashText')]:
+            add(family + '/' + label,'Elsa.Etl.Persistence.EntityFrameworkCore',owner,method,[dict(text=raw)],data)
+    address=dict(formatVersion=1,workflowExecutionId='workflow-é',activityExecutionId='activity-é',executableId='executable-é',executableHash='executable-hash',
+        nodeId='node-é',bookmarkId='bookmark-é',registrationId='registration-é',resumeTargetId='resume-é',stimulusType='etl-completed',stimulusHash='stimulus-hash',
+        payloadTypeAlias='EtlResult',payloadSchemaVersion=1,deduplicationPolicy='Once',providerId='elsa.etl.completion.v1')
+    for label, raw in variants:
+        digest=hashlib.sha256(helper.canonical(helper.load_json(raw)).encode()).hexdigest()
+        artifact=dict(constructorArguments=dict(formatVersion=dict(json=1),artifactId=dict(text='artifact-é'),contentHash=dict(text='claimed-content-hash'),
+            definitionId=dict(text='definition-é'),definitionVersion=dict(json=7),pipeline=dict(rawJson=raw)))
+        invocation=dict(constructorArguments=dict(Scope=dict(json=dict(tenantId=None,persistencePartition='partition-é')),RunId=dict(text='run-é'),Artifact=artifact,ResultAddress=dict(json=address)))
+        parts=['etl-invocation-v1',None,'partition-é','run-é','1','artifact-é','claimed-content-hash','definition-é','7','json-sha256:' + digest]
+        parts += [str(address[key]) for key in ['formatVersion','workflowExecutionId','activityExecutionId','executableId','executableHash','nodeId','bookmarkId','registrationId','resumeTargetId','stimulusType','stimulusHash','payloadTypeAlias','payloadSchemaVersion','deduplicationPolicy','providerId']]
+        frame=etl_frame(parts)
+        rows.append(dict(name='etl-invocation-fingerprint/' + label,assembly='Elsa.Etl.Core',type='Elsa.Etl.Core.Runtime.EtlRuntimeIdentity',method='InvocationFingerprint',
+            arguments=[invocation],frameHex=frame.hex(),expected=hashlib.sha256(frame).hexdigest(),
+            scope='Hash owner only; a mismatched claimed artifact hash is intentionally retained to detect changed raw pipeline data, not asserted as runtime admission.'))
+    # Background receipts select an explicit normal-JSON contract, not the opaque runtime projection.
+    runtime = 'Elsa.Workflows.Runtime.Core'
+    marker = '__S9_OWNER_RAW__'
+    def typed_raw(value, raw):
+        return dict(typedJson=json.dumps(value, ensure_ascii=True, separators=(',', ':')).replace(json.dumps(marker), raw))
+    attempt = dict(attemptId='attempt-é', invocationId='invocation-é', ordinal=1, reason=0,
+        startedAt='2026-07-15T09:30:00+02:00', endedAt=None, triggerDeliveryId=None, transitionKind=None, incidentId=None)
+    coordinator = dict(workItemId='work-item-é', workflowExecutionId='workflow-é', commandId='command-é', commandKind=0,
+        envelopeId='envelope-é', idempotencyKey='idempotency-é', enqueuedAt='2026-07-15T09:30:00+02:00',
+        recordedAt='2026-07-15T09:30:01+02:00', sequence=9007199254740993, payload=marker,
+        commandMetadata={'OwnerKey':'René'}, envelopeMetadata={}, executionScopeId='scope-é', attempt=None)
+    request = dict(workId='work-é', workflowExecutionId='workflow-é', activityExecutionId='activity-é', attempt=attempt,
+        executable=dict(artifactId='artifact-é', definitionId='definition-é', definitionVersionId='version-é', artifactVersion='7', artifactHash='hash-é'),
+        executableNodeId='node-é', contractFingerprint='contract-é',
+        inputSnapshot=dict(invocationId='invocation-é', contractFingerprint='contract-é', bindingFingerprint='binding-é', values={},
+            materializedAt='2026-07-15T09:30:00+02:00'), coordinatorWorkItem=coordinator)
+    def receipt_projection(value, raw, kind='Complete', selection=None, fault=None, cancellation=None, warnings=None):
+        result = {key:copy.deepcopy(value[key]) for key in ['workId','workflowExecutionId','activityExecutionId','attempt',
+            'coordinatorWorkItem','executable','executableNodeId','contractFingerprint','inputSnapshot']}
+        result['attempt']['reason'] = ['Initial','Retry','Resume'][result['attempt']['reason']]
+        result['coordinatorWorkItem']['commandKind'] = 'Start'
+        result['coordinatorWorkItem']['payload'] = helper.load_json(raw)
+        result.update(kind=kind, selection=selection if selection is not None else (dict(state='Unspecified',names=[]) if kind=='Complete' else None),
+            resultJson=None, fault=fault, cancellationReason=cancellation, warnings=warnings or [])
+        return result
+    def terminal(kind=0, raw=None, selection=None, fault=None, cancellation=None, warnings=None):
+        result = dict(constructorArguments=dict(kind=dict(json=kind),selection=dict(json=selection),resultJson=dict(clrNull=True) if raw is None else dict(text=raw),
+            fault=dict(json=fault),cancellationReason=dict(json=cancellation)))
+        if warnings is not None: result=dict(value=result,propertyArguments=dict(Warnings=dict(json=warnings)))
+        return result
+    for label, raw in variants:
+        projected=receipt_projection(request, variants[0][1]);projected['resultJson']=helper.load_json(raw)
+        add('background-receipt/result-' + label,runtime,'Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkReceipt','ComputeDigest',
+            [typed_raw(request,variants[0][1]),terminal(raw=raw)],projected)
+        projected=receipt_projection(request,raw);projected['resultJson']=helper.load_json(variants[0][1])
+        add('background-receipt/coordinator-' + label,runtime,'Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkReceipt','ComputeDigest',
+            [typed_raw(request,raw),terminal(raw=variants[0][1])],projected)
+    for label, changes in [('operation-keys',dict(operationKey='omitted-operation',targetOperationKey='omitted-target')),
+                           ('evaluation-one',{}),('attempt-retry',{}),('coordinator-sequence',{})]:
+        value=copy.deepcopy(request);value.update(changes)
+        if label=='evaluation-one':value['inputSnapshot']['evaluation']=1
+        if label=='attempt-retry':value['attempt'].update(ordinal=2,reason=1)
+        if label=='coordinator-sequence':value['coordinatorWorkItem']['sequence']+=1
+        projected=receipt_projection(value,variants[0][1]);projected['resultJson']=helper.load_json(variants[0][1])
+        add('background-receipt/' + label,runtime,'Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkReceipt','ComputeDigest',
+            [typed_raw(value,variants[0][1]),terminal(raw=variants[0][1])],projected)
+    warning=[dict(code='warning-a',message='A path',severity='Warning',details={'path':'OwnerKey'}),
+             dict(code='warning-b',message='Another path',severity='Information',details=None)]
+    fault=dict(code='fault-é',exceptionType='FixtureFailure',message='Failed',sanitizedStackTrace=None,isRetryable=True,metadata={})
+    for label, kind, raw, selection, fault_value, cancellation, warnings in [
+        ('absent-result',0,None,None,None,None,None),('null-result',0,'null',None,None,None,None),
+        ('empty-selection',0,variants[0][1],dict(state='Empty',names=[]),None,None,None),
+        ('named-selection',0,variants[0][1],dict(state='Named',names=['Ready','Done']),None,None,None),
+        ('warnings',0,variants[0][1],None,None,None,warning),('warning-order',0,variants[0][1],None,None,None,list(reversed(warning))),
+        ('fault',1,None,None,fault,None,None),('cancel',2,None,None,None,'cancelled-é',None)]:
+        projected=receipt_projection(request,variants[0][1],['Complete','Fault','Cancel'][kind],selection,fault_value,cancellation,warnings)
+        projected['resultJson']=None if raw is None else helper.load_json(raw)
+        add('background-receipt/' + label,runtime,'Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkReceipt','ComputeDigest',
+            [typed_raw(request,variants[0][1]),terminal(kind,raw,selection,fault_value,cancellation,warnings)],projected)
+
+    # The hierarchy owner hashes the full retained record with opaque identity strings.
+    hierarchy_item=dict(activityExecutionId='activity-é',workflowExecutionId='workflow-é',executableNodeId='node-é',authoredActivityId='authored-é',
+        activityType='Fixture.Activity',activityTypeVersion='1.0.0',status=1,subStatus='Pending',executionSequence=9007199254740993,
+        scheduledAt='2026-07-15T09:30:00+02:00',startedAt='2026-07-15T09:30:01+02:00',completedAt=None,parentActivityExecutionId=None,
+        schedulingActivityExecutionId='scheduler-é',relativeDepth=1,branchId='branch-é',iterationId=None,outcomeNames=['Ready','Done'],
+        bookmarkCount=2,incidentCount=1,blockingIncidentCount=0,attempt=dict(attemptNumber=2,firstAttemptActivityExecutionId='first-é',previousAttemptActivityExecutionId='previous-é'),
+        boundary=dict(kind='activity',definitionId='definition-é',definitionVersionId='version-é',version='1.0.0',templateHash='template-é',
+            invocationOrigin=dict(segments=[dict(kind=1,id='root-é'),dict(kind=3,id='template-é')]),executionScopeId='scope-é',hasChildren=True,
+            directChildCount=2,committedDescendantCount=9007199254740993,aggregate=dict(status=1,total=3,scheduled=1,running=1,suspended=0,completed=1,
+                faulted=0,cancelled=0,blockingIncidentCount=0,retryCount=1,lastExecutionSequence=9007199254740993),layoutAvailable=True,executableNodeId='boundary-node-é'),
+        metadata={'OwnerKey':'René','json-looking':'{"a":1.0}'})
+    hierarchy=dict(workflowExecutionId='workflow-é',executionScopeId='scope-é',activityExecutionId='activity-é',parentActivityExecutionId=None,
+        executionSequence=9007199254740993,item=hierarchy_item)
+    def hierarchy_projection(value):
+        result=opaque(value);item=result['item'];original=value['item']
+        item['status']=['Scheduled','Running','Waiting','Suspended','Completed','Faulted','Cancelled','Recovered','Superseded'][original['status']]
+        for field in ['scheduledAt','startedAt','completedAt']:item[field]=original[field]
+        item['metadata']={opaque(key):opaque(value) for key,value in original['metadata'].items()}
+        if original['boundary'] is not None:
+            item['boundary']['aggregate']['status']=['Empty','Running','Suspended','Completed','Faulted','Cancelled'][original['boundary']['aggregate']['status']]
+            for segment, source in zip(item['boundary']['invocationOrigin']['segments'],original['boundary']['invocationOrigin']['segments']):
+                segment['kind']={1:'WorkflowRoot',2:'AuthoredNode',3:'TemplateBoundary',4:'NestedPlacement'}[source['kind']]
+        return result
+    for label in ['base','metadata-order','metadata-case','json-looking-text','outcome-order','sequence','parent','without-boundary','without-attempt','date']:
+        value=copy.deepcopy(hierarchy)
+        if label=='metadata-order':value['item']['metadata']=dict(reversed(list(value['item']['metadata'].items())))
+        if label=='metadata-case':value['item']['metadata']['ownerKey']=value['item']['metadata'].pop('OwnerKey')
+        if label=='json-looking-text':value['item']['metadata']['json-looking']='{ "a":1 }'
+        if label=='outcome-order':value['item']['outcomeNames'].reverse()
+        if label=='sequence':value['executionSequence']+=1;value['item']['executionSequence']+=1
+        if label=='parent':value['parentActivityExecutionId']=value['item']['parentActivityExecutionId']='parent-é'
+        if label=='without-boundary':value['item']['boundary']=None
+        if label=='without-attempt':value['item']['attempt']=None
+        if label=='date':value['item']['startedAt']='2026-07-15T09:30:02+02:00'
+        add('hierarchy-snapshot/' + label,'Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore',
+            'Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfActivityExecutionHierarchyStore','SnapshotFingerprint',
+            [dict(json=value)],hierarchy_projection(value),uppercase=True)
+
+    # Elsa 3's collection owner builds an ordered heterogeneous field list. Extension data is flattened on input.
+    source=dict(id='version-é',definitionId='definition-é',name='Flow',description=None,version=7,createdAt='2026-07-15T09:30:00+02:00',toolVersion=None,
+        isReadonly=False,isSystem=False,isLatest=True,isPublished=True,options=dict(usableAsActivity=True,autoUpdateConsumingWorkflows=False),
+        inputs=[dict(name='amount',type='Any',storageDriverType=None,displayName=None,description=None)],
+        outputs=[dict(name='result',type='String',storageDriverType=None,displayName='Result',description=None)],
+        variables=[dict(id='variable-é',name='OwnerValue',typeName='Object',isArray=False,value='{"literal":1.0}',storageDriverTypeName=None)],outcomes=['Done','Error'],
+        customProperties={'aData':marker,'ZKeep':None},root=dict(id='root',nodeId='root-node',name='Root',type='Elsa.Sequence',version=1,
+            customProperties=dict(canStartWorkflow=False,runAsynchronously=True),metadata=dict(displayText='Root display',
+                designer=dict(position=dict(x=1.25,y=-2.5),size=dict(width=120,height=80)),ownerMetadata=marker),ownerData=marker,
+            activities=[dict(id='child-a',nodeId='node-a',name='First',type='Elsa.WriteLine',version=None),
+                        dict(id='child-b',nodeId='node-b',name='Second',type='Elsa.WriteLine',version=None)],
+            connections=[dict(source=dict(activity='child-a',port='Done'),target=dict(activity='child-b',port='In'))]))
+    def source_projection(value, raw):
+        fields=[]
+        def clr(*values):fields.extend(dict(representation='clr',value=opaque(item)) if item is not None else None for item in values)
+        def data(item):fields.append(dict(representation='json',value=helper.load_json(raw) if item==marker else item))
+        def boolean(item):return '' if item is None else str(item)
+        options=value.get('options') or {}
+        clr(value['id'],value['definitionId'],value['name'],value.get('description') or '',str(value['version']),
+            '2026-07-15T07:30:00.0000000+00:00',value.get('toolVersion') or '',boolean(value['isReadonly']),boolean(value['isSystem']),
+            boolean(value['isLatest']),boolean(value['isPublished']),boolean(options.get('usableAsActivity')),boolean(options.get('autoUpdateConsumingWorkflows')))
+        for family in ['inputs','outputs']:
+            for item in value[family]:clr('input' if family=='inputs' else 'output',item['name'],item['type'],item.get('storageDriverType') or '',item.get('displayName') or '',item.get('description') or '')
+        for item in value['variables']:clr('variable',item['id'],item['name'],item['typeName'],boolean(item['isArray']),item.get('value') or '',item.get('storageDriverTypeName') or '')
+        for outcome in value['outcomes']:clr('outcome',outcome)
+        for key,item in sorted(value['customProperties'].items()):clr('workflow-property',key);data(item)
+        def visit(activity):
+            properties=activity.get('customProperties');metadata=activity.get('metadata')
+            coordinates=['1.25','-2.5','120','80'] if metadata and 'designer' in metadata else (['0']*4 if metadata is not None else ['']*4)
+            clr('activity',activity['id'],activity['nodeId'],activity['name'],activity['type'],str(activity['version']) if activity.get('version') is not None else '',
+                boolean(properties.get('canStartWorkflow',False)) if properties is not None else '',boolean(properties.get('runAsynchronously',False)) if properties is not None else '',
+                (metadata or {}).get('displayText') or '',*coordinates)
+            for key in sorted(set(activity)-{'id','nodeId','name','type','version','customProperties','metadata','activities','connections'}):clr(key);data(activity[key])
+            for key in sorted(set(metadata or {})-{'displayText','designer'}):clr('activity-metadata',key);data(metadata[key])
+            for connection in activity.get('connections') or []:clr('connection',connection['source']['activity'],connection['source']['port'],connection['target']['activity'],connection['target']['port'])
+            for child in activity.get('activities') or []:visit(child)
+        if value.get('root') is not None:visit(value['root'])
+        return dict(kind=opaque('source'),fields=fields)
+    for label, raw in [*variants,('json-string','"René"'),('root-null','null')]:
+        add('elsa3-source/' + label,'Elsa3.Activities.Design.Import','Elsa3.Activities.Design.Import.Services.ReusableActivityCollectionAnalyzer','SourceFingerprint',
+            [typed_raw(source,raw)],source_projection(source,raw),'elsa3-source-')
+    for label in ['dictionary-order','dictionary-case','variable-text','child-order','connection','empty-description','empty-metadata','no-metadata','empty-custom-properties']:
+        value=copy.deepcopy(source)
+        if label=='dictionary-order':value['customProperties']=dict(reversed(list(value['customProperties'].items())))
+        if label=='dictionary-case':value['customProperties']['AData']=value['customProperties'].pop('aData')
+        if label=='variable-text':value['variables'][0]['value']='{ "literal":1 }'
+        if label=='child-order':value['root']['activities'].reverse()
+        if label=='connection':value['root']['connections'][0]['target']['port']='Other'
+        if label=='empty-description':value['description']=''
+        if label=='empty-metadata':value['root']['metadata']={}
+        if label=='no-metadata':value['root']['metadata']=None
+        if label=='empty-custom-properties':value['root']['customProperties']={}
+        add('elsa3-source/' + label,'Elsa3.Activities.Design.Import','Elsa3.Activities.Design.Import.Services.ReusableActivityCollectionAnalyzer','SourceFingerprint',
+            [typed_raw(value,variants[0][1])],source_projection(value,variants[0][1]),'elsa3-source-')
+    # Journal request v2 omits only the physical activity delivery from the otherwise complete request.
+    contract_material=dict(activityTypeKey='test.activity',contractVersion='1',descriptorKind='test',descriptorPayload=dict(x=1),inputs=[],outcomes=[],
+        activation=dict(descriptorKind='test',capability='execute'),result=dict(Type=dict(alias='Int32',collectionKind='Single',schema=None,schemaVersion=None),
+            IsRequired=False,Policy=dict(isPersistable=True,isSensitive=False,requiresEncryption=False,redactionMode=None,lifecycle='Instance',storage='Inline',
+                storageProfile=None,retentionPolicy=None),projections=[]))
+    contract_hash='sha256:' + hashlib.sha256(canonical(contract_material).encode()).hexdigest()
+    contract_wire=dict(activityTypeKey='test.activity',contractVersion='1',schemaFingerprint=contract_hash,descriptorKind='test',descriptorPayload=dict(x=1),
+        inputs={},outcomes=[],activation=contract_material['activation'],result=dict(type=contract_material['result']['Type'],isRequired=False,
+            policy=contract_material['result']['Policy'],projections={}))
+    agent_identity=dict(tenantId='tenant-é',persistencePartition='partition-é',workflowExecutionId='workflow-é',activityExecutionId='activity-é',
+        operationKey='operation-é',artifactId='artifact-é',artifactHash='artifact-hash',definitionVersionId='version-é',templateHash='template-é')
+    descriptor=dict(instructions='Explain the supplied data.',model=dict(providerKey='fixture',connectionName='connection',modelId='model'),settings={},
+        inputSchema={},resultSchema={},capabilitiesFingerprint='capability-é',schemaProfile='elsa.agent.structured-object/1',
+        limits=dict(maximumModelCalls=8,timeoutMilliseconds=300000,maximumOutputTokens=None),allowContinuity=False,
+        definitionId=None,definitionVersionId=None,version=None,templateHash=None,sourceReferenceId=None)
+    agent_request=dict(identity=agent_identity,descriptor=descriptor,contract=contract_wire,inputs=marker,bindingFingerprint='binding-é',
+        preparedSession=None,sessionTarget=None,continuation=None)
+    def agent_projection(value,raw,delivery):
+        result=copy.deepcopy(value);result['inputs']=helper.load_json(raw)
+        if delivery:result['identity']['activityExecutionId']=''
+        return result
+    for label,raw in variants:
+        for mode,delivery in [('legacy',False),('delivery',True)]:
+            add('agent-request/' + mode + '-' + label,'Elsa.Agent','Elsa.Agent.Journal.AgentTurnJournal','RequestHash',
+                [typed_raw(agent_request,raw),dict(text='elsa.agent.turn/request/' + ('2' if delivery else '1'))],agent_projection(agent_request,raw,delivery))
+    for label in ['other-activity','workspace','effective-limits','prepared-session','session-target','continuation','binding','descriptor-settings']:
+        value=copy.deepcopy(agent_request)
+        if label=='other-activity':value['identity']['activityExecutionId']='other-activity-é'
+        if label=='workspace':value['identity']['conversationWorkspace']='workspace-é'
+        if label=='effective-limits':value['effectiveLimits']=dict(maximumModelCalls=1,timeoutMilliseconds=20000,maximumOutputTokens=32)
+        if label=='prepared-session':value['preparedSession']=dict(conversationId='conversation-é',revision=9007199254740993,protectedValue='{"opaque":1.0}')
+        if label=='session-target':value['sessionTarget']=dict(conversationId='conversation-é',revision=9007199254740993)
+        if label=='continuation':value['continuation']=dict(conversationId='conversation-é',expectedRevision=9007199254740993)
+        if label=='binding':value['bindingFingerprint']='other-binding-é'
+        if label=='descriptor-settings':value['descriptor']['settings']=dict(temperature=0.25)
+        for mode,delivery in [('legacy',False),('delivery',True)]:
+            add('agent-request/' + mode + '-' + label,'Elsa.Agent','Elsa.Agent.Journal.AgentTurnJournal','RequestHash',
+                [typed_raw(value,variants[0][1]),dict(text='elsa.agent.turn/request/' + ('2' if delivery else '1'))],agent_projection(value,variants[0][1],delivery))
     return rows
 
 

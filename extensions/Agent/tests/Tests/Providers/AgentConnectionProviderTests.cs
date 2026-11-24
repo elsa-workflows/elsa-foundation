@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Elsa.Agent.Tests.Providers;
 
-public sealed class AgentConnectionProviderTests
+public sealed partial class AgentConnectionProviderTests
 {
     [Theory]
     [InlineData("anthropic")]

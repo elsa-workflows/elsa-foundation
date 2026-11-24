@@ -3,13 +3,16 @@ using System.Collections;
 using System.Text;
 using System.Text.Json;
 using Elsa.Serialization.Core;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
 
 /// <summary>Calls shipping owners with fixed inputs; expected values come from the independent Python recipe.</summary>
-public sealed class JsonHashOwnerGoldenTests
+public sealed class JsonHashOwnerGoldenTests : IDisposable
 {
+    private readonly ServiceProvider services = new ServiceCollection().BuildServiceProvider();
+    public void Dispose() => services.Dispose();
     [Fact]
     public void Shipping_hash_owners_pin_their_canonical_migration_inputs()
     {
@@ -50,6 +53,7 @@ public sealed class JsonHashOwnerGoldenTests
                     Assert.Equal(exceptionCode.GetString(), error.InnerException.GetType().GetProperty("Code")!.GetValue(error.InnerException));
                 continue;
             }
+            finally { (instance as IDisposable)?.Dispose(); }
             Assert.False(vector.TryGetProperty("expectedException", out _), vector.GetProperty("name").GetString() + ": the actual owner must refuse malformed JSON.");
             if (vector.TryGetProperty("expectedOrdinalDigest", out var ordinalDigest))
             {
@@ -68,10 +72,22 @@ public sealed class JsonHashOwnerGoldenTests
                 {
                     var actualMember = returned!.GetType().GetProperty(member.Name)!.GetValue(returned);
                     Assert.True(JsonCanonicalForm.Equals(member.Value, JsonSerializer.SerializeToElement(actualMember, JsonBaseline.Options)),
-                        vector.GetProperty("name").GetString() + ": returned " + member.Name + " must preserve the supplied owner identity/payload.");
+                        vector.GetProperty("name").GetString() + ": First-stable hash freeze: returned " + member.Name + " must preserve the supplied owner identity/payload; changes require an explicit identity/migration decision.");
                 }
+            if (vector.TryGetProperty("returnFieldsJson", out var fields))
+                foreach (var field in fields.EnumerateObject())
+                {
+                    var actualField = returned!.GetType().GetField(field.Name)!.GetValue(returned);
+                    using var expectedField = JsonDocument.Parse(field.Value.GetString()!);
+                    Assert.True(JsonCanonicalForm.Equals(expectedField.RootElement, JsonSerializer.SerializeToElement(actualField, JsonBaseline.Options)),
+                        vector.GetProperty("name").GetString() + ": First-stable hash freeze: reconstructed " + field.Name + " must preserve normalized owner state; changes require an explicit identity/migration decision.");
+                }
+            if (vector.TryGetProperty("returnRawPaths", out var rawPaths))
+                foreach (var path in rawPaths.EnumerateObject())
+                    Assert.True(ReadPath(returned!, path.Name) is JsonElement raw && raw.GetRawText() == path.Value.GetString(),
+                        vector.GetProperty("name").GetString() + "/" + path.Name + ": First-stable hash freeze: preserve the exact raw owner token; changes require an explicit identity/migration decision.");
             if (vector.TryGetProperty("returnProperty", out var returnedProperty))
-                returned = returned!.GetType().GetProperty(returnedProperty.GetString()!)!.GetValue(returned);
+                foreach (var member in returnedProperty.GetString()!.Split('.')) returned = returned!.GetType().GetProperty(member)!.GetValue(returned);
             if (vector.TryGetProperty("returnField", out var returnedField))
                 returned = returned!.GetType().GetField(returnedField.GetString()!)!.GetValue(returned);
             if (vector.GetProperty("expected").ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -105,8 +121,24 @@ public sealed class JsonHashOwnerGoldenTests
     private static Type ResolveType(string name, string assembly, IReadOnlyList<Assembly> assemblies) =>
         assemblies.Single(candidate => candidate.GetName().Name == assembly).GetType(name, throwOnError: true)!;
 
-    private static object? Argument(JsonElement argument, Type type, IReadOnlyList<Assembly> assemblies)
+    private static object? ReadPath(object value, string path)
     {
+        object? current = value;
+        foreach (var segment in path.Split('.'))
+        {
+            Assert.NotNull(current);
+            var opening = segment.IndexOf('[');
+            var name = opening < 0 ? segment : segment[..opening];
+            var type = current.GetType();
+            current = type.GetField(name) is { } field ? field.GetValue(current) : type.GetProperty(name)!.GetValue(current);
+            if (opening >= 0) current = ((IEnumerable)current!).Cast<object?>().ElementAt(int.Parse(segment[(opening + 1)..^1], System.Globalization.CultureInfo.InvariantCulture));
+        }
+        return current;
+    }
+
+    private object? Argument(JsonElement argument, Type type, IReadOnlyList<Assembly> assemblies)
+    {
+        if (argument.TryGetProperty("emptyScopeFactory", out _)) return services.GetRequiredService<IServiceScopeFactory>();
         if (argument.TryGetProperty("baselineOptions", out _)) return JsonBaseline.Options;
         if (argument.TryGetProperty("clrNull", out _)) return null;
         if (argument.TryGetProperty("optionsValue", out var options))

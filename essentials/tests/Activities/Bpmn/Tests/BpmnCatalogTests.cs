@@ -23,6 +23,27 @@ namespace Elsa.Activities.Bpmn.Tests;
 /// <summary>Bounded read/authorization controls; not a host-recovery or browser witness.</summary>
 public sealed class BpmnCatalogTests
 {
+    // Independent canonical array: [scope, actor, tenant, artifact filter, invariant limit string].
+    [Theory]
+    [InlineData(null, 50, false, "400229FAC330E9C4952BCE123A9E1348135943E6B1CB41FCCF7CF18490C1442D")]
+    [InlineData("artifact", 50, false, "EF908A13F1C44DA35A5B9BC65E48CDC8D0396E1F7633F7631B375F1F717117C3")]
+    [InlineData(null, 2, false, "8ED0BFC90C33406DB19EE33C87150AE46099DAF801B0F6CFE20593D0F965C555")]
+    [InlineData(null, 50, true, "FF4238F8E3BCC1E352EE5218CFB2178FDA4546501D2F533E4753469835D0D2A6")]
+    public void Actual_catalog_context_pins_its_binding_for_both_purposes(string? artifact, int limit, bool nullTenant, string expected)
+    {
+        var fixture = new Fixture();
+        if (nullTenant) { fixture.Tenant = null; fixture.SetPrincipal(); }
+        var method = typeof(BpmnCatalog).GetMethod("Context", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        foreach (var purpose in new[] { "bpmn-publication-catalog-v1", "bpmn-execution-catalog-v1" })
+        {
+            var result = method.Invoke(fixture.Catalog, [new BpmnCatalogRequest(limit, ArtifactId: artifact), purpose, CancellationToken.None])!;
+            var cursor = result.GetType().GetField("Item3")!.GetValue(result)!;
+            var actual = (string)cursor.GetType().GetProperty("Binding")!.GetValue(cursor)!;
+            Assert.True(actual == expected, $"BPMN catalog/{purpose}/{artifact ?? "<null>"}/{limit}/{nullTenant}: First-stable hash freeze requires an explicit identity/migration decision. Expected {expected}; actual {actual}");
+        }
+        Assert.Empty(fixture.SourceQueries); Assert.Empty(fixture.ExecutionQueries);
+    }
+
     [Fact]
     public async Task A_host_without_a_selected_model_reader_composes_but_refuses_execution_discovery()
     {
