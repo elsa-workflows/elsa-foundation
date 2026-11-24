@@ -145,9 +145,10 @@ if (args is ["pg-flowchart-preview", "restart", var flowchartActor, var flowchar
 if (args is ["pg-root-terminate", var terminateWriter and ("owned" or "ef"), var fenceMode and ("in-batch" or "checked")])
     return await PostgresRootTerminateChecks.RunAsync(terminateWriter == "owned", fenceMode == "in-batch");
 if (args is ["pg-root-terminate", var recoveryWriter and ("owned" or "ef"), var recoveryFence and ("in-batch" or "checked"),
-    var terminationProfile and ("fallback" or "stable-body" or "stable-body-fallback")])
+    var terminationProfile and ("fallback" or "stable-body" or "stable-body-fallback" or "terminal-selection" or "terminal-selection-fallback")])
     return await PostgresRootTerminateChecks.RunAsync(recoveryWriter == "owned", recoveryFence == "in-batch",
-        fallback: terminationProfile is "fallback" or "stable-body-fallback", stableBody: terminationProfile != "fallback");
+        fallback: terminationProfile is "fallback" or "stable-body-fallback" or "terminal-selection-fallback",
+        stableBody: terminationProfile != "fallback", terminalSelection: terminationProfile.StartsWith("terminal-", StringComparison.Ordinal));
 if (args is ["pg-root-worker", "budget-birth", var budgetMode] && budgetMode is Modes.Balanced or Modes.Durable)
     return await PostgresRootWorkerChecks.RunAsync("budget-birth", null, budgetMode);
 if (args is ["pg-root-worker", "budget-restart", var budgetReference])

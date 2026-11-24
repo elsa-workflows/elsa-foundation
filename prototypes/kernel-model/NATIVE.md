@@ -670,11 +670,13 @@ termination replay, use `pg-root-terminate owned checked stable-body`. Use
 `stable-body-fallback` to verify that an unavailable-model termination keeps the
 saved binary body and header byte for byte.
 
-Format 12 point and list reads issue a terminal selection bound to the tenant,
+Format 13 retains the binary body. Its point and list reads issue a terminal selection bound to the tenant,
 exact generated reference, terminal revision and terminal time. The terminal mark
-is projected in the same transaction as the checkpoint. Disabling the mark
-trigger makes both reads refuse. An exclusive setup pass can backfill the mark
-from a committed terminal checkpoint. Retention and delete command admission
+and the public header are projected together in the same transaction as the
+checkpoint. Disabling the projector refuses reads and rolls back checkpoint
+writes. An exclusive setup pass can rebuild the complete projection
+from committed checkpoints. Its first-checkpoint and takeover fixture runs with
+`pg-root-terminate owned checked terminal-selection`. Retention and delete command admission
 still need their own qualification. The ordinary Core Preview keeps its existing
 read layout.
 

@@ -4,6 +4,7 @@ using Kernel.EntityFramework;
 using Kernel.Native.Preview;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 using PublicModel = Kernel.Model.Contracts;
 using PublicActor = Kernel.WorkflowActor.WorkflowActor;
@@ -12,7 +13,7 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootTerminateChecks
 {
-    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool fallback = false, bool stableBody = false)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool fallback = false, bool stableBody = false, bool terminalSelection = false)
     {
         const string operation = "terminate-copy";
         const string definition = "before-upgraded-turn";
@@ -21,8 +22,10 @@ internal static class PostgresRootTerminateChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Open() => stableBody ? KernelDb.ForPostgresRootStableBody(options) : KernelDb.ForPostgresRootTerminations(options);
-        KernelDb OpenPrior() => stableBody ? KernelDb.ForPostgresRootTerminations(options) : KernelDb.ForPostgresRootOperators(options);
+        KernelDb Open() => terminalSelection ? KernelDb.ForPostgresRootTerminalSelection(options)
+            : stableBody ? KernelDb.ForPostgresRootStableBody(options) : KernelDb.ForPostgresRootTerminations(options);
+        KernelDb OpenPrior() => terminalSelection ? KernelDb.ForPostgresRootStableBody(options)
+            : stableBody ? KernelDb.ForPostgresRootTerminations(options) : KernelDb.ForPostgresRootOperators(options);
         EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch)
             { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
@@ -41,7 +44,8 @@ internal static class PostgresRootTerminateChecks
             (scope, kind) => ReferenceEquals(scope, tenant) && kind is Contract.Kinds.Terminate or Contract.Kinds.Suspend);
         var runtime = new WorkflowRuntime(basic, basic);
         var registry = new WorkflowRegistry().Add(Wf.Workflow(definition, Wf.Parallel("root", null,
-            Wf.Node<DirectApprovalWorkflow>("approval"), Wf.Node<InvocationWait>("receive"))));
+            Wf.Node<DirectApprovalWorkflow>("approval"), Wf.Node<InvocationWait>("receive"))))
+            .Add(Wf.Workflow("instant-finish", Wf.Sequence("instant")));
         var native = new NativeExecutionModel(registry);
         var writer = new ObservedNative(native, 13);
         var reader = new ObservedNative(native, native.StateVersion, fallback ? 400_000 : 0);
@@ -198,8 +202,27 @@ internal static class PostgresRootTerminateChecks
             {
                 Console.WriteLine("ok the prior reader refuses the persisted terminal checkpoint");
             }
+            catch (StoreFormatException) when (terminalSelection)
+            {
+                Console.WriteLine("ok the prior binary-body reader refuses the new marker");
+            }
         }
-        if (stableBody)
+        if (neighbor is { } remaining)
+        {
+            await using var normal = await Own("normal-owner", new PublicActor([new ObservedNative(native, native.StateVersion)]));
+            var advanced = await Drive(normal, image => image is { Revision: 2 }, remaining);
+            var values = Json.Read<NativeState>(advanced.State!).Frames.Values.Single(item => item.Node == "approval").State!.AsArray();
+            Check(advanced.Status == InstanceStatus.Running && values.Count == 1 &&
+                values[0]!.GetValue<string>() == neighborApproval &&
+                (await admission.ReadPendingDirectAsync(tenant.Tenant, remaining.Id, stop)).Count == 0 &&
+                (await cold.ReadJournalOfAsync(0, advanced.Actor.Id, 0, stop)).SelectMany(row => Json.Read<string[]>(row.Entries))
+                    .Count(entry => entry == "approved:neighbor-input") == 1,
+                "releasing the selected owner lets the neighboring actor resume exactly once");
+        }
+        if (terminalSelection) await CheckTerminalSelections();
+        return 0;
+
+        async Task CheckTerminalSelections()
         {
             var mark = (await cold.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop))!;
             var endedAt = mark.TerminalAt!.Value;
@@ -217,42 +240,106 @@ internal static class PostgresRootTerminateChecks
                   await cold.ReadRootActorAsync("other", actor.Id, stop) is null,
                 "the selection is qualified to the actor, scope and complete terminal mark");
 
+            var instant = (await runtime.StartAsync(tenant, "instant", NativeExecutionModel.Start("instant-finish"), cancellationToken: stop)).Actor!.Value;
+            await using (var db = Open())
+                await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_project_root_actor_list_v13""", stop);
+            await RequireWriterRefusal(instant);
+            await RequireUnavailable(async () => { _ = await reads.GetAsync(tenant, actor, stop); });
+            await RequireUnavailable(async () => { _ = await reads.ListAsync(tenant, new(), cancellationToken: stop); });
+
             await using (var db = Open())
             {
-                await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_project_root_terminal_mark""", stop);
-                await db.Database.ExecuteSqlRawAsync("""UPDATE "FoundationActorList" SET "TerminalRevision" = NULL""", stop);
+                await db.Database.ExecuteSqlRawAsync("""
+                    ALTER TABLE "Instances" ENABLE TRIGGER kernel_project_root_actor_list_v13;
+                    UPDATE "FoundationActorList" SET "Status" = 0 WHERE "Status" = 3;
+                    """, stop);
             }
-
             await RequireUnavailable(async () => { _ = await reads.GetAsync(tenant, actor, stop); });
             await RequireUnavailable(async () => { _ = await reads.ListAsync(tenant, new(), cancellationToken: stop); });
 
             await admission.InstallAsync(stop);
             var reopened = new PostgresRootReads(Store(), await admission.OpenJournalCursorAsync(stop), 12);
             var restored = (await reopened.GetAsync(tenant, actor, stop))!;
-            Check(PostgresRootTerminalSelection.Matches(cursor, restored.Selection, tenant.Tenant, actor.Id, revision, endedAt),
-                "exclusive reinstall restores terminal selection from the same physical transition");
+            var rebuilt = (await reopened.ListAsync(tenant, new(Status: Contract.ActorStatus.Cancelled), cancellationToken: stop)).Items.Single();
+            Check(restored.Header.Status == Contract.ActorStatus.Cancelled && rebuilt.Header.Ref == actor &&
+                  PostgresRootTerminalSelection.Matches(cursor, restored.Selection, tenant.Tenant, actor.Id, revision, endedAt),
+                "exclusive reinstall restores the complete projection from the same physical transition");
+
+            await using (var db = Open())
+                await db.Database.ExecuteSqlRawAsync("""
+                    CREATE SCHEMA selection_shadow;
+                    CREATE TABLE selection_shadow."FoundationActorList" (LIKE "FoundationActorList" INCLUDING ALL);
+                    INSERT INTO selection_shadow."FoundationActorList" SELECT * FROM "FoundationActorList";
+                    """, stop);
+            var shadowConnection = new NpgsqlConnectionStringBuilder(connection);
+            shadowConnection.SearchPath = "selection_shadow," + (shadowConnection.SearchPath ?? "public");
+            var shadowOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(shadowConnection.ConnectionString).Options;
+            KernelDb ShadowDb() => KernelDb.ForPostgresRootTerminalSelection(shadowOptions);
+            var shadow = new EfStore(ShadowDb, postgres: true, fenceInBatch: inBatch)
+                { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
+            var shadowReads = new PostgresRootReads(shadow, cursor, 12);
+            await RequireUnavailable(async () => { _ = await shadowReads.GetAsync(tenant, actor, stop); });
+            await RequireUnavailable(async () => { _ = await shadowReads.ListAsync(tenant, new(), cancellationToken: stop); });
+
+            await using (var worker = await Own("instant-worker", upgradedActor, shadow))
+            {
+                var ended = await Drive(worker, image => image is { Status: InstanceStatus.Finished }, instant);
+                var first = (await reads.GetAsync(tenant, instant, stop))!;
+                var firstListed = (await reads.ListAsync(tenant, new(Status: Contract.ActorStatus.Finished), cancellationToken: stop)).Items.Single();
+                Check(ended is { Revision: 1, TerminalRevision: 1, TerminalAt: { } at } &&
+                      PostgresRootTerminalSelection.Matches(cursor, first.Selection, tenant.Tenant, instant.Id, 1, at) &&
+                      PostgresRootTerminalSelection.Matches(cursor, firstListed.Selection, tenant.Tenant, instant.Id, 1, at),
+                    "first-checkpoint completion selects revision one in the source schema");
+            }
+            await using (var db = Open())
+                await db.Database.ExecuteSqlRawAsync("""
+                    DROP TABLE selection_shadow."FoundationActorList";
+                    CREATE TABLE selection_shadow."KernelStoreVersions" (LIKE "KernelStoreVersions" INCLUDING ALL);
+                    INSERT INTO selection_shadow."KernelStoreVersions" SELECT * FROM "KernelStoreVersions";
+                    """, stop);
+            await RequireUnavailable(async () => { _ = await shadowReads.GetAsync(tenant, instant, stop); });
+            await RequireUnavailable(async () => { _ = await shadowReads.ListAsync(tenant, new(), cancellationToken: stop); });
         }
 
-        if (neighbor is { } remaining)
+        async Task RequireWriterRefusal(Contract.ActorRef reference)
         {
-            await using var normal = await Own("normal-owner", new PublicActor([new ObservedNative(native, native.StateVersion)]));
-            var advanced = await Drive(normal, image => image is { Revision: 2 }, remaining);
-            var values = Json.Read<NativeState>(advanced.State!).Frames.Values.Single(item => item.Node == "approval").State!.AsArray();
-            Check(advanced.Status == InstanceStatus.Running && values.Count == 1 &&
-                values[0]!.GetValue<string>() == neighborApproval &&
-                (await admission.ReadPendingDirectAsync(tenant.Tenant, remaining.Id, stop)).Count == 0 &&
-                (await cold.ReadJournalOfAsync(0, advanced.Actor.Id, 0, stop)).SelectMany(row => Json.Read<string[]>(row.Entries))
-                    .Count(entry => entry == "approved:neighbor-input") == 1,
-                "releasing the selected owner lets the neighboring actor resume exactly once");
+            var store = Store();
+            await store.BindWorkerPartitionAsync(0, stop);
+            var lease = (await store.TakeAsync(0, "projection-block", Defaults.Lease, stop))!;
+            var creator = (await admission.ReadPendingCreatorAsync(tenant.Tenant, reference.Id, stop))!;
+            var start = creator.Start!;
+            var header = new FoundationHeaderChange("", new Dictionary<string, string>());
+            var row = new InstanceRow(creator.Target.Id, start.Model, start.Definition, InstanceStatus.Finished, "null", 1, null,
+                History: start.History, Creation: 1,
+                StartIntent: CreationProtocol.Fingerprint(start, creator.Kind, creator.Payload)).WithFoundationState(null) with
+            {
+                FoundationDispatchHeader = new(tenant.Tenant, reference.Id, header)
+            };
+            var turn = new TurnCommit(row.Id, row, null, [creator.InboxKey], [], [], [], [], """["end"]""", Unsubscribe: true)
+                { FoundationHeader = header };
+            try
+            {
+                await store.CommitAsync(new(0, lease.Epoch, lease.Position, Defaults.Lease, false, [turn], [], []), stop);
+                throw new InvalidOperationException("An ending checkpoint wrote while its projection was disabled.");
+            }
+            catch (StoreException error) when (error.Failure == Failure.Definite &&
+                error.InnerException?.GetBaseException() is PostgresException
+                { SqlState: PostgresErrorCodes.CheckViolation, MessageText: "Required actor projection is absent or disabled" }) { }
+            await using var db = Open();
+            Check(await cold.ReadFirstRootAsync(tenant.Tenant, reference.Id, stop) is null &&
+                  await admission.ReadPendingCreatorAsync(tenant.Tenant, reference.Id, stop) == creator &&
+                  (await cold.ReadJournalOfAsync(0, row.Id, 0, stop)).Count == 0 &&
+                  await db.Partitions.Where(partition => partition.Id == 0).Select(partition => partition.Position).SingleAsync(stop) == lease.Position,
+                "a disabled projector rolls back the first checkpoint, creator consumption, journal and fence");
+            await store.ReleaseAsync(0, lease.Epoch, stop);
         }
-        return 0;
 
         static async Task RequireUnavailable(Func<Task> read)
         {
             try { await read(); }
             catch (StoreFormatException)
             {
-                Console.WriteLine("ok selection reads refuse with the mark projection disabled");
+                Console.WriteLine("ok the read refuses an unavailable or inconsistent terminal projection");
                 return;
             }
             throw new InvalidOperationException("A read accepted a disabled terminal-mark projection.");
