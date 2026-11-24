@@ -19,8 +19,10 @@ public sealed class HostOwnershipAdministration(RuntimeNode node, Func<bool> aut
     /// <summary>Requests a graceful stop of the local node.</summary>
     /// <param name="cancellationToken">Cancels this call's wait. A stop already requested keeps running.</param>
     /// <returns>
-    /// False on refusal, or true when the authorized command has waited for the local stop to complete.
-    /// An earlier or concurrent host kill, or a store release failure, can leave ownership to expire by lease.
+    /// False on refusal. True when the authorized command has waited for the local stop: it completed, or its deadline
+    /// made it a kill and what is still owned runs out by its lease. When a stop was already under way, the command joins
+    /// it: its drain deadline then bounds only this wait, never the other caller's, and true can mean that this wait ended
+    /// first. An earlier or concurrent host kill, or a store release failure, can leave ownership to expire by lease.
     /// </returns>
     public async ValueTask<bool> DrainAsync(CancellationToken cancellationToken = default)
     {
@@ -28,8 +30,8 @@ public sealed class HostOwnershipAdministration(RuntimeNode node, Func<bool> aut
         if (!_authorize()) return false;
         cancellationToken.ThrowIfCancellationRequested();
 
-        // The runtime's stop token is the kill deadline: the drain renews ownership until it, never past it. It belongs to
-        // the stop, which may outlive this caller's wait, so it is disposed when the stop ends.
+        // When this call starts the stop, its token is the kill deadline: the drain renews ownership until it, never past
+        // it. It belongs to the stop, which may outlive this caller's wait, so it is disposed when the stop ends.
         var deadline = new CancellationTokenSource(_drainDeadline);
         var stop = _node.StopAsync(deadline.Token).AsTask();
         _ = stop.ContinueWith(static (_, source) => ((CancellationTokenSource)source!).Dispose(), deadline,

@@ -20,6 +20,9 @@ public sealed record LoopOptions
 
     /// <summary>Every held scope reads its inbox at least this often: the guarantee behind a lost wake hint.</summary>
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>How long <see cref="RuntimeNode.DisposeAsync"/> lets the graceful stop drain before it becomes a kill.</summary>
+    public TimeSpan DisposeDeadline { get; init; } = TimeSpan.FromSeconds(30);
 }
 
 /// <summary>
@@ -102,8 +105,10 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 return;
             }
         // A stop or kill that landed while the start validated its scopes found no host to release. The start has attached
-        // one since: end that run here, before any scope was taken, so the host is free for a later runtime.
-        await OnNode(() => _runtime.StopAsync(CancellationToken.None).AsTask());
+        // one since: end that run here, before any scope was taken, so the host is free for a later runtime. Joining a
+        // shutdown a kill abandoned reports a cancellation: ownership then runs out by lease, and the start returns.
+        try { await OnNode(() => _runtime.StopAsync(CancellationToken.None).AsTask()); }
+        catch (OperationCanceledException) { }
     }
 
     /// <summary>The heartbeat's cadence: at least three per lease and at most half the window apart, a second at most by default.</summary>
@@ -178,12 +183,38 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
 
     /// <summary>
     /// Finish the pass under way, end admitted off-turn work, then give every scope up: whoever takes them next finds no death.
+    /// The call that starts the stop sets its deadline: when <paramref name="cancellationToken"/> cancels, the stop becomes
+    /// a kill, also during the release, and what is still owned runs out by its lease. A call that joins a stop under way
+    /// waits for it; its token ends only its own wait and never shortens the deadline the first caller set.
     /// </summary>
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
-        using (cancellationToken.Register(_kill.Cancel))      // a stop that may not wait any longer becomes a kill, also during the release
-            await HaltAsync();
+        CancellationTokenRegistration deadline = default;
+        Task halted;
+        bool first;
+        lock (_halting)
+        {
+            first = _halted is null;
+            if (first) deadline = cancellationToken.Register(_kill.Cancel);
+            halted = _halted ??= HaltOnceAsync();
+        }
+        using (deadline) await ObserveAsync(halted, first ? CancellationToken.None : cancellationToken);
     }
+
+    // A stop's outcome is reported to the callers that wait for it. A dispose after one of them saw a failure does not
+    // report the same failure again.
+    private async Task ObserveAsync(Task halted, CancellationToken wait)
+    {
+        try { await halted.WaitAsync(wait); }
+        catch (OperationCanceledException) when (wait.IsCancellationRequested) { }
+        catch (Exception)
+        {
+            Volatile.Write(ref _outcomeSeen, 1);
+            throw;
+        }
+    }
+
+    private int _outcomeSeen;
 
     /// <summary>
     /// A crash: the loop stops (a pass under way stops at a turn boundary, before its commit) and nothing more is given
@@ -197,7 +228,14 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         await HaltAsync();
     }
 
-    public ValueTask DisposeAsync() => StopAsync();
+    /// <summary>A stop bounded by <see cref="LoopOptions.DisposeDeadline"/>. It does not rethrow a failure a stop already reported.</summary>
+    public async ValueTask DisposeAsync()
+    {
+        var reported = Volatile.Read(ref _outcomeSeen) == 1;
+        using var deadline = new CancellationTokenSource(_options.DisposeDeadline);
+        try { await StopAsync(deadline.Token); }
+        catch (Exception) when (reported) { }
+    }
 
     /// <summary>The first stop or kill leaves the loop and, unless killed, gives every scope up; every caller waits for it.</summary>
     private Task HaltAsync()
