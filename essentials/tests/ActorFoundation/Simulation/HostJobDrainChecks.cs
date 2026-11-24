@@ -13,20 +13,35 @@ internal static class HostJobDrainChecks
 
     internal static async Task<int> RunAsync()
     {
-        await GracefulAsync(ownedSet: true);
-        await GracefulAsync(ownedSet: false);
-        await ActiveHostAsync();
-        await ConcurrentStopAsync();
-        await CanceledStopAsync();
-        await CanceledReleaseAsync();
-        await StaleHostValidationAsync();
-        await FaultedStopAsync();
-        await DisposedSourceAsync();
-        await BeforeEntryAsync();
-        await AbruptAsync(duringStop: false);
-        await AbruptAsync(duringStop: true);
-        await LongDrainRenewsAsync(deadline: false);
-        await LongDrainRenewsAsync(deadline: true);
+        (string Name, Func<Task> Run)[] cases =
+        [
+            ("graceful-set", () => GracefulAsync(ownedSet: true)),
+            ("graceful-fixed", () => GracefulAsync(ownedSet: false)),
+            ("active-host", ActiveHostAsync),
+            ("concurrent-stop", ConcurrentStopAsync),
+            ("canceled-stop", CanceledStopAsync),
+            ("canceled-release", CanceledReleaseAsync),
+            ("stale-host", StaleHostValidationAsync),
+            ("faulted-stop", FaultedStopAsync),
+            ("disposed-source", DisposedSourceAsync),
+            ("before-entry", BeforeEntryAsync),
+            ("abrupt-kill", () => AbruptAsync(duringStop: false)),
+            ("abrupt-deadline", () => AbruptAsync(duringStop: true)),
+            ("long-drain-set", () => LongDrainRenewsAsync(deadline: false)),
+            ("long-drain-deadline", () => LongDrainRenewsAsync(deadline: true)),
+            ("long-drain-fixed", () => LongDrainRenewsAsync(deadline: false, ownedSet: false)),
+            ("stand-down-mid-drain", StandDownMidDrainAsync),
+            ("administration-deadline", AdministrationDeadlineAsync),
+            ("stop-after-abandoned", StopAfterAbandonedAsync),
+            ("stop-during-start", StopDuringStartAsync),
+            ("pass-in-flight", PassInFlightAsync),
+            ("paused-entry-while-draining", PausedEntryWhileDrainingAsync),
+        ];
+        // HOST_JOB_DRAIN_ONLY=name[,name]: run only these cases (fail-before witnesses run them one at a time).
+        var only = Environment.GetEnvironmentVariable("HOST_JOB_DRAIN_ONLY")?.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var (name, run) in cases)
+            if (only is null || only.Contains(name, StringComparer.Ordinal))
+                await run().WaitAsync(TimeSpan.FromMinutes(2));     // a hung case fails instead of holding the run
         return 0;
     }
 
@@ -563,7 +578,7 @@ internal static class HostJobDrainChecks
     // The drain of an entered job can outlast the node lease. The test clock moves past one lease plus a margin while the
     // job runs: a graceful stop keeps renewing the node lease, so a sibling cannot take over, and releases after the
     // job exits at the same epoch. Once the stop deadline passes nothing renews, and the fence runs out by its lease.
-    private static async Task LongDrainRenewsAsync(bool deadline)
+    private static async Task LongDrainRenewsAsync(bool deadline, bool ownedSet = true)
     {
         var fixture = new Fixture(manualClock: true);
         var type = new JobProbe();
@@ -578,7 +593,7 @@ internal static class HostJobDrainChecks
             releasedEpoch ??= fixture.Fence.Epoch;
         });
         await using var node = fixture.Node("long-drain");
-        await node.StartAsync(fixture.Host(node, type, store, ownedSet: true));
+        await node.StartAsync(fixture.Host(node, type, store, ownedSet));
         var actor = await fixture.StartActorAsync(node);
         await type.Entered.Task.WaitAsync(Timeout);
         var before = fixture.Checkpoint(actor);
@@ -607,12 +622,12 @@ internal static class HostJobDrainChecks
                     $"owner {fixture.Fence.Owner ?? "none"} at epoch {fixture.Fence.Epoch} (entered at {epoch}), renewals {node.Heartbeats.Renewed}");
                 Check(renewedThroughDrain && sibling is null && fixture.Fence.Owner == node.Node && fixture.Fence.Epoch == epoch &&
                     !type.Exited.Task.IsCompleted && !stop.IsCompleted,
-                    "a graceful stop renews the node lease while an entered job drains past one lease, and no sibling can take over");
+                    $"a graceful stop renews the node lease while an entered job drains past one lease, and no sibling can take over ({(ownedSet ? "node" : "per-partition")} host)");
                 type.Finish.TrySetResult();
                 await stop.WaitAsync(Timeout);
                 Check(exitedBeforeRelease && releasedEpoch == epoch && fixture.Fence.Owner is null && fixture.Fence.Epoch == epoch &&
                     fixture.Checkpoint(actor) == before,
-                    "the long-drained job exits before release, and the release happens at the original epoch");
+                    $"the long-drained job exits before release, and the release happens at the original epoch ({(ownedSet ? "node" : "per-partition")} host)");
             }
             else
             {
@@ -633,6 +648,270 @@ internal static class HostJobDrainChecks
             type.Finish.TrySetResult();
             await type.Exited.Task.WaitAsync(Timeout);
         }
+    }
+
+    // A heartbeat answer stands down the partition of the entered job while the node drains it: the Worker resets, the
+    // drain records the loss and still waits for the job, then the stop releases what the node still holds, frees the host
+    // for a new run and reports the loss.
+    private static async Task StandDownMidDrainAsync()
+    {
+        const int partitions = 2;
+        var fixture = new Fixture(partitions);
+        var type = new JobProbe();
+        var jobPartition = -1;     // read from the commit that issued the job: the store's rows are not safe to scan while the node runs
+        var store = new CountingStore(fixture.Store, static () => { }, observeCommit: (batch, landed) =>
+        {
+            if (!landed) return;
+            foreach (var turn in batch.Turns)
+                if (turn.Sent.Any(message => message.Kind == Kinds.Job)) Volatile.Write(ref jobPartition, batch.PartitionOf(turn));
+        });
+        var node = fixture.Node("stand-down", partitions);
+        var host = fixture.Host(node, type, store, ownedSet: true);
+        await node.StartAsync(host);
+        await WaitFor(() => fixture.Store.Partitions.All(row => row.Owner == node.Node));
+        await fixture.StartActorAsync(node);
+        await type.Entered.Task.WaitAsync(Timeout);
+        var lost = Volatile.Read(ref jobPartition);
+        var kept = 1 - lost;
+        var stop = node.StopAsync().AsTask();
+        Exception? reported = null;
+        try
+        {
+            await type.Canceled.Task.WaitAsync(Timeout);
+            var row = fixture.Store.Partitions[lost];
+            (row.Owner, row.Epoch) = ("sibling", row.Epoch + 1);     // the sibling took it: the next answer omits it
+            var renewed = node.Heartbeats.Renewed;
+            await RenewedAsync(node, renewed);
+            await Task.Delay(200);
+            Check(!stop.IsCompleted && !type.Exited.Task.IsCompleted && fixture.Store.Partitions[kept].Owner == node.Node,
+                "the stood-down drain keeps waiting for the entered job, and the node still holds the other partition");
+        }
+        finally { type.Finish.TrySetResult(); }
+        try { await stop.WaitAsync(Timeout); }
+        catch (InvalidOperationException error) { reported = error; }
+        var reattached = new PartitionRuntime(node.Node, store, partitions, Timeout);
+        var attached = true;
+        try { await reattached.StartAsync(host); }
+        catch (InvalidOperationException) { attached = false; }
+        Console.WriteLine($"  stand-down: reported {reported?.Message ?? "nothing"}; kept owner {fixture.Store.Partitions[kept].Owner ?? "none"}, " +
+            $"lost owner {fixture.Store.Partitions[lost].Owner ?? "none"}, reattached {attached}");
+        Check(reported?.Message.Contains("Ownership was lost while draining entered jobs", StringComparison.Ordinal) == true &&
+            fixture.Store.Partitions[kept].Owner is null && fixture.Store.Partitions[lost].Owner == "sibling" && attached,
+            "a mid-drain stand-down releases what the node still holds, frees the host and reports the lost ownership");
+        if (attached) await reattached.StopAsync();
+        try { await node.DisposeAsync(); }
+        catch (InvalidOperationException) { }     // the node's stop keeps its reported loss
+    }
+
+    // The administration drain is bounded: at its deadline the stop becomes a kill, nothing renews, and the fence runs
+    // out by its lease while the job that ignores cancellation is still inside.
+    private static async Task AdministrationDeadlineAsync()
+    {
+        var fixture = new Fixture(manualClock: true);
+        var type = new JobProbe();
+        var lease = fixture.Options.Lease;
+        await using var node = fixture.Node("administered");
+        await node.StartAsync(fixture.Host(node, type, fixture.Store, ownedSet: true));
+        await fixture.StartActorAsync(node);
+        await type.Entered.Task.WaitAsync(Timeout);
+        var epoch = fixture.Fence.Epoch;
+        var administration = new HostOwnershipAdministration(node, () => true, TimeSpan.FromMilliseconds(300));
+        var drain = administration.DrainAsync().AsTask();
+        try
+        {
+            var returned = await Task.WhenAny(drain, Task.Delay(TimeSpan.FromSeconds(5))) == drain;
+            var beats = node.Heartbeats.Renewed;
+            for (var moved = TimeSpan.Zero; moved < lease + TimeSpan.FromSeconds(2); moved += TimeSpan.FromSeconds(1))
+                fixture.Advance(TimeSpan.FromSeconds(1));
+            await Task.Delay(300);
+            var sibling = await fixture.Store.TakeAsync(0, "sibling", lease);
+            Check(returned && node.Heartbeats.Renewed == beats && sibling is { } taken && taken.Epoch == epoch + 1 && !type.Exited.Task.IsCompleted,
+                "an administration drain ends at its deadline, stops renewing, and the fence runs out by its lease");
+        }
+        finally
+        {
+            type.Finish.TrySetResult();
+            await type.Exited.Task.WaitAsync(Timeout);
+            await drain.WaitAsync(Timeout);
+        }
+    }
+
+    // A stop that arrives after an abandoned stop waits for the interrupted release, then reports the abandonment.
+    private static async Task StopAfterAbandonedAsync()
+    {
+        var fixture = new Fixture();
+        var issued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releases = 0;
+        var store = new CountingStore(fixture.Store, static () => { }, afterRelease: async () =>
+        {
+            if (Interlocked.Increment(ref releases) != 1) return;
+            issued.TrySetResult();
+            await finishRelease.Task.WaitAsync(Timeout);
+        });
+        var runtime = new PartitionRuntime("late-stop", store, 1, Timeout);
+        await runtime.StartAsync(new DurableHost([new Worker(runtime.Node, 0, store, new ActorAdapter(fixture.Store, new JobProbe()), fixture.Options)]));
+        Check(await runtime.ActivateAsync(0) is { Active: true }, "the late-stop fixture owns a real fence");
+        using var deadline = new CancellationTokenSource();
+        var stop = runtime.StopAsync(deadline.Token).AsTask();
+        string outcome;
+        try
+        {
+            await issued.Task.WaitAsync(Timeout);
+            deadline.Cancel();
+            await stop.WaitAsync(Timeout);
+            var late = runtime.StopAsync().AsTask();
+            await Task.Delay(200);
+            Check(!late.IsCompleted, "a stop after an abandoned stop waits while the interrupted release is in flight");
+            finishRelease.TrySetResult();
+            try
+            {
+                await late.WaitAsync(Timeout);
+                outcome = "success";
+            }
+            catch (OperationCanceledException) { outcome = "abandoned"; }
+        }
+        finally { finishRelease.TrySetResult(); }
+        Check(outcome == "abandoned", "once the interrupted release returns, the late stop reports the abandonment");
+    }
+
+    // A stop that lands while the start validates its scopes finds no host yet. The start must not leave the host attached.
+    private static async Task StopDuringStartAsync()
+    {
+        var fixture = new Fixture();
+        var checking = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishCheck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var checks = 0;
+        var store = new CountingStore(fixture.Store, static () => { }, beforePartitionCount: async () =>
+        {
+            if (Interlocked.Increment(ref checks) != 1) return;
+            checking.TrySetResult();
+            await finishCheck.Task.WaitAsync(Timeout);
+        });
+        await using var node = fixture.Node("stop-during-start");
+        var host = fixture.Host(node, new JobProbe(), store, ownedSet: true);
+        var start = node.StartAsync(host).AsTask();
+        try
+        {
+            await checking.Task.WaitAsync(Timeout);
+            await node.StopAsync().AsTask().WaitAsync(Timeout);
+        }
+        finally { finishCheck.TrySetResult(); }
+        await start.WaitAsync(Timeout);
+        var next = new PartitionRuntime(node.Node, store, 1, Timeout);
+        var attached = true;
+        try { await next.StartAsync(host); }
+        catch (InvalidOperationException) { attached = false; }
+        Check(attached && fixture.Fence.Owner is null, "a stop during the start's scope check leaves the host free for a new run");
+        if (attached) await next.StopAsync();
+    }
+
+    // A direct stop with a pass under way joins that pass before its drain starts (and judges answers or the fence).
+    // The host refuses activations once the drain has started, so a refused activation shows the drain began early.
+    private static async Task PassInFlightAsync()
+    {
+        var fixture = new Fixture();
+        var type = new JobProbe();
+        var stall = 1;
+        var stalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var store = new CountingStore(fixture.Store, static () => { }, beforeCommit: async _ =>
+        {
+            if (Interlocked.Exchange(ref stall, 0) == 0) return;
+            stalled.TrySetResult();
+            await resume.Task.WaitAsync(Timeout);
+        });
+        var runtime = new PartitionRuntime("pass-in-flight", store, 1, Timeout);
+        var host = new DurableHost([new Worker(runtime.Node, 0, store, new ActorAdapter(fixture.Store, type), fixture.Options)]);
+        await runtime.StartAsync(host);
+        await runtime.ActivateAsync(0);
+        await fixture.StartActorAsync(runtime.Node);
+        Task passing = Task.CompletedTask;
+        Task? stop = null;
+        try
+        {
+            for (var pass = 0; pass < 16 && !stalled.Task.IsCompleted; pass++)
+            {
+                passing = runtime.PassAsync(0).AsTask();     // the start's commit stalls inside this pass
+                await Task.WhenAny(passing, stalled.Task);
+            }
+            await stalled.Task.WaitAsync(Timeout);
+            stop = runtime.StopAsync().AsTask();
+            await Task.Delay(300);
+            var drainWaited = await host.ActivateAsync(0) is not null;
+            Check(drainWaited && !stop.IsCompleted, "a direct stop joins the pass under way before its drain starts");
+        }
+        finally
+        {
+            resume.TrySetResult();
+            type.Finish.TrySetResult();
+        }
+        await passing.WaitAsync(Timeout);
+        await stop!.WaitAsync(Timeout);
+        Check(fixture.Fence.Owner is null, "after the joined pass the stop drains and releases");
+    }
+
+    // Two jobs: one entered and draining, the other's scheduler callback paused before admission. The resumed callback
+    // passes every earlier guard (same generation, nothing released yet); only the entry epoch check keeps it out.
+    private static async Task PausedEntryWhileDrainingAsync()
+    {
+        var fixture = new Fixture();
+        var type = new JobProbe();
+        using var resumeGuard = new ManualResetEventSlim();
+        var reachedGuard = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var schedulerThread = 0;
+        var callbacks = 0;
+        var options = fixture.Options with
+        {
+            BeforeScheduledJobCheck = () =>
+            {
+                if (Interlocked.Increment(ref callbacks) == 2) Volatile.Write(ref schedulerThread, Environment.CurrentManagedThreadId);
+            },
+            Monotonic = () =>
+            {
+                if (Environment.CurrentManagedThreadId == Volatile.Read(ref schedulerThread) && !resumeGuard.IsSet)
+                {
+                    reachedGuard.TrySetResult();
+                    if (!resumeGuard.Wait(Timeout)) throw new TimeoutException("The scheduler guard was never released.");
+                }
+                return fixture.Options.Monotonic();
+            }
+        };
+        var issued = new System.Collections.Concurrent.ConcurrentQueue<Message>();     // job tickets in commit order
+        var store = new CountingStore(fixture.Store, static () => { }, observeCommit: (batch, landed) =>
+        {
+            if (!landed) return;
+            foreach (var turn in batch.Turns)
+                foreach (var message in turn.Sent.Where(message => message.Kind == Kinds.Job)) issued.Enqueue(message);
+        });
+        await using var node = fixture.Node("paused-entry");
+        var host = fixture.Host(node, type, store, ownedSet: true, options);
+        await node.StartAsync(host);
+        await fixture.StartActorAsync(node, "first");
+        await type.Entered.Task.WaitAsync(Timeout);
+        await fixture.StartActorAsync(node, "second");
+        Task? stop = null, callback = null;
+        try
+        {
+            await reachedGuard.Task.WaitAsync(Timeout);
+            await WaitFor(() => issued.Count >= 2);
+            var ticket = issued.ElementAt(1);
+            await WaitFor(() => (callback = host.NodeWorker!.JobCompletion(ticket.Target.Id, "cleanup", ticket.TargetCreation ?? 0)) is not null);
+            stop = node.StopAsync().AsTask();
+            await type.Canceled.Task.WaitAsync(Timeout);
+            resumeGuard.Set();
+            await callback!.WaitAsync(Timeout);
+            await Task.Delay(100);
+            Check(type.Starts == 1 && !stop.IsCompleted && fixture.Fence.Owner == node.Node,
+                "a callback paused before admission cannot enter while another entered job is still draining");
+        }
+        finally
+        {
+            resumeGuard.Set();
+            type.Finish.TrySetResult();
+        }
+        await stop!.WaitAsync(Timeout);
+        Check(type.Starts == 1 && fixture.Fence.Owner is null, "the drained job exits and the stop releases without the refused job");
     }
 
     private static async Task<bool> RenewedAsync(RuntimeNode node, long renewed)
@@ -686,7 +965,7 @@ internal static class HostJobDrainChecks
         private long Elapsed => _manual ? Interlocked.Read(ref _manualNow) : _clock.ElapsedMilliseconds;
         internal void Advance(TimeSpan span) => Interlocked.Add(ref _manualNow, (long)span.TotalMilliseconds);
 
-        internal RuntimeNode Node(string name) => new(name, Store, 1, new LoopOptions
+        internal RuntimeNode Node(string name, int partitions = 1) => new(name, Store, partitions, new LoopOptions
         {
             BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100),
             PollInterval = TimeSpan.FromMilliseconds(20)
@@ -695,17 +974,18 @@ internal static class HostJobDrainChecks
         internal DurableHost Host(RuntimeNode node, JobProbe model, IKernelStore store, bool ownedSet, WorkerOptions? options = null)
         {
             var adapter = new ActorAdapter(Store, model);
-            return ownedSet ? DurableHost.ForNode(node.Node, store, adapter, 1, options ?? Options) :
+            return ownedSet ? DurableHost.ForNode(node.Node, store, adapter, Store.Partitions.Length, options ?? Options) :
                 new DurableHost([new Worker(node.Node, 0, store, adapter, options ?? Options)]);
         }
 
-        internal Task<Contract.ActorRef> StartActorAsync(RuntimeNode node) => StartActorAsync(node.Node);
+        internal Task<Contract.ActorRef> StartActorAsync(RuntimeNode node, string key = "drain") => StartActorAsync(node.Node, key);
 
-        internal async Task<Contract.ActorRef> StartActorAsync(string node)
+        internal async Task<Contract.ActorRef> StartActorAsync(string node, string key = "drain")
         {
-            var ingress = new InMemoryIngress(Store, new Requests("job-drain"), node);
-            var receipt = await ingress.SendAsync(Scope, new Contract.Target.Start(new(JobProbe.TypeKey, "drain", History: Contract.History.Full)),
-                "start", Contract.Kinds.Start);
+            var first = key == "drain";
+            var ingress = new InMemoryIngress(Store, new Requests(first ? "job-drain" : "job-drain-" + key), node);
+            var receipt = await ingress.SendAsync(Scope, new Contract.Target.Start(new(JobProbe.TypeKey, key, History: Contract.History.Full)),
+                first ? "start" : "start-" + key, Contract.Kinds.Start);
             if (receipt is not { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } actor })
                 throw new InvalidOperationException("The test actor must start normally.");
             return actor;
