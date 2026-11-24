@@ -27,7 +27,7 @@ abstractions). No Elsa 3 package anywhere.
 
 **Testing**: xunit for the sample; the Python check has a `--self-test` mode, like `tools/ci/check_evidence_sizes.py`.
 
-**Target Platform**: Any machine with the .NET SDK and the `dotnet-elsa` tool; any AI assistant that reads
+**Target Platform**: Any machine with Docker (the tool runs in the Elsa 3 migration image) and the .NET SDK; any AI assistant that reads
 markdown, or none.
 
 **Project Type**: Documentation plus one non-packable sample feature project, its test project and one CI check.

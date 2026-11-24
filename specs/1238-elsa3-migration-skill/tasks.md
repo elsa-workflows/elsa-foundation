@@ -11,7 +11,7 @@ and the check's `--self-test`. The skill text itself is verified by the walkthro
 beyond xunit.
 
 **Dependencies outside this spec**: T030–T032 need spec 1237's `inventory` and `assess` commands. T020 and T021
-need spec 1237's `report.json` schema agreed. Everything else can start once this spec is approved.
+need spec 1237's `report.json` schema agreed. T013 needs the converter's replaced-global declaration member merged. Everything else can start once this spec is approved.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -54,7 +54,8 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 - [ ] T011 [P] Background (case 12): an activity marked `[BackgroundExecutionSafe]` that honours the cancellation token
   and keys its effect on the invocation id; test for cancellation.
 - [ ] T012 [P] Cancellation and faults (case 13): fault and cancel transitions; tests for each.
-- [ ] T013 [P] JavaScript host function (case 14): `acme.formatIban` declared in `AcmeFeature`; test calling the
+- [ ] T013 [P] JavaScript host function (case 14): `acme.lookupCustomer` declared in `AcmeFeature`, naming the
+  replaced Elsa 3 global `lookupCustomer`; test calling the
   implementation with JSON arguments.
 - [ ] T014 [P] Variable type (case 16): a descriptor provider registering `acme.Invoice`; test that the descriptor has
   the dotted alias.
@@ -73,7 +74,7 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
 
 - [ ] T018 [US3] Write `skill/porting-catalog.md`: an introduction (how to use a case, the verdicts, apply cases in
   order), then cases 01–19 in the [entry shape](contracts/catalog-entry.md) with the FR-014 verdicts and the R-2
-  evidence turned into plain guidance. *Port* "after" blocks are copied from the sample regions; *redesign* parts name
+  evidence turned into plain guidance. Case 14 states the replaced-global rules of research R-2. *Port* "after" blocks are copied from the sample regions; *redesign* parts name
   the alternatives and offer no workaround code. Elsa 3 "before" examples are written for the catalog, synthetic.
 - [ ] T019 [US3] Run the check; fix until it passes. Review that every case's search finds the "before" example.
   SC-006: rename an Elsa 4 member a region uses in a scratch commit, confirm the sample build or the check fails, then
@@ -89,7 +90,7 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. A
   and [data-model.md](data-model.md), with one example row per table using `Acme` names.
 - [ ] T021 [US1] Write `skill/SKILL.md`: front matter per [contracts/adapters.md](contracts/adapters.md); then, in
   order, the privacy statement (T024), what the skill does and does not do (FR-021), "read the plan first" (FR-007),
-  the four stages (FR-008–FR-012, R-6 searches, the report fields of
+  the prerequisite check and `docker run` invocation (FR-022), the four stages (FR-008–FR-012, R-6 searches, the report fields of
   [contracts/report-consumption.md](contracts/report-consumption.md)), the version check (R-4), the handoff
   (FR-020), and the edge cases of the spec as plain rules. No diagnostic code literal; read code, message and
   guidance from the report.

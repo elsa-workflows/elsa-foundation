@@ -14,4 +14,5 @@ raised on spec 1237's pull request, not worked around here.
 | Per finding: severity, code, message, JSON path, guidance, report category (Must fix, Reconsider, Take into account) | Work the report without hard-coded knowledge (FR-013). |
 | Settings and closure the run used (features loaded) | Check every planned feature is loaded (FR-011). |
 | Dispatched-workflow targets missing from the export | Tell the user (Take into account). |
-| Output folder paths (`report.html`, `converted/`) | Point the user at them; the handoff names `converted/`. |
+| Output paths relative to the mounted output folder (`report.html`, `converted/`) | Point the user at them on the host; the handoff names `converted/`. |
+| JavaScript globals used other than as a direct call, per definition and JSON path | Tell the user to make them direct calls before the next run (case 14); without this, the skill would have to read script bodies. |

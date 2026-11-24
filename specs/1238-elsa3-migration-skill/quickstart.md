@@ -17,7 +17,7 @@ All three pass. Rename a sample method used in a region without updating the cat
 2. Copy `plugins/elsa3-migration/skills/elsa3-workflows-migration/` into another workspace's
    `.agents/skills/` and confirm an agent that reads that folder lists the skill.
 
-## Walkthrough (needs spec 1237's tool)
+## Walkthrough (needs spec 1237's tool and migration image, and Docker)
 
 1. Prepare a synthetic Elsa 3 export using one custom activity, one JavaScript function, one custom variable type and
    one custom storage driver, with matching Elsa 3 source. Keep it outside the repository; it is test input.

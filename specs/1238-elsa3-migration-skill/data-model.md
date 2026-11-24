@@ -16,7 +16,8 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 | Features | Elsa 4 feature name → package → components | Every feature must appear in `appsettings.json` (FR-011). |
 | Components | One row per inventory item | See below. |
 | Accepted refusals | Definition, finding code, reason, date | Only the user adds a row. |
-| Last report | Path of the last `report.json` and its command | Updated after every run. |
+| Migration image | The image tag the runs use | Matches the skill release (FR-022). |
+| Last report | Path of the last `report.json` and the `docker run` command | Updated after every run. |
 
 ### Component row
 
