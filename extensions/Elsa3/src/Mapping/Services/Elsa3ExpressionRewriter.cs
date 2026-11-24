@@ -705,7 +705,11 @@ public sealed class Elsa3ExpressionRewriter(
         /// <summary>Script mode with a known node: <c>setOutcome</c> / <c>setOutcomes</c> are converted, not refused.</summary>
         public bool AllowsOutcomeSetters { get; init; }
 
-        /// <summary>Each Elsa 3 global a registered host function declares it replaces, with the functions that do.</summary>
+        /// <summary>
+        /// Each Elsa 3 global a registered host function declares it replaces, with the functions that do. An Elsa 3
+        /// built-in the converter converts itself (<c>getVariable</c>, the setters, <c>getCorrelationId</c>, …) keeps that
+        /// conversion; Elsa 3 functions the converter refuses (<c>getConfig</c>, …) can be replaced.
+        /// </summary>
         public IReadOnlyDictionary<string, string[]> ReplacedGlobals { get; init; } = new Dictionary<string, string[]>(StringComparer.Ordinal);
 
         /// <summary>
@@ -1998,7 +2002,8 @@ public sealed class Elsa3ExpressionRewriter(
 
         public bool ReusableScriptMayWrite(Script script) =>
             new Elsa3ReusableVariableWriteAnalyzer(CachedScope, IsSessionVariable,
-                name => TryGetAccessorName(name, "get", out var accessor) ? accessor : null).MayWrite(script);
+                name => TryGetAccessorName(name, "get", out var accessor) ? accessor : null,
+                ReplacedGlobals.ContainsKey).MayWrite(script);
 
         /// <summary>
         /// A Run JavaScript body reads a loop's item or index through args, as a copy: Elsa 4 freezes a loop value in a body
@@ -2184,7 +2189,7 @@ public sealed class Elsa3ExpressionRewriter(
 
         /// <summary>
         /// Rewrites a call to an Elsa 3 global into a call to the host function that declares it replaces it
-        /// (<c>getBusinessSettings()</c> becomes <c>nexxbiz.getBusinessSettings()</c>). The arguments convert as written.
+        /// (<c>getSettings()</c> becomes <c>acme.getSettings()</c>). The arguments convert as written.
         /// </summary>
         private void ConvertReplacedGlobal(CallExpression call, Identifier callee, string[] replacements)
         {
