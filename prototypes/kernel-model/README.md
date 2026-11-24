@@ -24,9 +24,10 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `../../essentials/tests/ActorFoundation/Simulation` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
 | [`Graph`](../../essentials/src/Workflows/Runtime/Graph) | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
 | `../../essentials/tests/Workflows/Runtime/Graph/Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
-| [Native model](../../essentials/src/Workflows/Runtime/Native/Model) | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
+| [Native model](../../essentials/src/Workflows/Runtime/Native/Model) | Native workflow definitions, interpretation and structural activities, including Flowchart on the graph engine |
+| [Native activities](../../essentials/src/Workflows/Runtime/Native/Activities) | Activity contracts, bindings and built-in leaf activities |
 | `../../essentials/tests/Workflows/Runtime/Native/Legacy` | Nonpackable adapter that runs Native through the legacy simulation turn contract |
-| `../../essentials/tests/ActorFoundation/Native/Run` | Native smoke tests, cost and memory measurement, PostgreSQL Core Preview |
+| `../../essentials/tests/ActorFoundation/Native/Run` | Native smoke tests, HTTP host and live output (`Live.cs`), cost and memory measurements, PostgreSQL Core Preview |
 | `../../essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |
 | `../../essentials/tests/ActorFoundation/Store/EntityFramework` | The conformance suite against the EF store, every engine |

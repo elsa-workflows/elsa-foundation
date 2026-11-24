@@ -169,7 +169,7 @@ an unescaped `LIKE 'acme_%'` would also match `acmex...`, so no query uses one.
 
 **`_` keeps the effect key fit for its receivers.** An effect key carries its instance origin, so a caller-key
 instance's key contains `Q`. `_` is RFC 5322 atext, so the key still fits the local part of the e-mail activity's
-`Message-ID` (`SendEmail.MessageId` in `models/Native/Activities.cs`), and a grammar tenant is printable ASCII, so it
+`Message-ID` (`SendEmail.MessageId` in [Activities.cs](../../essentials/src/Workflows/Runtime/Native/Activities/Activities.cs)), and a grammar tenant is printable ASCII, so it
 fits the `Idempotency-Key` header value too. A caller name with characters outside atext already needs encoding there
 today (`EffectKey.cs` states the fit holds "when those ids do"); the tenant part adds no such character. The receiver
 does see the tenant id: tenant ids are not secret, and a host that must not show tenant names to receivers gives its
