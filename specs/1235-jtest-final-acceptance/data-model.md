@@ -73,8 +73,8 @@ Each ledger file may end with a *Notes* section for findings that are not rows, 
 ## Adjusted definition (`adjusted/`)
 
 An adjusted copy keeps the original file name. The Elsa 4 run's definition set is the originals with each adjusted
-copy taking the place of its original, passed to the reconciliation as an explicit `Files` list. The original stays in
-`workflow-definitions/` unchanged.
+copy taking the place of its original, passed to the reconciliation as an explicit `Files` list of the 34 definitions in the acceptance set (spec Q13). The
+original stays in `workflow-definitions/` unchanged, apart from the approved version patch of spec Q14.
 
 ## Run record (`ledger/runs.md`, one row per run, newest last)
 

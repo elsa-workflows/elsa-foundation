@@ -127,6 +127,9 @@ blocks it, and J-001 through J-005 are open in the tasks.
 
 ### Functional Requirements
 
+Wherever this specification, its scenarios or its success criteria speak of every or all suites or definitions,
+they mean the acceptance set: the 41 suites and 34 definitions left after the exclusion in Q13.
+
 **Corpus**
 
 - **FR-001**: The complete corpus MUST be the JTest-Nexxbiz repository at commit `b1cde13`: 36 Elsa 3 workflow
@@ -185,7 +188,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
   with no diagnostic),
   `convert-with-adjustments` (an adjusted copy, kept next to the unchanged original, with the exact change and reason,
   approved by the coordinator) or `incompatible` (approved by the coordinator; refused with a diagnostic and guidance, or a feature with no Elsa 4
-  equivalent). Execution status and JOIN blocking MUST be recorded separately from the bucket.
+  equivalent). Execution status and JOIN blocking MUST be recorded separately from the bucket. The definition patched
+  under Q14 counts as unchanged source for this rule, since the patch leaves Elsa 3 behaviour as it was.
 - **FR-016**: Translating API calls in templates MUST NOT move a definition out of `convert-as-is`. A refusal or a
   publication alone MUST NOT count as a passing suite. A suite failing on Elsa 4 for a reason other than JOIN
   behaviour MUST follow one rule: a template defect is fixed in the template; a converter defect or Elsa 4 gap gets

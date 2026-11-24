@@ -25,7 +25,7 @@ $env:ADMIN_USERNAME = 'admin'; $env:ADMIN_PASSWORD = '<baseline admin password>'
 $env:CORRELATION_ID = [guid]::NewGuid().ToString('N'); $env:DATE_NOW_ISO_STRING = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
 $env:JTEST_CONFIG_FILE = "$PWD/global-configuration.json"
 jtest run import-and-publish-workflows.json --env-file environments/dev.json
-jtest run "tests/**/*" --env-file environments/dev.json
+jtest run "tests/**/*" "!tests/performance/baseline-dispatch-tests.json" --env-file environments/dev.json
 docker stop elsa3-jtest
 ```
 
@@ -41,7 +41,7 @@ $env:CORRELATION_ID = [guid]::NewGuid().ToString('N'); $env:DATE_NOW_ISO_STRING 
 $env:JTEST_CONFIG_FILE = "$PWD/global-configuration.elsa4.json"
 # after every start: set capture (in memory) - variableWrites override and activity snapshot level
 #   PUT $env:ELSA_API_BASE_URL/runtime/workflows/diagnostics/settings   (exact body recorded by task T007)
-jtest run "tests/**/*" --env-file environments/elsa4.json
+jtest run "tests/**/*" "!tests/performance/baseline-dispatch-tests.json" --env-file environments/elsa4.json
 ```
 
 There is no setup suite on Elsa 4: the reconciliation published the definitions at startup. Check its summary in the

@@ -52,7 +52,7 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   commit the changed `Elsa.Server.Workbench.slnf` and confirm with `-- solution-filters-check`; build the Workbench and run the architecture tests that cover feature
   composition and the Elsa 3 boundary (`Essentials/tests/Architecture/Tests/`).
 - [ ] T007 Find and verify the configuration override that enables `Elsa3JsonReconciliation` (`Options:SourceId`, and
-  `Options:FolderPath` or `Options:Files` with `{Order, FilePath}` entries) together with `Elsa3ImportActivitiesEntityFrameworkCore`, and sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` for one Workbench run without editing the
+  `Options:Files` with `{Order, FilePath}` entries listing the 34 definitions of the acceptance set, spec Q13) together with `Elsa3ImportActivitiesEntityFrameworkCore`, and sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` for one Workbench run without editing the
   committed `shells.json` (environment variables or a run-specific shells file, R-5); after start, set activity input
   and output capture to snapshot level and a `variableWrites` override with `PUT /runtime/workflows/diagnostics/settings`
   (in-memory, so after every start). Record the exact commands in `JTest/README.md`.
@@ -93,7 +93,7 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   `JTest/workflow-definitions/storage-drivers-variables-root-workflow.json` (spec Q14, approved),
   one commit, with the ledger row named per change; mark 3.6.3-defect suites `blocked: 3.6.3 defect <defect>` in
   `JTest/ledger/suites.md` (FR-008).
-- [ ] T018 [US1] Rerun all suites on a fresh container and confirm every unblocked suite passes (SC-001); record the
+- [ ] T018 [US1] Rerun the 41 suites of the acceptance set on a fresh container and confirm every unblocked suite passes (SC-001); record the
   run.
 
 **Checkpoint**: green Elsa 3 baseline.
@@ -120,7 +120,7 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 - [ ] T021 [US2] Move each listed value behind a template output, an environment value in `JTest/environments/dev.json`
   or a suite parameter, and pass any new template parameters, in `JTest/tests/**`; no expected business value or
   assertion changes (FR-010).
-- [ ] T022 [US2] Rerun all suites on a fresh 3.6.3 container; the same suites pass as after T018 (SC-002 part 1);
+- [ ] T022 [US2] Rerun the 41 suites of the acceptance set on a fresh 3.6.3 container; the same suites pass as after T018 (SC-002 part 1);
   record the run.
 
 **Checkpoint**: the suite files are frozen for the Elsa 4 work; later edits go through T029.
@@ -182,7 +182,7 @@ cannot produce with the same meaning fails the template with the output named (F
 - [ ] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` whose suites are neither JOIN-blocked,
   value-capture-blocked nor issue-blocked; the rest stay `unclassified` with the reason, and T043 completes SC-003.
 - [ ] T038 [US3] Once spec 1207 is implemented on the initiative branch (its status Implemented), merge the initiative branch into this branch and
-  make the qualifying run: all suites on a fresh Workbench from that head; record it as the non-JOIN milestone run
+  make the qualifying run: the 41 suites of the acceptance set on a fresh Workbench from that head; record it as the non-JOIN milestone run
   (FR-020, SC-004). Before recording it, confirm with `git diff` that `JTest/tests/**` differs from the T022 state
   only by approved T029 rows, that `JTest/templates/` differs only by approved rows too, and rerun the changed suites
   on 3.6.3 (SC-002).
@@ -209,8 +209,8 @@ until their evidence exists. T049 to T051 (value capture) run alongside T039 to 
   capture those values as it provides (update T007's commands in `JTest/README.md`) and adjust `templates-elsa4/`
   without changing expectations; suite edits go through T029.
 - [ ] T051 [US4] V-003: run those suites on a fresh Workbench from the qualified head and record the results.
-- [ ] T043 [US4] J-005: rerun the whole corpus on the final initiative head, reconcile `JTest/ledger/dispositions.md`
-  and `JTest/ledger/suites.md`, bucket every remaining definition (SC-003), and record the coordinator's
+- [ ] T043 [US4] J-005: rerun the 41 suites of the acceptance set on the final initiative head, reconcile `JTest/ledger/dispositions.md`
+  and `JTest/ledger/suites.md`, bucket every remaining definition of the acceptance set (SC-003), and record the coordinator's
   full-acceptance verdict (SC-005).
 
 ---
