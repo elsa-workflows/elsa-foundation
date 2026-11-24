@@ -152,6 +152,8 @@ if (args is ["pg-root-inbox", var inboxWriter and ("owned" or "ef"), var inboxFe
     return await PostgresRootInboxChecks.RunAsync(inboxWriter == "owned", inboxFence == "in-batch", inboxProfile == "operators");
 if (args is ["pg-held-operator", var heldOperatorWriter and ("owned" or "ef"), var heldOperatorFence and ("in-batch" or "checked")])
     return await PostgresHeldOperatorChecks.RunAsync(heldOperatorWriter == "owned", heldOperatorFence == "in-batch");
+if (args is ["pg-root-park-arrivals", var arrivalWriter and ("owned" or "ef"), var arrivalFence and ("checked" or "in-batch")])
+    return await PostgresRootParkOpeningChecks.RunAsync(arrivalWriter == "owned", arrivalFence == "in-batch", inspection: true, arrivals: true);
 if (args is ["pg-root-park-opening", var parkWriter and ("owned" or "ef"), var parkFence and ("checked" or "in-batch")])
     return await PostgresRootParkOpeningChecks.RunAsync(parkWriter == "owned", parkFence == "in-batch");
 if (args is ["pg-root-park-inspection", var parkReadWriter and ("owned" or "ef"), var parkReadFence and ("checked" or "in-batch")])

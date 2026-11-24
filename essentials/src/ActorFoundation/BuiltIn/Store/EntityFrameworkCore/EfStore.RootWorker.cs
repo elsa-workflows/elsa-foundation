@@ -29,6 +29,7 @@ public sealed partial class EfStore
         internal bool Discover { get; } = discover;
         internal bool RequiresCommittedTerminal { get; set; }
         internal bool KeepsParkInputs { get; set; }
+        internal bool KeepsParkArrivals { get; set; }
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
         private readonly Dictionary<string, WorkerRoot> _actors = roots.ToDictionary(r => r.Actor, StringComparer.Ordinal);
         private readonly Dictionary<string, WorkerRoot> _references = roots.ToDictionary(r => r.Reference, StringComparer.Ordinal);
@@ -58,6 +59,7 @@ public sealed partial class EfStore
 
         public bool RequiresCommittedTerminal => roots.RequiresCommittedTerminal;
         public bool KeepsParkInputs => roots.KeepsParkInputs;
+        public bool KeepsParkArrivals => roots.KeepsParkArrivals;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
@@ -108,6 +110,7 @@ public sealed partial class EfStore
                 throw new StoreFormatException("The PostgreSQL owner must initialize its value capability before binding to the value qualification profile.");
             scope.RequiresCommittedTerminal = db.UsesRootRetirement;
             scope.KeepsParkInputs = db.UsesRootParkOpening;
+            scope.KeepsParkArrivals = db.UsesRootParkArrivals;
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
         }
@@ -174,7 +177,7 @@ public sealed partial class EfStore
         }
         else if (image.Jobs is not null || image.NextJobGeneration is > 0) throw RootShape();
         return new InstanceRow(image.Actor.Id, image.Model, image.Definition, image.Status, "null", image.Revision, null,
-            History: image.History, Suspended: image.Suspended, StateVersion: image.StateVersion, Creation: image.Actor.Creation,
+            Fault: image.Fault, History: image.History, Suspended: image.Suspended, StateVersion: image.StateVersion, Creation: image.Actor.Creation,
             StartIntent: root.Fingerprint, Jobs: image.Jobs).WithFoundationState(image.State)
             with
             {
@@ -360,10 +363,11 @@ public sealed partial class EfStore
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
-        if (turn.OpensPark)
+        if (turn.OpensPark || turn.FoundationKept is { Count: > 0 })
         {
             await using var profile = create();
-            if (profile.UsesRootParkOpening) return await PrepareRootParkOpeningAsync(root, turn, cancellationToken);
+            if (profile.UsesRootParkArrivals || profile.UsesRootParkOpening && turn.OpensPark)
+                return await PrepareRootParkOpeningAsync(root, turn, cancellationToken);
         }
         if (turn.Delete) return await PrepareRootRetirementAsync(root, turn, cancellationToken);
         if (turn.Row is null)

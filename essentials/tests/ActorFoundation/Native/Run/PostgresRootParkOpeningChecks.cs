@@ -2,6 +2,8 @@ using System.Reflection;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -9,7 +11,7 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootParkOpeningChecks
 {
-    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool inspection = false)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool inspection = false, bool arrivals = false)
     {
         const string fault = "deliberate actor failure";
         const string original = "{\"before\":true}";
@@ -17,8 +19,8 @@ internal static class PostgresRootParkOpeningChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Profile(DbContextOptions<KernelDb> settings) => inspection
-            ? KernelDb.ForPostgresRootParkInspection(settings) : KernelDb.ForPostgresRootParkOpening(settings);
+        KernelDb Profile(DbContextOptions<KernelDb> settings) => arrivals ? KernelDb.ForPostgresRootParkArrivals(settings)
+            : inspection ? KernelDb.ForPostgresRootParkInspection(settings) : KernelDb.ForPostgresRootParkOpening(settings);
         KernelDb Open() => Profile(options);
         EfStore Store(Func<KernelDb>? open = null) => new(open ?? Open, postgres: true, fenceInBatch: inBatch)
             { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
@@ -59,8 +61,12 @@ internal static class PostgresRootParkOpeningChecks
             ?? throw new InvalidOperationException("The sibling creator was refused.");
         var observedTail = false;
         var attemptedTail = false;
+        var keptTail = false;
         string? tailOccurrence = null;
         var controlsRan = false;
+        var arrivalControlsRan = false;
+        var reparkControlsRan = false;
+        ParkMark? opened = null;
         Exception? controlError = null;
         long tailDue = 0;
         EfStore.RootImage before;
@@ -84,7 +90,8 @@ internal static class PostgresRootParkOpeningChecks
                 "the ordinary ingress admits the earlier-sequence future input");
             Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "fail", payload,
                 cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the ordinary ingress admits the ready failing input");
-            var parked = await Drive(owner, row => row is { Revision: 2, Status: InstanceStatus.Faulted });
+            var parked = await Drive(owner, row => row is { Revision: >= 2, Status: InstanceStatus.Faulted } &&
+                (arrivals || row.Revision == 2));
             Check(parked.State == before.State && parked.TypeData == before.TypeData && parked.StateVersion == before.StateVersion &&
                 probe.Failed == 1, "the failed turn records Park and preserves the committed actor state and header");
             Check(observedTail && controlsRan && parked.AsOf >= tailDue,
@@ -92,8 +99,24 @@ internal static class PostgresRootParkOpeningChecks
             Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(sibling), "side-turn", "ordinary", "{}",
                 cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the parked root has a ready neighbor");
             await Drive(owner, row => row is { Revision: 2 }, sibling);
-            Check(owner.Epoch == firstEpoch && !attemptedTail && probe.Ordinary == 1,
-                "the same owner withholds the buffered input without attempting to settle it, and advances the neighbor");
+            if (arrivals)
+            {
+                await Drive(owner, row => row is { Revision: 3, Status: InstanceStatus.Faulted });
+                var tail = (await ReadInputs(before.Actor.Id)).Single(row => row.Id == tailOccurrence);
+                Check(owner.Epoch == firstEpoch && keptTail && !attemptedTail && probe.Ordinary == 1 && probe.TurnsOf(actor) == 2 &&
+                    tail is { Done: true, Trial: 0, KeptBy: (short)ParkKeepReason.Arrived } && arrivalControlsRan,
+                    "the same owner keeps the buffered input as arrived without calling the actor, and advances the neighbor");
+            }
+            else
+                Check(owner.Epoch == firstEpoch && !attemptedTail && probe.Ordinary == 1,
+                    "the same owner withholds the buffered input without attempting to settle it, and advances the neighbor");
+        }
+
+        if (arrivals)
+        {
+            await ObserveArrivalsAsync();
+            await CrossProtocolAsync();
+            return 0;
         }
 
         Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "fail", payload,
@@ -169,6 +192,157 @@ internal static class PostgresRootParkOpeningChecks
         }
         if (inspection) await InspectParkAsync();
         return 0;
+
+        async Task ObserveArrivalsAsync()
+        {
+            var reads = await Store(OpenMixed).OpenPreviewRootReadsAsync(8, stop);
+            var parked = await reads.GetAsync(tenant, actor, stop);
+            Check(parked is { Park.At: > 0, Header.Fault: fault }, "the earlier Park has a fixed projected mark");
+            Check(opened is { At: > 0, Revision: 2 } && await ReadParkMark(before.Actor.Id) == opened,
+                "the Park baseline captured right after the opening commit holds before the first fresh arrival");
+            await using (var holder = Open())
+            {
+                // The Park writer locks the root's checkpoint row before it keeps any input.
+                await using var hold = await holder.Database.BeginTransactionAsync(stop);
+                await holder.Database.SqlQuery<string>($"""
+                    SELECT "Id" AS "Value" FROM "Instances" WHERE "Id" = {before.Actor.Id} FOR UPDATE
+                    """).ToListAsync(stop);
+                var racing = ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "fresh", "ordinary", payload,
+                    cancellationToken: stop).AsTask();
+                Check(await Task.WhenAny(racing, Task.Delay(TimeSpan.FromMilliseconds(500), stop)) != racing,
+                    "a public admission does not complete while another transaction holds the root row for update");
+                await using (var monitor = Open())
+                    Check(await monitor.Database.SqlQueryRaw<bool>("""
+                        SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_stat_activity
+                            WHERE datname = current_database() AND pid <> pg_backend_pid() AND wait_event_type = 'Lock'
+                                AND query LIKE '%FROM "Instances"%' AND query LIKE '%FOR SHARE%') AS "Value"
+                        """).SingleAsync(stop), "the waiting admission is blocked on its share lock of the root row");
+                await hold.RollbackAsync(stop);
+                Check(await racing is { Outcome: Contract.AdmissionOutcome.Accepted },
+                    "public ingress accepts new input for the parked generation after the lock holder rolls back");
+            }
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "fresh", "ordinary", payload,
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Duplicate },
+                "repeating the operation does not create a second arrival");
+
+            await using (var successor = await Own("arrival-successor"))
+            {
+                var after = await Drive(successor, row => row is { Revision: 4, Status: InstanceStatus.Faulted });
+                Check(successor.Epoch > firstEpoch && after.State == before.State && after.Fault == fault && probe.Ordinary == 1,
+                    "the successor captures the arrivals without calling the actor and retains its state");
+            }
+            var view = await reads.GetAsync(tenant, actor, stop);
+            var inbox = await reads.InboxAsync(tenant, actor, cancellationToken: stop);
+            Check(view?.Park == parked!.Park && view!.Header.Fault == fault, "arrivals preserve the original projected Park timestamp");
+            Check(inbox.Items is [{ Id: "later", State: Contract.DeliveryState.Arrived },
+                { Id: "poison", State: Contract.DeliveryState.Consumed },
+                { Id: "fresh", State: Contract.DeliveryState.Arrived }],
+                "public inspection distinguishes arrival and fault-causing input (" +
+                string.Join(", ", inbox.Items.Select(item => item.Id + "/" + item.State)) + ")");
+            var history = await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop);
+            Check(history is [_, { Revision: 2, Entries: "[\"parked\"]" }], "arrivals do not replace or append to the opening journal");
+            await using var db = Open();
+            var revision = await db.Database.SqlQuery<long>($"""
+                SELECT "FoundationParkRevision" AS "Value" FROM "Instances" WHERE "Id" = {before.Actor.Id}
+                """).SingleAsync(stop);
+            Check(revision == 2, "the opening revision remains two after the two retained arrivals");
+            var retained = await ReadInputs(before.Actor.Id);
+            Check(retained is [{ Done: true, KeptBy: (short)ParkKeepReason.Arrived },
+                { Done: true, Payload: payload, KeptBy: (short)ParkKeepReason.Consumed },
+                { Done: true, Payload: payload, KeptBy: (short)ParkKeepReason.Arrived }],
+                "all three physical occurrences retain their envelope and exact kept reason");
+
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "FoundationDirectReceipts" SET "Until" = 1
+                WHERE "Reference" = {actor.Id} AND "Operation" = {FoundationRootCreator.OperationDigest("poison")}
+                """, stop);
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "poison", "ordinary", "{}",
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "an expired operation id admits a new occurrence while the original stays kept");
+            await using (var third = await Own("reused-operation"))
+                await Drive(third, row => row is { Revision: 5, Status: InstanceStatus.Faulted });
+
+            var repeated = (await reads.InboxAsync(tenant, actor, cancellationToken: stop)).Items.Where(item => item.Id == "poison").ToArray();
+            Check(repeated is [{ State: Contract.DeliveryState.Consumed }, { State: Contract.DeliveryState.Arrived }] &&
+                repeated[0].Handle != repeated[1].Handle && (await reads.GetAsync(tenant, actor, stop))?.Park == parked.Park,
+                "the same outside id has two distinct kept handles and one unchanged Park");
+
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "exhausted", "ordinary", "{}",
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the exhausted-attempt control has a direct occurrence");
+            var exhausted = (await new PostgresRootAdmission(Open, TimeSpan.Zero)
+                .ReadPendingDirectAsync(tenant.Tenant, actor.Id, stop)).Single();
+            await db.Messages.Where(row => row.Id == exhausted.InboxKey.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.Attempts, new WorkerOptions().MaxAttempts), stop);
+            await using (var fourth = await Own("exhausted-attempt"))
+                await Drive(fourth, row => row is { Revision: 6, Status: InstanceStatus.Faulted });
+
+            var reparked = (await reads.InboxAsync(tenant, actor, cancellationToken: stop)).Items.Single(item => item.Id == "exhausted");
+            Check(reparked.State == Contract.DeliveryState.Consumed && (await reads.GetAsync(tenant, actor, stop))?.Park == parked.Park &&
+                (await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop)) is [_, { Revision: 2 }, { Revision: 6, Entries: "[\"parked\"]" }],
+                "an exhausted occurrence continues the same Park with the consumed reason and its own journal fact");
+            Check(reparkControlsRan, "the exhausted re-park ran its refusal controls before it landed");
+
+            // A taken batch with one exhausted occurrence re-parks as a whole, as the reference poison path does.
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "mixed-exhausted", "ordinary", "{}",
+                    cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "mixed-fresh", "ordinary", payload,
+                    cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "the mixed batch has an exhausted occurrence and a fresh arrival");
+            var mixed = await new PostgresRootAdmission(Open, TimeSpan.Zero).ReadPendingDirectAsync(tenant.Tenant, actor.Id, stop);
+            Check(mixed.Count == 2, "both mixed inputs are pending before the owner takes them");
+            await db.Messages.Where(row => row.Id == mixed[0].InboxKey.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.Attempts, new WorkerOptions().MaxAttempts), stop);
+            await using (var fifth = await Own("mixed-batch"))
+                await Drive(fifth, row => row is { Revision: >= 7, Status: InstanceStatus.Faulted });
+            var mixedKept = (await reads.InboxAsync(tenant, actor, cancellationToken: stop)).Items
+                .Where(item => item.Id is "mixed-exhausted" or "mixed-fresh").ToArray();
+            var mixedRows = (await ReadInputs(before.Actor.Id)).Where(row => mixed.Any(input => input.InboxKey.Id == row.Id)).ToArray();
+            Check((await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop)) is { Revision: 7, State: original, Fault: fault } &&
+                mixedKept is [{ Id: "mixed-exhausted", State: Contract.DeliveryState.Consumed },
+                    { Id: "mixed-fresh", State: Contract.DeliveryState.Consumed }] &&
+                mixedRows is [{ Done: true, KeptBy: (short)ParkKeepReason.Consumed },
+                    { Done: true, Payload: payload, KeptBy: (short)ParkKeepReason.Consumed }] &&
+                (await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop)) is
+                    [_, { Revision: 2 }, { Revision: 6 }, { Revision: 7, Entries: "[\"parked\"]" }],
+                "a batch with an exhausted occurrence keeps every taken input as consumed and adds one Park fact");
+            Check((await reads.GetAsync(tenant, actor, stop))?.Park == parked.Park && await ReadParkMark(before.Actor.Id) == opened,
+                "the final re-park keeps the opening Park time, revision and fault");
+        }
+
+        async Task CrossProtocolAsync()
+        {
+            await using (var older = KernelDb.ForPostgresRootParkInspection(options))
+                await FormatRefused(() => EfStore.RequireStoreVersionsAsync(older, stop), "a protocol 20 context refuses the protocol 21 store");
+            await FormatRefused(() => new EfStore(() => KernelDb.ForPostgresRootParkInspection(options), postgres: true)
+                .BindWorkerPartitionAsync(0, stop), "a protocol 20 owner refuses to bind the protocol 21 store");
+
+            // A fresh protocol 20 store in its own schema of the same empty database.
+            await using (var db = Open())
+                await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA park_protocol20", stop);
+            var prior = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "park_protocol20" };
+            var priorOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(prior.ConnectionString).Options;
+            await using (var db = KernelDb.ForPostgresRootParkInspection(priorOptions))
+                await db.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(stop);
+            var older20 = new EfStore(() => KernelDb.ForPostgresRootParkInspection(priorOptions), postgres: true);
+            await older20.CreateAsync(1);
+            await new PostgresRootAdmission(() => KernelDb.ForPostgresRootParkInspection(priorOptions), TimeSpan.FromHours(1)).InstallAsync(stop);
+            Check(await older20.PartitionCountAsync(stop) == 1, "a fresh protocol 20 store exists in its own schema");
+            await using (var newer = KernelDb.ForPostgresRootParkArrivals(priorOptions))
+                await FormatRefused(() => EfStore.RequireStoreVersionsAsync(newer, stop), "a protocol 21 context refuses the protocol 20 store");
+            await FormatRefused(() => new EfStore(() => KernelDb.ForPostgresRootParkArrivals(priorOptions), postgres: true)
+                .BindWorkerPartitionAsync(0, stop), "a protocol 21 owner refuses to bind the protocol 20 store");
+        }
+
+        static async Task FormatRefused(Func<Task> attach, string message)
+        {
+            try
+            {
+                await attach();
+                throw new InvalidOperationException("The store format was accepted: " + message);
+            }
+            catch (StoreFormatException error) { Console.WriteLine($"ok {message} ({error.Message})"); }
+        }
+
 
         async Task InspectParkAsync()
         {
@@ -287,6 +461,16 @@ internal static class PostgresRootParkOpeningChecks
         async ValueTask<Committed> Write(EfStore ownerStore, CommitBatch batch, CancellationToken token)
         {
             attemptedTail |= batch.Turns.Any(turn => turn.Row is null && turn.Done.Any(key => key.Id == tailOccurrence));
+            if (arrivals && !arrivalControlsRan && batch.Turns.SingleOrDefault(turn => Continues(turn, ParkKeepReason.Arrived)) is { } arrival)
+            {
+                arrivalControlsRan = true;
+                await ContinuationControlsAsync(ownerStore, batch, arrival, "arrival keep", token);
+            }
+            if (arrivals && !reparkControlsRan && batch.Turns.SingleOrDefault(turn => Continues(turn, ParkKeepReason.Consumed)) is { } repark)
+            {
+                reparkControlsRan = true;
+                await ContinuationControlsAsync(ownerStore, batch, repark, "exhausted re-park", token);
+            }
             if (!controlsRan && batch.Turns.SingleOrDefault(turn => turn.OpensPark) is { } park)
             {
                 controlsRan = true;
@@ -307,51 +491,13 @@ internal static class PostgresRootParkOpeningChecks
                     var failed = physical.Single(row => row.Kind == "fail");
                     var journalBeforePark = await store.ReadJournalOfAsync(0, park.Instance, 0, stop);
                     await Refused(ownerStore, batch with { Epoch = batch.Epoch - 1 }, "a stale epoch refuses the whole Park", token);
-                    var selected = db.Messages.Where(row => row.Id == failed.Id);
-                    await selected.ExecuteUpdateAsync(update => update.SetProperty(row => row.Payload, "changed"), token);
-                    try { await Refused(ownerStore, batch, "the same-key changed envelope rolls Park back", token); }
-                    finally
-                    {
-                        await selected.ExecuteUpdateAsync(update => update.SetProperty(row => row.Payload, failed.Payload), token);
-                    }
-                    await db.Database.ExecuteSqlRawAsync("""
-                        CREATE FUNCTION park_hold_wait() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';
-                        CREATE TRIGGER park_hold_wait BEFORE DELETE ON "Subscriptions"
-                          FOR EACH ROW EXECUTE FUNCTION park_hold_wait();
-                        """, token);
-                    try { await Refused(ownerStore, batch, "a silent subscription deletion veto rolls Park back", token); }
-                    finally
-                    {
-                        await db.Database.ExecuteSqlRawAsync("""
-                            DROP TRIGGER park_hold_wait ON "Subscriptions"; DROP FUNCTION park_hold_wait();
-                            """, token);
-                    }
-                    await db.Database.ExecuteSqlRawAsync("""
-                        CREATE FUNCTION park_change_kept() RETURNS trigger LANGUAGE plpgsql
-                            AS $$BEGIN NEW."Payload" := 'changed by the keep write'; RETURN NEW; END$$;
-                        CREATE TRIGGER park_change_kept BEFORE UPDATE OF "FoundationKeptBy" ON "Messages"
-                            FOR EACH ROW EXECUTE FUNCTION park_change_kept();
-                        """, token);
-                    try { await Refused(ownerStore, batch, "a keep write that rewrites the captured envelope rolls Park back", token); }
-                    finally
-                    {
-                        await db.Database.ExecuteSqlRawAsync("""
-                            DROP TRIGGER park_change_kept ON "Messages"; DROP FUNCTION park_change_kept();
-                            """, token);
-                    }
-                    await db.Database.ExecuteSqlRawAsync("""
-                        CREATE FUNCTION park_change_checkpoint() RETURNS trigger LANGUAGE plpgsql
-                            AS $$BEGIN NEW."State" := replace(NEW."State", 'true', 'false'); RETURN NEW; END$$;
-                        CREATE TRIGGER park_change_checkpoint BEFORE UPDATE OF "FoundationParkAt" ON "Instances"
-                            FOR EACH ROW EXECUTE FUNCTION park_change_checkpoint();
-                        """, token);
-                    try { await Refused(ownerStore, batch, "a Park stamp that rewrites the checkpoint rolls back", token); }
-                    finally
-                    {
-                        await db.Database.ExecuteSqlRawAsync("""
-                            DROP TRIGGER park_change_checkpoint ON "Instances"; DROP FUNCTION park_change_checkpoint();
-                            """, token);
-                    }
+                    await ChangedEnvelopeRefused(ownerStore, batch, failed, "the same-key changed envelope rolls Park back", token);
+                    await TriggerRefused(ownerStore, batch, "BEFORE DELETE ON \"Subscriptions\"", "RETURN NULL;",
+                        "a silent subscription deletion veto rolls Park back", token);
+                    await TriggerRefused(ownerStore, batch, KeepWrite, KeepRewrite,
+                        "a keep write that rewrites the captured envelope rolls Park back", token);
+                    await TriggerRefused(ownerStore, batch, ParkStamp, CheckpointRewrite,
+                        "a Park stamp that rewrites the checkpoint rolls back", token);
                     if (inspection)
                     {
                         try
@@ -382,7 +528,129 @@ internal static class PostgresRootParkOpeningChecks
                     throw;
                 }
             }
-            return await ownerStore.CommitAsync(batch, token);
+            var committed = await ownerStore.CommitAsync(batch, token);
+            if (committed.Landed && arrivals && opened is null && batch.Turns.SingleOrDefault(turn => turn.OpensPark) is { } landed)
+                opened = await ReadParkMark(landed.Instance);
+            keptTail |= committed.Landed && tailOccurrence is not null && batch.Turns.Any(turn =>
+                Continues(turn, ParkKeepReason.Arrived) && turn.Done.Any(key => key.Id == tailOccurrence));
+            return committed;
+        }
+
+        static bool Continues(TurnCommit turn, ParkKeepReason reason) =>
+            !turn.OpensPark && turn.FoundationKept is { Count: > 0 } kept && kept.Values.All(value => value == reason) &&
+            (turn.Journal is null) == (reason == ParkKeepReason.Arrived);
+
+        // The arrival keep and the exhausted re-park continue an existing Park. Each guard refuses the whole batch.
+        async Task ContinuationControlsAsync(EfStore ownerStore, CommitBatch batch, TurnCommit turn, string kind, CancellationToken token)
+        {
+            try
+            {
+                var physical = await ReadInputs(turn.Instance);
+                var checkpoint = (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, token))!;
+                var journal = await store.ReadJournalOfAsync(0, turn.Instance, 0, token);
+                var mark = await ReadParkMark(turn.Instance);
+                Check(checkpoint is { Status: InstanceStatus.Faulted, Fault: fault } && checkpoint.Revision == turn.Expected && mark == opened,
+                    $"the {kind} starts from the opening Park mark");
+                var kept = physical.Single(row => row.Id == turn.Done[0].Id);
+                await Refused(ownerStore, batch with { Epoch = batch.Epoch - 1 }, $"a stale epoch refuses the {kind}", token);
+                await Refused(ownerStore, batch with
+                {
+                    Turns = [.. batch.Turns.Select(item => ReferenceEquals(item, turn) ? item with { Expected = item.Expected - 1 } : item)]
+                }, $"a stale expected revision refuses the {kind}", token);
+                await ChangedEnvelopeRefused(ownerStore, batch, kept, $"the same-key changed envelope refuses the {kind}", token);
+                await TriggerRefused(ownerStore, batch, KeepWrite, KeepRewrite,
+                    $"a keep write that rewrites the captured envelope refuses the {kind}", token);
+                await TriggerRefused(ownerStore, batch, ParkStamp, CheckpointRewrite,
+                    $"a Park stamp that rewrites the checkpoint refuses the {kind}", token);
+                await TriggerRefused(ownerStore, batch, ParkStamp, """NEW."FoundationParkAt" := NEW."FoundationParkAt" + 1; RETURN NEW;""",
+                    $"a write that moves the Park time refuses the {kind}", token);
+                await TriggerRefused(ownerStore, batch, ParkStamp,
+                    """NEW."FoundationParkRevision" := NEW."FoundationParkRevision" + 1; RETURN NEW;""",
+                    $"a write that moves the opening revision refuses the {kind}", token);
+                await StoredMarkRefused(ownerStore, batch, turn.Instance, mark, $"""
+                    UPDATE "Instances" SET "Fault" = replace("Fault", ' ', chr(92) || 'u0020') WHERE "Id" = {turn.Instance}
+                    """, $"a differently encoded stored fault refuses the {kind}", token);
+                await StoredMarkRefused(ownerStore, batch, turn.Instance, mark, $"""
+                    UPDATE "Instances" SET "FoundationParkRevision" = "Revision" + 1 WHERE "Id" = {turn.Instance}
+                    """, $"an opening revision after the expected revision refuses the {kind}", token);
+                await StoredMarkRefused(ownerStore, batch, turn.Instance, mark, $"""
+                    UPDATE "Instances" SET "FoundationParkRevision" = NULL WHERE "Id" = {turn.Instance}
+                    """, $"a missing opening revision refuses the {kind}", token);
+                var unchanged = await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, token);
+                Check((await ReadInputs(turn.Instance)).SequenceEqual(physical) &&
+                    unchanged is { Status: InstanceStatus.Faulted, Fault: fault } && unchanged.Revision == checkpoint.Revision &&
+                    unchanged.State == checkpoint.State && unchanged.StateVersion == checkpoint.StateVersion &&
+                    (await store.ReadJournalOfAsync(0, turn.Instance, 0, token)).SequenceEqual(journal) &&
+                    await ReadParkMark(turn.Instance) == mark,
+                    $"the refused {kind} writes keep the checkpoint, journal, Park mark, time, revision, fault and occurrence");
+            }
+            catch (Exception error)
+            {
+                controlError = error;
+                throw;
+            }
+        }
+
+        async Task ChangedEnvelopeRefused(EfStore ownerStore, CommitBatch batch, InputImage input, string message, CancellationToken token)
+        {
+            await using var db = Open();
+            var selected = db.Messages.Where(row => row.Id == input.Id);
+            await selected.ExecuteUpdateAsync(update => update.SetProperty(row => row.Payload, "changed"), token);
+            try { await Refused(ownerStore, batch, message, token); }
+            finally
+            {
+                await selected.ExecuteUpdateAsync(update => update.SetProperty(row => row.Payload, input.Payload), token);
+            }
+        }
+
+        async Task TriggerRefused(EfStore ownerStore, CommitBatch batch, string on, string body, string message, CancellationToken token)
+        {
+            await using var db = Open();
+            var table = on[(on.IndexOf(" ON ", StringComparison.Ordinal) + 4)..];
+            // The trigger text comes only from this fixture's constants.
+#pragma warning disable EF1003
+            await db.Database.ExecuteSqlRawAsync(
+                "CREATE FUNCTION park_control() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN " + body + " END$$; " +
+                "CREATE TRIGGER park_control " + on + " FOR EACH ROW EXECUTE FUNCTION park_control();", token);
+            try { await Refused(ownerStore, batch, message, token); }
+            finally
+            {
+                await db.Database.ExecuteSqlRawAsync("DROP TRIGGER park_control ON " + table + "; DROP FUNCTION park_control();", token);
+            }
+#pragma warning restore EF1003
+        }
+
+        // The checkpoint writer trigger refuses direct edits, so the control edits the stored mark in its own transaction.
+        async Task StoredMarkRefused(EfStore ownerStore, CommitBatch batch, string instance, ParkMark mark, FormattableString change,
+            string message, CancellationToken token)
+        {
+            await Bypass(change, token);
+            try { await Refused(ownerStore, batch, message, token); }
+            finally
+            {
+                await Bypass($"""
+                    UPDATE "Instances" SET "Fault" = {mark.Fault}, "FoundationParkRevision" = {mark.Revision} WHERE "Id" = {instance}
+                    """, token);
+            }
+        }
+
+        async Task Bypass(FormattableString change, CancellationToken token)
+        {
+            await using var db = Open();
+            await using var transaction = await db.Database.BeginTransactionAsync(token);
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_require_root_checkpoint_writer""", token);
+            if (await db.Database.ExecuteSqlInterpolatedAsync(change, token) != 1)
+                throw new InvalidOperationException("The control did not change exactly the root row.");
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE TRIGGER kernel_require_root_checkpoint_writer""", token);
+            await transaction.CommitAsync(token);
+        }
+
+        async Task<ParkMark> ReadParkMark(string id)
+        {
+            await using var db = Open();
+            return await db.Database.SqlQuery<ParkMark>($"""
+                SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision", "Fault" FROM "Instances" WHERE "Id" = {id}
+                """).SingleAsync(stop);
         }
 
         async Task Refused(EfStore ownerStore, CommitBatch batch, string message, CancellationToken token) =>
@@ -415,6 +683,13 @@ internal static class PostgresRootParkOpeningChecks
     private sealed record InputImage(string Id, string Kind, bool Done, long Trial, string? Payload,
         string? Header, long? KeepUntil, long Due, short? KeptBy);
 
+    private sealed record ParkMark(long? At, long? Revision, string? Fault);
+
+    private const string KeepWrite = "BEFORE UPDATE OF \"FoundationKeptBy\" ON \"Messages\"";
+    private const string KeepRewrite = "NEW.\"Payload\" := 'changed by the keep write'; RETURN NEW;";
+    private const string ParkStamp = "BEFORE UPDATE OF \"FoundationParkAt\" ON \"Instances\"";
+    private const string CheckpointRewrite = "NEW.\"State\" := replace(NEW.\"State\", 'true', 'false'); RETURN NEW;";
+
     public class ObservedCommit : DispatchProxy
     {
         internal IKernelStore Store = null!;
@@ -427,8 +702,10 @@ internal static class PostgresRootParkOpeningChecks
 
     private sealed class Probe(string original, string fault) : Contract.IActorType
     {
+        private readonly Dictionary<Contract.ActorRef, int> _turns = [];
         public int Failed { get; private set; }
         public int Ordinary { get; private set; }
+        public int TurnsOf(Contract.ActorRef actor) => _turns.GetValueOrDefault(actor);
         public string Type => "postgres-park-opening";
         public bool Withholds(Contract.ActorHeader header) => false;
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
@@ -438,6 +715,7 @@ internal static class PostgresRootParkOpeningChecks
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            _turns[turn.Header.Ref] = TurnsOf(turn.Header.Ref) + 1;
             if (turn.Inbox.Single().Kind == "fail")
             {
                 Failed++;

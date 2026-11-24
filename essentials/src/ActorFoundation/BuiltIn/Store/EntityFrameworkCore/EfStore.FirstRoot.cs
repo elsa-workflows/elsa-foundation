@@ -37,6 +37,7 @@ public sealed partial class EfStore
     internal sealed record RootImage(CreationAddress Actor, string Model, string Definition, string TypeData,
         IReadOnlyDictionary<string, string> Labels, string? State, int StateVersion, long Revision)
     {
+        internal string? Fault { get; init; }
         internal string? Jobs { get; init; }
         internal long? NextJobGeneration { get; init; }
         internal History History { get; init; }
@@ -137,7 +138,7 @@ public sealed partial class EfStore
                     AND NEW."Revision" = NEW."FoundationWriteRevision"
                     AND NEW."FoundationReference" = OLD."FoundationReference" AND NEW."FoundationTenant" = OLD."FoundationTenant"
                     AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired"
-                    AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR
+                    AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR /*root-park-continues*/ OR
                         (/*root-retirement*/ AND NEW."Retired" AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL /*root-retirement-wire*/
                             AND ((OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
                                 AND NEW."FoundationTerminalRevision" = OLD."FoundationTerminalRevision"
@@ -155,16 +156,28 @@ public sealed partial class EfStore
             BEGIN
                 IF EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance" AND i."FoundationReference" IS NOT NULL
                     AND (i."Partition" <> NEW."Partition" OR NEW."Revision" <> i."Revision" + 1 OR i."Status" <> 0 OR i."Retired")
-                    AND NOT (/*root-retirement*/ AND i."Retired" AND i."Partition" = NEW."Partition" AND NEW."Revision" = -1
+                    AND NOT (/*root-park-journal*/ OR (/*root-retirement*/ AND i."Retired" AND i."Partition" = NEW."Partition" AND NEW."Revision" = -1
                         AND NEW."Entries" = '["delete"]' AND NOT EXISTS (
-                            SELECT 1 FROM "Journal" j WHERE j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = -1)))
+                            SELECT 1 FROM "Journal" j WHERE j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = -1))))
                 THEN RAISE EXCEPTION 'Qualified actor journal requires the next running checkpoint revision' USING ERRCODE = '23514'; END IF;
                 RETURN NEW;
             END
             $fn$;
             CREATE OR REPLACE TRIGGER kernel_require_root_journal_revision BEFORE INSERT ON "Journal"
             FOR EACH ROW EXECUTE FUNCTION kernel_require_root_journal_revision();
-            """.Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
+            """.Replace("/*root-park-continues*/", db.UsesRootParkArrivals ? """
+                (OLD."Status" = 2 AND NEW."Status" = OLD."Status" AND NOT NEW."Retired"
+                    AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
+                    AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationParkRevision" = OLD."FoundationParkRevision"
+                    AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
+                    AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
+                    AND NEW."History" IS NOT DISTINCT FROM OLD."History")
+                """ : "false", StringComparison.Ordinal)
+            .Replace("/*root-park-journal*/", db.UsesRootParkArrivals ? """
+                (i."Status" = 2 AND NOT i."Retired" AND NEW."Partition" = i."Partition" AND NEW."Revision" = i."Revision" + 1
+                    AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0 AND NEW."Entries" = '["parked"]')
+                """ : "false", StringComparison.Ordinal)
+            .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
             .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal), cancellationToken);
@@ -265,7 +278,7 @@ public sealed partial class EfStore
 
     private sealed record PhysicalRoot(string Id, long Creation, string State, byte[]? Wire, int StateVersion, long Revision, string Header,
         History History, InstanceStatus Status, bool Suspended, long? TerminalRevision, long? TerminalAt, long AsOf,
-        string? Jobs, long? NextJobGeneration);
+        string? Jobs, long? NextJobGeneration, string? Fault);
 
     internal async Task<RootImage?> ReadFirstRootAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
@@ -279,7 +292,7 @@ public sealed partial class EfStore
             SELECT i."Id", b."Creation", i."State", /*root-wire*/ AS "Wire", i."StateVersion", i."Revision", i."FoundationHeader" AS "Header",
                 i."History", i."Status", i."Suspended", i."FoundationTerminalRevision" AS "TerminalRevision", i."FoundationTerminalAt" AS "TerminalAt",
                 floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
-                i."Jobs", i."NextJobGeneration"
+                i."Jobs", i."NextJobGeneration", i."Fault"
             FROM "Instances" i JOIN "FoundationRootBirths" b ON b."Reference" = i."FoundationReference"
                 AND b."Actor" = i."Id" AND b."Tenant" = i."FoundationTenant"
             WHERE i."FoundationTenant" = {tenant} AND i."FoundationReference" = {reference} AND i."Partition" = b."Partition" AND NOT i."Retired"
@@ -310,6 +323,7 @@ public sealed partial class EfStore
             header.Labels.ToDictionary(StringComparer.Ordinal), state, physical.StateVersion, physical.Revision)
             {
                 History = physical.History, Status = physical.Status, Suspended = physical.Suspended, TerminalRevision = physical.TerminalRevision,
+                Fault = db.UsesRootParkArrivals && physical.Fault is not null ? DurableKeyJson.Read<string>(physical.Fault) : null,
                 TerminalAt = physical.TerminalAt, AsOf = physical.AsOf, Jobs = physical.Jobs, NextJobGeneration = physical.NextJobGeneration
             };
     }

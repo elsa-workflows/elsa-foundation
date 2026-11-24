@@ -12,7 +12,7 @@ public sealed partial class EfStore
                 WHERE "ParkAt" IS NOT NULL;
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Inspectable"
                 ON "Messages" ("Partition", "Target" COLLATE "C", "Seq", "Id" COLLATE "C")
-                WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND (NOT "Done" OR "FoundationKeptBy" = 0);
+                WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND (NOT "Done" OR /*kept-reasons*/);
             CREATE OR REPLACE FUNCTION kernel_project_root_park_metadata() RETURNS trigger LANGUAGE plpgsql AS $fn$
             DECLARE changed bigint;
             BEGIN
@@ -40,5 +40,12 @@ public sealed partial class EfStore
             WHERE p."Tenant" = i."FoundationTenant" AND p."Reference" = i."FoundationReference" AND NOT i."Retired"
                 AND (p."ParkAt", p."ParkFault") IS DISTINCT FROM
                     (i."FoundationParkAt", CASE WHEN i."FoundationParkAt" IS NULL THEN NULL ELSE i."Fault" END);
+            """.Replace("/*kept-reasons*/", db.UsesRootParkArrivals
+                ? """ "FoundationKeptBy" IN (0, 1) """
+                : """ "FoundationKeptBy" = 0 """, StringComparison.Ordinal), token);
+
+    internal static Task InstallRootParkArrivalReasonAsync(KernelDb db, CancellationToken token) =>
+        db.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkRevision" bigint CHECK ("FoundationParkRevision" > 0);
             """, token);
 }

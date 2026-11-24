@@ -103,7 +103,13 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
         var snapshot = await store.ReadRootInboxAsync(scope.Tenant, reference, afterSeq, afterOccurrence, _pageSize + 1, cancellationToken);
         var page = snapshot.Rows.Take(_pageSize).Select(row => new DeliveryView(
             cursor.InboxHandle(DurableKeyJson.Write(new { scope.Tenant, Reference = reference, row.Occurrence, row.Seq })),
-            row.Id, row.Kind, null, row.Due, row.Kept ? DeliveryState.Consumed : DeliveryState.Pending, row.Attempts, row.Size)).ToArray();
+            row.Id, row.Kind, null, row.Due, row.KeptBy switch
+            {
+                ParkKeepReason.Consumed => DeliveryState.Consumed,
+                ParkKeepReason.Arrived => DeliveryState.Arrived,
+                null => DeliveryState.Pending,
+                _ => throw new StoreFormatException("The root inbox has an unsupported kept reason.")
+            }, row.Attempts, row.Size)).ToArray();
         PageToken? next = null;
         if (snapshot.Rows.Count > _pageSize)
         {
