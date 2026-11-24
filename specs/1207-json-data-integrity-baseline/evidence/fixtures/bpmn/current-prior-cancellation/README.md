@@ -1,4 +1,4 @@
-These complete SQLite stores were written by clean source `e79d6dd41d17ad69222564eea4bbf4e496a74283`, using fourteen captured executing writers. They retain the original outer result before restart, its deferred positive claim after restart, and settlement after the real one-minute claim expires.
+These complete SQLite stores were written by clean source `c60268f11100e6645627fafed16aa2baf6622386`, using fourteen captured executing writers. They retain the original outer result before restart, its deferred positive claim after restart, and settlement after the real one-minute claim expires.
 
 The producer uses the supported SDK/store path and an actual suspended Delay descendant. This is not the historical ETL Workbench process-loss witness. The original round-nine archive remains unchanged and is separately tested for precise pre-stable material-hash refusal without rewriting retained payloads.
 
