@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Collections;
 using System.Text;
 using System.Text.Json;
 using Elsa.Serialization.Core;
@@ -28,7 +29,7 @@ public sealed class JsonHashOwnerGoldenTests
                 methods = methods.Where(m => m.GetParameters()[0].ParameterType.FullName == selected.GetString());
             var method = Assert.Single(methods);
             if (method.IsGenericMethodDefinition)
-                method = method.MakeGenericMethod(vector.TryGetProperty("genericType", out var generic)
+                method = method.MakeGenericMethod(vector.TryGetProperty("genericObject", out var genericObject) && genericObject.GetBoolean() ? typeof(object) : vector.TryGetProperty("genericType", out var generic)
                     ? inventory.Assemblies.Single(a => a.GetName().Name == vector.GetProperty("genericAssembly").GetString()).GetType(generic.GetString()!, throwOnError: true)!
                     : typeof(JsonElement));
             var parameters = method.GetParameters();
@@ -39,7 +40,28 @@ public sealed class JsonHashOwnerGoldenTests
             var instance = vector.TryGetProperty("instanceKeyHex", out var key)
                 ? Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.NonPublic, null, [Convert.FromHexString(key.GetString()!)], null)
                 : null;
-            var returned = method.Invoke(instance, values);
+            object? returned;
+            try { returned = method.Invoke(instance, values); }
+            catch (TargetInvocationException error) when (vector.TryGetProperty("expectedException", out _))
+            {
+                Assert.Equal(vector.GetProperty("expectedException").GetString(), error.InnerException!.GetType().FullName);
+                if (vector.TryGetProperty("exceptionCode", out var exceptionCode))
+                    Assert.Equal(exceptionCode.GetString(), error.InnerException.GetType().GetProperty("Code")!.GetValue(error.InnerException));
+                continue;
+            }
+            Assert.False(vector.TryGetProperty("expectedException", out _), vector.GetProperty("name").GetString() + ": the actual owner must refuse malformed JSON.");
+            if (vector.TryGetProperty("expectedOrdinalDigest", out var ordinalDigest))
+            {
+                Assert.True(Assert.IsType<int>(returned) == StringComparer.Ordinal.GetHashCode(ordinalDigest.GetString()!),
+                    vector.GetProperty("name").GetString() + ": First-stable hash freeze: the stable digest is pinned independently of process-randomized ordinal hashing.");
+                continue;
+            }
+            if (vector.GetProperty("expected").ValueKind == JsonValueKind.Number)
+            {
+                Assert.True(Assert.IsType<int>(returned) == vector.GetProperty("expected").GetInt32(),
+                    vector.GetProperty("name").GetString() + ": First-stable hash freeze: absent-value hash behavior requires an explicit identity/migration decision to change.");
+                continue;
+            }
             if (vector.TryGetProperty("returnMembers", out var members))
                 foreach (var member in members.EnumerateObject())
                 {
@@ -57,7 +79,7 @@ public sealed class JsonHashOwnerGoldenTests
             }
             if (vector.GetProperty("expected").ValueKind == JsonValueKind.Null)
             {
-                Assert.True(returned is null, vector.GetProperty("name").GetString() + ": absent owner input must remain distinct from an explicit JSON null.");
+                Assert.True(returned is null, vector.GetProperty("name").GetString() + ": First-stable hash freeze: absent owner input must remain distinct from explicit JSON null; changes require an identity/migration decision.");
                 continue;
             }
             var actual = Assert.IsType<string>(returned);
@@ -82,8 +104,30 @@ public sealed class JsonHashOwnerGoldenTests
 
     private static object? Argument(JsonElement argument, Type type, IReadOnlyList<Assembly> assemblies)
     {
+        if (argument.TryGetProperty("baselineOptions", out _)) return JsonBaseline.Options;
+        if (argument.TryGetProperty("clrNull", out _)) return null;
+        if (argument.TryGetProperty("arrayArguments", out var elements))
+        {
+            var itemType = type.IsArray ? type.GetElementType()! : type.GetGenericArguments().Single();
+            var result = Array.CreateInstance(itemType, elements.GetArrayLength());
+            var index = 0;
+            foreach (var element in elements.EnumerateArray()) result.SetValue(Argument(element, itemType, assemblies), index++);
+            return result;
+        }
         if (argument.TryGetProperty("clrType", out var clrType))
             type = ResolveType(clrType.GetString()!, argument.GetProperty("clrAssembly").GetString()!, assemblies);
+        if (argument.TryGetProperty("constructorArguments", out var constructorFields))
+        {
+            var constructor = Assert.Single(type.GetConstructors(), candidate => candidate.GetParameters().All(parameter => constructorFields.TryGetProperty(parameter.Name!, out _)));
+            return constructor.Invoke(constructor.GetParameters().Select(parameter => Argument(constructorFields.GetProperty(parameter.Name!), parameter.ParameterType, assemblies)).ToArray());
+        }
+        if (argument.TryGetProperty("dictionaryEntries", out var entries))
+        {
+            var valueType = type.GetGenericArguments()[1];
+            var dictionary = (IDictionary)Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType))!;
+            foreach (var entry in entries.EnumerateObject()) dictionary.Add(entry.Name, Argument(entry.Value, valueType, assemblies));
+            return dictionary;
+        }
         if (argument.TryGetProperty("typedJson", out var typed)) return JsonSerializer.Deserialize(typed.GetString()!, type, JsonBaseline.Options);
         if (argument.TryGetProperty("objectArray", out var array)) return array.EnumerateArray().Select(value => value.ValueKind switch
         {

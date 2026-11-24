@@ -5,9 +5,11 @@ an explicit identity/migration decision.
 """
 from pathlib import Path
 import base64
+from datetime import datetime, timezone
 import hashlib
 import importlib.util
 import json
+import re
 import struct
 
 spec = importlib.util.spec_from_file_location("canonical_fixture", Path(__file__).with_name("generate-variable-hash-vectors.py"))
@@ -165,6 +167,209 @@ def generate():
             parameterType="Elsa.Agent.Services.Agent" + kind + "Payload", returnProperty="IntentId",
             returnMembers=dict(IdempotencyKey=digest, WorkflowExecutionId="run", ActivityExecutionId="activity", RecordedAt=deadline,
                                Kind="elsa.agent.cancel/1" if kind == "Cancelled" else "elsa.agent.applied/1", Payload=value))
+    following = [
+        ("authoring-schema", "Elsa.Workflows.Design.Api", "Elsa.Workflows.Design.Api.Services.AuthoringSchemaExporter", "ComputeFingerprint", "sha256:", "rawJson", {}),
+        ("authoring-json", "Elsa.Workflows.Design.Api", "Elsa.Workflows.Design.Api.Services.WorkflowAuthoringRevision", "JsonDigest", "", "rawJson", {}),
+        ("draft-state", "Elsa.Workflows.Design.Persistence.Core", "Elsa.Workflows.Design.Persistence.Core.Models.WorkflowDraftStateHash", "Compute", "", "text", {}),
+        ("git-file", "Elsa.Workflows.Design.Reconciliation.Git", "Elsa.Workflows.Design.Reconciliation.Git.Services.GitCanonicalJson", "HashFile", "", "text", {}),
+        ("git-compact", "Elsa.Workflows.Design.Reconciliation.Git", "Elsa.Workflows.Design.Reconciliation.Git.Services.GitCanonicalJson", "Sha256Hex", "", "text", {}),
+        ("archive-json", "Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore", "Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.EfReleaseArchiveStore`1", "JsonDigest", "", "utf8",
+         dict(declaringType="Elsa.Decisions.Persistence.EntityFrameworkCore.DecisionsSqliteDbContext", declaringAssembly="Elsa.Decisions.Persistence.EntityFrameworkCore")),
+    ]
+    for label, assembly, owner, method, prefix, adapter, extra in following:
+        for name, raw in [*variants, ("root-null", "null")]:
+            add(f"{label}/{name}", assembly, owner, method, [{adapter: raw}], helper.load_json(raw), prefix, **extra)
+        if adapter != "rawJson":
+            rows.append(dict(name=label + "/malformed", assembly=assembly, type=owner, method=method, arguments=[{adapter: '{"x":'}],
+                             expectedException="Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreException" if label == "archive-json" else "System.Text.Json.JsonReaderException",
+                             **(dict(exceptionCode="archive_stored_content_invalid") if label == "archive-json" else {}), **extra))
+    for raw in [None, ""]:
+        add("draft-state/absent-" + ("null" if raw is None else "empty"), "Elsa.Workflows.Design.Persistence.Core", "Elsa.Workflows.Design.Persistence.Core.Models.WorkflowDraftStateHash", "Compute",
+            [dict(json=raw)], None, frame=b"")
+    archive = following[-1]
+    for name, raw in variants:
+        for kind in [1, 2]:
+            add(f"archive-content/{kind}-{name}", archive[1], archive[2], "ContentDigest", [dict(json=kind), dict(utf8=raw)],
+                helper.load_json(raw), frame=raw.encode() if kind == 2 else None, **archive[-1])
+    rows.append(dict(name="archive-content/invalid-kind", assembly=archive[1], type=archive[2], method="ContentDigest",
+                     arguments=[dict(json=3), dict(utf8="null")], expectedException="Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreException",
+                     exceptionCode="archive_stored_content_invalid", **archive[-1]))
+    rows.append(dict(name="draft-state/whitespace-refused", assembly="Elsa.Workflows.Design.Persistence.Core", type="Elsa.Workflows.Design.Persistence.Core.Models.WorkflowDraftStateHash",
+                     method="Compute", arguments=[dict(text=" ")], expectedException="System.Text.Json.JsonReaderException"))
+    for label, assembly, owner, method in [
+        ("authoring-parts", "Elsa.Workflows.Design.Api", "Elsa.Workflows.Design.Api.Services.WorkflowAuthoringRevision", "Digest"),
+        ("user-task-parts", "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.UserTasks.UserTaskRules", "Id"),
+    ]:
+        for index, parts in enumerate([["tenant-é", "a|b", "c"], ["tenant-é", "a", "b|c"], ["c", "a|b", "tenant-é"], ["tenant-é", "", "c"], []]):
+            add(f"{label}/{index}", assembly, owner, method, [dict(json=parts)], parts)
+    values = {"OwnerKey": dict(type="string", literal="René", parameter="ignored"), "Count": dict(type="integer", literal="1", parameter=None)}
+    for label, keys, members in [("base", ["OwnerKey", "Count"], values), ("order", ["Count", "OwnerKey"], values),
+                                 ("parameter-only", ["OwnerKey", "Count"], {**values, "OwnerKey": {**values["OwnerKey"], "parameter": "other"}})]:
+        add("workflow-dashboard-group/" + label, "Elsa.Workflows.Dashboard.Queries", "Elsa.Workflows.Dashboard.Queries.WorkflowDashboardQuerySource", "GroupKey",
+            [dict(json=keys), dict(json=members)], [dict(key=key, type=members[key]["type"], literal=members[key]["literal"]) for key in keys])
+    for label, values in [("strings", ["tenant-é", "reader", "Mixed"]), ("null", ["tenant-é", None]), ("scalars", [True, 3]),
+                          ("carried", [{"OwnerKey": "René", "rows": [1, None]}])]:
+        projection = [None if value is None else dict(representation="json", value=value) if isinstance(value, dict)
+                      else dict(representation="clr", value=opaque(value)) for value in values]
+        add("identity-scope/" + label, "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore", "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.EfIdentityStoreSupport", "JsonFingerprint",
+            [dict(objectArray=values)], projection)
+    for kind in ["Draft", "Version"]:
+        labels = [*variants, ("root-null", "null"), ("absent", None), ("idempotency-only", variants[0][1]), ("insertion-order", variants[0][1])]
+        for name, raw in labels:
+            data = helper.load_json(raw) if raw is not None else None
+            inputs = dict(aInput=dict(constructorArguments=dict(State=dict(text="Present"), Value=dict(rawJson=raw) if raw is not None else dict(json=None))),
+                          ZInput=dict(constructorArguments=dict(State=dict(text="Present"), Value=dict(rawJson="1"))))
+            if name == "insertion-order": inputs = dict(reversed(list(inputs.items())))
+            parts = dict(IdempotencyKey=dict(text="other" if name == "idempotency-only" else "idempotency-only"),
+                         Inputs=dict(dictionaryEntries=inputs), CorrelationId=dict(text="correlation-é"))
+            projected_inputs = [dict(name="ZInput", state="Present", hasValue=True, value=helper.load_json("1")),
+                                dict(name="aInput", state="Present", hasValue=raw is not None, value=data)]
+            if kind == "Draft":
+                parts.update(DraftId=dict(text="draft-é"), ExpectedRevision=dict(json=3))
+                projected_inputs = [{**item, "name": opaque(item["name"]), "state": opaque(item["state"])} for item in projected_inputs]
+                projection = dict(draftId=opaque("draft-é"), expectedRevision=3, correlationId=opaque("correlation-é"), inputs=projected_inputs)
+            else:
+                parts.update(VersionId=dict(text="version-é"))
+                projection = dict(versionId="version-é", correlationId="correlation-é", inputs=projected_inputs)
+            add(f"activity-{kind.lower()}-request/{name}", "Elsa.Workflows.Publishing.Api", "Elsa.Workflows.Publishing.Api.Services.ActivityDraftTestRunService", "RequestFingerprint",
+                [dict(constructorArguments=parts)], projection, parameterType="Elsa.Workflows.Publishing.Api.Models.StartActivity" + kind + "TestRun")
+    for name, raw in [*variants, ("root-null", "null")]:
+        data = helper.load_json(raw)
+        digest = hashlib.sha256(canonical(data).encode()).hexdigest()
+        add("activity-json-comparer/" + name, ef, "Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext", "JsonHashCode",
+            [dict(rawJson=raw), dict(baselineOptions=True)], data, genericObject=True, expectedOrdinalDigest=digest)
+    rows.append(dict(name="activity-json-comparer/clr-null", assembly=ef, type="Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext", method="JsonHashCode",
+                     arguments=[dict(clrNull=True), dict(baselineOptions=True)], genericObject=True, expected=0))
+    runtime_store = "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore"
+    schedule = dict(scheduleId="schedule-B", artifactId="artifact-é", executableNodeId="node", stimulusType="timer", stimulusHash="stimulus",
+                    kind=0, expression="PT5M", nextOccurrence="2026-07-15T09:30:00+02:00", createdAt="2026-01-15T08:00:00+00:00",
+                    activationId=None, slotId=None, isActive=True)
+
+    def schedule_projection(value, immutable=False):
+        result = dict(value, isActive=False)
+        for key in ["scheduleId", "artifactId", "executableNodeId", "stimulusType", "stimulusHash", "expression", "activationId", "slotId"]:
+            result[key] = opaque(result[key])
+        result['kind'] = ["Interval", "Cron"][value['kind']]
+        if immutable: result['nextOccurrence'] = "0001-01-01T00:00:00+00:00"
+        return result
+
+    for label, changes in [("base", {}), ("active-only", dict(isActive=False)), ("cursor-only", dict(nextOccurrence="2026-07-15T10:30:00+02:00")),
+                           ("expression", dict(expression="PT10M")), ("created", dict(createdAt="2026-01-15T09:00:00+00:00")), ("identity", dict(scheduleId="other"))]:
+        value = dict(schedule, **changes)
+        add("recurring-immutable/" + label, runtime_store, "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRecurringTriggerScheduleStore", "ImmutableFingerprint",
+            [dict(json=value)], schedule_projection(value, True), uppercase=True)
+        members = [value, dict(schedule, scheduleId="schedule-A")]
+        if label == "active-only": members = list(reversed(members))
+        add("recurring-projection/" + label, runtime_store, "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRecurringTriggerScheduleStore", "ProjectionFingerprint",
+            [dict(json=members)], [schedule_projection(item) for item in sorted(members, key=lambda item: item['scheduleId'])], uppercase=True)
+    binding = dict(triggerBindingId="binding-B", artifactId="artifact-é", definitionId="definition", artifactVersion="1.0.0", artifactHash="artifact-hash", executableNodeId="node",
+                   stimulusType="timer", stimulusHash="stimulus", correlationScope=None, metadata={"OwnerKey": "René"}, createdAt="2026-01-15T08:00:00+00:00",
+                   activationId=None, slotId=None, cardinality=1, isActive=True)
+
+    def binding_projection(value):
+        result = dict(value, isActive=False)
+        for key in ["triggerBindingId", "artifactId", "definitionId", "artifactVersion", "artifactHash", "executableNodeId", "stimulusType", "stimulusHash", "correlationScope", "activationId", "slotId"]:
+            result[key] = opaque(result[key])
+        result['metadata'] = {opaque(key): opaque(item) for key, item in value['metadata'].items()}
+        result['cardinality'] = ["Exclusive", "FanOut"][value['cardinality']]
+        return result
+
+    for label, changes in [("base", {}), ("active-only", dict(isActive=False)), ("metadata-case", dict(metadata={"ownerKey": "René"})),
+                           ("metadata-value", dict(metadata={"OwnerKey": "other"})), ("artifact-hash", dict(artifactHash="other")), ("cardinality", dict(cardinality=0)),
+                           ("slot", dict(slotId="slot")), ("empty-correlation", dict(correlationScope=""))]:
+        members = [dict(binding, **changes), dict(binding, triggerBindingId="binding-A")]
+        if label == "active-only": members = list(reversed(members))
+        add("trigger-projection/" + label, runtime_store, "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowTriggerBindingStore", "Fingerprint",
+            [dict(json=members)], [binding_projection(item) for item in sorted(members, key=lambda item: item['triggerBindingId'])], uppercase=True)
+    for label, tenant, partition, workflow, activity in [
+        ("base", None, "partition-é", "workflow|a", "activity|b"),
+        ("tenant", "tenant-é", "partition-é", "workflow|a", "activity|b"),
+        ("partition", None, "partition-other", "workflow|a", "activity|b"),
+        ("workflow", None, "partition-é", "workflow", "a|activity|b"),
+        ("activity", None, "partition-é", "workflow|a", "activity"),
+    ]:
+        scope = dict(tenantId=tenant, persistencePartition=partition)
+        add("rules-run/" + label, "Elsa.Rules.Workflows.Runtime", "Elsa.Rules.Workflows.Runtime.Services.RulesNativeBoundary", "RunId",
+            [dict(json=scope), dict(text=workflow), dict(text=activity)],
+            dict(format="rules-native-run-v1", scope=scope, workflowId=workflow, activityId=activity), "rules-")
+
+    for label, changed in [("base", {}), ("run", dict(runId="run-other")), ("source-handle", dict(source="source-other")),
+                           ("lookup-handle", dict(lookup="lookup-other")), ("pipeline", dict(pipeline="hash-other")),
+                           ("ignored-metadata", dict(alias="other", revision="other", partition="other"))]:
+        value = {**dict(runId="run-é", source="source-handle", lookup="lookup-handle", pipeline="pipeline-hash", alias="source", revision="revision", partition="partition-é"), **changed}
+        scope = dict(tenantId=None, persistencePartition=value['partition'])
+        snapshot = dict(scope=scope, runId=value['runId'],
+                        sourcePin=dict(scope=scope, alias=value['alias'], role=0, revision=value['revision'], handle=value['source'], expectedSha256=None),
+                        lookupPin=dict(scope=scope, alias="lookup", role=0, revision="revision", handle=value['lookup'], expectedSha256=None),
+                        sourceChunk=None, lookupChunk=None)
+        add("etl-source-index/" + label, "Elsa.Etl.Runtime", "Elsa.Etl.Runtime.Preparation.EtlFilePreparer", "SourceIndexIdentity",
+            [dict(json=snapshot), dict(text=value['pipeline'])],
+            dict(formatVersion=1, sourceIndexFormatVersion=1, runId=value['runId'], pipelineHash=value['pipeline'], sourcePinHandle=value['source'], lookupPinHandle=value['lookup']))
+
+    def ticks(value):
+        match = re.fullmatch(r'(.*T\d{2}:\d{2}:\d{2})(?:\.(\d{1,7}))?(Z|[+-]\d{2}:\d{2})', value)
+        date = datetime.fromisoformat(match[1] + match[3].replace('Z', '+00:00')).astimezone(timezone.utc)
+        return ((date.toordinal() - 1) * 86400 + date.hour * 3600 + date.minute * 60 + date.second) * 10_000_000 + int((match[2] or '').ljust(7, '0'))
+
+    def authority_key(system, root, metadata):
+        def frame(value):
+            data = value.encode('utf-16-le')
+            return struct.pack('>i', len(data)) + data
+        data = frame('workflow-execution-authority/v1') + frame(system) + frame(root) + struct.pack('>i', len(metadata))
+        for key, value in sorted(metadata.items()): data += frame(key) + frame(value)
+        return hashlib.sha256(data).hexdigest()
+
+    authority = dict(tenantPartition="partition-é", systemIdentity="system-é", rootInitiator="operator-é", authorityMetadata={"ZOwner": "René", "aOwner": "a|b"})
+    selector = dict(definitionId="definition-é", status=3, runKind=2, from_="2026-07-15T09:30:00+02:00", to="2026-07-16T09:30:00+02:00",
+                    correlationId="correlation-é", workflowExecutionId=None, artifactId=None, matchAllAuthorized=False)
+    selector['from'] = selector.pop('from_')
+    capture_cases = [("base", {}, {}), ("metadata-order", dict(authorityMetadata=dict(reversed(list(authority['authorityMetadata'].items())))), {}),
+                     ("metadata-value", dict(authorityMetadata={"ZOwner": "other", "aOwner": "a|b"}), {}),
+                     ("one-tick", {}, {"from": "2026-07-15T09:30:00.0000001+02:00"}),
+                     ("same-instant-offset", {}, {"from": "2026-07-15T07:30:00+00:00"}),
+                     ("status", {}, dict(status=4)), ("run-kind", {}, dict(runKind=1)),
+                     ("null-dates", {}, {"from": None, "to": None}), ("page-only", dict(pageSize=37, cursor="ignored-cursor"), {})]
+    for label, authority_changes, selector_changes in capture_cases:
+        a = {**authority, **authority_changes}
+        s = {**selector, **selector_changes}
+        query = {**a, 'selector': s, 'pageSize': a.pop('pageSize', 10), 'cursor': a.pop('cursor', None)}
+        common = dict(tenantPartition=a['tenantPartition'], systemIdentity=a['systemIdentity'], rootInitiator=a['rootInitiator'],
+                      authorityPartitionKey=authority_key(a['systemIdentity'], a['rootInitiator'], a['authorityMetadata']),
+                      definitionId=s['definitionId'], status=None, runKind=None, correlationId=s['correlationId'], workflowExecutionId=s['workflowExecutionId'],
+                      artifactId=s['artifactId'], matchAllAuthorized=s['matchAllAuthorized'])
+        common = opaque(common)
+        common['status'] = ['Pending', 'Running', 'Suspended', 'Completed', 'Faulted', 'Cancelled'][s['status']] if s['status'] is not None else None
+        common['runKind'] = ['Unknown', 'TestRun', 'PublishedRun', 'BackgroundWeaverRun'][s['runKind']] if s['runKind'] is not None else None
+        metadata = [opaque(dict(key=key, value=value)) for key, value in sorted(a['authorityMetadata'].items())]
+        for memory in [False, True]:
+            projected = {**common, ('authorityMetadata' if memory else 'metadata'): metadata,
+                         ('fromTicks' if memory else 'from'): ticks(s['from']) if s['from'] else None,
+                         ('toTicks' if memory else 'to'): ticks(s['to']) if s['to'] else None}
+            add(('memory' if memory else 'ef') + '-alteration-capture/' + label,
+                'Elsa.Workflows.Runtime' if memory else runtime_store,
+                'Elsa.Workflows.Runtime.Services.Executions.InMemoryWorkflowExecutionStateStore' if memory else 'Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfWorkflowExecutionStateStore',
+                'AlterationCaptureScope' if memory else 'CaptureScope', [dict(json=query)], projected, uppercase=True)
+
+    for branch in ['ids', 'query']:
+        for label, raw in variants:
+            data = helper.load_json(raw)
+            auth = dict(tenantPartition=authority['tenantPartition'], systemIdentity=authority['systemIdentity'], rootInitiator=authority['rootInitiator'], metadata=authority['authorityMetadata'])
+            target = dict(executionIds=['z-execution', 'a-execution', 'z-execution'], query=None) if branch == 'ids' else dict(executionIds=None, query=selector)
+            submission = dict(constructorArguments=dict(authorityScope=dict(json=auth), target=dict(json=target),
+                alterations=dict(arrayArguments=[dict(constructorArguments=dict(kind=dict(text='replace-é'), schemaVersion=dict(json=1), payload=dict(rawJson=raw)))])))
+            projected_authority = {**opaque({key: value for key, value in auth.items() if key != 'metadata'}),
+                                   'metadata': {opaque(key): opaque(value) for key, value in auth['metadata'].items()}}
+            if branch == 'ids': projected_target = opaque(dict(executionIds=['a-execution', 'z-execution']))
+            else:
+                normalized = {**selector}
+                normalized['from'] = '2026-07-15T07:30:00.0000000+00:00'
+                normalized['to'] = '2026-07-16T07:30:00.0000000+00:00'
+                normalized['status'] = 'Completed'; normalized['runKind'] = 'PublishedRun'
+                projected_target = opaque(dict(query=normalized))
+            projected = dict(authority=projected_authority, target=projected_target, alterations=[dict(kind=opaque('replace-é'), schemaVersion=1, payload=data)])
+            add('alteration-request/' + branch + '-' + label, 'Elsa.Workflows.Runtime',
+                'Elsa.Workflows.Runtime.Services.Alterations.WorkflowAlterationRequestCanonicalizer', 'Hash',
+                [submission], projected, terminalMethod='HashRequest')
     return rows
 
 
