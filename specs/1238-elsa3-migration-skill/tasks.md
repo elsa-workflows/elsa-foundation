@@ -54,7 +54,8 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T
   `context.Variables`; an `[AccessesUndeclaredVariables]` read by name; an `[AccessesWorkflowState]` activity setting an output; tests with fake step variables and
   workflow state.
 - [ ] T011 [P] Background (case 12): an activity marked `[BackgroundExecutionSafe]` that honours the cancellation token
-  and keys its effect on the invocation id; test for cancellation.
+  and keys its effect on `LogicalInvocationId` (stable across operator retries; `InvocationId` is not); test for
+  cancellation.
 - [ ] T012 [P] Cancellation and faults (case 13): fault and cancel transitions; tests for each.
 - [ ] T013 JavaScript host function (case 14): `acme.lookupCustomer` declared in `AcmeFeature` with
   `ReplacesGlobalFunctions = ["lookupCustomer"]`; test calling the
@@ -93,7 +94,7 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T
   and [data-model.md](data-model.md), with one example row per table using `Acme` names; the accepted-refusal example uses the placeholder `<code>`.
 - [ ] T021 [US1] Write `skill/SKILL.md`: front matter per [contracts/adapters.md](contracts/adapters.md); then, in
   order, the privacy statement (FR-005, FR-006: what reaches the AI provider; ask before each new raw definition or
-  source file, naming the file and the JSON path), what the skill does and does not do (FR-021), "read the plan first" (FR-007),
+  source file, naming the file and the JSON path), what the skill does and does not do (FR-021), "read the plan first" (FR-007), asking for and recording the essentials image tag when the plan has none (FR-004),
   the prerequisite check and the `docker run` invocation copied from spec 1237's command-line contract (FR-022), the four stages (FR-008–FR-012, R-6 searches, the report fields of
   [contracts/report-consumption.md](contracts/report-consumption.md)), the version check (R-4), the handoff
   (FR-020), and the edge cases of the spec as plain rules. No diagnostic code literal; read code, message and

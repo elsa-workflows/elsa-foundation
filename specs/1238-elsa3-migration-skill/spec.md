@@ -51,7 +51,8 @@ journey to the end, start a new session halfway, and confirm it resumes from the
 **Acceptance Scenarios**:
 
 1. **Given** no migration plan in the workspace, **When** the user starts the skill, **Then** it first states what can
-   reach the AI provider (FR-005), then creates the plan from the template and runs the inventory command.
+   reach the AI provider (FR-005), then creates the plan from the template, asks for the tag of the essentials engine
+   image the user will go live on and records it (FR-004), and runs the inventory command.
 2. **Given** an inventory report, **When** the skill reads it, **Then** it lists the custom components the report
    names, with their usage counts, asks for the Elsa 3 source folders or repositories, and records each component's
    source location in the plan, or records it as not found.
@@ -205,7 +206,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 **Privacy**
 
 - **FR-005**: Before reading any file, the skill MUST tell the user what can reach the AI provider: the redacted
-  report; everything else only after the user agrees. It asks once per Elsa 3 source folder before searching it
+  report, the migration plan and the skill's own files without asking (the plan holds only what the user wrote into
+  it: paths, names, decisions and notes); everything else only after the user agrees. It asks once per Elsa 3 source folder before searching it
   (FR-009), and before each raw definition and each other file it opens, naming the file. It never reads the user's
   `appsettings.json` without asking, and warns that the file can hold connection strings and secrets.
 - **FR-006**: The skill MUST rely on the report being complete without an AI and always redacted (spec 1237).
