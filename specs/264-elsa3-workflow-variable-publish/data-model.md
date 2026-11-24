@@ -31,10 +31,10 @@ No persisted model changes. The change is in how one Elsa 3 shape maps to one El
 | `Int32`, `Boolean`, other primitives, enums | `"5"`, `"true"`, `"OK"` | the converted value |
 | `List<T>`, `T[]`, array flag, with `T` known to Elsa 4 | a JSON array | Elsa 4 type `T`, kind List or Array; the items converted to `T` |
 | a type Elsa 4 does not know: `List<T>` or `T[]` with `T` unknown, a nested collection, a custom class, an unregistered enum | none, or JSON (`{…}`, `[…]`) | `Object`, holding the parsed JSON (revised after review) |
-| a type Elsa 4 does not know | text that is not JSON | refused |
+| a type Elsa 4 does not know | anything but a JSON object or array (`order-1`, `42`) | refused |
 | a resource: `FormFile`, `IFormFile`, `Stream`, `byte[]`, alone or as an element | any, or none | refused (#3194) |
 | `ObjectDictionary`, `HttpHeaders` | a JSON object | `Object` holding the object |
 | any collection | text that is not a JSON array (`a, b`) | refused; the guidance shows `["a","b"]` |
 | any dictionary | text that is not a JSON object | refused, with an example object |
 | a scalar type | text that does not convert in strict mode (`"abc"` for `Int32`) | refused |
-| a scalar type Elsa 4's registry does not know (an unregistered enum) | any text | refused |
+| a scalar type Elsa 4's registry does not know (an unregistered enum) | anything but a JSON object or array | refused; a JSON object or array starts as that JSON, as for any type Elsa 4 does not know (clarification 2026-11-24, #5684) |

@@ -55,6 +55,34 @@ public sealed class Elsa3VariableCustomComponentTests
         Assert.Contains("Variable 'local'", info.Message);
     }
 
+    [Fact]
+    public async Task An_unregistered_type_with_a_JSON_starting_value_starts_as_that_JSON_with_the_info()
+    {
+        var result = await ConvertAsync(new Elsa3Variable { Id = "order", Name = "order", TypeName = "Acme.Orders.OrderDto, Acme.Orders", Value = """{"id":1}""" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var variable = Assert.Single(result.Value!.State.Variables);
+        Assert.Equal(new TypeReference("Any"), variable.Type);
+        Assert.Equal("""{"id":1}""", Assert.IsType<System.Text.Json.JsonElement>(variable.Default!.Value).GetRawText());
+        var info = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.VariableTypeUnregistered);
+        Assert.Equal(Elsa3MigrationDiagnosticSeverity.Info, info.Severity);
+    }
+
+    /// <summary>Spec 264 FR-004's example: the info is reported and the starting value that is not JSON is refused.</summary>
+    [Fact]
+    public async Task An_unregistered_type_with_a_starting_value_that_is_not_JSON_reports_the_info_and_is_refused()
+    {
+        var result = await ConvertAsync(new Elsa3Variable { Id = "order", Name = "order", TypeName = "Acme.Orders.OrderDto, Acme.Orders", Value = "order-1" });
+
+        Assert.False(result.Succeeded);
+        var info = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.VariableTypeUnregistered);
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3MigrationDiagnosticSeverity.Info, info.Severity);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.VariableValueUnconvertible, refusal.Code);
+        Assert.Equal("$.variables[0]", refusal.Path);
+        Assert.Contains("is not known in Elsa 4, and the value is not a JSON object or array", refusal.Message);
+    }
+
     /// <summary>A collection names its unregistered element; a nesting Elsa 4 cannot express is Any whatever is registered, so it gets no info.</summary>
     [Theory]
     [InlineData("Acme.Orders.OrderDto, Acme.Orders", false, "Acme.Orders.OrderDto, Acme.Orders")]
