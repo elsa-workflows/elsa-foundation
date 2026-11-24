@@ -195,14 +195,16 @@
 		<!--
 			Hosts the WorkflowsRuntimeAttention and WorkflowsRuntimeTracing features. Tracing swaps the no-op
 			IWorkflowEngineTracer for the ActivitySource-backed tracer so the runtime emits drain/dispatch/activity/checkpoint
-			spans on the Elsa.Workflows.Runtime source; the host-local OpenTelemetryEngineTracingBridge feature then forwards
-			those spans into the OTel ingestion store.
+			spans on the Elsa.Workflows.Runtime source; the DiagnosticsOpenTelemetryEngineBridge feature
+			(Elsa.Diagnostics.OpenTelemetry.Workflows, below) then forwards those spans into the OTel ingestion store.
 		-->
 		<ProjectReference Include="../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
 		<ProjectReference Include="../../essentials/src/Caching/Core/Elsa.Caching.Core.csproj" />
 		<ProjectReference Include="../../essentials/src/Caching/Memory/Elsa.Caching.Memory.csproj" />
 		<ProjectReference Include="../../essentials/src/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
 		<ProjectReference Include="../../essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj" />
+		<!-- The DiagnosticsOpenTelemetryEngineBridge feature shells.json enables, discovered through WithHostAssemblies(). -->
+		<ProjectReference Include="../../essentials/src/Diagnostics/OpenTelemetry/Workflows/Elsa.Diagnostics.OpenTelemetry.Workflows.csproj" />
 		<ProjectReference Include="../../essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj" />
 		<ProjectReference Include="../../essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj" />
 		<!--

@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\src\Diagnostics\OpenTelemetry\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Diagnostics\OpenTelemetry\Workflows\Elsa.Diagnostics.OpenTelemetry.Workflows.csproj" />
   </ItemGroup>
 
 </Project>

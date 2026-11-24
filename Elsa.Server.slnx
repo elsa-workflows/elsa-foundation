@@ -362,6 +362,7 @@
   <Folder Name="/essentials/src/Diagnostics/OpenTelemetry/">
     <Project Path="essentials/src/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <Project Path="essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <Project Path="essentials/src/Diagnostics/OpenTelemetry/Workflows/Elsa.Diagnostics.OpenTelemetry.Workflows.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Diagnostics/OpenTelemetry/Persistence/">
     <Project Path="essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
