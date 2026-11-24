@@ -4,3 +4,5 @@
 # Retained compatibility fixtures are checked by byte length and SHA-256.
 # Preserve their captured bytes on checkouts with core.autocrlf enabled.
 /extensions/Etl/tests/Shared/Fixtures/** -text
+/specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-fault/** -text
+/specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-native/** -text

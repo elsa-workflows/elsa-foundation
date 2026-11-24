@@ -12,7 +12,7 @@ namespace Elsa.Activities.Bpmn.Tests;
 public sealed partial class BpmnDirectExecutionTests
 {
     /// <summary>Optional complete-store capture from an ordinary current writer; never repairs archived rows.</summary>
-    private async Task CaptureCurrentFixtureAsync(string scenario, string stage, IServiceProvider services, string executionId)
+    private async Task CaptureCurrentFixtureAsync(string scenario, string stage, IServiceProvider services, string executionId, object? observations = null)
     {
         if (Environment.GetEnvironmentVariable("ELSA_BPMN_CURRENT_FIXTURE_EVIDENCE") is not { Length: > 0 } root) return;
         var output = Path.Combine(root, scenario);
@@ -25,6 +25,8 @@ public sealed partial class BpmnDirectExecutionTests
         var names = new HashSet<string>(["Elsa.Activities.Bpmn.Tests", "Elsa.Activities.Bpmn", "Elsa.Workflows.Runtime.Core",
             "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "Elsa.Serialization.Core",
             "Elsa.Activities.Runtime.Core", "Bpmn.Model", "Bpmn.Semantics"], StringComparer.Ordinal);
+        if (scenario == "prior-scope-cancellation") names.UnionWith(["Elsa.Activities.Bpmn.Core", "Elsa.Activities.Scheduling",
+            "Elsa.Workflows.Runtime.Scheduling", "Elsa.Activities.Testing", "Elsa.Serialization.SystemText"]);
         var assemblies = AppDomain.CurrentDomain.GetAssemblies().Where(assembly => names.Contains(assembly.GetName().Name!)).ToArray();
         Assert.Equal(names.Count, assemblies.Length);
         var binaryHashes = assemblies.ToDictionary(assembly => Path.GetFileName(assembly.Location),
@@ -48,6 +50,7 @@ public sealed partial class BpmnDirectExecutionTests
             captureProvenance = new { version = 1, sourceSha, sourceDirty = false,
                 databaseSha256 = Convert.ToHexStringLower(SHA256.HashData(bytes)), databaseByteLength = bytes.Length, binaryHashes, binaryVersions },
             capturedAt = DateTimeOffset.UtcNow, scenario, stage, executionId,
+            observations,
             state = await services.GetRequiredService<IRuntimeModelExecutionReader>().FindAsync(executionId),
             native = await services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync(),
             modelQueue = (await services.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new(executionId))).Items

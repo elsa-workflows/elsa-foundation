@@ -123,10 +123,10 @@ def protected_worker_schema(version, content, expected):
     if version == '2.1.0':
         return True
     protected = {'ingressorigin', 'stimulusdeliveryorigin'}
-    origin = content.get('modelWorkOrigin')
+    origins = [value for name, value in content.items() if name.lower() == 'modelworkorigin']
     return (not any(name.lower() in protected for name in content)
-            and isinstance(origin, dict)
-            and not any(name.lower() == 'ingressorigin' for name in origin))
+            and isinstance(content.get('modelWorkOrigin'), dict)
+            and not any(name.lower() == 'ingressorigin' for origin in origins if isinstance(origin, dict) for name in origin))
 
 
 def protected_product_inventory(products, source, direct, version):

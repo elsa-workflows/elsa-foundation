@@ -30,6 +30,8 @@ class ProtectedWorkerSchemaTests(unittest.TestCase):
                 self.assertFalse(etl.protected_worker_schema('2.0.0',{'modelWorkOrigin':{},name:None},'2.0.0'))
         for name in ('ingressOrigin','IngressOrigin','INGRESSORIGIN'):
             self.assertFalse(etl.protected_worker_schema('2.0.0',{'modelWorkOrigin':{name:None}},'2.0.0'))
+            for alias in ('ModelWorkOrigin','MODELWORKORIGIN'):
+                self.assertFalse(etl.protected_worker_schema('2.0.0',{'modelWorkOrigin':{},alias:{name:None}},'2.0.0'))
 
     def test_current_gate_version_is_valid_with_or_without_ingress(self):
         for state in ({'modelWorkOrigin':{}}, {'modelWorkOrigin':{'ingressOrigin':None},'ingressOrigin':None}):
