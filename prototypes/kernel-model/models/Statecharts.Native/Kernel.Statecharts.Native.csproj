@@ -5,7 +5,7 @@
   <PropertyGroup><KernelContractOnly>true</KernelContractOnly></PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Statecharts.Run" />
-    <InternalsVisibleTo Include="Kernel.Native.Run" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Statecharts.OrderFixture" />
     <ProjectReference Include="../Statecharts/Kernel.Statecharts.csproj" />
     <ProjectReference Include="../Native/Kernel.Native.csproj" />
   </ItemGroup>

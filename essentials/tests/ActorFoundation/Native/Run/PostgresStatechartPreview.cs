@@ -1,10 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Statecharts.OrderFixture;
 using Kernel.EntityFramework;
 using Kernel.Native;
 using Kernel.Runtime.Hosting;
-using Kernel.Statecharts.Native;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
 using Contract = Kernel.Foundation.Contracts;
@@ -187,14 +187,9 @@ internal static class PostgresStatechartPreview
 
     internal static (string Frame, string Visit) Configuration(EfStore.RootImage image, string expected)
     {
-        var native = Json.Read<NativeState>(image.State!);
-        var frame = native.Frames.Values.Single(f => f.Node == OrderStatechart.Node);
-        var chart = frame.State?.Deserialize<MachineState>();
-        Check(image is { Status: InstanceStatus.Running, History: History.Full } && native.Mode == Modes.Balanced && native.Agenda.Count == 0 &&
-            chart is { Active: [var state], Pending: null, Visits: [var visit] } && state == expected &&
-            visit.State == expected && visit.Occurrence.StartsWith(frame.Id + "/state/", StringComparison.Ordinal),
+        Check(image is { Status: InstanceStatus.Running, History: History.Full, State: not null },
             $"Expected the persisted order machine to be settled in {expected}.");
-        return (frame.Id, chart!.Visits![0].Occurrence);
+        return OrderStatechart.SettledConfiguration(image.State!, expected);
     }
 
     internal static string?[][] ChartEntries(IEnumerable<Contract.JournalEntry> entries)

@@ -494,6 +494,12 @@
       "elsa.workflows.runtime.graph": {
         "type": "Project"
       },
+      "elsa.workflows.runtime.statecharts.orderfixture": {
+        "type": "Project",
+        "dependencies": {
+          "Kernel.Statecharts.Native": "[1.0.0, )"
+        }
+      },
       "Kernel.Foundation.InMemory": {
         "type": "Project",
         "dependencies": {
@@ -530,9 +536,9 @@
           "Elsa.ActorFoundation.BuiltIn.PostgreSql": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Statecharts.OrderFixture": "[1.0.0, )",
           "Kernel.Foundation.InMemory": "[1.0.0, )",
           "Kernel.Native.Legacy": "[1.0.0, )",
-          "Kernel.Statecharts.Native": "[1.0.0, )",
           "Kernel.WorkflowActor": "[1.0.0, )"
         }
       },
