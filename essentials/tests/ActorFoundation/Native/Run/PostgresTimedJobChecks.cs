@@ -10,6 +10,7 @@ namespace Kernel.Native.Run;
 internal static class PostgresTimedJobChecks
 {
     private static readonly InstanceRef Actor = InstanceRef.In(0, "timed-job");
+    private static readonly InstanceRef Other = InstanceRef.In(0, "unrelated-actor");
     private const string Model = "timed-job-check";
     private const string Live = "live";
     private const string Moved = "moved";
@@ -17,13 +18,15 @@ internal static class PostgresTimedJobChecks
     private const string FirstOwner = "job-original";
     private const string RetryOwner = "job-retry";
     private const string NextOwner = "job-successor";
+    private const string ActiveOwner = "job-active-trial";
+    private const string Unwinding = "unwinding";
     private static readonly TimeSpan Lease = TimeSpan.FromMinutes(1);
 
-    internal static async Task<int> RunAsync(bool inBatch)
+    internal static async Task<int> RunAsync(bool inBatch, bool owned = true, bool trialWithdrawal = true)
     {
         var open = PostgresMultiRootClient.Database();
-        var store = new EfStore(open, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(40));
+        var store = new EfStore(open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         var stop = timeout.Token;
         await using (var db = open())
         {
@@ -103,14 +106,79 @@ internal static class PostgresTimedJobChecks
                 final.History.Select(entry => (entry.Revision, Json.Read<string[]>(entry.Entries).Single())).SequenceEqual(
                     [(1L, "start:live"), (2L, "result:live-result"), (3L, "start:moved"), (4L, "result:deadline")]),
                 "The late callback must leave exactly one physical journal outcome for each job on the same actor.");
-            Console.WriteLine($"PostgreSQL owned {(inBatch ? "in-batch" : "checked")}: {Actor.Id}, epoch {previousFence.Epoch}->{retryFence.Epoch}->{takeoverFence.Epoch}, " +
-                "revision 4, timely completion wins, due takeover counts one trial and delivers one deadline.");
+            Console.WriteLine($"ok PostgreSQL {(owned ? "owned" : "EF")} {(inBatch ? "in-batch" : "checked")}: {Actor.Id}, " +
+                $"epochs {previousFence.Epoch}->{retryFence.Epoch}->{takeoverFence.Epoch}, revision 4, timely completion wins and due takeover counts one trial.");
+            await CheckCurrentOwnerTrialAsync(next, nextModel, takeoverFence);
             return 0;
         }
         finally
         {
             foreach (var body in firstModel.Results.Values.Concat(retryModel.Results.Values).Concat(nextModel.Results.Values))
                 body.TrySetCanceled();
+        }
+
+        async Task CheckCurrentOwnerTrialAsync(Worker preceding, Probe precedingModel, PartitionFence precedingFence)
+        {
+            var due = await Issue(Unwinding, birth: false);
+            var original = await Pending(preceding, precedingModel, Unwinding, due, 5);
+            var originalDriver = Driver(preceding, Unwinding);
+            var activeModel = new Probe(trialWithdrawal);
+            await using var active = Owner(ActiveOwner, activeModel);
+            try
+            {
+                await Expire(NextOwner);
+                await Activate(active);
+                var trial = await Pending(active, activeModel, Unwinding, due, 5, recovered: true);
+                var activeDriver = Driver(active, Unwinding);
+                Check(active.Fences.Single().Epoch > precedingFence.Epoch && trial.Seq == original.Seq &&
+                    await DatabaseNow() < due, "The current Worker must enter the same ticket under a newer trial epoch.");
+                var followUp = new Message("unrelated-start", Other, Kinds.Start, Start: new(Model, "unrelated-work"));
+                Check(await store.AddAsync(followUp, stop), "The later actor's independent birth must be admitted once.");
+                await Pass(active);
+                Check(await UnrelatedPending(), "The later actor must remain pending while the timed callback is on trial.");
+
+                await AtDeadline(due);
+                await Drive(active, async () => (await Snapshot()).Checkpoint.Revision >= 6);
+                for (var i = 0; i < 3; i++) await Pass(active);
+                var timedOut = await Snapshot();
+                Check(activeModel.Cancellations[Unwinding].IsCancellationRequested && !activeDriver.IsCompleted &&
+                    timedOut.Checkpoint.Revision == 6 && timedOut.Checkpoint.Jobs is null && timedOut.Rows.Length == 0 &&
+                    StateOf(timedOut.Checkpoint) is { Active: null, Results: ["live-result", "deadline", "deadline"] } &&
+                    timedOut.History.Count(entry => entry.Revision >= 6) == 1,
+                    "The timeout must commit once while the cancelled callback is still unwinding.");
+                Check(await UnrelatedPending(), "The unrelated actor committed before the cancelled trial callback exited.");
+                Console.WriteLine("ok the current owner commits its timeout while the callback keeps another admitted actor pending");
+
+                activeModel.Results[Unwinding].SetResult("late active result");
+                await activeDriver.WaitAsync(stop);
+                precedingModel.Results[Unwinding].SetResult("late prior result");
+                await originalDriver.WaitAsync(stop);
+                await Drive(active, async () => !await UnrelatedPending());
+                var afterExit = await Snapshot();
+                await using var db = open();
+                var otherHistory = await db.Journal.AsNoTracking().Where(row => row.Instance == Other.Id).ToArrayAsync(stop);
+                Check(otherHistory is [{ Revision: 1 }] &&
+                    Json.Read<string[]>(otherHistory[0].Entries).SequenceEqual(["unrelated"]) &&
+                    await db.Instances.AsNoTracking().AnyAsync(row => row.Id == Other.Id && row.Status == InstanceStatus.Finished && row.Revision == 1, stop) &&
+                    !await db.Messages.AsNoTracking().AnyAsync(row => row.Target == Other.Id, stop) &&
+                    afterExit.Checkpoint.Revision == 6 && afterExit.Checkpoint.State == timedOut.Checkpoint.State &&
+                    afterExit.History.Select(row => row.Entries).SequenceEqual(timedOut.History.Select(row => row.Entries)),
+                    "Only callback exit should release the independent actor, and neither late callback may publish another job outcome.");
+                Console.WriteLine("ok the unrelated actor commits once after callback exit and both late results leave the original journal unchanged");
+            }
+            finally
+            {
+                if (activeModel.Results.TryGetValue(Unwinding, out var pending)) pending.TrySetCanceled();
+                precedingModel.Results[Unwinding].TrySetCanceled();
+            }
+        }
+
+        async Task<bool> UnrelatedPending()
+        {
+            await using var db = open();
+            return await db.Messages.AsNoTracking().AnyAsync(row => row.Target == Other.Id && !row.Done, stop) &&
+                !await db.Instances.AsNoTracking().AnyAsync(row => row.Id == Other.Id, stop) &&
+                !await db.Journal.AsNoTracking().AnyAsync(row => row.Instance == Other.Id, stop);
         }
 
         Worker Owner(string node, Probe model) => new(node, 0, store, model, new() { Lease = Lease });
@@ -217,9 +285,11 @@ internal static class PostgresTimedJobChecks
     private sealed record Job(string Key, long Due);
     private sealed record JobState(Job? Active, string[] Results);
 
-    private sealed class Probe : IActorType
+    private sealed class Probe(bool trialWithdrawal = false) : IActorType
     {
+        bool IActorType.SupportsTrialWithdrawal => trialWithdrawal;
         public Dictionary<string, IJob> Entries { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, CancellationToken> Cancellations { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, TaskCompletionSource<object?>> Results { get; } = new(StringComparer.Ordinal);
         public bool Withholds(InstanceRow row, ITurnServices services) => false;
         public bool SelectsAlone(string? model, InstanceRow? row, Delivery delivery) =>
@@ -233,6 +303,7 @@ internal static class PostgresTimedJobChecks
             Check(model == Model && job.Instance == Actor, "The Worker must execute only the issued same-actor job.");
             var body = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
             Entries.Add(job.Key, job);
+            Cancellations.Add(job.Key, cancellationToken);
             Results.Add(job.Key, body);
             return new(body.Task);
         }
@@ -241,6 +312,12 @@ internal static class PostgresTimedJobChecks
         {
             var turn = new DurableTurn(input);
             var message = turn.Inbox.Single();
+            if (input.Actor == Other.Id && message.Kind == Kinds.Start)
+            {
+                var ended = new InstanceRow(input.Actor, Model, "unrelated-work", InstanceStatus.Finished, "null",
+                    turn.Revision, null);
+                return ValueTask.FromResult(turn.Seal(turn.Outcome(ended.Status), ended, null, """["unrelated"]"""));
+            }
             var state = input.Row is { } current ? Json.Read<JobState>(current.State) : new(null, []);
             string entry;
             if (message.Kind is Kinds.Start or StartNext)

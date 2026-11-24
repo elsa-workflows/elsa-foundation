@@ -257,16 +257,24 @@ From `prototypes/kernel-model`, set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicat
 ```sh
 dotnet restore ../../essentials/tests/ActorFoundation/Native/Run --locked-mode
 dotnet build -c Release ../../essentials/tests/ActorFoundation/Native/Run --no-restore
-dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-timed-job-worker checked
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-timed-job-worker owned checked
 ```
 
-Use `in-batch` on another fresh database for the other owned SQL fence mode. The Worker commits the issued
+Use `owned` or `ef` and `checked` or `in-batch`, with a fresh database per run. The Worker commits the issued
 job ticket, its absolute deadline, the waiting checkpoint and journal in the same PostgreSQL transaction.
 A callback publishes before the deadline. The worker resumes only once the database clock reaches the deadline,
 applies the job result and recalls the timer. The same actor starts another job. A new owner retries its
 pending ticket before the deadline. After expiration, a third owner counts one abandoned trial, validates the
 old fence is refused and delivers the deadline without entering the callback. The physical inbox is empty and
 the journal shows one outcome per job even after the displaced callbacks return.
+
+The same fixture takes a third pending ticket before its deadline. The current owner
+commits the job's timeout while its cancelled callback is still unwinding. Another
+actor's admitted start remains pending and has no checkpoint or journal until the
+callback exits. Neither late callback changes the timeout checkpoint or journal.
+Append `without-trial-withdrawal` on a fresh database to run a failing control. The
+fixture disables trial withdrawal support at the actor-type boundary and detects
+the unrelated actor committing before callback exit.
 
 This covers the legacy relational actor protocol. In that path a Worker completion consumes the original issued
 ticket and commits the actor's result directly in its checkpoint and journal. The public generated-root path
