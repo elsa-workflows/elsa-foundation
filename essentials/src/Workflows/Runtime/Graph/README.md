@@ -48,11 +48,14 @@ a public policy routes different targets into different scopes. Other untaken ta
 
 ## The corpus
 
-[The Graph tests](../../../../../essentials/tests/Workflows/Runtime/Graph/Tests) run the conformance corpus and join tests against this engine through `GraphHarness`, a
+The Graph suite runs the conformance corpus and join tests against this engine through `GraphHarness`, a
 host that does what main's workflow execution harness does for a Flowchart: probe leaves with a fixed outcome,
 children run first in, first out, execution ids from a pool, the state carried between callbacks as main stages it.
 That includes main's two determinism byte-locks (dead-path and reachability): the persisted state is byte-identical
 to main's, so the extracted engine makes the same state mutations in the same order.
+[Graph tests](https://github.com/elsa-workflows/elsa-foundation/tree/main/essentials/tests/Workflows/Runtime/Graph/Tests)
+
+Run from the repository root.
 
 ```
 dotnet test essentials/tests/Workflows/Runtime/Graph/Tests -c Release

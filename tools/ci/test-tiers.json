@@ -7,8 +7,7 @@
   "slowTestMode": "report",
   "flakeTrackerIssue": 3263,
   "ownJobs": {
-    "essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj": "Architecture guards",
-    "essentials/tests/Workflows/Runtime/Graph/Tests/Elsa.Workflows.Runtime.Graph.Tests.csproj": "Kernel prototype gate"
+    "essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj": "Architecture guards"
   },
   "hostLaunchExemptions": [
     {
@@ -1020,6 +1019,7 @@
           "essentials/tests/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj",
           "essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
           "essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj",
+          "essentials/tests/Workflows/Runtime/Graph/Tests/Elsa.Workflows.Runtime.Graph.Tests.csproj",
           "essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
           "essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj",
           "essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
