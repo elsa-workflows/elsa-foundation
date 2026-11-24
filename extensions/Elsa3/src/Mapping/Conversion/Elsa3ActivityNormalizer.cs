@@ -69,6 +69,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
 
         CheckWorkflowVariables(plan);
         CheckWorkflowInputs(plan);
+        CheckArgumentStorageDrivers(plan, plan.Definition.Inputs, "Input", "inputs", Elsa3ImportDiagnosticCodes.InputStorageDriverUnmapped);
+        CheckArgumentStorageDrivers(plan, plan.Definition.Outputs, "Output", "outputs", Elsa3ImportDiagnosticCodes.OutputStorageDriverUnmapped);
 
         var pending = new Dictionary<Elsa3Activity, string>(ReferenceEqualityComparer.Instance);
         await VisitAsync(plan, clone.Root, "$.root", null, RootJsonLevel, pending, cancellationToken);
@@ -112,6 +114,36 @@ internal sealed partial class Elsa3ActivityNormalizer(
                 "Use a nullable target type, or enable the converter's null policies for a Boolean, numeric or enum target.", Elsa3IntrinsicContracts.ValueKey);
         else
             context.Activity.AdditionalProperties[Elsa3IntrinsicContracts.ValueKey] = Elsa3TypedValues.CreateNull(type.Alias);
+    }
+
+    /// <summary>
+    /// A workflow input or output on an Elsa 3 storage driver other than the default kept its value outside the instance.
+    /// No Elsa 4 storage driver stands for an Elsa 3 one: a reusable workflow's publication refuses the driver key the
+    /// type registry would give it, and a plain workflow would drop it without a word. So it is refused here, where the
+    /// migrator sees it (#5683). The default driver maps to no storage driver.
+    /// </summary>
+    private static void CheckArgumentStorageDrivers(
+        Elsa3ConversionPlan plan,
+        IList<Elsa3WorkflowArgumentDefinition>? arguments,
+        string kind,
+        string member,
+        string code)
+    {
+        for (var index = 0; index < (arguments?.Count ?? 0); index++)
+        {
+            var argument = arguments![index];
+            if (string.IsNullOrWhiteSpace(argument.StorageDriverType) || Elsa3VariableMapper.IsDefaultStorageDriver(argument.StorageDriverType))
+                continue;
+            var noun = kind.ToLowerInvariant();
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
+                plan,
+                Elsa3MigrationDiagnosticSeverity.Error,
+                code,
+                $"{kind} '{argument.Name}' uses the Elsa 3 storage driver '{argument.StorageDriverType.Trim()}'. Elsa 4 has no storage driver that stands for an Elsa 3 one, so the {noun} cannot be converted.",
+                $"In the Elsa 3 workflow, set the {noun}'s storage back to the default (the workflow instance), then convert again.",
+                $"$.{member}[{index}]",
+                new Dictionary<string, string> { [$"{kind}Name"] = argument.Name }));
+        }
     }
 
     private void CheckWorkflowVariables(Elsa3ConversionPlan plan)

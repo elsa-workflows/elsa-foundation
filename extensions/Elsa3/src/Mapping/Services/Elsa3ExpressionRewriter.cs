@@ -3042,4 +3042,16 @@ public static class Elsa3ImportDiagnosticCodes
     /// variable outside the workflow instance yet (publication refuses it with VF-ACT-005), with guidance to use the default.
     /// </summary>
     public const string VariableStorageDriverUnmapped = "ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED";
+
+    /// <summary>
+    /// A workflow input uses an Elsa 3 storage driver other than the default one (#5683): refused, because no Elsa 4
+    /// storage driver stands for an Elsa 3 one, with guidance to use the default.
+    /// </summary>
+    public const string InputStorageDriverUnmapped = "ELS3-INPUT-STORAGE-DRIVER-UNMAPPED";
+
+    /// <summary>
+    /// A workflow output uses an Elsa 3 storage driver other than the default one (#5683): refused, because no Elsa 4
+    /// storage driver stands for an Elsa 3 one, with guidance to use the default.
+    /// </summary>
+    public const string OutputStorageDriverUnmapped = "ELS3-OUTPUT-STORAGE-DRIVER-UNMAPPED";
 }

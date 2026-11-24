@@ -28,6 +28,9 @@ A variable of a custom type Elsa 4 does not register converts as Any and reports
 `ELS3-VARIABLE-TYPE-UNREGISTERED`; to keep the type, register it in an Elsa 4 feature and convert again. A variable on
 an Elsa 3 storage driver other than the default is refused with `ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED`: Elsa 4 cannot
 store a variable outside the workflow instance yet, so set it back to the default storage before converting.
+A workflow input or output on an Elsa 3 storage driver other than the default is refused with
+`ELS3-INPUT-STORAGE-DRIVER-UNMAPPED` or `ELS3-OUTPUT-STORAGE-DRIVER-UNMAPPED`: no Elsa 4 storage driver stands for an
+Elsa 3 one, so set the input or output back to the default storage before converting.
 
 Built-in null audit: WriteLine Text and SendHttpRequest Method now declare the null their implementations already
 handle (blank line and GET). URL/path, event name and workflow-definition identifiers still need real values; the

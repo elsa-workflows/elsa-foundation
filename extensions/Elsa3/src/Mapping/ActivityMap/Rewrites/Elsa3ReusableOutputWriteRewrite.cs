@@ -33,7 +33,8 @@ internal sealed class Elsa3ReusableOutputWriteRewrite : IElsa3NodeRewrite
         if (!context.Plan.Definition.Variables.Any(variable => StringComparer.Ordinal.Equals(variable.Id, variableKey)))
             context.Plan.Definition.Variables.Add(new Elsa3Variable { Id = variableKey, Name = variableKey, TypeName = declared.Type ?? "Object" });
         if (!context.Plan.OutputMappings.Any(mapping => StringComparer.Ordinal.Equals(mapping.OutputReferenceKey, declared.Name)))
-            context.Plan.OutputMappings.Add(new Elsa3GraphOutputMapping(declared.Name, variableKey, type, declared.StorageDriverType));
+            // A declared output on a storage driver other than Elsa 3's default is refused before rewriting (#5683).
+            context.Plan.OutputMappings.Add(new Elsa3GraphOutputMapping(declared.Name, variableKey, type, StorageDriverKey: null));
 
         context.Activity.AdditionalProperties.Remove(Elsa3IntrinsicContracts.NameKey);
         context.Node.Resolved = Elsa3IntrinsicContracts.Resolve(Elsa3IntrinsicContracts.Set, context.Node.Resolved?.Entry);

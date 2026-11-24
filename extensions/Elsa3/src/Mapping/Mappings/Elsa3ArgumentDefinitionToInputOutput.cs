@@ -6,7 +6,11 @@ using Elsa3.Models;
 
 namespace Elsa3.Mapping.Mappings;
 
-/// <summary>Converts an Elsa-3 workflow argument definition to an Elsa-4 input/output definition.</summary>
+/// <summary>
+/// Converts an Elsa-3 workflow argument definition to an Elsa-4 input/output definition. Elsa 3's default storage driver
+/// kept the value with the workflow instance, as Elsa 4 does without a storage driver; any other driver is refused before
+/// mapping (#5683), so a converted input or output never names a storage driver.
+/// </summary>
 public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry wellKnownTypeRegistry)
 {
     public InputDefinition MapInput(Elsa3WorkflowArgumentDefinition input)
@@ -16,7 +20,7 @@ public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry 
             input.Name,
             input.Name,
             MapTypeReference(type),
-            MapAlias(input.StorageDriverType),
+            StorageDriverType: null,
             $"{input.DisplayName}",
             input.Category,
             IsNullable: SupportsNull(type),
@@ -32,7 +36,7 @@ public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry 
             input.Name,
             input.Name,
             MapTypeReference(type),
-            MapAlias(input.StorageDriverType),
+            StorageDriverType: null,
             $"{input.DisplayName}",
             input.Category,
             IsNullable: SupportsNull(type),
@@ -48,13 +52,4 @@ public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry 
 
     private static bool SupportsNull(Type type) =>
         !type.IsValueType || Nullable.GetUnderlyingType(type) is not null;
-
-    private string? MapAlias(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value) || Elsa3VariableMapper.IsDefaultStorageDriver(value))
-            return null;
-
-        var type = LegacyClrTypeResolver.Resolve(wellKnownTypeRegistry, value);
-        return wellKnownTypeRegistry.GetAliasOrDefault(type);
-    }
 }
