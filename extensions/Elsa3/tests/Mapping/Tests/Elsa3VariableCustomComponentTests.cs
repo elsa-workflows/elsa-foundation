@@ -154,7 +154,7 @@ public sealed class Elsa3VariableCustomComponentTests
         Assert.Contains("Variable 'local'", refusal.Message);
     }
 
-    /// <summary>Registering the driver's type does not help: Elsa 4 refuses every storage driver for a variable at publication (VF-ACT-005).</summary>
+    /// <summary>Registering the driver's type does not help: Elsa 4 publication refuses every variable storage driver that stores the value outside the instance (VF-ACT-005), and an Elsa 3 driver name never becomes the built-in one.</summary>
     [Fact]
     public void A_storage_driver_registered_in_Elsa_4_is_refused_too()
     {
