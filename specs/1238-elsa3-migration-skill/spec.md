@@ -279,7 +279,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   | 14 | JavaScript functions | A JavaScript host function declaration with a `prefix.name`, effect-free, JSON in and out, that names the Elsa 3 global it replaces; the converter rewrites direct calls only, so other references to the global are turned into direct calls in the Elsa 3 definition first | port; redesign as an activity when the function has effects |
   | 15 | Liquid filters and other expression additions | Liquid filters: none, filter registration is closed to modules. A new expression syntax: the public expression descriptor and portable expression handler extension points | redesign (Liquid filters: a JavaScript host function or an activity); a new syntax is named with its extension points but carries no example |
   | 16 | Variable type registration | A variable type descriptor provider registering the type under a dotted alias | port |
-  | 17 | Storage drivers | None per variable: workflow variables, inputs and outputs use the default durable storage, and Elsa 3's default drivers need nothing. A variable, input or output on the memory driver or on a custom driver starts an interview: what did the user want? A value that is never persisted: the Elsa 4 features that reach that, and how to use them. Any other objective (for example values kept in blob storage): the user plans their own solution, and the plan records it with a link | interview |
+  | 17 | Storage drivers | None per variable: the converter stores every value in the default durable storage, and Elsa 3's default drivers need nothing. A variable, input or output on the memory driver or on a custom driver converts with a Reconsider finding and starts an interview: what did the user want? A value that is never persisted: the Elsa 4 features that reach that, and how to use them. Any other objective (for example values kept in blob storage): the user plans their own solution, and the plan records it with a link | interview |
   | 18 | Feature registration | An Elsa 4 shell feature in a Nuplane package, enabled in `appsettings.json`; activities are discovered from the feature's assembly | port |
   | 19 | Tests | xunit tests that build an activity execution context and call the activity directly | port |
 
@@ -343,12 +343,13 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   report contract, and the categories and buckets. This spec only references that schema.
 - Spec 1236 delivers the essentials engine image the handoff names; spec 1237 delivers the Elsa 3 migration image,
   built from it, that runs the tool.
-- The converter, on the initiative branch, diagnoses unregistered variable types and unmapped storage drivers and maps declared JavaScript
+- The converter, on the initiative branch, diagnoses unregistered variable types, reports memory and custom storage drivers as behaviour warnings, and maps declared JavaScript
   functions to prefixed host functions; the skill relies on the guidance those diagnostics carry. A converter
   change that spec 1237 also depends on adds a finding for a declared JavaScript global used other than as a direct
   call.
 - The user has Docker, and the .NET SDK to build their feature packages. The only network calls are NuGet restore
   and image pulls.
-- Storage drivers reach the inventory through the converter's storage-driver findings, which name the driver as a
-  storage-driver component; the skill reads the kind and name, not the codes.
+- Storage drivers reach the inventory through the converter's Reconsider findings that name the memory or custom
+  driver as a storage-driver component; the skill reads the kind and name, not the codes. A storage-driver finding
+  never blocks the run: the value converts to the default storage, and the interview decides what else to do.
 - The sample is never packed or published.
