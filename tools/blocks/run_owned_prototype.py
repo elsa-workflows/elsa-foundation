@@ -39,7 +39,7 @@ reader = (
 )
 assemblies = {
     "workbench": REPO
-    / "apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll",
+    / "apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll",
     "studio": REPO
     / "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0/Elsa.Studio.Web.dll",
 }

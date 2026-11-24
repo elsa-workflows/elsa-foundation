@@ -16,7 +16,7 @@ Unlike other suites, this one needs a feature the stock `shells.json` does not e
 `JsonWorkflowReconciliation` requires a `SourceId` and a path and fails registration on empty options).
 `Test-FileBasedDeployment.ps1` composes it **via environment variables** — they layer above `shells.json`, and setting the
 section enables the feature. It does so on a server process the suite owns (`../_ServerLifecycle.ps1`:
-the already-built `Elsa.Workbench.dll` is launched directly from a temporary content root, on a free loopback
+the already-built `Elsa.Workbench.Host.dll` is launched directly from a temporary content root, on a free loopback
 port unless `-BaseUrl` names one):
 
 ```text
@@ -35,7 +35,7 @@ content root. It uses the same owned-server lifecycle and leaves the repository 
 - The suite starts, restarts and stops its own server, and only that process. It never stops a server you
   started, so it can run while yours is up. If you pass `-BaseUrl` and that port is held by another process,
   the suite fails with the port and the pid in the message instead of stopping it (issue #2329).
-- Requires a built Workbench (`dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj`); the EF modules
+- Requires a built Workbench (`dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj`); the EF modules
   migrate on shell activation. See [`../README.md`](../README.md).
 - Definition ids/names are timestamped per run. They land in the SQLite files of the temporary content root,
   which is removed after a passing run and kept, with the server logs, after a failing one.

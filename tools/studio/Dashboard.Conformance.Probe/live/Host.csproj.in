@@ -2,7 +2,7 @@
   <!-- Dedicated opt-in owned source host. All dependencies are unconditional and reviewed here.
        This template neither changes nor adds a conditional dependency to the normal Workbench. -->
   <PropertyGroup>
-    <AssemblyName>Elsa.Workbench</AssemblyName>
+    <AssemblyName>Elsa.Workbench.Host</AssemblyName>
     <RootNamespace>Elsa.Workbench</RootNamespace>
     <IsPackable>false</IsPackable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -11,8 +11,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
-    <Compile Include="__SOURCE_ROOT__/apps/Elsa.Workbench/**/*.cs"
-             Exclude="__SOURCE_ROOT__/apps/Elsa.Workbench/Program.cs;__SOURCE_ROOT__/apps/Elsa.Workbench/bin/**;__SOURCE_ROOT__/apps/Elsa.Workbench/obj/**;__SOURCE_ROOT__/apps/Elsa.Workbench/extension-builder/**" />
+    <Compile Include="__SOURCE_ROOT__/apps/Elsa.Workbench.Host/**/*.cs"
+             Exclude="__SOURCE_ROOT__/apps/Elsa.Workbench.Host/Program.cs;__SOURCE_ROOT__/apps/Elsa.Workbench.Host/bin/**;__SOURCE_ROOT__/apps/Elsa.Workbench.Host/obj/**;__SOURCE_ROOT__/apps/Elsa.Workbench.Host/extension-builder/**" />
     <Compile Include="__SOURCE_ROOT__/tools/ux-acceptance/DashboardQualificationBootstrap.cs" />
     <Compile Include="__SOURCE_ROOT__/tools/studio/Weaver.Conformance.Probe/fixtures/BackendConsumer/QualificationPrincipals.cs" />
     <Compile Include="__SOURCE_ROOT__/tools/studio/Dashboard.Conformance.Probe/live/DashboardLiveQualification.cs" />

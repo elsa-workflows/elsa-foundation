@@ -455,7 +455,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     [Fact]
     public void Workbench_enables_the_secrets_ef_module_by_default()
     {
-        var workbench = XDocument.Load(RepoPath("apps", "Elsa.Workbench", "Elsa.Workbench.csproj"));
+        var workbench = XDocument.Load(RepoPath("apps", "Elsa.Workbench.Host", "Elsa.Workbench.Host.csproj"));
         var references = workbench.Descendants("ProjectReference")
             .Select(element => element.Attribute("Include")?.Value)
             .OfType<string>()
@@ -468,7 +468,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         // EF is the only Secrets persistence family.
         foreach (var relative in new[]
                  {
-                     "apps/Elsa.Workbench/shells.json",
+                     "apps/Elsa.Workbench.Host/shells.json",
                      "docker/compose/elsa-workbench.shells.json"
                  })
         {

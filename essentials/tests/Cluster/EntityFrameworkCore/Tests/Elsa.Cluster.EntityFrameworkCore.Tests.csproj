@@ -51,7 +51,7 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\..\apps\Elsa.Workbench.Host\Elsa.Workbench.Host.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <!--

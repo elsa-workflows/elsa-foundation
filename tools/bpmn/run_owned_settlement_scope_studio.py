@@ -144,7 +144,7 @@ def run(output, skip_build=False):
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()
     receipt = {"sourceSha": sha, "dirty": bool(dirty), "status": "failed", "stage": "build"}
     try:
-        backend_project = ROOT / "apps/Elsa.Workbench/Elsa.Workbench.csproj"
+        backend_project = ROOT / "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj"
         studio_project = ROOT / "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj"
         if not skip_build:
             command(["dotnet", "build", str(backend_project), "-p:RestoreLockedMode=true", "-v:q", "-nologo", "-m:1", "/nr:false"],
@@ -152,7 +152,7 @@ def run(output, skip_build=False):
             command(["pnpm", "build"], output / "frontend-build.log", cwd=ROOT / "Studio")
             command(["dotnet", "build", str(studio_project), "-p:RestoreLockedMode=true", "-v:q", "-nologo", "-m:1", "/nr:false"],
                     output / "studio-build.log")
-        elif not (backend_project.parent / "bin/Debug/net10.0/Elsa.Workbench.dll").is_file():
+        elif not (backend_project.parent / "bin/Debug/net10.0/Elsa.Workbench.Host.dll").is_file():
             raise FileNotFoundError("Build the Workbench and Studio hosts before --skip-build.")
         with tempfile.TemporaryDirectory(prefix="elsa-bpmn-settlement-scope-") as temporary:
             data = Path(temporary)
@@ -168,10 +168,10 @@ def run(output, skip_build=False):
                        **{"Logging__LogLevel__Microsoft.Hosting.Lifetime": "Information"})
             (data / "home").mkdir()
             receipt.update(stage="host-start", studioUrl=studio_url, backendUrl=backend_url, holdPath=str(hold_path))
-            with host(backend, "Elsa.Workbench.dll", backend_url, "/health/ready", output / "backend-seed.log", env):
+            with host(backend, "Elsa.Workbench.Host.dll", backend_url, "/health/ready", output / "backend-seed.log", env):
                 pass
             seed_operator(backend)
-            with host(backend, "Elsa.Workbench.dll", backend_url, "/health/ready", output / "backend.log", env):
+            with host(backend, "Elsa.Workbench.Host.dll", backend_url, "/health/ready", output / "backend.log", env):
                 with host(studio, "Elsa.Studio.Web.dll", studio_url, "/studio-runtime.js", output / "studio.log",
                           dict(env, Studio__BackendBaseUrl=backend_url)):
                     receipt["stage"] = "journeys"

@@ -230,7 +230,7 @@
   <Folder Name="/apps/">
     <Project Path="apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj" />
     <Project Path="apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
-    <Project Path="apps/Elsa.Workbench/Elsa.Workbench.csproj" />
+    <Project Path="apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj" />
   </Folder>
   <Folder Name="/essentials/" />
   <Folder Name="/essentials/build/">
