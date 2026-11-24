@@ -53,7 +53,7 @@ which definitions convert, which custom components they use, and what I must fix
 - clean definitions;
 - definitions using unmapped custom activities;
 - an undeclared JavaScript function;
-- an unregistered variable type and an unmapped storage driver;
+- an unregistered variable type, a custom storage driver and the Elsa 3 memory driver;
 - a reusable workflow;
 - a definition whose reusable dependency is refused.
 
@@ -282,10 +282,11 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   marks it so: an Info the converter adds to every definition, such as the null-policy record.
 - **FR-016a**: A component finding MUST name its component from structured diagnostic data, never by parsing a
   message. Every component diagnostic carries a `ComponentName` metadata entry (the Elsa 3 activity type, function name,
-  variable type name or storage driver key). The converter attaches it to its component diagnostics. For storage drivers these are the converter's
-  storage-driver refusals (`ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED`, `ELS3-INPUT/OUTPUT-STORAGE-DRIVER-UNSUPPORTED`
-  and `ELS3-INPUT/OUTPUT-STORAGE-DRIVER-UNREGISTERED`), whose `ComponentName` is the Elsa 3 driver type. Any later
-  storage-driver code the converter adds joins the code table the same way. An Elsa 4 publication error that carries
+  variable type name or storage driver key). The converter attaches it to its component diagnostics. The converter does not refuse Elsa 3 storage
+  drivers: it converts the value to the default `elsa.json` storage and warns. A custom driver is reported as
+  `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED`, a `storage-driver` component whose `ComponentName` is the trimmed Elsa
+  3 driver type. It is a Reconsider finding, not a blocker. The Elsa 3 memory driver is reported as
+  `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED`, also Reconsider, and is not a component. An Elsa 4 publication error that carries
   no structured metadata is never used to name a component. A call of an undeclared JavaScript function gets
   its own code, separate from the forbidden-capability code it otherwise shares, so that refused capabilities (forbidden globals) do not count as
   components.
@@ -413,9 +414,10 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   too. The engine must also include JSON activity reconciliation, so that `migrated/activities/` loads, and it must
   carry `Nuplane.Sources.Directory`, so that directory feeds load.
 - **Converter diagnostics this specification relies on.** The converter maps declared Elsa 3 JavaScript globals to
-  prefixed host functions (direct calls only), and diagnoses unregistered variable types and unmapped storage drivers.
-  Its storage-driver refusals carry the input, output or variable name but not the driver type, which T004b adds as
-  `ComponentName`. These supply
+  prefixed host functions (direct calls only), and diagnoses unregistered variable types. It converts Elsa 3 storage
+  drivers to the default storage with a Reconsider warning: `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED`, which
+  carries the driver type as `StorageDriverType` and `ComponentName`, and `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED`.
+  These supply
   the codes from which the custom-component inventory is built, and this specification adds their entries to the code
   table.
 - **Converter diagnostic for non-call references.** A declared global that a script references without calling it is

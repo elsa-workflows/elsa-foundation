@@ -44,7 +44,7 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   - clean definitions;
   - an unmapped custom activity used by three definitions;
   - an undeclared JavaScript function;
-  - an unregistered variable type and an unmapped storage driver;
+  - an unregistered variable type, a variable on a custom storage driver, and one on the Elsa 3 memory driver;
   - a reusable definition with two users;
   - a definition whose reusable dependency is refused;
   - a C# expression;
@@ -78,10 +78,9 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   string literals outside the constant classes, and fails on any (FR-016, FR-019).
 - [ ] T004b Make the converter carry component names as data (FR-016a). Add a `ComponentName` metadata key to every
   component diagnostic: unmapped activity types, undeclared and replaced-function references, unregistered variable
-  types and unmapped storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. The
-  storage-driver refusals (`ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED`, `ELS3-INPUT/OUTPUT-STORAGE-DRIVER-UNSUPPORTED`,
-  `ELS3-INPUT/OUTPUT-STORAGE-DRIVER-UNREGISTERED`) get the Elsa 3 driver type as `ComponentName`; if a converter
-  change has already added the driver type under another key, `ComponentName` holds the same value. Give a call of an
+  types and custom storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. Where
+  `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` already carries `ComponentName`, leave it; test that the inventory
+  lists a custom driver and does not list the memory driver. Give a call of an
   undeclared JavaScript function a code of its own, separate from the forbidden-capability code, and update the
   mapping README and the affected converter tests. The report builder reads `componentName` only from that metadata.
 - [ ] T005 Extract `Elsa3ImportRun` from `Elsa3FolderImportTask` in
