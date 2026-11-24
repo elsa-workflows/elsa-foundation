@@ -47,7 +47,7 @@ the engine-neutral refactor adds.
 | §E7 CI test tiers | PASS | No new test project. The JTest folder has no csproj and is not part of any tier, by design (FR-002). |
 | §2.21.1 refactoring keeps behaviour | PASS | The engine-neutral refactor moves values without changing expectations and is checked by a green Elsa 3 rerun; templates keep output meaning or fail (contract). |
 | §2.23 risk-based tests | PASS | The risky change is host composition; existing feature-composition and boundary tests cover it, and the Elsa 4 run itself exercises the feature end to end. No new unit test is needed for a project reference and a catalog line. |
-| §2.22 docs | ACTION | Suite README with run instructions; Elsa 3 migration readiness guide gains a pointer to the suite and its ledger once results exist. |
+| §2.22 feature documentation | PASS | No feature, contributor interface or extension point is added. The suite README and a migration-guide pointer are plain deliverables (T044, T045). |
 | ADR 0080 (internal by default, pre-GA cleanup) | PASS | No public API added. |
 | Accepted initiative ADRs | PASS | No requirement contradicts an accepted ADR: dispositions follow the existing refuse-with-guidance rule, and JOIN decisions stay with the JOIN initiative. |
 | xunit-only test rule | PASS | No test framework is added to a test project; JTest is an external acceptance tool run by hand (Q6). |

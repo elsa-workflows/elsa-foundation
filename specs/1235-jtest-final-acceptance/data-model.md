@@ -19,7 +19,7 @@ PR diff; no tooling parses it.
 | Suite | path under `tests/` |
 | Definitions | definition files it exercises |
 | Elsa 3 result | `not run`, `pass`, `fail`, `blocked: <3.6.3 defect>` |
-| Elsa 4 result | `pass`, `fail`, `not run`, `blocked: JOIN`, `blocked: <prerequisite>`, `incompatible` |
+| Elsa 4 result | `pass`, `fail`, `not run`, `blocked: JOIN`, `blocked: <issue>`, `blocked: <prerequisite>`, `blocked: 3.6.3 defect` (carried from the Elsa 3 result), `incompatible` |
 | Last run | run id |
 
 State flow per engine: `not run` → `fail` or `pass`; `fail` → `pass` after a recorded fix, or → `blocked`/`incompatible`

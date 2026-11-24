@@ -141,7 +141,8 @@ cannot produce with the same meaning fails the template with the output named (F
 - [ ] T026 [P] [US3] Write `templates-elsa4/elsa-api-workflow-instance-templates.json`: get, search, not-exists and
   variable value, with the status and version translations.
 - [ ] T027 [P] [US3] Write `templates-elsa4/elsa-api-activity-instance-templates.json`: the eight
-  `elsa-activity-instance-*` templates, with node-id suffix matching and execution-list counts.
+  `elsa-activity-instance-*` templates, with node-id suffix matching, execution-list counts and the counting rules of
+  `assert-all-completed` and `assert-none-executed` in contracts/templates.md.
 - [ ] T028 [US3] Start a fresh Workbench with the T007 override on the HTTP definition (`http-endpoints.json`), run the
   six `tests/http/*` suites with the Elsa 4 configuration, and fix templates until they pass or a failure is shown to
   be an engine or conversion result; record the run and receipt.
@@ -166,7 +167,8 @@ cannot produce with the same meaning fails the template with the output named (F
   `JTest/adjusted/` with the exact change and reason in `JTest/ledger/dispositions.md`, get the coordinator's
   approval, and run the Elsa 4 host with the adjusted copy in place of the original via the reconciliation `Files`
   list (FR-014, FR-015).
-- [ ] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` (SC-003).
+- [ ] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` whose suites are neither JOIN-blocked nor
+  issue-blocked; the rest stay `unclassified` with the reason, and T043 completes SC-003.
 - [ ] T038 [US3] Once spec 1207 is implemented on the initiative branch (its status Implemented), merge the initiative branch into this branch and
   make the qualifying run: all suites on a fresh Workbench from that head; record it as the non-JOIN milestone run
   (FR-020, SC-004). Before recording it, confirm with `git diff` that `JTest/tests/**` differs from the T022 state
@@ -189,7 +191,8 @@ exists.
   suite edits go through T029.
 - [ ] T042 [US4] J-004: run the JOIN-blocked suites on a fresh Workbench from the qualified head and record the results.
 - [ ] T043 [US4] J-005: rerun the whole corpus on the final initiative head, reconcile `JTest/ledger/dispositions.md`
-  and `JTest/ledger/suites.md`, and record the coordinator's full-acceptance verdict (SC-005).
+  and `JTest/ledger/suites.md`, bucket every remaining definition (SC-003), and record the coordinator's
+  full-acceptance verdict (SC-005).
 
 ---
 

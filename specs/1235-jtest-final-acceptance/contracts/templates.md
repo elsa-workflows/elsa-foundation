@@ -50,8 +50,8 @@ Parameters and outputs are copied from the corpus files.
 | `elsa-activity-instance-get-count-started` | `baseUrl`, `authHeader`, `workflowInstanceId`, `activityId` | `count` | executions with `startedAt` set | Durable persistence |
 | `elsa-activity-instance-get-count-completed` | `baseUrl`, `authHeader`, `workflowInstanceId`, `activityId` | `count` | executions with status Completed | Durable persistence |
 | `elsa-activity-instance-get-journal-items-completed` | `baseUrl`, `authHeader`, `workflowInstanceId`, `activityId` | `journalEntries`, `journalEntriesCount` | completed executions | entry shape differs; reads inside an entry are refactor scope |
-| `elsa-activity-instance-assert-all-completed` | `baseUrl`, `authHeader`, `workflowInstanceId`, `activityIdentifiers`, `activityIdentifiersCount` | none | instance activity list, all named nodes Completed | page through the activity list |
-| `elsa-activity-instance-assert-none-executed` | `baseUrl`, `authHeader`, `workflowInstanceId`, `activityIdentifiers`, `eventNames` | none | instance activity list, none of the named nodes started or completed | as above |
+| `elsa-activity-instance-assert-all-completed` | `baseUrl`, `authHeader`, `workflowInstanceId`, `activityIdentifiers`, `activityIdentifiersCount` | none | the number of Completed executions whose node matches any listed id equals `activityIdentifiersCount` (as the Elsa 3 template counts Completed journal events), excluding the workflow and flowchart containers | page through the activity list |
+| `elsa-activity-instance-assert-none-executed` | `baseUrl`, `authHeader`, `workflowInstanceId`, `activityIdentifiers`, `eventNames` | none | no execution of a listed node has reached any of the events in `eventNames` (default `Completed` and `Started`) | as above |
 
 `internal-elsa-activity-instance-get-count` (parameters as the count templates plus `eventName`) is called only by
 the two count templates. The Elsa 4 set may implement it or inline it; suites never call it.

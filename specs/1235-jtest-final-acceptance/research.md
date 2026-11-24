@@ -92,8 +92,8 @@ repository unless they name the corpus.
 
 - **Decision**: Templates use these Elsa 4 sources: `POST /_elsa/identity/login` then `GET /_elsa/identity/token` for
   a bearer token; `GET /design/workflows/definitions/{id}` for definition lookups; `/runtime/workflows/instances/...`
-  for instances, activity executions and variables. Import and publish templates become checks that the
-  reconciliation published the definition. Counts of started or completed activities are computed from the activity
+  for instances, activity executions and variables. The import and publish templates are not implemented for Elsa 4;
+  the reconciliation receipt shows publication. Counts of started or completed activities are computed from the activity
   execution list. Per-activity outputs and variable values come from value snapshots and variable write payloads,
   which require capture to be on for the run.
 - **Rationale**: Every Elsa 3 output has an Elsa 4 source with the same meaning except the ones listed in the

@@ -187,8 +187,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
   publication alone MUST NOT count as a passing suite. A suite failing on Elsa 4 for a reason other than JOIN
   behaviour MUST follow one rule: a template defect is fixed in the template; a converter defect or Elsa 4 gap gets
   its own issue and the suite is `blocked: <issue>` until it is fixed, an approved adjusted copy passes, or the
-  definition is bucketed `incompatible`; missing setup is `blocked: <prerequisite>`, never incompatible. A blocked
-  suite other than a JOIN-blocked one does not satisfy the non-JOIN milestone.
+  definition is bucketed `incompatible`; missing setup is `blocked: <prerequisite>`, never incompatible. Only suites
+  blocked by JOIN behaviour or by a 3.6.3 defect are exempt from the non-JOIN milestone (SC-004).
 - **FR-017**: Where an adjusted copy is needed, the converter MUST NOT gain a workaround for it; a construct that
   cannot convert faithfully MUST be refused with guidance, and a genuine Elsa 4 gap gets its own issue.
 
@@ -244,7 +244,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
   defect of that version, with every suite change approved and reasoned.
 - **SC-002 - Engine-neutral**: Every suite file is identical between the Elsa 3 and Elsa 4 runs, and still passes on
   the Elsa 3 baseline.
-- **SC-003 - Dispositions**: All 36 definitions have exactly one bucket with its evidence.
+- **SC-003 - Dispositions**: All 36 definitions have exactly one bucket with its evidence (definitions whose suites
+  are JOIN-blocked are bucketed when the JOIN tasks close).
 - **SC-004 - Non-JOIN milestone**: Every suite not blocked by JOIN behaviour, by a 3.6.3 defect (SC-001) or by an
   approved incompatibility passes on
   Elsa 4, on an initiative head with spec 1207 implemented (its status Implemented). This is a milestone, not completion.
