@@ -90,7 +90,8 @@ internal static class HttpRouteChecks
 
         var waitBeside = new WorkflowRegistry().Add(Starts("starter", "in", "approve"))
             .Add(Wf.Workflow("waiter", Wf.Sequence("main", Wf.HttpEndpoint("in", "begin"), Wf.HttpEndpoint("wait", "approve"))));
-        check(Refused(waitBeside) is null, "a wait in the middle of another workflow claims no start route, so it does not conflict");
+        check(Refused(waitBeside) is { Kind: HttpRouteConflict.StartAndWait, First: ("starter", "in"), Second: ("waiter", "wait") },
+            "a wait in the middle of another workflow on a start route's path is refused, so that a request reaches one of them");
     }
 
     private static HttpRouteConflictException? Refused(WorkflowRegistry registry)
