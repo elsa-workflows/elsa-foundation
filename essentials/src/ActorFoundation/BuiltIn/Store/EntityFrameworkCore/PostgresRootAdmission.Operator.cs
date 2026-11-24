@@ -20,6 +20,9 @@ internal sealed partial class PostgresRootAdmission
         public FoundationTerminalStamp? Terminal { get; init; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public FoundationParkMark? Park { get; init; }
+        // A recover carries the ordinary admission window, which it gives each row it restores or clears.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public long? Window { get; init; }
     }
     internal const string OperatorOccurrencePrefix = "operator/";
     internal static bool IsStoredOperator(string? header) => header is not null &&
@@ -71,7 +74,8 @@ internal sealed partial class PostgresRootAdmission
         if (!db.UsesRootOperatorProtocol || kind == Kinds.Terminate && !db.UsesRootTermination) return null;
         // The Park recovery profile admits Recover and no other operator command. No other profile admits Recover.
         var recover = kind == Kinds.Recover;
-        if (recover != db.UsesRootParkRecovery) return null;
+        // Recover is immediate: a delayed one could mature behind the cohort it releases.
+        if (recover != db.UsesRootParkRecovery || recover && due is not null) return null;
         var deletion = kind == Kinds.Delete;
         if (deletion && !db.UsesRootRetirement || thenDelete && (kind != Kinds.Terminate || !db.UsesRootTerminateThenDelete) ||
             retentionDelete && (!deletion || !db.UsesRootRetention)) return null;
@@ -186,7 +190,10 @@ internal sealed partial class PostgresRootAdmission
             var prefix = retentionDelete ? RetentionDeletePrefix : thenDelete ? TerminateThenDeletePrefix : OperatorPrefix;
             var replyAddress = reply?.Address;
             var header = (replyAddress is null ? "" : HeldOperatorPrefix) + prefix +
-                DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0) { Terminal = terminal, Park = park });
+                DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0)
+                {
+                    Terminal = terminal, Park = park, Window = recover ? (long)deduplicationWindow.TotalMilliseconds : null
+                });
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial", "ReplyTo")
                 VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0, {replyAddress})
@@ -345,7 +352,7 @@ internal sealed partial class PostgresRootAdmission
             {
                 QualifiedTerminal = header.Terminal, DeleteTarget = thenDelete ? reference : null,
                 RootThenDelete = thenDelete, RetentionDelete = retentionDelete, RootHeldReply = held,
-                RecoverMode = header.Park is null ? null : ParkRecoveryMode.Resume, RootParkMark = header.Park
+                RecoverMode = header.Park is null ? null : ParkRecoveryMode.Resume, RootParkMark = header.Park, RootParkWindow = header.Window
             });
     }
 
@@ -379,7 +386,8 @@ internal sealed partial class PostgresRootAdmission
         if (header is null) throw new StoreException(Failure.Definite, "Invalid stored operator framing.");
         if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != kind ||
             (kind == Kinds.Delete ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
-            (kind == Kinds.Recover ? header.Park is not { Revision: > 0, At: > 0 } || held || thenDelete || retentionDelete : header.Park is not null) ||
+            (kind == Kinds.Recover ? header.Park is not { Revision: > 0, At: > 0 } || header.Window is not >= 0 || due != 0 || header.ExplicitZeroDue ||
+                held || thenDelete || retentionDelete : header.Park is not null || header.Window is not null) ||
             thenDelete && (!terminateThenDelete || kind != Kinds.Terminate) ||
             retentionDelete && (!retentionDeletes || kind != Kinds.Delete || held) ||
             header.ExplicitZeroDue && due != 0 || !MatchesDirectOccurrence(reference, header.Operation, occurrence[OperatorOccurrencePrefix.Length..], retentionDelete))

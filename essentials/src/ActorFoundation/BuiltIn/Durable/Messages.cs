@@ -62,8 +62,10 @@ internal sealed record FoundationOperatorCommand(string? Selection)
     internal bool RootHeldReply { get; init; }
     internal ParkRecoveryMode? RecoverMode { get; init; }
     internal IReadOnlyList<string>? RecoverHandles { get; init; }
-    // A qualified root recover: the Park mark its selection sealed, and the store's Park facts read when it was polled.
+    // A qualified root recover: the Park mark its selection sealed, the admission's ordinary window in milliseconds
+    // for the rows it restores or clears, and the store's Park facts read when it was polled.
     internal FoundationParkMark? RootParkMark { get; init; }
+    internal long? RootParkWindow { get; init; }
     internal FoundationRootParkFacts? RootParkFacts { get; init; }
 }
 

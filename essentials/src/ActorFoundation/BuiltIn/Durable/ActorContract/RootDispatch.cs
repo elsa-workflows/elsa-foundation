@@ -53,7 +53,7 @@ internal sealed partial class ActorAdapter
         KeepUntil: not null, ReplyTo: null, Start: null, Payload: null, EventMatch: null, Sender: null, SenderCreation: 0,
         ActorAuthored: false, JobGeneration: 0,
         Operator: { Selection: null, RecoverMode: Durable.ParkRecoveryMode.Resume, RecoverHandles: null, QualifiedTerminal: null,
-            DeleteTarget: null, RootThenDelete: false, RetentionDelete: false, RootHeldReply: false, RootParkMark: not null, RootParkFacts: not null }
+            DeleteTarget: null, RootThenDelete: false, RetentionDelete: false, RootHeldReply: false, RootParkMark: not null, RootParkWindow: >= 0, RootParkFacts: not null }
     };
 
     // One page of a qualified root's kept set resolves in one fenced commit: the store restores the arrivals and clears the
@@ -62,8 +62,9 @@ internal sealed partial class ActorAdapter
     {
         var message = recover.Message;
         var facts = message.Operator!.RootParkFacts!;
-        var reason = row is not { Status: Durable.InstanceStatus.Faulted, Creation: 1, Retired: false, Suspended: false } ||
-            message.Target.Id != row.Id || facts.Mark != message.Operator.RootParkMark ? "selection"
+        var reason = message.Target.Id != row.Id || row.Creation != 1 ? "target"
+            : row is not { Status: Durable.InstanceStatus.Faulted, Retired: false, Suspended: false } ||
+                facts.Mark != message.Operator.RootParkMark ? "selection"
             : !RestoresNothing(row) ? "plan" : !facts.FitsPage ? "page" : null;
         var revision = checked(row.Revision + 1);
         var next = reason is null ? row with { Status = Durable.InstanceStatus.Running, Fault = null, Revision = revision } : row with { Revision = revision };

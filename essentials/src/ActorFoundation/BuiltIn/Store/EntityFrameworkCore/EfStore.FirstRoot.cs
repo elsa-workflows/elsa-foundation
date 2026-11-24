@@ -160,6 +160,7 @@ public sealed partial class EfStore
                         AND NEW."Entries" = '["delete"]' AND NOT EXISTS (
                             SELECT 1 FROM "Journal" j WHERE j."Instance" = i."Id" AND j."Partition" = i."Partition" AND j."Revision" = -1))))
                 THEN RAISE EXCEPTION 'Qualified actor journal requires the next running checkpoint revision' USING ERRCODE = '23514'; END IF;
+                /*root-park-recovered-journal*/
                 RETURN NEW;
             END
             $fn$;
@@ -179,17 +180,41 @@ public sealed partial class EfStore
                     AND (NEW."Entries" = '["parked"]' /*root-park-recover-journal*/))
                 """ : "false", StringComparison.Ordinal)
             // Only a recover leaves Faulted for Running. It clears the Park mark and moves the release generation by one.
+            // A recover outcome at the new revision binds the write: "recovered" only with that transition, "refused"
+            // only with the row unchanged apart from its revision.
             .Replace("/*root-park-generation*/", db.UsesRootParkRecovery ? """
                 AND (NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" OR (OLD."Status" = 2 AND NEW."Status" = 0
                     AND NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" + 1))
-                """ : "", StringComparison.Ordinal)
+                AND NOT EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
+                    AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/
+                    AND CASE WHEN j."Entries" LIKE '{{"Outcome":"recovered",%' THEN NOT (OLD."Status" = 2 AND NEW."Status" = 0)
+                        ELSE j."Entries" LIKE '{{"Outcome":"refused",%' AND ROW(NEW."Status", NEW."Retired", NEW."Suspended", NEW."State",
+                            NEW."StateVersion", NEW."FoundationHeader", NEW."Fault", NEW."History", NEW."Jobs", NEW."Children", NEW."Parent",
+                            NEW."FoundationParkAt", NEW."FoundationParkRevision", NEW."FoundationParkGeneration",
+                            NEW."FoundationTerminalRevision", NEW."FoundationTerminalAt")
+                        IS DISTINCT FROM ROW(OLD."Status", OLD."Retired", OLD."Suspended", OLD."State",
+                            OLD."StateVersion", OLD."FoundationHeader", OLD."Fault", OLD."History", OLD."Jobs", OLD."Children", OLD."Parent",
+                            OLD."FoundationParkAt", OLD."FoundationParkRevision", OLD."FoundationParkGeneration",
+                            OLD."FoundationTerminalRevision", OLD."FoundationTerminalAt") END)
+                """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal) : "", StringComparison.Ordinal)
             .Replace("/*root-park-recover*/", db.UsesRootParkRecovery ? """
                 (OLD."Status" = 2 AND NEW."Status" = 0 AND NOT NEW."Retired" AND NOT OLD."Suspended" AND NOT NEW."Suspended"
                     AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
                     AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL AND NEW."Fault" IS NULL
+                    AND NEW."FoundationParkGeneration" = OLD."FoundationParkGeneration" + 1
                     AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
-                    AND NEW."History" IS NOT DISTINCT FROM OLD."History")
-                """ : "false", StringComparison.Ordinal)
+                    AND NEW."History" IS NOT DISTINCT FROM OLD."History"
+                    AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
+                        AND j."Revision" = NEW."Revision" AND /*root-outcome-entry*/ AND j."Entries" LIKE '{{"Outcome":"recovered",%'))
+                """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal) : "false", StringComparison.Ordinal)
+            // A recovered entry is journaled only on the parked root it resolves.
+            .Replace("/*root-park-recovered-journal*/", db.UsesRootParkRecovery ? """
+                IF NEW."Entries" LIKE '{{"Outcome":"recovered",%' AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance"
+                    AND i."FoundationReference" IS NOT NULL AND NOT (i."Status" = 2 AND NOT i."Retired" AND NOT i."Suspended"
+                        AND i."Partition" = NEW."Partition" AND NEW."Revision" = i."Revision" + 1
+                        AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0))
+                THEN RAISE EXCEPTION 'A recovered journal entry requires the parked checkpoint it resolves' USING ERRCODE = '23514'; END IF;
+                """ : "", StringComparison.Ordinal)
             .Replace("/*root-park-recover-journal*/", db.UsesRootParkRecovery
                 // The raw command is formatted, so the literal brace is doubled.
                 ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" : "", StringComparison.Ordinal)
