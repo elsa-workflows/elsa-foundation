@@ -14824,6 +14824,30 @@
       ]
     },
     {
+      "path": "essentials/tests/ActorFoundation/Store/EntityFramework/Elsa.ActorFoundation.Store.EntityFramework.csproj",
+      "name": "Elsa.ActorFoundation.Store.EntityFramework",
+      "kind": "test",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "Store.EntityFramework",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Kernel.Store.Conformance",
+          "path": "essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.EntityFramework",
+          "path": "prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj"
+        }
+      ]
+    },
+    {
       "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj",
       "name": "Elsa.ActorFoundation.TestSupport",
       "kind": "test",
