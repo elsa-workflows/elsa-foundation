@@ -322,6 +322,7 @@ The preview's public `IActorReads.GetAsync` and `ListAsync` use a persisted, ten
 updates the list within the fenced metadata commit, including suspension changes that leave no public journal entry.
 Point queries use the tenant and exact reference. Point and list queries refuse when either required source trigger
 is missing, disabled or bound to a different function.
+The trigger functions belong to the source table's installation schema.
 If the projection trigger was disabled while writing checkpoints, rebuild the projection from committed metadata before serving it again. List queries use a reference bookmark bound to the tenant and filters. The existing root schema
 installer backfills public metadata for earlier preview databases. This slice represents running and finished roots,
 and leaves the release-wide projector, Park, and operator selections to K9 follow-up.

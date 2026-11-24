@@ -83,9 +83,11 @@ public sealed partial class EfStore
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
                     EXISTS (
                         SELECT 1 FROM pg_catalog.pg_trigger source
+                        JOIN pg_catalog.pg_class relation ON relation.oid = source.tgrelid
+                        JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
+                            AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
                         WHERE source.tgrelid = to_regclass('"Instances"')
                             AND source.tgname::text = ANY({RootListSourceTriggers}) AND source.tgenabled IN ('O', 'A')
-                            AND source.tgfoid = to_regprocedure(source.tgname::text || '()')
                         GROUP BY source.tgrelid HAVING count(*) = {RootListSourceTriggers.Length}
                     ) AS "SourceReady"
                 FROM (VALUES (1)) stamp(id)
@@ -129,9 +131,11 @@ public sealed partial class EfStore
                 ), readiness AS (
                     SELECT EXISTS (
                         SELECT 1 FROM pg_catalog.pg_trigger source
+                        JOIN pg_catalog.pg_class relation ON relation.oid = source.tgrelid
+                        JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
+                            AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
                         WHERE source.tgrelid = to_regclass('"Instances"')
                             AND source.tgname::text = ANY({RootListSourceTriggers}) AND source.tgenabled IN ('O', 'A')
-                            AND source.tgfoid = to_regprocedure(source.tgname::text || '()')
                         GROUP BY source.tgrelid HAVING count(*) = {RootListSourceTriggers.Length}
                     ) AS "SourceReady"
                 ), page AS (
