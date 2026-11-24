@@ -498,6 +498,10 @@ public sealed record HttpRequest(string Method, string Path, JsonNode? Body = nu
 
     /// <summary>The header fields by lower-case name, credentials left out; a repeated field's values joined with ", ".</summary>
     public IReadOnlyDictionary<string, string> Headers { get => _headers; init => _headers = HttpFields.RequestHeaders(value); }
+
+    /// <summary>The values of the route template's parameters by lower-case name, as the HTTP edge matched and decoded them.</summary>
+    public IReadOnlyDictionary<string, string> RouteValues { get => _routeValues; init => _routeValues = HttpFields.RouteValues(value); }
+    private readonly IReadOnlyDictionary<string, string> _routeValues = HttpFields.None;
 }
 
 /// <summary>An HTTP response as a workflow writes it. Its headers follow the <see cref="HttpFields"/> rules.</summary>
@@ -511,18 +515,35 @@ public sealed record HttpResponse(int StatusCode, string ContentType, JsonNode? 
 
 public sealed record HttpWaitState(string Method, string Path);
 
-/// <summary>As a start trigger it completes with the request. In the middle of a workflow it waits for a request on its route.</summary>
+/// <summary>
+/// As a start trigger it completes with the request. In the middle of a workflow it waits for a request on its route: its
+/// <see cref="Path"/> is a route template, resolved with <see cref="RouteValues"/>, so that only a request for these values
+/// resumes it (<c>orders/{id}/cancel</c> with <c>{ id: 42 }</c> waits on <c>orders/42/cancel</c>).
+/// </summary>
 public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, HttpRequest>
 {
     [Input] public string Path { get; set; } = "";
+    /// <summary>In the middle of a workflow, the values of its route's parameters: an object of strings, numbers or booleans.</summary>
+    [Input] public JsonObject? RouteValues { get; set; }
     [Input] public string Method { get; set; } = "POST";
     /// <summary>The route's opt-out of the release rule: its caller is answered when the turn ends, not after its commit.</summary>
     [Input] public bool RespondBeforeCommit { get; set; }
 
-    protected override ValueTask<Transition> ExecuteAsync(StartContext<HttpRequest> context) =>
-        new(context.TryGetTrigger(out var request)
-            ? Complete(request)
-            : Suspend(new HttpWaitState(Method, Path), new HttpTrigger(Method, Path)));
+    protected override ValueTask<Transition> ExecuteAsync(StartContext<HttpRequest> context)
+    {
+        if (context.TryGetTrigger(out var request)) return new(Complete(request));
+        string path;
+        try
+        {
+            var values = RouteValues is null ? null : HttpFields.RouteValues(HttpFields.Scalars(RouteValues, "route value"));
+            path = HttpRouteTemplate.Parse(Path).Resolve(values);
+        }
+        catch (ArgumentException refused) when (refused is HttpRouteTemplateException or HttpFieldsException)
+        {
+            return new(Fault("http.route.invalid", refused.Message));
+        }
+        return new(Suspend(new HttpWaitState(Method, path), new HttpTrigger(Method, path)));
+    }
 
     protected override ValueTask<Transition> ResumeAsync(ResumeContext<HttpWaitState, HttpRequest> context) => new(Complete(context.Trigger));
 }

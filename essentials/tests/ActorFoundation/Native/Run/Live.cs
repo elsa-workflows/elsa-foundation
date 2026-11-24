@@ -48,9 +48,10 @@ public sealed class Network
 }
 
 /// <summary>
-/// A node's HTTP front: a request that matches a start route starts a workflow in a partition this node owns, hands
-/// it the request as the turn's ambient value, and observes it; any other request resumes the instance that waits on
-/// its route, wherever it is owned, by a delivery that carries this node's reply address. The host's <c>pump</c> runs
+/// A node's HTTP front: a request is matched against the route templates (<see cref="HttpRouteMatcher"/>), and carries
+/// the matched route values. One that matches a start route starts a workflow in a partition this node owns, hands it
+/// the request as the turn's ambient value, and observes it; any other request resumes the instance that waits on its
+/// resolved route, wherever it is owned, by a delivery that carries this node's reply address. The host's <c>pump</c> runs
 /// the workers; a request still open when the pump returns times out.
 /// </summary>
 public sealed class HttpHost(string node, Requests requests, HttpRoutes routes, IKernelStore store)
@@ -60,11 +61,13 @@ public sealed class HttpHost(string node, Requests requests, HttpRoutes routes, 
     public async Task<HttpResponse> SendAsync(HttpRequest request, Worker local, string mode, Func<Task> pump)
     {
         var id = "q" + Interlocked.Increment(ref _requests);
+        var match = HttpRouteMatcher.Match(routes, request.Method, request.Path);
+        request = request with { RouteValues = match.Values };
         var open = requests.Open(id, local.Now + 30_000);
-        var replyTo = open.ReplyAddress(node, routes.BeforeCommit(request.Method, request.Path));
+        var replyTo = open.ReplyAddress(node, match.Route?.RespondBeforeCommit ?? false);
         try
         {
-            if (routes.TryStart(request.Method, request.Path, out var route))
+            if (match.Route is { Start: true } route)
             {
                 var instance = InstanceRef.In(local.Partition, $"http-{node}-{open.Registration}");
                 // Decision 4: an Ephemeral run may wait in memory for its own short timers and jobs up to the route's timeout.
@@ -73,7 +76,7 @@ public sealed class HttpHost(string node, Requests requests, HttpRoutes routes, 
             }
             else
             {
-                var key = HttpRoutes.Key(request.Method, request.Path);
+                var key = match.Key;
                 var waiting = await store.FindSubscriptionsAsync(key);
                 if (waiting.Count == 0) return new HttpResponse(404, "text/plain", "no workflow waits on this route");
                 var delivery = new EventRoute(new EventRow(key, $"{node}.{open.Registration}", Json.Write(request), local.Now + 60_000), waiting[0]).Delivery(replyTo: replyTo);

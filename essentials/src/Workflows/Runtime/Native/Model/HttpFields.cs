@@ -72,14 +72,19 @@ public static class HttpFields
         return query.Count == 0 ? NoQuery : Bounded(query, "query string");
     }
 
-    /// <summary>
-    /// Response headers from a workflow's input: a JSON object whose values are strings, numbers or booleans. Anything
-    /// else is refused, as are names that are not HTTP tokens, two names that differ only in case, and values outside
-    /// visible ASCII, space and tab.
-    /// </summary>
-    public static IReadOnlyDictionary<string, string> ResponseHeaders(JsonObject? input)
+    /// <summary>The route values as the model keeps them: names in lower case, as the template has them, values as decoded; bounded.</summary>
+    public static IReadOnlyDictionary<string, string> RouteValues(IEnumerable<KeyValuePair<string, string>>? fields)
     {
-        if (input is null) return None;
+        if (fields is null) return None;
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, value) in fields)
+            if (!string.IsNullOrEmpty(name)) values[name.ToLowerInvariant()] = value ?? "";
+        return Bounded(values, "route values");
+    }
+
+    /// <summary>A JSON object's scalar values as strings: route values or headers a workflow binds.</summary>
+    internal static List<KeyValuePair<string, string>> Scalars(JsonObject input, string what)
+    {
         var fields = new List<KeyValuePair<string, string>>(input.Count);
         foreach (var (name, value) in input)
         {
@@ -89,10 +94,20 @@ public static class HttpFields
                 JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => scalar.ToJsonString(),
                 _ => null,
             } : null;
-            if (text is null) throw new HttpFieldsException($"The response header '{name}' must be a string, number or boolean.");
+            if (text is null) throw new HttpFieldsException($"The {what} '{name}' must be a string, number or boolean.");
             fields.Add(new(name, text));
         }
-        return ResponseHeaders(fields);
+        return fields;
+    }
+
+    /// <summary>
+    /// Response headers from a workflow's input: a JSON object whose values are strings, numbers or booleans. Anything
+    /// else is refused, as are names that are not HTTP tokens, two names that differ only in case, and values outside
+    /// visible ASCII, space and tab.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> ResponseHeaders(JsonObject? input)
+    {
+        return input is null ? None : ResponseHeaders(Scalars(input, "response header"));
     }
 
     private static IReadOnlyDictionary<string, string> Headers(IEnumerable<KeyValuePair<string, string>>? fields, string side, bool joinRepeats)
