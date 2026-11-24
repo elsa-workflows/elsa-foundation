@@ -273,7 +273,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **FR-016a**: A component finding MUST name its component from structured diagnostic data, never by parsing a
   message. The converter attaches a `ComponentName` metadata entry (the Elsa 3 activity type, function name, variable
   type name or storage driver type) to every component diagnostic. A call of an undeclared JavaScript function gets
-  its own code, separate from the forbidden-capability code it otherwise shares, so that only missing functions count as
+  its own code, separate from the forbidden-capability code it otherwise shares, so that refused capabilities (forbidden globals) do not count as
   components.
 - **FR-016**: Every Must fix finding MUST carry one of three remedies:
   - `patch-definition`: change the Elsa 3 definition;
@@ -357,7 +357,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 | Q1 | Where does the migrated content come from? | It is exported from the run's own Elsa 4 store after publish, not written from the converter's output. The folder is `migrated/`. Workflows use the workflow format, and reusables use the activity format. |
 | Q2 | Converted reusables depend on other activity versions, and the engine's source reconciliation refuses such content. | The engine gap is fixed by specification 1239, outside this one. The CLI exports reusables anyway, and the report flags every reusable and every workflow that uses one. Only that part of SC-004 waits on the fix. |
 | Q3 | Where does the CLI's Elsa 4 closure come from? | The Elsa 3 migration image, built `FROM` the essentials engine at the same version, with the Elsa 3 additions baked in. The CLI ships no closure, and Docker is a prerequisite. |
-| Q4 | Does using the ADR 0076 worker for this group need an ADR change? | Yes. A small ADR 0076 amendment lets the worker reach further named frozen entry points, one per command group. This specification is provisional on it. |
+| Q4 | Does using the ADR 0076 worker for this group need an ADR change? | Yes. A small ADR 0076 amendment does two things. It lets the worker reach further named frozen entry points, one per command group (D1). It also lets such a group, by default, reconcile local directory feeds into a private, run-scoped install root that it deletes at the end, never a host's shared store and never the network (D1, D10). This specification is provisional on it. |
 | Q5 | How is the run kept to one database when the shared transaction refuses a supplied connection? | Every module gets the same connection string, for a uniquely named in-memory shared-cache database that is kept alive for the run. |
 | Q6 | How far is the report versioned? | One integer `schemaVersion`. The skill and the image ship separately, so the skill must be able to refuse a version it does not know. Nothing more. |
 | Q7 | Is there an unredacted mode? | No. The user already holds the raw definitions, and the skill asks before reading them. |
@@ -398,17 +398,18 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   image, and its composition starts from the feature list. The `appsettings.json` merge comes from that specification
   too. The engine must also include JSON activity reconciliation, so that `migrated/activities/` loads, and it must
   carry `Nuplane.Sources.Directory`, so that directory feeds load.
-- **Converter diagnostics in progress.** The converter maps declared Elsa 3 JavaScript globals to prefixed host
-  functions (direct calls only), and diagnoses unregistered variable types and unmapped storage drivers. These supply
+- **Converter diagnostics this specification relies on.** The converter maps declared Elsa 3 JavaScript globals to
+  prefixed host functions (direct calls only), and diagnoses unregistered variable types and unmapped storage drivers. These supply
   the codes from which the custom-component inventory is built, and this specification adds their entries to the code
   table.
 - **Converter diagnostic for non-call references.** A declared global that a script references without calling it is
-  not rewritten, and it fails at run time. The converter refuses it as `ELS3-REPLACED-FUNCTION-REFERENCE` (Q11). That
-  is a converter change outside this specification, and this specification adds its entry to the code table.
+  not rewritten, and it fails at run time. The converter refuses it as `ELS3-REPLACED-FUNCTION-REFERENCE` (Q11), and
+  this specification adds its entry to the code table.
 - **Component metadata in the converter** (FR-016a): `ComponentName` metadata on component diagnostics, and a code of
   its own for a call of an undeclared JavaScript function. This specification makes that converter change (T004b).
-- **ADR 0076 amendment**: the worker may reach one further named frozen entry point per command group, each a
-  compatibility surface. Until the amendment is agreed, this specification stays provisional.
+- **ADR 0076 amendment** (Q4): the worker may reach one further named frozen entry point per command group, each a
+  compatibility surface. Such a group may, by default, reconcile local directory feeds into a private, run-scoped
+  install root. Until the amendment is agreed, this specification stays provisional.
 - **Engine gap**: the engine's JSON activity reconciliation refuses source-owned activity content that depends on other
   activity versions. Specification 1239 fixes that gap (Q2).
 - **Migration skill** (specification 1238): it starts the image with `docker run` and consumes `report.json` through

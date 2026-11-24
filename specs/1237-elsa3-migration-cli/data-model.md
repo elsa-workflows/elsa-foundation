@@ -18,7 +18,7 @@ This page explains the entities and their rules.
 | `definitions` | One entry per converted or refused definition version, ordered by definition id, then version. |
 | `notConverted` | Versions skipped by selection (FR-012), ordered by definition id, then version. |
 | `missingTargets` | Dispatched or executed workflow targets absent from the export. |
-| `inputFindings` | Findings that belong to no definition, such as an unreadable file or duplicate input. |
+| `inputFindings` | Findings with no definition identity: a file that is not valid JSON, or valid JSON with no Elsa 3 definition. A duplicate input is a definition result, with an `error` finding and its own bucket. |
 | `run` | The settings and composition section (FR-018 item 4). |
 
 No field holds a timestamp, an absolute path, a machine name or a run id (FR-022). All paths in the report are relative: `exportedTo` to `--out`, and input file paths to the

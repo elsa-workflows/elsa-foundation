@@ -61,7 +61,7 @@ essentials engine image (specification 1236).
 |---|---|---|
 | §E2.7 Elsa 3 stays behind the import boundary | PASS | All Elsa 3 code, the addition list and the Dockerfile are under `extensions/Elsa3/`. `essentials/src` gains no reference containing `Elsa3`, and the front end uses a type-name string only. The essentials engine image stays free of Elsa 3. The boundary tests stay green. |
 | §E2.2 Runtime takes no Design reference | PASS | No runtime project changes. The tooling project is a composition root, as a host is. |
-| ADR 0076 worker and frozen entry points | CONDITIONAL | Applies D1 to a second entry point. Depends on the ADR 0076 amendment (spec Q4). The group downloads nothing, so D10 is untouched. |
+| ADR 0076 worker and frozen entry points | CONDITIONAL | Applies D1 to a second entry point, and reconciles local directory feeds into a private run-scoped install root by default, which D1 and D10 do not allow unamended. Both depend on the ADR 0076 amendment (spec Q4). The group never touches the network or a host's shared store. |
 | ADR 0080 internal by default | PASS | The shared import run stays internal (`InternalsVisibleTo` for the tooling assembly). The only public additions are the entry point type, the two writer contracts beside their reader contracts, and the startup-only member on `ITaskManager`. |
 | §2.24.2 sanctioned patterns | PASS | R-10. There is no new seam and no dry-run abstraction: the real pipeline runs on a disposable store. |
 | §2.21.1 refactoring keeps behaviour | PASS | Extracting `Elsa3ImportRun` keeps the startup task's log lines and skip behaviour, and the existing reconciliation integration tests cover it. |

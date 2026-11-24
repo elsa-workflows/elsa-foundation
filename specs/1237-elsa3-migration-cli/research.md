@@ -163,6 +163,11 @@ different thing, an install root of extracted packages. The two groups never sha
 `NuplanePackageSet`, and deletes the root at the end. A dependency that cannot be resolved is a refusal (FR-004,
 spec Q9).
 
+ADR 0076 D1 says the worker never reconciles on its own initiative, and D10 says no command reconciles by default,
+because a reconcile pass writes a host's shared state file and install root. This reconcile touches neither: it
+reads local folders, writes only a private root it deletes, and uses no network. The ADR 0076 amendment (spec Q4)
+states that exception.
+
 ## R-7 The Elsa 3 migration image
 
 The CLI runs inside an image built `FROM` the essentials engine image at the same version (spec Q3). Specification

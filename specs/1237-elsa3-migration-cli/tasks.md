@@ -7,7 +7,6 @@
 
 - this specification is approved, and the ADR 0076 amendment is agreed (spec Q4);
 - the essentials engine image and feature list of specification 1236 exist on the initiative branch;
-- the converter diagnostic units named under *Dependencies and boundaries* are merged.
 
 T032 also waits on the engine gap of spec Q2, for its composite case only.
 
@@ -49,8 +48,8 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   - a reusable definition with two users;
   - a definition whose reusable dependency is refused;
   - a C# expression;
-  - a JavaScript call of a .NET-style member on a sentinel literal, which Elsa 4 refuses at publish with a message
-    that quotes the call;
+  - a JavaScript call of a .NET-style member on a sentinel literal, which the converter refuses as `VF-IMP-012` with
+    the analyzer's message, which quotes the call;
   - a dispatch target absent from the export;
   - a definition with three versions: the latest published one, an older one pinned by a reusable reference, and an
     unpinned one;
@@ -229,8 +228,11 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 ## Phase 7: User Story 5 - Redacted, versioned report (P2)
 
 - [ ] T028 [US5] Make every message and guidance from the converter, the import and reconciliation free of input text
-  (FR-019). Start with the strict-mode parse message, and find the others with the sentinel test (T029). For codes the
-  converter does not own, the report builder uses the code table's fixed text (T004), never the Elsa 4 message. Change each
+  (FR-019). Start with the strict-mode parse message and the `VF-IMP-012` message (the .NET-usage analyzer's message,
+  passed through, which quotes the call), and find the others with the sentinel test (T029). For codes the
+  converter does not own, the report builder uses the code table's fixed text (T004), never the Elsa 4 message. Unit-test
+  that path directly: a publish-stage diagnostic with an Elsa 4 code and a sentinel in its message reaches the report
+  with the fixed text only. Change each
   message so that it names the cause without quoting input, and add no workaround (FR-026).
 - [ ] T029 [US5] Add the sentinel test: the fixture run's `report.json` and `report.html` contain no `SENTINEL-1237`,
   including from the publish-stage refusal of the .NET-member call (SC-005).
