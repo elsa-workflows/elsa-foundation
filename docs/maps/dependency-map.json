@@ -3098,6 +3098,38 @@
       ]
     },
     {
+      "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj",
+      "name": "Elsa.ActorFoundation.BuiltIn.Hosting",
+      "kind": "source",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "BuiltIn.Hosting",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.ActorFoundation.BuiltIn.Hosting",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Runtime",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj",
+      "name": "Elsa.ActorFoundation.BuiltIn.Runtime",
+      "kind": "source",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "BuiltIn.Runtime",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.ActorFoundation.BuiltIn.Runtime",
+      "line": "B",
+      "edges": []
+    },
+    {
       "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj",
       "name": "Elsa.ActorFoundation.Contracts",
       "kind": "source",
@@ -15157,6 +15189,16 @@
           "type": "internal",
           "id": "Elsa.Activities.Sequence",
           "path": "essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Runtime",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj"
         },
         {
           "type": "internal",
