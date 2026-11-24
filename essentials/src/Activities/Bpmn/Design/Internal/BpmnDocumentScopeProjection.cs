@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Models;
@@ -167,9 +166,14 @@ internal static class BpmnDocumentScopeProjection
 
     internal static ActivityNode Write(ActivityNode owner, BpmnAuthoredDocument source)
     {
-        var payload = JsonSerializer.SerializeToNode(source, Json)!.AsObject();
-        if (source.ScopeHeaders.Count == 0 && !owner.Structure!.Payload.TryGetProperty("scopeHeaders", out _)) payload.Remove("scopeHeaders");
-        var result = owner with { Structure = new(BpmnActivityIdentities.StructureKind, BpmnAuthoredDocument.SchemaVersion, JsonSerializer.SerializeToElement(payload, Json)) };
+        var payload = JsonSerializer.SerializeToElement(source, Json);
+        if (source.ScopeHeaders.Count == 0 && !owner.Structure!.Payload.TryGetProperty("scopeHeaders", out _))
+        {
+            var values = payload.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+            values.Remove("scopeHeaders");
+            payload = JsonSerializer.SerializeToElement(values, Json);
+        }
+        var result = owner with { Structure = new(BpmnActivityIdentities.StructureKind, BpmnAuthoredDocument.SchemaVersion, payload) };
         BpmnDocumentStructureHandler.Read(result);
         return result;
     }
