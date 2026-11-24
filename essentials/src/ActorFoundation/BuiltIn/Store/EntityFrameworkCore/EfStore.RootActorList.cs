@@ -8,13 +8,16 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     internal sealed record RootListItem(string Reference, string Type, InstanceStatus Status, long? EndedAt, long? TerminalRevision, bool SupportsSelection,
-        string TypeData, IReadOnlyDictionary<string, string> Labels, long? ParkAt, string? ParkFault);
+        string TypeData, IReadOnlyDictionary<string, string> Labels, long? ParkAt, string? ParkFault)
+    {
+        internal long? ParkRevision { get; init; }
+    }
     internal sealed record RootListPage(IReadOnlyList<RootListItem> Items, long AsOf);
 
     private sealed record RootListRow(string? Reference, int? Status, long? EndedAt, long? TerminalRevision, string? Header, long? ParkAt, string? ParkFault, long AsOf, bool SourceReady,
-        int? StoreSchema, int? MessageProtocol, int? JournalCodec);
+        int? StoreSchema, int? MessageProtocol, int? JournalCodec, long? ParkRevision);
     private sealed record RootPointRow(string? Reference, int? Status, long? EndedAt, long? TerminalRevision, string? Header, long? ParkAt, string? ParkFault, long AsOf, bool SourceReady,
-        int? StoreSchema, int? MessageProtocol, int? JournalCodec);
+        int? StoreSchema, int? MessageProtocol, int? JournalCodec, long? ParkRevision);
 
     internal static async Task RequirePreviewInstallSchemaAsync(KernelDb db, CancellationToken token)
     {
@@ -161,6 +164,7 @@ public sealed partial class EfStore
             .Replace("/*terminal-mark*/", terminalSelections ? """l."TerminalRevision" """ : "NULL::bigint", StringComparison.Ordinal)
             .Replace("/*park-at*/", parks ? """l."ParkAt" """ : "NULL::bigint", StringComparison.Ordinal)
             .Replace("/*park-fault*/", parks ? """l."ParkFault" """ : "NULL::text", StringComparison.Ordinal)
+            .Replace("/*park-revision*/", db.UsesRootParkRecovery ? """l."ParkRevision" """ : "NULL::bigint", StringComparison.Ordinal)
             .Replace("/*filter*/", encodeFilterLocally ? "" : "kernel_actor_list_filter", StringComparison.Ordinal)
             .Replace("/*filter-cast*/", encodeFilterLocally ? "::jsonb" : "", StringComparison.Ordinal);
         return FormattableStringFactory.Create(sql, query.GetArguments());
@@ -188,7 +192,7 @@ public sealed partial class EfStore
         {
             row = await db.Database.SqlQuery<RootPointRow>(ActorListQuery(db, $"""
                 SELECT l."Reference", l."Status", l."EndedAt", /*terminal-mark*/ AS "TerminalRevision", l."Header", /*park-at*/ AS "ParkAt", /*park-fault*/ AS "ParkFault",
-                    kernel."StoreSchema", kernel."MessageProtocol", kernel."JournalCodec",
+                    /*park-revision*/ AS "ParkRevision", kernel."StoreSchema", kernel."MessageProtocol", kernel."JournalCodec",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf",
                     EXISTS (
                         SELECT 1 FROM pg_catalog.pg_trigger source
@@ -223,7 +227,7 @@ public sealed partial class EfStore
         }
         RequireSnapshotFormat(expected, row.StoreSchema, row.MessageProtocol, row.JournalCodec);
         RequireRootActorListSource(row.SourceReady);
-        return row.Reference is null ? null : (ToRootListItem(row.Reference, row.Status!.Value, row.EndedAt, row.TerminalRevision, row.Header!, db.UsesRootTerminalSelection, row.ParkAt, row.ParkFault), row.AsOf);
+        return row.Reference is null ? null : (ToRootListItem(row.Reference, row.Status!.Value, row.EndedAt, row.TerminalRevision, row.Header!, db.UsesRootTerminalSelection, row.ParkAt, row.ParkFault, row.ParkRevision), row.AsOf);
     }
 
     internal async Task<RootListPage> ReadRootActorListAsync(string tenant, string after, string? type, int? status,
@@ -263,7 +267,8 @@ public sealed partial class EfStore
                         GROUP BY source.tgrelid HAVING count(*) = {triggers.Length}
                     ) AS "SourceReady"
                 ), page AS (
-                    SELECT l."Reference", l."Status", l."EndedAt", /*terminal-mark*/ AS "TerminalRevision", l."Header", /*park-at*/ AS "ParkAt", /*park-fault*/ AS "ParkFault"
+                    SELECT l."Reference", l."Status", l."EndedAt", /*terminal-mark*/ AS "TerminalRevision", l."Header", /*park-at*/ AS "ParkAt", /*park-fault*/ AS "ParkFault",
+                        /*park-revision*/ AS "ParkRevision"
                     FROM "FoundationActorList" l
                     WHERE l."Tenant" = {tenant} AND l."Reference" > {after}
                         AND (SELECT "SourceReady" FROM readiness)
@@ -277,7 +282,7 @@ public sealed partial class EfStore
                             WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements(l."Labels") label(entry) WHERE label.entry = criterion.entry))
                     ORDER BY l."Reference" LIMIT {limit}
                 )
-                SELECT page."Reference", page."Status", page."EndedAt", page."TerminalRevision", page."Header", page."ParkAt", page."ParkFault",
+                SELECT page."Reference", page."Status", page."EndedAt", page."TerminalRevision", page."Header", page."ParkAt", page."ParkFault", page."ParkRevision",
                     marker."StoreSchema", marker."MessageProtocol", marker."JournalCodec",
                     (SELECT "SourceReady" FROM readiness) AS "SourceReady",
                     floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "AsOf"
@@ -298,7 +303,7 @@ public sealed partial class EfStore
         var first = rows[0];
         RequireSnapshotFormat(expected, first.StoreSchema, first.MessageProtocol, first.JournalCodec);
         RequireRootActorListSource(first.SourceReady);
-        var items = rows.Where(row => row.Reference is not null).Select(row => ToRootListItem(row.Reference!, row.Status!.Value, row.EndedAt, row.TerminalRevision, row.Header!, db.UsesRootTerminalSelection, row.ParkAt, row.ParkFault)).ToArray();
+        var items = rows.Where(row => row.Reference is not null).Select(row => ToRootListItem(row.Reference!, row.Status!.Value, row.EndedAt, row.TerminalRevision, row.Header!, db.UsesRootTerminalSelection, row.ParkAt, row.ParkFault, row.ParkRevision)).ToArray();
         return new(items, first.AsOf);
     }
 
@@ -307,16 +312,18 @@ public sealed partial class EfStore
         if (!ready) throw new StoreFormatException("The root actor projection source or a required trigger is missing or disabled.");
     }
 
-    private static RootListItem ToRootListItem(string reference, int status, long? endedAt, long? terminalRevision, string encodedHeader, bool qualified, long? parkAt, string? parkFault)
+    private static RootListItem ToRootListItem(string reference, int status, long? endedAt, long? terminalRevision, string encodedHeader, bool qualified, long? parkAt, string? parkFault,
+        long? parkRevision)
     {
         if (qualified && ((InstanceStatus)status == InstanceStatus.Running
             ? endedAt is not null || terminalRevision is not null
             : endedAt is null || terminalRevision is not > 0))
             throw new StoreFormatException("The actor list terminal mark is incomplete.");
-        if (parkAt is not null ? parkAt <= 0 || status != (int)InstanceStatus.Faulted || parkFault is null : parkFault is not null)
+        if (parkAt is not null ? parkAt <= 0 || status != (int)InstanceStatus.Faulted || parkFault is null || parkRevision <= 0 : parkFault is not null || parkRevision is not null)
             throw new StoreFormatException("The actor list Park mark is incomplete.");
         var header = DurableKeyJson.Read<RootHeader>(encodedHeader);
         return new(reference, header.Model, (InstanceStatus)status, endedAt, terminalRevision, qualified, header.TypeData,
-            header.Labels.ToDictionary(StringComparer.Ordinal), parkAt, parkFault is null ? null : DurableKeyJson.Read<string>(parkFault));
+            header.Labels.ToDictionary(StringComparer.Ordinal), parkAt, parkFault is null ? null : DurableKeyJson.Read<string>(parkFault))
+            { ParkRevision = parkRevision };
     }
 }

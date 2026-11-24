@@ -102,11 +102,14 @@ public sealed partial class EfStore
         var home = new InstanceRef(actor.Id).Partition;
         var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
         var operatorOnly = suspended ? """AND "Id" LIKE 'operator/%'""" : "";
+        // The settled prefix follows the poll's order, which puts a pending released cohort first.
+        var cohort = db.UsesRootParkRecovery
+            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter})""" : "";
         var rows = await db.Messages.FromSqlRaw($$"""
-            SELECT * FROM {{source}} WHERE "Target" = {0} AND "Partition" = {1}
+            SELECT * FROM {{source}} m WHERE "Target" = {0} AND "Partition" = {1}
                 AND "InboxScope" IN ({2}, {3}) AND "EventMatch" IS NULL
-                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}}
-            ORDER BY "Seq" LIMIT {4} FOR UPDATE
+                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}} {{cohort}}
+            ORDER BY "Seq" LIMIT {4} FOR UPDATE OF m
             """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count).AsNoTracking().ToListAsync(cancellationToken);
         if (!db.UsesRootOperatorProtocol && rows.Any(row => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))))
             return false;

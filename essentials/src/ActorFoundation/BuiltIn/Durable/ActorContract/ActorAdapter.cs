@@ -47,7 +47,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => roots is null && row?.Model == actor.Type;
     bool Durable.IActorType.AcceptsFoundationOperator(Durable.InstanceRow? row, Durable.Message message) =>
-        roots is null ? SupportsFoundationOperator(row) : row?.Model == actor.Type && IsRootControl(message);
+        roots is null ? SupportsFoundationOperator(row) : row?.Model == actor.Type && (IsRootControl(message) || IsRootRecover(message));
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => roots is null && type == actor.Type;
 
     bool Durable.IActorType.SupportsTrialWithdrawal => roots is null;
@@ -89,7 +89,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        roots is not null ? CanKeepRootParkArrival(row, delivery) :
+        roots is not null ? CanKeepRootParkArrival(row, delivery) || delivery.Durable && IsRootRecover(delivery.Message) :
         row.ParkDiscard?.Kind != Durable.ParkClearKind.Terminate &&
         (row.ParkRecovery is null && store.FoundationTurnHeader(row).Park is not null
             ? !delivery.Message.IsControl
@@ -113,7 +113,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
         SettlesEndedChildNotice(row, delivery.Message) ||
-        roots is not null && delivery.Message.Operator is { QualifiedTerminal: not null } or { RootThenDelete: true } ||
+        roots is not null && delivery.Message.Operator is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null } ||
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
             delivery.IsWorkerJobCompletion && (rootJobHandle is not null || delivery.JobDeadline is not null || IsParked(row)));
 
@@ -126,6 +126,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var message = delivery.Message;
         if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition, spec.Input))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
+        // A recover that reaches an ended or suspended root settles with the other operator kinds through the root refusal.
+        if (roots is not null && input.Row is { Status: Durable.InstanceStatus.Running or Durable.InstanceStatus.Faulted, Suspended: false } recoverTarget &&
+            input.Taken is [{ Durable: true } recover] && IsRootRecover(recover.Message))
+            return RecoverRootPark(input, recoverTarget, recover);
         if (roots is not null && input.Row is { } qualifiedPark && input.Taken.All(item => CanKeepRootParkArrival(qualifiedPark, item)))
         {
             if (input.Taken.Any(item => item.Attempts >= input.MaxAttempts))

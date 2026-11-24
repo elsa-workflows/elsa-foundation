@@ -30,6 +30,7 @@ public sealed partial class EfStore
         internal bool RequiresCommittedTerminal { get; set; }
         internal bool KeepsParkInputs { get; set; }
         internal bool KeepsParkArrivals { get; set; }
+        internal bool RecoversPark { get; set; }
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
         private readonly Dictionary<string, WorkerRoot> _actors = roots.ToDictionary(r => r.Actor, StringComparer.Ordinal);
         private readonly Dictionary<string, WorkerRoot> _references = roots.ToDictionary(r => r.Reference, StringComparer.Ordinal);
@@ -60,6 +61,7 @@ public sealed partial class EfStore
         public bool RequiresCommittedTerminal => roots.RequiresCommittedTerminal;
         public bool KeepsParkInputs => roots.KeepsParkInputs;
         public bool KeepsParkArrivals => roots.KeepsParkArrivals;
+        public bool RecoversPark => roots.RecoversPark;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
@@ -111,6 +113,7 @@ public sealed partial class EfStore
             scope.RequiresCommittedTerminal = db.UsesRootRetirement;
             scope.KeepsParkInputs = db.UsesRootParkOpening;
             scope.KeepsParkArrivals = db.UsesRootParkArrivals;
+            scope.RecoversPark = db.UsesRootParkRecovery;
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
         }
@@ -363,6 +366,7 @@ public sealed partial class EfStore
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
+        if (turn.FoundationRootOperator is { Kind: Kinds.Recover }) return await PrepareRootParkRecoverAsync(root, turn, cancellationToken);
         if (turn.OpensPark || turn.FoundationKept is { Count: > 0 })
         {
             await using var profile = create();

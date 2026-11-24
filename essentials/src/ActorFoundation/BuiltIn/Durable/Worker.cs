@@ -129,7 +129,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly List<Delivery> _meets = [];
     private readonly HashSet<Delivery> _exhaustedCatchUps = [];
     private readonly HashSet<InboxKey> _cancelling = [];        // tickets of jobs cancelled by a commit in flight
-    private readonly HashSet<string> _retiredRootsDuringPoll = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _retiredRootsDuringPoll = new(StringComparer.Ordinal);   // also roots a recover reset; the in-flight poll's rows for them are dropped
     private readonly HashSet<InboxKey> _consumed = [];          // while a poll is in flight
     private readonly Dictionary<InboxKey, int> _behind = [];    // own rows written while catching up, not yet polled, with their partition
     private readonly List<TurnOutcome> _queue = [];
@@ -3455,6 +3455,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // The root retirement write settles every occurrence, including ones read ahead of this command.
             foreach (var item in retired.Inbox.ToArray()) Forget(item);
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
+        }
+        if (unit.Slot is { CurrentRow.Status: InstanceStatus.Faulted } restored && unit.Row is { Status: InstanceStatus.Running } &&
+            unit.Consumed is [{ Message.Operator.RootParkMark: not null }])
+        {
+            // A qualified root's recover puts its released rows ahead of every input read before it. The next poll reads
+            // the inputs held here again, in that order, so no ordinary turn runs ahead of the cohort.
+            foreach (var item in restored.Inbox.Where(item => item.Durable && !item.Taken).ToArray()) Forget(item);
+            if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
+            _caughtUp = false;
+            _woken = true;
         }
         foreach (var item in unit.Held)     // back in its place; its turn ran, so it is no suspect and no longer on trial
         {

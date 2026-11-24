@@ -144,6 +144,8 @@ public class KernelDb : DbContext
     internal bool UsesRootParkOpening => Has(RootCapabilities.ParkOpening);
     internal bool UsesRootParkInspection => Has(RootCapabilities.ParkInspection);
     internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
+    internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
+    internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
@@ -786,9 +788,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (root.Discover)
             {
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
-                return ToGeneratedPoll(page, root, db);
+                return await WithRootParkFactsAsync(db, ToGeneratedPoll(page, root, db), cancellationToken);
             }
-            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db);
+            return await WithRootParkFactsAsync(db, ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db), cancellationToken);
         }
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
     }
@@ -799,13 +801,14 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
-             {(db.UsesRootOperatorProtocol ? RootOperatorPollFilter : "")}
+             {(db.UsesRootOperatorProtocol ? db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter : RootOperatorPollFilter : "")}
              AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({RootInputScopes}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
                  WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"
-                   {(db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL""" : "")})))
+                   {(db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL""" : "")}
+                   {(db.UsesRootParkRecovery ? RootReleasedCohortFilter : "")})))
             """;
     // Commands are exposed only when database time makes them due. On a suspended root the
     // first due command can pass withheld ordinary inputs. Running roots first clear their ready FIFO prefix.
@@ -820,13 +823,16 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                          AND prior."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND prior."EventMatch" IS NULL
                          AND NOT prior."Done" AND prior."Due" <= t.now
                          AND (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%'))
-                   ELSE (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running}) AND NOT EXISTS (
+                   ELSE (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running}) AND (/*released-cohort*/ NOT EXISTS (
                        SELECT 1 FROM "Messages" op
                        WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
                          AND op."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND op."Id" LIKE 'operator/%'
-                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now)
+                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now))
                    END)))
         """;
+    // A released row of the root's current generation goes before every control: an earlier operator row waits for the cohort.
+    private static readonly string RootRecoveryOperatorPollFilter = RootOperatorPollFilter.Replace("/*released-cohort*/",
+        """m."FoundationReleasedBy" = target."FoundationParkGeneration" OR """, StringComparison.Ordinal);
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
         ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
     private string PollMessages => _ordinaryRoots is { Discover: true }

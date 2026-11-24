@@ -54,6 +54,8 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
                 PostgresRootSelection.SealRunning(cursor, scope.Tenant, row.Reference),
             { TerminalRevision: > 0 and var revision, EndedAt: { } at } =>
                 PostgresRootSelection.SealTerminal(cursor, scope.Tenant, row.Reference, revision, at),
+            { ParkAt: { } parkedAt, ParkRevision: { } parkRevision } =>
+                PostgresRootSelection.SealPark(cursor, scope.Tenant, row.Reference, parkRevision, parkedAt),
             _ => null
         };
         return new(header, selection, row.ParkAt is { } parkAt ? new(parkAt, null) : null, asOf);

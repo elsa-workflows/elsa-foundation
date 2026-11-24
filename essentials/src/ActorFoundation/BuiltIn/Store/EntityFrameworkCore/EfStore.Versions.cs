@@ -52,6 +52,7 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootParkOpening => Current with { MessageProtocol = 19 };
     internal static StoreFormat RootParkInspection => Current with { MessageProtocol = 20 };
     internal static StoreFormat RootParkArrivals => Current with { MessageProtocol = 21 };
+    internal static StoreFormat RootParkRecovery => Current with { MessageProtocol = 22 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
@@ -82,7 +83,8 @@ internal enum RootCapabilities
     ReplyProtocol = 1 << 16,
     ParkOpening = 1 << 17,
     ParkInspection = 1 << 18,
-    ParkArrivals = 1 << 19
+    ParkArrivals = 1 << 19,
+    ParkRecovery = 1 << 20
 }
 
 internal static class RootProfiles
@@ -119,7 +121,9 @@ internal static class RootProfiles
         [StoreFormat.RootTimedJobPreview] = TimedJobSettlement | RootCapabilities.TimedJobPreview,
         [StoreFormat.RootParkOpening] = RootCapabilities.ParkOpening,
         [StoreFormat.RootParkInspection] = ParkInspection,
-        [StoreFormat.RootParkArrivals] = ParkInspection | RootCapabilities.ParkArrivals
+        [StoreFormat.RootParkArrivals] = ParkInspection | RootCapabilities.ParkArrivals,
+        // Recover composes with the Park capabilities and admits only its own operator occurrence.
+        [StoreFormat.RootParkRecovery] = ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery | RootCapabilities.OperatorProtocol
     };
 
     internal static RootCapabilities CapabilitiesOf(StoreFormat format) =>

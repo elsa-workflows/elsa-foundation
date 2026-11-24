@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Elsa.ActorFoundation.TestSupport;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
@@ -11,15 +13,17 @@ namespace Kernel.Native.Run;
 
 internal static class PostgresRootParkOpeningChecks
 {
-    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool inspection = false, bool arrivals = false)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool inspection = false, bool arrivals = false, bool recovery = false)
     {
+        if (recovery) (inspection, arrivals) = (true, true);
         const string fault = "deliberate actor failure";
         const string original = "{\"before\":true}";
         const string payload = "{\"retain\":\"this input\"}";
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        KernelDb Profile(DbContextOptions<KernelDb> settings) => arrivals ? KernelDb.ForPostgresRootParkArrivals(settings)
+        KernelDb Profile(DbContextOptions<KernelDb> settings) => recovery ? KernelDb.ForPostgresRootParkRecovery(settings)
+            : arrivals ? KernelDb.ForPostgresRootParkArrivals(settings)
             : inspection ? KernelDb.ForPostgresRootParkInspection(settings) : KernelDb.ForPostgresRootParkOpening(settings);
         KernelDb Open() => Profile(options);
         EfStore Store(Func<KernelDb>? open = null) => new(open ?? Open, postgres: true, fenceInBatch: inBatch)
@@ -52,7 +56,7 @@ internal static class PostgresRootParkOpeningChecks
         var admission = new PostgresRootAdmission(OpenMixed, TimeSpan.FromHours(1), lockOrdinaryWrites: true);
         var tenant = ContractScopes.Bind("park-preview");
         var probe = new Probe(original, fault);
-        var ingress = new PostgresRootIngress(admission, probe.Type);
+        var ingress = new PostgresRootIngress(admission, probe.Type, authorizeRecover: recovery ? (_, _) => true : null);
         var accepted = await ingress.SendAsync(tenant, new Contract.Target.Start(new(probe.Type, "{}")),
             "start", Contract.Kinds.Start, cancellationToken: stop);
         var actor = accepted.Actor ?? throw new InvalidOperationException("The creator was refused.");
@@ -66,6 +70,12 @@ internal static class PostgresRootParkOpeningChecks
         var controlsRan = false;
         var arrivalControlsRan = false;
         var reparkControlsRan = false;
+        var recoverControlsRan = false;
+        var secondRecoverLanded = false;
+        int? recoveredAt = null;
+        long recoverAsOf = 0;
+        string? staleRecover = null;
+        var staleRecoverSettled = false;
         ParkMark? opened = null;
         Exception? controlError = null;
         long tailDue = 0;
@@ -112,6 +122,11 @@ internal static class PostgresRootParkOpeningChecks
                     "the same owner withholds the buffered input without attempting to settle it, and advances the neighbor");
         }
 
+        if (recovery)
+        {
+            await RecoverAsync();
+            return 0;
+        }
         if (arrivals)
         {
             await ObserveArrivalsAsync();
@@ -528,12 +543,334 @@ internal static class PostgresRootParkOpeningChecks
                     throw;
                 }
             }
+            static bool Recovers(TurnCommit turn) => turn.FoundationRootOperator?.Kind == Contract.Kinds.Recover &&
+                turn.Row?.Status == InstanceStatus.Running;
+            if (recovery && !recoverControlsRan && batch.Turns.SingleOrDefault(Recovers) is { } recovering)
+            {
+                recoverControlsRan = true;
+                await RecoverControlsAsync(ownerStore, batch, recovering, token);
+                recoverAsOf = (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, token))!.AsOf;
+            }
             var committed = await ownerStore.CommitAsync(batch, token);
+            staleRecoverSettled |= committed.Landed && staleRecover is not null &&
+                batch.Turns.Any(turn => turn.Row is null && turn.Done.Any(key => key.Id == staleRecover));
+            if (recovery && committed.Landed && staleRecover is null &&
+                batch.Turns.FirstOrDefault(turn => turn.FoundationRootOperator?.Id == "recover-2" && turn.Row?.Status == InstanceStatus.Running) is { } second)
+            {
+                // The second recover's occurrence becomes a due operator row ahead of the cohort it must wait for.
+                await using var db = Open();
+                staleRecover = await db.Database.SqlQuery<string>($"""
+                    SELECT "Id" AS "Value" FROM "Messages" WHERE "Target" = {second.Instance} AND "InboxScope" = -4
+                        AND "Id" LIKE 'operator/%' AND NOT "Done"
+                    """).SingleAsync(token);
+                Check(await db.Database.SqlQuery<int>($"""
+                    SELECT count(*)::int AS "Value" FROM "Messages" WHERE "Target" = {second.Instance} AND NOT "Done"
+                        AND "FoundationReleasedBy" = 2 AND "Kind" = 'finish'
+                    """).SingleAsync(token) == 1 && await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Seq" = (SELECT min("Seq") - 1 FROM "Messages" WHERE "Target" = {second.Instance})
+                    WHERE "Id" = {staleRecover}
+                    """, token) == 1, "raw SQL moves the second recover of the new Park ahead of its released generation-2 row");
+            }
+            secondRecoverLanded |= committed.Landed && batch.Turns.Any(turn => turn.FoundationRootOperator?.Id == "recover-again");
+            if (recovery && committed.Landed && recoveredAt is null && batch.Turns.FirstOrDefault(Recovers) is { } recoveredTurn)
+            {
+                recoveredAt = probe.Delivered.Count;
+                // A fresh input admitted after the recover is given a lower Seq than every released row.
+                Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "post", "ordinary", "{}",
+                    cancellationToken: token) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the recovered root admits a fresh input");
+                await using var db = Open();
+                Check(await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Seq" = (SELECT min("Seq") - 1 FROM "Messages" WHERE "Target" = {recoveredTurn.Instance})
+                    WHERE "Target" = {recoveredTurn.Instance} AND "InboxScope" = -4 AND NOT "Done" AND "FoundationReleasedBy" IS NULL
+                        AND "Id" NOT LIKE 'operator/%'
+                    """, token) == 1, "raw SQL moves the fresh post-recover input ahead of the released rows");
+            }
             if (committed.Landed && arrivals && opened is null && batch.Turns.SingleOrDefault(turn => turn.OpensPark) is { } landed)
                 opened = await ReadParkMark(landed.Instance);
             keptTail |= committed.Landed && tailOccurrence is not null && batch.Turns.Any(turn =>
                 Continues(turn, ParkKeepReason.Arrived) && turn.Done.Any(key => key.Id == tailOccurrence));
             return committed;
+        }
+
+        async Task RecoverAsync()
+        {
+            var reads = await Store(OpenMixed).OpenPreviewRootReadsAsync(8, stop);
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "fresh", "ordinary", payload,
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the parked root admits a second arrival");
+            await using (var keeper = await Own("recover-arrival"))
+                await Drive(keeper, row => row is { Revision: 4, Status: InstanceStatus.Faulted });
+            var parked = await reads.GetAsync(tenant, actor, stop);
+            var selection = parked?.Selection ?? throw new InvalidOperationException("The parked view has no Park selection.");
+            Check(parked.Park?.At == opened!.At && (await reads.GetAsync(tenant, sibling, stop))?.Selection is null,
+                "the public view of the parked root carries a Park selection and the running sibling none");
+            ValueTask<Contract.Admission> Send(Contract.ActorRef target, string id, Contract.OperatorCommand command) =>
+                ingress.SendAsync(tenant, new Contract.Target.Ref(target), id, Contract.Kinds.Recover, JsonSerializer.Serialize(command),
+                    cancellationToken: stop);
+            foreach (var (command, what) in new (Contract.OperatorCommand, string)[]
+            {
+                (new(selection, Contract.RecoverMode.Retry), "Retry"), (new(selection, Contract.RecoverMode.RetryAll), "RetryAll"),
+                (new(selection, Handles: ["handle"]), "handles"), (new(selection, Reason: "why"), "a reason"), (new(selection, ThenDelete: true), "ThenDelete")
+            })
+                Check(await Send(actor, "refused-" + what, command) is { Outcome: Contract.AdmissionOutcome.Refused }, $"ingress refuses a recover with {what}");
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "refused-delayed", Contract.Kinds.Recover,
+                    JsonSerializer.Serialize(new Contract.OperatorCommand(selection)),
+                    new(DueAt: (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop))!.AsOf + 60_000), stop) is { Outcome: Contract.AdmissionOutcome.Refused },
+                "ingress refuses a delayed recover, since Recover is immediate");
+            Check(await Send(sibling, "refused-sibling", new(selection)) is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
+                "ingress refuses the parked root's selection on its sibling");
+            Check(await new PostgresRootIngress(new PostgresRootAdmission(() => KernelDb.ForPostgresRootParkArrivals(mixedOptions), TimeSpan.FromHours(1)),
+                    probe.Type, authorizeRecover: (_, _) => true).SendAsync(tenant, new Contract.Target.Ref(actor), "protocol-21", Contract.Kinds.Recover,
+                    JsonSerializer.Serialize(new Contract.OperatorCommand(selection)), cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Refused },
+                "a protocol 21 ingress refuses Recover");
+
+            // A kept set larger than one page is refused at the owner and leaves the Park as it was.
+            await using (var db = Open())
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Kind", "Partition", "Due", "Seen", "Attempts", "Trial", "Done", "JobGeneration", "FoundationKeptBy")
+                    SELECT 'page-filler-' || n, -4, {before.Actor.Id}, 'ordinary', 0, 0, 0, 0, 0, true, 0, 1 FROM generate_series(1, {InMemoryStore.ParkPageLimit}) n
+                    """, stop);
+            Check(await Send(actor, "recover-page", new(selection)) is { Outcome: Contract.AdmissionOutcome.Accepted }, "ingress admits a recover of the oversized Park");
+            await using (var pager = await Own("recover-page"))
+                await Drive(pager, row => row is { Revision: 5 });
+            Check((await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop))[^1] is { Revision: 5, Entries: """{"Outcome":"refused","Operation":"recover-page","Reason":"page"}""" } &&
+                (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop)) is { Status: InstanceStatus.Faulted, Fault: fault, State: original } &&
+                await ReadParkMark(before.Actor.Id) == opened && (await reads.GetAsync(tenant, actor, stop))?.Park == parked.Park,
+                "the owner records a page refusal at the next revision and keeps the Park mark and fault");
+            await using (var db = Open())
+                await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" LIKE 'page-filler-%'""", stop);
+
+            Check(await Send(actor, "recover", new(selection)) is { Outcome: Contract.AdmissionOutcome.Accepted }, "ingress admits the recover");
+            Check(await Send(actor, "recover", new(selection)) is { Outcome: Contract.AdmissionOutcome.Duplicate }, "a repeated recover operation is a duplicate");
+            Check(await Send(actor, "recover-again", new(selection)) is { Outcome: Contract.AdmissionOutcome.Accepted }, "a second recover of the same Park is admitted");
+            await using (var recoverer = await Own("recoverer"))
+                await Drive(recoverer, _ => probe.Delivered.Contains((actor, "post")) && secondRecoverLanded);
+            var after = await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop);
+            var view = await reads.GetAsync(tenant, actor, stop);
+            await using (var db = Open())
+                Check(after is { Status: InstanceStatus.Running, Fault: null, State: original } && view is { Park: null, Header.Status: Contract.ActorStatus.Running } &&
+                    await ReadParkMark(before.Actor.Id) == new ParkMark(null, null, null) && await db.Database.SqlQuery<long>($"""
+                        SELECT "FoundationParkGeneration" AS "Value" FROM "Instances" WHERE "Id" = {before.Actor.Id}
+                        """).SingleAsync(stop) == 1 && await db.Database.SqlQuery<long?>($"""
+                        SELECT "ParkRevision" AS "Value" FROM "FoundationActorList" WHERE "Reference" = {actor.Id}
+                        """).SingleAsync(stop) is null,
+                    "the root is Running with its Park mark and projection cleared and release generation one");
+            var released = probe.Delivered.Skip(recoveredAt!.Value).Where(item => item.Actor == actor).Select(item => item.Id).ToArray();
+            Check(released is ["later", "fresh", "post"] && probe.Failed == 1,
+                $"the released arrivals reach the model in Seq order before the lower-Seq fresh input, and the fault input is not redelivered ({string.Join(", ", released)})");
+            var inputs = await ReadInputs(before.Actor.Id);
+            Check(inputs.Single(row => row.Kind == "fail") is { Done: true, KeptBy: null, Payload: null } && inputs.All(row => row.Done && row.KeptBy is null),
+                "the fault input is cleared and stays settled, and no kept row remains");
+            Check(recoverAsOf > 0 && inputs.Where(row => !row.Id.StartsWith("operator/", StringComparison.Ordinal))
+                    .All(row => row.KeepUntil >= recoverAsOf + (long)TimeSpan.FromHours(1).TotalMilliseconds),
+                "the restored and cleared rows take the ordinary admission window from the recover commit");
+            var history = await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop);
+            Check(history.Count(entry => entry.Entries.Contains("\"recovered\"", StringComparison.Ordinal)) == 1 && history.Any(entry => entry is
+                { Revision: 6, Entries: """{"Outcome":"recovered","Operation":"recover","Restored":2,"Cleared":1,"AlreadyRearmed":0}""" }) &&
+                history[^1].Entries == """{"Outcome":"refused","Operation":"recover-again","Reason":"selection"}""" && history[^1].Revision == after!.Revision,
+                "the journal records one recovery, and the second recover finds the root Running and records a refusal");
+            Check(await Send(actor, "recover", new(selection)) is { Outcome: Contract.AdmissionOutcome.Duplicate } &&
+                (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop))?.Revision == after!.Revision,
+                "the recover operation id stays a duplicate after it applied once");
+            Check(await Send(actor, "recover-running", new(selection)) is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
+                "ingress refuses a stale Park selection on the running root");
+
+            // A fresh protocol 21 store in its own schema of the same empty database.
+            await using (var db = Open())
+                await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA park_protocol21", stop);
+            var prior = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "park_protocol21" };
+            var priorOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(prior.ConnectionString).Options;
+            await using (var db = KernelDb.ForPostgresRootParkArrivals(priorOptions))
+                await db.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(stop);
+            await new EfStore(() => KernelDb.ForPostgresRootParkArrivals(priorOptions), postgres: true).CreateAsync(1);
+            await new PostgresRootAdmission(() => KernelDb.ForPostgresRootParkArrivals(priorOptions), TimeSpan.FromHours(1)).InstallAsync(stop);
+            await FormatRefused(async () => await new PostgresRootIngress(new PostgresRootAdmission(() => KernelDb.ForPostgresRootParkRecovery(priorOptions),
+                    TimeSpan.FromHours(1)), probe.Type, authorizeRecover: (_, _) => true).SendAsync(tenant, new Contract.Target.Ref(actor), "protocol-21-store",
+                    Contract.Kinds.Recover, JsonSerializer.Serialize(new Contract.OperatorCommand(selection)), cancellationToken: stop),
+                "a recover sent to a protocol 21 store fails with a format error");
+
+            // Generation 2: the recovered root parks again and keeps an arrival that finishes it. Of two recovers of the
+            // new Park, the second is moved ahead of the released row, which still goes first; the second recover then
+            // reaches the Finished root and settles with no checkpoint write.
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "fail-again", "fail", payload,
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the recovered root admits a second failing input");
+            await using (var reparker = await Own("repark"))
+            {
+                var reparked = await Drive(reparker, row => row is { Status: InstanceStatus.Faulted });
+                Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(actor), "finish", "finish", "{}",
+                    cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the re-parked root admits a finishing arrival");
+                await Drive(reparker, row => row is { Status: InstanceStatus.Faulted } && row.Revision == reparked.Revision + 1);
+            }
+            var secondSelection = (await reads.GetAsync(tenant, actor, stop))?.Selection
+                ?? throw new InvalidOperationException("The re-parked view has no Park selection.");
+            Check(secondSelection != selection && await Send(actor, "recover-old", new(selection)) is
+                    { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
+                "ingress refuses the generation-1 selection on the re-parked root");
+            Check(await Send(actor, "recover-2", new(secondSelection)) is { Outcome: Contract.AdmissionOutcome.Accepted } &&
+                await Send(actor, "recover-2-again", new(secondSelection)) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "ingress admits two recovers of the new Park");
+            await using (var finisher = await Own("finisher"))
+            {
+                var finished = await Drive(finisher, row => row is { Status: InstanceStatus.Finished } && staleRecoverSettled);
+                var history2 = await store.ReadJournalOfAsync(0, before.Actor.Id, 0, stop);
+                await using (var db = Open())
+                    Check(await db.Database.SqlQuery<long>($"""
+                            SELECT "FoundationParkGeneration" AS "Value" FROM "Instances" WHERE "Id" = {before.Actor.Id}
+                            """).SingleAsync(stop) == 2 && history2.Any(entry => entry.Entries ==
+                            """{"Outcome":"recovered","Operation":"recover-2","Restored":1,"Cleared":1,"AlreadyRearmed":0}""") &&
+                        !history2.Any(entry => entry.Entries.Contains("recover-2-again", StringComparison.Ordinal)) &&
+                        history2[^1].Revision == finished.Revision &&
+                        (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop))?.Revision == finished.Revision &&
+                        (await ReadInputs(before.Actor.Id)).All(row => row.Done && row.KeptBy is null),
+                        "the generation-2 recover restores the finishing arrival first, and the second recover settles on the Finished root with no checkpoint write");
+                var neighbor = (await store.ReadFirstRootAsync(tenant.Tenant, sibling.Id, stop))!;
+                Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(sibling), "after-finish", "ordinary", "{}",
+                    cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the neighbor admits a later input");
+                await Drive(finisher, row => row?.Revision == neighbor.Revision + 1, sibling);
+                Console.WriteLine("ok the owner moves on to the neighbor's later input");
+            }
+
+            // The page's byte bound charges restored rows only: two arrivals over 4 MiB are refused, and the cleared
+            // fault input over 4 MiB with one small arrival recovers.
+            var large = "{\"big\":\"" + new string('x', ParkRecoveryCredit.LimitBytes + 1024) + "\"}";
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(sibling), "large-fail", "fail", large,
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the neighbor admits a failing input over 4 MiB");
+            EfStore.RootImage neighborParked;
+            await using (var large1 = await Own("large-park"))
+                neighborParked = await Drive(large1, row => row is { Status: InstanceStatus.Faulted }, sibling);
+            var neighborId = neighborParked.Actor.Id;
+            var neighborSelection = (await reads.GetAsync(tenant, sibling, stop))?.Selection
+                ?? throw new InvalidOperationException("The parked neighbor has no Park selection.");
+            Check(await ingress.SendAsync(tenant, new Contract.Target.Ref(sibling), "small-arrival", "ordinary", "{}",
+                cancellationToken: stop) is { Outcome: Contract.AdmissionOutcome.Accepted }, "the parked neighbor admits a small arrival");
+            await using (var keeper = await Own("large-keep"))
+                await Drive(keeper, row => row?.Revision == neighborParked.Revision + 1, sibling);
+            await using (var db = Open())
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Kind", "Partition", "Due", "Seen", "Attempts", "Trial", "Done", "JobGeneration", "FoundationKeptBy", "Payload")
+                    VALUES ('byte-filler', -4, {neighborId}, 'ordinary', 0, 0, 0, 0, 0, true, 0, 1, {large})
+                    """, stop);
+            Check(await Send(sibling, "recover-bytes", new(neighborSelection)) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "ingress admits a recover of two arrivals over 4 MiB");
+            await using (var large2 = await Own("large-page"))
+                await Drive(large2, row => row?.Revision == neighborParked.Revision + 2, sibling);
+            Check((await store.ReadJournalOfAsync(0, neighborId, 0, stop))[^1].Entries ==
+                    """{"Outcome":"refused","Operation":"recover-bytes","Reason":"page"}""" &&
+                (await store.ReadFirstRootAsync(tenant.Tenant, sibling.Id, stop)) is { Status: InstanceStatus.Faulted },
+                "the owner refuses two restored rows over 4 MiB as page and keeps the Park");
+            await using (var db = Open())
+                await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Messages" WHERE "Id" = 'byte-filler'""", stop);
+            Check(await Send(sibling, "recover-alone", new(neighborSelection)) is { Outcome: Contract.AdmissionOutcome.Accepted },
+                "ingress admits a recover of the fault input over 4 MiB and one small arrival");
+            await using (var large3 = await Own("large-alone"))
+                await Drive(large3, row => row is { Status: InstanceStatus.Running } && probe.Delivered.Contains((sibling, "small-arrival")), sibling);
+            Check((await store.ReadJournalOfAsync(0, neighborId, 0, stop))[^1].Entries ==
+                """{"Outcome":"recovered","Operation":"recover-alone","Restored":1,"Cleared":1,"AlreadyRearmed":0}""",
+                "the cleared fault input over 4 MiB is not charged, and the neighbor recovers with its small arrival");
+        }
+
+        // Each guard rolls back the whole recover and leaves the Faulted row, kept rows, journal and Park mark.
+        async Task RecoverControlsAsync(EfStore ownerStore, CommitBatch batch, TurnCommit turn, CancellationToken token)
+        {
+            try
+            {
+                var physical = await ReadInputs(turn.Instance);
+                var checkpoint = (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, token))!;
+                var journal = await store.ReadJournalOfAsync(0, turn.Instance, 0, token);
+                var mark = await ReadParkMark(turn.Instance);
+                await Refused(ownerStore, batch with { Epoch = batch.Epoch - 1 }, "a stale epoch refuses the recover", token);
+                await ChangedEnvelopeRefused(ownerStore, batch, physical.First(row => row.KeptBy == (short)ParkKeepReason.Arrived && row.Payload == payload),
+                    "a kept payload changed after the poll refuses the recover", token);
+                await TriggerRefused(ownerStore, batch, "BEFORE UPDATE OF \"FoundationReleasedBy\" ON \"Messages\"",
+                    // The raw command is formatted, so the payload literal doubles its braces.
+                    "IF NEW.\"Payload\" = '{{}}' THEN RETURN NULL; END IF; RETURN NEW;", "a trigger that vetoes one restore refuses the recover", token);
+                await TriggerRefused(ownerStore, batch, "BEFORE UPDATE OF \"FoundationParkGeneration\" ON \"Instances\"", CheckpointRewrite,
+                    "a recover write that rewrites the checkpoint state rolls back", token);
+                await using (var db = Open())
+                {
+                    try
+                    {
+                        await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_project_root_park_metadata""", token);
+                        await Refused(ownerStore, batch, "a missing Park projection rolls the recover back", token);
+                    }
+                    finally
+                    {
+                        await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE TRIGGER kernel_project_root_park_metadata""", CancellationToken.None);
+                    }
+                }
+                await Bypass($"""UPDATE "Instances" SET "FoundationParkAt" = "FoundationParkAt" + 1 WHERE "Id" = {turn.Instance}""", token);
+                try { await Refused(ownerStore, batch, "a Park mark moved after the poll refuses the recover at bind", token); }
+                finally { await Bypass($"""UPDATE "Instances" SET "FoundationParkAt" = "FoundationParkAt" - 1 WHERE "Id" = {turn.Instance}""", token); }
+
+                // Raw writes against the checkpoint and journal triggers, each rolled back.
+                const string recovered = """{"Outcome":"recovered","Operation":"probe","Restored":0,"Cleared":0,"AlreadyRearmed":0}""";
+                const string refused = """{"Outcome":"refused","Operation":"probe","Reason":"selection"}""";
+                FormattableString Transition(int step) => $"""
+                    UPDATE "Instances" SET "Revision" = "Revision" + 1, "FoundationWriteRevision" = "Revision" + 1, "Status" = 0, "Fault" = NULL,
+                        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkGeneration" = "FoundationParkGeneration" + {step}
+                    WHERE "Id" = {turn.Instance}
+                    """;
+                FormattableString Continue(string instance, int stateStep = 0) => $"""
+                    UPDATE "Instances" SET "Revision" = "Revision" + 1, "FoundationWriteRevision" = "Revision" + 1,
+                        "StateVersion" = "StateVersion" + {stateStep} WHERE "Id" = {instance}
+                    """;
+                var running = (await store.ReadFirstRootAsync(tenant.Tenant, sibling.Id, token))!;
+                Check(await TriggerProbe(turn.Instance, checkpoint.Revision, recovered, Transition(1), token),
+                    "a raw recover write with its recovered entry passes the triggers (rolled back)");
+                Check(!await TriggerProbe(turn.Instance, checkpoint.Revision, recovered, Transition(0), token),
+                    "the checkpoint trigger refuses Faulted to Running with the release generation unchanged");
+                Check(!await TriggerProbe(turn.Instance, checkpoint.Revision, null, Transition(1), token),
+                    "the checkpoint trigger refuses a recover write with no recovered entry");
+                Check(!await TriggerProbe(turn.Instance, checkpoint.Revision, recovered, Continue(turn.Instance), token),
+                    "the checkpoint trigger refuses a recovered entry with a Park-continue write");
+                Check(await TriggerProbe(turn.Instance, checkpoint.Revision, recovered, Transition(1), token, then: recovered),
+                    "two recovered entries with the recover write pass the triggers (rolled back)");
+                Check(!await TriggerProbe(turn.Instance, checkpoint.Revision, recovered, Transition(1), token, then: refused),
+                    "the checkpoint trigger refuses a refused entry beside a recovered entry with the recover write");
+                Check(await TriggerProbe(turn.Instance, checkpoint.Revision, refused, Continue(turn.Instance), token),
+                    "a refused entry with only the revision moved passes the triggers (rolled back)");
+                // No commit-time check here: only the journal's insert trigger can refuse this probe.
+                Check(!await TriggerProbe(running.Actor.Id, running.Revision, recovered, null, token, immediate: false),
+                    "the journal trigger refuses a recovered entry on a Running root");
+                Check(await TriggerProbe(running.Actor.Id, running.Revision, refused, Continue(running.Actor.Id), token) &&
+                    !await TriggerProbe(running.Actor.Id, running.Revision, refused,
+                        Continue(running.Actor.Id, stateStep: 1), token),
+                    "a refused entry on a Running root passes with the row unchanged and is refused with a changed row");
+                // Each column the refused-row rule compares beyond the older set: the change alone passes, beside a refused entry it is refused.
+                foreach (var (column, change) in new (string, string)[]
+                {
+                    ("Model", "\"Model\" = \"Model\" || 'x'"), ("Definition", "\"Definition\" = \"Definition\" || 'x'"),
+                    ("NextJobGeneration", "\"NextJobGeneration\" = coalesce(\"NextJobGeneration\", 0) + 1"),
+                    ("CustomHandles", "\"CustomHandles\" = coalesce(\"CustomHandles\", '') || 'x'")
+                })
+                {
+                    var write = FormattableStringFactory.Create(
+                        "UPDATE \"Instances\" SET \"Revision\" = \"Revision\" + 1, \"FoundationWriteRevision\" = \"Revision\" + 1, " + change +
+                        " WHERE \"Id\" = {0}", running.Actor.Id);
+                    Check(await TriggerProbe(running.Actor.Id, running.Revision, null, write, token) &&
+                        !await TriggerProbe(running.Actor.Id, running.Revision, refused, write, token),
+                        $"a refused entry on a Running root is refused when {column} changes");
+                }
+                // A lone outcome entry passes the insert trigger but is refused at commit, so the next write at that revision still lands.
+                Check(!await LoneEntryCommits(turn.Instance, checkpoint.Revision, recovered, token) &&
+                    !await LoneEntryCommits(turn.Instance, checkpoint.Revision, refused, token) &&
+                    !await LoneEntryCommits(running.Actor.Id, running.Revision, refused, token),
+                    "a lone recovered or refused entry with no checkpoint write is refused at commit");
+                Check(await TriggerProbe(turn.Instance, checkpoint.Revision, refused, Continue(turn.Instance), token) &&
+                    await TriggerProbe(running.Actor.Id, running.Revision, refused, Continue(running.Actor.Id), token) &&
+                    (await store.ReadJournalOfAsync(0, running.Actor.Id, 0, token)).All(entry => entry.Revision <= running.Revision),
+                    "after a refused lone entry the parked and Running roots stay writable at the next revision");
+
+                var unchanged = await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, token);
+                Check((await ReadInputs(turn.Instance)).SequenceEqual(physical) && unchanged is { Status: InstanceStatus.Faulted, Fault: fault } &&
+                    unchanged.Revision == checkpoint.Revision && unchanged.State == checkpoint.State &&
+                    (await store.ReadJournalOfAsync(0, turn.Instance, 0, token)).SequenceEqual(journal) && await ReadParkMark(turn.Instance) == mark,
+                    "the refused recover writes keep the Faulted row, kept rows, journal and Park mark");
+            }
+            catch (Exception error)
+            {
+                controlError = error;
+                throw;
+            }
         }
 
         static bool Continues(TurnCommit turn, ParkKeepReason reason) =>
@@ -645,6 +982,55 @@ internal static class PostgresRootParkOpeningChecks
             await transaction.CommitAsync(token);
         }
 
+        // One or two raw journal entries at the next revision, then one write, in a transaction that is always rolled back
+        // after its deferred checks run. True when all pass the triggers; false when a trigger refuses any.
+        async Task<bool> TriggerProbe(string instance, long revision, string? entries, FormattableString? write, CancellationToken token,
+            string? then = null, bool immediate = true)
+        {
+            await using var db = Open();
+            await using var transaction = await db.Database.BeginTransactionAsync(token);
+            try
+            {
+                foreach (var entry in new[] { entries, then }.OfType<string>())
+                    await InsertEntry(db, instance, revision, entry, token);
+                if (write is not null && await db.Database.ExecuteSqlInterpolatedAsync(write, token) != 1)
+                    throw new InvalidOperationException("The trigger probe did not write exactly the root row.");
+                if (immediate) await db.Database.ExecuteSqlRawAsync("SET CONSTRAINTS ALL IMMEDIATE", token);
+                return true;
+            }
+            catch (Exception error) when ((error as PostgresException ?? error.InnerException as PostgresException)?.SqlState == "23514")
+            {
+                return false;
+            }
+            finally
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+            }
+        }
+
+        static Task InsertEntry(KernelDb db, string instance, long revision, string entries, CancellationToken token) =>
+            db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Journal" ("Partition", "Position", "Instance", "Revision", "Entries")
+                SELECT 0, coalesce(max("Position"), 0) + 1, {instance}, {revision + 1}, {entries} FROM "Journal" WHERE "Partition" = 0
+                """, token);
+
+        // One raw journal entry at the next revision with no checkpoint write, committed. True when the commit lands.
+        async Task<bool> LoneEntryCommits(string instance, long revision, string entries, CancellationToken token)
+        {
+            await using var db = Open();
+            await using var transaction = await db.Database.BeginTransactionAsync(token);
+            try
+            {
+                await InsertEntry(db, instance, revision, entries, token);
+                await transaction.CommitAsync(token);
+                return true;
+            }
+            catch (Exception error) when ((error as PostgresException ?? error.InnerException as PostgresException)?.SqlState == "23514")
+            {
+                return false;
+            }
+        }
+
         async Task<ParkMark> ReadParkMark(string id)
         {
             await using var db = Open();
@@ -703,6 +1089,7 @@ internal static class PostgresRootParkOpeningChecks
     private sealed class Probe(string original, string fault) : Contract.IActorType
     {
         private readonly Dictionary<Contract.ActorRef, int> _turns = [];
+        public List<(Contract.ActorRef Actor, string Id)> Delivered { get; } = [];
         public int Failed { get; private set; }
         public int Ordinary { get; private set; }
         public int TurnsOf(Contract.ActorRef actor) => _turns.GetValueOrDefault(actor);
@@ -716,7 +1103,8 @@ internal static class PostgresRootParkOpeningChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             _turns[turn.Header.Ref] = TurnsOf(turn.Header.Ref) + 1;
-            if (turn.Inbox.Single().Kind == "fail")
+            Delivered.AddRange(turn.Inbox.Select(input => (turn.Header.Ref, input.Id)));
+            if (turn.Inbox.Any(input => input.Kind == "fail"))
             {
                 Failed++;
                 turn.State = "null";
@@ -724,6 +1112,7 @@ internal static class PostgresRootParkOpeningChecks
             }
             if (turn.Inbox[0].Kind == "ordinary") Ordinary++;
             turn.State = original;
+            if (turn.Inbox.Any(input => input.Kind == "finish")) turn.End(Contract.ActorStatus.Finished);
             return default;
         }
     }

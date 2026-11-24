@@ -34,6 +34,23 @@ internal static class PostgresRootSelection
             : null;
     }
 
+    // A Park selection names the Park it resolves: its opening revision and its time.
+    internal static string SealPark(FoundationReadCursor cursor, string tenant, string reference, long revision, long at)
+    {
+        Span<byte> mark = stackalloc byte[Size];
+        BinaryPrimitives.WriteInt64LittleEndian(mark, revision);
+        BinaryPrimitives.WriteInt64LittleEndian(mark[sizeof(long)..], at);
+        return cursor.Seal(Context("postgres-root-park-selection/1", tenant, reference), mark);
+    }
+
+    internal static FoundationParkMark? OpenPark(FoundationReadCursor cursor, string? selection, string tenant, string reference)
+    {
+        Span<byte> mark = stackalloc byte[Size];
+        return cursor.TryOpen(Context("postgres-root-park-selection/1", tenant, reference), selection, mark)
+            ? new(BinaryPrimitives.ReadInt64LittleEndian(mark), BinaryPrimitives.ReadInt64LittleEndian(mark[sizeof(long)..]))
+            : null;
+    }
+
     private static byte[] Context(string read, string tenant, string reference) =>
         JsonSerializer.SerializeToUtf8Bytes(new { Read = read, Tenant = tenant, Actor = reference });
 }
