@@ -210,14 +210,16 @@ internal static partial class NativeHttpEdgeChecks
             {
                 resume.Headers.Add("X-Tenant", "acme");
                 resume.Headers.Add("Authorization", "Bearer secret");
+                resume.Headers.Add(retryHeader, "true");       // kept for a minute, so its publication can be read back
                 using var resumed = await client.SendAsync(resume, token);
                 var said = await resumed.Content.ReadAsStringAsync(token);
                 Require(resumed.StatusCode == HttpStatusCode.OK && said == "Ada@acme" &&
                         resumed.Headers.TryGetValues("x-resumed", out var resumedHeader) && resumedHeader.Single() == "yes",
                     $"A request that resumes a wait as an event carries its query and headers, and its answer carries its headers. Observed {(int)resumed.StatusCode} '{said}'.");
-                Require(store.FoundationEvents.Values.All(e => e.Payload?.Contains("secret", StringComparison.Ordinal) != true) &&
-                        store.EventRows.Values.All(e => e.Payload?.Contains("secret", StringComparison.Ordinal) != true),
-                    "The resuming request's credentials are in no stored event or publication.");
+                var resumeKey = HttpRoutes.Key("GET", "greet-later/resume");
+                var kept = store.FoundationEvents.Where(e => e.Key.Key.EndsWith(resumeKey, StringComparison.Ordinal)).Select(e => e.Value.Payload).ToArray();
+                Require(kept is [{ } payload] && payload.Contains("acme", StringComparison.Ordinal) && !payload.Contains("secret", StringComparison.Ordinal),
+                    $"The resuming request's retained publication keeps its other headers and none of its credentials. Observed {kept.Length} publication(s).");
             }
             using (var echoed = await SendWithHeadersAsync("echo-headers", ("X-Tenant", "acme"), ("x-tenant", "beta"), ("Authorization", "Bearer secret"),
                        ("Cookie", "session=secret"), ("X-Api-Key", "secret")))
@@ -309,8 +311,8 @@ internal static partial class NativeHttpEdgeChecks
         var body = context.Features.Get<IHttpRequestBodyDetectionFeature>()?.CanHaveBody == true
             ? await JsonNode.ParseAsync(request.Body, cancellationToken: token) : null;
         IReadOnlyDictionary<string, string> query, headers;
-        // Each pair goes in on its own and in order, so the model's rules join the repeats and keep a name's first spelling
-        // (Request.Query has merged them already, under the last spelling).
+        // Each pair goes in raw and in order, so the model's rules join the repeats and keep each name as sent
+        // (Request.Query would have merged names that differ only in case).
         try { query = HttpFields.Query(QueryPairs(request.QueryString.Value)); }
         catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: refused.OverBound ? StatusCodes.Status414UriTooLong : 400); }
         try { headers = HttpFields.RequestHeaders(request.Headers.SelectMany(field => field.Value.Select(value => KeyValuePair.Create(field.Key, value ?? "")))); }
