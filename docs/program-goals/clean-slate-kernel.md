@@ -25,7 +25,8 @@ plan: the ADR's non-goals for release 1, and anything not named there.
 Sipke trimmed the program to the **Actor Foundation** and the **Elsa engine**. He set the goal as end-to-end delivery
 through gate 4, the default switch, and gate 5, old-core removal, with his decision at each gate
 ([owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7142657677)). This section
-replaces the release 1 scope of ADR 0099 section 10 where the two differ, until the ADR is amended to match. Milestone acceptance, including K13's "K1 to
+replaces the release 1 scope of ADR 0099 section 10 where the two differ,
+until the ADR is amended to match. Milestone acceptance, including K13's "K1 to
 K12 accepted on main", is measured against the rows as trimmed here.
 
 His decisions:
@@ -54,10 +55,13 @@ Claude's reading of these decisions, which the owner can correct:
   as bounded drains. Until the multi-page drain ships, they are bounded to one page as recover is, and a Park larger
   than one page is refused with a recorded reason. As a result, a Park that keeps more than one page cannot be
   recovered, terminated, deleted or discarded before the release. Claude brings this to the owner as a decision
-  before the parked-root terminate slice (composition S5).
+  before the parked-root terminate slice, composition slice S5 of the
+  [composition decisions](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7135533849).
 - K10's StateMachine journeys go with the StateMachine engine.
-- Instance migration moves after the release with the plan runner. The runner is the only path that sends `Migrate`,
-  which also covers ADR 0099 section 10's "simple instance migration".
+- Instance migration moves after the release with the plan runner. In this plan and in the built source, the runner
+  is the only sender of `Migrate`. The one-instance migration through the runtime API that
+  [migrating running instances](../architecture/migrating-running-instances.md) describes moves with it. This reading
+  also moves ADR 0099 section 10's "simple instance migration".
 - Work for SQL Server and MySQL moves after the release. That includes:
   - condition RP;
   - the SQL Server and MySQL legs of NL-C1;
