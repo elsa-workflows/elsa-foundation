@@ -163,11 +163,11 @@ public sealed class WorkflowInputDefaultSerializationTests : IDisposable
     [InlineData("Payload")]
     [InlineData("Web")]
     [InlineData("Metadata")]
-    public void Input_definition_still_requires_an_explicit_nullability_flag(string serializer)
+    public void Input_definition_accepts_authored_members_without_a_nullability_flag(string serializer)
     {
         const string json = """{"referenceKey":"value","name":"value","type":{"alias":"String"},"displayName":"Value"}""";
 
-        Assert.Throws<JsonException>(() => Deserialize<InputDefinition>(json, serializer));
+        Assert.False(Deserialize<InputDefinition>(json, serializer).IsNullable);
     }
 
     [Theory]

@@ -68,7 +68,11 @@ public sealed record TriggerTargetResource(string DefinitionId, string SlotName)
 public sealed record TriggerTargetDescription(string DefinitionId, string SlotName, string? DisplayName, string ModelKey,
     TriggerTargetState State, WorkflowExecutableInputContract? InputContract, string? ContractRevision, string? VersionId,
     string? Version, string? PublicationId, long? SlotRevision, bool SupportsWorkflowOwnedHttpResponse,
-    IReadOnlyList<TriggerFinding> Findings);
+    IReadOnlyList<TriggerFinding> Findings)
+{
+    public WorkflowValuePolicies ValuePolicies { get; init; } = WorkflowValuePolicies.Off;
+    public TriggerInputSemantics InputSemantics { get; init; } = TriggerInputSemantics.Native;
+}
 
 /// <summary>Authoring query replacement contract. It neither inherits nor resolves a runtime target adapter.</summary>
 public interface IStandaloneTriggerTargetDiscovery

@@ -27,7 +27,8 @@ internal static class StepStateCommit
             var policy = source;
             if (session.Outputs.TryGetValue(name, out var destination))
                 policy = ValuePolicyCombiner.Combine(policy, destination.Policy, "Step workflow output");
-            var value = ValueEnvelope.Inline(new ValueTypeDescriptor(TypeAliasConvention.AnyAlias), json, policy);
+            var type = new ValueTypeDescriptor(TypeAliasConvention.AnyAlias);
+            var value = json.ValueKind == JsonValueKind.Null ? ValueEnvelope.Null(type, policy) : ValueEnvelope.Inline(type, json, policy);
             if (preparer is null)
                 throw new InvalidOperationException("VF-STATE-003: Workflow output encoding is unavailable.");
             changes.Add(await preparer.PrepareOutputAsync(executionId, invocation.InvocationId, name, value, occurredAt, cancellationToken));

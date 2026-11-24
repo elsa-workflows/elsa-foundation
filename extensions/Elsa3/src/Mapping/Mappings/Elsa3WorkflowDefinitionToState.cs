@@ -1,3 +1,4 @@
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Conversion;
@@ -15,11 +16,16 @@ public sealed class Elsa3WorkflowDefinitionToState(
     Elsa3ArgumentDefinitionToInputOutput argumentMapper
 )
 {
+    private readonly IVariableTypeDescriptorCatalog? _typeDescriptors;
+    public Elsa3WorkflowDefinitionToState(IWellKnownTypeRegistry wellKnownTypeRegistry, IObjectConverter objectConverter,
+        Elsa3ActivityToState activityMapper, Elsa3ArgumentDefinitionToInputOutput argumentMapper, IVariableTypeDescriptorCatalog typeDescriptors)
+        : this(wellKnownTypeRegistry, objectConverter, activityMapper, argumentMapper) => _typeDescriptors = typeDescriptors;
+
     internal WorkflowDefinitionState Map(Elsa3ConversionPlan plan)
     {
         var definition = plan.Definition;
         var variables = definition.Variables.Select(variable => plan.WorkflowVariables.TryGetValue(variable, out var mapped)
-            ? mapped : Elsa3VariableMapper.Map(wellKnownTypeRegistry, objectConverter, variable)).ToList();
+            ? mapped : Elsa3VariableMapper.Map(wellKnownTypeRegistry, objectConverter, variable, _typeDescriptors)).ToList();
         var rootActivity = definition.Root is null ? null : activityMapper.Map(plan, definition.Root);
         var inputs = (definition.Inputs ?? []).Select(argumentMapper.MapInput).ToList();
         var outputs = (definition.Outputs ?? []).Select(argumentMapper.MapOutput).ToList();
@@ -28,7 +34,9 @@ public sealed class Elsa3WorkflowDefinitionToState(
             rootActivity!,
             inputs,
             outputs,
-            StrategyOptions: null
+            StrategyOptions: plan.ValuePolicies.DefaultOnNull || plan.ValuePolicies.UndefinedAsNull
+                ? new WorkflowStrategyOptions { NullHandling = new WorkflowNullHandling { DefaultOnNull = plan.ValuePolicies.DefaultOnNull, UndefinedAsNull = plan.ValuePolicies.UndefinedAsNull } }
+                : null
         );
     }
 }

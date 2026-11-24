@@ -17,9 +17,11 @@ internal sealed partial class BpmnModelRuntime
             throw new NotSupportedException("The selected artifact/source providers cannot prepare model material safely.");
         var useInputs = inputContract.Inputs.Count != 0 || workerInputMappings.Count != 0;
         var mappings = new List<BpmnWorkerInputMapping>();
+        var workerPolicies = new Dictionary<string, WorkflowValuePolicies>(StringComparer.Ordinal);
         foreach (var binding in definition.ServiceBindings ?? [])
         {
             var worker = await ValidatePublishedWorkerAsync(binding.BindingId, binding.Executable, caller, cancellationToken, allowInputs: useInputs);
+            workerPolicies[binding.BindingId] = worker.ValuePolicies;
             if (useInputs)
             {
                 var mapping = workerInputMappings.SingleOrDefault(item => item.BindingId == binding.BindingId)
@@ -33,7 +35,7 @@ internal sealed partial class BpmnModelRuntime
             _ = await ValidatePublishedWorkerAsync(binding.BindingId, binding.Executable, caller, cancellationToken);
         var envelope = useInputs ? new BpmnInputModelDefinition(1, definition, mappings) : null;
         if (envelope is not null) BpmnInputSupport.Validate(inputContract, envelope,
-            inputValidator ?? throw new NotSupportedException("BPMN inputs require the shared declared-input validator."));
+            inputValidator ?? throw new NotSupportedException("BPMN inputs require the shared declared-input validator."), workerPolicies);
         var dependencies = (definition.ServiceBindings ?? []).Select(binding => new RuntimeModelDependency(binding.BindingId, binding.Executable))
             .Concat((definition.NativeEventBindings ?? []).Select(binding => new RuntimeModelDependency(binding.BindingId, binding.Executable))).ToArray();
         var seed = new WorkflowExecutableIdentity("pending", "pending", "pending", "1.0.0", "pending");

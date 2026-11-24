@@ -30,7 +30,7 @@ public sealed class Elsa3VariableReadConversionTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var expression = ReadExpression(result);
-        Assert.Equal("(variables.Order.total) ?? null", expression.Source);
+        Assert.Equal("variables.Order.total", expression.Source);
         var parameter = Assert.IsType<VariableExpressionParameterBinding>(Assert.Single(expression.Parameters).Value);
         Assert.Equal("variables.Order", expression.Parameters.Keys.Single());
         Assert.Equal((VariableReference.WorkflowScopeId, "order-id", ExpressionParameterSurfaces.Variables), (parameter.DeclaringScopeNodeId, parameter.VariableKey, parameter.Surface));
@@ -47,7 +47,7 @@ public sealed class Elsa3VariableReadConversionTests
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("(args.customer + variables.Order) ?? null", ReadExpression(result).Source);
+        Assert.Equal("args.customer + variables.Order", ReadExpression(result).Source);
     }
 
     [Theory]

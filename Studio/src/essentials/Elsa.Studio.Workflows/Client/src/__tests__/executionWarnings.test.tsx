@@ -62,6 +62,20 @@ describe("execution warnings", () => {
     expect(items[1].querySelector("code")?.textContent).toBe("args.order.id");
   });
 
+  it("shows information and warning severity in the existing execution surface", () => {
+    flushSync(() => root.render(<ExecutionWarningsSection warnings={[
+      warning({ code: "VF-NULL-001", severity: "Information", message: "Value used its type default because DefaultOnNull is enabled.", details: {} }),
+      warning({ code: "VF-UNDEF-003", details: { paths: "args.items[1]" } })
+    ]} />));
+    const items = [...container.querySelectorAll('[role="listitem"]')];
+    expect(items[0].getAttribute("data-outcome")).toBe("Information");
+    expect(items[0].textContent).toContain("Information · VF-NULL-001");
+    expect(items[1].textContent).toContain("Warning · VF-UNDEF-003");
+    expect(items[1].textContent).toContain("args.items[1]");
+    flushSync(() => root.render(<ExecutionWarningBadge warnings={[warning({ severity: "Information" })]} />));
+    expect(container.textContent).toBe(" 1 information record");
+  });
+
   it("renders nothing when the execution raised no warning or the host does not report them", () => {
     flushSync(() => root.render(<><ExecutionWarningsSection warnings={[]} /><ExecutionWarningsSection warnings={undefined} /><ExecutionWarningBadge warnings={null} /></>));
 

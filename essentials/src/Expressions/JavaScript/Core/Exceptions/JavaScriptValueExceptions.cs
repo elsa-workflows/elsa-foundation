@@ -6,6 +6,11 @@ namespace Elsa.Expressions.JavaScript.Core.Exceptions;
 /// <summary>The stable codes of the JavaScript value adapter (spec 1228).</summary>
 public static class JavaScriptValueDiagnostics
 {
+    public const string UndefinedValue = "VF-UNDEF-001";
+    public const string UndefinedPropertyDropped = "VF-UNDEF-002";
+    public const string UndefinedArrayElement = "VF-UNDEF-003";
+    public const string ComputedNonFiniteNumber = "VF-NUM-001";
+
     /// <summary>The precision policy refused a write that carries a precision loss (FR-013, FR-014).</summary>
     public const string PrecisionLossRefused = "VF-PREC-001";
 

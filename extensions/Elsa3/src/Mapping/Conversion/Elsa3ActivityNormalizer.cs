@@ -1,3 +1,7 @@
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Options;
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
@@ -12,7 +16,6 @@ using Elsa3.Mapping.Resolution;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
 using static Elsa3.Models.Elsa3ActivityDiagnosticCodes;
-using Microsoft.Extensions.Options;
 
 namespace Elsa3.Mapping.Conversion;
 
@@ -27,7 +30,9 @@ internal sealed partial class Elsa3ActivityNormalizer(
     IEnumerable<IElsa3NodeRewrite> rewrites,
     IWellKnownTypeRegistry wellKnownTypeRegistry,
     IObjectConverter objectConverter,
-    IOptions<Elsa3ConversionOptions> conversionOptions)
+    IOptions<Elsa3ConversionOptions> conversionOptions,
+    IOptions<Elsa3MappingOptions>? options = null,
+    IVariableTypeDescriptorCatalog? typeDescriptors = null)
 {
     /// <summary>
     /// The deepest JSON level an activity node may sit at. The state is limited to 64 JSON levels (System.Text.Json's
@@ -52,11 +57,19 @@ internal sealed partial class Elsa3ActivityNormalizer(
         Elsa3WorkflowDefinition clone,
         CancellationToken cancellationToken)
     {
-        var plan = new Elsa3ConversionPlan(request, clone);
+        var applyPolicies = options?.Value.ApplyElsa3NullPolicies ?? true;
+        var plan = new Elsa3ConversionPlan(request, clone) { ValuePolicies = new WorkflowValuePolicies(applyPolicies, applyPolicies) };
+        plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Info,
+            "ELS3-NULL-POLICIES", applyPolicies
+                ? "The converted workflow records DefaultOnNull and UndefinedAsNull."
+                : "The converted workflow keeps native Elsa 4 null and undefined rules.",
+            applyPolicies ? "These policies remain pinned when the workflow is exported and imported without the converter."
+                : "Explicit null for a non-nullable target and consumed undefined values are refused.", "$.strategyOptions.nullHandling"));
         if (clone.Root is null)
             return plan;
 
         CheckWorkflowVariables(plan);
+        CheckWorkflowInputs(plan);
 
         var pending = new Dictionary<Elsa3Activity, string>(ReferenceEqualityComparer.Instance);
         await VisitAsync(plan, clone.Root, "$.root", null, RootJsonLevel, pending, cancellationToken);
@@ -72,6 +85,36 @@ internal sealed partial class Elsa3ActivityNormalizer(
     /// A workflow variable's starting value converts by Elsa 3's rule or is refused here, before mapping, so a converted
     /// definition never carries a starting value that fails at publish (spec 264 D-4).
     /// </summary>
+    private void CheckWorkflowInputs(Elsa3ConversionPlan plan)
+    {
+        // Elsa 3.6.3 InputDefinition/ArgumentDefinition have neither requiredness nor a default; every input is optional.
+        var index = 0;
+        foreach (var input in plan.Definition.Inputs ?? [])
+        {
+            var type = ResolveType(input.Type);
+            if (type.CollectionKind == CollectionKind.Single && !NullPolicyDefaults.AcceptsNull(type, wellKnownTypeRegistry, typeDescriptors) &&
+                wellKnownTypeRegistry.TryGetTypeOrDefault(type.Alias, out var clrType) && !NullPolicyDefaults.TryGetTypeDefault(clrType, out _))
+                plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Error,
+                    "ELS3-INPUT-DEFAULT-REQUIRED", $"Optional input '{input.Name}' of type '{type.Alias}' has no supported implicit default.",
+                    "Declare a default or type the member String / Any before converting.", $"$.inputs[{index}]"));
+            index++;
+        }
+    }
+
+    private void CheckIntrinsicNull(Elsa3RewriteContext context)
+    {
+        if (context.Node.Intrinsic is not { Kind: AuthoredWorkflowIntrinsicKind.Set or AuthoredWorkflowIntrinsicKind.SetOutput, ValueType: { } type } ||
+            !context.Activity.AdditionalProperties.TryGetValue(Elsa3IntrinsicContracts.ValueKey, out var value) || !Elsa3TypedValues.IsNullLiteral(value))
+            return;
+        var supportedDefault = type.CollectionKind == CollectionKind.Single && wellKnownTypeRegistry.TryGetTypeOrDefault(type.Alias, out var clrType) &&
+            NullPolicyDefaults.TryGetTypeDefault(clrType, out _);
+        if (!NullPolicyDefaults.AcceptsNull(type, wellKnownTypeRegistry, typeDescriptors) && !(context.Plan.ValuePolicies.DefaultOnNull && supportedDefault))
+            context.Error(NullUnconvertible, $"Null cannot be assigned to target type '{type.Alias}'.",
+                "Use a nullable target type, or enable the converter's null policies for a Boolean, numeric or enum target.", Elsa3IntrinsicContracts.ValueKey);
+        else
+            context.Activity.AdditionalProperties[Elsa3IntrinsicContracts.ValueKey] = Elsa3TypedValues.CreateNull(type.Alias);
+    }
+
     private void CheckWorkflowVariables(Elsa3ConversionPlan plan)
     {
         var variables = plan.Definition.Variables;
@@ -100,7 +143,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
     {
         var notes = new List<Elsa3LiteralConversion.Note>();
         var success = Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, source, out mapped, out refusal,
-            conversionOptions.Value, notes.Add);
+            typeDescriptors: typeDescriptors, options: conversionOptions.Value, report: notes.Add);
         foreach (var note in notes)
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, note.Severity, note.Code, note.Message, note.Guidance,
                 path + note.Path[1..], new Dictionary<string, string> { ["VariableName"] = source.Name }));
@@ -198,6 +241,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
                 await rewrite.ApplyAsync(context, cancellationToken);
             RemoveConsumedStructure(context);
             PinIntrinsic(context);
+            CheckIntrinsicNull(context);
             CheckRequiredInputs(context);
             if (nodePlan.Resolved?.Structure is null && nodePlan.Slots.Any(slot => slot.Child is not null))
                 context.Error(UnknownMember,
@@ -1077,7 +1121,10 @@ internal sealed partial class Elsa3ActivityNormalizer(
         foreach (var input in node.Resolved.Inputs.Where(input => input.IsRequired))
         {
             if (context.Activity.AdditionalProperties.TryGetValue(input.ReferenceKey, out var value) &&
-                (Elsa3TypedValues.IsBound(value) || IsEmittedDefault(node, input.ReferenceKey, value)))
+                (Elsa3TypedValues.IsBound(value) || IsEmittedDefault(node, input.ReferenceKey, value) ||
+                 input.ReferenceKey == Elsa3IntrinsicContracts.ValueKey &&
+                 node.Intrinsic?.Kind is AuthoredWorkflowIntrinsicKind.Set or AuthoredWorkflowIntrinsicKind.SetOutput &&
+                 Elsa3TypedValues.IsNullLiteral(value)))
                 continue;
             context.Error(RequiredInputUnbound,
                 $"Required Elsa 4 input '{input.ReferenceKey}' of '{node.Resolved.ActivityTypeKey ?? node.Resolved.ActivityVersionId}' would stay unbound.",

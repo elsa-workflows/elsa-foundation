@@ -1,10 +1,13 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Workflows.Publishing.Api.Models;
 
-public sealed record ActivityDraftTestRunInput(string State, JsonElement? Value = null);
+public sealed record ActivityDraftTestRunInput(string State,
+    [property: JsonConverter(typeof(NullableJsonElementConverter))]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Value = null);
 
 public sealed record StartActivityDraftTestRun(
     [property: JsonIgnore] string DraftId,

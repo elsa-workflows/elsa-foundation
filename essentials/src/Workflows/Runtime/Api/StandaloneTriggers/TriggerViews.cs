@@ -25,10 +25,13 @@ internal sealed record TriggerTargetView(string DefinitionId, string SlotName, s
     TriggerServing? Serving, WorkflowExecutableInputContract? InputContract, string? ContractRevision,
     bool SupportsWorkflowOwnedHttpResponse, IReadOnlyList<TriggerFinding> Findings)
 {
+    [JsonIgnore]
+    public WorkflowValuePolicies ValuePolicies { get; init; } = WorkflowValuePolicies.Off;
+    [JsonIgnore] public TriggerInputSemantics InputSemantics { get; init; } = TriggerInputSemantics.Native;
     internal static TriggerTargetView From(TriggerTargetDescription value) => new(value.DefinitionId, value.SlotName,
         value.DisplayName, value.State.ToString(), value.SlotRevision is null ? null : new(value.SlotRevision,
             value.PublicationId, value.VersionId, value.Version, value.ModelKey, value.ContractRevision),
-        value.InputContract, value.ContractRevision, value.SupportsWorkflowOwnedHttpResponse, value.Findings);
+        value.InputContract, value.ContractRevision, value.SupportsWorkflowOwnedHttpResponse, value.Findings) { ValuePolicies = value.ValuePolicies, InputSemantics = value.InputSemantics };
 }
 internal sealed record TriggerGrantView(string State, long? Revision = null, DateTimeOffset? GrantedAt = null,
     string? GrantedBy = null, IReadOnlyList<TriggerFinding>? Findings = null);

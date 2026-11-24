@@ -288,11 +288,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     triggerPayload: projections.StimulusInput is JsonElement stimulusInput ? stimulusInput : null,
                     triggerNodeId: projections.TriggerNodeId,
                     triggerMetadata: projections.TriggerMetadata,
-                    scopedVariableEnvelopes: scopedVariableEnvelopes).WithWarnings(stepWarnings);
+                    scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies).WithWarnings(stepWarnings);
                 stepSession = await StepVariableSessions.CreateAsync(
                     serviceProvider, scopeService, activity, executable, executableNode, executionContextState, persistedDurableValues, cancellationToken, warnings: stepWarnings);
                 stateSession = await StepWorkflowState.CreateAsync(serviceProvider, scopeService, activity, executableNode,
                     executionContextState, persistedDurableValues, stepSession, cancellationToken);
+                stepSession?.SetWarnings(stepWarnings);
                 faultMasking.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedOutput ||
                     activity is not IStepWorkflowStateConsumer && stateSession.HasReadProtectedValue);
                 stepWarnings.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedValue);
@@ -634,7 +635,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 TimeProvider.GetUtcNow(),
                 () => StepStateReadProtection.Read(stepSession, stateSession),
                 cancellationToken);
-            var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
+            var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().WithValuePolicies(executable.ValuePolicies, stepWarnings).ProjectAsync(
                 workItem.WorkflowExecutionId,
                 invokePayload.ActivityExecutionId,
                 executableNode,
@@ -753,7 +754,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 childScheduling.IdGenerator,
                 workItem,
                 invokePayload,
-                state,
+                WithSessionReads(state, stepSession, stepWarnings),
                 childScheduling.Requests,
                 parentNotificationWorkItems,
                 valueSnapshots,

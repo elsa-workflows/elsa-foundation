@@ -10,6 +10,9 @@ namespace Elsa.Activities.Runtime.Core.Models;
 /// </summary>
 public sealed record ActivityExecutionContext
 {
+    public bool DefaultOnNull { get; init; }
+    public bool UndefinedAsNull { get; init; }
+
     public ActivityExecutionContext(
         string workflowExecutionId,
         string invocationId,
@@ -194,7 +197,9 @@ public sealed record ActivityExecutionContext
             _variables = _variables,
             _workflowState = _workflowState,
             _warnings = _warnings,
-            _hasProtectedInputs = _hasProtectedInputs
+            _hasProtectedInputs = _hasProtectedInputs,
+            DefaultOnNull = DefaultOnNull,
+            UndefinedAsNull = UndefinedAsNull
         };
 }
 

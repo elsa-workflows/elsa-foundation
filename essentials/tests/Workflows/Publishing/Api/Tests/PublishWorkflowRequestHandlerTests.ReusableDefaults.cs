@@ -233,7 +233,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var bodyPublication = DefaultPublication(_writeLineActivity.Id, _writeLineActivity.DefinitionId, bodyContract, bodyTemplate,
             new("clr", "1", JsonSerializer.SerializeToElement(new { })), ActivityDefinitionVersionResolutionKind.AuthorableActivity);
         var graph = new GraphActivityProvider(_activityStructureService, new ActivityContractAuthoringValidator(new DefaultContractCapabilities()));
-        var contract = new DesignContract("1", noPublicInputs ? [] : [new(inputKey, "Value", new("String"), true, nullable, value, "elsa.json")], [], [new("done", "Done", true)]);
+        var contract = new DesignContract("1", noPublicInputs ? [] : [new(inputKey, "Value", new("String"), false, nullable, value, "elsa.json")], [], [new("done", "Done", true)]);
         var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new
         {
             rootActivity = Node("body", Text("body")), variables = Array.Empty<object>(), outputMappings = Array.Empty<object>()

@@ -125,7 +125,7 @@ internal sealed partial class TriggerManagement
             if (enabled != old?.Enabled && (enabled || old is not null)) await access.RequireAsync(TriggerPermissions.Operate, trigger, ct);
             if (target.InputContract is { } contract)
             {
-                var validation = mapper.ValidateMappings(contract, mappings);
+                var validation = mapper.ValidateMappings(contract, mappings, target.ValuePolicies, target.InputSemantics);
                 if (!validation.IsValid) throw new TriggerOperationException("validation", "Correct the association's input mappings.",
                     validation.Findings.GroupBy(finding => finding.InputName ?? "mappings").ToDictionary(group => group.Key, group => string.Join(" ", group.Select(finding => finding.Message))));
             }

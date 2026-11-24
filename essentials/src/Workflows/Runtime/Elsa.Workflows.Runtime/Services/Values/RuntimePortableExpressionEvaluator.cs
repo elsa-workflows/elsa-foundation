@@ -1,3 +1,4 @@
+using Elsa.Serialization.Core;
 using System.Text.Json;
 using Elsa.Expressions.Core.Constants;
 using Elsa.Expressions.Core.Contracts;
@@ -6,6 +7,7 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
 
@@ -17,7 +19,9 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 internal sealed class RuntimePortableExpressionEvaluator(
     IPortableExpressionEvaluator? portableExpressionEvaluator,
     IExternalPayloadStore? externalPayloadStore,
-    IRuntimeValueConversionExecutor? valueConversionExecutor = null)
+    IRuntimeValueConversionExecutor? valueConversionExecutor = null,
+    IWellKnownTypeRegistry? wellKnownTypeRegistry = null,
+    IRuntimeTypeNullability? typeDescriptors = null)
 {
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
 
@@ -72,8 +76,12 @@ internal sealed class RuntimePortableExpressionEvaluator(
             // parameters and nothing else.
             fallback = expression.VariableReadFallback is null
                 ? null
-                : await RuntimeVariableReadFallback.LoadAsync(resolutionContext.VisibleVariables, externalPayloadStore, cancellationToken);
-            request = new ExpressionEvaluationRequest(definition, parameters.Values, fallback, cancellationToken) { Warnings = warnings };
+                : await RuntimeVariableReadFallback.LoadAsync(resolutionContext.VisibleVariables, externalPayloadStore, cancellationToken, wellKnownTypeRegistry, typeDescriptors);
+            request = new ExpressionEvaluationRequest(definition, parameters.Values, fallback, cancellationToken)
+            {
+                Warnings = warnings,
+                UndefinedAsNull = resolutionContext.Executable?.ValuePolicies.UndefinedAsNull ?? false
+            };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -402,7 +410,13 @@ internal sealed class RuntimePortableExpressionEvaluator(
         context.VariableReadRecorder?.Record(envelope);
         // Spec 1222 FR-006: a script reads a declared variable with no value as JSON null, never undefined.
         if (binding.IsVariablesSurface && envelope.Presence == ValuePresence.Absent && envelope.Policy.Lifecycle != DurableValueLifecycle.None)
-            return new PortableExpressionParameter(JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options), envelope.Policy);
+        {
+            var value = !NullPolicyDefaults.AcceptsNull(envelope.Type.ToTypeReference(), wellKnownTypeRegistry, typeDescriptors) &&
+                NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, wellKnownTypeRegistry, out var typeDefault)
+                ? JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType(), Elsa.Serialization.Core.JsonBaseline.Options)
+                : JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options);
+            return new PortableExpressionParameter(value, envelope.Policy);
+        }
         return new PortableExpressionParameter(
             await ReadPersistableEnvelopeAsync(envelope, parameterName, nodeId, inputName, cancellationToken, binding.VariableKey),
             envelope.Policy);

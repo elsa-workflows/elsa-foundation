@@ -661,7 +661,8 @@ public sealed class ReusableActivityAuthoringService(
             version.Version,
             version.SourceDraftId,
             version.SourceVersionId,
-            version.Contract.ToView(),
+            version.Contract.ToView(authoring.ContentAuthority.Kind == ActivityContentAuthorityKind.ProviderSource &&
+                version.Provider.ProviderKey == "elsa.clr-activity"),
             await ToProviderViewAsync(version.Provider, cancellationToken),
             new(
                 version.TemplateId,
@@ -949,11 +950,16 @@ public sealed class ReusableActivityAuthoringService(
         }
     }
 
-    private static ActivityContract ToDomainContract(ActivityContractView contract)
+    private ActivityContract ToDomainContract(ActivityContractView contract)
     {
         try
         {
-            return contract.ToDomain();
+            var value = contract.ToDomain();
+            return value with
+            {
+                Inputs = value.Inputs.Select(input => input with { IsNullable = contractAuthoringValidator.AllowsNull(input.Type) }).ToArray(),
+                Outputs = value.Outputs.Select(output => output with { IsNullable = contractAuthoringValidator.AllowsNull(output.Type) }).ToArray()
+            };
         }
         catch (ArgumentException exception)
         {

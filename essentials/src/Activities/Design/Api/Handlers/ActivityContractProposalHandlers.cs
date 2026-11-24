@@ -201,7 +201,7 @@ public sealed class ActivityContractProposalService(
         };
     }
 
-    private static ActivityContract ApplyChanges(
+    private ActivityContract ApplyChanges(
         ActivityContract contract,
         IEnumerable<ActivityContractProposalChangeView> changes)
     {
@@ -244,12 +244,12 @@ public sealed class ActivityContractProposalService(
             members.Add(replacement!);
     }
 
-    private static ActivityOutputContract ToDomain(ActivityOutputContractView output) => new(
+    private ActivityOutputContract ToDomain(ActivityOutputContractView output) => new(
         output.ReferenceKey,
         output.Name,
         output.Type.ToDomain(),
         output.IsRequired,
-        output.IsNullable,
+        contractValidator.AllowsNull(output.Type.ToDomain()),
         output.StorageDriverKey,
         output.Durability,
         output.DisplayName,
@@ -259,12 +259,12 @@ public sealed class ActivityContractProposalService(
         output.UiHint,
         output.UiSpecifications?.Clone());
 
-    private static ActivityInputContract ToDomain(ActivityInputContractView input) => new(
+    private ActivityInputContract ToDomain(ActivityInputContractView input) => new(
         input.ReferenceKey,
         input.Name,
         input.Type.ToDomain(),
         input.IsRequired,
-        input.IsNullable,
+        contractValidator.AllowsNull(input.Type.ToDomain()),
         input.Default is null ? null : new(input.Default.Syntax, input.Default.Value.Clone()),
         input.StorageDriverKey,
         input.Durability,

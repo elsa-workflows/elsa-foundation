@@ -731,7 +731,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     ExpressionValidationMetadata(expressionValidation, unavailableValidationAcknowledged));
 
             var validator = inputValidator;
-            var inputValidation = validator.Validate(inputContract, normalizedInputs);
+            var inputValidation = validator.Validate(inputContract, normalizedInputs, executable.ValuePolicies);
             if (!inputValidation.IsValid)
             {
                 var inputMetadata = ExpressionValidationMetadata(expressionValidation, unavailableValidationAcknowledged);

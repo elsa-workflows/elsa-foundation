@@ -85,6 +85,10 @@ public sealed class ScriptOutcomeValidator(
             if (scriptOutcomeAnalyzer.Analyze(script) is not { } analysis)
                 continue;
 
+            if (!analysis.HasReturnStatement && node.Outputs.Any(output => output.ReferenceKey == "result"))
+                errors.Add(new ValidationError($"{node.NodeId}/inputs/{scriptInput}", "VF-UNDEF-001",
+                    "A script with a bound result must contain a return statement. Return the value to capture."));
+
             if (analysis.ReservedNameDeclarations.Count > 0)
                 errors.Add(new ValidationError($"{node.NodeId}/inputs/{scriptInput}", ReservedNameType,
                     $"The script of activity '{node.NodeId}' declares '{Complete}', a reserved built-in name: scripts select outcomes by returning {Complete}(result, outcomes). Rename it."));

@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Services;
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -232,13 +233,7 @@ public static class RuntimeInputBindingStateProjection
     private static ValueEnvelope ToEnvelope(DurableValueState value)
     {
         var type = new Elsa.Primitives.Models.ValueTypeDescriptor(Elsa.Primitives.Models.TypeAliasConvention.AnyAlias);
-        var policy = new ValueProtectionPolicy(
-            value.Lifecycle,
-            value.Storage,
-            IsTrue(value.Metadata, RuntimeMetadataKeys.IsSensitive),
-            IsTrue(value.Metadata, RuntimeMetadataKeys.RequiresEncryption),
-            value.Metadata.GetValueOrDefault(RuntimeMetadataKeys.RedactionMode),
-            value.Metadata.GetValueOrDefault(RuntimeMetadataKeys.RetentionPolicy));
+        var policy = DurableValuePolicies.Read(value);
 
         if (value.ExternalReference is not null)
             return ValueEnvelope.External(type, value.ExternalReference, policy);

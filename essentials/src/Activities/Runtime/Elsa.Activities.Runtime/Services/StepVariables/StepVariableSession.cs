@@ -6,6 +6,9 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Serialization.Core;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Runtime.Services.Values;
 using ExpressionVariableReference = Elsa.Expressions.Core.Models.VariableReference;
 
@@ -38,7 +41,11 @@ internal sealed class StepVariableSession : IStepVariableSession
     private readonly bool _suspends;
     private readonly IReadOnlyDictionary<(string ScopeId, string Key), bool> _bound;
     private readonly bool _engineConsumer;
-    private readonly Elsa.Expressions.Core.Contracts.IExecutionWarningSink? _warnings;
+    private readonly WorkflowValuePolicies _valuePolicies;
+    private readonly IWellKnownTypeRegistry? _registry;
+    private readonly IRuntimeTypeNullability? _typeDescriptors;
+    private IExecutionWarningSink? _warnings;
+    internal void SetWarnings(IExecutionWarningSink warnings) => _warnings = warnings;
     private readonly Dictionary<(string ScopeId, string Key), VariableSessionRead> _reads = new();
     private readonly List<VariableSessionRead> _readOrder = [];
     private readonly HashSet<ValueProtectionPolicy> _pendingReadPolicies = [];
@@ -63,7 +70,9 @@ internal sealed class StepVariableSession : IStepVariableSession
         bool suspends = false,
         IReadOnlyDictionary<(string ScopeId, string Key), bool>? boundReferences = null,
         bool engineConsumer = false,
-        Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings = null)
+        IWellKnownTypeRegistry? registry = null,
+        IRuntimeTypeNullability? typeDescriptors = null,
+        IExecutionWarningSink? warnings = null)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(invocation);
@@ -81,6 +90,9 @@ internal sealed class StepVariableSession : IStepVariableSession
         _bound = boundReferences ?? new Dictionary<(string ScopeId, string Key), bool>();
         _engineConsumer = engineConsumer;
         _warnings = warnings;
+        _valuePolicies = executable.ValuePolicies;
+        _registry = registry;
+        _typeDescriptors = typeDescriptors;
         AttemptId = attemptId
                     ?? invocation.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId
                     ?? invocation.Attempts?.LastOrDefault()?.AttemptId
@@ -245,6 +257,19 @@ internal sealed class StepVariableSession : IStepVariableSession
         Stage(resolved, json, StepVariableWriteKind.WholeAssignment, droppedMembers: null);
     }
 
+    public void WriteUndefined(StepVariableTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        EnsureEngineSurface();
+        var resolved = ResolvePinned(target.ScopeId, target.VariableKey, target.Name);
+        if (resolved.IsTransient)
+            throw Fault(new InvalidOperationException(
+                $"Variable '{resolved.Name}' is transient: a script cannot write it."));
+        if (!_valuePolicies.UndefinedAsNull)
+            throw Fault(new UndefinedVariableAssignmentException(resolved.Name));
+        Stage(resolved, null, StepVariableWriteKind.WholeAssignment, droppedMembers: null);
+    }
+
     // ---- reads ----
 
     private T GetTyped<T>(ResolvedVariable variable)
@@ -330,6 +355,10 @@ internal sealed class StepVariableSession : IStepVariableSession
             _readOrder.Add(read);
         }
 
+        if (envelope.Presence == ValuePresence.Absent &&
+            !NullPolicyDefaults.AcceptsNull(envelope.Type.ToTypeReference(), _registry, _typeDescriptors) &&
+            NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, _registry, out var typeDefault))
+            return ValueEnvelope.Inline(envelope.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType()), envelope.Policy);
         return envelope;
     }
 
@@ -393,6 +422,16 @@ internal sealed class StepVariableSession : IStepVariableSession
         var envelope = json is { ValueKind: not (JsonValueKind.Null or JsonValueKind.Undefined) } inline
             ? ValueEnvelope.Inline(declared.Type, inline, declared.Policy)
             : ValueEnvelope.Null(declared.Type, declared.Policy);
+        try
+        {
+            envelope = NullPolicyDefaults.NormalizeNull(envelope,
+                NullPolicyDefaults.AcceptsNull(declared.Type.ToTypeReference(), _registry, _typeDescriptors), _valuePolicies,
+                $"Variable '{variable.Name}'", _registry, _warnings);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw Fault(exception);
+        }
         Validate(variable, envelope);
 
         var writeBase = _reads.TryGetValue(variable.Address, out var read)
@@ -557,4 +596,9 @@ internal static class DroppedMembers
 
         return false;
     }
+}
+
+internal sealed class UndefinedVariableAssignmentException(string variable) : InvalidOperationException($"VF-UNDEF-001: Variable '{variable}' cannot be assigned undefined; assign a value or null, or enable UndefinedAsNull."), Elsa.Expressions.Core.Contracts.IValueFreeExpressionFailure
+{
+    public string ValueFreeMessage => "VF-UNDEF-001: A variable cannot be assigned undefined; assign a value or null, or enable UndefinedAsNull. The variable name is withheld because a value it read is protected.";
 }

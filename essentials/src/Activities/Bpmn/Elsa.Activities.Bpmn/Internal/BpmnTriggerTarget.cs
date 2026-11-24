@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Services;
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -44,7 +45,7 @@ internal sealed class BpmnTriggerTarget(IWorkflowExecutableStore materials,
             material.Model!.Protocol != recipient.ModelProtocol || material.Model.Profile != recipient.ModelProfile ||
             RuntimeIngressAdmission.ComputeInputContractFingerprint(material.Model.InputContract) != recipient.InputContractFingerprint)
             throw new BpmnModelValidationException("The captured BPMN model material or input contract is unavailable.");
-        var validation = inputs.Validate(material.Model.InputContract, recipient.Inputs);
+        var validation = ModelInputValidation.Normalize(inputs, material.Model.InputContract, recipient.Inputs);
         BpmnInputSupport.Check(validation);
         if (!BpmnDirectExecutionDriver.SameInputs(recipient.Inputs, validation.NormalizedInputs))
             throw new BpmnModelValidationException("The captured model inputs are not the normalized admission snapshot.");

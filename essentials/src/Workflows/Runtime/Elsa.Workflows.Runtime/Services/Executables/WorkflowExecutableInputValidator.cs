@@ -3,6 +3,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
@@ -12,20 +13,34 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
     public WorkflowExecutableInputValidation Validate(
         WorkflowExecutableInputContract contract,
         IEnumerable<KeyValuePair<string, JsonElement>> inputs) =>
-        ValidateCore(contract, inputs, requireCompleteInputBag: true);
+        Validate(contract, inputs, WorkflowValuePolicies.Off);
 
     public WorkflowExecutableInputValidation ValidateKnownInputs(
         WorkflowExecutableInputContract contract,
         IEnumerable<KeyValuePair<string, JsonElement>> inputs) =>
-        ValidateCore(contract, inputs, requireCompleteInputBag: false);
+        ValidateKnownInputs(contract, inputs, WorkflowValuePolicies.Off);
+
+    public WorkflowExecutableInputValidation Validate(
+        WorkflowExecutableInputContract contract,
+        IEnumerable<KeyValuePair<string, JsonElement>> inputs,
+        WorkflowValuePolicies policies) =>
+        ValidateCore(contract, inputs, policies, requireCompleteInputBag: true);
+
+    public WorkflowExecutableInputValidation ValidateKnownInputs(
+        WorkflowExecutableInputContract contract,
+        IEnumerable<KeyValuePair<string, JsonElement>> inputs,
+        WorkflowValuePolicies policies) =>
+        ValidateCore(contract, inputs, policies, requireCompleteInputBag: false);
 
     private WorkflowExecutableInputValidation ValidateCore(
         WorkflowExecutableInputContract contract,
         IEnumerable<KeyValuePair<string, JsonElement>> inputs,
+        WorkflowValuePolicies policies,
         bool requireCompleteInputBag)
     {
         ArgumentNullException.ThrowIfNull(contract);
         ArgumentNullException.ThrowIfNull(inputs);
+        ArgumentNullException.ThrowIfNull(policies);
 
         if (contract.Version != WorkflowExecutableInputContract.CurrentVersion)
         {
@@ -79,7 +94,7 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
         var suppliedNames = supplied.Select(input => input.Key).ToHashSet(StringComparer.Ordinal);
         var missingRequired = requireCompleteInputBag
             ? contract.Inputs.FirstOrDefault(
-                declaration => declaration.IsRequired && !declaration.DefaultValue.HasValue && !suppliedNames.Contains(declaration.Name))
+                declaration => declaration.IsRequired && !suppliedNames.Contains(declaration.Name))
             : null;
         if (missingRequired is not null)
         {
@@ -113,17 +128,38 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
             }
 
             var targetType = TypeReferenceFactory.Close(elementType, declaration.Type.CollectionKind);
-            foreach (var input in normalized.Where(input => StringComparer.Ordinal.Equals(input.Key, declaration.Name)))
+            if (requireCompleteInputBag && !normalized.Any(input => StringComparer.Ordinal.Equals(input.Key, declaration.Name)))
             {
+                if (declaration.IsNullable)
+                    normalized.Add(new(declaration.Name, JsonSerializer.SerializeToElement<object?>(null)));
+                else if (NullPolicyDefaults.TryGetTypeDefault(targetType, out var defaultValue))
+                    normalized.Add(new(declaration.Name, JsonSerializer.SerializeToElement(defaultValue, targetType)));
+                else
+                    return WorkflowExecutableInputValidation.Failure([
+                        new(WorkflowExecutableInputValidationReasonCodes.IncompatibleValue,
+                            $"Workflow input '{declaration.Name}' has no supported type default.", declaration.Name)]);
+            }
+
+            for (var index = 0; index < normalized.Count; index++)
+            {
+                var input = normalized[index];
+                if (!StringComparer.Ordinal.Equals(input.Key, declaration.Name))
+                    continue;
                 if (input.Value.ValueKind == JsonValueKind.Null)
                 {
                     if (declaration.IsNullable)
                         continue;
 
+                    if (policies.DefaultOnNull && NullPolicyDefaults.TryGetTypeDefault(targetType, out var defaultValue))
+                    {
+                        normalized[index] = new(input.Key, JsonSerializer.SerializeToElement(defaultValue, targetType));
+                        continue;
+                    }
+
                     return WorkflowExecutableInputValidation.Failure(
                     [
                         new WorkflowExecutableInputValidationFinding(
-                            WorkflowExecutableInputValidationReasonCodes.IncompatibleValue,
+                            WorkflowExecutableInputValidationReasonCodes.NullNotAllowed,
                             $"Workflow input '{declaration.Name}' cannot be null.",
                             declaration.Name)
                     ]);

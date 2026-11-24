@@ -70,7 +70,7 @@ public sealed class SendHttpRequest(
 
     /// <summary>The HTTP method (verb). Defaults to <c>GET</c> when not set.</summary>
     [ActivityInput(Key = nameof(Method), DefaultValue = "GET", DefaultSyntax = "Literal", Options = ["GET", "POST", "PUT", "DELETE", "HEAD"], Tier = InputTier.Essential)]
-    public string Method { get; set; } = "GET";
+    public string? Method { get; set; } = "GET";
 
     /// <summary>Optional request body content, serialized as a UTF-8 string.</summary>
     [ActivityInput(Key = nameof(Content), Tier = InputTier.Essential)]

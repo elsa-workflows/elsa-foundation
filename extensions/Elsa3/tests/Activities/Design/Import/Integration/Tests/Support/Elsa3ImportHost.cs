@@ -148,10 +148,11 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     private readonly bool _withPublishSeam;
     private readonly bool _withScheduling;
     private readonly bool _withHttp;
+    private readonly bool _withConverter;
     private bool _ownsRoot = true;
 
     private Elsa3ImportHost(WebApplication app, IShell shell, DirectoryInfo root, WarningLog warnings,
-        bool withPublishing, bool withPublishSeam, bool withScheduling, bool withHttp)
+        bool withPublishing, bool withPublishSeam, bool withScheduling, bool withHttp, bool withConverter)
     {
         _app = app;
         _root = root;
@@ -159,6 +160,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         _withPublishSeam = withPublishSeam;
         _withScheduling = withScheduling;
         _withHttp = withHttp;
+        _withConverter = withConverter;
         Shell = shell;
         Warnings = warnings;
         Client = app.GetTestClient();
@@ -176,7 +178,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     {
         _ownsRoot = false;
         await DisposeAsync();
-        return await StartAsync(_withPublishing, _withPublishSeam, _withScheduling, _withHttp, reconcileFolder, strict, refuseAllPublications, _root);
+        return await StartAsync(_withPublishing, _withPublishSeam, _withScheduling, _withHttp, reconcileFolder, strict, refuseAllPublications, _root, withConverter: _withConverter);
     }
 
     public IShell Shell { get; }
@@ -214,7 +216,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         bool strict = false,
         bool refuseAllPublications = false,
         DirectoryInfo? existingRoot = null,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        bool withConverter = true)
     {
         var root = existingRoot ?? Directory.CreateTempSubdirectory("elsa3-import-");
         var warnings = new WarningLog();
@@ -224,6 +227,12 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         try
         {
             var settings = ShellSettings(root.FullName, withPublishing, withPublishSeam, withScheduling, withHttp);
+            if (!withConverter)
+            {
+                if (reconcileFolder is not null) throw new ArgumentException("Reconciliation requires the converter feature.", nameof(reconcileFolder));
+                foreach (var key in settings.Keys.Where(key => key.StartsWith($"CShells:Shells:{ShellName}:Features:Elsa3", StringComparison.Ordinal)).ToArray())
+                    settings.Remove(key);
+            }
             if (reconcileFolder is not null)
             {
                 var reconciliation = $"CShells:Shells:{ShellName}:Features:Elsa3JsonReconciliation:Options:";
@@ -319,7 +328,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             }
 
             // A restarted host takes over the stores and deletes them when it is disposed.
-            var host = new Elsa3ImportHost(app, shell, root, warnings, withPublishing, withPublishSeam, withScheduling, withHttp);
+            var host = new Elsa3ImportHost(app, shell, root, warnings, withPublishing, withPublishSeam, withScheduling, withHttp, withConverter);
             try
             {
                 await host.RequireCatalogAsync();

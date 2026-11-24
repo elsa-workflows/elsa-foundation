@@ -54,7 +54,7 @@ internal static class SavedStimulusStartSeal
         IReadOnlyDictionary<string, JsonElement> defaults = new Dictionary<string, JsonElement>();
         if (material.InputContract is { } contract)
         {
-            var validation = (inputValidator ?? throw new NotSupportedException("Saved start admission needs the selected input validator.")).Validate(contract, []);
+            var validation = (inputValidator ?? throw new NotSupportedException("Saved start admission needs the selected input validator.")).Validate(contract, [], material.ValuePolicies);
             if (!validation.IsValid) throw new InvalidDataException("The saved start's empty ordinary input bag violates its retained contract.");
             defaults = validation.NormalizedInputs;
         }

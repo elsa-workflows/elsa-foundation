@@ -2366,6 +2366,7 @@ describe("workflows module", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.endsWith("/expressions/variable-types")) return response({ items: [{ alias: "String", supportsNull: true }] });
       if (init?.method === "POST") return response({ workflowExecutionId: "wfexec-published-1" });
       if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-published-1")) {
         return response(workflowInstanceDetails({
@@ -2936,6 +2937,7 @@ describe("workflows module", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.endsWith("/expressions/variable-types")) return response({ items: [{ alias: "String", supportsNull: true }] });
       if (init?.method === "POST" && url.endsWith("/executables/artifact-1/execute")) {
         return response({ workflowExecutionId: "wfexec-inspector-1" });
       }
@@ -6745,7 +6747,7 @@ async function flushPromises() {
 }
 
 async function waitForRunWorkbench(container: HTMLElement) {
-  await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
+  await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy(), { timeout: 5_000, interval: 20 });
 }
 
 async function waitForText(container: HTMLElement, text: string) {

@@ -154,6 +154,12 @@ public sealed class WorkflowExecutableCompiler(
             source = request.Source ?? await GetVersionSourceAsync(request.VersionId, cancellationToken);
             var state = source.State;
             ArgumentNullException.ThrowIfNull(state);
+            var valuePolicies = new WorkflowValuePolicies(
+                state.StrategyOptions?.NullHandling?.DefaultOnNull ?? false,
+                state.StrategyOptions?.NullHandling?.UndefinedAsNull ?? false);
+            var policyBindingCompiler = inputBindingCompiler.WithValuePolicies(valuePolicies);
+            var policyNodeCompiler = executableNodeCompiler.WithInputBindingCompiler(policyBindingCompiler);
+            var policyTemplatePlacer = templatePlacer.WithInputBindingCompiler(policyBindingCompiler);
 
             var rootActivity = state.RootActivity
                 ?? throw new ArgumentException(ActivityTreeProjector.NoRootActivityMessage);
@@ -164,9 +170,9 @@ public sealed class WorkflowExecutableCompiler(
             // Single tree walk: children are projected once here and reused for both flattening and node
             // compilation, replacing the former double ProjectChildren traversal.
             var projection = activityTreeProjector.Project(rootActivity);
-            executableNodeCompiler.SetConversionWarningSink(projection, request.Warnings);
+            policyNodeCompiler.SetConversionWarningSink(projection, request.Warnings);
             ActivityTreeProjector.Validate(projection.Nodes);
-            executableNodeCompiler.ValidateIntrinsicVariableTargets(state, projection.Nodes);
+            policyNodeCompiler.ValidateIntrinsicVariableTargets(state, projection.Nodes);
 
             var activityRows = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
             var placedActivities = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);
@@ -201,12 +207,12 @@ public sealed class WorkflowExecutableCompiler(
                 placedStorageDriverRequirements.UnionWith(template.StorageDriverRequirements);
                 var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken)
                                       ?? throw new ArgumentException($"Published activity version '{publication.DefinitionVersionId}' has no Source Reference '{publication.SourceReferenceId}'.");
-                var bindings = executableNodeCompiler.PinPlacedBoundaryReads(
+                var bindings = policyNodeCompiler.PinPlacedBoundaryReads(
                     rootActivity,
                     projection,
                     state.Variables,
                     activity.NodeId,
-                    CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, executableNodeCompiler.ConversionCompilerFor(template.Root.Descriptor, request.Warnings, activity.NodeId), callWorkflowInputs, out var effectiveInputs));
+                    CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, policyNodeCompiler.ConversionCompilerFor(template.Root.Descriptor, request.Warnings, activity.NodeId), callWorkflowInputs, out var effectiveInputs));
                 compiledBoundaryInputs.Add(activity.NodeId, effectiveInputs);
                 var outputCaptures = outputCaptureCompiler.CompileBoundaryOutputs(
                     activity.NodeId,
@@ -223,7 +229,7 @@ public sealed class WorkflowExecutableCompiler(
                 // structure addresses that child by its authored node id. A reusable that is the workflow root is
                 // addressed by nothing structural, so it keeps its content-addressed placement id.
                 var isWorkflowRoot = StringComparer.Ordinal.Equals(activity.NodeId, rootActivity.NodeId);
-                var placement = await templatePlacer.PlaceAsync(new(
+                var placement = await policyTemplatePlacer.PlaceAsync(new(
                     publication,
                     template,
                     sourceReference,
@@ -244,7 +250,7 @@ public sealed class WorkflowExecutableCompiler(
                 }
             }
 
-            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs);
+            var compiledRoot = policyNodeCompiler.WithOutputDeclarations(state.Outputs).CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs);
             var sourceRevision = ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(new
             {
                 source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionId,
@@ -302,7 +308,7 @@ public sealed class WorkflowExecutableCompiler(
             var inputContract = BuildInputContract(state.Inputs);
             var dependencies = BuildDependencies(dependencyClaims);
             var persistenceMode = CompilePersistenceMode(state.StrategyOptions);
-            var workflowVariables = executableNodeCompiler.CompileWorkflowVariables(state.Variables);
+            var workflowVariables = policyNodeCompiler.CompileWorkflowVariables(state.Variables);
             var incidentStrategy = ResolveIncidentStrategy(state.StrategyOptions, incidentStrategyCatalog);
             var artifactHash = hasher.ComputeHash(
                 compiledRoot,
@@ -310,13 +316,14 @@ public sealed class WorkflowExecutableCompiler(
                 dependencies,
                 persistenceMode,
                 workflowVariables,
-                incidentStrategy);
+                incidentStrategy,
+                valuePolicies);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             await ValidateDependencyGraphAsync(artifactId, artifactHash, dependencies, cancellationToken);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
                 .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 
-            var resumeTargets = executableNodeCompiler.BuildResumeTargets(compiledRoot, placedNodeIds).ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+            var resumeTargets = policyNodeCompiler.BuildResumeTargets(compiledRoot, placedNodeIds).ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
             foreach (var target in placedResumeTargets)
                 if (!resumeTargets.TryAdd(target.Key, target.Value))
                     throw new ArgumentException($"Resume target '{target.Key}' collides with an ordinary workflow activity resume target.");
@@ -353,7 +360,8 @@ public sealed class WorkflowExecutableCompiler(
                 dependencies: dependencies,
                 persistenceMode: persistenceMode,
                 workflowVariables: workflowVariables,
-                incidentStrategy: incidentStrategy);
+                incidentStrategy: incidentStrategy,
+                valuePolicies: valuePolicies);
             placementSidecars?.Set(source.DefinitionVersionId, placedLayoutSegments);
             placementSidecars?.SetPresentation(source.DefinitionVersionId, placedPresentation);
             return executable;
@@ -600,7 +608,7 @@ public sealed class WorkflowExecutableCompiler(
         return descriptor.Reference;
     }
 
-    private static WorkflowExecutableInputContract BuildInputContract(IEnumerable<InputDefinition> inputs)
+    private WorkflowExecutableInputContract BuildInputContract(IEnumerable<InputDefinition> inputs)
     {
         ArgumentNullException.ThrowIfNull(inputs);
         var declarations = inputs.Select(input =>
@@ -613,7 +621,13 @@ public sealed class WorkflowExecutableCompiler(
                     $"Workflow input '{input.Name}' uses unsupported default syntax '{input.DefaultSyntax}'. Only literal defaults can be compiled.");
             }
 
-            return new WorkflowDeclaredInput(input.Name, input.Type, input.IsRequired, input.DefaultValue, input.IsNullable);
+            if (input.IsRequired && input.DefaultValue.HasValue)
+                throw new ArgumentException($"VF-ACT-014: Workflow input '{input.Name}' has a default but Required is on; set Required off.");
+            var isNullable = inputBindingCompiler.AuthoredAllowsNull(input.Type);
+            if (!input.IsRequired && !input.DefaultValue.HasValue && !isNullable &&
+                !inputBindingCompiler.TryAuthoredDefault(input.Type, out _))
+                throw new ArgumentException($"VF-ACT-003: Optional workflow input '{input.Name}' requires Required on or a declared default through the API or JSON.");
+            return new WorkflowDeclaredInput(input.Name, input.Type, input.IsRequired, input.DefaultValue, isNullable);
         }).ToArray();
 
         return new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, declarations);

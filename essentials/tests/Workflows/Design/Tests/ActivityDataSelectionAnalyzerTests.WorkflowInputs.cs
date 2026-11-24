@@ -3,6 +3,10 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests;
@@ -15,6 +19,32 @@ namespace Elsa.Workflows.Design.Tests;
 public sealed partial class ActivityDataSelectionAnalyzerTests
 {
     private static readonly InputDefinition RenamedInput = new("customer-ref", "customer", new("String"), null, "Customer", null, true);
+
+    [Fact]
+    public async Task Intrinsic_metadata_preserves_a_contributed_convention_alias_null_contract()
+    {
+        using var provider = Provider(services =>
+        {
+            new SerializationFeature().ConfigureServices(services);
+            services.AddSingleton<IVariableTypeDescriptorCatalog, NullableChoiceCatalog>();
+        });
+        provider.GetRequiredService<IWellKnownTypeRegistry>().RegisterType(typeof(MetadataChoice), "Acme.NullableChoice");
+        var type = new TypeReference(TypeAliasConvention.CanonicalAlias(typeof(MetadataChoice)));
+        var intrinsic = Node("set") with { Intrinsic = new(AuthoredWorkflowIntrinsicKind.Set, type, new("choice")) };
+        var document = Document(Sequence(intrinsic)) with { Variables = [new("choice", "Choice", type, null, null)] };
+        var result = await Analyzer(provider).AnalyzeAsync(document, new("set", "value"));
+        Assert.Empty(result.Findings);
+        Assert.True(result.Target!.IsNullable);
+    }
+
+    private enum MetadataChoice { First = 1 }
+
+    private sealed class NullableChoiceCatalog : IVariableTypeDescriptorCatalog
+    {
+        public IEnumerable<TypeDescriptor> GetDescriptors() =>
+            [new("Acme.NullableChoice", typeof(MetadataChoice), "Choice", "Test", "select", new HashSet<CollectionKind>([CollectionKind.Single]), true, true, new HashSet<string> { "elsa.json" })];
+        public IEnumerable<IGrouping<string, TypeDescriptor>> GetDescriptorsByCategory() => GetDescriptors().GroupBy(item => item.Category);
+    }
 
     [Fact]
     public async Task A_workflow_offers_the_request_read_of_an_input_by_its_name()

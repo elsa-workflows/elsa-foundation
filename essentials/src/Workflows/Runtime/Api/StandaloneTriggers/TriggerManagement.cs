@@ -142,7 +142,7 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
         if (target.InputContract is null) throw new TriggerOperationException("unavailable", "The selected serving input contract is unavailable.");
         if (OptionalText(request, "contractRevision") is { } expected && expected != target.ContractRevision) throw Conflict();
         var mappings = ReadMappings(Property(request, "mappings"));
-        var result = await mapper.MapAsync(target.InputContract, mappings, Property(request, "sample").Clone(), ct);
+        var result = await mapper.MapAsync(target.InputContract, mappings, Property(request, "sample").Clone(), target.ValuePolicies, ct, target.InputSemantics);
         var fields = target.InputContract.Inputs.Select(input => new { inputName = input.Name,
             state = result.NormalizedInputs.ContainsKey(input.Name) ? (mappings.Any(mapping => mapping.InputName == input.Name) ? "Mapped" : "Defaulted") : "Omitted",
             value = result.NormalizedInputs.TryGetValue(input.Name, out var normalized) ? (JsonElement?)normalized : null });
@@ -208,7 +208,7 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
                 JsonSerializer.SerializeToElement(new { trigger.Name, effectiveState = trigger.DesiredState.ToString(), http = HttpSummary(trigger) }, options: StandaloneTriggersApi.Json));
         }
         var target = await TargetAsync(subscription.DefinitionId, subscription.SlotName, ct);
-        var validation = target.InputContract is null ? null : mapper.ValidateMappings(target.InputContract, subscription.Mappings);
+        var validation = target.InputContract is null ? null : mapper.ValidateMappings(target.InputContract, subscription.Mappings, target.ValuePolicies, target.InputSemantics);
         var compatibility = target.State != "Available" || target.InputContract is null ? "ValidationPending" : validation?.IsValid == true ? "Valid" : "Blocked";
         var findings = target.Findings.Concat(validation?.Findings.Select(error => new TriggerFinding(error.ReasonCode, error.Message, InputName: error.InputName)) ?? []).ToArray();
         var manage = await access.HasAsync(TriggerPermissions.Manage, trigger, ct);
@@ -241,7 +241,7 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
         if (subscription.Grant?.Status != TriggerGrantStatus.Granted) return false;
         var description = await targets.DescribeAsync(access.Scope, subscription.DefinitionId, subscription.SlotName, ct);
         return description is { State: TriggerTargetState.Available, InputContract: { } contract } &&
-            mapper.ValidateMappings(contract, subscription.Mappings).IsValid;
+            mapper.ValidateMappings(contract, subscription.Mappings, description.ValuePolicies, description.InputSemantics).IsValid;
     }
 
     private ValueTask<bool> CanReadTargetAsync(string id, string slot, CancellationToken ct) =>

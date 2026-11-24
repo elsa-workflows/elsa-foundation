@@ -1,3 +1,5 @@
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Serialization.Core;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -22,7 +24,8 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
     IWorkflowExecutableSourceReferenceReader sources, TimeProvider clock,
     IPublicationActivator? activator = null, IPublicationRecordStore? publications = null,
     IWorkflowActivationAuthority? slots = null, IPublicationPolicyStore? policies = null,
-    IPublicationPolicyResolver? policyResolver = null, IPersistenceAccessContextAccessor? access = null)
+    IPublicationPolicyResolver? policyResolver = null, IPersistenceAccessContextAccessor? access = null,
+    IWellKnownTypeRegistry? types = null, IVariableTypeDescriptorCatalog? typeDescriptors = null)
 {
     internal const string PublishPermission = "bpmn:publish";
     // Existing workflow publication permission; the domain bridge does not depend on its API assembly.
@@ -66,7 +69,7 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
         if (layout is not null && (layout.WorkflowDefinitionVersionId != version.Id || layout.TenantId != caller.TenantId))
             throw new BpmnModelResourceMissingException();
         var projected = BpmnAuthoredDirectProjection.Project(version, layout);
-        var inputContract = BpmnAuthoredDirectProjection.InputContract(version);
+        var inputContract = BpmnAuthoredDirectProjection.InputContract(version, types, typeDescriptors);
         var inputCapable = inputContract.Inputs.Count != 0 || projected.Services.Any(item => item.InputMapping is not null);
         foreach (var service in projected.Services)
         {

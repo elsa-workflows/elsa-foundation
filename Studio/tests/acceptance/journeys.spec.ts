@@ -1,3 +1,4 @@
+import { nullPoliciesJourney } from "./nullPoliciesJourney";
 import { timelineDiagnosticsJourney } from "./timelineDiagnosticsJourney";
 import { scopedExpressionReferencesJourney } from "./scopedExpressionReferencesJourney";
 import { activityValidationReportingJourney } from "./activityValidationReportingJourney";
@@ -122,6 +123,13 @@ test("set output assigns reusable activity output", async ({ page }, info) => {
   await setOutputJourney(page, info, capture, id => {
     creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
   });
+});
+
+test("nullability defaults and execution diagnostics", async ({ page }, info) => {
+  test.setTimeout(360_000);
+  const creations: CreatedWorkflow[] = [];
+  createdWorkflows.set(page, creations);
+  await nullPoliciesJourney(page, info, capture, id => creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id }));
 });
 
 test("activity definition identity survives reopening", async ({ page }, info) => activityDefinitionTitleJourney(page, info, capture));

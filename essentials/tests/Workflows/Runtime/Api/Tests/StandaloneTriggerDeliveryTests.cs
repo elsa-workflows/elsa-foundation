@@ -295,6 +295,12 @@ public sealed class StandaloneTriggerDeliveryTests
     { public TriggerTypeDescriptor? Find(string key) => null; public IReadOnlyList<TriggerTypeDescriptor> List() => []; }
     private sealed class Mapper : ITriggerInputMapper
     {
+        WorkflowExecutableInputValidation ITriggerInputMapper.ValidateMappings(WorkflowExecutableInputContract contract,
+            IReadOnlyList<TriggerInputMapping> mappings, WorkflowValuePolicies policies, TriggerInputSemantics semantics) => ValidateMappings(contract, mappings);
+        ValueTask<WorkflowExecutableInputValidation> ITriggerInputMapper.MapAsync(WorkflowExecutableInputContract contract,
+            IReadOnlyList<TriggerInputMapping> mappings, JsonElement source, WorkflowValuePolicies policies,
+            CancellationToken cancellationToken, TriggerInputSemantics semantics) => MapAsync(contract, mappings, source, cancellationToken);
+
         public ValueTask<WorkflowExecutableInputValidation> MapAsync(WorkflowExecutableInputContract contract, IReadOnlyList<TriggerInputMapping> mappings, JsonElement source, CancellationToken ct = default) => ValueTask.FromResult(WorkflowExecutableInputValidation.Success([]));
         public WorkflowExecutableInputValidation ValidateMappings(WorkflowExecutableInputContract contract, IReadOnlyList<TriggerInputMapping> mappings) => WorkflowExecutableInputValidation.Success([]);
     }

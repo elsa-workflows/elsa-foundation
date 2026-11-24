@@ -411,10 +411,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 executableNode,
                 executionState,
                 variableScope: null,
-                scopedVariableEnvelopes: scopedVariableEnvelopes);
+                scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies).WithWarnings(stepWarnings);
             stepSession = await StepVariableSessions.CreateAsync(
                 serviceProvider, scopeService, activity, executable, executableNode, executionState, durableValues: null, cancellationToken,
                 attemptId: resumeAttempt.AttemptId, warnings: stepWarnings);
+            stepSession?.SetWarnings(stepWarnings);
             stateSession = await StepWorkflowState.CreateAsync(serviceProvider, scopeService, activity, executableNode,
                 executionState, await durableValueStateStore.ListAllDurableValueStatesAsync(workItem.WorkflowExecutionId, cancellationToken),
                 stepSession, cancellationToken);
@@ -464,7 +465,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 triggerDelivery,
                 cancellationToken,
                 (IStepVariables?)stepSession ?? UnavailableStepVariables.Instance,
-                stepWarnings, stateSession!);
+                  stepWarnings, stateSession!, executable.ValuePolicies);
             RecordContinuation(RuntimeHistorySourceFactKind.ActivityContinuationStarted);
             var transition = await statefulActivity.ResumeAsync(actualResume);
             RecordContinuation(RuntimeHistorySourceFactKind.ActivityContinuationReturned, reasonCode: transition?.Kind.ToString() ?? "Unknown");
@@ -689,10 +690,10 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             return;
         }
 
-        completedState = stepWrites.Apply(completedState).WithWarnings(stepWarnings.Warnings);
+        completedState = stepWrites.Apply(completedState);
         var captureProjection = typedCompletion is null
             ? RuntimeOutputCaptureProjection.Empty
-            : await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
+            : await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().WithValuePolicies(executable.ValuePolicies, stepWarnings).ProjectAsync(
                 workItem.WorkflowExecutionId,
                 executionState.InvocationId,
                 executableNode,
@@ -703,6 +704,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
                 closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken),
                 invocation: completedState, durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>());
+        completedState = completedState.WithWarnings(stepWarnings.Warnings);
         // Spec 1221 T003: a refused write into a closed scope's variable row refuses the completion, as a frame write does.
         if (captureProjection.LostUpdateFault is { } rowLostUpdate)
         {
@@ -1010,7 +1012,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityTriggerDelivery trigger,
         CancellationToken cancellationToken,
         IStepVariables variables,
-        IExecutionWarningSink warnings, IStepWorkflowState workflowState)
+        IExecutionWarningSink warnings, IStepWorkflowState workflowState, WorkflowValuePolicies valuePolicies)
     {
         var privateState = state.PrivateState
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' has no committed private state.");
@@ -1023,7 +1025,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 state.InvocationId,
                 attempt.AttemptId,
                 resumePayload.ExecutableNodeId,
-                cancellationToken).WithResolvedOperationKeys(state).WithVariables(variables).WithWorkflowState(workflowState).WithWarnings(warnings)
+                cancellationToken)
+            {
+                DefaultOnNull = valuePolicies.DefaultOnNull,
+                UndefinedAsNull = valuePolicies.UndefinedAsNull
+            }.WithResolvedOperationKeys(state).WithVariables(variables).WithWorkflowState(workflowState).WithWarnings(warnings)
                 .WithProtectedInputs(ProtectsAnyInput(state.InputSnapshot)),
             privateState.Value.Type,
             RequireInlinePayload(privateState.Value, "private state"),

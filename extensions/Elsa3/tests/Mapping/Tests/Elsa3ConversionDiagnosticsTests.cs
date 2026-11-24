@@ -103,7 +103,8 @@ public sealed class Elsa3ConversionDiagnosticsTests
             [
                 Elsa3ActivityDiagnosticCodes.UnmappedType,
                 Elsa3ActivityDiagnosticCodes.UnknownMember,
-                Elsa3ActivityDiagnosticCodes.NoCounterpart
+                Elsa3ActivityDiagnosticCodes.NoCounterpart,
+                "ELS3-NULL-POLICIES"
             ],
             first.Diagnostics.Select(diagnostic => diagnostic.Code));
         var paths = first.Diagnostics.Select(diagnostic => diagnostic.Path!).ToArray();
@@ -123,7 +124,7 @@ public sealed class Elsa3ConversionDiagnosticsTests
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", endpoint)));
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Empty(result.Diagnostics);
+        Assert.Empty(result.Diagnostics.Where(diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES"));
     }
 
     [Fact]

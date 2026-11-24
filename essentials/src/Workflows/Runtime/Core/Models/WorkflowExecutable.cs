@@ -80,7 +80,6 @@ public sealed class WorkflowExecutable
     {
     }
 
-    [JsonConstructor]
     public WorkflowExecutable(
         WorkflowExecutableIdentity identity,
         ExecutableNode rootActivity,
@@ -94,6 +93,27 @@ public sealed class WorkflowExecutable
         IncidentStrategyReference incidentStrategy,
         PersistenceMode? persistenceMode = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null)
+        : this(identity, rootActivity, resumeTargets, createdAt, compatibilityMetadata, inputContract,
+            dependencies, runtimeRequirements, storageDriverRequirements, incidentStrategy, persistenceMode,
+            workflowVariables, valuePolicies: null)
+    {
+    }
+
+    [JsonConstructor]
+    public WorkflowExecutable(
+        WorkflowExecutableIdentity identity,
+        ExecutableNode rootActivity,
+        IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
+        DateTimeOffset createdAt,
+        IReadOnlyDictionary<string, string> compatibilityMetadata,
+        WorkflowExecutableInputContract? inputContract,
+        IReadOnlyCollection<WorkflowExecutableDependency>? dependencies,
+        IReadOnlyCollection<RuntimeRequirement>? runtimeRequirements,
+        IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements,
+        IncidentStrategyReference incidentStrategy,
+        PersistenceMode? persistenceMode,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
+        WorkflowValuePolicies? valuePolicies)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(rootActivity);
@@ -109,6 +129,7 @@ public sealed class WorkflowExecutable
         NodesById = new ReadOnlyDictionary<string, ExecutableNode>(nodeSnapshot.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal));
         ResumeTargets = new ReadOnlyDictionary<string, WorkflowExecutableResumeTarget>(resumeTargets.ToDictionary(target => target.Key, target => target.Value, StringComparer.Ordinal));
         InputContract = inputContract;
+        ValuePolicies = valuePolicies ?? WorkflowValuePolicies.Off;
         Dependencies = SnapshotDependencies(dependencies, NodesById);
         PersistenceMode = persistenceMode;
         WorkflowVariables = SnapshotWorkflowVariables(workflowVariables);
@@ -138,6 +159,7 @@ public sealed class WorkflowExecutable
     public IReadOnlyDictionary<string, ExecutableNode> NodesById { get; }
     public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets { get; }
     public WorkflowExecutableInputContract? InputContract { get; }
+    public WorkflowValuePolicies ValuePolicies { get; }
     public IReadOnlyCollection<WorkflowExecutableDependency> Dependencies { get; }
 
     /// <summary>

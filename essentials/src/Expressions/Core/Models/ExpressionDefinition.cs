@@ -317,6 +317,9 @@ public static class ExpressionCapabilityProfiles
 /// <summary>A complete immutable parameter snapshot supplied to a pure evaluator.</summary>
 public sealed record ExpressionEvaluationRequest
 {
+    /// <summary>The selected executable's explicit undefined-at-boundary policy.</summary>
+    public bool UndefinedAsNull { get; init; }
+
     public ExpressionEvaluationRequest(
         ExpressionDefinition definition,
         IReadOnlyDictionary<string, JsonElement> parameterValues,

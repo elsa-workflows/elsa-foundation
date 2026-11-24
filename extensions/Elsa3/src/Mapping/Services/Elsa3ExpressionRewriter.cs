@@ -89,8 +89,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
     /// <param name="mode">
     /// <see cref="Elsa3JavaScriptMode.Expression"/>: the result is one expression, as Elsa 4 evaluates it; a statement
-    /// form is wrapped in a function returning its completion value (plan D-15). Every value that leaves it ends in
-    /// <c>?? null</c>, because Elsa 3 returned null where Elsa 4 refuses undefined (spec 262).
+    /// form is wrapped in a function returning its completion value (plan D-15). Source values are preserved;
+    /// the workflow's pinned null and undefined policies govern the durable boundary (spec 1232 FR-023).
     /// <see cref="Elsa3JavaScriptMode.Script"/>: a RunJavaScript body, whose completion value becomes a <c>return</c>
     /// (plan D-16).
     /// </param>
@@ -223,23 +223,17 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         CollectTopLevelReturns(script, topLevelReturns);
         if (topLevelReturns.Count > 0)
         {
-            // Elsa 3 turned a bare `return;` (undefined) into null; Elsa 4 refuses an undefined result.
-            foreach (var bare in topLevelReturns.Where(statement => statement.Argument is null))
-                edits.Add(new SourceEdit(bare.Start + "return".Length, bare.Start + "return".Length,
-                    selection is null ? " null" : $" complete(null, {selection})"));
+            // Preserve no value; the workflow's explicit UndefinedAsNull policy owns boundary normalization.
+            if (selection is not null)
+                foreach (var bare in topLevelReturns.Where(statement => statement.Argument is null))
+                    edits.Add(new SourceEdit(bare.Start + "return".Length, bare.Start + "return".Length,
+                        $" complete(undefined, {selection})"));
 
             // A converted setter: every value the script returns carries the pending selection (FR-027).
             if (selection is not null)
             {
                 foreach (var returned in topLevelReturns.Where(statement => statement.Argument is not null))
                     AddCompletion(edits, returned.Argument!.Start, returned.Argument.End, selection);
-            }
-
-            // An expression's returned value becomes null when it is undefined (spec 262 R-1).
-            if (mode == Elsa3JavaScriptMode.Expression)
-            {
-                foreach (var returned in topLevelReturns.Where(statement => statement.Argument is not null))
-                    AddNullCoalescing(edits, returned.Argument!.Start, returned.Argument.End);
             }
 
             // Every path ends in a return Elsa 3 would have returned: a trailing return keeps its value, a trailing
@@ -249,8 +243,6 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             var preserved = body[^1] is ExpressionStatement or ReturnStatement;
             if (body[^1] is ExpressionStatement trailing)
             {
-                if (mode == Elsa3JavaScriptMode.Expression)
-                    AddNullCoalescing(edits, trailing.Start, ExpressionEnd(source, trailing));
                 if (selection is not null)
                     AddCompletion(edits, trailing.Start, ExpressionEnd(source, trailing), selection);
                 edits.Add(new SourceEdit(trailing.Start, trailing.Start, "return "));
@@ -311,14 +303,12 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             var end = ExpressionEnd(source, last);
             if (last.End > end)
                 edits.Add(new SourceEdit(end, last.End, string.Empty));
-            AddNullCoalescing(edits, last.Start, end);
             if (source.AsSpan(last.End).Contains("//", StringComparison.Ordinal))
                 edits.Add(new SourceEdit(source.Length, source.Length, "\n"));
             return Elsa3ExpressionRewriteResult.SuccessReading(analyzer.HasComputedVariableRead, CreateDefinition("JavaScript", ApplyEdits(source, edits), resultType, analyzer.Parameters));
         }
 
         // Statements: an immediately invoked function that returns the last expression, Elsa 3's completion value.
-        AddNullCoalescing(edits, last.Start, ExpressionEnd(source, last));
         edits.Add(new SourceEdit(last.Start, last.Start, "return "));
         var wrapped = $"(function () {{\n{prelude}{ApplyEdits(source, edits)}\n}})()";
         return Elsa3ExpressionRewriteResult.SuccessReading(analyzer.HasComputedVariableRead, CreateDefinition("JavaScript", wrapped, resultType, analyzer.Parameters));
@@ -574,18 +564,6 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 returns.Add(statement);
             CollectTopLevelReturns(child, returns);
         }
-    }
-
-    /// <summary>
-    /// Makes the value of <c>source[start..end]</c> null when it is undefined, as Elsa 3 did (spec 262 R-1). The parentheses
-    /// keep the expression one unit, so <c>a || b</c> and <c>a, b</c> stay valid. Edits are applied in descending start
-    /// order and, at one offset, in the order added: a replacement added earlier (an analyzer edit) keeps the opening
-    /// parenthesis in front of it, and an insertion added later at the same offset (<c>return </c>) lands before it.
-    /// </summary>
-    private static void AddNullCoalescing(List<SourceEdit> edits, int start, int end)
-    {
-        edits.Add(new SourceEdit(start, start, "("));
-        edits.Add(new SourceEdit(end, end, ") ?? null"));
     }
 
     /// <summary>

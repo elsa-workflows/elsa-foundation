@@ -11,6 +11,26 @@ this page adds what differs inside a reusable workflow. Each check names the dia
 not met. Every code comes with a message and guidance
 in the API response; this page is the checklist, the response is the authority for one case.
 
+## Nulls and missing starting values (S-2)
+
+The [portable null policies](workflow-definition-values.md) are recorded by the converter's explicit
+`ApplyElsa3NullPolicies` option, on by default. Export/import keeps the recorded behavior. Turning the option off
+uses native rules; the conversion report always identifies the choice. SetVariable/SetOutput literal null is retained
+for a nullable target, or a supported Boolean/numeric/enum target when default-on-null is recorded. Other non-nullable
+targets are refused with `ELS3-ACTIVITY-NULL-UNCONVERTIBLE`.
+
+Variables of date/time, TimeSpan or Guid types without a starting value report
+`ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE`; optional workflow inputs without a supported default report
+`ELS3-INPUT-DEFAULT-REQUIRED`. Declare a starting default or type the member String / Any before converting. Elsa 3
+3.6.3 has no required/default metadata on workflow inputs, so its inputs convert as optional.
+
+Built-in null audit: WriteLine Text and SendHttpRequest Method now declare the null their implementations already
+handle (blank line and GET). URL/path, event name and workflow-definition identifiers still need real values; the
+converter retains its existing per-member refusal/default corrections. No type default is invented for a non-nullable
+String. Required-with-default CreateUserTask Title/Actions are now optional. Native Microsoft365 CreateEvent date
+members and ListEvents StartDateTime/EndDateTime require explicit values rather than unsupported implicit date defaults;
+these connector activities have no converter null workaround. Delay Duration retains its declared default.
+
 ## Status at a glance
 
 Some limits are permanent differences between Elsa 3 and Elsa 4. Others are gaps in Elsa 4 graph activities that are

@@ -18,7 +18,8 @@ internal static class PortableJavaScript
     public static async Task<JsonElement> EvaluateAsync(
         ExpressionDefinition definition,
         IReadOnlyDictionary<string, JsonElement>? args = null,
-        IExpressionVariableReader? reader = null)
+        IExpressionVariableReader? reader = null,
+        bool undefinedAsNull = false)
     {
         var services = new ServiceCollection();
         new ExpressionsFeature().ConfigureServices(services);
@@ -40,7 +41,7 @@ internal static class PortableJavaScript
             definition,
             values,
             reader,
-            CancellationToken.None));
+            CancellationToken.None) { UndefinedAsNull = undefinedAsNull });
     }
 
     /// <summary>Runs a converted RunJavaScript body with the Elsa 4 script evaluator, with no arguments (spec 262 R-5).</summary>

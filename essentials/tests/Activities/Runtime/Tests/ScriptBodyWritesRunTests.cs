@@ -176,6 +176,25 @@ public sealed class ScriptBodyWritesRunTests
         Assert.Contains("'nope'", state.Fault!.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(false, "undefined", "VF-UNDEF-001", "assign a value or null")]
+    [InlineData(true, "undefined", "VF-UNDEF-001", "assign a value or null")]
+    [InlineData(false, "null", "VF-ACT-004", "does not accept null")]
+    [InlineData(true, "null", "VF-ACT-004", "does not accept null")]
+    public async Task Protected_assignment_refusals_keep_safe_codes_and_guidance(bool variableRead, string value, string code, string guidance)
+    {
+        var read = variableRead ? "void variables.order;" : "void args.order;";
+        var run = await RunAsync($"{read} variables.count = {value}; return 1;", protectedArguments: !variableRead, sensitiveVariable: variableRead);
+        var state = run.State("node-js");
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Null(state.VariableWrites);
+        Assert.Equal("0", Stored(run, "var-count"));
+        Assert.Contains(code, state.Fault!.Message);
+        Assert.Contains(guidance, state.Fault.Message);
+        Assert.DoesNotContain("private-arguments-canary", state.Fault.Message);
+        Assert.DoesNotContain("9007199254740993", state.Fault.Message);
+    }
+
     private static JsonElement Result(WorkflowExecutionRun run) =>
         run.AssertCompleted("node-js").Completion!.Result.InlineValue!.Value.GetProperty("value");
 
@@ -187,7 +206,7 @@ public sealed class ScriptBodyWritesRunTests
             ? version.Version
             : null;
 
-    private static async Task<WorkflowExecutionRun> RunAsync(string script)
+    private static async Task<WorkflowExecutionRun> RunAsync(string script, bool protectedArguments = false, bool sensitiveVariable = false)
     {
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesScriptingFeature().ConfigureServices(services))
@@ -213,30 +232,30 @@ public sealed class ScriptBodyWritesRunTests
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["script"] = Literal("script", "String", JsonSerializer.SerializeToElement(script)),
-                ["arguments"] = Literal("arguments", "JsonElement", JsonSerializer.SerializeToElement(new { }))
+                ["arguments"] = Literal("arguments", "JsonElement", JsonSerializer.SerializeToElement(protectedArguments ? new Dictionary<string, string> { ["order"] = "private-arguments-canary" } : []), protectedArguments)
             },
             metadata: new Dictionary<string, string>());
 
         return await harness.RunAsync(
             WorkflowExecutionHarness.NewExecutable(node,
-                Declare("var-total", "total", "Int32", "10"), Declare("var-count", "count", "Int32", "0"), Declare("var-order", "order", "Any", Order)),
+                Declare("var-total", "total", "Int32", "10"), Declare("var-count", "count", "Int32", "0"), Declare("var-order", "order", "Any", Order, sensitiveVariable)),
             allowPendingWorkOnTerminalCompletion: true,
             allowAcceptedButFaulted: true);
     }
 
-    private static RuntimeVariableDeclaration Declare(string key, string name, string alias, string json)
+    private static RuntimeVariableDeclaration Declare(string key, string name, string alias, string json, bool sensitive = false)
     {
         var type = new ValueTypeDescriptor(alias);
-        var policy = ValueProtectionPolicy.InstanceInline;
+        var policy = sensitive ? new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true) : ValueProtectionPolicy.InstanceInline;
         return new RuntimeVariableDeclaration(key, name, type, policy,
             new RuntimeInputBinding(key, type, policy, RuntimeInputBindingSource.Literal,
                 literal: ValueEnvelope.Inline(type, JsonSerializer.Deserialize<JsonElement>(json), policy)));
     }
 
-    private static RuntimeInputBinding Literal(string key, string alias, JsonElement value)
+    private static RuntimeInputBinding Literal(string key, string alias, JsonElement value, bool sensitive = false)
     {
         var type = new ValueTypeDescriptor(alias);
-        var policy = ValueProtectionPolicy.InstanceInline;
+        var policy = sensitive ? new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true) : ValueProtectionPolicy.InstanceInline;
         return new RuntimeInputBinding(key, type, policy, RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(type, value, policy));
     }
 }

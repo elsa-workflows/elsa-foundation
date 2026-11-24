@@ -19,7 +19,7 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
     TimeProvider clock, BpmnModelHostingOptions options, IRuntimeModelExecutionReader? reader = null,
     BpmnNativeWorkBoundary? nativeWork = null, BpmnEmbeddingBoundary? embedding = null,
     BpmnDurationTimerDelivery? durationTimers = null, IWorkflowExecutableInputValidator? inputValidator = null,
-    IRuntimeIngressDeliveryStore? ingress = null) : IRuntimeExecutionProtocolDriver
+    IRuntimeIngressDeliveryStore? ingress = null, IWorkflowExecutableStore? materials = null) : IRuntimeExecutionProtocolDriver
 {
     private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly JsonSerializerOptions Strict = new(Elsa.Serialization.Core.JsonBaseline.Options) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
@@ -29,7 +29,7 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
     private BpmnEmbeddingBoundary Embedding => embedding ?? throw new NotSupportedException("The native RunBpmn binding is not installed.");
     internal bool AdmitNewExecutions => options.AdmitNewExecutions;
 
-    public ValueTask ValidateMaterialAsync(RuntimeModelMaterial material, CancellationToken cancellationToken = default)
+    public async ValueTask ValidateMaterialAsync(RuntimeModelMaterial material, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         try { _ = Graph(material); }
@@ -39,8 +39,7 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
         }
         if (EffectiveProfile(material) == BpmnModelProtocol.NativeWorkProfile) NativeWork.EnsureQualified();
         if (BpmnInputSupport.Envelope(material) is { } inputs)
-            BpmnInputSupport.Validate(material.InputContract, inputs, InputsValidator);
-        return ValueTask.CompletedTask;
+            BpmnInputSupport.Validate(material.InputContract, inputs, InputsValidator, await ResolveWorkerPoliciesAsync(material, cancellationToken));
     }
 
     public async ValueTask ValidateInputAsync(RuntimeModelExecutionContext context, CancellationToken cancellationToken = default)
@@ -49,7 +48,8 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
             throw new RuntimeSchedulerWorkUnavailableException("bpmn.admission-disabled", "New BPMN execution admission is disabled.");
         try
         {
-            await ValidateShapeAndReplayAsync(context, cancellationToken);
+            var workerPolicies = await ResolveWorkerPoliciesAsync(context.Material.Model!, cancellationToken);
+            await ValidateShapeAndReplayAsync(context, workerPolicies, cancellationToken);
             // An embedded start already owes its committed native parent a result. New parents
             // are checked in PrepareAsync; retained sources must reach a durable decision here.
             if (context.State is null && (context.Command.InputKind is "start" or AuthoredKind or TriggerKind))
@@ -73,7 +73,26 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
         { throw new BpmnModelValidationException($"BPMN material '{material.Identity.ArtifactId}': {exception.Message}", exception.InnerException); }
     }
 
-    private async ValueTask ValidateShapeAndReplayAsync(RuntimeModelExecutionContext context, CancellationToken cancellationToken)
+    private async ValueTask<IReadOnlyDictionary<string, WorkflowValuePolicies>> ResolveWorkerPoliciesAsync(RuntimeModelMaterial model, CancellationToken ct)
+    {
+        var policies = new Dictionary<string, WorkflowValuePolicies>(StringComparer.Ordinal);
+        if (BpmnInputSupport.Envelope(model) is not { } envelope) return policies;
+        foreach (var binding in envelope.BaseDefinition.ServiceBindings ?? [])
+        {
+            var material = materials is null ? null : await materials.FindMaterialAsync(binding.Executable.ArtifactId, ct);
+            if (material?.NativeWorkflow is not { InputContract: { } contract } worker ||
+                !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Identity, binding.Executable))
+                throw new BpmnModelValidationException("The exact native worker material is unavailable.");
+            var mapping = envelope.WorkerInputMappings.SingleOrDefault(item => item.BindingId == binding.BindingId);
+            if (mapping?.WorkerInputContract is not { } pinned || BpmnInputSupport.Fingerprint(contract) != BpmnInputSupport.Fingerprint(pinned))
+                throw new BpmnModelValidationException("The worker input mapping differs from its pinned native material.");
+            policies.Add(binding.BindingId, worker.ValuePolicies);
+        }
+        return policies;
+    }
+
+    private async ValueTask ValidateShapeAndReplayAsync(RuntimeModelExecutionContext context,
+        IReadOnlyDictionary<string, WorkflowValuePolicies> workerPolicies, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (context.State is { } retained)
@@ -88,8 +107,12 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
                 {
                     var mapping = envelope.WorkerInputMappings.SingleOrDefault(item => item.BindingId == origin.BindingId)
                         ?? throw new BpmnModelValidationException("The native input origin lacks its pinned worker mapping.");
+                    var binding = envelope.BaseDefinition.ServiceBindings?.SingleOrDefault(item => item.BindingId == origin.BindingId)
+                        ?? throw new BpmnModelValidationException("The native input origin lacks its exact worker binding.");
+                    if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(origin.WorkerExecutable, binding.Executable))
+                        throw new BpmnModelValidationException("The native input origin differs from its pinned worker executable.");
                     if (origin.FormatVersion != 2 || origin.InputContractFingerprint != BpmnInputSupport.Fingerprint(mapping.WorkerInputContract!) ||
-                        !SameInputs(origin.Inputs!, BpmnInputSupport.Realize(mapping, entry!.Inputs, InputsValidator)))
+                        !SameInputs(origin.Inputs!, BpmnInputSupport.Realize(mapping, entry!.Inputs, InputsValidator, workerPolicies[origin.BindingId])))
                         throw new BpmnModelValidationException("The native input origin differs from its captured model inputs and worker contract.");
                 }
         }
@@ -174,7 +197,8 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
             if (prior.ContentFingerprint != fingerprint) throw new RuntimeCheckpointReplayConflictException(command.InputId);
             return;
         }
-        await ValidateShapeAndReplayAsync(context, cancellationToken);
+        var workerPolicies = await ResolveWorkerPoliciesAsync(context.Material.Model!, cancellationToken);
+        await ValidateShapeAndReplayAsync(context, workerPolicies, cancellationToken);
         var graph = Graph(context.Material.Model!);
         var definition = Definition(context.Material.Model!);
         var claimsFrame = definition.FormatVersion == 6;
@@ -276,7 +300,7 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
                 var attempt = "attempt:" + BpmnModelIdentity.Create(work.InvocationId, number.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 var binding = definition.ServiceBindings!.Single(item => item.BindingId == work.BindingId);
                 var replacement = work with { AttemptId = attempt, AttemptNumber = number,
-                    NativeWork = NativeOrigin(context, binding, work.InvocationId, attempt, commitId, document) };
+                    NativeWork = NativeOrigin(context, binding, work.InvocationId, attempt, commitId, document, workerPolicies) };
                 document = document with { Work = document.Work.Select(item => item == work ? replacement : item).ToArray(),
                     Failures = document.Failures!.Select(item => item == failure ? item with
                         { Status = "Retried", RetryAttemptId = attempt, ResolutionInputId = command.InputId } : item).ToArray() };
@@ -380,7 +404,7 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
         }
         if (evaluation is not null)
         {
-            try { document = Apply(context, document, evaluation, commitId, timerDecisionAt ?? clock.GetUtcNow()); }
+            try { document = Apply(context, document, evaluation, commitId, timerDecisionAt ?? clock.GetUtcNow(), workerPolicies); }
             catch (BpmnDurationTimer.DeadlineOverflowException exception)
             {
                 // A prior writer may already have accepted this input, or a valid timer may be
@@ -676,7 +700,7 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
         return result;
     }
 
-    private Document Apply(RuntimeModelExecutionContext context, Document prior, BpmnEvaluation evaluation, string commitId, DateTimeOffset at)
+    private Document Apply(RuntimeModelExecutionContext context, Document prior, BpmnEvaluation evaluation, string commitId, DateTimeOffset at, IReadOnlyDictionary<string, WorkflowValuePolicies> workerPolicies)
     {
         var definition = Definition(context.Material.Model!);
         var timed = definition.FormatVersion is 4 or 6;
@@ -710,7 +734,7 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
             RuntimeModelNativeWorkOrigin? origin = null;
             if (binding is not null)
             {
-                origin = NativeOrigin(context, binding, invocation, attempt, commitId, prior);
+                origin = NativeOrigin(context, binding, invocation, attempt, commitId, prior, workerPolicies);
             }
             else if (eventBinding is not null)
                 origin = NativeOrigin(context, eventBinding.BindingId, eventBinding.Executable, invocation, attempt, commitId);
@@ -730,12 +754,12 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
     }
 
     private RuntimeModelNativeWorkOrigin NativeOrigin(RuntimeModelExecutionContext context, BpmnNativeServiceBinding binding,
-        string invocation, string attempt, string commitId, Document owner)
+        string invocation, string attempt, string commitId, Document owner, IReadOnlyDictionary<string, WorkflowValuePolicies> workerPolicies)
     {
         var origin = NativeOrigin(context, binding.BindingId, binding.Executable, invocation, attempt, commitId);
         if (BpmnInputSupport.Envelope(context.Material.Model!) is not { } envelope) return origin;
         var mapping = envelope.WorkerInputMappings.Single(item => item.BindingId == binding.BindingId);
-        var values = BpmnInputSupport.Realize(mapping, owner.Entry?.Inputs ?? throw new BpmnModelValidationException("The model input snapshot is missing."), InputsValidator);
+        var values = BpmnInputSupport.Realize(mapping, owner.Entry?.Inputs ?? throw new BpmnModelValidationException("The model input snapshot is missing."), InputsValidator, workerPolicies[binding.BindingId]);
         return new(2, origin.Scope, origin.ExecutionId, origin.Protocol, origin.Executable, origin.MaterialIncarnationId, origin.BindingId,
             origin.InvocationId, origin.AttemptId, origin.WorkerExecutable, origin.WorkerExecutionId, origin.SourceOutboxItemId,
             origin.SourceIntentId, origin.ResultIntentKind, origin.ResultInputId, values, BpmnInputSupport.Fingerprint(mapping.WorkerInputContract!))

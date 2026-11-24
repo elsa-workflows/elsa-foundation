@@ -24,6 +24,23 @@ namespace Elsa.Activities.Runtime.Tests;
 
 public sealed class BackgroundActivityWorkerTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Background_body_receives_both_exact_pinned_workflow_policy_flags(bool defaultOnNull, bool undefinedAsNull)
+    {
+        var expected = (defaultOnNull ? 1 : 0) + (undefinedAsNull ? 2 : 0);
+        var probe = new Probe(context => ActivityTransition.Complete((context.DefaultOnNull ? 1 : 0) + (context.UndefinedAsNull ? 2 : 0)));
+        await using var harness = await Harness.CreateAsync<int>(probe, expected.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            valuePolicies: new(defaultOnNull, undefinedAsNull));
+        await harness.RunAsync();
+        Assert.Equal(BackgroundActivityWorkResultKind.Complete, harness.Store.Item!.Result!.Kind);
+        Assert.Equal(harness.ExpectedJson, harness.Store.Item.Result.ResultJson);
+        Assert.Equal(1, probe.Executions);
+    }
+
     [Fact]
     public async Task Records_typed_scalar_completion_and_enqueues_one_coordinator_receipt()
     {
@@ -490,7 +507,7 @@ public sealed class BackgroundActivityWorkerTests
             Func<BackgroundActivityWorkRequest, BackgroundActivityWorkRequest>? configureRequest = null,
             Func<ActivityResultContract, ActivityResultContract>? configureResult = null,
             Action<IServiceCollection>? configureServices = null,
-            bool registerActivityType = true)
+            bool registerActivityType = true, WorkflowValuePolicies? valuePolicies = null)
         {
             var activityType = typeof(ProbeActivity<TResult>);
             var activityAlias = TypeAliasConvention.CanonicalAlias(activityType);
@@ -545,7 +562,8 @@ public sealed class BackgroundActivityWorkerTests
             var identity = new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
             var executable = new WorkflowExecutable(
                 identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow,
-                new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
+                new Dictionary<string, string>(), null, null, null, null, IncidentStrategyBuiltIns.FaultReference,
+                null, null, valuePolicies ?? WorkflowValuePolicies.Off);
             await executableStore.SaveAsync(executable);
 
             var now = DateTimeOffset.UtcNow;

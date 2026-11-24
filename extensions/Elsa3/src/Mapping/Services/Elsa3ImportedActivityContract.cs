@@ -1,3 +1,6 @@
+using Elsa.Serialization.Core;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Activities.Design.Core.Models;
 using Elsa3.Mapping.Conversion;
 
@@ -12,13 +15,13 @@ internal static class Elsa3ImportedActivityContract
 {
     private const string DefaultStorageDriver = "elsa.json";
 
-    public static ActivityContract Build(Elsa3ConvertedDefinition converted) => new(
+    public static ActivityContract Build(Elsa3ConvertedDefinition converted, IWellKnownTypeRegistry? types = null, IVariableTypeDescriptorCatalog? descriptors = null) => new(
         "1",
         converted.State.Inputs
-            .Select(input => new ActivityInputContract(input.ReferenceKey, input.Name, input.Type, false, input.IsNullable, null, input.StorageDriverType ?? DefaultStorageDriver))
+            .Select(input => new ActivityInputContract(input.ReferenceKey, input.Name, input.Type, false, NullPolicyDefaults.AcceptsNull(input.Type, types, descriptors), null, input.StorageDriverType ?? DefaultStorageDriver))
             .ToArray(),
         converted.State.Outputs
-            .Select(output => new ActivityOutputContract(output.ReferenceKey, output.Name, output.Type, false, output.IsNullable, output.StorageDriverType ?? DefaultStorageDriver))
+            .Select(output => new ActivityOutputContract(output.ReferenceKey, output.Name, output.Type, false, NullPolicyDefaults.AcceptsNull(output.Type, types, descriptors), output.StorageDriverType ?? DefaultStorageDriver))
             .ToArray(),
         converted.BoundaryOutcomes.ToArray());
 }

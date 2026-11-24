@@ -40,15 +40,25 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         ComputeBehavioralHash(rootActivity, inputContract, dependencies, persistenceMode, workflowVariables,
             incidentStrategy);
 
+    public string ComputeHash(
+        ExecutableNode rootActivity,
+        WorkflowExecutableInputContract inputContract,
+        IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
+        PersistenceMode? persistenceMode,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
+        IncidentStrategyReference? incidentStrategy,
+        WorkflowValuePolicies valuePolicies) =>
+        ComputeBehavioralHash(rootActivity, inputContract, dependencies, persistenceMode, workflowVariables,
+            incidentStrategy, valuePolicies);
+
     public bool MatchesHash(WorkflowExecutable executable)
     {
         ArgumentNullException.ThrowIfNull(executable);
         if (executable.InputContract is not { } contract)
             return false;
 
-        var current = ComputeHash(executable.RootActivity, contract, executable.Dependencies,
-            executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy);
-        return StringComparer.Ordinal.Equals(current, executable.Identity.ArtifactHash);
+        return StringComparer.Ordinal.Equals(ComputeHash(executable.RootActivity, contract, executable.Dependencies,
+            executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy, executable.ValuePolicies), executable.Identity.ArtifactHash);
     }
 
     private static string ComputeBehavioralHash(
@@ -57,7 +67,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
         PersistenceMode? persistenceMode,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
-        IncidentStrategyReference? incidentStrategy)
+        IncidentStrategyReference? incidentStrategy,
+        WorkflowValuePolicies? valuePolicies = null)
     {
         ArgumentNullException.ThrowIfNull(rootActivity);
         ArgumentNullException.ThrowIfNull(inputContract);
@@ -72,7 +83,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
                 dependencies,
                 persistenceMode,
                 workflowVariables,
-                incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference);
+                incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference,
+                valuePolicies);
 
         return Hash(stream.ToArray());
     }
@@ -264,11 +276,20 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
         PersistenceMode? persistenceMode,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
-        IncidentStrategyReference incidentStrategy)
+        IncidentStrategyReference incidentStrategy,
+        WorkflowValuePolicies? valuePolicies)
     {
         writer.WriteStartObject();
-        writer.WriteNumber("schemaVersion", 2);
+        writer.WriteNumber("schemaVersion", inputContract.Inputs.Count == 0 ? 2 : 3);
         writer.WriteString("rootNodeId", rootActivity.ExecutableNodeId);
+
+        if (valuePolicies is { DefaultOnNull: true } or { UndefinedAsNull: true })
+        {
+            writer.WriteStartObject("valuePolicies");
+            writer.WriteBoolean("defaultOnNull", valuePolicies.DefaultOnNull);
+            writer.WriteBoolean("undefinedAsNull", valuePolicies.UndefinedAsNull);
+            writer.WriteEndObject();
+        }
 
         writer.WriteStartObject("incidentStrategy");
         writer.WriteString("alias", incidentStrategy.Alias);
@@ -319,8 +340,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             writer.WriteString("collectionKind", input.Type.CollectionKind.ToString());
             writer.WriteBoolean("isRequired", input.IsRequired);
             writer.WriteBoolean("hasDefaultValue", input.DefaultValue.HasValue);
-            if (input.IsNullable)
-                writer.WriteBoolean("isNullable", true);
+            if (!input.IsNullable)
+                writer.WriteBoolean("isNullable", false);
             writer.WritePropertyName("defaultValue");
             if (input.DefaultValue is { } defaultValue)
                 WriteCanonicalJson(writer, defaultValue);

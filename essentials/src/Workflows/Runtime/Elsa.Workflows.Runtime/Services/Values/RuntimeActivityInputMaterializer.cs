@@ -12,6 +12,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Resolvers;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
@@ -52,13 +53,26 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         IPortableExpressionEvaluator? portableExpressionEvaluator = null,
         IRuntimeValueConversionExecutor? valueConversionExecutor = null,
         IExternalPayloadStore? externalPayloadStore = null)
+        : this(typeDescriptors: null, inputBindingResolver, structurePolicies, wellKnownTypeRegistry, portableExpressionEvaluator,
+            valueConversionExecutor, externalPayloadStore)
+    {
+    }
+
+    public RuntimeActivityInputMaterializer(
+        IRuntimeTypeNullability? typeDescriptors,
+        IRuntimeInputBindingResolver inputBindingResolver,
+        IEnumerable<IRuntimeStructureInputMaterializationPolicy> structurePolicies,
+        IWellKnownTypeRegistry? wellKnownTypeRegistry = null,
+        IPortableExpressionEvaluator? portableExpressionEvaluator = null,
+        IRuntimeValueConversionExecutor? valueConversionExecutor = null,
+        IExternalPayloadStore? externalPayloadStore = null)
     {
         ArgumentNullException.ThrowIfNull(inputBindingResolver);
         _inputBindingResolver = inputBindingResolver;
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
         _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor, _wellKnownTypeRegistry, typeDescriptors);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
         _structurePolicies = IndexStructurePolicies(structurePolicies);
     }
@@ -101,7 +115,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _inputBindingResolver = inputBindingResolver;
         _valueConversionExecutor = new RuntimeValueConversionExecutor();
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor, wellKnownTypeRegistry: _wellKnownTypeRegistry);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -117,7 +131,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _valueConversionExecutor = new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor, wellKnownTypeRegistry: _wellKnownTypeRegistry);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -135,7 +149,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _valueConversionExecutor = new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor, _wellKnownTypeRegistry);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -155,7 +169,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
         _valueConversionExecutor = valueConversionExecutor;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor, _wellKnownTypeRegistry);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -191,7 +205,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 resolutionContext,
                 cancellationToken);
 
-            ValidatePresence(input, value, node.ExecutableNodeId);
+            value = ValidatePresence(input, value, node.ExecutableNodeId, resolutionContext);
             values.Add(input.Key, value);
         }
 
@@ -253,7 +267,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 ValidatePortableType(input, binding, node.ExecutableNodeId);
                 ValidateEffectivePolicy(input, binding, node.ExecutableNodeId);
                 value = await MaterializeEnvelopeAsync(node, invocationId, input, binding, resolutionContext, cancellationToken);
-                ValidatePresence(input, value, node.ExecutableNodeId);
+                value = ValidatePresence(input, value, node.ExecutableNodeId, resolutionContext);
                 values.Add(key, value);
             }
 
@@ -329,6 +343,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                     evaluated.Value is JsonElement original ? original.Clone() : conversion.Write(materialized, type),
                     expressionPolicy);
             return await ApplyDestinationStorageAsync(
+                node.ExecutableNodeId,
                 invocationId,
                 input,
                 ApplyConversionPlan(binding, envelope),
@@ -395,6 +410,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 projected.ExternalReference,
                 effectivePolicy));
         return await ApplyDestinationStorageAsync(
+            node.ExecutableNodeId,
             invocationId,
             input,
             retyped,
@@ -435,7 +451,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 value = ValueEnvelope.Absent(binding.TargetType, effectivePolicy);
                 break;
             case RuntimeReadSelectionOutcome.Null:
-                if (!input.IsNullable)
+                if (!input.IsNullable && resolutionContext.Executable?.ValuePolicies.DefaultOnNull != true)
                     throw RuntimeReadSelectionException.Null(binding, node.ExecutableNodeId, selected.SegmentIndex);
                 value = ValueEnvelope.Null(binding.TargetType, effectivePolicy);
                 break;
@@ -456,6 +472,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         }
 
         return await ApplyDestinationStorageAsync(
+            node.ExecutableNodeId,
             invocationId,
             input,
             value,
@@ -490,6 +507,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     }
 
     private async ValueTask<ValueEnvelope> ApplyDestinationStorageAsync(
+        string nodeId,
         string invocationId,
         ActivityInputContract input,
         ValueEnvelope value,
@@ -499,6 +517,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         CancellationToken cancellationToken,
         string? fallbackStorageProfile = null)
     {
+        value = ValidatePresence(input, value, nodeId, resolutionContext);
         return await _externalEnvelopeStorage.RewriteAsync(
             new RuntimeExternalEnvelopeRewriteRequest(
                 resolutionContext.WorkflowExecutionId,
@@ -528,11 +547,10 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         var path = ResolveProjectionPath(binding, node.ExecutableNodeId, resolutionContext);
         payload = RuntimeExternalProjection.Apply(payload, path, input.Key, node.ExecutableNodeId);
 
-        if (payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
-            return ValueEnvelope.Null(binding.ConversionPlan?.TargetType ?? binding.TargetType, effectivePolicy);
-
-        var projected = ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, payload.Clone(), effectivePolicy);
-        var converted = ApplyConversionPlan(binding, projected);
+        var projected = payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+            ? ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, effectivePolicy)
+            : ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, payload.Clone(), effectivePolicy);
+        var converted = ValidatePresence(input, ApplyConversionPlan(binding, projected), node.ExecutableNodeId, resolutionContext);
         return await _externalEnvelopeStorage.RewriteAsync(
             new RuntimeExternalEnvelopeRewriteRequest(
                 resolutionContext.WorkflowExecutionId,
@@ -564,6 +582,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             ? ValueEnvelope.Null(source.Type, effectivePolicy)
             : ValueEnvelope.Inline(source.Type, payload, effectivePolicy);
         return await ApplyDestinationStorageAsync(
+            node.ExecutableNodeId,
             invocationId,
             input,
             ApplyConversionPlan(binding, conversionSource),
@@ -676,13 +695,22 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             throw new InvalidOperationException($"VF-ACT-005: Input '{input.Key}' on executable node '{nodeId}' would downgrade its contract protection policy.");
     }
 
-    private static void ValidatePresence(ActivityInputContract input, ValueEnvelope value, string nodeId)
+    private ValueEnvelope ValidatePresence(ActivityInputContract input, ValueEnvelope value, string nodeId,
+        RuntimeInputBindingResolutionContext context)
     {
         if (value.Presence == ValuePresence.Absent && input.IsRequired)
             throw new InvalidOperationException($"VF-ACT-003: Required input '{input.Key}' on executable node '{nodeId}' cannot materialize as absent.");
 
+        if (value.Presence == ValuePresence.ExplicitNull && !input.IsNullable && context.Executable?.ValuePolicies.DefaultOnNull == true &&
+            _wellKnownTypeRegistry is not null && _wellKnownTypeRegistry.TryGetTypeOrDefault(input.Type.Alias, out var elementType) &&
+            NullPolicyDefaults.TryGetTypeDefault(TypeReferenceFactory.Close(elementType, input.Type.CollectionKind), out var defaultValue))
+        {
+            context.Warnings?.Report(new ExecutionWarning("VF-NULL-001", $"Input '{input.Key}' on '{nodeId}' used its type default because DefaultOnNull is enabled.", ExecutionWarningSeverity.Information));
+            return ValueEnvelope.Inline(value.Type, JsonSerializer.SerializeToElement(defaultValue, defaultValue!.GetType()), value.Policy);
+        }
         if (value.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull && !input.IsNullable)
             throw new InvalidOperationException($"VF-ACT-004: Input '{input.Key}' on executable node '{nodeId}' does not accept null or absence.");
+        return value;
     }
 
     private static bool SameType(ValueTypeDescriptor left, ValueTypeDescriptor right) =>

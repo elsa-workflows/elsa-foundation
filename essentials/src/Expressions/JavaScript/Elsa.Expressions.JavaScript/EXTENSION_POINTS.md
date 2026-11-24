@@ -110,7 +110,10 @@ with portable expression evaluation.
   - `LiteralOutcomes` — string literals passed as the outcomes of `complete(_, 'X' | ['X', …])`
     calls anywhere, nested functions included;
   - `ReturnedStrings` — string literals returned at the top level;
-  - `ReservedNameDeclarations` — zero-based ranges of every declaration of `complete`.
+  - `ReservedNameDeclarations` — zero-based ranges of every declaration of `complete`;
+  - `HasReturnStatement` — whether the outer script body contains a return statement. Returns inside nested
+    functions do not count. A consumed script-activity result requires one at publication; input expressions and
+    statement completion forms do not. Replacement analyzers must report this field for valid bound bodies.
   Computed names and aliased `complete` calls are not reported; they are checked at run time.
 - **Implementation:** `JavaScriptScriptOutcomeAnalyzer` (internal), registered as a singleton by
   `JavaScriptFeature`: it is stateless, holds no scoped dependency and only parses. It shares the reserved-name collector
@@ -156,7 +159,7 @@ with portable expression evaluation.
 ### IScriptValueBridge *(Jint — Elsa.Expressions.JavaScript.Jint)*
 
 - **Kind:** replacement contract: exactly one implementation is active per host (spec 1228 FR-009, ADR 0046 V12).
-- **Contract:** `Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge` — `Begin(engine)` starts the values of
+- **Contract:** `Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge` — `Begin(engine)` (policies off) or `Begin(engine, undefinedAsNull)` starts the values of
   one evaluation (`IScriptValueEvaluation`): `Enter(key, json)` puts a value in as a plain, changeable JavaScript value
   and records its lossy numbers; `Collect(key, current, assigned)` reports, after the run, unchanged, a member change
   (untouched members keep their stored text) or a whole assignment (a changed array is written whole);
@@ -164,7 +167,9 @@ with portable expression evaluation.
   functions reading a variable (spec 1222 FR-034); `Write(value,
   path)` converts a value leaving the evaluation, writing an unchanged entered value from its original JSON and
   reporting the lossy entered numbers the written JSON carries; `TryFindLoss(double)` serves host-function argument
-  checks. Script activities and JavaScript input expressions use the same bridge (D-15).
+  checks. `Warnings` exposes boundary diagnostics for omitted undefined properties, null array positions and
+  non-finite numbers, with value-free paths; callers apply the evaluation's protection before retaining them.
+  Script activities and JavaScript input expressions use the same bridge (D-15).
 - **Implementation:** `CopyComparePatchValueBridge` (internal), registered with `TryAddSingleton` by `JintFeature`.
   It compares JavaScript with JavaScript (ADR 0090 C2) and records its cost per evaluation on the
   `Elsa.Expressions.JavaScript` meter (`elsa.javascript.value_bridge.enter.duration`, `…collect.duration`, `…bytes`).

@@ -405,7 +405,7 @@ public sealed class BpmnAuthoredDirectPublisherTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task Published_optional_input_contract_preserves_authored_nullability(bool nullable, bool immutableSource)
+    public async Task Published_optional_input_contract_uses_TYPE_and_ignores_the_retired_nullable_flag(bool nullable, bool immutableSource)
     {
         var fixture = new Fixture();
         fixture.Version.State = fixture.Version.State with
@@ -418,7 +418,7 @@ public sealed class BpmnAuthoredDirectPublisherTests
         await fixture.Publish();
         var retained = JsonSerializer.Deserialize<WorkflowExecutableInputContract>(JsonSerializer.Serialize(fixture.InputContract, Web), Web)!;
         var declared = Assert.Single(retained.Inputs);
-        Assert.Equal(nullable, declared.IsNullable);
+        Assert.True(declared.IsNullable);
         Assert.False(declared.IsRequired);
         Assert.Equal("fallback", declared.DefaultValue!.Value.GetString());
         Assert.Equal(before, JsonSerializer.Serialize(fixture.Version.State, Web));

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Events.Core.Extensions;
@@ -26,6 +27,8 @@ public class SerializationFeature : IShellFeature
             .AddSingleton<IPayloadSerializer, JsonPayloadSerializer>()
             .AddSingleton<IObjectConverter, ObjectConverter>()
             .AddSingleton<IWellKnownTypeRegistry, WellKnownTypeRegistry>();
+        services.TryAddSingleton<IRuntimeTypeNullability, RuntimeTypeNullability>();
+        services.AddScoped<IStartupTask, RuntimeTypeNullabilityCompositionCheck>();
 
         // The type discriminator converter (the go-forward alias-registry mechanism) needs a concrete DI
         // registration so BuiltInJsonConverterSource can request it via constructor injection. Open-object

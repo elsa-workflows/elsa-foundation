@@ -1,4 +1,6 @@
 import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import type { ActivityContractTypeCapability } from "./activityDefinitionTypes";
+import { typeAllowsNull } from "./typeNullability";
 import { lazy, Suspense, useEffect, useRef, useState, useId, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -82,7 +84,7 @@ export function ActivityDefinitionWorkbench({ agentWorkspace = false, context, d
   const activeSection = detail && !designOwned && requestedSection === "drafts" ? "overview" : requestedSection;
   const forkAllowed = !designOwned && isActionAllowed(detail?.actions ?? [], "fork-definition");
   const recommendation = detail?.lifecycle.recommendation;
-  const capabilitiesQuery = useActivityAuthoringCapabilities(context, forkAllowed && isActivityDefinitionEnumValue(recommendation?.lifecycle, "Active"));
+  const capabilitiesQuery = useActivityAuthoringCapabilities(context, Boolean(detail && !detailQuery.error));
   const childEnabled = Boolean(detail && !detailQuery.error);
   const overview = activeSection === "overview" && designOwned;
   const draftRequest = { definitionId, limit: 10, cursor: overview ? null : draftCursorStack[draftCursorIndex] };
@@ -283,9 +285,9 @@ export function ActivityDefinitionWorkbench({ agentWorkspace = false, context, d
       tabs={tabs.map(tab => ({ ...tab, panelIndex: 0 }))} activeTab={activeSection} onSelect={id => navigateSection(normalizeSection(id))} />
     <section className="ad-tab-panel" role="tabpanel" id={tabElementIds(tabBaseId, 0).panelId}
       aria-labelledby={tabElementIds(tabBaseId, tabs.findIndex(tab => tab.id === activeSection)).tabId}>
-      {activeSection === "overview" ? designOwned ? <DesignedOverview detail={detail} activeDrafts={activeDrafts?.length ?? null} onOpen={navigateSection} onOpenWorkflows={onOpenWorkflows} /> : <Overview detail={detail} provider={provider} designOwned={false} versionQuery={exactVersionQuery} onOpen={navigateSection} /> : null}
+      {activeSection === "overview" ? designOwned ? <DesignedOverview detail={detail} activeDrafts={activeDrafts?.length ?? null} onOpen={navigateSection} onOpenWorkflows={onOpenWorkflows} /> : <Overview types={capabilitiesQuery.data?.types ?? []} detail={detail} provider={provider} designOwned={false} versionQuery={exactVersionQuery} onOpen={navigateSection} /> : null}
       {activeSection === "drafts" ? <DraftsSection query={draftsQuery} exactQuery={exactDraftQuery} exactFailure={effectiveDraftSelectionFailure} privacyFailure={effectiveDraftPrivacyFailure} selectedDraftId={selectedDraftId} page={draftCursorIndex + 1} designOwned={designOwned} canCreateDraft={canCreateDraft} publicationReviewRequested={requestedPublicationReview} onCreate={() => setDraftDialogSource(null)} onPrevious={() => setDraftCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = draftsQuery.data?.continuation; if (!continuation) return; setDraftCursorStack(current => [...current.slice(0, draftCursorIndex + 1), continuation]); setDraftCursorIndex(current => current + 1); }} onRetry={() => { setDraftPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void draftsQuery.refetch(); }} onSelect={draftId => navigateSection("drafts", draftId, null)} onEdit={draftId => onNavigate({ definitionId, section: "editor", draftId, versionId: null })} onReviewPublication={draftId => onNavigate({ definitionId, section: "editor", draftId, versionId: null, publicationReview: true })} onPlanUpgrade={draftId => onPlanUpgrade("ActivityDraft", draftId)} /> : null}
-      {activeSection === "versions" ? <VersionsSection query={versionsQuery} exactQuery={exactVersionQuery} exactFailure={effectiveVersionSelectionFailure} privacyFailure={effectiveVersionPrivacyFailure} selectedVersionId={selectedVersionId} page={versionCursorIndex + 1} designOwned={designOwned} onCreateFromVersion={versionId => setDraftDialogSource(versionId)} onManage={(action, version) => setLifecycleDialog({ action, version })} onPrevious={() => setVersionCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = versionsQuery.data?.continuation; if (!continuation) return; setVersionCursorStack(current => [...current.slice(0, versionCursorIndex + 1), continuation]); setVersionCursorIndex(current => current + 1); }} onRetry={() => { setVersionPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void versionsQuery.refetch(); }} onSelect={versionId => navigateSection("versions", null, versionId)} onPlanUpgrade={versionId => onPlanUpgrade("ActivityVersion", versionId)} /> : null}
+      {activeSection === "versions" ? <VersionsSection types={capabilitiesQuery.data?.types ?? []} query={versionsQuery} exactQuery={exactVersionQuery} exactFailure={effectiveVersionSelectionFailure} privacyFailure={effectiveVersionPrivacyFailure} selectedVersionId={selectedVersionId} page={versionCursorIndex + 1} designOwned={designOwned} onCreateFromVersion={versionId => setDraftDialogSource(versionId)} onManage={(action, version) => setLifecycleDialog({ action, version })} onPrevious={() => setVersionCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = versionsQuery.data?.continuation; if (!continuation) return; setVersionCursorStack(current => [...current.slice(0, versionCursorIndex + 1), continuation]); setVersionCursorIndex(current => current + 1); }} onRetry={() => { setVersionPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void versionsQuery.refetch(); }} onSelect={versionId => navigateSection("versions", null, versionId)} onPlanUpgrade={versionId => onPlanUpgrade("ActivityVersion", versionId)} /> : null}
       {activeSection === "relationships" ? <Suspense fallback={<StudioLoadingStatus>Loading dependency explorer…</StudioLoadingStatus>}><ActivityDefinitionDependencyExplorer context={context} definitionId={definitionId} initialVersionId={!designOwned ? detail.lifecycle.recommendation?.versionId : undefined} initialDirection={!designOwned ? "inbound" : undefined} /></Suspense> : null}
     </section>
     {designOwned ? <details className="ad-technical-disclosure"><summary>Advanced</summary><IdentityDetails detail={detail} provider={provider} /></details> : null}
@@ -320,8 +322,7 @@ function DesignedOverview({ detail, activeDrafts, onOpen, onOpenWorkflows }: { d
   </div>;
 }
 
-function Overview({ detail, provider, designOwned, versionQuery, onOpen }: { detail: ActivityDefinitionManagementView; provider: string; designOwned: boolean; versionQuery: ReturnType<typeof useActivityDefinitionVersion>; onOpen(section: Section): void }) {
-  
+function Overview({ types = [], detail, provider, designOwned, versionQuery, onOpen }: { types?: readonly ActivityContractTypeCapability[]; detail: ActivityDefinitionManagementView; provider: string; designOwned: boolean; versionQuery: ReturnType<typeof useActivityDefinitionVersion>; onOpen(section: Section): void }) {
   if (!designOwned) return <div className="ad-source-overview">
     <dl className="ad-source-summary">
       <div><dt>Category</dt><dd>{detail.definition.category}</dd></div>
@@ -329,7 +330,7 @@ function Overview({ detail, provider, designOwned, versionQuery, onOpen }: { det
     </dl>
     {isActivityDefinitionEnumValue(detail.lifecycle.recommendation?.lifecycle, "Active") ? versionQuery.isError
       ? <div className="ad-inline-error" role="alert">Activity details could not be loaded. <button type="button" onClick={() => void versionQuery.refetch()}>Retry</button></div>
-      : versionQuery.data?.contract ? <HistoricalContract contract={versionQuery.data.contract} compact />
+      : versionQuery.data?.contract ? <HistoricalContract types={types} contract={versionQuery.data.contract} compact />
       : <StudioLoadingStatus>Loading activity details…</StudioLoadingStatus>
       : <p>No recommended active version is available. Choose a version to inspect its inputs and outputs.</p>}
   </div>;
@@ -352,7 +353,7 @@ function DraftsSection({ query, exactQuery, exactFailure, privacyFailure, select
   return <div><div className="ad-section-heading-row"><SectionHeading icon={<GitBranch size={18} />} title="Drafts" description="Choose a draft to edit. Drafts with the same name have different IDs." />{editableDrafts.length === 1 ? <button type="button" onClick={() => onEdit(editableDrafts[0].draft.draftId)}>Open editor</button> : null}{canCreateDraft ? <StudioButton onClick={onCreate}>Create parallel draft</StudioButton> : null}</div>{publicationReviewRequested && !selectedDraftId && !privacyFailure && !query.error ? <p className="ad-inline-status" role="status">Select an active draft to review for publication.</p> : null}{!designOwned ? <div className="ad-unavailable-note" role="status"><strong>This source has no editable drafts</strong><span>Choose a published version to create your own editable copy.</span></div> : null}{selected ? <SelectedDraft item={query.error ? { ...selected, actions: [] } : selected} onEdit={() => onEdit(selected.draft.draftId)} showPublicationReview={publicationReviewRequested} onReviewPublication={() => onReviewPublication(selected.draft.draftId)} onPlanUpgrade={() => onPlanUpgrade(selected.draft.draftId)} /> : <ExactSelectionState kind="draft" selected={Boolean(selectedDraftId)} query={exactQuery} failure={exactFailure} />}<ChildCollectionState query={query} privacyFailure={privacyFailure} empty="No authorized drafts are available for this definition." onRetry={onRetry} />{data?.items.length ? <div className="ad-child-list" role="group" aria-label="Activity Definition drafts">{data.items.map(item => <button key={item.draft.draftId} type="button" className={item.draft.draftId === selectedDraftId ? "is-selected" : ""} onClick={() => onSelect(item.draft.draftId)}><span><strong>{draftLabel(item)}</strong><small>Revision {item.draft.revision} · {item.draft.status}</small></span><span><strong>{item.draft.providerKey}</strong><small>{formatDate(item.draft.updatedAt)}</small></span></button>)}</div> : null}<CursorPager page={page} data={data} onPrevious={onPrevious} onNext={onNext} /></div>;
 }
 
-function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, selectedVersionId, page, designOwned, onCreateFromVersion, onManage, onPrevious, onNext, onRetry, onSelect, onPlanUpgrade }: { query: ReturnType<typeof useActivityDefinitionVersions>; exactQuery: ReturnType<typeof useActivityDefinitionVersion>; exactFailure: ReturnType<typeof classifyActivityDefinitionReadFailure> | null; privacyFailure: "unavailable" | "forbidden" | "not-found" | null; selectedVersionId: string | null; page: number; designOwned: boolean; onCreateFromVersion(versionId: string): void; onManage(action: ActivityDefinitionVersionLifecycleAction, version: ActivityDefinitionVersionManagementView): void; onPrevious(): void; onNext(): void; onRetry(): void; onSelect(versionId: string | null): void; onPlanUpgrade(versionId: string): void }) {
+function VersionsSection({ types = [], query, exactQuery, exactFailure, privacyFailure, selectedVersionId, page, designOwned, onCreateFromVersion, onManage, onPrevious, onNext, onRetry, onSelect, onPlanUpgrade }: { types?: readonly ActivityContractTypeCapability[]; query: ReturnType<typeof useActivityDefinitionVersions>; exactQuery: ReturnType<typeof useActivityDefinitionVersion>; exactFailure: ReturnType<typeof classifyActivityDefinitionReadFailure> | null; privacyFailure: "unavailable" | "forbidden" | "not-found" | null; selectedVersionId: string | null; page: number; designOwned: boolean; onCreateFromVersion(versionId: string): void; onManage(action: ActivityDefinitionVersionLifecycleAction, version: ActivityDefinitionVersionManagementView): void; onPrevious(): void; onNext(): void; onRetry(): void; onSelect(versionId: string | null): void; onPlanUpgrade(versionId: string): void }) {
   useStudioTimeZone();
   const data = privacyFailure ? undefined : query.data;
   const listedSelection = data?.items.find(item => item.version.versionId === selectedVersionId);
@@ -364,7 +365,7 @@ function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, sele
   const actionAllowed = Boolean(designOwned && listedSelection && isActionAllowed(listedSelection.actions, "clone-draft"));
   return <div className="ad-version-history">
     <SectionHeading icon={<Layers3 size={18} />} title="Versions" description={designOwned ? "Every row is an immutable semantic version. Recommendation and lifecycle are reviewed exact-version decisions." : "Versions supplied by the module."} />
-    {selected && !listedSelection ? <SelectedVersion item={selected} compact={!designOwned} standalone actionLabel="Create draft from this exact version" actionAllowed={actionAllowed} onCreate={() => onCreateFromVersion(selected.version.versionId)} onPlanUpgrade={() => onPlanUpgrade(selected.version.versionId)} onManage={action => onManage(action, selected)} /> : null}
+    {selected && !listedSelection ? <SelectedVersion types={types} item={selected} compact={!designOwned} standalone actionLabel="Create draft from this exact version" actionAllowed={actionAllowed} onCreate={() => onCreateFromVersion(selected.version.versionId)} onPlanUpgrade={() => onPlanUpgrade(selected.version.versionId)} onManage={action => onManage(action, selected)} /> : null}
     {!selected ? <ExactSelectionState kind="version" selected={Boolean(selectedVersionId)} query={exactQuery} failure={exactFailure} /> : null}
     <ChildCollectionState query={query} privacyFailure={privacyFailure} empty="No authorized versions are available for this definition." onRetry={onRetry} />
     {data?.items.length ? <div className="ad-child-list ad-version-list" role="group" aria-label="Activity Definition versions">{data.items.map(item => {
@@ -377,7 +378,7 @@ function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, sele
           <span className="ad-version-badges"><StatusChip tone={isActivityDefinitionEnumValue(item.version.lifecycle, "Active") ? "success" : "neutral"}>{item.version.lifecycle}</StatusChip>{item.isRecommended ? <span className="ad-version-recommended">Recommended</span> : null}</span>
           <span className="ad-version-disclosure"><span>{selectedItem ? "Hide details" : "Show details"}</span><ChevronDown size={16} aria-hidden /></span>
         </button>
-        {selectedItem ? <div id={detailsId} className="ad-version-expanded"><SelectedVersion item={selectedItem} compact={!designOwned} actionLabel="Create draft from this exact version" actionAllowed={actionAllowed} onCreate={() => onCreateFromVersion(selectedItem.version.versionId)} onPlanUpgrade={() => onPlanUpgrade(selectedItem.version.versionId)} onManage={action => onManage(action, selectedItem)} /></div> : null}
+        {selectedItem ? <div id={detailsId} className="ad-version-expanded"><SelectedVersion types={types} item={selectedItem} compact={!designOwned} actionLabel="Create draft from this exact version" actionAllowed={actionAllowed} onCreate={() => onCreateFromVersion(selectedItem.version.versionId)} onPlanUpgrade={() => onPlanUpgrade(selectedItem.version.versionId)} onManage={action => onManage(action, selectedItem)} /></div> : null}
       </div>;
     })}</div> : null}
     <CursorPager page={page} data={data} onPrevious={onPrevious} onNext={onNext} />
@@ -412,7 +413,7 @@ function SelectedDraft({ item, onEdit, showPublicationReview, onReviewPublicatio
   const canEdit = isActivityDefinitionEnumValue(item.draft.status, "Active") && isActionAllowed(item.actions, "edit-draft");
   return <div className="ad-selected-record" aria-label="Selected exact draft"><strong>{draftLabel(item)}</strong><span><code>{item.draft.draftId}</code> · revision {item.draft.revision} · {item.draft.providerKey}</span><div className="ad-header-actions">{canEdit ? <button type="button" onClick={onEdit}>Open editor</button> : <span>This draft is read-only or editing is unavailable for this account.</span>}{showPublicationReview && canEdit ? <button type="button" onClick={onReviewPublication}>Review publication</button> : null}<button type="button" onClick={onPlanUpgrade}>Plan broad upgrade from this exact draft</button></div></div>;
 }
-function SelectedVersion({ item, compact, standalone = false, actionLabel, actionAllowed, onCreate, onPlanUpgrade, onManage }: { item: ActivityDefinitionVersionManagementView; compact: boolean; standalone?: boolean; actionLabel: string; actionAllowed: boolean; onCreate(): void; onPlanUpgrade(): void; onManage(action: ActivityDefinitionVersionLifecycleAction): void }) {
+function SelectedVersion({ types = [], item, compact, standalone = false, actionLabel, actionAllowed, onCreate, onPlanUpgrade, onManage }: { types?: readonly ActivityContractTypeCapability[]; item: ActivityDefinitionVersionManagementView; compact: boolean; standalone?: boolean; actionLabel: string; actionAllowed: boolean; onCreate(): void; onPlanUpgrade(): void; onManage(action: ActivityDefinitionVersionLifecycleAction): void }) {
   const lifecycleActions: Array<{ action: ActivityDefinitionVersionLifecycleAction; availability: string; label: string }> = [
     { action: "recommend", availability: "set-recommendation", label: "Make recommended" },
     { action: "retire", availability: "retire-version", label: "Retire" },
@@ -427,7 +428,7 @@ function SelectedVersion({ item, compact, standalone = false, actionLabel, actio
   return <section className="ad-version-detail" aria-label="Selected exact version">
     {standalone ? <header className="ad-version-detail-heading"><strong>Version {compact ? displayActivityDefinitionVersion(item.version.version) : item.version.version}{item.isRecommended ? " · Recommended" : ""}</strong><span>{item.version.lifecycle} · {formatDate(item.version.publishedAt)}</span></header> : null}
     {!compact ? actions : null}
-    {item.contract ? <HistoricalContract contract={item.contract} compact={compact} /> : <StudioLoadingStatus>Loading activity details…</StudioLoadingStatus>}
+    {item.contract ? <HistoricalContract types={types} contract={item.contract} compact={compact} /> : <StudioLoadingStatus>Loading activity details…</StudioLoadingStatus>}
     <details className="ad-technical-details ad-version-details"><summary>Version details</summary>
       {compact ? actions : null}
       <dl className="ad-version-identifiers">
@@ -441,20 +442,20 @@ function SelectedVersion({ item, compact, standalone = false, actionLabel, actio
 
 }
 
-function HistoricalContract({ contract, compact = false }: { contract: NonNullable<ActivityDefinitionVersionManagementView["contract"]>; compact?: boolean }) {
+function HistoricalContract({ types = [], contract, compact = false }: { types?: readonly ActivityContractTypeCapability[]; contract: NonNullable<ActivityDefinitionVersionManagementView["contract"]>; compact?: boolean }) {
   return <section className="ad-historical-contract" aria-labelledby="historical-contract-title"><header>{compact ? <h2 id="historical-contract-title">Inputs, outputs &amp; outcomes</h2> : <h3 id="historical-contract-title">Published inputs, outputs and outcomes</h3>}{!compact ? <span>Schema {contract.contractSchemaVersion}</span> : null}</header>{!compact ? <p>Stored aliases remain visible even when they are no longer available in the current authoring catalog.</p> : null}
     <div className="ad-historical-contract-groups">
       <HistoricalMembers compact={compact} title="Inputs" members={contract.inputs.map(member => ({
         key: member.referenceKey,
         name: member.displayName || member.name,
-        detail: `${member.type.alias} · ${member.type.collectionKind} · ${member.isRequired ? "Required effective value" : "Optional effective value"} · ${member.isNullable ? "Allows null" : "Non-null"}`,
-        compactDetail: compactContractType(member.type.alias, member.type.collectionKind, member.isRequired ? "Required" : "Optional", member.isNullable)
+        detail: `${member.type.alias} · ${member.type.collectionKind} · ${member.isRequired ? "Required" : "Optional"} · ${typeAllowsNull(member.type, types) ? "Allows null" : "Non-null"}`,
+        compactDetail: compactContractType(member.type.alias, member.type.collectionKind, member.isRequired ? "Required" : "Optional", typeAllowsNull(member.type, types))
       }))} />
       <HistoricalMembers compact={compact} title="Outputs" members={contract.outputs.map(member => ({
         key: member.referenceKey,
         name: member.displayName || member.name,
-        detail: `${member.type.alias} · ${member.type.collectionKind} · ${member.isRequired ? "Must be produced" : "Optional production"} · ${member.isNullable ? "Allows null" : "Non-null"}`,
-        compactDetail: compactContractType(member.type.alias, member.type.collectionKind, member.isRequired ? "Must be produced" : "Optional", member.isNullable)
+        detail: `${member.type.alias} · ${member.type.collectionKind} · ${member.isRequired ? "Must be produced" : "Optional production"} · ${typeAllowsNull(member.type, types) ? "Allows null" : "Non-null"}`,
+        compactDetail: compactContractType(member.type.alias, member.type.collectionKind, member.isRequired ? "Must be produced" : "Optional", typeAllowsNull(member.type, types))
       }))} />
       <HistoricalMembers compact={compact} title="Outcomes" members={contract.outcomes.map(member => ({
         key: member.referenceKey,

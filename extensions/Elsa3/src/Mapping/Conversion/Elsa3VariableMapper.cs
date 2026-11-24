@@ -1,3 +1,5 @@
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Services;
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
@@ -43,8 +45,8 @@ internal static class Elsa3VariableMapper
     };
 
     /// <summary>Maps a variable whose starting value <see cref="TryMap"/> accepts; synthesized variables have none.</summary>
-    public static VariableDefinition Map(IWellKnownTypeRegistry wellKnownTypeRegistry, IObjectConverter objectConverter, Elsa3Variable source) =>
-        TryMap(wellKnownTypeRegistry, objectConverter, source, out var variable, out var refusal)
+    public static VariableDefinition Map(IWellKnownTypeRegistry wellKnownTypeRegistry, IObjectConverter objectConverter, Elsa3Variable source, IVariableTypeDescriptorCatalog? typeDescriptors = null) =>
+        TryMap(wellKnownTypeRegistry, objectConverter, source, out var variable, out var refusal, typeDescriptors)
             ? variable
             : throw new InvalidOperationException(refusal!.Message);
 
@@ -66,6 +68,7 @@ internal static class Elsa3VariableMapper
         Elsa3Variable source,
         out VariableDefinition variable,
         out Elsa3VariableRefusal? refusal,
+        IVariableTypeDescriptorCatalog? typeDescriptors = null,
         Elsa3ConversionOptions? options = null,
         Action<Elsa3LiteralConversion.Note>? report = null)
     {
@@ -89,7 +92,16 @@ internal static class Elsa3VariableMapper
         }
 
         if (source.Value is null)
+        {
+            if (shape.Type.CollectionKind == CollectionKind.Single && !NullPolicyDefaults.AcceptsNull(shape.Type, wellKnownTypeRegistry, typeDescriptors) &&
+                shape.ClrType is { } clrType && !NullPolicyDefaults.TryGetTypeDefault(clrType, out _))
+            {
+                refusal = new($"Variable '{source.Name}' of type '{shape.Type.Alias}' needs a declared starting value.",
+                    "Declare a default or type the member String / Any before converting.");
+                return false;
+            }
             return true;
+        }
 
         if (!TryStart(shape, source, typeName, options ?? new(), report ?? (_ => { }), out var json, out refusal))
             return false;
@@ -105,7 +117,8 @@ internal static class Elsa3VariableMapper
         Elsa3ConversionOptions options,
         Action<Elsa3LiteralConversion.Note> report,
         out JsonElement json,
-        out Elsa3VariableRefusal? refusal)
+        out Elsa3VariableRefusal? refusal,
+        IVariableTypeDescriptorCatalog? typeDescriptors = null)
     {
         var value = source.Value!;
         refusal = null;

@@ -297,12 +297,14 @@ public sealed partial class ActivityDraftTestRunServiceTests
             (IExecutableActivityTemplateStore Templates, IWorkflowExecutableSourceReferenceStore References)>? selectRootPorts = null,
         bool includePublishedVersion = false,
         bool acceptDispatch = false,
-        string? publishedVersionTenantId = null)
+        string? publishedVersionTenantId = null,
+        Elsa.Activities.Design.Core.Models.ActivityContract? publicContract = null,
+        Elsa.Activities.Runtime.Core.Models.ActivityContract? rootRuntimeContract = null)
     {
         var now = new DateTimeOffset(2026, 10, 17, 9, 0, 0, TimeSpan.Zero);
         var clock = runtimeServices is null ? new FakeTimeProvider(now) : (FakeTimeProvider)runtimeServices.GetRequiredService<TimeProvider>();
         childTemplate ??= RequiredInputTemplate();
-        var rootTemplate = GraphTemplate(childTemplate);
+        var rootTemplate = GraphTemplate(childTemplate, rootRuntimeContract);
         var childPublication = Publication("child-definition", "child-version", "child-type", childTemplate);
         var childReference = new WorkflowExecutableSourceReference(
             "child-source-reference",
@@ -325,7 +327,7 @@ public sealed partial class ActivityDraftTestRunServiceTests
         var templates = wrapTemplates?.Invoke(innerTemplates) ?? innerTemplates;
         if (selectRootPorts is not null) (templates, sourceReferences) = selectRootPorts(templates, sourceReferences);
         await sourceReferences.SaveAsync(childReference);
-        var draftContract = new Elsa.Activities.Design.Core.Models.ActivityContract("1", [], [], []);
+        var draftContract = publicContract ?? new Elsa.Activities.Design.Core.Models.ActivityContract("1", [], [], []);
         var draft = new ActivityDefinitionDraft
         {
             Id = "draft-1",
@@ -345,7 +347,7 @@ public sealed partial class ActivityDraftTestRunServiceTests
         if (includePublishedVersion)
         {
             publishedVersion = Publication(definition.Id, "published-version-1", definition.ActivityTypeKey,
-                rootTemplate, "published-source-reference", publishedVersionTenantId);
+                rootTemplate, "published-source-reference", publishedVersionTenantId, draftContract);
             var publishedReference = new WorkflowExecutableSourceReference(
                 publishedVersion.SourceReferenceId,
                 rootTemplate.TemplateId,
@@ -445,7 +447,7 @@ public sealed partial class ActivityDraftTestRunServiceTests
         return Template("child-template", "child-template-hash", root);
     }
 
-    private static ExecutableActivityTemplate GraphTemplate(ExecutableActivityTemplate childTemplate)
+    private static ExecutableActivityTemplate GraphTemplate(ExecutableActivityTemplate childTemplate, Elsa.Activities.Runtime.Core.Models.ActivityContract? rootContract = null)
     {
         var graphRoot = new ExecutableNode(
             "graph-root",
@@ -455,7 +457,7 @@ public sealed partial class ActivityDraftTestRunServiceTests
             WellKnownRuntimeActivityConsumers.GraphActivity,
             Json("{\"entryOccurrenceId\":\"child-occurrence\"}"),
             new Dictionary<string, RuntimeInputBinding>(),
-            new Dictionary<string, string>());
+            new Dictionary<string, string>(), activityContract: rootContract);
         return Template(
             "root-template",
             "root-template-hash",
@@ -493,14 +495,15 @@ public sealed partial class ActivityDraftTestRunServiceTests
         string activityTypeKey,
         ExecutableActivityTemplate template,
         string sourceReferenceId = "child-source-reference",
-        string? tenantId = null) => new()
+        string? tenantId = null,
+        Elsa.Activities.Design.Core.Models.ActivityContract? contract = null) => new()
     {
         DefinitionId = definitionId,
         TenantId = tenantId,
         DefinitionVersionId = versionId,
         Version = "1",
         ActivityTypeKey = activityTypeKey,
-        Contract = new Elsa.Activities.Design.Core.Models.ActivityContract("1", [], [], []),
+        Contract = contract ?? new Elsa.Activities.Design.Core.Models.ActivityContract("1", [], [], []),
         Provider = new("test.provider", "1", Json("{}")),
         TemplateId = template.TemplateId,
         TemplateHash = template.TemplateHash,

@@ -109,7 +109,7 @@ public sealed partial class WorkflowExecutableCompilerTests
                 "Greeting",
                 null,
                 IsNullable: true,
-                IsRequired: true,
+                IsRequired: false,
                 DefaultValue: JsonSerializer.SerializeToElement("hello"),
                 DefaultSyntax: "Literal")]
         };
@@ -121,7 +121,7 @@ public sealed partial class WorkflowExecutableCompilerTests
 
         var input = Assert.Single(executable.InputContract!.Inputs);
         Assert.True(input.IsNullable);
-        Assert.True(input.IsRequired);
+        Assert.False(input.IsRequired);
         Assert.Equal("hello", input.DefaultValue!.Value.GetString());
     }
 
@@ -129,12 +129,12 @@ public sealed partial class WorkflowExecutableCompilerTests
     [InlineData("Int32", "10", "0", false)]
     [InlineData("Boolean", "true", "false", false)]
     [InlineData("String", "\"hello\"", "\"\"", false)]
-    [InlineData("Int32", "null", "0", true)]
+    [InlineData("String", "null", "\"override\"", true)]
     public async Task Persisted_literal_defaults_survive_compilation_reload_and_runtime_resolution(string alias, string defaultJson, string overrideJson, bool isNullable)
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var declaration = new InputDefinition("input-1", "value", new TypeReference(alias), null, "Value", null,
-            IsNullable: isNullable, IsRequired: !isNullable,
+            IsNullable: isNullable, IsRequired: false,
             DefaultValue: JsonSerializer.Deserialize<JsonElement>(defaultJson), DefaultSyntax: "Literal");
         var savedDeclaration = JsonSerializer.Deserialize<InputDefinition>(JsonSerializer.Serialize(declaration, options), options)!;
         var version = WorkflowVersion(Node("consumer", Text("first")));
@@ -766,7 +766,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     public async Task Resolves_exact_reusable_version_places_template_and_compiles_expression_default()
     {
         var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
-            "value", "Value", new TypeReference("Int32"), true,
+            "value", "Value", new TypeReference("Int32"), false,
             false, new("JavaScript", JsonSerializer.SerializeToElement("40 + 2")), "elsa.json")], [new ActivityOutputContract(
             "result", "Result", new TypeReference("Int32"), true, false, "elsa.json")], []);
         var root = new ExecutableNode(
@@ -864,20 +864,11 @@ public sealed partial class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task Placed_reusable_activity_rejects_an_omitted_optional_nonnullable_reference_input_during_compile()
+    public async Task Placed_reusable_activity_accepts_an_omitted_optional_String_input_by_its_type()
     {
-        var compiler = PlacedReusableCompiler(
-            authoredInput: null,
-            valueTypeAlias: "String",
-            primaryInputIsRequired: false);
-
-        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
-            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
-
-        Assert.Contains(
-            "VF-ACT-003: Optional input 'value' with non-nullable type alias 'String' requires an authored binding or pinned default.",
-            exception.Message,
-            StringComparison.Ordinal);
+        var executable = await PlacedReusableCompiler(authoredInput: null, valueTypeAlias: "String", primaryInputIsRequired: false)
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        Assert.Equal(ValuePresence.Absent, executable.RootActivity.InputBindings["value"].Literal!.Presence);
     }
 
     [Fact]
@@ -1967,7 +1958,7 @@ public sealed partial class WorkflowExecutableCompilerTests
                 WorkflowInput(
                     "alpha",
                     new TypeReference("Object"),
-                    isRequired: true,
+                    isRequired: false,
                     JsonSerializer.SerializeToElement(new { b = 2, a = 1 }),
                     "Literal")
             ]);
@@ -1977,7 +1968,7 @@ public sealed partial class WorkflowExecutableCompilerTests
                 WorkflowInput(
                     "alpha",
                     new TypeReference("Object"),
-                    isRequired: true,
+                    isRequired: false,
                     JsonSerializer.SerializeToElement(new { a = 1, b = 2 }),
                     "Literal"),
                 WorkflowInput("zeta", new TypeReference("String"), isRequired: false)
@@ -2984,14 +2975,13 @@ public sealed partial class WorkflowExecutableCompilerTests
         var analysis = await authority.AnalyzeAsync(new("WorkflowDefinition", "draft", "revision", set, [], [variable], []), new("set", "value"));
         Assert.NotNull(analysis.Target);
         Assert.True(analysis.Target.IsRequired);
-        Assert.False(analysis.Target.IsNullable);
+        Assert.True(analysis.Target.IsNullable);
         Assert.Equal("String", analysis.Target.Type.Alias);
         Assert.Equal(WorkflowIntrinsicKind.Set, (await Compiler(version).CompileAsync(NewRequest(DateTimeOffset.UtcNow))).RootActivity.IntrinsicKind);
 
         var nullValue = set with { Inputs = [new WorkflowArgumentState("value", ArgumentValue.FromClr(null, "Literal"), null, null, null, null)] };
-        var nullFailure = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
-            Compiler(WorkflowVersion(nullValue, variables: [variable])).CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
-        Assert.Contains("does not accept null", nullFailure.Message, StringComparison.Ordinal);
+        var nullExecutable = await Compiler(WorkflowVersion(nullValue, variables: [variable])).CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        Assert.Equal(ValuePresence.ExplicitNull, nullExecutable.RootActivity.InputBindings["value"].Literal!.Presence);
         var missingFailure = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
             Compiler(WorkflowVersion(set with { Inputs = [] }, variables: [variable])).CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
         Assert.Contains("requires exactly these inputs", missingFailure.Message, StringComparison.Ordinal);
@@ -3205,7 +3195,9 @@ public sealed partial class WorkflowExecutableCompilerTests
     [InlineData("TimeSpan")]
     public async Task Set_preserves_matching_request_contracts_for_registered_non_numeric_types(string alias)
     {
-        var target = new Elsa.Expressions.Core.Models.VariableDefinition("target", "Target", new TypeReference(alias), null, null);
+        var initialJson = alias switch { "Guid" => "\"cb9ac5e1-dff7-4cdd-9ba7-bbe07fa64aa1\"", "DateTime" => "\"2026-11-23T00:00:00Z\"", _ => "\"00:00:01\"" };
+        var target = new Elsa.Expressions.Core.Models.VariableDefinition("target", "Target", new TypeReference(alias), null,
+            new ArgumentValue(JsonSerializer.Deserialize<JsonElement>(initialJson), "Literal"));
         var set = DynamicSetIntrinsicNode("set-target", "target", new { memberKey = "source" }, "WorkflowRequest");
         var executable = await Compiler(WorkflowVersion(SequenceNode("root", [set]),
             inputs: [WorkflowInput("source", new TypeReference(alias), true)], variables: [target]))

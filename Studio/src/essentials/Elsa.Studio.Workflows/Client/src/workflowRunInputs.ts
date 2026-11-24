@@ -1,8 +1,9 @@
 import { localDateTimeToIso } from "@elsa-workflows/studio-sdk";
+import { typeAllowsNull } from "./typeNullability";
 import type { StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowExecutionInputs, WorkflowInput } from "./workflowTypes";
 
-export type WorkflowRunInputDrafts = Record<string, string>;
+export type WorkflowRunInputDrafts = Record<string, string | null>;
 export type WorkflowRunInputValues = WorkflowExecutionInputs;
 
 export interface WorkflowRunInputParseResult {
@@ -61,15 +62,21 @@ export function parseWorkflowRunInputs(
       ? drafts[input.referenceKey]
       : "";
     if (!hasDraft) {
-      if (input.isRequired && !hasUsableWorkflowInputDefault(input)) {
+      if (input.isRequired) {
         errorEntries.push([input.referenceKey, `${input.displayName || input.name} is required.`]);
       }
       continue;
     }
 
+    if (draft === null) {
+      if (typeAllowsNull(input.type)) valueEntries.push([input.name, null]);
+      else errorEntries.push([input.referenceKey, `${input.displayName || input.name} cannot be null.`]);
+      continue;
+    }
+
     const editor = fallbackInputKeys.has(input.referenceKey) ? undefined : resolveWorkflowRunInputEditor(editors, input);
     if (draft === "" && !editor && !isEmptyStringInput(input)) {
-      if (input.isRequired && !hasUsableWorkflowInputDefault(input)) {
+      if (input.isRequired) {
         errorEntries.push([input.referenceKey, `${input.displayName || input.name} is required.`]);
       }
       continue;
@@ -85,7 +92,7 @@ export function parseWorkflowRunInputs(
       if (parsed.contributionFailure) contributionFailureEntries.push([input.referenceKey, parsed.contributionFailure]);
       continue;
     }
-    if (parsed.value === null && (input.isRequired || !input.isNullable)) {
+    if (parsed.value === null && !typeAllowsNull(input.type)) {
       errorEntries.push([input.referenceKey, input.isRequired
         ? `${input.displayName || input.name} is required.`
         : `${input.displayName || input.name} cannot be null.`]);
@@ -115,7 +122,7 @@ export function parseWorkflowRunInputs(
 function hasUsableWorkflowInputDefault(input: WorkflowInput): boolean {
   if (!Object.prototype.hasOwnProperty.call(input, "defaultValue") || input.defaultValue === undefined) return false;
   if (input.defaultSyntax && input.defaultSyntax !== "Literal") return false;
-  return input.defaultValue !== null || (!input.isRequired && input.isNullable);
+  return input.defaultValue !== null || typeAllowsNull(input.type);
 }
 
 function isEmptyStringInput(input: WorkflowInput): boolean {

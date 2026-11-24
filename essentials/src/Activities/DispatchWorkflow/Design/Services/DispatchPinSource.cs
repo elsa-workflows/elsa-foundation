@@ -94,8 +94,8 @@ public sealed class DispatchPinSource(
 
             var (literalInputs, isComplete) = ReadInputs(node);
             var validation = isComplete
-                ? inputValidator.Validate(executable.InputContract, literalInputs)
-                : inputValidator.ValidateKnownInputs(executable.InputContract, literalInputs);
+                ? inputValidator.Validate(executable.InputContract, literalInputs, executable.ValuePolicies)
+                : inputValidator.ValidateKnownInputs(executable.InputContract, literalInputs, executable.ValuePolicies);
             if (!validation.IsValid)
             {
                 throw new ArgumentException(

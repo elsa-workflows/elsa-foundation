@@ -268,6 +268,18 @@
           "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
         }
       },
+      "elsa.activities.design.reconciliation.clr": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
+          "System.Reflection.MetadataLoadContext": "[10.0.8, )"
+        }
+      },
       "elsa.activities.graph.design": {
         "type": "Project",
         "dependencies": {
@@ -920,6 +932,12 @@
           "SQLitePCLRaw.config.e_sqlite3": "3.0.3",
           "SourceGear.sqlite3": "3.50.4.5"
         }
+      },
+      "System.Reflection.MetadataLoadContext": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.8, )",
+        "resolved": "10.0.8",
+        "contentHash": "w9sjhVDe4AKkyswUctVK3oCmZHaA7g+ZUG/xDmzgbsOGxmeRQA6lCQeAh6r75K0lcsLlfBzZXmsNblndyNJhxw=="
       },
       "ValenceWorks.MinimalEndpoints": {
         "type": "CentralTransitive",

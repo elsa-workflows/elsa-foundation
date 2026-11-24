@@ -93,7 +93,7 @@ export function contractMemberFacts(member: ActivityContractMember | null) {
   const facts = [`Name: ${member.name}`, `Reference key: ${member.referenceKey}`];
   if (isTypedMember(member)) {
     facts.push(`Type: ${member.type.alias} · ${member.type.collectionKind}`);
-    facts.push(`${member.isRequired ? "Required" : "Optional"} · ${member.isNullable ? "Allows null" : "Non-null"}`);
+    facts.push(`${member.isRequired ? "Required" : "Optional"}`);
     facts.push(`Durability: ${member.durability} · ${member.storageDriverKey}`);
     if (isInputMember(member)) facts.push(member.default === null ? "No configured default" : `Configured ${member.default.syntax} default`);
   } else {

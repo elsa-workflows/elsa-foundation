@@ -66,7 +66,7 @@ public sealed class ActivitySideEffectProfileReaderTests
         var services = new ServiceCollection();
         new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver));
-        Assert.Contains(typeof(ExecutableNodeCompiler).GetConstructors().Single().GetParameters(),
+        Assert.Contains(typeof(ExecutableNodeCompiler).GetConstructors().SelectMany(constructor => constructor.GetParameters()),
             parameter => parameter.ParameterType == typeof(Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver));
     }
 

@@ -17,6 +17,18 @@ namespace Elsa3.Mapping.Tests;
 /// </summary>
 public sealed class Elsa3MappingFeatureRegistrationTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void The_converter_feature_binds_its_engineer_null_policy_option(bool apply)
+    {
+        var services = new ServiceCollection();
+        new Elsa3MappingFeature { ApplyElsa3NullPolicies = apply }.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(apply, provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Elsa3MappingOptions>>().Value.ApplyElsa3NullPolicies);
+        Assert.True(new Elsa3MappingOptions().ApplyElsa3NullPolicies);
+    }
+
     // Spec 1223 FR-034: a date interpretation the converter cannot apply fails composition, naming the fix.
     [Theory]
     [InlineData(Elsa3DateInterpretation.SourceTimeZone, null, "no source time zone")]

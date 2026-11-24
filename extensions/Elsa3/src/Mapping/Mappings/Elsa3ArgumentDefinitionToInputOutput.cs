@@ -20,6 +20,7 @@ public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry 
             $"{input.DisplayName}",
             input.Category,
             IsNullable: SupportsNull(type),
+            IsRequired: false,
             Description: input.Description,
             UiHint: input.UiHint);
     }

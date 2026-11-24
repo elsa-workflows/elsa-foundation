@@ -255,6 +255,7 @@ export interface ActivityTypeReference {
   alias: string;
   collectionKind: string;
   [key: string]: unknown;
+  supportsNull?: boolean;
 }
 
 export interface ActivityInputDefault {
@@ -278,7 +279,6 @@ interface ActivityContractMemberPresentation {
 export interface ActivityInputContract extends ActivityContractMemberPresentation {
   type: ActivityTypeReference;
   isRequired: boolean;
-  isNullable: boolean;
   default: ActivityInputDefault | null;
   storageDriverKey: string;
   durability: string;
@@ -287,7 +287,6 @@ export interface ActivityInputContract extends ActivityContractMemberPresentatio
 export interface ActivityOutputContract extends ActivityContractMemberPresentation {
   type: ActivityTypeReference;
   isRequired: boolean;
-  isNullable: boolean;
   storageDriverKey: string;
   durability: string;
 }

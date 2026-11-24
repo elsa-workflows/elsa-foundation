@@ -125,6 +125,8 @@ internal static class WorkflowsDesignJsonOptions
 [JsonSerializable(typeof(SubmittedWorkflowDefinitionView))]
 [JsonSerializable(typeof(WorkflowDefinitionSubmitSchemaView))]
 [JsonSerializable(typeof(WorkflowDraftView))]
+[JsonSerializable(typeof(List<Elsa.Activities.Design.Core.Models.InputDefinition>))]
+[JsonSerializable(typeof(List<Elsa.Activities.Design.Core.Models.OutputDefinition>))]
 [JsonSerializable(typeof(WorkflowDefinitionStateView))]
 [JsonSerializable(typeof(ExpressionDefinition))]
 [JsonSerializable(typeof(VariableReference))]

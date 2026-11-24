@@ -47,7 +47,7 @@ internal sealed class PrimitiveReleaseOccurrenceInspector(IReleaseRuntimeSiteRea
                 contract.Result.Type != new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(ActivityUnit))) ||
                 !contract.Result.IsRequired || contract.Result.Projections.Count != 0 || !contract.Outcomes.ToHashSet(StringComparer.Ordinal).SetEquals(["Done"]) ||
                 contract.Inputs.Count != 1 || !contract.Inputs.TryGetValue(inputKey, out var input) ||
-                input.Name != nameof(WriteLine.Text) || !input.IsRequired || input.IsNullable ||
+                input.Name != nameof(WriteLine.Text) || !input.IsRequired ||
                 input.Type != new ValueTypeDescriptor("String", CollectionKind.Single) || input.IsCredential || input.ConnectionType is not null || input.IsStructureInput ||
                 node.InputBindings.Keys.Any(key => key != inputKey))
                 return ValueTask.FromResult(Failed("primitive_contract_mismatch"));

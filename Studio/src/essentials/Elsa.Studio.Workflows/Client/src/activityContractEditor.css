@@ -610,3 +610,45 @@
   .ad-output-primary.has-value-editor { grid-template-columns: minmax(0, 1fr); }
   .ad-output-value-source { border-left: 0; border-top: 1px solid var(--studio-border); padding-left: 0; padding-top: 16px; }
 }
+
+
+.ad-contract-default-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: normal;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.ad-contract-editor.is-input .wf-properties-table:has(.ad-contract-default-hint) :is(th, td):nth-child(1) { width: 20%; }
+.ad-contract-editor.is-input .wf-properties-table:has(.ad-contract-default-hint) :is(th, td):nth-child(2) { width: 15%; }
+.ad-contract-editor.is-input .wf-properties-table:has(.ad-contract-default-hint) :is(th, td):nth-child(3) { width: 14%; }
+.ad-contract-editor.is-input .wf-properties-table:has(.ad-contract-default-hint) :is(th, td):nth-child(4) { width: 15%; }
+.ad-contract-editor.is-input .wf-properties-table:has(.ad-contract-default-hint) :is(th, td):nth-child(5) { width: 14%; }
+.ad-contract-editor.is-input .wf-properties-table:has(.ad-contract-default-hint) :is(th, td):nth-child(6) { width: 17%; }
+.ad-contract-editor.is-input .wf-properties-table:has(.ad-contract-default-hint) :is(th, td):nth-child(7) { width: 5%; }
+
+@container (max-width: 640px) {
+  .ad-contract-editor > .wf-properties-section .wf-properties-table tbody > tr[data-contract-row-kind] > td.ad-contract-required {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .ad-contract-required > :is(.ad-contract-default-hint, button) {
+    flex: 0 0 100%;
+    margin-top: 0;
+  }
+}
+
+@container (max-width: 480px) {
+  .ad-contract-editor > .wf-properties-section .wf-properties-table tbody > tr[data-contract-row-kind] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ad-contract-editor > .wf-properties-section .wf-properties-table tbody > tr[data-contract-row-kind] > td:has(.wf-properties-remove) {
+    grid-column: 1;
+  }
+}

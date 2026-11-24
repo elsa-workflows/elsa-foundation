@@ -374,10 +374,10 @@ public sealed partial class StandaloneTriggerManagementTests
         internal Fixture(ITriggerManagementCommitter? runtime = null, IRecurringTriggerScheduleStore? schedules = null,
             IRuntimeIngressReservationReader? reservations = null, IEnumerable<ITriggerReservationPlanner>? planners = null,
             IEnumerable<IPortableExpressionHandler>? expressionHandlers = null, IPortableExpressionEvaluator? expressionEvaluator = null, IEnumerable<IIngressReservationPolicy>? policies = null,
-            IWorkflowTriggerBindingStore? bindings = null)
+            IWorkflowTriggerBindingStore? bindings = null, ITriggerInputMapper? mapper = null)
         {
             Committer = new(Store);
-            Management = new(Store, runtime ?? Committer, Access, new Catalog(), Discovery, new Mapper(), Events, new EphemeralDataProtectionProvider(), Clock,
+            Management = new(Store, runtime ?? Committer, Access, new Catalog(), Discovery, mapper ?? new Mapper(), Events, new EphemeralDataProtectionProvider(), Clock,
                 schedules: schedules, reservations: reservations, reservationPlanners: planners,
                 expressionHandlers: expressionHandlers, expressionEvaluator: expressionEvaluator, reservationPolicies: policies, triggerBindings: bindings);
         }
@@ -403,6 +403,12 @@ public sealed partial class StandaloneTriggerManagementTests
     }
     private sealed class Mapper : ITriggerInputMapper
     {
+        WorkflowExecutableInputValidation ITriggerInputMapper.ValidateMappings(WorkflowExecutableInputContract contract,
+            IReadOnlyList<TriggerInputMapping> mappings, WorkflowValuePolicies policies, TriggerInputSemantics semantics) => ValidateMappings(contract, mappings);
+        ValueTask<WorkflowExecutableInputValidation> ITriggerInputMapper.MapAsync(WorkflowExecutableInputContract contract,
+            IReadOnlyList<TriggerInputMapping> mappings, JsonElement source, WorkflowValuePolicies policies,
+            CancellationToken cancellationToken, TriggerInputSemantics semantics) => MapAsync(contract, mappings, source, cancellationToken);
+
         public ValueTask<WorkflowExecutableInputValidation> MapAsync(WorkflowExecutableInputContract contract, IReadOnlyList<TriggerInputMapping> mappings, JsonElement source, CancellationToken cancellationToken = default) => ValueTask.FromResult(WorkflowExecutableInputValidation.Success([]));
         public WorkflowExecutableInputValidation ValidateMappings(WorkflowExecutableInputContract contract, IReadOnlyList<TriggerInputMapping> mappings) => WorkflowExecutableInputValidation.Success([]);
     }
@@ -423,12 +429,17 @@ public sealed partial class StandaloneTriggerManagementTests
     private sealed class FakeDiscovery : IStandaloneTriggerTargetDiscovery
     {
         internal string ContractRevision = "contract-v1";
+        internal WorkflowExecutableInputContract InputContract = new(1, []);
+        internal string ModelKey = "native";
+        internal WorkflowValuePolicies ValuePolicies = WorkflowValuePolicies.Off;
+        internal TriggerInputSemantics InputSemantics = TriggerInputSemantics.Native;
         internal Action? BeforeDescribe;
         public ValueTask<TriggerTargetDescription?> DescribeAsync(TriggerScope scope, string definitionId, string slotName, CancellationToken cancellationToken = default)
         {
             BeforeDescribe?.Invoke();
-            return ValueTask.FromResult<TriggerTargetDescription?>(new(definitionId, slotName, "Target", "native", TriggerTargetState.Available,
-                new(1, []), ContractRevision, "version-1", "1", "publication-1", 1, false, []));
+            return ValueTask.FromResult<TriggerTargetDescription?>(new(definitionId, slotName, "Target", ModelKey, TriggerTargetState.Available,
+                InputContract, ContractRevision, "version-1", "1", "publication-1", 1, false, [])
+                { ValuePolicies = ValuePolicies, InputSemantics = InputSemantics });
         }
         public async ValueTask<TriggerTargetPage> ListAsync(TriggerScope scope, TriggerTargetQuery query, CancellationToken cancellationToken = default) =>
             new([(await DescribeAsync(scope, "definition-a", "default", cancellationToken))!], null);
