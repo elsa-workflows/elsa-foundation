@@ -15153,12 +15153,12 @@
         {
           "type": "internal",
           "id": "Kernel.Native.Legacy",
-          "path": "prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj"
+          "path": "essentials/tests/Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj"
         },
         {
           "type": "internal",
-          "id": "Kernel.Statecharts.Native",
-          "path": "prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj"
+          "id": "Elsa.Workflows.Runtime.Statecharts.OrderFixture",
+          "path": "essentials/tests/Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj"
         },
         {
           "type": "internal",
@@ -15202,7 +15202,7 @@
         {
           "type": "internal",
           "id": "Kernel.Native.Legacy",
-          "path": "prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj"
+          "path": "essentials/tests/Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj"
         },
         {
           "type": "internal",
@@ -15213,40 +15213,6 @@
           "type": "internal",
           "id": "Kernel.WorkflowActor",
           "path": "prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj"
-        }
-      ]
-    },
-    {
-      "path": "essentials/tests/ActorFoundation/Statecharts/Run/Elsa.ActorFoundation.Statecharts.Run.csproj",
-      "name": "Elsa.ActorFoundation.Statecharts.Run",
-      "kind": "test",
-      "domain": "Elsa.ActorFoundation",
-      "sub_domain": "Statecharts.Run",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
-          "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.ActorFoundation.Hosting",
-          "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Kernel.Sim",
-          "path": "essentials/tests/ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Kernel.Statecharts.Native",
-          "path": "prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj"
         }
       ]
     },
@@ -25004,6 +24970,68 @@
       ]
     },
     {
+      "path": "essentials/tests/Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj",
+      "name": "Elsa.Workflows.Runtime.Native.Legacy",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Native.Legacy",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Kernel.Workflows",
+          "path": "essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Native",
+          "path": "prototypes/kernel-model/models/Native/Kernel.Native.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/Workflows/Runtime/Native/Recovery/Run/Elsa.Workflows.Runtime.Native.Recovery.Run.csproj",
+      "name": "Elsa.Workflows.Runtime.Native.Recovery.Run",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Native.Recovery.Run",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Kernel.Sim",
+          "path": "essentials/tests/ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/Workflows/Runtime/Native/Scopes/Run/Elsa.Workflows.Runtime.Native.Scopes.Run.csproj",
+      "name": "Elsa.Workflows.Runtime.Native.Scopes.Run",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Native.Scopes.Run",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Kernel.Sim",
+          "path": "essentials/tests/ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj"
+        }
+      ]
+    },
+    {
       "path": "essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/RuntimeHistoryRestartHost/RuntimeHistoryRestartHost.csproj",
       "name": "RuntimeHistoryRestartHost",
       "kind": "test",
@@ -25841,6 +25869,69 @@
           "type": "external",
           "id": "xunit.runner.visualstudio",
           "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj",
+      "name": "Elsa.Workflows.Runtime.Statecharts.OrderFixture",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Statecharts.OrderFixture",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Kernel.Statecharts.Native",
+          "path": "prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/Workflows/Runtime/Statecharts/Run/Elsa.Workflows.Runtime.Statecharts.Run.csproj",
+      "name": "Elsa.Workflows.Runtime.Statecharts.Run",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Statecharts.Run",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.BuiltIn.Hosting",
+          "path": "essentials/src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Hosting",
+          "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Sim",
+          "path": "essentials/tests/ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Foundation.InMemory",
+          "path": "essentials/tests/ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Statecharts.OrderFixture",
+          "path": "essentials/tests/Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Kernel.Statecharts.Native",
+          "path": "prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj"
         }
       ]
     },
