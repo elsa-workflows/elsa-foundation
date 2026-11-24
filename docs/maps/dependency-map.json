@@ -15249,6 +15249,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.ActorFoundation.TestSupport",
+          "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Kernel.Native.Legacy",
           "path": "essentials/tests/Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj"
         },
@@ -15256,6 +15261,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Native.Migration.SqliteFixture",
           "path": "essentials/tests/Workflows/Runtime/Native/Migration/SqliteFixture/Elsa.Workflows.Runtime.Native.Migration.SqliteFixture.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Native.RetentionFixture",
+          "path": "essentials/tests/Workflows/Runtime/Native/RetentionFixture/Elsa.Workflows.Runtime.Native.RetentionFixture.csproj"
         },
         {
           "type": "internal",
@@ -25204,6 +25214,25 @@
           "type": "internal",
           "id": "Kernel.Sim",
           "path": "essentials/tests/ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/tests/Workflows/Runtime/Native/RetentionFixture/Elsa.Workflows.Runtime.Native.RetentionFixture.csproj",
+      "name": "Elsa.Workflows.Runtime.Native.RetentionFixture",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Runtime.Native.RetentionFixture",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.WorkflowActor",
+          "path": "essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj"
         }
       ]
     },
