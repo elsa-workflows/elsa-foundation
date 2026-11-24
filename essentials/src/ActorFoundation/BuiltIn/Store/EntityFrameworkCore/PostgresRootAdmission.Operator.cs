@@ -284,7 +284,35 @@ internal sealed partial class PostgresRootAdmission
         if (held != (row.ReplyTo is not null) || held && (!operatorReplies || !ValidOperatorReply(row.ReplyTo!) ||
             row.Kind is not (Kinds.Terminate or Kinds.Delete)))
             throw new StoreException(Failure.Definite, "Unexpected stored operator reply route.");
-        var wire = held ? row.Start[HeldOperatorPrefix.Length..] : row.Start;
+        var (header, thenDelete, retentionDelete) = ReadOperatorHeader(row.Start!, reference, row.Id, row.Kind, row.Due,
+            held, terminateThenDelete, retentionDeletes);
+        var suffix = row.Id.LastIndexOf('/');
+        return FoundationIngressAddress.Occurrence(header.Operation, row.Id[..suffix], row.Id[(suffix + 1)..],
+            new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, row.ReplyTo, new(null)
+            {
+                QualifiedTerminal = header.Terminal, DeleteTarget = thenDelete ? reference : null,
+                RootThenDelete = thenDelete, RetentionDelete = retentionDelete, RootHeldReply = held
+            });
+    }
+
+    internal static (string Id, string Kind, long? Due) InspectOperatorHeader(KernelDb db, string? wire, string reference,
+        string occurrence, string kind, long due, bool hasReply)
+    {
+        if (!db.UsesRootOperatorProtocol || !IsStoredOperator(wire) || kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete) ||
+            kind == Kinds.Terminate && !db.UsesRootTermination || kind == Kinds.Delete && !db.UsesRootRetirement)
+            throw new StoreException(Failure.Definite, "Unexpected stored PostgreSQL operator envelope.");
+        var held = wire!.StartsWith(HeldOperatorPrefix, StringComparison.Ordinal);
+        if (held != hasReply || held && (!db.UsesRootOperatorReplies || kind is not (Kinds.Terminate or Kinds.Delete)))
+            throw new StoreException(Failure.Definite, "Unexpected stored operator reply route.");
+        var (header, _, _) = ReadOperatorHeader(wire, reference, occurrence, kind, due, held,
+            db.UsesRootTerminateThenDelete, db.UsesRootRetention);
+        return (header.Operation, kind, due != 0 || header.ExplicitZeroDue ? due : null);
+    }
+
+    private static (StoredOperator Header, bool ThenDelete, bool RetentionDelete) ReadOperatorHeader(string framing,
+        string reference, string occurrence, string kind, long due, bool held, bool terminateThenDelete, bool retentionDeletes)
+    {
+        var wire = held ? framing[HeldOperatorPrefix.Length..] : framing;
         var thenDelete = wire.StartsWith(TerminateThenDeletePrefix, StringComparison.Ordinal);
         var retentionDelete = wire.StartsWith(RetentionDeletePrefix, StringComparison.Ordinal);
         var prefix = retentionDelete ? RetentionDeletePrefix : thenDelete ? TerminateThenDeletePrefix : OperatorPrefix;
@@ -294,19 +322,13 @@ internal sealed partial class PostgresRootAdmission
         try { header = DurableKeyJson.Read<StoredOperator>(wire[prefix.Length..]); }
         catch (JsonException error) { throw new StoreException(Failure.Definite, "Invalid stored operator framing.", error); }
         if (header is null) throw new StoreException(Failure.Definite, "Invalid stored operator framing.");
-        if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != row.Kind ||
-            (row.Kind == Kinds.Delete ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
-            thenDelete && (!terminateThenDelete || row.Kind != Kinds.Terminate) ||
-            retentionDelete && (!retentionDeletes || row.Kind != Kinds.Delete || held) ||
-            header.ExplicitZeroDue && row.Due != 0 || !MatchesDirectOccurrence(reference, header.Operation, row.Id[OperatorOccurrencePrefix.Length..], retentionDelete))
+        if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != kind ||
+            (kind == Kinds.Delete ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
+            thenDelete && (!terminateThenDelete || kind != Kinds.Terminate) ||
+            retentionDelete && (!retentionDeletes || kind != Kinds.Delete || held) ||
+            header.ExplicitZeroDue && due != 0 || !MatchesDirectOccurrence(reference, header.Operation, occurrence[OperatorOccurrencePrefix.Length..], retentionDelete))
             throw new StoreException(Failure.Definite, "The operator occurrence differs from its bound reference and operation.");
-        var suffix = row.Id.LastIndexOf('/');
-        return FoundationIngressAddress.Occurrence(header.Operation, row.Id[..suffix], row.Id[(suffix + 1)..],
-            new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, row.ReplyTo, new(null)
-            {
-                QualifiedTerminal = header.Terminal, DeleteTarget = thenDelete ? reference : null,
-                RootThenDelete = thenDelete, RetentionDelete = retentionDelete, RootHeldReply = held
-            });
+        return (header, thenDelete, retentionDelete);
     }
 
     private static bool ValidOperatorReply(string address, long? expectedDeadline = null) =>

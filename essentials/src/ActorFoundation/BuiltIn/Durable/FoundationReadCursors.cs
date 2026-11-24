@@ -51,6 +51,9 @@ internal sealed class FoundationReadCursor(byte[]? key = null)
     internal const int Overhead = NonceBytes + TagBytes;
     private readonly Lazy<byte[]> _key = new(() => key ?? RandomNumberGenerator.GetBytes(32));
 
+    internal string InboxHandle(string identity) =>
+        FoundationSelfSend.Handle(HMACSHA256.HashData(_key.Value, "elsa/inbox-handle/1"u8), identity);
+
     internal string Seal(ReadOnlySpan<byte> context, ReadOnlySpan<byte> plain)
     {
         var bytesCount = plain.Length + Overhead;

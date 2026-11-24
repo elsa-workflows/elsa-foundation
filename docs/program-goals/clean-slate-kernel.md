@@ -612,6 +612,14 @@ ones on developers' machines. So there are no live runs to carry over, no data m
 - **Rollback** is a revert of the switch PR, followed by the same database reset. There is no data rollback, because
   no user data exists.
 
+### K9 PostgreSQL pending inbox
+
+The [pending-inbox fixture](../../prototypes/kernel-model/NATIVE.md#postgresql-pending-inbox-inspection)
+reads generated direct-input roots through `IActorReads.InboxAsync`, including selected operator commands.
+It pages without loading actor state or sending message bodies to the read client. It qualifies the live
+metadata slice. Parked work, recoverable handles, the plan-outcome projection, shipped runtime routing and
+FC-C4 retain their separate acceptance cases.
+
 ## Owner answers of 17 November
 
 - **Rebalance strategy** ([PARTITIONS.md](../../prototypes/kernel-model/PARTITIONS.md#the-owners-decisions-sipke-16-november-2026), decision 4): fewest

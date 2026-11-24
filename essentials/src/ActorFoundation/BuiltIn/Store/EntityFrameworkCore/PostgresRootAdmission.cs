@@ -49,26 +49,23 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         {
             return await ReadJournalCursorAsync(db, cancellationToken);
         }
-        catch (PostgresException error) when (db.UsesRootTerminalSelection && IsUnavailableSelectedSchema(error))
+        catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
         {
-            throw new StoreFormatException("The selection issuer schema is unreadable.", error);
+            throw new StoreFormatException("The root read issuer schema is unreadable.", error);
         }
     }
 
     private static async Task<FoundationReadCursor> ReadJournalCursorAsync(KernelDb db, CancellationToken cancellationToken)
     {
-        var issuerKey = db.UsesRootTerminalSelection
-            ? await db.Database.SqlQueryRaw<byte[]>("""
-                SELECT issuer."Key" AS "Value" FROM "FoundationRootIssuer" issuer
-                JOIN pg_catalog.pg_class i ON i.oid = issuer.tableoid
-                JOIN pg_catalog.pg_class source ON source.oid = pg_catalog.to_regclass('"Instances"')
-                    AND source.relnamespace = i.relnamespace
-                JOIN pg_catalog.pg_class marker ON marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
-                    AND marker.relnamespace = i.relnamespace
-                """).SingleOrDefaultAsync(cancellationToken)
-                ?? throw new StoreFormatException("The selection issuer is missing from the checkpoint's store schema.")
-            : await db.Database.SqlQueryRaw<byte[]>("""SELECT "Key" AS "Value" FROM "FoundationRootIssuer" """)
-                .SingleAsync(cancellationToken);
+        var issuerKey = await db.Database.SqlQueryRaw<byte[]>("""
+            SELECT issuer."Key" AS "Value" FROM "FoundationRootIssuer" issuer
+            JOIN pg_catalog.pg_class i ON i.oid = issuer.tableoid AND i.relkind = 'r'
+            JOIN pg_catalog.pg_class source ON source.oid = pg_catalog.to_regclass('"Instances"')
+                AND source.relnamespace = i.relnamespace AND source.relkind = 'r'
+            JOIN pg_catalog.pg_class marker ON marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
+                AND marker.relnamespace = i.relnamespace AND marker.relkind = 'r'
+            """).SingleOrDefaultAsync(cancellationToken)
+            ?? throw new StoreFormatException("The root read issuer is missing from the checkpoint's store schema.");
         return new(HMACSHA256.HashData(issuerKey, "elsa-preview/journal-cursor/1"u8));
     }
 
@@ -100,6 +97,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 "Reference" text COLLATE "C" NOT NULL REFERENCES "FoundationRootBirths" ("Reference") DEFERRABLE INITIALLY DEFERRED,
                 "Until" bigint NOT NULL, PRIMARY KEY ("Tenant", "Operation"));
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootReceipts_Until" ON "FoundationRootReceipts" ("Until");
+            CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Pending"
+                ON "Messages" ("Partition", "Target" COLLATE "C", "Seq", "Id" COLLATE "C")
+                WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND NOT "Done";
             """, cancellationToken);
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""

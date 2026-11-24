@@ -744,6 +744,26 @@ use the live fixture transport and can be lost on process death or an
 unknown commit outcome. Build Native.Run in Release with a locked restore
 and run `pg-held-operator owned checked` against an empty PostgreSQL database.
 
+### PostgreSQL pending inbox inspection
+
+`IActorReads.InboxAsync` returns pending direct inputs and admitted operator
+commands on direct-input root profiles. The page binds to the tenant and
+generated actor reference. The issuer and inbox sources must share the marker's
+schema. Each page reads its own committed metadata and database time together
+with that format marker. The index orders each root's occurrences by
+delivery sequence and physical occurrence. Continuations and handles are
+opaque. Handles remain stable across reader and owner changes.
+
+The page reports the original public id, kind, due time, attempts and the
+stored byte count of the identifier, kind, framing and payload. The message
+body and reply address stay in the database. Consumed deduplication rows and
+retired roots are absent. The fixture includes a future input, tied positions,
+cursor scope, a held operator and retirement. Run `pg-root-inbox owned checked ordinary`
+or `pg-root-inbox owned checked operators` from the locked Release build of
+Native.Run against an empty PostgreSQL database, and `pg-held-operator owned checked`
+for the held operator. Use another database for each writer and fence combination.
+Park, recovery handles, job inboxes and self-send inboxes retain their own cases.
+
 These profiles qualify generated roots with no attached work. Descendant and
 job cascades, parked work, retention scheduling and production reply transport
 have separate acceptance cases.
