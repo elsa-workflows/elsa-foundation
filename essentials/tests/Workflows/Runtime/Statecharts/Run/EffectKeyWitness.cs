@@ -36,7 +36,7 @@ internal static class EffectKeyWitness
             [new("root", NodeKind.Root, Initial: "A"), new("A", NodeKind.Atomic, "root"), new("B", NodeKind.Atomic, "root", Entry: "notify"), new("Done", NodeKind.Final, "root")],
             [new("go", 0, "A", "B", VisitMode.Reenter, "go"), new("back", 1, "B", "A", VisitMode.Reenter, "back"), new("finish", 2, "A", "Done", VisitMode.Reenter, "finish")]);
         var machine = Wf.Node<StateMachine>("machine", ("StructuralDefinition", Binding.Literal(definition)))
-            .With(Wf.Http("notify", "https://partner.example/entered", Binding.Literal("B")));
+            .With(TestWf.Post("notify", "https://partner.example/entered", Binding.Literal("B")));
         using var registration = Register(Wf.Workflow("machine-inbox", machine));
         h.Start(mode);
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
