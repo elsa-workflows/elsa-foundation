@@ -174,6 +174,31 @@ public sealed class JsonBaselineConstructionContextTests
     }
 
     [Fact]
+    public void A_resolved_generic_wrapper_cannot_hide_an_unresolved_production_construction_target()
+    {
+        using var fixture = new Sources("using System.Collections.Generic; public class C { public static List<LinkedType> Make() => new(); }",
+            "public class LinkedType {}");
+        var roots = fixture.Roots().Take(1).ToArray(); // The wrapper resolves; its actual argument declaration is missing.
+        var finding = Assert.Single(JsonBaselineSourceScan.Scan(roots[0], roots, fixture.Contexts(roots)));
+        Assert.Equal("construction-unresolved", finding.Setting);
+        var register = new[] { new JsonBaselineSourceScan.Registration("owner.cs", new HashSet<string> { JsonBaselineSourceScan.RegistrationKey(finding) }, "A wrapper cannot approve missing type facts.", "control") };
+        Assert.False(JsonBaselineSourceScan.IsAccounted("owner.cs", finding, new HashSet<string>(), register));
+    }
+
+    [Fact]
+    public void An_unresolved_nullable_production_receiver_is_nonwaivable_coverage_failure()
+    {
+        using var fixture = new Sources("using System.Text.Json; public class C { public static void M(JsonSerializerOptions? wire) { wire!.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase; } }",
+            "public class LinkedType {}");
+        var roots = fixture.Roots();
+        var contexts = fixture.Contexts(roots);
+        var changed = CSharpSyntaxTree.ParseText(File.ReadAllText(fixture.Source).Replace("using System.Text.Json;", "", StringComparison.Ordinal), path: fixture.Source).GetRoot();
+        var finding = Assert.Single(JsonBaselineSourceScan.Scan(changed, roots, contexts).Where(finding => finding.Setting == "construction-unresolved"));
+        var register = new[] { new JsonBaselineSourceScan.Registration("owner.cs", new HashSet<string> { JsonBaselineSourceScan.RegistrationKey(finding) }, "A nullable wrapper cannot approve missing receiver facts.", "control") };
+        Assert.False(JsonBaselineSourceScan.IsAccounted("owner.cs", finding, new HashSet<string>(), register));
+    }
+
+    [Fact]
     public void The_actual_built_framework_and_module_symbols_expose_conditional_options_constructions()
     {
         const string source = """

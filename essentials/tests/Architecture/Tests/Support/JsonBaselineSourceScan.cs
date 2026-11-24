@@ -90,7 +90,7 @@ internal static class JsonBaselineSourceScan
         bool? KnownOptionsType(ExpressionSyntax expression)
         {
             var type = Model().GetTypeInfo(expression).Type;
-            return type is null || type.TypeKind is TypeKind.Error or TypeKind.Dynamic ? null : IsFrameworkOptions(type);
+            return HasUnresolvedTypeFacts(type) || type!.TypeKind == TypeKind.Dynamic ? null : IsFrameworkOptions(type);
         }
         NullableFlowView? nullableFlow = null;
         bool NullProfile(ExpressionSyntax expression, SyntaxNode site)
@@ -137,7 +137,12 @@ internal static class JsonBaselineSourceScan
                 if (IsModifierCollection(collection) || index.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Modifiers" }) Add("modifier-mutation:replace", assignment);
             }
             var name = assignment.Left is MemberAccessExpressionSyntax member ? member.Name.Identifier.ValueText : assignment.Left.ToString();
-            if (IsDeviation(name, assignment.Right.ToString()) && IsOptionsAssignment(assignment, OptionsType, IsOptionsConstruction, KnownOptionsType)) Add(name, assignment);
+            if (IsDeviation(name, assignment.Right.ToString()))
+            {
+                if (constructionModel is not null && assignment.Left is MemberAccessExpressionSyntax receiver &&
+                    HasUnresolvedTypeFacts(Model().GetTypeInfo(receiver.Expression).Type)) Add("construction-unresolved", receiver.Expression);
+                if (IsOptionsAssignment(assignment, OptionsType, IsOptionsConstruction, KnownOptionsType)) Add(name, assignment);
+            }
         }
         foreach (var argument in root.DescendantNodes().OfType<AttributeArgumentSyntax>().Where(x => x.NameEquals is not null))
             if (AttributeTypeName(argument.Ancestors().OfType<AttributeSyntax>().First()).Contains("JsonSourceGenerationOptions", StringComparison.Ordinal))
@@ -275,9 +280,9 @@ internal static class JsonBaselineSourceScan
             var target = Model().GetTypeInfo(creation).ConvertedType;
             // A resolved business type is authoritative even when it happens to be named
             // JsonSerializerOptions. Only System.Text.Json owns the protected options type.
-            if (target is not null && target.TypeKind != TypeKind.Error)
+            if (!HasUnresolvedTypeFacts(target))
             {
-                return IsFrameworkOptions(target);
+                return IsFrameworkOptions(target!);
             }
             if (constructionModel is not null)
             {
@@ -506,6 +511,33 @@ internal static class JsonBaselineSourceScan
     private static bool IsFrameworkOptions(ITypeSymbol type) => type is INamedTypeSymbol { Name: "JsonSerializerOptions", Arity: 0 } &&
         type.ContainingNamespace.ToDisplayString() == "System.Text.Json" &&
         type.ContainingAssembly.Identity.Name == typeof(System.Text.Json.JsonSerializerOptions).Assembly.GetName().Name;
+
+    internal static bool HasUnresolvedTypeFacts(ITypeSymbol? type)
+    {
+        var pending = new Stack<ITypeSymbol>();
+        var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        if (type is null) return true;
+        pending.Push(type);
+        while (pending.TryPop(out var current))
+        {
+            if (!visited.Add(current)) continue;
+            if (current.TypeKind == TypeKind.Error) return true;
+            switch (current)
+            {
+                case INamedTypeSymbol named:
+                    if (named.ContainingType is { } owner) pending.Push(owner);
+                    foreach (var argument in named.TypeArguments) pending.Push(argument);
+                    break;
+                case IArrayTypeSymbol array: pending.Push(array.ElementType); break;
+                case IPointerTypeSymbol pointer: pending.Push(pointer.PointedAtType); break;
+                case IFunctionPointerTypeSymbol function:
+                    pending.Push(function.Signature.ReturnType);
+                    foreach (var parameter in function.Signature.Parameters) pending.Push(parameter.Type);
+                    break;
+            }
+        }
+        return false;
+    }
 
     private static bool IsBaselineExpression(ExpressionSyntax expression)
     {

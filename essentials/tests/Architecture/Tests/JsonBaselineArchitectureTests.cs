@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -329,6 +331,7 @@ public sealed class JsonBaselineArchitectureTests
     [InlineData("namespace Business { class JsonSerializerOptions { public int MaxDepth { get; set; } public bool PropertyNameCaseInsensitive { get; set; } } class C { object M() => new JsonSerializerOptions { MaxDepth = 128, PropertyNameCaseInsensitive = true }; } }")]
     [InlineData("namespace Business { class JsonSerializerOptions { public int MaxDepth { get; set; } } class C { void M() { var options = new Business.JsonSerializerOptions(); options.MaxDepth = 128; } } }")]
     [InlineData("namespace Business { class JsonSerializerOptions { public static JsonSerializerOptions Default => new JsonSerializerOptions(); public int MaxDepth { get; set; } } class C { void M(JsonSerializerOptions options) { options.MaxDepth = 128; var value = JsonSerializerOptions.Default; } } }")]
+    [InlineData("namespace Business { struct JsonSerializerOptions { public JsonNamingPolicy? DictionaryKeyPolicy { get; set; } public int MaxDepth { get; set; } } class C { JsonSerializerOptions? M() => new(); void Use(JsonSerializerOptions? wire) { var value = wire!.Value; value.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase; value.MaxDepth = 128; } } }")]
     public void Explicit_business_options_names_and_their_settings_are_not_framework_deviations(string body)
     {
         var source = TargetTypedSource(body);
@@ -342,6 +345,23 @@ public sealed class JsonBaselineArchitectureTests
         var source = TargetTypedSource("class C { object M() => new System.Text.Json.JsonSerializerOptions { MaxDepth = 128 }; }");
         _ = FixtureCompiler.Compile("ExplicitFrameworkOptionsControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
         Assert.Equal(new[] { "construction", "MaxDepth" }, JsonBaselineSourceScan.Scan(source).Select(finding => finding.Setting));
+    }
+
+    [Fact]
+    public void Incomplete_nullable_receiver_facts_do_not_borrow_the_resolved_wrapper_as_a_business_type()
+    {
+        const string source = "class C { void M(JsonSerializerOptions? wire) { wire!.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase; } }";
+        var tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(source);
+        var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create("IncompleteNullableReceiver", [tree],
+            [Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(typeof(object).Assembly.Location)],
+            new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary,
+                nullableContextOptions: Microsoft.CodeAnalysis.NullableContextOptions.Enable));
+        var receiver = tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MemberAccessExpressionSyntax>()
+            .Single(member => member.Name.Identifier.ValueText == "DictionaryKeyPolicy").Expression;
+        var type = compilation.GetSemanticModel(tree).GetTypeInfo(receiver).Type;
+        Assert.NotNull(type);
+        Assert.True(JsonBaselineSourceScan.HasUnresolvedTypeFacts(type), $"Compiler receiver facts: {type.TypeKind} {type.ToDisplayString()}");
+        Assert.Equal("DictionaryKeyPolicy", Assert.Single(JsonBaselineSourceScan.Scan(source)).Setting);
     }
 
     [Theory]
