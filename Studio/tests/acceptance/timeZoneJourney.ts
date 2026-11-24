@@ -102,6 +102,7 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
     if (pause) await page.route(executeUrl, async route => { await gate; await route.continue(); });
     const response = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === executePath);
     const request = page.waitForRequest(request => request.method() === "POST" && new URL(request.url()).pathname === executePath);
+    const observations = Promise.allSettled([request, response]);
     try {
       await dialog.getByRole("button", { name: "Run workflow", exact: true }).click();
       expect((await request).postDataJSON().inputs.when).toBe(expected);
@@ -110,6 +111,7 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
         await capture(page, info, "run-busy");
         const expandInspector = page.getByRole("button", { name: "Expand inspector panel", exact: true });
         if (await expandInspector.isVisible()) await expandInspector.click();
+        await expect(page.locator(".wf-executable-workbench")).not.toHaveClass(/inspector-maximized|inspector-collapsed/);
         const created = page.locator(".wf-instance-meta dt").filter({ hasText: /^Created$/ }).locator("xpath=following-sibling::dd[1]");
         await created.scrollIntoViewIfNeeded();
         await expect(created).toBeInViewport();
@@ -117,10 +119,13 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
         expect(await created.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
         await capture(page, info, "run-busy-created");
       }
-    } finally { release(); }
+    } finally {
+      release();
+      await observations;
+      if (pause) await page.unroute(executeUrl);
+    }
     const result = await response;
     expect(result.ok(), await result.text()).toBe(true);
-    if (pause) await page.unroute(executeUrl);
     const runId = (await result.json() as { workflowExecutionId: string }).workflowExecutionId;
     const instance = `/runtime/workflows/instances/${runId}`;
     await expect.poll(async () => (await api<{ instance: { status: string } }>(instance)).instance.status, { timeout: 60_000 }).toBe("Completed");
@@ -142,16 +147,19 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
     const panel = page.getByRole("complementary", { name: "Run details panel", exact: true });
     await expect(panel).toBeVisible();
     await panel.getByRole("tab", { name: "Details", exact: true }).click();
-    const created = panel.locator("dt").filter({ hasText: /^Created$/ }).locator("xpath=following-sibling::dd[1]").locator("time");
-    await expect(created).toHaveAttribute("datetime", retained.instance.createdAt);
-    const expected = await expectedDate(retained.instance.createdAt, zone);
-    await expect(created).toHaveAttribute("title", expected.full);
-    await expect(created.locator(".studio-timestamp-date")).toHaveText(expected.date);
-    await expect(created.locator(".studio-timestamp-time")).toHaveText(expected.time);
-    await created.scrollIntoViewIfNeeded();
-    await expect(created).toBeInViewport();
+    const dates = ([['Created', retained.instance.createdAt], ['Started', retained.instance.startedAt], ['Completed', retained.instance.completedAt]] as const)
+      .map(([label, instant]) => ({ instant, locator: panel.locator("dt").filter({ hasText: new RegExp(`^${label}$`) }).locator("xpath=following-sibling::dd[1]").locator("time") }));
+    for (const date of dates) {
+      const expected = await expectedDate(date.instant, zone);
+      await expect(date.locator).toHaveAttribute("datetime", date.instant);
+      await expect(date.locator).toHaveAttribute("title", expected.full);
+      await expect(date.locator.locator(".studio-timestamp-date")).toHaveText(expected.date);
+      await expect(date.locator.locator(".studio-timestamp-time")).toHaveText(expected.time);
+    }
+    await dates[2].locator.scrollIntoViewIfNeeded();
+    for (const date of dates) await expect(date.locator).toBeInViewport();
     await capture(page, info, name);
-    return { created, instant: retained.instance.createdAt };
+    return { created: dates[0].locator, instant: retained.instance.createdAt, dates };
   }
   const mounted = await inspectCreated(amsterdamRun, "Europe/Amsterdam", "run-result-amsterdam");
   // A real second Settings tab changes the preference while the details view stays mounted.
@@ -159,13 +167,15 @@ export async function timeZoneJourney(page: Page, info: TestInfo, capture: Captu
   try {
     await settings.goto("/settings/appearance");
     await settings.getByLabel("Time zone", { exact: true }).selectOption("UTC");
-    await expect(mounted.created).toHaveAttribute("datetime", mounted.instant);
-    const expected = await expectedDate(mounted.instant, "UTC");
-    await expect(mounted.created).toHaveAttribute("title", expected.full);
-    await expect(mounted.created.locator(".studio-timestamp-date")).toHaveText(expected.date);
-    await expect(mounted.created.locator(".studio-timestamp-time")).toHaveText(expected.time);
-    await mounted.created.scrollIntoViewIfNeeded();
-    await expect(mounted.created).toBeInViewport();
+    for (const date of mounted.dates) {
+      const expected = await expectedDate(date.instant, "UTC");
+      await expect(date.locator).toHaveAttribute("datetime", date.instant);
+      await expect(date.locator).toHaveAttribute("title", expected.full);
+      await expect(date.locator.locator(".studio-timestamp-date")).toHaveText(expected.date);
+      await expect(date.locator.locator(".studio-timestamp-time")).toHaveText(expected.time);
+    }
+    await mounted.dates[2].locator.scrollIntoViewIfNeeded();
+    for (const date of mounted.dates) await expect(date.locator).toBeInViewport();
     await capture(page, info, "run-mounted-zone-change");
   } finally { await settings.close(); }
   const lastRun = await run("2026-07-15T09:30:12.345", "2026-07-15T09:30:12.345+00:00", "run-utc", true);

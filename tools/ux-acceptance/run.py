@@ -93,7 +93,8 @@ CAPTURES = {
 }
 NATIVE_RESULT_CAPTURES = ('provenance', 'coverage-periods', 'series-1', 'series-2', 'series-3', 'exact-values', 'exact-values-end')
 CAPTURES['native dashboard questions and sharing'] += (
-    [f'question-preview-{section}' for section in NATIVE_RESULT_CAPTURES]
+    ['question-optional-provider-unavailable']
+    + [f'question-preview-{section}' for section in NATIVE_RESULT_CAPTURES]
     + [f'question-editor-preview-appearance-{appearance}-{section}' for appearance in (1, 2)
        for section in ('parameters', 'parameters-end', 'presentation', 'presentation-end', *NATIVE_RESULT_CAPTURES)]
     + [f'dashboard-and-dependency-dialogs-appearance-{appearance}-tile-{tile}-{section}'

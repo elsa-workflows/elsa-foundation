@@ -1,7 +1,7 @@
 import { chromium, expect, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
 import { expectedStudioDate, selectStudioTimeZone } from "./studioDateAssertions";
 import type { QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
-import { openQuestionSection as openQuerySection, openQuestionProperties, selectQuestionTab } from "./questionNavigation";
+import { openQuestionSection as openQuerySection, openQuestionProperties, closeQuestionProperties, selectQuestionTab } from "./questionNavigation";
 import { attachDashboardJson, dashboardBackend, registerDashboardCleanup, observeNativeWeaverBoundary, seedDashboardRuns, signInDashboardReader, tag, type Capture, type Resource, type Result } from "./dashboardJourneySupport";
 
 /** Native authoring against real Workflow/Identity/Dashboard authorities; no provider or result mocks. */
@@ -120,10 +120,17 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("combobox", { name: "Visualization", exact: true }).selectOption("bar");
       await page.getByRole("combobox", { name: "Horizontal axis", exact: true }).selectOption("status");
       await page.getByRole("listbox", { name: "Value columns", exact: true }).selectOption(["started", "failed", "rate"]);
+      await closeQuestionProperties(page);
+      await selectQuestionTab(page, "build");
       await page.locator(".named-weaver-disclosure > summary").click();
       const unavailableAuthoring = page.getByRole("region", { name: "Ask Weaver", exact: true });
       await expect(unavailableAuthoring.getByRole("status")).toContainText(/unavailable|connection|provider|configured/i);
       await expect(unavailableAuthoring.getByRole("textbox", { name: "Your question", exact: true })).toHaveCount(0);
+      await unavailableAuthoring.scrollIntoViewIfNeeded();
+      await expect(unavailableAuthoring).toBeInViewport();
+      await capture(page, info, "question-optional-provider-unavailable");
+      await openQuestionProperties(page);
+      await expect(page.getByRole("combobox", { name: "Visualization", exact: true })).toBeVisible();
       await expect(page.getByRole("combobox", { name: "Visualization", exact: true })).toBeEnabled();
       await capture(page, info, "question-controls");
       // A real native validation response identifies the invalid field and moves focus there.
@@ -221,7 +228,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("menuitem", { name: "History", exact: true }).click();
       const history = page.getByRole("dialog", { name: "Definition history", exact: true });
       await expect(history.getByRole("button", { name: /^Inspect revision / })).toHaveCount(2);
-      await expect(history.getByText("Current", { exact: true })).toBeVisible();
+      await expect(history.getByRole("button", { name: `Inspect revision ${updatedQuestion.revision}`, exact: true }).getByText("Current", { exact: true })).toBeVisible();
       await expect(history.getByRole("button", { name: `Restore revision ${updatedQuestion.revision}`, exact: true })).toHaveCount(0);
       await history.getByRole("button", { name: `Inspect revision ${saved.revision}`, exact: true }).click();
       await history.getByText("View technical definition", { exact: true }).click();
