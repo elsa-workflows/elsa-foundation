@@ -1,13 +1,15 @@
 # GA test drive: three owner decisions for the kernel
 
-24 November 2026, `main` at `92bc067918`. Part of [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229).
+24 November 2026, read at `main` `92bc067918`; the facts below are updated for #5706 and #5711. Part of [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229).
 **Decided by the owner on 24 November 2026:** card 1 option A, card 2 option A, card 3 option B. Each card ends with its
 decision. Read from the source only; nothing was run and no code changes.
 
 The GA test drive's [gap map](core-preview-map.md) found that no designer-built
-HTTP workflow runs on the Core Preview yet. A parallel session is adding query strings, headers, Flowchart start routes
-and duplicate-route refusal to the Native model. Three gaps need an owner decision first, because they touch the
-foundation contract or the side-effect rules:
+HTTP workflow runs on the Core Preview yet. Query strings and headers landed with
+[#5706](https://github.com/elsa-workflows/elsa-foundation/pull/5706), and Flowchart start routes with
+[#5711](https://github.com/elsa-workflows/elsa-foundation/pull/5711); duplicate-route refusal is still open. Three gaps
+needed an owner decision first. Cards 1 and 2 could touch the foundation contract or the side-effect rules, and card 3
+sets the release 1 scope:
 
 | # | Decision | Owner's decision (24 November) | Milestone | Contract change | Size |
 |---|---|---|---|---|---|
@@ -16,7 +18,7 @@ foundation contract or the side-effect rules:
 | 3 | The release 1 activity list | **B**; A was recommended. 26 of 34 toolbox activities run, Timer and Cron on a layer 3 schedule actor; 8 are hidden through the host availability baseline | K6, K10 | None | L, in small PRs |
 
 None of the decided options changes the accepted K2 contracts
-([foundation contract](../../architecture/foundation-contract.md)). Each card names the one option that would.
+([foundation contract](../../architecture/foundation-contract.md)). Cards 1 and 2 each name the one option that would; no card 3 option does.
 
 ## 1. Route templates
 
@@ -25,9 +27,9 @@ None of the decided options changes the accepted K2 contracts
 - `HttpRoutes.Key(method, path)` builds the literal key `http:{METHOD}:{path}`
   ([HttpRoutes.cs](../../../essentials/src/Workflows/Runtime/Native/Model/HttpRoutes.cs)).
 - A waiting `HttpEndpoint` subscribes on that literal key
-  ([NativeModel.cs:455](../../../essentials/src/Workflows/Runtime/Native/Model/NativeModel.cs)).
-- `HttpRequest` is `(Method, Path, Body)`
-  ([Activities.cs:481](../../../essentials/src/Workflows/Runtime/Native/Model/Activities.cs)). It has no route values.
+  ([NativeModel.cs:456–457](../../../essentials/src/Workflows/Runtime/Native/Model/NativeModel.cs)).
+- `HttpRequest` has the method, path, body, query string and headers since #5706
+  ([Activities.cs:490](../../../essentials/src/Workflows/Runtime/Native/Model/Activities.cs)). It has no route values.
 - The foundation matches event keys exactly. A key is an opaque string, tenant-qualified as `Q(t, key)`, at most
   1,024 UTF-8 bytes (`FoundationMetadataLimits.NameBytes`).
 
@@ -109,8 +111,8 @@ the K2 contract.** Not recommended.
 ### Recommendation
 
 Option A, in K8, with an acceptance case: W3's `/orders/{id}/enrich` starts with `id` in `HttpRequest.RouteValues`;
-W5's `/orders/{id}/cancel` resumes only the waiting W4 for that order; and a conflicting publish is refused.
-Size M: about 400 to 600 lines with tests, after the parallel session's work lands.
+W5's `/orders/{id}/cancel` resumes only the waiting W4 for that order; and the route table refuses a template shape and
+method that another definition holds. Size M: about 400 to 600 lines with tests, on top of #5706 and #5711.
 
 ### Decision
 
@@ -127,11 +129,12 @@ Owner, 24 November 2026: **option A**, resolved waits, as recommended. Its accep
 - The host callback sends the request during the turn. The workflow never sees the response, and the Workbench
   preview passes no sender.
 - The old core's `SendHttpRequest` awaits the response inside the activity. It returns status, headers and body. Its
-  outcomes are one port per expected status code, `Unmatched status code`, `Failed` and `Timeout`, plus a `Timeout`
+  outcomes are `Done` when no codes are set, or one port per expected status code and `Unmatched status code`, then
+  `Failed` and `Timeout`, plus a `Timeout`
   input and credentials through a `Connection`. W3 needs all of this.
 - **Elsa 3** (`SendHttpRequestBase`, `FlowSendHttpRequest`) also awaits the call inside the activity. It sets
-  `StatusCode`, `ParsedContent` and `ResponseHeaders` outputs, and completes on one outcome per expected status code,
-  `Unmatched status code`, `Failed to connect` or `Timeout`. An opt-in `EnableResiliency` retries 408, 409, 429, 500,
+  `StatusCode`, `ParsedContent` and `ResponseHeaders` outputs, and completes on `Done` plus one outcome per expected
+  status code or `Unmatched status code`, or on `Failed to connect` or `Timeout`. An opt-in `EnableResiliency` retries 408, 409, 429, 500,
   502, 503 and 504 through Polly, with no idempotency key, and `Authorization` is a plain input. **Option A keeps** the
   outputs and outcomes. **It improves** where the call runs: in a job, so the instance stays responsive, parallel
   calls run side by side and every send carries the effect key. **It drops** the in-activity Polly retries for
@@ -154,13 +157,16 @@ The rules that bind every option:
 ### Options
 
 **A. A Background job whose result completes the activity (recommended).** `SendHttpRequest` becomes `[Background]`,
-as `CallService` is ([NativeModel.cs:281](../../../essentials/src/Workflows/Runtime/Native/Model/NativeModel.cs)).
+as `CallService` is ([Native Activities.cs:78](../../../essentials/src/Workflows/Runtime/Native/Activities/Activities.cs);
+the model's background path is [NativeModel.cs:281](../../../essentials/src/Workflows/Runtime/Native/Model/NativeModel.cs)).
 The turn commits the job ticket with the evaluated inputs and the effect key (`BackgroundArgs` already carries both).
 The job sends the request. Its result, `{ status, headers, body }`, comes back as `job-finished`, and the activity
 completes with the old core's outcomes.
 
 - **Timeouts.** The `Timeout` input, defaulting to `HttpActivityOptions.DefaultTimeout`, becomes the `StartJob`
   timeout and the HTTP client's timeout. Either one firing completes the activity on `Timeout`. It does not fault.
+  The background path takes this evaluated timeout in place of the node's fixed `JobTimeout`, which is part of the
+  work.
   The race between a timeout and a completion is already a K6 acceptance case.
 - **Retries.** The job makes one HTTP attempt. The foundation re-runs it only after an owner loss, with the same
   `Idempotency-Key`. A non-2xx status is an outcome, and a transport error is `Failed`, so the workflow decides what
@@ -173,8 +179,8 @@ completes with the old core's outcomes.
 - **Secrets.** The ticket's arguments are stored, so credentials must not be in them. Credentials come through a
   `Connection` reference that the job resolves when it runs, as on the old core. Authored headers refuse secret
   bindings.
-- **Parallel calls** (W3) run as parallel jobs. An Ephemeral instance that waits only on its own jobs stays in memory
-  (FC-2), so a synchronous proxy writes nothing.
+- **Parallel calls** (W3) run as parallel jobs. An Ephemeral instance that waits only on its own jobs may stay in memory
+  up to the short wait and the request's deadline (FC-2), so a fast synchronous proxy writes nothing.
 - **Cost.** In Balanced the ticket rides the turn's commit, and the result adds one turn and one commit.
 - **Contract:** none. `StartJob`, `IJob` and `JobFinished` exist. The fire-and-forget `HttpSendEffect` stays for
   `SendEmail` and `SendNotification`.
@@ -185,7 +191,7 @@ the host sends it and posts the response to the instance's exact ref, and the ac
 - If the process dies between the commit and the post, nothing durable says the call is outstanding. The instance
   waits until a timer fires. A resend on that timer duplicates what the job ticket already does.
 - Making it durable needs a new foundation obligation: an outbound call with a reply. **That changes the K2
-  contract** (a new `ITurn` member and an FC clause). Not recommended.
+  contract** (a new `IActorTurn` member, its `ITurn` view and an FC clause). Not recommended.
 
 **C. Keep fire-and-forget and add a request-and-response activity.** `SendHttpRequest` stays as it is. A second
 activity, for example `CallHttpEndpoint`, is option A. The toolbox then has two HTTP senders. Old-core definitions
@@ -264,7 +270,7 @@ engine and is not counted; the Native model has it as `SetVariable`. "Native" me
 | 20 | Delay | Scheduling | Run | ✅ | Timer as a message to self |
 | 21 | DispatchWorkflow | DispatchWorkflow | Run | ✅ | |
 | 22 | HttpEndpoint | Http | Run | ✅ | Route templates: card 1 |
-| 23 | WriteHttpResponse | Http | Run | ✅ | Headers: parallel session |
+| 23 | WriteHttpResponse | Http | Run | ✅ | Headers since #5706 |
 | 24 | SendHttpRequest | Http | Run | 🟡 no response | Card 2 |
 | 25 | CompensationScope | Compensation | Hide | ❌ | No compensation port in release 1 ([StateMachine page](../../architecture/statemachine-on-the-kernel.md), decision 4) |
 | 26 | Compensate | Compensation | Hide | ❌ | Same |
@@ -284,8 +290,9 @@ and Timer and Cron are new on the schedule actor. Option A, the recommendation, 
 
 **A. Run the 24 and hide the 10 (recommended).** This covers all seven test-drive workflows except W7's compensation,
 which is out by owner decision, and every basic control-flow and HTTP activity a designer user expects. Hiding uses
-the existing host baseline: a kernel host ships a named set, for example `kernel-unsupported`, under
-`Elsa:Activities:Availability:Exclude:Sets`, so Studio needs no code change. The kernel's publication path refuses a
+the existing host baseline: a kernel host defines a named set, for example
+`Elsa:Activities:Availability:Sets:kernel-unsupported`, and lists it under `Exclude:Sets`, so Studio needs no code
+change. The kernel's publication path refuses a
 definition that holds a hidden type, with an error that names the node. Contract: none.
 
 **B. A + Timer and Cron.** It adds a layer 3 schedule actor: a self-timer per schedule that publishes to the
@@ -304,8 +311,9 @@ core is gone. Not recommended.
 ### Recommendation
 
 Option A. The ports land in K6 as small PRs, about one container or leaf each: Switch, For, Do, Break, WriteLines and
-Fault are S; GraphActivity with Complete is M; Inline and RunJavaScript follow K12 item 3. The publish refusal and the
-`kernel-unsupported` set land with the definitions-to-kernel path. K10 adds a journey: on a kernel host the toolbox
+Fault are S; GraphActivity with Complete is M; Inline and RunJavaScript land in K6, and K12 item 3 qualifies their
+JavaScript semantics. The `kernel-unsupported` set and the kernel registry's refusal land in K6. The publish refusal
+through the definitions API lands in K10 with the definitions-to-kernel path. K10 adds a journey: on a kernel host the toolbox
 shows the 24, and publishing a definition with `CompensationScope` is refused with the node named. Size L in all,
 about ten PRs.
 
@@ -318,8 +326,8 @@ Owner, 24 November 2026: **option B**, A plus Timer and Cron. The recommendation
 - **The schedule actor.** Timer and Cron run on a layer 3 schedule actor: one self-timer per schedule, publishing to
   the workflow's start key at each occurrence. It uses the contract as it stands. K6 carries its restart and
   duplicate-firing cases. It adds one M-sized slice.
-- **The rest is as in A.** The ports land in K6. The `kernel-unsupported` set and the publish refusal land with the
-  definitions-to-kernel path, and the K10 journey shows the 26.
+- **The rest is as in A.** The ports, the `kernel-unsupported` set and the kernel registry's refusal land in K6. The
+  publish refusal lands in K10 with the definitions-to-kernel path, and the K10 journey shows the 26.
 
 The acceptance cases are in the K6 and K10 rows of the
 [program plan](../../program-goals/clean-slate-kernel.md#milestones).
