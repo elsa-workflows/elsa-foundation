@@ -531,6 +531,7 @@ app.MapShells();
 // automatic insertion of these middleware earlier in the pipeline.
 app.UseAuthentication();
 app.UseAuthorization();
+WorkbenchCorePreviewReads.Map(app);
 #if ELSA_DASHBOARD_QUALIFICATION
 QualificationPrincipals.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>(), "default", configuration);
 HistoryQualificationControls.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>());
