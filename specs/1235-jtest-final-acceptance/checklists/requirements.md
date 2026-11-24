@@ -18,7 +18,7 @@
 - [x] Failure classification on the baseline and its approval defined (Q5).
 - [x] Engine-difference approach selected: same-name templates, engine-neutral suites (Q7).
 - [x] Observation rule: full values, no unrequested normalization (FR-013).
-- [x] JOIN blocking rule defined; J-001 to J-005 open (Q9).
+- [x] JOIN and value-capture blocking rules defined; J-001 to J-005 and V-001 to V-003 open (Q9, Q12).
 - [x] Spec 1207 implementation placed before the qualifying Elsa 4 run (FR-020).
 - [x] No secrets; corpus may be committed (Q3, FR-004).
 - [x] No Studio surface (FR-023).
@@ -28,7 +28,7 @@
 
 - [x] Intake questions answered by the coordinator and recorded.
 - [ ] Coordinator approval of the specification, plan and tasks.
-- [x] Plan and tasks retain J-001 to J-005 (T039 to T043).
+- [x] Plan and tasks retain J-001 to J-005 and V-001 to V-003 (T039 to T043, T049 to T051).
 
 ## Notes
 

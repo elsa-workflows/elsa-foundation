@@ -182,25 +182,29 @@ blocks it, and J-001 through J-005 are open in the tasks.
   definition no suite exercises or whose only suites are blocked by a 3.6.3 defect, is imported and published unchanged
   with no diagnostic),
   `convert-with-adjustments` (an adjusted copy, kept next to the unchanged original, with the exact change and reason,
-  approved by the coordinator) or `incompatible` (refused with a diagnostic and guidance, or a feature with no Elsa 4
+  approved by the coordinator) or `incompatible` (approved by the coordinator; refused with a diagnostic and guidance, or a feature with no Elsa 4
   equivalent). Execution status and JOIN blocking MUST be recorded separately from the bucket.
 - **FR-016**: Translating API calls in templates MUST NOT move a definition out of `convert-as-is`. A refusal or a
   publication alone MUST NOT count as a passing suite. A suite failing on Elsa 4 for a reason other than JOIN
   behaviour MUST follow one rule: a template defect is fixed in the template; a converter defect or Elsa 4 gap gets
   its own issue and the suite is `blocked: <issue>` until it is fixed, an approved adjusted copy passes, or the
   definition is bucketed `incompatible`; missing setup is `blocked: <prerequisite>`, never incompatible. Only suites
-  blocked by JOIN behaviour or a 3.6.3 defect, or carrying an approved incompatibility, are exempt from the non-JOIN
-  milestone (SC-004).
+  blocked by JOIN behaviour, value capture or a 3.6.3 defect, or carrying an approved incompatibility, are exempt from
+  the non-JOIN milestone (SC-004).
 - **FR-017**: Where an adjusted copy is needed, the converter MUST NOT gain a workaround for it; a construct that
   cannot convert faithfully MUST be refused with guidance, and a genuine Elsa 4 gap gets its own issue.
 
-**JOIN**
+**Work owned by separate initiatives**
 
 - **FR-018**: A suite MUST be marked JOIN-blocked only when join behaviour is what stops it on Elsa 4. The record MUST
   name the definition, the join construct and the observed failure. A suite whose path does not depend on the join
   MUST stay in the main run.
 - **FR-019**: JOIN-blocked suites MUST stay in this specification. Deferred tasks J-001 to J-005 MUST stay open until
   their own evidence exists, and a non-JOIN milestone MUST NOT mark this specification Implemented.
+- **FR-024**: A suite MUST be marked `blocked: value capture` only when a value one of its assertions reads comes back
+  truncated or unavailable under the host's capture limits. The record MUST name the suite, the key and the limit hit.
+  Such suites stay in this specification, like JOIN-blocked ones; complete value capture belongs to the separate
+  value-capture initiative, and deferred tasks V-001 to V-003 MUST stay open until their own evidence exists.
 
 **Prerequisites, evidence and hand-over**
 
@@ -235,6 +239,7 @@ blocks it, and J-001 through J-005 are open in the tasks.
 | Q7 | How are engine differences expressed? | Same-name Elsa 4 templates; Elsa 3-specific values in suite files move behind templates or parameters first. |
 | Q8 | Is the Elsa 3 setup suite needed on Elsa 4? | No. Startup reconciliation replaces it. |
 | Q9 | How is JOIN handled? | Blocked only where the join actually stops a suite; the rest goes first; JOIN work stays here. |
+| Q12 | What if a suite needs a complete value Elsa 4 only captures as a bounded snapshot? | It is blocked on the separate value-capture initiative, handled like JOIN: marked only where a truncated or unavailable value stops it, kept in this specification, finished when that initiative delivers (FR-024, V-001 to V-003). |
 | Q10 | Which suites go first? | The six HTTP suites (one definition, no join), then single-outcome. |
 | Q11 | Where does the corpus live after the copy? | Here; the original repository gets a template update through a hand-over at the end. |
 
@@ -248,10 +253,12 @@ blocks it, and J-001 through J-005 are open in the tasks.
   the Elsa 3 baseline.
 - **SC-003 - Dispositions**: All 36 definitions have exactly one bucket with its evidence (definitions whose suites
   are JOIN-blocked are bucketed when the JOIN tasks close).
-- **SC-004 - Non-JOIN milestone**: Every suite not blocked by JOIN behaviour, by a 3.6.3 defect (SC-001) or by an
+- **SC-004 - Non-JOIN milestone**: Every suite not blocked by JOIN behaviour, by value capture (FR-024), by a 3.6.3
+  defect (SC-001) or by an
   approved incompatibility passes on
   Elsa 4, on an initiative head with spec 1207 implemented (its status Implemented). This is a milestone, not completion.
-- **SC-005 - Full acceptance**: SC-001 to SC-004 hold on the final initiative head, J-001 to J-005 are closed with
+- **SC-005 - Full acceptance**: SC-001 to SC-004 hold on the final initiative head, J-001 to J-005 and V-001 to V-003
+  are closed with
   evidence, and every suite passes, carries an approved incompatibility, or is blocked by a named 3.6.3 defect
   (SC-001).
 
@@ -267,6 +274,16 @@ These tasks are OPEN and carry into the tasks list.
 | J-004 | OPEN | Run the JOIN-blocked suites on Elsa 4 on the qualified head and record the results. |
 | J-005 | OPEN | Reconcile the complete disposition list, rerun the whole corpus and record the coordinator's full-acceptance verdict. |
 
+## Deferred value-capture tasks retained in this specification
+
+These tasks are OPEN and carry into the tasks list.
+
+| ID | State | Task and closure evidence |
+|---|---|---|
+| V-001 | OPEN | List every `blocked: value capture` suite with the key it reads and the capture limit hit. |
+| V-002 | OPEN | Once the value-capture initiative delivers on the initiative branch, configure the run to capture those values as it provides and adjust the Elsa 4 templates without changing expectations. |
+| V-003 | OPEN | Run those suites on a fresh Workbench from the qualified head and record the results; J-005 reconciles them with the rest. |
+
 ## Dependencies and boundaries
 
 - [Startup reconciliation, spec 235](../235-elsa3-json-reconciliation/spec.md) loads and converts the definitions. This
@@ -275,7 +292,8 @@ These tasks are OPEN and carry into the tasks list.
   [migration readiness](../../docs/reference/elsa3-migration-readiness.md) explain expected diagnostics.
 - [JSON data integrity, spec 1207](../1207-json-data-integrity-baseline/spec.md) must be implemented on the initiative head
   before the qualifying Elsa 4 run.
-- JOIN behaviour belongs to the separate JOIN initiative; its acceptance in this corpus belongs here.
+- JOIN behaviour belongs to the separate JOIN initiative, and complete value capture to the separate value-capture
+  initiative; their acceptance in this corpus belongs here.
 - [Elsa constitution](../../.specify/memory/constitution.md) E2.7 keeps Elsa 3 behind the import boundary; the Elsa 3
   server runs only as a separate baseline container.
 

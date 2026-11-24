@@ -10,8 +10,8 @@ commit `b1cde13`.
 feature-catalog entry with no logic; the existing feature-composition and Elsa 3 boundary tests cover it, so no new
 unit test is required (framework §2.23). No test cadence beyond that applies.
 
-**Approval gates**: T016 (baseline failure list), T029 and T036 (suite changes and adjustments) need the coordinator's
-recorded approval before the tasks after them start.
+**Approval gates**: T016 (baseline failure list), T029 and T036 (suite changes and adjustments) and T034 (every
+`incompatible` bucket) need the coordinator's recorded approval before the tasks after them start.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -101,7 +101,8 @@ recorded approval before the tasks after them start.
 
 **Independent test**: Elsa 3 rerun green; the diff of each suite shows only values moved behind parameters.
 
-- [ ] T019 [US2] List every Elsa 3-specific value in `JTest/tests/**` that the template contract cannot absorb: direct
+- [ ] T019 [US2] List every Elsa 3-specific value in `JTest/tests/**` that the template contract cannot absorb (including
+  expected definition versions, which differ between engines, contracts/templates.md): direct
   Elsa 3 API calls in `http` steps (the `events` suite and three `performance` suites call
   `/elsa/api/workflow-definitions/{id}/execute` and `/elsa/api/workflow-instances`), response fields read from those
   steps, reads inside template outputs beyond the projected fields (for example
@@ -159,9 +160,11 @@ cannot produce with the same meaning fails the template with the output named (F
 - [ ] T032 [US3] Run all 42 suites on that host; record the Elsa 4 result per suite in `JTest/ledger/suites.md`.
 - [ ] T033 [US3] For each failing suite, find the cause (template, converter, engine, prerequisite) and record it in
   `JTest/ledger/suites.md`; a template cause is fixed in `templates-elsa4/` and rerun; a missing prerequisite marks
-  the suite `blocked: <prerequisite>` (FR-016).
+  the suite `blocked: <prerequisite>` (FR-016); a value that comes back truncated or unavailable under the capture
+  limits marks it `blocked: value capture` with the key and limit (FR-024).
 - [ ] T034 [US3] For a converter or engine cause: if the definition cannot convert faithfully, confirm it is refused
-  with guidance and bucket it `incompatible`; if a genuine Elsa 4 gap or converter defect, file a `needs-triage` issue
+  with guidance and propose the `incompatible` bucket, recorded only after the coordinator approves it in
+  `JTest/ledger/dispositions.md`; if a genuine Elsa 4 gap or converter defect, file a `needs-triage` issue
   (sub-issue of the initiative), mark the suite `blocked: <issue>` and leave the bucket `unclassified` until the
   issue is fixed, an approved adjusted copy passes (T036) or the definition is bucketed `incompatible`; never add a
   converter workaround (FR-016, FR-017).
@@ -183,10 +186,10 @@ cannot produce with the same meaning fails the template with the output named (F
 
 ---
 
-## Phase 6: User Story 4 - JOIN-blocked suites (Priority: P2)
+## Phase 6: User Story 4 - Suites blocked by separate initiatives (Priority: P2)
 
-**Goal**: JOIN-blocked suites pass after the JOIN initiative delivers. These tasks stay OPEN until their evidence
-exists.
+**Goal**: JOIN-blocked and value-capture-blocked suites pass after their initiatives deliver. These tasks stay OPEN
+until their evidence exists. T049 to T051 (value capture) run alongside T039 to T042 (JOIN); T043 closes both.
 
 - [ ] T039 [US4] J-001: list every `blocked: JOIN` suite with its definition, join construct and observed Elsa 4
   failure in `JTest/ledger/suites.md`.
@@ -195,6 +198,12 @@ exists.
 - [ ] T041 [US4] J-003: make the JOIN-dependent templates and waits work on Elsa 4 without changing expectations;
   suite edits go through T029.
 - [ ] T042 [US4] J-004: run the JOIN-blocked suites on a fresh Workbench from the qualified head and record the results.
+- [ ] T049 [US4] V-001: list every `blocked: value capture` suite with the key it reads and the capture limit hit in
+  `JTest/ledger/suites.md`.
+- [ ] T050 [US4] V-002: once the value-capture initiative delivers on the initiative branch, configure the run to
+  capture those values as it provides (update T007's commands in `JTest/README.md`) and adjust `templates-elsa4/`
+  without changing expectations; suite edits go through T029.
+- [ ] T051 [US4] V-003: run those suites on a fresh Workbench from the qualified head and record the results.
 - [ ] T043 [US4] J-005: rerun the whole corpus on the final initiative head, reconcile `JTest/ledger/dispositions.md`
   and `JTest/ledger/suites.md`, bucket every remaining definition (SC-003), and record the coordinator's
   full-acceptance verdict (SC-005).
@@ -223,7 +232,8 @@ exists.
 - Within US2: T019 → T020 → T021 → T022.
 - Within US3: T023 to T027 can run in parallel; T028 needs T007 and T023 to T027; T030 to T037 follow; T038 waits for
   spec 1207 to be implemented on the initiative branch.
-- US4 waits for the JOIN initiative's delivery; T039 can be filled as soon as T035 is done.
+- US4 waits for the JOIN and value-capture initiatives' delivery; T039 and T049 can be filled as soon as T035 and
+  T033 are done; T043 needs T042 and T051.
 - T047 and T048 come last.
 
 ## Parallel example (US3)

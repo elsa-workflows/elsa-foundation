@@ -16,7 +16,7 @@ output with the same meaning, the template fails with a message naming the outpu
 | Authentication | `POST /_elsa/identity/login` with JSON `{username, password}`, then `GET /_elsa/identity/token` with the session cookie; `authHeader` is `Bearer {accessToken}`. |
 | Activity ids | A suite's short Elsa 3 activity id matches the Elsa 4 node whose id equals it or ends with `:{id}`. |
 | Definition ids | Unchanged by conversion. Version id equals the Elsa 3 version id at converter revision 0. |
-| Version numbers | At converter revision 0, an integer version `n` matches Elsa 4 version `n.0.0`; templates output the integer. A later converter revision changes this rule and the template with it. |
+| Version numbers | At converter revision 0, an integer version `n` matches Elsa 4 version `n.0.0`; templates output the integer. A later converter revision changes this rule and the template with it. The Elsa 3 baseline numbers every imported definition 1 whatever its file says, while Elsa 4 keeps the file's version, so a suite's expected version is engine-specific and moves behind an environment value in the engine-neutral refactor (`storage-drivers-variables-root-workflow.json` is version 2). |
 | Workflow status | Elsa 4 status → Elsa 3 status/sub-status: Completed → Finished/Finished; Faulted → Finished/Faulted; Cancelled → Finished/Cancelled; Suspended → Running/Suspended; Running → Running/Executing; Pending → Running/Pending. |
 | Activity status | Elsa 4 `Completed`, `Faulted` and `Cancelled` output as Elsa 3 `Completed`, `Faulted` and `Canceled`; `Running`, `Waiting` and `Suspended` output as `Running`. Other Elsa 4 statuses fail the template with the value named. |
 | Workflow instance items | `instances` items carry the Elsa 3 field names suites read: `id` (from `workflowExecutionId`), `definitionId`, `definitionVersionId`, `correlationId`, `name`, `version` (integer, per the version rule) and `status`/`subStatus` (per the status table). |
@@ -32,7 +32,8 @@ enum name `Accepted`). A key with no Elsa 4 counterpart fails the template with 
 **Snapshot limits.** Elsa 4 caps capture at diagnostic snapshots by host policy: bounded values (strings, arrays, objects, depth and
 size are limited) marked `Truncated` or `OmittedCount` when cut. Templates read the snapshot's full value fields and
 fail with the key named when a value is truncated or only a preview exists; each such value is recorded as an
-FR-011 gap. Raising the host policy to full payloads is a separate decision, taken only if gaps appear.
+FR-011 gap, and its suite is marked `blocked: value capture` (spec FR-024). Complete capture belongs to the separate
+value-capture initiative.
 
 Other values suites read **inside** an output beyond the fields above (for example
 `instance.workflowState.activityExecutionContexts[0].properties.Variables[...]`) are Elsa 3 internals. They are not

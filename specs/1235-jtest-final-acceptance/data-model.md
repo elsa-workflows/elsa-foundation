@@ -19,7 +19,7 @@ PR diff; no tooling parses it.
 | Suite | path under `tests/` |
 | Definitions | definition files it exercises |
 | Elsa 3 result | `not run`, `pass`, `fail`, `blocked: 3.6.3 defect <defect>` |
-| Elsa 4 result | `pass`, `fail`, `not run`, `blocked: JOIN`, `blocked: <issue>`, `blocked: <prerequisite>`, `blocked: 3.6.3 defect <defect>` (carried from the Elsa 3 result; not run on Elsa 4), `incompatible` |
+| Elsa 4 result | `pass`, `fail`, `not run`, `blocked: JOIN`, `blocked: value capture`, `blocked: <issue>`, `blocked: <prerequisite>`, `blocked: 3.6.3 defect <defect>` (carried from the Elsa 3 result; not run on Elsa 4), `incompatible` |
 | Last run | run id |
 
 State flow per engine: `not run` → `fail` or `pass`; `fail` → `pass` after a recorded fix, or → `blocked`/`incompatible`
@@ -65,7 +65,7 @@ Each ledger file may end with a *Notes* section for findings that are not rows, 
 | Bucket | `convert-as-is`, `convert-with-adjustments`, `incompatible`, or `unclassified` until decided |
 | Reconciliation | `published`, `refused: <code>`, `skipped: <cause>` from the receipt |
 | Adjusted copy | path under `adjusted/`, the change and reason, coordinator approval |
-| Incompatibility | diagnostic, guidance, inherent or not yet implemented, condition to reconsider |
+| Incompatibility | diagnostic, guidance, inherent or not yet implemented, condition to reconsider, coordinator approval |
 | Suites affected | every suite using the definition |
 | JOIN | `none`, `contains join, not blocking`, `blocked` with construct and failure |
 
