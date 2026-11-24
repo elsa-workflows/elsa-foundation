@@ -24,6 +24,10 @@ LEGACY_ROUTE = "/runtime/workflows/instances/page"
 TENANT = "workbench-preview"
 READ = "workflows/runtime:read"
 INSPECT = "workflows/activity-executions:inspect"
+PROFILE = os.environ.get("WORKBENCH_READS_PROFILE", "ordinary")
+if PROFILE not in ("ordinary", "timed"):
+    raise ValueError("Choose the ordinary or timed Workbench read profile.")
+TIMED = PROFILE == "timed"
 
 
 def expect(condition, message):
@@ -69,6 +73,8 @@ def host(workspace, principals, resource_handler=False, replacement=False, enabl
     })
     if reads:
         env["Elsa__CorePreview__ReadsTenant"] = TENANT
+    if TIMED:
+        env["Elsa__CorePreview__TimedNativeJobs"] = "true"
     logins = {}
     for index, (name, tenant, grants) in enumerate(principals):
         password = secrets.token_urlsafe(24) + "aA!14"
@@ -119,11 +125,16 @@ def host(workspace, principals, resource_handler=False, replacement=False, enabl
 def run(scratch):
     receipt = scratch / "receipt.json"
     env = {"KERNEL_PREVIEW_WORKBENCH": str(WORKBENCH), "KERNEL_PREVIEW_POSTGRES": CONNECTION, "PATH": os.environ["PATH"]}
-    subprocess.run([RUNNER, "pg-workbench-core-preview", "birth", receipt], env=env, check=True, timeout=100)
+    profile_args = ["timed"] if TIMED else []
+    subprocess.run([RUNNER, "pg-workbench-core-preview", "birth", receipt, *profile_args], env=env, check=True, timeout=100)
     actor = json.loads(receipt.read_text())["Actor"]
+    if TIMED:
+        subprocess.run([RUNNER, "pg-workbench-core-preview", "restart", receipt, *profile_args], env=env, check=True, timeout=100)
     seed_file = scratch / "expected-roots.json"
-    subprocess.run([RUNNER, "pg-workbench-preview-reads-seed", actor, seed_file], env=env, check=True, timeout=45)
-    references = sorted(json.loads(seed_file.read_text()))
+    subprocess.run([RUNNER, "pg-workbench-preview-reads-seed", actor, seed_file, *profile_args], env=env, check=True, timeout=45)
+    seeded = json.loads(seed_file.read_text())
+    references = sorted(seeded)
+    expected_running = sorted(seeded[2:]) if TIMED else references[:25]
     reader = ("preview-allowed", TENANT, [READ, INSPECT])
     principals = [reader, ("preview-other", "other-preview-tenant", [READ, INSPECT]),
                   ("preview-no-inspection", TENANT, [READ]), ("preview-no-runtime", TENANT, [INSPECT])]
@@ -147,8 +158,12 @@ def run(scratch):
                "a valid continuation is refused when its filters change")
         rows = snapshot["items"] + continuation["items"]
         row = next(item for item in rows if item["ref"] == actor)
-        expect(row["ref"] == actor and row["status"] == "Running" and row["definition"] == "direct-approval",
+        status = "Finished" if TIMED else "Running"
+        definition = "direct-approval-with-timed-job" if TIMED else "direct-approval"
+        expect(row["ref"] == actor and row["status"] == status and row["definition"] == definition,
                "the preview page contains the exact persisted workflow, projected status and definition")
+        if TIMED:
+            expect(row["endedAt"] > 0, "the HTTP projection carries the actual ended time after the timed jobs settle")
         expect(set(row) == {"ref", "status", "definition", "version", "endedAt"} and snapshot["asOf"] > 0,
                "the preview returns only bounded metadata and the foundation read time")
         for name in ("preview-other", "preview-no-inspection", "preview-no-runtime"):
@@ -160,7 +175,7 @@ def run(scratch):
             query = urllib.parse.urlencode({"status": status})
             expect(request(allowed, base, ROUTE + "?" + query)[0] == 400, "the status must be one named state")
         code, matches = request(allowed, base, ROUTE + "?status=running&definition=direct-approval")
-        expect(code == 200 and [item["ref"] for item in matches["items"]] == references[:25], "status and definition filter the projection")
+        expect(code == 200 and [item["ref"] for item in matches["items"]] == expected_running, "status and definition filter the projection")
         code, empty = request(allowed, base, ROUTE + "?definition=no-such-definition")
         expect(code == 200 and empty["items"] == [], "a different definition is a clean miss")
         code, inherited = request(allowed, base, LEGACY_ROUTE)
