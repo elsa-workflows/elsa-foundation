@@ -5,10 +5,10 @@ using Kernel.Sim;
 if (args is ["--park-operator-demo"]) return await ParkOperatorDemo.RunAsync();
 
 // Usage:
-//   dotnet run -c Release --project sim -- --seeds 10000 [--from 1] [--actions 300] [--flaw Name[,Name]] [--count 1024|4096]
-//   dotnet run -c Release --project sim -- --seed 42 [--actions 300] [--flaw Name]      replay one seed; prints a shrunk trace if it fails
-//   dotnet run -c Release --project sim -- --mutations [--seeds 2000]                   break the kernel on purpose and see who notices
-//   dotnet run -c Release --project sim -- --node-lease-mutations                       the node lease's mutations, each against its witnesses
+//   dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --seeds 10000 [--from 1] [--actions 300] [--flaw Name[,Name]] [--count 1024|4096]
+//   dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --seed 42 [--actions 300] [--flaw Name]      replay one seed; prints a shrunk trace if it fails
+//   dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --mutations [--seeds 2000]                   break the kernel on purpose and see who notices
+//   dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --node-lease-mutations                       the node lease's mutations, each against its witnesses
 
 // A named mutation must select exactly its own bit. Aliases make unrelated controls run together.
 var namedFlaws = Enum.GetNames<Flaw>().Where(name => name != nameof(Flaw.None)).ToArray();

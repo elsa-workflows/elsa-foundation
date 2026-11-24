@@ -1782,7 +1782,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
@@ -1790,7 +1790,7 @@ jobs:
       # restores against its committed packages.lock.json in locked mode, then builds without restoring again.
       - name: Build
         run: |
-          for p in sim models/Native.Recovery.Run models/Statecharts.Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation models/Native.Recovery.Run models/Statecharts.Run conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1799,7 +1799,7 @@ jobs:
       # count-4096 job runs the integrated runtime suite at 4,096.
       - name: Simulation, kernel and native, plus the lease witness
         run: |
-          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
           $SIM --seeds 10000
           $SIM --native --seeds 10000
           $SIM --lease-check
@@ -1815,7 +1815,7 @@ jobs:
 
       - name: Public contract workloads
         run: |
-          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
           $SIM --contract --seeds 100
           $SIM --contract-native --seeds 100
           $SIM --contract-actors --seeds 100 --actions 100
@@ -1869,10 +1869,10 @@ jobs:
       - name: Mutation checks
         run: |
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 48 -- \
-            dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
+            dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --mutations --seeds 20000
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
-            dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 12000
-          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 7 -- dotnet sim/$BIN/Kernel.Sim.dll --node-lease-mutations
+            dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --native-mutations --seeds 12000
+          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 7 -- dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --node-lease-mutations
 
       # K1 slice 7: both witness cases must fail, each on the landed flush, with the k-row fence broken to land the part
       # of a flush still fenced.
@@ -1923,13 +1923,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
       - name: Build
         run: |
-          for p in sim ../../essentials/tests/ActorFoundation/Native/Run models/Native.Recovery.Run models/Statecharts.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run models/Native.Recovery.Run models/Statecharts.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1937,7 +1937,7 @@ jobs:
       # The sizes of the README's refactor gates (The gates of a refactor).
       - name: Simulation, full sizes
         run: |
-          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
           $SIM --seeds 200000
           $SIM --seeds 20000 --actions 1000
           $SIM --native --seeds 200000
@@ -1968,10 +1968,10 @@ jobs:
       - name: Mutation checks, full size
         run: |
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FenceWithoutPosition,DeleteWithoutCount --expect-total 48 -- \
-            dotnet sim/$BIN/Kernel.Sim.dll --mutations --seeds 20000
+            dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --mutations --seeds 20000
           python3 ../../tools/ci/kernel_prototype_gate.py --allow-uncaught FlatRetryGeneration --expect-total 15 -- \
-            dotnet sim/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
-          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 7 -- dotnet sim/$BIN/Kernel.Sim.dll --node-lease-mutations
+            dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --native-mutations --seeds 20000
+          python3 ../../tools/ci/kernel_prototype_gate.py --expect-total 7 -- dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll --node-lease-mutations
 
       - name: Store conformance, in memory and EF on SQLite in both fence modes
         run: |
@@ -2032,20 +2032,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Simulation/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
       - name: Build
         run: |
-          for p in sim conformance/Kernel.Runtime.Conformance.Run; do
+          for p in ../../essentials/tests/ActorFoundation/Simulation conformance/Kernel.Runtime.Conformance.Run; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
 
       - name: Simulation at 4,096, kernel and native
         run: |
-          SIM="dotnet sim/$BIN/Kernel.Sim.dll"
+          SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
           $SIM --seeds 20000 --count 4096
           $SIM --native --seeds 20000 --count 4096
           $SIM --contract --seeds 1000 --count 4096

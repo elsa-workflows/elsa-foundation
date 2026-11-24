@@ -332,7 +332,7 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     a coordinator design choice ([register](decisions.md#the-gate-2-fix-round-17-november)). The terminates a cascade
     sends carry the cascade origin mark, and every recipient checks the parent binding on them in every state, a
     running one included ("Cascade terminates are parent-bound in every state" below, fifth review R5-M5).
-    The K3 [open-drain fixture](../../prototypes/kernel-model/sim/ParkDrainCascadeChecks.cs) runs a parent's
+    The K3 [open-drain fixture](../../essentials/tests/ActorFoundation/Simulation/ParkDrainCascadeChecks.cs) runs a parent's
     terminate during discard and expiry, and an operator's current selection during discard, through the
     built-in Worker. The refusal commits a cascade while preserving the drain. The fixture rejects cascade
     authority for an operator command selected before the actor parked. The original drain completes as Faulted.
@@ -361,7 +361,7 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     give; the operator terminates each child by its own selection. The marker's shape, its bound and when the
     obligation clears are on the data lifecycle page ([the qualified
     delete](data-lifecycle.md#proposed-the-qualified-delete)).
-    The K3 [retirement fixture](../../prototypes/kernel-model/sim/RetirementCascadeChecks.cs) runs the
+    The K3 [retirement fixture](../../essentials/tests/ActorFoundation/Simulation/RetirementCascadeChecks.cs) runs the
     in-memory Worker through qualified Delete of an already-ended child with live descendants. An operator
     terminate leaves its obligation held. The recorded parent's terminate opens it, and one-page and
     two-page schedules check progress across takeover and one send per exact child. The fixture also checks
@@ -1194,7 +1194,7 @@ Park decision.
       ticket id. The returned event id is still the ticket id prefixed with `~`. Typed ticket metadata carries
       the author commit's acceptance time and distinguishes the duration in the new frame from the absolute
       expiry in older frames. Its first fenced step inserts the event row and rewrites the ticket without the
-      payload. [The in-memory fixture](../../prototypes/kernel-model/sim/EventIdentityChecks.cs) exercises the
+      payload. [The in-memory fixture](../../essentials/tests/ActorFoundation/Simulation/EventIdentityChecks.cs) exercises the
       Native and direct payload boundaries, restored waits, lost insert and match answers, and recovery of
       a Park-kept ticket. Provider frame and key-width evidence stays at K4.
       - **A generated event id counts inside `C`.** A turn's `Publish` takes no event id from the model: the event id
@@ -1708,7 +1708,7 @@ calls one new model hook.
         byte allowance lets it reach one wait before the second matches both. The first publication's next page
         reaches the remaining wait. The test reads opposite broadcast orders from the two actors and confirms
         that two subsequent direct sends from one actor arrive in authored order. The in-memory run is in
-        [FoundationEventSendChecks](../../prototypes/kernel-model/sim/FoundationEventSendChecks.cs). K4 also
+        [FoundationEventSendChecks](../../essentials/tests/ActorFoundation/Simulation/FoundationEventSendChecks.cs). K4 also
         races two transactions matching the same wait. Pause the first while it assigns inbox order and let the
         second try to commit. The resulting delivery order must follow commit visibility. If the provider serializes
         order assignment for that wait, verify that the second transaction waits and that the first delivery stays first.
@@ -2378,7 +2378,7 @@ store conformance suite need it:
   page at the row's revision plus one, the obligation kept on the marker by a delete while `Discharging`, a root
   included (fifth review R5-B2), and in the simulation, invariant 17 widened so that at quiescence no `Cascade`
   obligation remains `Discharging` on any instance row or marker and no `kernel.cascade` is pending (today I17 checks
-  only that no terminated tree instance runs or lists `Children`, existing prototype behaviour, `sim/Checks.cs`
+  only that no terminated tree instance runs or lists `Children`, existing prototype behaviour, [Checks.cs](../../essentials/tests/ActorFoundation/Simulation/Checks.cs)
   676–680);
 - the idempotent cancel of a job ticket by its exact key (instance, creation, job key, `JobGeneration`), shared by
   the live terminate, the open-drain refusal cascade and the marker's cascade: a pending ticket consumed and counted,

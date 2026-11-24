@@ -21,7 +21,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `../../essentials/src/ActorFoundation/BuiltIn/Runtime` | Layer 1, the actor runtime: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal, and `PartitionRuntime`, the built-in runtime (balancer, activations, one pass at a time per partition); addresses, flaws, the owner's defaults |
 | `src/Kernel.Durable` | Layer 2, durable actors: `Worker` (a partition's activation: inbox, fenced commit, timers, background jobs, events, poison, journal), `DurableHost`, the seam to layer 3 (`IActorType`, `DurableTurn`), the store contract, the in-memory store, the projector, reply addresses for live output |
 | `src/Kernel.Workflows` | Layer 3, actor types: `WorkflowInstance` (status, definition, parent and children, suspend, resume, terminate, rebind, delete, the history envelope) and the execution-model contract (`IExecutionModel`, `ITurn`) |
-| `sim` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
+| `../../essentials/tests/ActorFoundation/Simulation` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
 | `models/Graph` | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
 | `models/Graph.Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
 | `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
@@ -51,7 +51,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 One project at a time (they share `obj/` folders through project references):
 
 ```
-for p in sim ../../essentials/tests/ActorFoundation/Native/Run ef/Kernel.Ef.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
+for p in ../../essentials/tests/ActorFoundation/Simulation ../../essentials/tests/ActorFoundation/Native/Run ef/Kernel.Ef.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
@@ -60,8 +60,8 @@ dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 From `prototypes/kernel-model`, run:
 
 ```bash
-dotnet restore sim --locked-mode
-dotnet run -c Release --no-restore --project sim -- --park-operator-demo
+dotnet restore ../../essentials/tests/ActorFoundation/Simulation --locked-mode
+dotnet run -c Release --no-restore --project ../../essentials/tests/ActorFoundation/Simulation -- --park-operator-demo
 ```
 
 An approval actor parks when its service is unavailable. The operator lists parked actors through
@@ -88,7 +88,7 @@ in-memory actor-backed runs and their own read route.
 Run the Native workflow witness from `prototypes/kernel-model`.
 
 ```sh
-dotnet run --project sim -c Release -- --workflow-run-history-check
+dotnet run --project ../../essentials/tests/ActorFoundation/Simulation -c Release -- --workflow-run-history-check
 ```
 
 ## Migration plan outcomes from the journal
@@ -96,7 +96,7 @@ dotnet run --project sim -c Release -- --workflow-run-history-check
 From `prototypes/kernel-model`, run:
 
 ```sh
-dotnet run -c Release --project sim -- --migration-plan-reads
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --migration-plan-reads
 ```
 
 This K9 example projects one plan's committed journal through `IActorReads`, using its opaque page token.
@@ -158,7 +158,7 @@ tenant and reads the view file locally. Application hosting and operator authent
 From `prototypes/kernel-model`:
 
 ```sh
-dotnet run -c Release --project sim -- --migration-plan-dispatch
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --migration-plan-dispatch
 ```
 
 This K11 dispatch example reads a committed batch and sends `Migrate` outside actor turns to its exact actor refs.
@@ -175,7 +175,7 @@ remain separate K11 work.
 ### Validate a waiting Native checkpoint
 
 ```sh
-dotnet run -c Release --project sim -- --native-migration-validation
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --native-migration-validation
 ```
 
 This K11 check loads real Balanced and Durable checkpoints through the in-memory Actor Foundation.
@@ -189,7 +189,7 @@ outstanding jobs, Flowchart and StateMachine compatibility are separate work.
 ### Apply a compatible Native migration
 
 ```sh
-dotnet run -c Release --project sim -- --native-migration-apply
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --native-migration-apply
 ```
 
 The public in-memory command suspends a waiting Native workflow, rebinds a compatible Sequence and
@@ -204,7 +204,7 @@ exercises real actor delivery. Declaration mapping and graph and statechart migr
 ### Dispatch a real migration plan
 
 ```sh
-dotnet run -c Release --project sim -- --migration-plan-actor
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --migration-plan-actor
 ```
 
 The in-memory demo pages two Native workflows from the public instance read model. The plan model
@@ -224,7 +224,7 @@ automatic selection scheduling and provider qualification remain separate work.
 ### Run migration selection and completion
 
 ```sh
-dotnet run -c Release --project sim -- --migration-plan-runner
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Simulation -- --migration-plan-runner
 ```
 
 The in-memory operator service selects through the public actor list, dispatches the committed
@@ -810,7 +810,7 @@ Foundation use across an owned set and the remaining release-profile acceptance 
 ## The simulation
 
 ```
-SIM="dotnet sim/bin/Release/net10.0/Kernel.Sim.dll"
+SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/bin/Release/net10.0/Kernel.Sim.dll"
 $SIM --seeds 200000                                  # 200,000 seeds of 300 actions each
 $SIM --seeds 20000 --actions 1000                    # 20,000 seeds of 1,000 actions
 $SIM --seeds 200000 --count 4096                     # K1: the store's virtual partitions, 1,024 (the default) or 4,096
@@ -895,7 +895,7 @@ obligation held, and the recorded parent's terminate which starts the cascade. I
 two-page cascades across takeover, an exact registry hand-off, and root retirement. Park drains, ThenDelete,
 and physical-provider qualification have separate cases.
 
-The focused [held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
+The focused [held request cases](../../essentials/tests/ActorFoundation/Simulation/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
 response after takeover and an input that stays durable across local reset. The seeded actor workload
 uses already-started counter receivers and one state version. The other legacy actor and transport
 mixes continue to use their separate simulation and case suites.
