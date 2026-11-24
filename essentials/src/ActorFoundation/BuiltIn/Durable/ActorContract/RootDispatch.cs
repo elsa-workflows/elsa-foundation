@@ -13,6 +13,7 @@ internal interface IRootDispatchHeaders
     bool KeepsParkInputs { get; }
     bool KeepsParkArrivals { get; }
     bool RecoversPark { get; }
+    bool RefusesParkedOperators { get; }
 }
 
 internal sealed partial class ActorAdapter
@@ -74,6 +75,22 @@ internal sealed partial class ActorAdapter
             Journal = reason is null
                 ? Durable.Json.Write(new { Outcome = "recovered", Operation = message.Id, Restored = facts.Arrived, Cleared = facts.Consumed, AlreadyRearmed = 0 })
                 : Durable.Json.Write(new { Outcome = "refused", Operation = message.Id, Reason = reason })
+        };
+    }
+
+    // S5a: a composed Park set delivers an operator command to a parked root. Until S5b ends the root here, the command is
+    // consumed and refused with a journalled reason at the next revision, and the Park and checkpoint stay as they are.
+    private Durable.TurnOutcome? RefuseOnParkedRoot(Durable.TurnInput input)
+    {
+        if (roots is not { RefusesParkedOperators: true } || input.Row is not
+            { Status: Durable.InstanceStatus.Faulted, Suspended: false, Retired: false, Creation: 1, FoundationDispatchHeader.Terminal: null } row ||
+            input.Taken is not [{ Durable: true, Message: { ReplyTo: null } control } refused] ||
+            !IsRootControl(control) || control.Target.Id != row.Id) return null;
+        var revision = checked(row.Revision + 1);
+        return new(input.Actor)
+        {
+            Expected = row.Revision, Row = row with { Revision = revision }, Revision = revision, Status = row.Status, Consumed = [refused],
+            Journal = Durable.Json.Write(new { Outcome = "refused", Operation = control.Id, Reason = "parked" })
         };
     }
 

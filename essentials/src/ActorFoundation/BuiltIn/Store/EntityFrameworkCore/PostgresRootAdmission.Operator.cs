@@ -146,7 +146,8 @@ internal sealed partial class PostgresRootAdmission
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
             var eligible = deletion ? exactTerminal : recover ? exactPark
                 : thenDelete ? selectedStatus is InstanceStatus.Running or InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled
-                : selectedStatus == InstanceStatus.Running;
+                : selectedStatus == InstanceStatus.Running || selectedStatus == InstanceStatus.Faulted && kind == Kinds.Terminate &&
+                    reply is null && db.UsesRootParkedOperators && await LocksParkedRootAsync(db, address, tenant, reference, token);
             if (!eligible)
             {
                 await tx.RollbackAsync(token);
@@ -231,6 +232,18 @@ internal sealed partial class PostgresRootAdmission
             FOR SHARE
             """).ToListAsync(token)).Count == 1;
 
+    // S5a: a composed Park set admits a Terminate for a parked root with the root's running selection. The owner refuses it
+    // there with a journalled reason; S5b checks it against the Park selection and ends the root.
+    private static async Task<bool> LocksParkedRootAsync(KernelDb db, CreationAddress address, string tenant, string reference,
+        CancellationToken token) =>
+        address.Creation == 1 && (await db.Database.SqlQuery<long>($"""
+            SELECT "Revision" AS "Value" FROM "Instances"
+            WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
+                AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired" AND NOT "Suspended"
+                AND "Status" = {(int)InstanceStatus.Faulted} AND "FoundationParkAt" IS NOT NULL AND "FoundationTerminalRevision" IS NULL
+            FOR SHARE
+            """).ToListAsync(token)).Count == 1;
+
     private static bool IsUnavailableSelectedSchema(PostgresException error) =>
         error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn
             or PostgresErrorCodes.InvalidSchemaName or PostgresErrorCodes.WrongObjectType;
@@ -275,7 +288,8 @@ internal sealed partial class PostgresRootAdmission
             """, token);
         if (db.UsesRootParkOpening)
         {
-            var receipts = db.UsesRootParkRecovery;
+            // Every Park set that admits operator commands, Recover or a composed one, pins their receipts too.
+            var receipts = db.UsesRootOperatorProtocol;
             await db.Database.ExecuteSqlRawAsync(receipts ? ParkRecoverySources : ParkSources, token);
             var parkSources = await db.Database.SqlQuery<bool>($"""
                 SELECT count(*) = {(receipts ? 14 : 13)} AS "Value"

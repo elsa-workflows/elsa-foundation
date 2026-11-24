@@ -7,14 +7,19 @@ public sealed partial class EfStore
 {
     // Qualified generated roots keep only ordinary direct inputs here. The same fenced
     // path covers opening and continuing the Park without entering the actor model.
-    private async Task<PreparedRoot?> PrepareRootParkOpeningAsync(WorkerRoot root, TurnCommit turn,
+    private async Task<PreparedRoot?> PrepareRootParkOpeningAsync(WorkerRoot root, TurnCommit turn, bool parkedOperators,
         CancellationToken cancellationToken)
     {
         var opening = turn.OpensPark;
         var reason = turn.Journal is null ? ParkKeepReason.Arrived : ParkKeepReason.Consumed;
         var repark = !opening && reason == ParkKeepReason.Consumed;
+        // S5a: a composed Park set opens the Park without the operator command whose own turn failed. The command keeps its
+        // row and FIFO place, unmarked, so the owner polls it again on the parked root.
+        var split = parkedOperators && opening && turn.Done.Any(PostgresRootAdmission.IsOperatorOccurrence);
+        string[] returned = split ? turn.Done.Where(PostgresRootAdmission.IsOperatorOccurrence).Select(key => key.Id).ToArray() : [];
+        if (split) turn = WithoutOperators(turn);
         if (turn.Row is not { Status: InstanceStatus.Faulted, Suspended: false, Fault: { } fault } row ||
-            turn.Expected is not > 0 || opening && reason != ParkKeepReason.Consumed || turn.Done.Count == 0 ||
+            turn.Expected is not > 0 || opening && reason != ParkKeepReason.Consumed || turn.Done.Count == 0 && !split ||
             turn.FoundationKept is not { } kept || kept.Count != turn.Done.Count ||
             turn.FoundationRootParkInputs is not { } envelopes || !SameInputs(envelopes, turn.Done) ||
             turn.Done.Any(key => key.Scope != InboxKey.FoundationOccurrenceScope || !root.Owns(key) ||
@@ -42,13 +47,27 @@ public sealed partial class EfStore
             throw RootShape();
 
         var journal = turn.Journal is null ? null : new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal);
-        return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes));
+        return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes, returned));
+    }
+
+    private static TurnCommit WithoutOperators(TurnCommit turn)
+    {
+        bool Ordinary(InboxKey key) => !PostgresRootAdmission.IsOperatorOccurrence(key);
+        var command = turn.FoundationRootOperator;
+        if (turn.FoundationKept is not { } kept || turn.FoundationRootParkInputs is not { } inputs ||
+            command is not null && (Ordinary(command.InboxKey) || turn.Done is not [var only] || only != command.InboxKey)) throw RootShape();
+        return turn with
+        {
+            Done = turn.Done.Where(Ordinary).ToArray(), FoundationRootOperator = null,
+            FoundationKept = kept.Where(entry => Ordinary(entry.Key)).ToDictionary(),
+            FoundationRootParkInputs = inputs.Where(input => Ordinary(input.InboxKey)).ToArray()
+        };
     }
 
     private sealed record LockedParkCheckpoint(long At, long? ParkAt, long? OpenRevision, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
 
     private sealed record RootParkOpening(WorkerRoot Root, long Expected, bool Opening, ParkKeepReason Reason, string EncodedFault,
-        IReadOnlyList<Message> Inputs)
+        IReadOnlyList<Message> Inputs, string[] Returned)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
@@ -108,7 +127,11 @@ public sealed partial class EfStore
                 WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
                 """, cancellationToken);
-            if (kept != keys.Length) return false;
+            if (kept != keys.Length || Returned.Length != 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Messages" SET "Seen" = 0
+                WHERE "Id" = ANY({Returned}) AND "Id" LIKE 'operator/%' AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
+                    AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
+                """, cancellationToken) != Returned.Length) return false;
             if (Reason == ParkKeepReason.Consumed)
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     DELETE FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition}
