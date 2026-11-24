@@ -30,22 +30,24 @@ internal sealed class BpmnStateCodec
 
         try
         {
-            var root = JsonNode.Parse(payload.GetRawText())?.AsObject()
+            var shape = JsonNode.Parse(payload.GetRawText())?.AsObject()
                 ?? throw new JsonException("BPMN state is null.");
-            BpmnPersistedStateShape.Validate(root, document.StateVersion);
-            var correlation = root[InvocationKey]?.Deserialize<Dictionary<string, string>>(Web)
-                ?? new Dictionary<string, string>();
+            BpmnPersistedStateShape.Validate(shape, document.StateVersion);
+            // Shape validation can inspect a DOM, but the persisted values come from the original JSON.
+            var root = Properties(payload);
+            var correlation = root.TryGetValue(InvocationKey, out var invocationValue)
+                ? invocationValue.Deserialize<Dictionary<string, string>>(Web) ?? new Dictionary<string, string>()
+                : new Dictionary<string, string>();
             root.Remove(InvocationKey);
             if (document.StateVersion == 1)
             {
-                if (root["activeChildren"] is not JsonArray)
+                if (root["activeChildren"].ValueKind != JsonValueKind.Array)
                     throw new JsonException("Legacy BPMN active-child state is missing.");
                 Rename(root, "activeChildren", "activeWork");
-                foreach (var token in root["tokens"]?.AsArray() ?? [])
-                    if (token is JsonObject entry)
-                        Rename(entry, "producingActivityExecutionId", "producingWorkHandle");
+                RenameTokenMembers(root, "producingActivityExecutionId", "producingWorkHandle");
             }
-            var state = root.Deserialize<BpmnExecutionState>(Web) ?? throw new JsonException("BPMN state is null.");
+            var state = JsonSerializer.SerializeToElement(root, Web).Deserialize<BpmnExecutionState>(Web)
+                ?? throw new JsonException("BPMN state is null.");
             if (state.Tokens.Any(token => token is null) || state.ActiveWork.Any(work => work is null) || state.Diagnostics.Any(entry => entry is null) ||
                 state.Tokens.Select(token => token.TokenId).Distinct(StringComparer.Ordinal).Count() != state.Tokens.Count ||
                 state.ActiveWork.Select(work => work.TokenId).Distinct(StringComparer.Ordinal).Count() != state.ActiveWork.Count ||
@@ -64,14 +66,13 @@ internal sealed class BpmnStateCodec
     {
         try
         {
-            var root = JsonSerializer.SerializeToNode(state, Web)!.AsObject();
+            var root = Properties(JsonSerializer.SerializeToElement(state, Web));
             if (document.Version == 1)
             {
                 Rename(root, "activeWork", "activeChildren");
-                foreach (var token in root["tokens"]!.AsArray())
-                    Rename(token!.AsObject(), "producingWorkHandle", "producingActivityExecutionId");
+                RenameTokenMembers(root, "producingWorkHandle", "producingActivityExecutionId");
             }
-            root[InvocationKey] = JsonSerializer.SerializeToNode(document.InvocationCorrelation, Web);
+            root[InvocationKey] = JsonSerializer.SerializeToElement(document.InvocationCorrelation, Web);
             return ValueEnvelope.Inline(new ValueTypeDescriptor(StateAlias, schemaVersion: document.Version),
                 JsonSerializer.SerializeToElement(root, Web), ValueProtectionPolicy.InstanceInline);
         }
@@ -81,9 +82,23 @@ internal sealed class BpmnStateCodec
         }
     }
 
-    private static void Rename(JsonObject root, string from, string to)
+    private static Dictionary<string, JsonElement> Properties(JsonElement value) => value.EnumerateObject()
+        .ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+
+    private static void RenameTokenMembers(Dictionary<string, JsonElement> root, string from, string to)
     {
-        if (!root.TryGetPropertyValue(from, out var value))
+        var tokens = root["tokens"].EnumerateArray().Select(token =>
+        {
+            var properties = Properties(token);
+            Rename(properties, from, to);
+            return JsonSerializer.SerializeToElement(properties, Web);
+        }).ToArray();
+        root["tokens"] = JsonSerializer.SerializeToElement(tokens, Web);
+    }
+
+    private static void Rename(Dictionary<string, JsonElement> root, string from, string to)
+    {
+        if (!root.TryGetValue(from, out var value))
             return;
         if (root.ContainsKey(to))
             throw new JsonException($"BPMN state contains conflicting '{from}' and '{to}' fields.");
