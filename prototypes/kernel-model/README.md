@@ -357,6 +357,9 @@ version and end time, alongside `next` and `asOf`. The route is available only w
 enabled and its read tenant configured.
 Run `bash tools/ci/actor-foundation/check-workbench-core-preview-reads.sh Release`
 to qualify the route against disposable PostgreSQL and Workbench Identity principals.
+Set `WORKBENCH_READS_PROFILE=timed` on the same command to qualify the timed-job preview.
+That lane restarts the waiting workflow, settles both timed jobs and verifies its terminal
+status and end time through the same authenticated list, pagination and authorization checks.
 
 The first restart in each lane stops while the approval wait is open. Run either active-job takeover lane on its own:
 
