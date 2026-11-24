@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Kernel.Native.Run</RootNamespace>
+    <AssemblyName>Kernel.Native.Run</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);EF1002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+    <Using Include="Elsa.ActorFoundation.Hosting" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Compile Include="../../../../../prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs" Link="Wire.cs" />
+    <Compile Include="../../../../../prototypes/kernel-model/sim/Models.cs" Link="Models.cs" />
+    <Compile Include="../../../../../prototypes/kernel-model/models/Statecharts.Run/OrderStatechart.cs" Link="OrderStatechart.cs" />
+    <ProjectReference Include="../../../../../prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj" />
+    <ProjectReference Include="../../../../../prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj" />
+    <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
+    <ProjectReference Include="../../../../../prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj" />
+    <ProjectReference Include="../../../../../prototypes/kernel-model/src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
+    <ProjectReference Include="../../../../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
+    <ProjectReference Include="../../../../../prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+  </ItemGroup>
+</Project>

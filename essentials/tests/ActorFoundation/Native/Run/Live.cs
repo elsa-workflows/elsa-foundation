@@ -1,9 +1,8 @@
 using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
+using Kernel.Native;
 
 namespace Kernel.Native.Run;
-
-using Kernel.Native;
 
 // HTTP on the kernel's live output (merge): the model emits with ITurn.Emit, the kernel releases after the commit of the
 // turn that wrote it and sends it to the reply addresses of the messages the instance consumed, and each node keeps its

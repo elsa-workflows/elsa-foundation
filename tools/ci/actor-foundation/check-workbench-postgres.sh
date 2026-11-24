@@ -52,9 +52,9 @@ project.write_text(text.replace('</Project>', '''
     <ProjectReference Include="../../prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
     <ProjectReference Include="../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <Compile Include="../../tools/ci/actor-foundation/WorkbenchPostgresPreview.cs" Link="Qualification/WorkbenchPostgresPreview.cs" />
-    <Compile Include="../../prototypes/kernel-model/models/Native.Run/DirectApprovalWorkflow.cs" Link="Qualification/DirectApprovalWorkflow.cs" />
+    <Compile Include="../../essentials/tests/ActorFoundation/Native/Run/DirectApprovalWorkflow.cs" Link="Qualification/DirectApprovalWorkflow.cs" />
     <Compile Include="../../prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs" Link="Qualification/Wire.cs" />
-    <Compile Include="../../prototypes/kernel-model/models/Native.Run/PostgresFixtureDatabase.cs" Link="Qualification/PostgresFixtureDatabase.cs" />
+    <Compile Include="../../essentials/tests/ActorFoundation/Native/Run/PostgresFixtureDatabase.cs" Link="Qualification/PostgresFixtureDatabase.cs" />
   </ItemGroup>
 </Project>'''))
 program=app/'Program.cs'

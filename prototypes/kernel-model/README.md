@@ -25,7 +25,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `models/Graph` | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
 | `models/Graph.Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
 | `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
-| `models/Native.Run` | Native smoke tests, cost and memory measurement, PostgreSQL Core Preview |
+| `../../essentials/tests/ActorFoundation/Native/Run` | Native smoke tests, cost and memory measurement, PostgreSQL Core Preview |
 | `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs`; the commit as the store's own SQL in `EfStore.Owned.cs` and the `*CommitDialect.cs` files ([COMMIT-SQL.md](COMMIT-SQL.md)) |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |
 | `../../essentials/tests/ActorFoundation/Store/EntityFramework` | The conformance suite against the EF store, every engine |
@@ -51,7 +51,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 One project at a time (they share `obj/` folders through project references):
 
 ```
-for p in sim models/Native.Run ef/Kernel.Ef.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
+for p in sim ../../essentials/tests/ActorFoundation/Native/Run ef/Kernel.Ef.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run; do dotnet build $p -c Release; done
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
@@ -118,9 +118,9 @@ and operator controls.
 From `prototypes/kernel-model`, build the runner and give it a new SQLite file:
 
 ```sh
-dotnet restore models/Native.Run --locked-mode
-dotnet build -c Release models/Native.Run --no-restore
-dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+dotnet restore ../../essentials/tests/ActorFoundation/Native/Run --locked-mode
+dotnet build -c Release ../../essentials/tests/ActorFoundation/Native/Run --no-restore
+dll=../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll
 scratch=$(mktemp -d)
 dotnet "$dll" sqlite-plan-projection build "$scratch/plan.db"
 dotnet "$dll" sqlite-plan-projection inspect "$scratch/plan.db" <plan-ref> <digest>
@@ -252,9 +252,9 @@ terminate a version 1 pending plan within its original terminal state reserve.
 From `prototypes/kernel-model`, set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database:
 
 ```sh
-dotnet restore models/Native.Run --locked-mode
-dotnet build -c Release models/Native.Run --no-restore
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-timed-job-worker checked
+dotnet restore ../../essentials/tests/ActorFoundation/Native/Run --locked-mode
+dotnet build -c Release ../../essentials/tests/ActorFoundation/Native/Run --no-restore
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-timed-job-worker checked
 ```
 
 Use `in-batch` on another fresh database for the other owned SQL fence mode. The Worker commits the issued
@@ -275,7 +275,7 @@ Set `KERNEL_PREVIEW_POSTGRES` to the connection string of an empty PostgreSQL 17
 Run this from `prototypes/kernel-model` with the SDK in [global.json](global.json).
 
 ```bash
-models/Native.Run/run-core-preview.sh
+../../essentials/tests/ActorFoundation/Native/Run/run-core-preview.sh
 ```
 
 The first Embedded host starts a Native approval workflow through the public Foundation contract, records Ada's approval,
@@ -370,7 +370,7 @@ To measure TCP turns as well, use a dedicated loopback database with `Host=127.0
 and refuses `GSS Encryption Mode=Require`.
 
 ```bash
-KERNEL_PREVIEW_MEASURE_WIRE=1 models/Native.Run/run-core-preview.sh
+KERNEL_PREVIEW_MEASURE_WIRE=1 ../../essentials/tests/ActorFoundation/Native/Run/run-core-preview.sh
 ```
 
 The meter counts the client's first send and each subsequent send after a server response. Pipelined requests can
@@ -404,11 +404,11 @@ checks, up from three. The general journal reader, view reader and sweeper each 
 The public preview uses separate tenant-scoped checkpoint and journal queries.
 
 To run two tenants' Native approvals on the same Embedded worker, use a fresh dedicated database. After building
-`models/Native.Run` in Release, run the following commands from `prototypes/kernel-model`. Supply the three
+`../../essentials/tests/ActorFoundation/Native/Run` in Release, run the following commands from `prototypes/kernel-model`. Supply the three
 references printed by the first process to the second. The third identifies a root outside the owner's set.
 
 ```bash
-dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+dll=../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll
 birth=$(dotnet "$dll" pg-multi-root owned in-batch birth)
 read -r label first_ref second_ref outside_ref <<< "$(printf '%s\n' "$birth" | awk '$1 == "multi-references"')"
 dotnet "$dll" pg-multi-root owned in-batch restart "$first_ref" "$second_ref" "$outside_ref"
@@ -422,7 +422,7 @@ are `owned` and `ef`. The fence choices are `in-batch` and `checked`.
 To let an Embedded worker discover public roots from their partition, use a fresh dedicated database and run:
 
 ```bash
-dll=models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll
+dll=../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll
 dotnet "$dll" pg-discover-roots birth 0
 dotnet "$dll" pg-discover-roots restart 0
 ```
@@ -436,10 +436,10 @@ Each tenant uses its own fixed-scope public client process. To select a writer a
 and `in-batch` or `checked` to both commands. This preview runs one registered workflow actor type on its dedicated database.
 
 To run two processes under the built-in Cluster runtime, point `KERNEL_PREVIEW_POSTGRES` at a fresh dedicated
-PostgreSQL database and run the following after building `models/Native.Run` in Release:
+PostgreSQL database and run the following after building `../../essentials/tests/ActorFoundation/Native/Run` in Release:
 
 ```bash
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-roots 1024
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-roots 1024
 ```
 
 Each Native application explicitly registers `PostgresPreviewHostedService` in its .NET Generic Host.
@@ -473,7 +473,7 @@ owned-SQL writer. Run `root-set` in PostgreSQL EF conformance for the stale-fenc
 For an abrupt peer exit in the same two-process Cluster fixture, use a fresh dedicated PostgreSQL database:
 
 ```bash
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-crash 1024
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-crash 1024
 ```
 
 The coordinator terminates only its spawned peer process while the workflow waits for its second approval.
@@ -486,7 +486,7 @@ spans process loss and replay.
 To observe an abrupt owner loss on a POSIX host, use a fresh dedicated database and run:
 
 ```bash
-models/Native.Run/run-core-preview-failover.py
+../../essentials/tests/ActorFoundation/Native/Run/run-core-preview-failover.py
 ```
 
 The fixture starts two Embedded host processes for the same root. The first keeps renewing its lease at the second
@@ -498,7 +498,7 @@ Grace's approval. This exercises one fixed partition. K5 covers Cluster placemen
 For a Durable Flowchart handover, set `KERNEL_PREVIEW_POSTGRES` to a fresh database. Both runtime nodes and the public reader use the scoped continuation format (schema 3, message protocol 3, journal codec 1). Run:
 
 ```sh
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-flowchart 1024
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-flowchart 1024
 ```
 
 The two RuntimeNodes establish an equal split. A public purchase Flowchart starts on the peer. A fixture callback
@@ -512,7 +512,7 @@ keeps consecutive positions. The check also runs with eight virtual partitions.
 For a Balanced StateMachine handover, point `KERNEL_PREVIEW_POSTGRES` at another fresh database and run:
 
 ```sh
-dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-statechart 1024
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-statechart 1024
 ```
 
 A Native order chart starts on the peer. A declined payment commits the shipment-release wait. The driver
@@ -565,7 +565,7 @@ From this directory, set `KERNEL_PREVIEW_POSTGRES` to a fresh disposable Postgre
 loopback (`Host=127.0.0.1`, `SSL Mode=Disable`). Use a fresh database for each writer and fence combination.
 
 ```sh
-dotnet run -c Release --project models/Native.Run -- pg-write-budget owned in-batch
+dotnet run -c Release --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-write-budget owned in-batch
 ```
 
 Use `ef` for the EF writer, or `checked` for a separate fence statement. The measured interval starts at public
@@ -586,7 +586,7 @@ can reuse the original reference without uploading another body.
 Set `KERNEL_PREVIEW_POSTGRES` to a fresh PostgreSQL database and run from `prototypes/kernel-model`:
 
 ```bash
-models/Native.Run/run-core-preview.sh pg-flowchart-preview
+../../essentials/tests/ActorFoundation/Native/Run/run-core-preview.sh pg-flowchart-preview
 ```
 
 The Flowchart routes an amount of 750 to the approval path and persists a second approval wait. A new process
@@ -602,7 +602,7 @@ remain part of K7.
 Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database and run from `prototypes/kernel-model`:
 
 ```sh
-models/Native.Run/run-statechart-preview.sh
+../../essentials/tests/ActorFoundation/Native/Run/run-statechart-preview.sh
 ```
 
 The Embedded processes use Balanced persistence and run the same Native order chart as the
@@ -625,7 +625,7 @@ invariants, Durable persistence and Cluster qualification have separate K7 accep
 Use a fresh dedicated database in `KERNEL_PREVIEW_POSTGRES` for each run. From `prototypes/kernel-model`:
 
 ```sh
-models/Native.Run/run-flowchart-preview.sh manual
+../../essentials/tests/ActorFoundation/Native/Run/run-flowchart-preview.sh manual
 ```
 
 The public runtime starts a Native purchase Flowchart. A decision selects manual risk review while finance waits in
@@ -635,7 +635,7 @@ last live branch. The journal shows one join, and the terminal checkpoint contai
 
 Run with `automatic` on a separate fresh database to select the bypass path. Finance still has to finish. The inactive risk branch cannot hold the join open.
 
-For Durable persistence, run `models/Native.Run/run-flowchart-preview.sh manual durable` (or `automatic durable`).
+For Durable persistence, run `../../essentials/tests/ActorFoundation/Native/Run/run-flowchart-preview.sh manual durable` (or `automatic durable`).
 The first Embedded process exits with an immediate self-send in the inbox. The fixture checks that this envelope
 and the initial checkpoint share a PostgreSQL transaction ID. The next process picks up the continuation and runs
 to the finance wait. A third process resumes the same workflow using its saved journal cursor. The manual route
@@ -657,7 +657,7 @@ The adapter maps these inbox rows to a dedicated storage scope. The Worker sees 
 checks on a fresh PostgreSQL database, use `pg-root-self owned checked` with the Native runner. The other choices
 are `ef` for the writer and `in-batch` for the fence.
 
-On a fresh database, `dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
+On a fresh database, `dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
 replaces the join with a merge. The waiting assertion detects the premature finish.
 
 ### PostgreSQL Delay preview
@@ -665,7 +665,7 @@ replaces the join with a merge. The waiting assertion detects the premature fini
 On a fresh dedicated PostgreSQL database set `KERNEL_PREVIEW_POSTGRES` and run:
 
 ```sh
-models/Native.Run/run-delay-preview.sh owned checked
+../../essentials/tests/ActorFoundation/Native/Run/run-delay-preview.sh owned checked
 ```
 
 The Delay profile seeds schema 3, message protocol 4 and journal codec 1. An existing schema-2 Delay store
@@ -684,7 +684,7 @@ whether the early-input check ran. The
 fixture checks the public journal after another worker pass. Use `ef` for the EF writer or `in-batch` for the batch
 fence. This preview exercises a single generated root, one partition and a clean process restart.
 
-Run `models/Native.Run/run-delay-preview.sh owned checked recall` on another fresh database to let a public approval
+Run `../../essentials/tests/ActorFoundation/Native/Run/run-delay-preview.sh owned checked recall` on another fresh database to let a public approval
 win a Native Parallel join before the sibling Delay fires. Its checkpoint recalls the persisted timer. A cold process
 keeps the same actor, delivers an independently admitted notice at the original deadline and finishes on a second
 approval. The journal records the cancelled frame once. This Embedded preview supports recall of already persisted
@@ -696,7 +696,7 @@ recovery fall outside this case.
 Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated PostgreSQL database and run from `prototypes/kernel-model`:
 
 ```sh
-models/Native.Run/run-root-job-preview.sh checked
+../../essentials/tests/ActorFoundation/Native/Run/run-root-job-preview.sh checked
 ```
 
 Use `in-batch` on another fresh database to exercise the other owned SQL fence. The first Embedded process starts
@@ -759,7 +759,7 @@ The fixture counts durable outcomes. The completion case deliberately executes t
 
 ### PostgreSQL Suspend and Resume preview
 
-On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `models/Native.Run/run-root-operator-preview.sh [owned|ef] [checked|in-batch]`.
+On a fresh dedicated PostgreSQL database, set `KERNEL_PREVIEW_POSTGRES` and run `../../essentials/tests/ActorFoundation/Native/Run/run-root-operator-preview.sh [owned|ef] [checked|in-batch]`.
 
 The first process starts Native workflows and admits one-way Suspend and Resume through an explicitly authorized
 host. Receipts are scoped to the tenant and operation, including concurrent retries with changed targets. A second
@@ -783,8 +783,8 @@ Set `KERNEL_PREVIEW_POSTGRES` to the connection string of a fresh, empty Postgre
 `prototypes/kernel-model`:
 
 ```bash
-dotnet restore models/Native.Run --locked-mode
-dotnet run -c Release --no-restore --project models/Native.Run -- pg-runtime-cluster 1024
+dotnet restore ../../essentials/tests/ActorFoundation/Native/Run --locked-mode
+dotnet run -c Release --no-restore --project ../../essentials/tests/ActorFoundation/Native/Run -- pg-runtime-cluster 1024
 ```
 
 Omit the partition count for the eight-partition smoke. Append `wake` to use the optional PostgreSQL wake transport. The two processes listen on separate
@@ -1049,7 +1049,7 @@ the stress test kills the suite's sessions too.
 ## Native
 
 ```
-NAT="dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll"
+NAT="dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll"
 $NAT smoke
 $NAT park                    # Park removes active subscriptions; suspension preserves them
 $NAT cost sqlite

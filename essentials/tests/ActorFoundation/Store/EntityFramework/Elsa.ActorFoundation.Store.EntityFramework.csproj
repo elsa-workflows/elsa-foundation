@@ -10,7 +10,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../../../../prototypes/kernel-model/models/Native.Run/PostgresFixtureDatabase.cs" Link="PostgresFixtureDatabase.cs" />
+    <Compile Include="../../Native/Run/PostgresFixtureDatabase.cs" Link="PostgresFixtureDatabase.cs" />
     <ProjectReference Include="../../../../../prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
     <ProjectReference Include="../Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
   </ItemGroup>

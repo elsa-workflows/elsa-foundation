@@ -39,7 +39,7 @@ build_driver() {
         # The disposable driver and its database guard are the only additions to the archived test project.
         project=$legacy_runner
         build_root="$destination/prototypes/kernel-model"
-        cp "$source/$runner/FormatRehearsalProcess.cs" "$source/prototypes/kernel-model/models/Native.Run/PostgresFixtureDatabase.cs" "$build_root/$project/"
+        cp "$source/$runner/FormatRehearsalProcess.cs" "$source/essentials/tests/ActorFoundation/Native/Run/PostgresFixtureDatabase.cs" "$build_root/$project/"
         cat > "$build_root/$project/Program.cs" <<'CS'
 using Kernel.Ef.Conformance;
 return await FormatRehearsalProcess.RunAsync(args);

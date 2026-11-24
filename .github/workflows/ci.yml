@@ -1923,13 +1923,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json') }}
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Store/EntityFramework/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-kernel-prototype-nuget-
 
       - name: Build
         run: |
-          for p in sim models/Native.Run models/Native.Recovery.Run models/Statecharts.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
+          for p in sim ../../essentials/tests/ActorFoundation/Native/Run models/Native.Recovery.Run models/Statecharts.Run ../../essentials/tests/ActorFoundation/Store/EntityFramework conformance/Kernel.Store.Conformance.Run conformance/Kernel.Runtime.Conformance.Run models/Graph.Tests; do
             dotnet restore "$p" --locked-mode
             dotnet build "$p" -c Release --no-restore
           done
@@ -1996,7 +1996,7 @@ jobs:
 
       - name: Native model, smoke and cost
         run: |
-          NAT="dotnet models/Native.Run/$BIN/Kernel.Native.Run.dll"
+          NAT="dotnet ../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll"
           $NAT smoke
           $NAT cost sqlite
 
