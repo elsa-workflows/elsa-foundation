@@ -60,6 +60,12 @@ public sealed class JsonConversionLifetimeTests
         var property = builder.DefineProperty("CustomerName", PropertyAttributes.None, typeof(string), null);
         var getter = builder.DefineMethod("get_CustomerName", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, typeof(string), Type.EmptyTypes);
         var il = getter.GetILGenerator(); il.Emit(OpCodes.Ldstr, "Ada"); il.Emit(OpCodes.Ret); property.SetGetMethod(getter);
+        // A member override of an annotated recursive root also creates collection-local options.
+        // Those options must be released with the operation, including their collectible element metadata.
+        var children = builder.DefineProperty("Children", PropertyAttributes.None, builder.MakeArrayType(), null);
+        var childrenGetter = builder.DefineMethod("get_Children", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, builder.MakeArrayType(), Type.EmptyTypes);
+        var childrenIl = childrenGetter.GetILGenerator();
+        childrenIl.Emit(OpCodes.Ldc_I4_0); childrenIl.Emit(OpCodes.Newarr, builder); childrenIl.Emit(OpCodes.Ret); children.SetGetMethod(childrenGetter);
         var type = builder.CreateType()!;
         var instance = Activator.CreateInstance(type)!;
         var key = annotated ? "customer_name" : "customerName";
@@ -73,7 +79,9 @@ public sealed class JsonConversionLifetimeTests
         var memberContract = JsonConversionContract.For(type, member);
         Assert.Same(memberContract, JsonConversionContract.For(type, member));
         Assert.NotSame(memberContract, JsonConversionContract.For(typeof(object), member));
-        Assert.Equal("Ada", memberContract.Write(instance, type).GetProperty("customerName").GetString());
+        var memberWritten = memberContract.Write(instance, type);
+        Assert.Equal("Ada", memberWritten.GetProperty("customerName").GetString());
+        Assert.Empty(memberWritten.GetProperty("children").EnumerateArray());
         Assert.True(JsonConversionContract.For(typeof(object)).Options.IsReadOnly);
         _ = JsonSerializer.SerializeToElement<object>(instance, JsonConversionContract.For(typeof(object)).Options);
         // A stable scalar contract is also an options provider and accepts an explicit requested type.

@@ -15,21 +15,26 @@ public sealed class JsonConversionContract
     private readonly bool caseInsensitive;
     private readonly (string Json, string Member)[] mappings;
     private readonly Type? rootType;
+    private readonly bool memberOverride;
 
-    private JsonConversionContract(JsonConversionAttribute? selection, Type? rootType = null)
+    private JsonConversionContract(JsonConversionAttribute? selection, Type? rootType = null, bool memberOverride = false)
     {
         namingPolicy = selection?.NamingPolicy ?? JsonKnownNamingPolicy.CamelCase;
         caseInsensitive = selection?.CaseInsensitive ?? false;
         RefuseUnmatchedMembers = selection?.RefuseUnmatchedMembers ?? false;
         mappings = (selection?.MemberMappings ?? []).Select(ParseMapping).ToArray();
         this.rootType = rootType;
+        this.memberOverride = memberOverride;
     }
 
-    private JsonSerializerOptions CreateOptions(Operation operation)
+    private JsonSerializerOptions CreateOptions(Operation operation, Type? converterRootType = null)
     {
         var options = JsonBaseline.CreateCopy();
         options.PropertyNamingPolicy = Naming(namingPolicy);
         options.PropertyNameCaseInsensitive = caseInsensitive;
+        // A member overrides this occurrence only. A recursive child selects the type's annotation again,
+        // just as the scanner does. Ordinary type contracts need no additional boundary or option set.
+        var recursiveTypeContract = memberOverride && rootType is not null && HasSelection(rootType) ? For(rootType) : null;
         options.TypeInfoResolver = new DefaultJsonTypeInfoResolver
         {
             Modifiers = { info =>
@@ -46,10 +51,14 @@ public sealed class JsonConversionContract
                         property.CustomConverter = null;
                     if (member.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null)
                         property.CustomConverter = CreateBoundaryConverter(property.PropertyType, For(property.PropertyType, member), operation);
+                    else if (recursiveTypeContract is not null && (Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType) == rootType)
+                        property.CustomConverter = CreateBoundaryConverter(property.PropertyType, recursiveTypeContract, operation);
+                    else if (recursiveTypeContract is not null && property.CustomConverter is null && !HasSelection(property.PropertyType) && ContainsCollectionElement(property.PropertyType, rootType!))
+                        property.CustomConverter = (JsonConverter)Activator.CreateInstance(typeof(RecursiveCollectionConverter<>).MakeGenericType(property.PropertyType), this, operation)!;
                 }
             } }
         };
-        options.Converters.Insert(0, new ScopedConverterFactory(rootType, operation));
+        options.Converters.Insert(0, new ScopedConverterFactory(converterRootType ?? rootType, operation));
         StrictDateTimeConverters.Configure(options);
         options.MakeReadOnly();
         return options;
@@ -70,7 +79,7 @@ public sealed class JsonConversionContract
         ArgumentNullException.ThrowIfNull(type);
         type = Nullable.GetUnderlyingType(type) ?? type;
         if (member?.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null)
-            return Members.GetValue(member, _ => new()).GetValue(type, key => new(member.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key));
+            return Members.GetValue(member, _ => new()).GetValue(type, key => new(member.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key, memberOverride: true));
         return Types.GetValue(type, key => new(key.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key));
     }
 
@@ -146,6 +155,40 @@ public sealed class JsonConversionContract
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) => JsonSerializer.Serialize(writer, value, options: operation.GetOptions(contract));
     }
 
+    private interface IRecursiveCollectionConverter { }
+
+    // A collection's elements must not inherit the root-only converter exclusion. Keep the enclosing
+    // naming/mapping policy, but let annotated elements select their own contract in these local options.
+    private sealed class RecursiveCollectionConverter<T>(JsonConversionContract contract, Operation operation) : JsonConverter<T>, IRecursiveCollectionConverter
+    {
+        public override T? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => JsonSerializer.Deserialize<T>(ref reader, options: operation.GetCollectionOptions(contract, typeof(T)));
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) => JsonSerializer.Serialize(writer, value, options: operation.GetCollectionOptions(contract, typeof(T)));
+    }
+
+    internal static bool IsRecursiveCollectionConverter(JsonConverter? converter) => converter is IRecursiveCollectionConverter;
+
+    private static bool ContainsCollectionElement(Type type, Type elementType)
+    {
+        if (type == typeof(string)) return false;
+        HashSet<Type>? visited = null;
+        while (type != elementType)
+        {
+            Type? itemType;
+            if (type.IsArray) itemType = type.GetElementType();
+            else
+            {
+                var interfaces = type.GetInterfaces().Append(type);
+                var dictionary = interfaces.FirstOrDefault(item => item.IsGenericType &&
+                    (item.GetGenericTypeDefinition() == typeof(IDictionary<,>) || item.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)));
+                itemType = dictionary?.GetGenericArguments()[1] ?? interfaces.FirstOrDefault(item =>
+                    item.IsGenericType && item.GetGenericTypeDefinition() == typeof(IEnumerable<>))?.GetGenericArguments()[0];
+            }
+            if (itemType is null || !(visited ??= []).Add(type)) return false;
+            type = Nullable.GetUnderlyingType(itemType) ?? itemType;
+        }
+        return true;
+    }
+
     // Reuse effective metadata within one conversion, including repeated scoped collection elements.
     // The cache belongs to the operation/options graph, never to a stable type or global serializer.
     internal sealed class Operation
@@ -153,6 +196,7 @@ public sealed class JsonConversionContract
         private readonly object gate = new();
         private readonly Dictionary<JsonConversionContract, JsonSerializerOptions> options = new();
         private readonly Dictionary<(Type Type, JsonConversionContract Parent), JsonConversionContract> children = new();
+        private Dictionary<(JsonConversionContract Contract, Type Type), JsonSerializerOptions>? collectionOptions;
 
         internal JsonConversionContract ChildContract(Type type, JsonConversionContract parent)
         {
@@ -173,6 +217,19 @@ public sealed class JsonConversionContract
                 if (options.TryGetValue(contract, out var existing)) return existing;
                 var created = contract.CreateOptions(this);
                 options.Add(contract, created);
+                return created;
+            }
+        }
+
+        internal JsonSerializerOptions GetCollectionOptions(JsonConversionContract contract, Type type)
+        {
+            lock (gate)
+            {
+                var key = (contract, type);
+                var cache = collectionOptions ??= new();
+                if (cache.TryGetValue(key, out var existing)) return existing;
+                var created = contract.CreateOptions(this, type);
+                cache.Add(key, created);
                 return created;
             }
         }

@@ -31,6 +31,9 @@ public static class UnmatchedMemberScanner
 
     private static void Visit(JsonElement value, Type type, JsonConversionContract contract, string path, List<JsonConversionDiagnostic> result, JsonConversionContract.Operation operation, JsonConverter? customConverter = null)
     {
+        // This internal wrapper only restores annotated recursive element contracts; the collection
+        // still has its ordinary JSON shape, so scan it instead of reporting opaque converter coverage.
+        if (JsonConversionContract.IsRecursiveCollectionConverter(customConverter)) customConverter = null;
         var declaredType = type;
         var temporalType = Nullable.GetUnderlyingType(type) ?? type;
         type = temporalType;
