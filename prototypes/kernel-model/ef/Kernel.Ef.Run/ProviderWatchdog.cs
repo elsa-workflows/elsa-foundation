@@ -141,8 +141,7 @@ static class ProviderWatchdog
         {
             await using var blocker = target.Admins()();
             await using var hold = await blocker.Database.BeginTransactionAsync(token);
-            var blockerPid = await blocker.Database.SqlQueryRaw<int>("""SELECT pg_backend_pid() AS "Value" """).SingleAsync(token);
-            await blocker.Database.ExecuteSqlRawAsync(AwaitAdvisoryLock, token);
+            var blockerPid = await HoldPostgresBlockerAsync(blocker, token);
             var pause = new PauseBeforeCommit();
             var owner = target.Store(target.Workers(pause));
             long monotonic = 0;
@@ -159,7 +158,8 @@ static class ProviderWatchdog
                 "the waiting PostgreSQL command reported cancellation on the watchdog token");
             monotonic += (long)(LeaseTime.TotalMilliseconds / 3);
             Require(watchdog.Check() == 0 && escalated.Count == 0, "the provider returned before process escalation");
-            Require(await FenceCanBeLockedAsync(target, token), "the fence lock cleared while the advisory blocker was still held");
+            Require(await FenceCanBeLockedAsync(target, token), "the worker's fence lock cleared after cancellation");
+            await RequirePostgresBlockerAsync(blocker, blockerPid, token);
         }
         finally
         {
@@ -183,8 +183,7 @@ static class ProviderWatchdog
     {
         await using var blocker = target.Admins()();
         await using var hold = await blocker.Database.BeginTransactionAsync(token);
-        var blockerPid = await blocker.Database.SqlQueryRaw<int>("""SELECT pg_backend_pid() AS "Value" """).SingleAsync(token);
-        await blocker.Database.ExecuteSqlRawAsync(AwaitAdvisoryLock, token);
+        var blockerPid = await HoldPostgresBlockerAsync(blocker, token);
         using var child = StartWorker(target, connection, options, first);
         try
         {
@@ -201,6 +200,8 @@ static class ProviderWatchdog
                 clearance.CancelAfter(ProcessExitBudget);
                 while (!await FenceCanBeLockedAsync(target, clearance.Token))
                     await Task.Delay(25, clearance.Token);
+                elapsed.Stop();
+                await RequirePostgresBlockerAsync(blocker, blockerPid, token);
                 Require(elapsed.Elapsed <= ProcessExitBudget,
                     $"PostgreSQL released the fence {elapsed.ElapsedMilliseconds} ms after the exit signal while the advisory blocker remained");
             }
@@ -218,6 +219,7 @@ static class ProviderWatchdog
                     """).SingleAsync(token), "the database clock is past the original owner's persisted lease");
                 Require(!await FenceCanBeLockedAsync(target, token),
                     "without disconnect detection the exited owner's transaction still holds the fence past lease expiry");
+                await RequirePostgresBlockerAsync(blocker, blockerPid, token);
             }
         }
         finally
@@ -230,6 +232,24 @@ static class ProviderWatchdog
             }
         }
     }
+
+    private static async Task<int> HoldPostgresBlockerAsync(KernelDb blocker, CancellationToken token)
+    {
+        await blocker.Database.ExecuteSqlRawAsync("SET LOCAL idle_in_transaction_session_timeout = 0", token);
+        if (blocker.Database.GetDbConnection() is NpgsqlConnection { PostgreSqlVersion.Major: >= 17 })
+            await blocker.Database.ExecuteSqlRawAsync("SET LOCAL transaction_timeout = 0", token);
+        var pid = await blocker.Database.SqlQueryRaw<int>("""SELECT pg_backend_pid() AS "Value" """).SingleAsync(token);
+        await blocker.Database.ExecuteSqlRawAsync(AwaitAdvisoryLock, token);
+        return pid;
+    }
+
+    private static async Task RequirePostgresBlockerAsync(KernelDb blocker, int pid, CancellationToken token) =>
+        Require(await blocker.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (
+                SELECT 1 FROM pg_locks WHERE pid = {pid} AND pid = pg_backend_pid() AND locktype = 'advisory'
+                    AND classid = 4229 AND objid = 5 AND objsubid = 2 AND granted
+            ) AS "Value"
+            """).SingleAsync(token), "the original advisory lock is still held by the blocking transaction");
 
     private static async Task WaitForPostgresFenceAsync(Target target, int blockerPid, Func<bool> ended, CancellationToken token)
     {
