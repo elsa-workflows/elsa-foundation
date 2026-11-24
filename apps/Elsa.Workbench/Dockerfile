@@ -60,6 +60,7 @@ ARG TARGETARCH
 # .editorconfig carries the naming analyzer's per-domain retired terms, so the image compiles under the same
 # naming rules as CI.
 COPY *.props *.targets .editorconfig NuGet.config Elsa.Server.slnx ./
+COPY tools/architecture/check-kernel-model-references.targets ./tools/architecture/
 
 # Copy only restore inputs while preserving their source-tree paths. Ordinary source
 # changes no longer invalidate the expensive RID-specific restore layer. The recursive

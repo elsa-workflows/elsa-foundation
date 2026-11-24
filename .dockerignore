@@ -34,6 +34,7 @@ docs/
 samples/
 specs/
 tools/
+!tools/architecture/check-kernel-model-references.targets
 .specify/
 .agents/
 .agent-prefs/

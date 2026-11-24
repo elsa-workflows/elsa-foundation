@@ -13,7 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <Compile Include="../Native/Run/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
+    <Compile Include="../../../../apps/Elsa.Workbench/CorePreview/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
     <ProjectReference Include="../Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
     <ProjectReference Include="../Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
     <ProjectReference Include="../../Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />

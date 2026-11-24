@@ -13,6 +13,17 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
+{
+    var workbenchExecutable = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_WORKBENCH");
+    if (string.IsNullOrWhiteSpace(workbenchExecutable) || !File.Exists(workbenchExecutable))
+    {
+        Console.Error.WriteLine("Set KERNEL_PREVIEW_WORKBENCH to the built Workbench executable.");
+        return 2;
+    }
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunAsync(workbenchPreview, workbenchExecutable);
+    return 0;
+}
 if (args is ["pg-root-operators", "admit"])
     return await PostgresRootOperatorChecks.RunAsync(null);
 if (args is ["pg-root-operators", var defaultOperatorPhase and ("read" or "resume"), var operatorA, var operatorB, var operatorC])
