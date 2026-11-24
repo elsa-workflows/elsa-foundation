@@ -40,25 +40,32 @@ public sealed partial class EfStore
         return new(journal, new RootParkOpening(root, current.Revision, DurableKeyJson.Write(fault), envelopes));
     }
 
+    private sealed record LockedParkCheckpoint(long At, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
+
     private sealed record RootParkOpening(WorkerRoot Root, long Expected, string EncodedFault, IReadOnlyList<Message> Inputs)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             if (!db.UsesRootParkOpening) return false;
-            var at = await db.Database.SqlQueryRaw<long>(
-                """SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "Value" """)
-                .SingleAsync(cancellationToken);
-            var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Instances" i
-                SET "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {EncodedFault}, "Revision" = {JournalRevision},
-                    "FoundationWriteRevision" = {JournalRevision}, "FoundationParkAt" = {at}
-                FROM "FoundationRootBirths" b
+            var locked = await db.Database.SqlQuery<LockedParkCheckpoint>($"""
+                SELECT floor(extract(epoch from statement_timestamp()) * 1000)::bigint AS "At",
+                    sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
+                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion"
+                FROM "Instances" i JOIN "FoundationRootBirths" b
+                    ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
+                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired"
                     AND NOT i."Suspended" AND i."Status" = {(int)InstanceStatus.Running} AND i."Revision" = {Expected}
                     AND i."FoundationParkAt" IS NULL AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
-                    AND b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
-                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
+                FOR UPDATE OF i
+                """).ToListAsync(cancellationToken);
+            if (locked is not [var prior]) return false;
+
+            var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Instances" SET "Status" = {(int)InstanceStatus.Faulted}, "Fault" = {EncodedFault},
+                    "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}, "FoundationParkAt" = {prior.At}
+                WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """, cancellationToken);
             if (updated != 1) return false;
 
@@ -67,7 +74,7 @@ public sealed partial class EfStore
             var pending = await db.Messages.FromSqlInterpolated($"""
                 SELECT * FROM "Messages" WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({keys})
-                    AND "EventMatch" IS NULL AND NOT "Done" ORDER BY "Seq" FOR UPDATE
+                    AND "EventMatch" IS NULL AND NOT "Done" AND "Due" <= {prior.At} ORDER BY "Seq" FOR UPDATE
                 """).AsNoTracking().ToListAsync(cancellationToken);
             var inputs = pending.Select(row => DecodeRootInput(db, row, Root.Reference, null)).ToArray();
             if (inputs.Any(input => input.TargetCreation != 1 || input.Operator is not null) ||
@@ -102,7 +109,9 @@ public sealed partial class EfStore
                     SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
                         AND "FoundationTenant" = {Root.Tenant} AND "FoundationReference" = {Root.Reference}
                         AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision}
-                        AND "Status" = {(int)InstanceStatus.Faulted} AND "Fault" = {EncodedFault} AND "FoundationParkAt" = {at}
+                        AND "Status" = {(int)InstanceStatus.Faulted} AND "Fault" = {EncodedFault} AND "FoundationParkAt" = {prior.At}
+                        AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
+                        AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest}
                 ) AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor}
                         AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
                         AND "EventMatch" IS NULL AND "Done" AND "Trial" = 0 AND "FoundationKeptBy" = {(short)ParkKeepReason.Consumed}
