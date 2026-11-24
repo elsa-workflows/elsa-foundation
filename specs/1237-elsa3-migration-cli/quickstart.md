@@ -1,43 +1,51 @@
 # Quickstart: Elsa 3 workflows migration CLI
 
+Docker is a prerequisite. The migration skill normally starts these commands for you. The image tag below stands for
+the Elsa 3 migration image at the version of the essentials images you will go live on.
+
 ## Inventory
 
 ```bash
-dotnet tool install --global dotnet-elsa
-dotnet elsa elsa3-migration workflows inventory ./my-elsa3-export --out ./migration
+docker run --rm --network none \
+  -v "$PWD/my-elsa3-export:/work/export:ro" -v "$PWD/migration:/work/out" \
+  <migration image>:<version> workflows inventory /work/export --out /work/out
 ```
 
-The first run restores the pinned reference host package into the NuGet cache. Later runs work offline. The last line
-printed is the output path. Open `./migration/report.html`, or read `./migration/report.json`.
+The last line printed is the output path. Open `./migration/report.html`, or read `./migration/report.json`.
 
-Exit code 0 means nothing to fix or reconsider. 1 means the report has findings. 2 means the tool refused to run, and
-standard error says why.
+- Exit code 0: nothing to fix or reconsider.
+- Exit code 1: the report has findings.
+- Exit code 2: the tool refused to run, and standard error says why.
 
 ## Assess with your own features
 
 ```bash
-dotnet elsa elsa3-migration workflows assess ./my-elsa3-export \
-  --packages ./nupkgs --settings ./appsettings.json --out ./migration
+docker run --rm --network none \
+  -v "$PWD/my-elsa3-export:/work/export:ro" -v "$PWD/nupkgs:/work/packages:ro" \
+  -v "$PWD/appsettings.json:/work/appsettings.json:ro" -v "$PWD/migration:/work/out" \
+  <migration image>:<version> workflows assess /work/export \
+  --packages /work/packages --settings /work/appsettings.json --out /work/out
 ```
 
 `./nupkgs` holds your Elsa 4 feature packages. `appsettings.json` enables them, exactly as you would configure the
-essentials engine image. Fix, rebuild the packages, and rerun until every remaining finding is clean or accepted.
+essentials engine image. Fix, rebuild the packages and rerun until every remaining finding is clean or accepted.
 
 ## Go live (outside the tool)
 
-Mount `./migration/migrated/` into the essentials engine image, together with your `appsettings.json` and packages.
-Point JSON workflow reconciliation at `migrated/workflows/`, and JSON activity reconciliation at
+Start the essentials engine image with your `appsettings.json`, your packages and `./migration/migrated/` mounted.
+Point JSON workflow reconciliation at `migrated/workflows/` and JSON activity reconciliation at
 `migrated/activities/activities.json`. A reusable marked `needsCompositeSourceSupport` loads only on an engine that
 supports source-owned composites with dependencies.
 
 ## Validation scenarios (for implementers)
 
-1. Fixture export → `inventory` → the expected `report.json` (golden file) and `migrated/` layout. Run it twice and
-   check the output is byte-identical.
-2. The sentinel fixture: no sentinel in `report.json` or `report.html`.
-3. The fixture feature package → `assess` clears exactly its findings.
-4. The S-15 acceptance set → `inventory`: every definition is bucketed, and the published set equals startup
-   reconciliation's.
-5. A fresh reference composition loads `migrated/workflows/`.
-6. Make the run fail mid-way (a fixture feature that throws during composition): no database file or temporary
-   install root remains, and the previous `--out` is intact.
+1. Fixture export → `inventory` → the expected `report.json` (golden file) and `migrated/` layout. A second run is
+   byte-identical.
+2. Sentinel fixture: no sentinel appears in `report.json` or `report.html`.
+3. Fixture feature package → `assess` clears exactly its findings.
+4. S-15 acceptance set → `inventory` in the image: every definition gets a bucket, and the published set equals
+   startup reconciliation's.
+5. The essentials feature list, with JSON reconciliation, loads `migrated/workflows/`.
+6. A fixture feature that throws during composition makes the run fail part-way. No database or temporary install root
+   remains, and the previous `--out` is intact.
+7. `docker run --network none` gives the same output as the in-process run.

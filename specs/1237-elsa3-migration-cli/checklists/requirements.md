@@ -12,7 +12,7 @@
 
 ## Requirement Completeness
 
-- [x] No [NEEDS CLARIFICATION] markers remain (Q1–Q4 answered by the coordinator; Q5–Q9 decided from the code)
+- [x] No [NEEDS CLARIFICATION] markers remain (Q1–Q4 and Q10 decided by the coordinator; Q3, Q10 and Q11 follow the coordinator's design change to run the CLI inside the migration image; Q5–Q9 decided from the code)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are verifiable without reading the implementation

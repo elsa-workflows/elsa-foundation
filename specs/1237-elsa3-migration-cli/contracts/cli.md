@@ -2,20 +2,30 @@
 
 ## Commands
 
+The commands run inside the Elsa 3 migration image, whose entry point is `dotnet-elsa elsa3-migration`.
+
 ```text
 dotnet elsa elsa3-migration workflows inventory <export> [--out <dir>] [--all-versions]
 dotnet elsa elsa3-migration workflows assess <export> --packages <dir> --settings <file> [--out <dir>] [--all-versions]
-dotnet elsa elsa3-migration workflows assess <export> --host <dir> [--settings <file>] [--out <dir>] [--all-versions]
+```
+
+A typical start, with the paths mounted into the container:
+
+```text
+docker run --rm --network none \
+  -v "$PWD/export:/work/export:ro" -v "$PWD/nupkgs:/work/packages:ro" \
+  -v "$PWD/appsettings.json:/work/appsettings.json:ro" -v "$PWD/migration:/work/out" \
+  <migration image>:<version> workflows assess /work/export --packages /work/packages \
+  --settings /work/appsettings.json --out /work/out
 ```
 
 | Argument | Rule |
 |---|---|
 | `<export>` | A folder (searched recursively for `*.json`) or a `.zip`. Anything else exits 2. |
 | `--out` | Default `./elsa3-migration`, created if it is missing. Only `report.json`, `report.html` and `migrated/` are replaced. |
-| `--all-versions` | Converts every version instead of the FR-010 selection. |
-| `--packages` | A folder of `.nupkg` files, read as a directory feed. `--settings` is required with it. It cannot be combined with `--host`. |
-| `--settings` | An `appsettings.json`, merged as the essentials engine image merges it. |
-| `--host` | An Elsa 4 host build output that has a `.runtimeconfig.json` and a `.deps.json`, and carries the Elsa 3 migration tooling assembly. |
+| `--all-versions` | Converts every version instead of the FR-012 selection. |
+| `--packages` | A folder of `.nupkg` files, read as a directory feed. Required for `assess`. |
+| `--settings` | An `appsettings.json`, merged as the essentials engine image merges it. Required for `assess`. |
 
 ## Exit codes
 
@@ -27,27 +37,24 @@ dotnet elsa elsa3-migration workflows assess <export> --host <dir> [--settings <
 
 ## Standard output
 
-On exit 0 or 1, the last line is the absolute path of `--out`. On exit 2, standard error carries one refusal line:
-`elsa3-migration: refused: <reason>`, with a reason code from the table below and a sentence.
+On exit 0 or 1, the last line is the output path as it was given (container path). On exit 2, standard error carries
+one refusal line, `elsa3-migration: refused: <reason>`, with a reason code from the table below and a sentence.
 
 | Reason code | When |
 |---|---|
-| `input-missing` | `<export>` does not exist or is neither a folder nor a zip. |
+| `input-missing` | `<export>` does not exist, or is neither a folder nor a zip. |
 | `input-empty` | No file holds an Elsa 3 definition. |
 | `input-unreadable` | The zip cannot be opened. |
 | `arguments` | An invalid combination of options. |
-| `reference-host-unavailable` | The pinned reference host package is neither cached nor restorable. |
-| `host-entry-point-missing` | `--host` does not carry the migration entry point. The reason names the minimum version. |
-| `host-layout` | `--host` lacks `.runtimeconfig.json` or `.deps.json`. |
-| `package-unresolved` | A package dependency is in neither `--packages` nor the closure. The reason names the id and range. |
-| `settings-unreadable` | `--settings` is missing or is not valid JSON. |
-| `composition-failed` | The shell could not be composed (a feature failed to configure). The reason names the feature. |
+| `package-unresolved` | A package dependency is in neither `--packages` nor the image. The reason names the id and range. |
+| `settings-unreadable` | `--settings` is missing, or is not valid JSON. |
+| `composition-failed` | A user package or setting the composition cannot boot. The reason names the feature, package or setting key, never a value. |
 
 ## Report compatibility
 
-- `schemaVersion` is an integer. Version 1 is [report.schema.json](report.schema.json).
+- `schemaVersion` is an integer. Version 1 is defined by [report.schema.json](report.schema.json).
 - A consumer MUST refuse a `schemaVersion` it does not know.
-- A consumer MUST ignore properties it does not know. Adding a property does not change `schemaVersion`. Removing,
-  renaming, or changing the meaning of a property or an enum value does.
+- A consumer MUST ignore properties it does not know. Adding a property does not change `schemaVersion`. Removing or
+  renaming a property, or changing the meaning of a property or an enum value, does.
 - Codes, messages and guidance come from the converter and from Elsa 4. A consumer MUST NOT hard-code their meaning.
   It reads `category`, `remedy` and `componentKind`.
