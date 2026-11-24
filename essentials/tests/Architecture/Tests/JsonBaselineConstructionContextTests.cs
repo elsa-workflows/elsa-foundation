@@ -7,6 +7,72 @@ namespace Elsa.Architecture.Tests;
 public sealed class JsonBaselineConstructionContextTests
 {
     [Fact]
+    public void Repeated_physical_TPA_entries_are_one_reference_and_conflicting_images_are_never_arbitrarily_selected()
+    {
+        var core = typeof(object).Assembly.Location;
+        Assert.Equal(core, Assert.Single(JsonBaselineConstructionContexts.PlatformReferences([core, core])).Value);
+        using var first = new Sources("public class First {}", "public class FirstLinked {}");
+        using var second = new Sources("public class Second {}", "public class SecondLinked {}");
+        Assert.Throws<InvalidDataException>(() => JsonBaselineConstructionContexts.PlatformReferences([first.Image, second.Image]));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Production_inventory_discovers_linked_inputs_before_scanning_and_rechecks_their_mutated_contracts(bool evaluated)
+    {
+        using var fixture = new Sources("public partial class C { public static object Make() => new C(new()); }",
+            "public partial class C { public C(object value) {} }", symbols: ["ELSA_DASHBOARD_QUALIFICATION"]);
+        // The production entry point finds directory roots itself. The caller supplies no linked
+        // SyntaxNode: only the project's actual compile membership or portable PDB can find it.
+        var before = fixture.Inventory(evaluated);
+        Assert.Equal(2, before.Count);
+        Assert.Contains(before, root => root.SyntaxTree.FilePath == fixture.Linked);
+        var original = fixture.Contexts(before, evaluated);
+        Assert.Empty(before.SelectMany(root => JsonBaselineSourceScan.Scan(root, before, original)));
+
+        File.WriteAllText(fixture.Linked, """
+            using System.Text.Json;
+            public partial class C {
+            #if ELSA_DASHBOARD_QUALIFICATION
+                public C(JsonSerializerOptions options) {}
+                public static JsonSerializerOptions Settings() => new();
+                public static object Serialize() => JsonSerializer.SerializeToElement(1);
+            #else
+                public C(object value) {}
+            #endif
+            }
+            """);
+        fixture.Build();
+        var after = fixture.Inventory(evaluated);
+        var current = fixture.Contexts(after, evaluated);
+        Assert.Equal("construction", Assert.Single(JsonBaselineSourceScan.Scan(after.Single(root => root.SyntaxTree.FilePath == fixture.Source), after, current)).Setting);
+        var linked = JsonBaselineSourceScan.Scan(after.Single(root => root.SyntaxTree.FilePath == fixture.Linked), after, current);
+        Assert.Equal(new[] { "construction", "optionless" }, linked.Select(finding => finding.Setting));
+        Assert.All(linked, finding => Assert.False(JsonBaselineSourceScan.IsAccounted("tools/Linked/Contract.cs", finding, new HashSet<string>(), [])));
+        Assert.Empty(before.SelectMany(root => JsonBaselineSourceScan.Scan(root, before, original)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_missing_authored_link_is_a_production_inventory_coverage_failure(bool evaluated)
+    {
+        using var fixture = new Sources("public class C {}", "public class Linked {}");
+        File.Delete(fixture.Linked);
+        Assert.Throws<InvalidOperationException>(() => fixture.Inventory(evaluated));
+    }
+
+    [Fact]
+    public void An_external_authored_compile_source_cannot_be_silently_exempted_by_the_directory_sweep()
+    {
+        using var fixture = new Sources("public class C {}", "public class Linked {}");
+        using var other = new Sources("public class Other {}", "public class OtherLinked {}");
+        var record = fixture.Record(fixture.Roots()) with { CompileSources = new HashSet<string> { fixture.Source, other.Linked } };
+        Assert.Throws<InvalidOperationException>(() => JsonBaselineConstructionContexts.ReadSources(fixture.RepositoryRoot, [record]));
+    }
+
+    [Fact]
     public void Linked_partial_constructor_declarations_supply_the_actual_target_outside_the_project_folder()
     {
         using var fixture = new Sources("""
@@ -164,20 +230,21 @@ public sealed class JsonBaselineConstructionContextTests
         private readonly string root = Path.Join(Path.GetTempPath(), "elsa-json-construction-targets-" + Guid.NewGuid().ToString("N"));
         private readonly bool external;
         private readonly string[] defines;
+        internal string RepositoryRoot => root;
         internal string Source { get; }
         internal string Linked { get; }
         private string Project { get; }
-        private string Image { get; }
+        internal string Image { get; }
         private string? Globals { get; }
 
         internal Sources(string source, string linked, bool external = false, string? globals = null, string[]? symbols = null)
         {
             this.external = external;
             defines = symbols ?? [];
-            Source = Path.Join(root, "Owner", "Source.cs");
-            Linked = Path.Join(root, "Linked", "Contract.cs");
-            Project = Path.Join(root, "Owner", "Owner.csproj");
-            Image = Path.Join(root, "Owner", "bin", "Debug", "net10.0", "Owner.dll");
+            Source = Path.Join(root, "essentials", "src", "Owner", "Source.cs");
+            Linked = Path.Join(root, "tools", "Linked", "Contract.cs");
+            Project = Path.Join(Path.GetDirectoryName(Source), "Owner.csproj");
+            Image = Path.Join(Path.GetDirectoryName(Source), "bin", "Debug", "net10.0", "Owner.dll");
             Directory.CreateDirectory(Path.GetDirectoryName(Source)!);
             Directory.CreateDirectory(Path.GetDirectoryName(Linked)!);
             Directory.CreateDirectory(Path.GetDirectoryName(Image)!);
@@ -186,7 +253,7 @@ public sealed class JsonBaselineConstructionContextTests
             File.WriteAllText(Linked, linked);
             if (globals is not null)
             {
-                Globals = Path.Join(root, "Owner", "obj", "Debug", "net10.0", "Owner.GlobalUsings.g.cs");
+                Globals = Path.Join(Path.GetDirectoryName(Source), "obj", "Debug", "net10.0", "Owner.GlobalUsings.g.cs");
                 Directory.CreateDirectory(Path.GetDirectoryName(Globals)!);
                 File.WriteAllText(Globals, globals);
             }
@@ -210,6 +277,9 @@ public sealed class JsonBaselineConstructionContextTests
 
         internal IReadOnlyList<SyntaxNode> Roots() => (external ? new[] { Source } : new[] { Source, Linked })
             .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path).GetRoot()).ToArray();
+
+        internal IReadOnlyList<SyntaxNode> Inventory(bool evaluated) => JsonBaselineConstructionContexts.ReadSources(root,
+            [new(Project, Image, CompileSources: evaluated ? new HashSet<string> { Source, Linked } : null)]);
 
         internal void RemoveSymbols() => File.Delete(Path.ChangeExtension(Image, ".pdb"));
         internal void BorrowSymbols(Sources other) => File.Copy(Path.ChangeExtension(other.Image, ".pdb"), Path.ChangeExtension(Image, ".pdb"), overwrite: true);

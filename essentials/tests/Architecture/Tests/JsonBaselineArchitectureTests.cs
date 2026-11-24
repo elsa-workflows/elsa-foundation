@@ -326,6 +326,90 @@ public sealed class JsonBaselineArchitectureTests
     }
 
     [Theory]
+    [InlineData("namespace Business { class JsonSerializerOptions { public int MaxDepth { get; set; } public bool PropertyNameCaseInsensitive { get; set; } } class C { object M() => new JsonSerializerOptions { MaxDepth = 128, PropertyNameCaseInsensitive = true }; } }")]
+    [InlineData("namespace Business { class JsonSerializerOptions { public int MaxDepth { get; set; } } class C { void M() { var options = new Business.JsonSerializerOptions(); options.MaxDepth = 128; } } }")]
+    [InlineData("namespace Business { class JsonSerializerOptions { public static JsonSerializerOptions Default => new JsonSerializerOptions(); public int MaxDepth { get; set; } } class C { void M(JsonSerializerOptions options) { options.MaxDepth = 128; var value = JsonSerializerOptions.Default; } } }")]
+    public void Explicit_business_options_names_and_their_settings_are_not_framework_deviations(string body)
+    {
+        var source = TargetTypedSource(body);
+        _ = FixtureCompiler.Compile("ExplicitBusinessOptionsControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        Assert.Empty(JsonBaselineSourceScan.Scan(source));
+    }
+
+    [Fact]
+    public void Explicit_framework_options_and_their_settings_still_require_receipts()
+    {
+        var source = TargetTypedSource("class C { object M() => new System.Text.Json.JsonSerializerOptions { MaxDepth = 128 }; }");
+        _ = FixtureCompiler.Compile("ExplicitFrameworkOptionsControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        Assert.Equal(new[] { "construction", "MaxDepth" }, JsonBaselineSourceScan.Scan(source).Select(finding => finding.Setting));
+    }
+
+    [Theory]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.CreateCopy(); profile = null; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = JsonBaseline.Options; profile = null!; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = null!; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions? profile = JsonBaseline.CreateCopy(); profile = null!; if (flag) profile = JsonBaseline.CreateCopy(); JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions profile = null!; if (flag) goto Use; profile = JsonBaseline.Options; Use: JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = JsonBaseline.Options; for (var index = 0; index < 2; index++) { JsonSerializer.Serialize(1, profile); profile = null!; } }")]
+    [InlineData("JsonSerializerOptions? profile; void M() { this.profile = null; JsonSerializer.Serialize(1, this.profile); }")]
+    [InlineData("static JsonSerializerOptions? profile; void M() { C.profile = null; JsonSerializer.Serialize(1, C.profile); }")]
+    [InlineData("JsonSerializerOptions? Profile { get; set; } void M() { Profile = null; JsonSerializer.Serialize(1, Profile); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile = null); }")]
+    [InlineData("void M(bool flag) { JsonSerializer.Serialize(1, flag ? JsonBaseline.Options : null); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions? profile = JsonBaseline.CreateCopy(); if (flag) profile = null; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions? profile = null; if (flag) profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions? profile = flag ? JsonBaseline.Options : null; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.Options; profile = null; var alias = profile; JsonSerializer.Serialize(1, alias!); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.Options; Action reset = () => profile = null; reset(); JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions? profile = JsonBaseline.Options; Action reset = () => profile = null; reset(); if (flag) profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions? profile = JsonBaseline.Options; Action reset = () => profile = null!; reset(); if (flag) profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = null; Action use = () => JsonSerializer.Serialize(1, profile); use(); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.Options; void Reset() { profile = null; } Reset(); JsonSerializer.Serialize(1, profile); }")]
+    public void Reaching_null_profiles_cannot_bypass_the_guard_through_writes_branches_or_captures(string member)
+    {
+        var source = TargetTypedSource("class C { " + member + " }");
+        _ = FixtureCompiler.Compile("NullProfileFlowControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        Assert.Equal("optionless", Assert.Single(JsonBaselineSourceScan.Scan(source)).Setting);
+    }
+
+    [Theory]
+    [InlineData("void M() { JsonSerializerOptions? profile = null; profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = null!; profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.Options; if (false) profile = null!; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.Options; Action reset = () => profile = null!; if (false) reset(); JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.Options; Action reset = () => { if (false) profile = null!; }; reset(); JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.Options; Action reset = () => profile = null!; reset(); profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions profile = JsonBaseline.Options; for (var index = 0; index < 2; index++) { profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); profile = null!; } }")]
+    [InlineData("void M() { for (var index = 0; index < 2; index++) { JsonSerializerOptions profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); profile = null!; } }")]
+    [InlineData("JsonSerializerOptions? profile; void M() { this.profile = JsonBaseline.Options; JsonSerializer.Serialize(1, this.profile); }")]
+    [InlineData("static JsonSerializerOptions? profile; void M() { C.profile = JsonBaseline.Options; JsonSerializer.Serialize(1, C.profile); }")]
+    [InlineData("JsonSerializerOptions? Profile { get; set; } void M() { Profile = JsonBaseline.Options; JsonSerializer.Serialize(1, Profile); }")]
+    [InlineData("JsonSerializerOptions? profile; JsonSerializerOptions other = JsonBaseline.Options; void M() { profile = null; JsonSerializer.Serialize(1, this.other); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions profile = null!; if (flag) profile = JsonBaseline.Options; else profile = JsonBaseline.CreateCopy(); JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = null; profile ??= JsonBaseline.Options; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M(bool flag) { JsonSerializerOptions? profile = null; if (flag) profile = JsonBaseline.Options; else profile = JsonBaseline.CreateCopy(); JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); profile = null; }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.Options; Action reset = () => profile = null; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void M() { JsonSerializerOptions? profile = JsonBaseline.Options; Action reset = () => profile = null; reset(); profile = JsonBaseline.Options; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("JsonSerializerOptions? profile; void M() { JsonSerializerOptions profile = JsonBaseline.Options; Action reset = () => this.profile = null; reset(); JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("JsonSerializerOptions? profile; void M(JsonSerializerOptions profile) { this.profile = null; JsonSerializer.Serialize(1, profile); }")]
+    [InlineData("void Other() { JsonSerializerOptions? profile = null; } void M(JsonSerializerOptions profile) { JsonSerializer.Serialize(1, profile); }")]
+    public void Nonnull_reaching_profiles_ignore_future_uninvoked_or_shadowed_null_writes(string member)
+    {
+        var source = TargetTypedSource("class C { " + member + " }");
+        _ = FixtureCompiler.Compile("NonnullProfileFlowControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        Assert.Empty(JsonBaselineSourceScan.Scan(source));
+    }
+
+    [Fact]
+    public void A_business_codecs_nullable_input_is_not_mistaken_for_a_JSON_profile()
+    {
+        var source = TargetTypedSource("class Codec { public object? Deserialize(string? input) => input; } class C { void M(Codec codec) { string? input = null; codec.Deserialize(input); } }");
+        _ = FixtureCompiler.Compile("BusinessCodecNullInputControl", source, [typeof(Elsa.Serialization.Core.JsonBaseline).Assembly]);
+        Assert.Empty(JsonBaselineSourceScan.Scan(source));
+    }
+
+    [Theory]
     [InlineData("class H { public H(JsonSerializerOptions options) {} } class C { object M() => new H(new()); }")]
     [InlineData("class C { JsonSerializerOptions M() => new(); }")]
     public void Incomplete_fragments_retain_their_exact_declared_options_target_without_ambient_usings(string source) =>
@@ -362,14 +446,13 @@ public sealed class JsonBaselineArchitectureTests
         var legacyPath = Path.Join(RepoPaths.RepoRoot, "essentials/tests/Architecture/Tests/Baselines/json-optionless-calls.txt");
         Assert.True(File.Exists(legacyPath), "Missing shrinking option-less own-contract inventory.");
         var legacy = File.ReadAllLines(legacyPath).Where(line => line.Length > 0 && !line.StartsWith('#')).ToHashSet(StringComparer.Ordinal);
-        var paths = ModuleRoots.Resolve(RepoPaths.RepoRoot, [.. ModuleRoots.Production, "Studio/src", "extensions/*/studio"])
-            .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
-            .Where(path => !RepoPaths.IsBuildOutput(path) && ModuleRoots.IsNotTestFile(path)).Distinct().ToArray();
-        Assert.NotEmpty(paths);
-        var storageRoots = paths.Select(path => Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path).GetRoot()).ToArray();
         var configuration = typeof(JsonBaselineArchitectureTests).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyConfigurationAttribute), false)
             .Cast<System.Reflection.AssemblyConfigurationAttribute>().Single().Configuration;
-        var constructionContexts = new JsonBaselineConstructionContexts(storageRoots, ShippingHashAssemblies.Discover(RepoPaths.RepoRoot, configuration), configuration);
+        var projects = ShippingHashAssemblies.Discover(RepoPaths.RepoRoot, configuration);
+        var storageRoots = JsonBaselineConstructionContexts.ReadSources(RepoPaths.RepoRoot, projects);
+        var paths = storageRoots.Select(root => root.SyntaxTree.FilePath).ToArray();
+        Assert.NotEmpty(paths);
+        var constructionContexts = new JsonBaselineConstructionContexts(storageRoots, projects, configuration);
         var rootsByPath = storageRoots.ToDictionary(root => root.SyntaxTree.FilePath, StringComparer.Ordinal);
         Assert.All(register, row => Assert.True(File.Exists(Path.Join(RepoPaths.RepoRoot, row.File)), $"Stale register path: {row.File}"));
         var failures = new List<string>();

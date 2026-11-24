@@ -1,6 +1,8 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.FlowAnalysis;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Elsa.Architecture.Tests;
 
@@ -82,15 +84,25 @@ internal static class JsonBaselineSourceScan
         bool OptionsType(string value) => value.TrimEnd('?') is { } name && (name == "JsonSerializerOptions" || name.EndsWith(".JsonSerializerOptions", StringComparison.Ordinal) || optionAliases.Contains(name));
         bool BaselineCopy(ArgumentListSyntax? args) => args?.Arguments.Count == 1 && IsBaselineExpression(args.Arguments[0].Expression);
         SemanticModel? cachedConstructionModel = null;
+        SemanticModel Model() => cachedConstructionModel ??= constructionModel?.Invoke() ?? ConstructionCompilation.Value.AddSyntaxTrees(root.SyntaxTree)
+            .GetSemanticModel(root.SyntaxTree, ignoreAccessibility: true);
+        bool? KnownOptionsType(ExpressionSyntax expression)
+        {
+            var type = Model().GetTypeInfo(expression).Type;
+            return type is null || type.TypeKind is TypeKind.Error or TypeKind.Dynamic ? null : IsFrameworkOptions(type);
+        }
+        bool NullProfile(ExpressionSyntax expression, SyntaxNode site) => IsNullProfile(expression, site, Model);
+        bool ProfileExpression(ExpressionSyntax expression, SyntaxNode site) => IsProfileExpression(expression, site, Model);
         var constructionTargets = new Dictionary<ImplicitObjectCreationExpressionSyntax, bool>();
         foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
-            if (OptionsType(creation.Type.ToString()) && !BaselineCopy(creation.ArgumentList)) Add("construction", creation);
+            if (OptionsType(creation.Type.ToString()) && !BaselineCopy(creation.ArgumentList) && KnownOptionsType(creation) != false)
+                Add(constructionModel is not null && KnownOptionsType(creation) is null ? "construction-unresolved" : "construction", creation);
         foreach (var creation in root.DescendantNodes().OfType<ImplicitObjectCreationExpressionSyntax>())
         {
             if (!BaselineCopy(creation.ArgumentList) && IsOptionsConstruction(creation)) Add("construction", creation);
         }
         foreach (var access in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
-            if (OptionsType(access.Expression.ToString()) && access.Name.Identifier.ValueText is "Web" or "Default") Add("defaults", access);
+            if (OptionsType(access.Expression.ToString()) && access.Name.Identifier.ValueText is "Web" or "Default" && KnownOptionsType(access.Expression) != false) Add("defaults", access);
         var contextNames = storageRoots is null ? FindContextNames([root]) : ContextNameCache.GetValue(storageRoots, FindContextNames);
         foreach (var access in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
             if (access.Name.Identifier.ValueText == "Default" &&
@@ -114,7 +126,7 @@ internal static class JsonBaselineSourceScan
                 if (IsModifierCollection(collection) || index.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Modifiers" }) Add("modifier-mutation:replace", assignment);
             }
             var name = assignment.Left is MemberAccessExpressionSyntax member ? member.Name.Identifier.ValueText : assignment.Left.ToString();
-            if (IsDeviation(name, assignment.Right.ToString()) && IsOptionsAssignment(assignment, OptionsType, IsOptionsConstruction)) Add(name, assignment);
+            if (IsDeviation(name, assignment.Right.ToString()) && IsOptionsAssignment(assignment, OptionsType, IsOptionsConstruction, KnownOptionsType)) Add(name, assignment);
         }
         foreach (var argument in root.DescendantNodes().OfType<AttributeArgumentSyntax>().Where(x => x.NameEquals is not null))
             if (AttributeTypeName(argument.Ancestors().OfType<AttributeSyntax>().First()).Contains("JsonSourceGenerationOptions", StringComparison.Ordinal))
@@ -161,8 +173,8 @@ internal static class JsonBaselineSourceScan
             {
                 var profileStart = httpRead ? name == "GetFromJsonAsync" ? 1 : 0 : httpWrite ? name == "WriteAsJsonAsync" ? 1 : 2 : 1;
                 var acceptsProfile = !httpResult || name == "Json";
-                var explicitProfile = acceptsProfile && (arguments.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" or "jsonSerializerOptions" && !IsNullProfile(argument.Expression, call)) ||
-                    effective.Skip(profileStart).Take(httpResult ? 1 : 2).Any(argument => argument.NameColon is null && IsProfileExpression(argument.Expression, call)));
+                var explicitProfile = acceptsProfile && (arguments.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" or "jsonSerializerOptions" && !NullProfile(argument.Expression, call)) ||
+                    effective.Skip(profileStart).Take(httpResult ? 1 : 2).Any(argument => argument.NameColon is null && ProfileExpression(argument.Expression, call)));
                 var bodyCount = name is "Created" or "Accepted" ? 2 : 1;
                 if (!explicitProfile && (httpRead || httpWrite || effective.Length >= bodyCount)) Add("optionless", call);
             }
@@ -171,11 +183,16 @@ internal static class JsonBaselineSourceScan
                 var namedProfile = effective.FirstOrDefault(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" or "context");
                 // Required stream/writer/type/bool arguments are never evidence of a profile.
                 // An unfamiliar profile expression can name its actual parameter explicitly.
-                if (namedProfile is not null ? IsNullProfile(namedProfile.Expression, call) :
-                    !effective.Skip(1).Any(argument => argument.NameColon is null && IsProfileExpression(argument.Expression, call))) Add("optionless", call);
+                if (namedProfile is not null ? NullProfile(namedProfile.Expression, call) :
+                    !effective.Skip(1).Any(argument => argument.NameColon is null && ProfileExpression(argument.Expression, call))) Add("optionless", call);
             }
             else if (!serializer && (member is not null || binding is not null) && name is "Deserialize" or "DeserializeAsync")
             {
+                // A domain codec's nullable input is not an STJ options parameter. Resolve valid
+                // business methods before applying JSON-profile flow; incomplete controls keep
+                // the conservative syntax fallback used by this scan.
+                if (Model().GetSymbolInfo(call).Symbol is IMethodSymbol called &&
+                    called.ContainingNamespace.ToDisplayString() is not ("System.Text.Json" or "System.Text.Json.Nodes")) continue;
                 var profile = effective.FirstOrDefault(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo");
                 if (profile is null)
                 {
@@ -183,7 +200,7 @@ internal static class JsonBaselineSourceScan
                     var typeArgument = (member?.Name ?? binding!.Name) is not GenericNameSyntax && positional.Length > 0 && IsTypeExpression(positional[0].Expression, call);
                     profile = positional.ElementAtOrDefault(typeArgument ? 1 : 0);
                 }
-                if (profile is null || IsNullProfile(profile.Expression, call)) Add("optionless", call);
+                if (profile is null || NullProfile(profile.Expression, call)) Add("optionless", call);
             }
             if (member is null) continue;
             var collectionType = name is "Add" or "Insert" or "Remove" or "RemoveAt" or "Clear" ? DeclaredType(member.Expression, call) : null;
@@ -244,16 +261,12 @@ internal static class JsonBaselineSourceScan
 
         bool IsOptionsConstructionCore(ImplicitObjectCreationExpressionSyntax creation)
         {
-            cachedConstructionModel ??= constructionModel?.Invoke() ?? ConstructionCompilation.Value.AddSyntaxTrees(root.SyntaxTree)
-                .GetSemanticModel(root.SyntaxTree, ignoreAccessibility: true);
-            var target = cachedConstructionModel.GetTypeInfo(creation).ConvertedType;
+            var target = Model().GetTypeInfo(creation).ConvertedType;
             // A resolved business type is authoritative even when it happens to be named
             // JsonSerializerOptions. Only System.Text.Json owns the protected options type.
             if (target is not null && target.TypeKind != TypeKind.Error)
             {
-                return target is INamedTypeSymbol { Name: "JsonSerializerOptions", Arity: 0 } &&
-                    target.ContainingNamespace.ToDisplayString() == "System.Text.Json" &&
-                    target.ContainingAssembly.Identity.Name == typeof(System.Text.Json.JsonSerializerOptions).Assembly.GetName().Name;
+                return IsFrameworkOptions(target);
             }
             if (constructionModel is not null)
             {
@@ -446,10 +459,11 @@ internal static class JsonBaselineSourceScan
     }
 
     private static bool IsOptionsAssignment(AssignmentExpressionSyntax assignment, Func<string, bool> optionsType,
-        Func<ImplicitObjectCreationExpressionSyntax, bool>? implicitOptionsType = null)
+        Func<ImplicitObjectCreationExpressionSyntax, bool>? implicitOptionsType = null, Func<ExpressionSyntax, bool?>? knownOptionsType = null)
     {
         if (assignment.Left is MemberAccessExpressionSyntax member)
         {
+            if (knownOptionsType?.Invoke(member.Expression) is { } actualOptions) return actualOptions;
             if (DeclaredType(member.Expression, assignment) is { } actualType && optionsType(actualType)) return true;
             var receiver = member.Expression.ToString();
             if (member.Expression is IdentifierNameSyntax identifier)
@@ -468,7 +482,8 @@ internal static class JsonBaselineSourceScan
                 receiver.Contains(".JsonSerializerOptions", StringComparison.Ordinal) || receiver.Contains(".SerializerOptions", StringComparison.Ordinal);
         }
         var creation = assignment.Ancestors().FirstOrDefault(node => node is ObjectCreationExpressionSyntax or ImplicitObjectCreationExpressionSyntax);
-        if (creation is ObjectCreationExpressionSyntax explicitCreation) return optionsType(explicitCreation.Type.ToString());
+        if (creation is ObjectCreationExpressionSyntax explicitCreation)
+            return knownOptionsType?.Invoke(explicitCreation) ?? optionsType(explicitCreation.Type.ToString());
         var implicitCreation = creation as ImplicitObjectCreationExpressionSyntax;
         if (implicitCreation is not null && implicitOptionsType is not null) return implicitOptionsType(implicitCreation);
         var declaredType = implicitCreation?.Ancestors().OfType<VariableDeclarationSyntax>().FirstOrDefault()?.Type.ToString()
@@ -476,6 +491,10 @@ internal static class JsonBaselineSourceScan
             ?? implicitCreation?.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.ReturnType.ToString();
         return declaredType is not null && optionsType(declaredType);
     }
+
+    private static bool IsFrameworkOptions(ITypeSymbol type) => type is INamedTypeSymbol { Name: "JsonSerializerOptions", Arity: 0 } &&
+        type.ContainingNamespace.ToDisplayString() == "System.Text.Json" &&
+        type.ContainingAssembly.Identity.Name == typeof(System.Text.Json.JsonSerializerOptions).Assembly.GetName().Name;
 
     private static bool IsBaselineExpression(ExpressionSyntax expression)
     {
@@ -502,9 +521,9 @@ internal static class JsonBaselineSourceScan
         .Where(type => type.BaseList?.Types.Any(parent => parent.Type.ToString().EndsWith("JsonSerializerContext", StringComparison.Ordinal)) == true)
         .Select(type => type.Identifier.ValueText).ToHashSet(StringComparer.Ordinal);
 
-    private static bool IsProfileExpression(ExpressionSyntax expression, SyntaxNode site)
+    private static bool IsProfileExpression(ExpressionSyntax expression, SyntaxNode site, Func<SemanticModel>? model = null)
     {
-        if (IsNullProfile(expression, site)) return false;
+        if (IsNullProfile(expression, site, model)) return false;
         var type = DeclaredType(expression, site);
         if (type is not null)
         {
@@ -522,19 +541,219 @@ internal static class JsonBaselineSourceScan
         return IsBaselineExpression(expression);
     }
 
-    private static bool IsNullProfile(ExpressionSyntax expression, SyntaxNode site, HashSet<string>? visited = null)
+    private static bool IsNullProfile(ExpressionSyntax expression, SyntaxNode site, Func<SemanticModel>? model = null, HashSet<string>? visited = null)
     {
         if (expression.IsKind(SyntaxKind.NullLiteralExpression) || expression.IsKind(SyntaxKind.DefaultLiteralExpression) || expression is DefaultExpressionSyntax) return true;
-        if (expression is ParenthesizedExpressionSyntax parentheses) return IsNullProfile(parentheses.Expression, site, visited);
-        if (expression is CastExpressionSyntax cast) return IsNullProfile(cast.Expression, site, visited);
-        if (expression is PostfixUnaryExpressionSyntax suppression && suppression.IsKind(SyntaxKind.SuppressNullableWarningExpression)) return IsNullProfile(suppression.Operand, site, visited);
+        if (expression is ParenthesizedExpressionSyntax parentheses) return IsNullProfile(parentheses.Expression, site, model, visited);
+        if (expression is CastExpressionSyntax cast) return IsNullProfile(cast.Expression, site, model, visited);
+        if (expression is PostfixUnaryExpressionSyntax suppression && suppression.IsKind(SyntaxKind.SuppressNullableWarningExpression)) return IsNullProfile(suppression.Operand, site, model, visited);
+        if (model is not null)
+        {
+            var semantic = model();
+            // The compiler tracks reaching writes, branches, coalescing assignments, captures and
+            // lexical symbol identity. A write elsewhere is never proof that this value is non-null.
+            // Inspect the operand before !: suppression must not turn a known null into a profile.
+            var type = semantic.GetTypeInfo(expression);
+            if (type.Nullability.FlowState == NullableFlowState.MaybeNull) return true;
+            if (type.Nullability.FlowState == NullableFlowState.NotNull)
+                return expression is IdentifierNameSyntax local && CapturedNullBefore(local, site, semantic);
+        }
         if (expression is not IdentifierNameSyntax name) return false;
         visited ??= new(StringComparer.Ordinal);
         if (!visited.Add(name.Identifier.ValueText)) return false;
         var method = site.Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault();
-        if (method is null || method.DescendantNodes().OfType<AssignmentExpressionSyntax>().Any(assignment => assignment.Left.ToString() == name.Identifier.ValueText)) return false;
+        if (method is null) return false;
         var initializer = method.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault(variable => variable.Identifier.ValueText == name.Identifier.ValueText)?.Initializer?.Value;
-        return initializer is not null && IsNullProfile(initializer, site, visited);
+        return initializer is not null && IsNullProfile(initializer, site, model, visited);
+    }
+
+    private static bool CapturedNullBefore(IdentifierNameSyntax name, SyntaxNode site, SemanticModel model)
+    {
+        // Nullable flow deliberately does not inline a delegate invocation. Its statically known
+        // captured writes still matter: `Action reset = () => profile = null; reset(); Serialize(..., profile)`.
+        var target = model.GetSymbolInfo(name).Symbol;
+        if (target is not (ILocalSymbol or IParameterSymbol)) return false;
+        var owner = ExecutableOwner(site);
+        if (owner is null) return false;
+        var graphs = new Dictionary<SyntaxNode, ControlFlowGraph?>();
+        var facts = new Dictionary<SyntaxNode, ProfileControlFlow?>();
+        ProfileControlFlow? Facts(SyntaxNode node)
+        {
+            var executable = ExecutableOwner(node);
+            if (executable is null) return null;
+            if (!facts.TryGetValue(executable, out var selected))
+            {
+                selected = Graph(executable) is { } graph ? new ProfileControlFlow(graph) : null;
+                facts.Add(executable, selected);
+            }
+            return selected;
+        }
+        ControlFlowGraph? Graph(SyntaxNode executable)
+        {
+            if (graphs.TryGetValue(executable, out var known)) return known;
+            ControlFlowGraph? selected;
+            if (executable is LocalFunctionStatementSyntax local)
+                selected = ExecutableOwner(local.Parent!) is { } localParent && Graph(localParent) is { } localGraph && model.GetDeclaredSymbol(local) is { } localSymbol
+                    ? localGraph.GetLocalFunctionControlFlowGraph(localSymbol) : null;
+            else if (executable is AnonymousFunctionExpressionSyntax anonymous)
+            {
+                var anonymousGraph = ExecutableOwner(anonymous.Parent!) is { } anonymousParent ? Graph(anonymousParent) : null;
+                var operation = anonymousGraph is null ? null : ProfileControlFlow.Operations(anonymousGraph).OfType<IFlowAnonymousFunctionOperation>()
+                    .SingleOrDefault(operation => operation.Syntax.Span == anonymous.Span);
+                selected = operation is null ? null : anonymousGraph!.GetAnonymousFunctionControlFlowGraph(operation);
+            }
+            else selected = model.GetOperation(executable) switch
+            {
+                IMethodBodyOperation body => ControlFlowGraph.Create(body),
+                IConstructorBodyOperation body => ControlFlowGraph.Create(body),
+                IBlockOperation { Parent: null } body => ControlFlowGraph.Create(body),
+                _ => null
+            };
+            graphs.Add(executable, selected);
+            return selected;
+        }
+        bool Reachable(SyntaxNode node) => Facts(node)?.IsReachable(node) != false;
+        var calls = owner.DescendantNodes().OfType<InvocationExpressionSyntax>()
+            .Where(call => ExecutableOwner(call) == owner && Reachable(call) &&
+                WritesNull(Callable(call.Expression), new HashSet<SyntaxNode>())).ToArray();
+        // A null-forgiving RHS changes compiler annotations, not the value passed to STJ.
+        var nullSites = calls.Cast<SyntaxNode>().Concat(owner.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+            .Where(assignment => ExecutableOwner(assignment) == owner && Reachable(assignment) &&
+                SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(assignment.Left).Symbol, target) && SuppressedNull(assignment.Right))
+            .Cast<SyntaxNode>()).Concat(owner.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+            .Where(variable => ExecutableOwner(variable) == owner && Reachable(variable) &&
+                SymbolEqualityComparer.Default.Equals(model.GetDeclaredSymbol(variable), target) && variable.Initializer is { } initializer && SuppressedNull(initializer.Value))).ToArray();
+        if (nullSites.Length == 0) return false;
+        var clears = owner.DescendantNodes().OfType<AssignmentExpressionSyntax>().Where(assignment =>
+            ExecutableOwner(assignment) == owner &&
+            SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(assignment.Left).Symbol, target) &&
+            !NullLiteral(assignment.Right) && !SuppressedNull(assignment.Right) && model.GetTypeInfo(assignment.Right).Nullability.FlowState == NullableFlowState.NotNull)
+            .Cast<SyntaxNode>().Concat(owner.DescendantNodes().OfType<VariableDeclaratorSyntax>().Where(variable =>
+                ExecutableOwner(variable) == owner && SymbolEqualityComparer.Default.Equals(model.GetDeclaredSymbol(variable), target) &&
+                variable.Initializer is { } initializer && !NullLiteral(initializer.Value) && !SuppressedNull(initializer.Value) &&
+                model.GetTypeInfo(initializer.Value).Nullability.FlowState == NullableFlowState.NotNull)).ToArray();
+        return Facts(name)?.NullCanReach(name, nullSites, clears) ?? true;
+
+        SyntaxNode? Callable(ExpressionSyntax expression)
+        {
+            var symbol = model.GetSymbolInfo(expression).Symbol;
+            if (symbol is IMethodSymbol { MethodKind: MethodKind.DelegateInvoke } && expression is MemberAccessExpressionSyntax member)
+                symbol = model.GetSymbolInfo(member.Expression).Symbol;
+            var declaration = symbol?.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+            return declaration switch
+            {
+                LocalFunctionStatementSyntax function => (SyntaxNode?)function.Body ?? function.ExpressionBody?.Expression,
+                VariableDeclaratorSyntax { Initializer.Value: LambdaExpressionSyntax lambda } => lambda.Body,
+                VariableDeclaratorSyntax { Initializer.Value: AnonymousMethodExpressionSyntax anonymous } => anonymous.Block,
+                _ => null
+            };
+        }
+
+        bool WritesNull(SyntaxNode? body, HashSet<SyntaxNode> visited)
+        {
+            if (body is null || !visited.Add(body)) return false;
+            var callableOwner = ExecutableOwner(body);
+            return body.DescendantNodesAndSelf().OfType<AssignmentExpressionSyntax>().Any(assignment =>
+                ExecutableOwner(assignment) == callableOwner && Reachable(assignment) && SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(assignment.Left).Symbol, target) &&
+                (NullLiteral(assignment.Right) || model.GetTypeInfo(assignment.Right).Nullability.FlowState == NullableFlowState.MaybeNull)) ||
+                body.DescendantNodesAndSelf().OfType<InvocationExpressionSyntax>().Any(call =>
+                    ExecutableOwner(call) == callableOwner && Reachable(call) && WritesNull(Callable(call.Expression), visited));
+        }
+
+        static bool NullLiteral(ExpressionSyntax expression) => expression switch
+        {
+            ParenthesizedExpressionSyntax parentheses => NullLiteral(parentheses.Expression),
+            CastExpressionSyntax cast => NullLiteral(cast.Expression),
+            PostfixUnaryExpressionSyntax suppression when suppression.IsKind(SyntaxKind.SuppressNullableWarningExpression) => NullLiteral(suppression.Operand),
+            _ => expression.IsKind(SyntaxKind.NullLiteralExpression) || expression.IsKind(SyntaxKind.DefaultLiteralExpression) || expression is DefaultExpressionSyntax
+        };
+
+        static bool SuppressedNull(ExpressionSyntax expression) => expression switch
+        {
+            ParenthesizedExpressionSyntax parentheses => SuppressedNull(parentheses.Expression),
+            CastExpressionSyntax cast => SuppressedNull(cast.Expression),
+            PostfixUnaryExpressionSyntax suppression when suppression.IsKind(SyntaxKind.SuppressNullableWarningExpression) =>
+                NullLiteral(suppression.Operand) || SuppressedNull(suppression.Operand),
+            ConditionalExpressionSyntax conditional => SuppressedNull(conditional.WhenTrue) || SuppressedNull(conditional.WhenFalse),
+            BinaryExpressionSyntax binary when binary.IsKind(SyntaxKind.CoalesceExpression) => SuppressedNull(binary.Right),
+            _ => false
+        };
+    }
+
+    private static SyntaxNode? ExecutableOwner(SyntaxNode node) => node.AncestorsAndSelf().FirstOrDefault(ancestor =>
+        ancestor is BaseMethodDeclarationSyntax or LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax);
+
+    // Compiler blocks carry constant-branch reachability, jumps and loop back-edges. Walk from
+    // every known null to the actual argument read, cutting only paths that execute a non-null write.
+    private sealed class ProfileControlFlow
+    {
+        private readonly ControlFlowGraph graph;
+        private readonly (IOperation Operation, BasicBlock Block, int Index)[] operations;
+
+        internal ProfileControlFlow(ControlFlowGraph graph)
+        {
+            this.graph = graph;
+            operations = graph.Blocks.SelectMany(block => BlockOperations(block).Select((operation, index) => (operation, block, index))).ToArray();
+        }
+
+        internal bool IsReachable(SyntaxNode node) => Point(node)?.Block.IsReachable != false;
+        internal bool NullCanReach(SyntaxNode use, IReadOnlyList<SyntaxNode> nulls, IReadOnlyList<SyntaxNode> clears)
+        {
+            var destination = Point(use);
+            var starts = nulls.Select(Point).ToArray();
+            // Missing operation coverage never proves a null safe. Exception continuations are
+            // implicit CFG edges: without a dedicated proof, retain the refusal for those shapes.
+            if (destination is null || starts.Any(start => start is null) ||
+                graph.OriginalOperation.Syntax.DescendantNodes().Any(node => node is TryStatementSyntax)) return true;
+            var cuts = clears.Select(Point).Where(point => point is not null).Select(point => point!.Value).ToArray();
+            var pending = new Queue<(BasicBlock Block, int Index)>();
+            foreach (var start in starts.Select(point => point!.Value).Where(point => point.Block.IsReachable))
+                pending.Enqueue((start.Block, start.Index + 1));
+            var visited = new HashSet<(int Block, int Index)>();
+            while (pending.TryDequeue(out var cursor))
+            {
+                if (!visited.Add((cursor.Block.Ordinal, cursor.Index))) continue;
+                var firstClear = cuts.Where(cut => cut.Block.Ordinal == cursor.Block.Ordinal && cut.Index >= cursor.Index)
+                    .Select(cut => cut.Index).DefaultIfEmpty(int.MaxValue).Min();
+                if (destination.Value.Block.Ordinal == cursor.Block.Ordinal && destination.Value.Index >= cursor.Index &&
+                    destination.Value.Index < firstClear) return true;
+                if (firstClear != int.MaxValue) continue;
+                foreach (var next in Successors(cursor.Block).Where(block => block.IsReachable)) pending.Enqueue((next, 0));
+            }
+            return false;
+        }
+
+        private (BasicBlock Block, int Index)? Point(SyntaxNode node) => operations
+            .Where(entry => entry.Operation.Syntax.SyntaxTree == node.SyntaxTree && entry.Operation.Syntax.Span.Contains(node.Span))
+            .OrderBy(entry => entry.Operation.Syntax.Span.Length).ThenBy(entry => entry.Index)
+            .Select(entry => ((BasicBlock Block, int Index)?)(entry.Block, entry.Index)).FirstOrDefault();
+
+        private static IEnumerable<BasicBlock> Successors(BasicBlock block)
+        {
+            var conditional = block.ConditionalSuccessor?.Destination;
+            var fallThrough = block.FallThroughSuccessor?.Destination;
+            if (block.BranchValue is { ConstantValue: { HasValue: true, Value: bool value } } && block.ConditionKind != ControlFlowConditionKind.None)
+            {
+                var next = value == (block.ConditionKind == ControlFlowConditionKind.WhenTrue) ? conditional : fallThrough;
+                if (next is not null) yield return next;
+                yield break;
+            }
+            if (conditional is not null) yield return conditional;
+            if (fallThrough is not null && fallThrough != conditional) yield return fallThrough;
+        }
+
+        internal static IEnumerable<IOperation> Operations(ControlFlowGraph graph) => graph.Blocks.SelectMany(BlockOperations);
+        private static IEnumerable<IOperation> BlockOperations(BasicBlock block)
+        {
+            var roots = block.BranchValue is { } branch ? block.Operations.Append(branch) : block.Operations;
+            var pending = new Stack<(IOperation Operation, bool Visited)>(roots.Reverse().Select(operation => (operation, false)));
+            while (pending.TryPop(out var current))
+            {
+                if (current.Visited) { yield return current.Operation; continue; }
+                pending.Push((current.Operation, true));
+                foreach (var child in current.Operation.ChildOperations.Reverse()) pending.Push((child, false));
+            }
+        }
     }
 
     private static string? DeclaredType(ExpressionSyntax expression, SyntaxNode site, HashSet<string>? visited = null, bool inferDynamic = true)

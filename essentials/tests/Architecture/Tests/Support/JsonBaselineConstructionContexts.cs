@@ -24,6 +24,31 @@ internal sealed class JsonBaselineConstructionContexts
     private readonly Dictionary<string, CSharpCompilation> compilations = new(StringComparer.Ordinal);
     private readonly string configuration;
 
+    internal static IReadOnlyList<SyntaxNode> ReadSources(string repoRoot, IReadOnlyList<ShippingHashAssemblies.Project> projects)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var prefix = Path.TrimEndingDirectorySeparator(Path.GetFullPath(repoRoot)) + Path.DirectorySeparatorChar;
+        var paths = ModuleRoots.Resolve(repoRoot, [.. ModuleRoots.Production, "Studio/src", "extensions/*/studio"])
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+            .Where(path => !RepoPaths.IsBuildOutput(repoRoot, path) && ModuleRoots.IsNotTestFile(repoRoot, path))
+            .Select(Path.GetFullPath).ToHashSet(comparer);
+        foreach (var project in projects)
+            foreach (var input in project.CompileSources ?? AuthoredDocuments(project.AssemblyPath, repoRoot))
+            {
+                var path = Path.GetFullPath(input);
+                if (!path.EndsWith(".cs", comparison) || RepoPaths.IsBuildOutput(repoRoot, path)) continue;
+                // A linked authored input is production code regardless of the directory it lives
+                // in. Unknown external inputs are coverage failures, not silent root exemptions.
+                if (!path.StartsWith(prefix, comparison))
+                    throw new InvalidOperationException("A JSON baseline compile source is outside the repository: " + path);
+                if (!File.Exists(path)) throw new InvalidOperationException("A JSON baseline compile source is missing: " + path);
+                paths.Add(path);
+            }
+        return paths.Order(StringComparer.Ordinal)
+            .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path).GetRoot()).ToArray();
+    }
+
     internal JsonBaselineConstructionContexts(IReadOnlyList<SyntaxNode> roots, IReadOnlyList<ShippingHashAssemblies.Project> projects,
         string configuration)
     {
@@ -45,7 +70,7 @@ internal sealed class JsonBaselineConstructionContexts
         foreach (var project in projects)
             // Evaluated compile membership is authoritative when supplied. Otherwise portable PDB
             // documents retain linked authored files outside the owning project's directory.
-            foreach (var path in project.CompileSources ?? AuthoredDocuments(project.AssemblyPath))
+            foreach (var path in project.CompileSources ?? AuthoredDocuments(project.AssemblyPath, RepoPaths.RepoRoot))
                 if (treesByPath.TryGetValue(Path.GetFullPath(path), out var tree)) projectSources[Path.GetFullPath(project.Path)].Add(tree);
         sources = projectSources.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<SyntaxTree>)pair.Value.ToArray(), StringComparer.Ordinal);
         owners = projectSources.SelectMany(pair => pair.Value.Select(tree => (Path: Path.GetFullPath(tree.FilePath), Project: pair.Key)))
@@ -172,7 +197,7 @@ internal sealed class JsonBaselineConstructionContexts
         return new CSharpParseOptions(language, preprocessorSymbols: defines);
     }
 
-    private static IReadOnlySet<string> AuthoredDocuments(string image)
+    private static IReadOnlySet<string> AuthoredDocuments(string image, string repoRoot)
     {
         var symbols = Path.ChangeExtension(image, ".pdb");
         if (!File.Exists(symbols)) throw new InvalidOperationException("JSON construction linked-source inventory needs the built portable PDB: " + symbols);
@@ -180,7 +205,7 @@ internal sealed class JsonBaselineConstructionContexts
         using var provider = MetadataReaderProvider.FromPortablePdbStream(stream);
         var reader = provider.GetMetadataReader();
         return reader.Documents.Select(handle => reader.GetString(reader.GetDocument(handle).Name)).Select(path =>
-            path.StartsWith("/_/", StringComparison.Ordinal) ? Path.Join(RepoPaths.RepoRoot, path[3..]) : path)
+            path.StartsWith("/_/", StringComparison.Ordinal) ? Path.Join(repoRoot, path[3..]) : path)
             .Where(Path.IsPathRooted).Select(Path.GetFullPath).ToHashSet(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
     }
 
@@ -191,8 +216,7 @@ internal sealed class JsonBaselineConstructionContexts
             .Where(File.Exists).ToArray();
         var frameworkFolders = new[] { typeof(object).Assembly.Location, typeof(Microsoft.AspNetCore.Builder.WebApplication).Assembly.Location }
             .Select(path => Path.GetDirectoryName(path)!).ToHashSet(StringComparer.Ordinal);
-        var references = platform.Where(path => frameworkFolders.Contains(Path.GetDirectoryName(path)!))
-            .ToDictionary(path => AssemblyName.GetAssemblyName(path).Name!, path => path, StringComparer.Ordinal);
+        var references = PlatformReferences(platform.Where(path => frameworkFolders.Contains(Path.GetDirectoryName(path)!)));
         var resolver = new AssemblyDependencyResolver(image);
         var pending = new Queue<string>();
         var inspected = new HashSet<string>(StringComparer.Ordinal);
@@ -232,5 +256,18 @@ internal sealed class JsonBaselineConstructionContexts
         }
         return references.OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => (MetadataReference)MetadataReference.CreateFromFile(pair.Value)).ToArray();
+    }
+
+    internal static Dictionary<string, string> PlatformReferences(IEnumerable<string> paths)
+    {
+        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var references = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var path in paths.Select(Path.GetFullPath).Distinct(comparer))
+        {
+            var name = AssemblyName.GetAssemblyName(path).Name!;
+            if (!references.TryAdd(name, path))
+                throw new InvalidDataException($"JSON construction platform identity '{name}' has conflicting image paths: {references[name]}, {path}");
+        }
+        return references;
     }
 }
