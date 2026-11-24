@@ -38,6 +38,14 @@ port=${port##*:}
 [[ -n "$port" && "$port" != 5095 ]]
 docker exec "$container" createdb -U postgres workbench_core_preview
 export KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=$port;Username=postgres;Password=$POSTGRES_PASSWORD;Database=workbench_core_preview;SSL Mode=Disable;GSS Encryption Mode=Disable"
+sentinel="$scratch/caller-identity.sqlite"
+export CShells__Shells__default__Features__FoundationIdentityOpenIddict__IsDevelopmentOrDemo=false
+export CShells__Shells__default__Features__FoundationIdentityOpenIddict__ConnectionString="Data Source=$sentinel"
 for phase in disabled birth restart; do
   dotnet "$dll" pg-workbench-core-preview "$phase" "$scratch/waiting.json"
+  if [[ -e "$sentinel" ]]; then
+    echo "Workbench inherited the caller's identity database configuration." >&2
+    exit 1
+  fi
 done
+echo "ok caller identity database configuration stayed isolated"
