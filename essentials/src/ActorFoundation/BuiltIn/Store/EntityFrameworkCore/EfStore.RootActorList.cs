@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -145,9 +146,24 @@ public sealed partial class EfStore
                 (excluded."Status", excluded."EndedAt", excluded."TerminalRevision", excluded."Header", excluded."Type", excluded."Labels");
             """, token);
 
-    private static FormattableString ActorListQuery(KernelDb db, FormattableString query) =>
-        FormattableStringFactory.Create(query.Format.Replace("/*terminal-mark*/",
-            db.UsesRootTerminalSelection ? """l."TerminalRevision" """ : "NULL::bigint", StringComparison.Ordinal), query.GetArguments());
+    private static FormattableString ActorListQuery(KernelDb db, FormattableString query)
+    {
+        var terminalSelections = db.UsesRootTerminalSelection;
+        var sql = query.Format
+            .Replace("/*terminal-mark*/", terminalSelections ? """l."TerminalRevision" """ : "NULL::bigint", StringComparison.Ordinal)
+            .Replace("/*filter*/", terminalSelections ? "" : "kernel_actor_list_filter", StringComparison.Ordinal)
+            .Replace("/*filter-cast*/", terminalSelections ? "::jsonb" : "", StringComparison.Ordinal);
+        return FormattableStringFactory.Create(sql, query.GetArguments());
+    }
+
+    // Apply the same complete-escape transform as the projector. List parameters can then be
+    // cast to jsonb directly, without resolving a function through the client's search path.
+    private static string EncodeListFilter(string json) => Regex.Replace(json, """\\(?:u0000|.)""", match => match.Value switch
+    {
+        """\u0000""" => """\\u0000""",
+        """\\""" => """\\\\""",
+        _ => match.Value
+    }, RegexOptions.CultureInvariant);
 
     internal async Task<(RootListItem Item, long AsOf)?> ReadRootActorAsync(string tenant, string reference,
         CancellationToken cancellationToken)
@@ -208,6 +224,11 @@ public sealed partial class EfStore
         var triggers = db.UsesRootTerminalSelection ? RootListWithMarkTriggers : RootListSourceTriggers;
         var encodedType = type is null ? null : DurableKeyJson.Write(type);
         var encodedLabels = DurableKeyJson.Write(labels);
+        if (db.UsesRootTerminalSelection)
+        {
+            encodedType = encodedType is null ? null : EncodeListFilter(encodedType);
+            encodedLabels = EncodeListFilter(encodedLabels);
+        }
         List<RootListRow> rows;
         try
         {
@@ -227,9 +248,6 @@ public sealed partial class EfStore
                                 SELECT count(*) FROM pg_catalog.pg_class dependency
                                 WHERE dependency.relnamespace = relation.relnamespace AND dependency.oid IN (
                                     to_regclass('"FoundationActorList"'), to_regclass('"KernelStoreVersions"'))))
-                            AND (NOT {db.UsesRootTerminalSelection} OR relation.relnamespace = (
-                                SELECT f.pronamespace FROM pg_catalog.pg_proc f
-                                WHERE f.oid = to_regprocedure('kernel_actor_list_filter(text)')))
                         GROUP BY source.tgrelid HAVING count(*) = {triggers.Length}
                     ) AS "SourceReady"
                 ), page AS (
@@ -239,11 +257,11 @@ public sealed partial class EfStore
                         AND (SELECT "SourceReady" FROM readiness)
                         AND EXISTS (SELECT 1 FROM marker WHERE "StoreSchema" = {expected.StoreSchema}
                             AND "MessageProtocol" = {expected.MessageProtocol} AND "JournalCodec" = {expected.JournalCodec})
-                        AND ({encodedType}::text IS NULL OR l."Type" = kernel_actor_list_filter({encodedType}::text))
+                        AND ({encodedType}::text IS NULL OR l."Type" = /*filter*/({encodedType}::text)/*filter-cast*/)
                         AND ({status}::integer IS NULL OR l."Status" = {status}::integer)
                         AND ({endedBefore}::bigint IS NULL OR l."EndedAt" < {endedBefore}::bigint)
                         AND {parked}::boolean IS NOT TRUE
-                        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(kernel_actor_list_filter({encodedLabels})) criterion(entry)
+                        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(/*filter*/({encodedLabels})/*filter-cast*/) criterion(entry)
                             WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements(l."Labels") label(entry) WHERE label.entry = criterion.entry))
                     ORDER BY l."Reference" LIMIT {limit}
                 )

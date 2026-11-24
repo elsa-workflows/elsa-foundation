@@ -17,6 +17,7 @@ internal static class PostgresRootTerminateChecks
     {
         const string operation = "terminate-copy";
         const string definition = "before-upgraded-turn";
+        const string instantDefinition = "instant\\u0000\0";
         const int payloadLength = 16_405_000;
         const string neighborApproval = "held for the normal owner";
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
@@ -45,7 +46,7 @@ internal static class PostgresRootTerminateChecks
         var runtime = new WorkflowRuntime(basic, basic);
         var registry = new WorkflowRegistry().Add(Wf.Workflow(definition, Wf.Parallel("root", null,
             Wf.Node<DirectApprovalWorkflow>("approval"), Wf.Node<InvocationWait>("receive"))))
-            .Add(Wf.Workflow("instant-finish", Wf.Sequence("instant")));
+            .Add(Wf.Workflow(instantDefinition, Wf.Sequence("instant")));
         var native = new NativeExecutionModel(registry);
         var writer = new ObservedNative(native, 13);
         var reader = new ObservedNative(native, native.StateVersion, fallback ? 400_000 : 0);
@@ -240,7 +241,7 @@ internal static class PostgresRootTerminateChecks
                   await cold.ReadRootActorAsync("other", actor.Id, stop) is null,
                 "the selection is qualified to the actor, scope and complete terminal mark");
 
-            var instant = (await runtime.StartAsync(tenant, "instant", NativeExecutionModel.Start("instant-finish"), cancellationToken: stop)).Actor!.Value;
+            var instant = (await runtime.StartAsync(tenant, "instant", NativeExecutionModel.Start(instantDefinition), cancellationToken: stop)).Actor!.Value;
             await using (var db = Open())
                 await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_project_root_actor_list_v13""", stop);
             await RequireWriterRefusal(instant);
@@ -318,15 +319,19 @@ internal static class PostgresRootTerminateChecks
             await using (var db = Open())
                 await db.Database.ExecuteSqlRawAsync("""
                     DROP TABLE selection_shadow."KernelStoreVersions";
-                    CREATE FUNCTION selection_shadow.kernel_actor_list_filter(text)
+                    CREATE FUNCTION selection_shadow.kernel_actor_list_filter(text, integer DEFAULT 0)
                         RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$ SELECT '[]'::jsonb $$;
                     """, stop);
-            Check((await shadowReads.GetAsync(tenant, instant, stop))?.Header.Ref == instant,
-                "the canonical point read needs no label filter function");
-            await RequireUnavailable(async () =>
-            {
-                _ = await shadowReads.ListAsync(tenant, new(Type: PublicActor.ActorType), cancellationToken: stop);
-            });
+            var requiredLabels = new Dictionary<string, string> { ["definition"] = instantDefinition };
+            var shadowFiltered = await shadowReads.ListAsync(tenant,
+                new(Type: PublicActor.ActorType, Status: Contract.ActorStatus.Finished, Labels: requiredLabels), cancellationToken: stop);
+            var otherLabels = new Dictionary<string, string> { ["definition"] = instantDefinition[..^1] };
+            var notMatched = await shadowReads.ListAsync(tenant,
+                new(Type: PublicActor.ActorType, Labels: otherLabels), cancellationToken: stop);
+            Check((await shadowReads.GetAsync(tenant, instant, stop))?.Header.Ref == instant &&
+                  shadowFiltered.Items.Single().Header.Ref == instant &&
+                  shadowFiltered.Items.Single().Header.Labels["definition"] == instantDefinition && notMatched.Items.Count == 0,
+                "a conflicting filter overload cannot alter canonical matching of NUL and literal escape labels");
         }
 
         async Task RequireWriterRefusal(Contract.ActorRef reference)
