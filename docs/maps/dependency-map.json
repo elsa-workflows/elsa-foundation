@@ -270,6 +270,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.ActorFoundation.Hosting",
+          "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Api.Capabilities",
           "path": "essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
         },
