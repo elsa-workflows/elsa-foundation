@@ -20,6 +20,7 @@ internal sealed class EvaluatedHashInputs(string configuration)
         if (cache.TryGetValue(project, out var known)) return known;
         if (!evaluating.Add(project)) throw new InvalidOperationException($"A project-input cycle cannot be admitted: {project}");
         var imports = Path.Join(Path.GetTempPath(), "elsa-s9-msbuild-" + Guid.NewGuid().ToString("N") + ".xml");
+        var result = Path.Join(Path.GetTempPath(), "elsa-s9-msbuild-" + Guid.NewGuid().ToString("N") + ".json");
         try
         {
             var common = new[] { "msbuild", project, "-nologo", "-verbosity:quiet", "-property:Configuration=" + configuration };
@@ -29,11 +30,12 @@ internal sealed class EvaluatedHashInputs(string configuration)
             // Resolve final compiler inputs using existing project outputs. This target does not
             // invoke Csc; BuildProjectReferences=false makes referenced projects return GetTargetPath.
             var (code, text) = ChildProcess.Run("dotnet", [.. common, "-target:FindReferenceAssembliesForReferences", "-property:BuildProjectReferences=false",
-                "-getProperty:MSBuildAllProjects,IntermediateOutputPath,ProjectAssetsFile", "-getItem:Compile,AdditionalFiles,EditorConfigFiles,Analyzer,ProjectReference,ReferencePathWithRefAssemblies"], workingDirectory: startDirectory, timeout: TimeSpan.FromMinutes(5));
+                "-getProperty:MSBuildAllProjects,IntermediateOutputPath,ProjectAssetsFile", "-getItem:Compile,AdditionalFiles,EditorConfigFiles,Analyzer,ProjectReference,ReferencePathWithRefAssemblies",
+                "-getResultOutputFile:" + result], workingDirectory: startDirectory, timeout: TimeSpan.FromMinutes(5));
             if (code != 0) throw new InvalidOperationException($"SDK input evaluation failed for {project}: {text}");
-            var beginning = text.IndexOf('{');
-            if (beginning < 0) throw new InvalidOperationException($"SDK input evaluation returned no JSON for {project}.");
-            using var document = JsonDocument.Parse(text[beginning..]);
+            // Warnings may follow valid result JSON on stderr. Console output is diagnostic
+            // text, never structured compiler evidence; the SDK owns this dedicated result file.
+            using var document = ReadResultFile(result, project);
             compileSources[project] = document.RootElement.GetProperty("Items").GetProperty("Compile").EnumerateArray()
                 .Select(item => Path.GetFullPath(item.GetProperty("FullPath").GetString()!))
                 .ToHashSet(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -60,7 +62,14 @@ internal sealed class EvaluatedHashInputs(string configuration)
         {
             evaluating.Remove(project);
             if (File.Exists(imports)) File.Delete(imports);
+            if (File.Exists(result)) File.Delete(result);
         }
+    }
+
+    internal static JsonDocument ReadResultFile(string result, string project)
+    {
+        if (!File.Exists(result)) throw new InvalidOperationException($"SDK input evaluation returned no structured result for {project}: {result}");
+        return JsonDocument.Parse(File.ReadAllText(result));
     }
 
     internal IReadOnlySet<string> CompileSources(string project) { _ = Read(project); return compileSources[Path.GetFullPath(project)]; }
