@@ -21,7 +21,7 @@ classified list as a whole before any fix lands (task T016). Observed in runs 2 
 | B13 | `logging/logging-tests.json`, *Act: Execute workflow definition*, response header `test-response-header12` equals `TestValue235` | missing vs `TestValue235` | suite defect | As B12: 3.6.3 returns `test-response-header12: TestValue235`. Suite description concerns log persistence, not headers. Probe p1 passes with the fix | `$.this.headers[?(@.name == '{{ $.globals.requestBody.expectedResponseHeader.name }}')].value` → `$.this.headers['{{ $.globals.requestBody.expectedResponseHeader.name }}']` (1 line) |
 | B14 | `javascript/script-handler-functions-tests.json`, cases `getConfiguration`, `base64Encode`, `base64Decode`, status equals `202`; `body.result` exists / equals / length | `500` vs `202`; no `result` | not a 3.6.3 result: host prerequisite (needs a decision) | Suite name: "Testing functions registered in the Executor V3 code base". `getConfiguration`, `base64Encode` and `base64Decode` are host functions of the Nexxbiz Executor V3, not of elsa-core: 3.6.3's `JintJavaScriptEvaluator` registers `getConfig` (only with `AllowConfigurationAccess`) and none of these three. Spec 247 lists them as unknown calls for the Elsa 4 conversion | none. **Question**: exclude this suite and `javascript-script-handler-functions.json` from acceptance like spec Q13, or keep it and mark the Elsa 3 result `blocked: host prerequisite (Executor V3 functions)` (a value the data model does not have yet)? |
 
-**Approval**: pending (T016).
+**Approval**: pending (T016); list posted at https://github.com/elsa-workflows/elsa-foundation/pull/5662#issuecomment-7134511104.
 
 ## Notes
 
