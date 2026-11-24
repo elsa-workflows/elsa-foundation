@@ -54,11 +54,16 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     const receipt = await api<{ testRunId: string; workflowExecutionId: string; failure?: unknown }>(`/publishing/activity-test-runs/${initial.testRunId}`);
     expect(receipt.testRunId).toBe(initial.testRunId); expect(receipt.failure ?? null).toBeNull();
     const result = page.getByRole("dialog").getByRole("region", { name: "Test run result", exact: true });
-    const details = result.locator("details.ad-test-run-details");
-    if (await details.getAttribute("open") === null) await activate(details.locator("summary"), "Open activity run details");
-    // Visible technical identifiers are abbreviated; their title retains the exact current run identity.
-    await expect(result.locator(".ad-test-run-technical code").first()).toHaveAttribute("title", initial.testRunId);
-    await expect(result).toContainText("Completed", { timeout: 30_000 });
+    await expect.poll(async () => {
+      if (await result.count() === 0) return null;
+      const details = result.locator("details.ad-test-run-details");
+      const open = await details.evaluateAll(items => items[0]?.hasAttribute("open") ?? false);
+      if (!open) await activate(details.locator("summary"), "Open current activity run details");
+      // A rerun remounts this disclosure. Keep opening only the closed current result until its exact ID arrives.
+      return await result.locator(".ad-test-run-technical code").evaluateAll(items => items[0]?.getAttribute("title") ?? null);
+    }, { timeout: 30_000 }).toBe(initial.testRunId);
+    // Rerun history also contains earlier Completed labels; qualify the current result's heading alone.
+    await expect(result.locator(".ad-test-run-result-heading .ad-test-run-stage")).toHaveText("Completed", { timeout: 30_000 });
     return { request: { url: started.url(), body: started.request().postDataJSON() }, receipt, completed: execution };
   }
   const definitionIds = new Map<string, string>();
@@ -236,9 +241,13 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     const nullableOmission = await runActivityTest(runTest, "Run nullable omission");
     proof.activityNullableOmission = nullableOmission;
     expect(nullableOmission.request.body).toMatchObject({ inputs: { count: { state: "Absent" }, note: { state: "Present", value: null } } });
+    // A completed Activity Test Run displays result evidence instead of editable inputs. Reopen to enter another value.
+    await activate(dialog.getByRole("button", { name: "Close", exact: true }).first(), "Close omission Test Run");
+    await activate(page.getByRole("button", { name: "Test Run", exact: true }), "Reopen nullable Test Run");
+    await selectWithKeyboard(dialog.getByRole("combobox", { name: "Note", exact: true }), "Null");
     await selectWithKeyboard(changedCount, "Null");
     await capture(page, info, "contract-type-nullable");
-    const changedActivityRun = await runActivityTest(dialog.getByRole("button", { name: "Run again", exact: true }), "Run nullable value again");
+    const changedActivityRun = await runActivityTest(runTest, "Run nullable value after reopening");
     expect(changedActivityRun.receipt.testRunId).not.toBe(nullableOmission.receipt.testRunId);
     proof.changedTypeRequest = changedActivityRun.request; proof.changedTypeCompletion = changedActivityRun;
     await activate(dialog.getByRole("button", { name: "Close", exact: true }).first(), "Close Test Run");
