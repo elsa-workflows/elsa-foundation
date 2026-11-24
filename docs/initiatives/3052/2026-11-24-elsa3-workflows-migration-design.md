@@ -61,15 +61,8 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
 - **`assess <export> --packages <folder of .nupkg> --settings <appsettings.json> [--out <dir>]`** loads the user's
   feature packages through Nuplane, exactly as the image does. `--host <build output>` remains for users with their
   own Elsa 4 host.
-- **The Elsa 3 converter in the essentials engine.** The essentials engine bakes in the `Elsa3Mapping` feature,
-  which is the converter only, for as long as users are migrating. It can be removed later.
-  - It depends only on `JavaScriptExpressions`. Its packages are Acornima, Fluid.Core, `Elsa3.Models` and essentials
-    core abstractions. It maps no endpoints and has no persistence of its own.
-  - `Elsa3.Mapping.csproj` references the `Elsa3.Activities.Design.Import` assembly, so that assembly ships in the
-    image, but its feature, with the HTTP migration endpoints, stays off.
-- **Reference closure** = the essentials engine composition (which already includes the converter) plus the Elsa 3
-  import features the CLI needs: the collection import for reusables, its EF ledger, and the publishing bridge. The
-  CLI enables these itself; neither the skill nor the user configures them. The image does not enable them.
+- **Reference closure** = the **Elsa 3 migration image's** composition: the essentials engine plus the Elsa 3
+  converter and import features (see *Essentials images*). Neither the skill nor the user configures these.
 - **`--host` fails loudly.** When the user's own host closure lacks the Elsa 3 converter or import assemblies, the
   worker cannot reach its entry point. The CLI then refuses with exit code 2 and a message naming the packages and
   features to add. It never falls back to a partial run.
@@ -119,9 +112,14 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
 - The feature composition is baked in and immutable. Users never see `shells.json`.
 - Users deliver one `appsettings.json`. It can override the settings of baked features and add features, such as
   their own custom features. Whether configuration can switch a baked feature off is deliberately left alone.
-- One feature list, defined once, feeds both the engine image and the CLI's reference closure. It includes the
-  converter-only `Elsa3Mapping` feature while users migrate. The Elsa 3 import features are not on it; only the CLI
-  enables those.
+- **The essentials engine carries no Elsa 3 code.**
+- **A third image, the Elsa 3 migration image,** is built `FROM` the essentials engine at the same version. It adds
+  the Elsa 3 features and their dependencies: the converter (`Elsa3Mapping`), the collection import for reusables,
+  its EF ledger and the publishing bridge.
+  - Its Dockerfile is maintained under `extensions/Elsa3/`, so Elsa 3 stays behind the import boundary and can be
+    retired with the extension.
+  - Its composition is the essentials feature list plus an Elsa 3 addition list. It is the CLI's reference closure.
+- The essentials feature list is defined once and feeds the engine image, and through it the migration image.
 - **Acceptance:** the S-15 JTest acceptance set passes against the essentials engine image. S-15 itself stays on the
   Workbench, unchanged.
 - The engine image includes JSON workflow reconciliation, so `converted/` can be mounted and loaded at startup.
@@ -199,7 +197,7 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
 | 0 | #5664 converter maps Elsa 3 functions to prefixed host functions | — | PR #5667 |
 | 0 | #5666 converter diagnoses unregistered variable types and unmapped storage drivers | — | in progress |
 | 1 | **Essentials images**: engine and designer-only Studio, one feature list, JTest acceptance | — | to define |
-| 2 | **Workflows migration CLI**: `elsa3-migration workflows inventory\|assess`, in-memory SQLite, report, `converted/` | 1 (feature list), #5664, #5666 | to define |
+| 2 | **Workflows migration CLI**: `elsa3-migration workflows inventory\|assess`, the Elsa 3 migration image (`extensions/Elsa3/`, `FROM` essentials), in-memory SQLite, report, `converted/` | 1 (engine image), #5664, #5666 | to define |
 | 3 | **Migration skill and docs**: plan template, porting catalog, provider-neutral skill, README section, contributor triggers | 2 (report schema) | to define |
 
 All three specs can be defined in parallel now. Implementation follows the dependency order.
