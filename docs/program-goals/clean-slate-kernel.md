@@ -20,6 +20,33 @@ Replace Elsa 4's runtime core with the kernel that the prototype (`prototypes/ke
 scope of [ADR 0099 section 10](../adr/0099-clean-slate-execution-kernel.md#10-release-1-scope). Out of scope for this
 plan: the ADR's non-goals for release 1, and anything not named there.
 
+### Trimmed scope (owner, 24 November 2026)
+
+Sipke trimmed the program to two parts, the **Actor Foundation** and the **Elsa engine**, and set the goal as end-to-end
+delivery through gate 4, the default switch, and gate 5, old-core removal. Each gate still needs his decision.
+[Owner decision on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7142657677)
+
+- **Actor Foundation:** the foundation contract and the Built-in Actor Foundation. This covers the durable layer,
+  store, runtime, hosting, placement and node lease, and K5 graceful stop of entered jobs.
+- **Elsa engine:** the workflow instance actor, the Native model and activities, and Graph/Flowchart.
+- **Providers:** PostgreSQL and SQLite. One composed shipped format runs on both
+  ([composition decisions](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7135533849)).
+  Besides the operator, job and Park capabilities, it carries self-sends and timers, direct held replies and workflow history.
+- **Kept milestones:** K8 synchronous HTTP, K9 read models and the API read path, and K10 Studio on the projector for
+  Native and Flowchart.
+- **Park:** opening, inspection, arrivals and one-page recover. Terminate and delete of a parked root come with
+  profile composition.
+
+These items move after the release. Where a milestone row or condition below names one of them, it applies after the release:
+
+- the StateMachine engine with invariants S1 to S4, and its Studio journeys;
+- Park operations beyond the one-page recover: the multi-page drain, discard, expiry and retry selection. The
+  drain prototype is kept as a deferred draft, [#5692](https://github.com/elsa-workflows/elsa-foundation/pull/5692);
+- the K11 extras: traces and metrics beyond the basics, the migration-plan runner and its plan-outcome read model,
+  and values by reference;
+- SQL Server and MySQL, with the conditions that only they carry: RP collations, MySQL TLS cancellation and Entra
+  qualification. MongoDB stays on hold.
+
 ## How the work lands
 
 - One concern per PR, about 500 changed lines or fewer, stacked where they depend on each other. Mechanical moves and
