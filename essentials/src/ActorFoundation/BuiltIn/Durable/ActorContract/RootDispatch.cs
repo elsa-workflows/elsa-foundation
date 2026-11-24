@@ -34,8 +34,12 @@ internal sealed partial class ActorAdapter
         Kind: Durable.Kinds.Suspend or Durable.Kinds.Resume or Durable.Kinds.Terminate or Durable.Kinds.Delete,
         InboxScope: Durable.InboxKey.FoundationOccurrenceScope, StorageId: not null, TargetCreation: 1, KeepUntil: not null,
         Operator: { Selection: null, RecoverMode: null, RecoverHandles: null },
-        Start: null, Payload: null, ReplyTo: null, EventMatch: null, Sender: null, SenderCreation: 0, ActorAuthored: false, JobGeneration: 0
+        Start: null, Payload: null, EventMatch: null, Sender: null, SenderCreation: 0, ActorAuthored: false, JobGeneration: 0
     } && (message.Kind == Durable.Kinds.Delete ? message.Operator.QualifiedTerminal is not null : message.Operator.QualifiedTerminal is null)
+        && (message.ReplyTo is not null) == message.Operator.RootHeldReply
+        && (message.ReplyTo is null || !message.Operator.RetentionDelete &&
+            message.Kind is Durable.Kinds.Terminate or Durable.Kinds.Delete &&
+            Durable.ReplyTo.Parse(message.ReplyTo) is { BeforeCommit: false })
         && (!message.Operator.RetentionDelete || message.Kind == Durable.Kinds.Delete)
         && (message.Operator.RootThenDelete ? message.Kind == Durable.Kinds.Terminate && message.Operator.DeleteTarget is not null
             : message.Operator.DeleteTarget is null);
@@ -62,11 +66,13 @@ internal sealed partial class ActorAdapter
         if (protection is not null)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, protection);
         var marker = Durable.CreationProtocol.Retire(row);
-        return new(input.Actor)
+        var outcome = new Durable.TurnOutcome(input.Actor)
         {
             Row = marker, Expected = row.Revision, Revision = marker.Revision, Status = marker.Status,
             Consumed = [.. input.Taken], Journal = """["delete"]""", Delete = true, Unsubscribe = true
         };
+        outcome.ReplyTo(input.Taken[0], "deleted");
+        return outcome;
     }
 
     private string? RootRefusal(Durable.TurnInput input)

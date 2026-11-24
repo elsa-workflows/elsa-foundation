@@ -1366,8 +1366,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void LoseCallers(IEnumerable<Slot> slots, IEnumerable<Delivery> items)
     {
-        var pending = items.Where(item => !item.Message.SuppliedCreator ||
-                _slots.TryGetValue(Canonical(item.Message.Target.Id), out var slot) && slot.CurrentRow is not null)
+        // A held operator's unresolved durable row keeps the same address for the next owner.
+        var pending = items.Where(item => (!item.Durable || item.Message.Operator?.RootHeldReply != true) &&
+                (!item.Message.SuppliedCreator ||
+                 _slots.TryGetValue(Canonical(item.Message.Target.Id), out var slot) && slot.CurrentRow is not null))
             .Select(item => item.ReplyRoute).OfType<LiveReplyRoute>();
         foreach (var route in slots.SelectMany(slot => slot.Replies).Concat(pending).Distinct().ToList())
             Send(route, "lost", null, null, error: "lost");
@@ -1386,7 +1388,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _held.Clear();
             _polling = _loading = _flushing = _meeting = _releasing = _aliasesChangedDuringLoad = _retryAliases = false;
             foreach (var item in _items.Values.ToList()) CancelJobDriver(item);
-            // Every caller this memory knows of is told at once; a new owner answers only what is still in the rows.
+            // End volatile waits. A durable held operator can still be answered by the next owner.
             LoseCallers(_slots.Values, _items.Values);
             _slots.Clear();
             _passTurns.Clear();

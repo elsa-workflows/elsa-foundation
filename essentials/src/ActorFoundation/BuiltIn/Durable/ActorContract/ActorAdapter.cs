@@ -383,7 +383,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             if (nextRow.Status == Durable.InstanceStatus.Running && outcome.FoundationHeader is not null)
                 outcome.FoundationWithholds = actor.Withholds(nextHeader);
         }
-        return thenDelete && input.Row is { } prior ? FinishThenDelete(input, delivery, prior, header, outcome) : outcome;
+        if (thenDelete && input.Row is { } prior) return FinishThenDelete(input, delivery, prior, header, outcome);
+        if (roots is not null && delivery.Message.Kind == Durable.Kinds.Terminate)
+            outcome.ReplyTo(delivery, "terminated");
+        return outcome;
     }
 
     private Durable.TurnOutcome FinishThenDelete(Durable.TurnInput input, Durable.Delivery delivery, Durable.InstanceRow prior,

@@ -722,9 +722,19 @@ delivery and checks model protection against the committed checkpoint before
 it retires an eligible root. Build Native.Run in Release with a locked restore
 and run `pg-root-retention owned checked` against an empty PostgreSQL database.
 
-These profiles qualify generated roots with no attached work. Descendant and job
-cascades, parked work, retention scheduling and held operator replies have
-separate acceptance cases.
+The opt-in format-17 fixture holds a selected operator request through
+`IIngress.RequestAsync`. Admission stores the tenant-bound reply address with
+the exact command. The Worker releases its answer after the fenced commit,
+including after takeover. The fixture observes committed `deleted`,
+`terminated and kept` and protected Delete outcomes. Rollback leaves the
+caller waiting and the durable registration intact. A later owner can commit
+after the caller's deadline. Build Native.Run in Release with a locked restore
+and run `pg-held-operator owned checked` against an empty PostgreSQL database.
+This exercises the live reply contract through a fixture transport.
+
+These profiles qualify generated roots with no attached work. Descendant and
+job cascades, parked work, retention scheduling and production reply transport
+have separate acceptance cases.
 
 ## 10. Private durable lexical-resource probe
 

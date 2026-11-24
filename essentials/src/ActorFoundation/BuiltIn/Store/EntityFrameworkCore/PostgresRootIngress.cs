@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +8,8 @@ namespace Kernel.EntityFramework;
 
 internal sealed class PostgresRootIngress(PostgresRootAdmission admission, string actorType,
     Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeTerminate = null,
-    Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeDelete = null) : Contract.IIngress
+    Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeDelete = null,
+    (Requests Requests, string Node)? heldOperators = null) : Contract.IIngress
 {
     private static readonly JsonSerializerOptions OperatorJson = new()
     {
@@ -25,14 +27,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         if (Contract.Kinds.IsCommand(kind))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var authorize = kind switch
-            {
-                Contract.Kinds.Terminate => authorizeTerminate,
-                Contract.Kinds.Delete => authorizeDelete,
-                _ => null
-            };
-            return target is Contract.Target.Ref exact && PostgresRootAdmission.IsIssuedReferenceShape(exact.Actor.Id) &&
-                authorize?.Invoke(scope, exact.Actor) == true
+            return target is Contract.Target.Ref exact && Authorizes(scope, exact.Actor, kind)
                 ? await OperateAsync(scope, exact.Actor, id, kind, payload, options, cancellationToken)
                 : new(Contract.AdmissionOutcome.Refused);
         }
@@ -70,8 +65,16 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         };
     }
 
+    private bool Authorizes(Contract.BoundScope scope, Contract.ActorRef actor, string kind) =>
+        PostgresRootAdmission.IsIssuedReferenceShape(actor.Id) && (kind switch
+        {
+            Contract.Kinds.Terminate => authorizeTerminate,
+            Contract.Kinds.Delete => authorizeDelete,
+            _ => null
+        })?.Invoke(scope, actor) == true;
+
     private async ValueTask<Contract.Admission> OperateAsync(Contract.BoundScope scope, Contract.ActorRef actor, string id,
-        string kind, string? payload, Contract.AddOptions? options, CancellationToken token)
+        string kind, string? payload, Contract.AddOptions? options, CancellationToken token, PostgresRootAdmission.OperatorReply? reply = null)
     {
         if (!FoundationMetadataLimits.IsOutsideMessageId(id) || payload is null || payload.Length > 2_048)
             return new(Contract.AdmissionOutcome.Refused);
@@ -90,7 +93,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         if (command.Selection is not { Length: > 0 } selection)
             return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
         var receipt = await admission.AdmitRootOperatorAsync(scope.Tenant, actor.Id, id, kind,
-            options?.DueAt, options?.KeepFor, token, selection, command.ThenDelete);
+            options?.DueAt, options?.KeepFor, token, selection, command.ThenDelete, reply: reply);
         return receipt switch
         {
             { Duplicate: true } => new(Contract.AdmissionOutcome.Duplicate, new Contract.ActorRef(receipt.Reference)),
@@ -99,9 +102,70 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         };
     }
 
-    public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
-        string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("Held requests are outside the ordinary generated-root preview.");
+    public async ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
+        string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default)
+    {
+        if (heldOperators is not { } host)
+            throw new NotSupportedException("This generated-root profile has no held operator requests.");
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (request.Inline || request.ReleaseBeforeCommit || request.Ambient is not null) return new(null, null, Error: "invalid operator request");
+        if (add?.DueAt is not null) return new(null, null, Error: "requests cannot set a due time");
+        if (target is not Contract.Target.Ref exact || !Authorizes(scope, exact.Actor, kind))
+            return new(null, null, Error: "missing");
+
+        var started = Stopwatch.GetTimestamp();
+        var now = await admission.ReadReplyTimeAsync(cancellationToken);
+        double Remaining() => (double)((decimal)request.Deadline - now) - Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        var remaining = Remaining();
+        if (remaining <= 0) return new(null, null, Error: "timeout");
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (remaining <= int.MaxValue) lifetime.CancelAfter(TimeSpan.FromMilliseconds(remaining));
+        var open = host.Requests.OpenBound(id, request.Deadline, scope.Tenant, null);
+        try
+        {
+            var route = new PostgresRootAdmission.OperatorReply(open.ReplyAddress(host.Node), open.Deadline);
+            var accepted = await OperateAsync(scope, exact.Actor, id, kind, payload, add, lifetime.Token, route);
+            if (Remaining() <= 0) return new(null, null, Error: "timeout");
+            if (accepted.Outcome == Contract.AdmissionOutcome.Duplicate) return new(null, null, Error: "repeat");
+            if (accepted.Outcome == Contract.AdmissionOutcome.Refused)
+                return new(null, null, Error: accepted.Reason switch
+                {
+                    Contract.RefusalReason.StaleSelection => "stale selection",
+                    Contract.RefusalReason.TargetMismatch => "target",
+                    _ => "missing"
+                });
+
+            var completion = host.Requests.CompletionOf(open);
+            while (!completion.IsCompleted && (remaining = Remaining()) > 0)
+            {
+                try { await completion.WaitAsync(TimeSpan.FromMilliseconds(Math.Min(remaining, int.MaxValue)), lifetime.Token); }
+                catch (TimeoutException) { }
+            }
+            if (!completion.IsCompleted) host.Requests.Timeout(open);
+            var answer = await completion.WaitAsync(cancellationToken);
+            if (answer.Item is CreationResult refusal)
+                return new(null, refusal.OwningOperation, Error: refusal.Result switch
+                {
+                    "Protected" => "protected",
+                    "ProtectionUnavailable" => "protection unavailable",
+                    "StaleSelection" => "stale selection",
+                    "TargetMismatch" => "target",
+                    _ => "missing"
+                });
+            return new(answer.Channel, answer.Item, (Contract.ActorStatus?)answer.Status, answer.Error);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            return new(null, null, Error: "timeout");
+        }
+        catch (PostgresRootAdmission.OperatorReplyExpired)
+        {
+            return new(null, null, Error: "timeout");
+        }
+        finally { host.Requests.Disconnect(open); }
+    }
 
     public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
         CancellationToken cancellationToken = default) =>
@@ -128,7 +192,7 @@ public sealed partial class EfStore
     // The host authenticates the caller and authorizes termination of the supplied exact reference.
     internal async ValueTask<Contract.IIngress> OpenSelectedRootIngressAsync(string actorType, TimeSpan deduplicationWindow,
         Func<Contract.BoundScope, Contract.ActorRef, bool> authorizeTerminate, CancellationToken cancellationToken,
-        Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeDelete = null)
+        Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeDelete = null, (Requests Requests, string Node)? heldOperators = null)
     {
         ArgumentNullException.ThrowIfNull(authorizeTerminate);
         PostgresRootAdmission.RequireActorType(actorType);
@@ -140,7 +204,16 @@ public sealed partial class EfStore
         await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
         if (authorizeDelete is not null && !db.UsesRootRetirement)
             throw new NotSupportedException("Selected deletion requires the PostgreSQL retirement profile.");
-        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType, authorizeTerminate, authorizeDelete);
+        if (heldOperators is { } host)
+        {
+            if (!db.UsesRootOperatorReplies) throw new NotSupportedException("Held operators require the PostgreSQL reply profile.");
+            ArgumentNullException.ThrowIfNull(host.Requests);
+            if (string.IsNullOrWhiteSpace(host.Node) || host.Node.Length > 256 || host.Node.Contains('|') ||
+                host.Node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(host.Node))
+                throw new ArgumentException("Expected an issued reply node.", nameof(heldOperators));
+        }
+        return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType,
+            authorizeTerminate, authorizeDelete, heldOperators);
     }
 
     /// <summary>
