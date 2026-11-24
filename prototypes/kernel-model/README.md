@@ -345,6 +345,19 @@ job of its type per generated root. The timed host uses message protocol 18. The
 timed qualification keeps its own protocol 9. Provision a dedicated database for each format. Workbench
 checks the installed format before registering an owner. Run one Workbench process at a time against
 the preview database. Existing workflow and Studio endpoints still use their current runtime.
+
+Set `Elsa__CorePreview__ReadsTenant` to the preview's Embedded tenant id to expose
+`GET /runtime/core-preview/workflows/instances`. Workbench requires both workflow runtime read
+and activity structure inspection permissions. The authenticated tenant and ordinary persistence
+scope must match the configured preview tenant. Use a dedicated preview shell with the built-in
+inspection context and permission evaluator and without resource authorization handlers. The stock
+shell's Decisions workflow disclosure feature provides such a handler. The route accepts `definition`, `status` and an
+opaque `cursor`. It returns up to 25 workflow references with their status, definition, model state
+version and end time, alongside `next` and `asOf`. The route is available only with the Core Preview
+enabled and its read tenant configured.
+Run `bash tools/ci/actor-foundation/check-workbench-core-preview-reads.sh Release`
+to qualify the route against disposable PostgreSQL and Workbench Identity principals.
+
 The first restart in each lane stops while the approval wait is open. Run either active-job takeover lane on its own:
 
 ```bash

@@ -1,3 +1,4 @@
+using Elsa.ActorFoundation.Hosting;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Native;
@@ -41,6 +42,8 @@ internal static class WorkbenchCorePreview
         var actor = new WorkflowActor([model]);
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
         services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node, actor, Environment.FailFast));
+        if (configuration["Elsa:CorePreview:ReadsTenant"] is { } readsTenant)
+            services.AddSingleton(new WorkbenchCorePreviewReads(Open, EmbeddedTenant.Bind(readsTenant)));
 
         KernelDb Open() => timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(options) :
             nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);
