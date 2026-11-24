@@ -66,7 +66,8 @@ from the tenant, exact actor reference and authenticated terminal mark. Reopenin
 can return a fresh token for the same mark, which reuses the reserved operation. The owner
 reads the configured window at execution.
 
-`--retention-pass-check` runs one configured public list page per pass, using the tenant, definition
+The [workflow qualification runner](../../essentials/tests/Workflows/Runtime/Native/Migration/Run) runs
+`--retention-pass-check` against one configured public list page per pass, using the tenant, definition
 label, status, `EndedAt`, `AsOf` and opaque selection. The pass follows the supplied continuation
 and excludes unresolved Parks. Its application work and admission attempts are bounded by the
 configured page size. The in-memory list scans instance checkpoints to build that page.

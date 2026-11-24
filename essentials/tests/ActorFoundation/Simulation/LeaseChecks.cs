@@ -57,7 +57,6 @@ public static class LeaseChecks
         await RetirementCascadeChecks.Run(Check);
         await ParkDeleteChecks.Run(Check);
         await RetentionDeleteChecks.Run(Check);
-        await RetentionPassChecks.Run(Check);
         await FoundationValueChecks.Run(Check);
         await ParkDrainCascadeChecks.Run(Check);
         await ParkCohortTupleChecks.Run(Check);

@@ -7,10 +7,12 @@ namespace Kernel.Foundation.InMemory;
 public sealed class InMemoryActorFixture(Durable.InMemoryStore store, string ingressNode, int pageSize,
     Func<BoundScope, string, bool>? authorizeOperator = null)
 {
-    public IIngress Ingress { get; } = new InMemoryIngress(store, new Durable.Requests(ingressNode), ingressNode, authorizeOperator);
+    private readonly InMemoryIngress _ingress = new(store, new Durable.Requests(ingressNode), ingressNode, authorizeOperator);
+    public IIngress Ingress => _ingress;
     public IActorReads Reads { get; } = new ActorList(store, pageSize);
 
-    public Durable.IActorType Bind(IActorType actor) => new Durable.ActorAdapter(store, actor);
+    public Durable.IActorType Bind(IActorType actor, Func<ActorHeader, TimeSpan?>? retentionWindow = null) =>
+        new Durable.ActorAdapter(store, actor, retentionWindow: retentionWindow);
 
     public IActorReads OpenReads(int pageSize) => new ActorList(store, pageSize);
 
@@ -22,6 +24,23 @@ public sealed class InMemoryActorFixture(Durable.InMemoryStore store, string ing
 
     public static Durable.InMemoryStore CreateWithParkRetention(Func<long> clock, TimeSpan retention) =>
         new(1, clock) { ParkedRetentionWindow = retention };
+
+    public static Durable.InMemoryStore CreateWithDeduplicationWindow(Func<long> clock, TimeSpan window) =>
+        new(1, clock) { IngressDeduplicationWindow = window };
+
+    public ValueTask<Admission> AdmitRetentionDeleteAsync(BoundScope scope, ActorRef actor, string selection,
+        CancellationToken cancellationToken) => _ingress.AdmitRetentionDeleteAsync(scope, actor, selection, cancellationToken);
+
+    public IEnumerable<(string Tenant, ActorRef Actor, string Id)> PendingRetentionDeletes() => store.Messages.Values
+        .Where(row => !row.Done && row.Message.Operator?.RetentionDelete == true)
+        .Select(row => (row.Tenant!, new ActorRef(store.FoundationIdentity(row.Message.Target.Id, row.Message.TargetCreation!.Value).Reference),
+            row.Message.Id));
+
+    public int CountRetirementMarkers(BoundScope scope, ActorRef actor)
+    {
+        var id = store.FoundationTarget(scope.Tenant, actor.Id)?.Id;
+        return store.Journal.Values.Count(row => row.Instance == id && row.Revision == -1);
+    }
 
     public string ResolveTargetId(BoundScope scope, ActorRef actor) =>
         store.FoundationTarget(scope.Tenant, actor.Id)?.Id ??

@@ -5,7 +5,6 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.Migration.Run" />
-    <InternalsVisibleTo Include="Kernel.Sim" />
     <InternalsVisibleTo Include="Kernel.Native.Run" />
     <ProjectReference Include="../../../../essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
     <ProjectReference Include="../../../../essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
