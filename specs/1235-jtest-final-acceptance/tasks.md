@@ -22,7 +22,7 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `/extensions/Elsa3/tests/JTest/** -text` to the repository `.gitattributes` first (the corpus stores
+- [X] T001 Add `/extensions/Elsa3/tests/JTest/** -text` to the repository `.gitattributes` first (the corpus stores
   `import-and-publish-workflows.json` with CRLF line endings, which `core.autocrlf` would otherwise change), then copy
   the corpus at `b1cde13` unchanged into `JTest/` from the commit, not a working tree (for example
   `git -C <corpus> -c core.autocrlf=false archive b1cde13 <paths> | tar -x -C extensions/Elsa3/tests/JTest`; line-ending
@@ -33,9 +33,9 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   side the same naming as Elsa 4: rename `templates/` to `templates-elsa3/`, `environments/dev.json` to
   `environments/elsa3.json` and `global-configuration.json` to `global-configuration.elsa3.json`, and point its
   template search path at `templates-elsa3/*` (renames plus that one search-path line).
-- [ ] T002 Check `JTest/` for secrets: credentials and base URLs are `${VARIABLE}` references; other literals in the
+- [X] T002 Check `JTest/` for secrets: credentials and base URLs are `${VARIABLE}` references; other literals in the
   environment files (dispatch channels, wait times, engine-specific expected values) are not secrets (FR-004).
-- [ ] T003 [P] Create the ledger files with their table headers from data-model.md: `JTest/ledger/suites.md` (one row
+- [X] T003 [P] Create the ledger files with their table headers from data-model.md: `JTest/ledger/suites.md` (one row
   per suite, all `not run` except the excluded one, spec Q13), `JTest/ledger/baseline-failures.md`, `JTest/ledger/refactor-scope.md`,
   `JTest/ledger/suite-changes.md`,
   `JTest/ledger/dispositions.md` (one row per definition, bucket `unclassified`, or `excluded` for the two of spec Q13), `JTest/ledger/runs.md`.
@@ -44,17 +44,17 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 ## Phase 2: Elsa 4 host composition (parallel with US1 and US2)
 
-- [ ] T004 Add a `ProjectReference` to the Elsa 3 reconciliation project
+- [X] T004 Add a `ProjectReference` to the Elsa 3 reconciliation project
   (`extensions/Elsa3/src/Activities/Design/Import/Reconciliation/`) in `apps/Elsa.Workbench/Elsa.Workbench.csproj`.
-- [ ] T005 Add `typeof(Elsa3JsonReconciliationFeature).Assembly` to the Elsa 3 feature assemblies in
+- [X] T005 Add `typeof(Elsa3JsonReconciliationFeature).Assembly` to the Elsa 3 feature assemblies in
   `apps/Elsa.Workbench/Program.cs`, next to the four existing Elsa 3 entries; leave the feature disabled in
   `apps/Elsa.Workbench/shells.json`.
-- [ ] T006 Run `dotnet restore Elsa.Server.slnx` and commit every `packages.lock.json` it changes (at least
+- [X] T006 Run `dotnet restore Elsa.Server.slnx` and commit every `packages.lock.json` it changes (at least
   `apps/Elsa.Workbench/`, `Essentials/tests/Modularity/Tests/` and `Essentials/tests/Modularity/ProviderTests/`; CI
   restores in locked mode); regenerate the solution filters (`dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters`),
   commit the changed `Elsa.Server.Workbench.slnf` and confirm with `-- solution-filters-check`; build the Workbench and run the architecture tests that cover feature
   composition and the Elsa 3 boundary (`Essentials/tests/Architecture/Tests/`).
-- [ ] T007 Find and verify the configuration override that enables `Elsa3JsonReconciliation` (`Options:SourceId`, and
+- [X] T007 Find and verify the configuration override that enables `Elsa3JsonReconciliation` (`Options:SourceId`, and
   `Options:Files` with `{Order, FilePath}` entries listing the 34 definitions of the acceptance set, spec Q13) together with `Elsa3ImportActivitiesEntityFrameworkCore`, and sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` for one Workbench run without editing the
   committed `shells.json` (environment variables or a run-specific shells file, R-5); after start, set activity input
   and output capture to snapshot level and a `variableWrites` override with `PUT /runtime/workflows/diagnostics/settings`
@@ -70,24 +70,24 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 
 **Independent test**: run the corpus against the 3.6.3 container and read `JTest/ledger/suites.md`.
 
-- [ ] T008 [US1] Build the baseline image from elsa-core tag `3.6.3` (`docker/ElsaServer.Dockerfile`) from the tag's
+- [X] T008 [US1] Build the baseline image from elsa-core tag `3.6.3` (`docker/ElsaServer.Dockerfile`) from the tag's
   committed bytes (the Git URL build context in quickstart.md; a Windows working tree breaks `entrypoint.sh`), find its development admin credentials, and record the build command and image digest in
   `JTest/README.md` (FR-006).
-- [ ] T009 [US1] Install or update `JTest.Cli` to the latest release and run
+- [X] T009 [US1] Install or update `JTest.Cli` to the latest release and run
   `jtest validate "tests/**/*"` from `JTest/`; record the version and any invalid file in `JTest/ledger/runs.md`.
-- [ ] T010 [US1] Start a fresh baseline container, run `import-and-publish-workflows.json`, and record its result per
+- [X] T010 [US1] Start a fresh baseline container, run `import-and-publish-workflows.json`, and record its result per
   dataset in `JTest/ledger/runs.md`; a definition that fails to import on 3.6.3 is itself a baseline failure.
-- [ ] T011 [US1] Run the 41 suites of the acceptance set (`performance/baseline-dispatch-tests.json` is excluded,
+- [X] T011 [US1] Run the 41 suites of the acceptance set (`performance/baseline-dispatch-tests.json` is excluded,
   spec Q13) on the same container; record the run in `JTest/ledger/runs.md` and the Elsa 3
   result per suite in `JTest/ledger/suites.md`.
-- [ ] T012 [US1] Rerun every failing suite on a fresh container to separate intermittent failures from stable ones;
+- [X] T012 [US1] Rerun every failing suite on a fresh container to separate intermittent failures from stable ones;
   keep both runs in `JTest/ledger/runs.md`.
-- [ ] T013 [US1] For each failing assertion, add a row to `JTest/ledger/baseline-failures.md` with observed and expected
+- [X] T013 [US1] For each failing assertion, add a row to `JTest/ledger/baseline-failures.md` with observed and expected
   values and the suite's description (FR-007).
-- [ ] T014 [US1] Classify each row as suite defect, corrected behaviour or 3.6.3 defect, with evidence (suite
+- [X] T014 [US1] Classify each row as suite defect, corrected behaviour or 3.6.3 defect, with evidence (suite
   description, elsa-core 3.6.3 source or release notes, a minimal reproduction) and the proposed fix or `none
   (blocked)`.
-- [ ] T015 [US1] Check the If and Switch suites (`tests/branching/if-then-else-tests.json`, `switch-*`,
+- [X] T015 [US1] Check the If and Switch suites (`tests/branching/if-then-else-tests.json`, `switch-*`,
   `switchflow-*`) are present and cover the corpus's If, Switch and FlowSwitch activities; record any activity the
   corpus definitions use that no suite covers in the *Notes* section of `JTest/ledger/baseline-failures.md`.
 - [ ] T016 [US1] **Approval gate**: post the classified list on the PR and get the coordinator's approval of the whole
