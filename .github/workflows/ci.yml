@@ -762,6 +762,7 @@ jobs:
       - kernel-prototype-nightly
       - kernel-prototype-nightly-4096
       - nightly-nl9
+      - nightly-kernel-postgres-history
       - nightly-kernel-mysql
       # Only so a stale-filter failure, which reaches alert through Build & test, can be told apart and file nothing.
       - generated-maps
@@ -796,6 +797,7 @@ jobs:
           KERNEL_NIGHTLY: ${{ needs.kernel-prototype-nightly.result }}
           KERNEL_4096: ${{ needs.kernel-prototype-nightly-4096.result }}
           KERNEL_NL9: ${{ needs.nightly-nl9.result }}
+          KERNEL_PG_HISTORY: ${{ needs.nightly-kernel-postgres-history.result }}
           KERNEL_MYSQL: ${{ needs.nightly-kernel-mysql.result }}
           MAPS: ${{ needs.generated-maps.result }}
         run: |
@@ -808,6 +810,7 @@ jobs:
               "Workflows unit tests (three shuffled orders):$SHUFFLED" "Kernel prototype nightly:$KERNEL_NIGHTLY" \
               "Kernel prototype nightly, 4,096 virtual partitions:$KERNEL_4096" \
               "Kernel prototype nightly, NL-9 node lease deadlock runs:$KERNEL_NL9" \
+              "Kernel prototype nightly, PostgreSQL workflow history:$KERNEL_PG_HISTORY" \
               "Kernel prototype nightly, MySQL provider:$KERNEL_MYSQL"; do
             if [[ "${pair##*:}" == failure ]]; then failed+=("CI nightly, ${pair%:*}"); fi
           done
@@ -818,7 +821,7 @@ jobs:
               echo "::notice::Only Generated maps failed: stale solution filters are a refresh request, not a red main. No issue filed."
               exit 0
             fi
-            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE weaver=$WEAVER published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096 kernel-nl9=$KERNEL_NL9 kernel-mysql=$KERNEL_MYSQL"
+            echo "::warning::A need failed, but no gate or suite result reads failure; filing for the gate. Results: gate=[$GATE_RESULTS] maps=$MAPS full-tier=$FULL_TIER studio-browser=$STUDIO_BROWSER studio-ux=$STUDIO_UX studio-dotnet=$STUDIO_DOTNET backend-source=$BACKEND_SOURCE weaver=$WEAVER published-images=$PUBLISHED_IMAGES shuffled=$SHUFFLED kernel-nightly=$KERNEL_NIGHTLY kernel-4096=$KERNEL_4096 kernel-nl9=$KERNEL_NL9 kernel-pg-history=$KERNEL_PG_HISTORY kernel-mysql=$KERNEL_MYSQL"
             failed=("CI")
           fi
 
@@ -2191,6 +2194,90 @@ jobs:
           # NL-C1 on the other engines: hold both owners' node records and force the mutual take.
           run mysql "$MY" case=mutual mutation=rr-subquery expect=deadlock
           run postgres "$PG" case=mutual mutation=share expect=deadlock
+          if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
+
+  # The workflow history chain runs birth, then restart and tenant in separate processes after birth renames the
+  # checkpoint and journal tables. One empty database per writer and fence lane (prototypes/kernel-model/README.md).
+  nightly-kernel-postgres-history:
+    name: Kernel prototype nightly, PostgreSQL workflow history
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-nightly' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      BIN: bin/Release/net10.0
+      # Throwaway value for the job-scoped database service.
+      PG_PASSWORD: kernel
+    defaults:
+      run:
+        working-directory: prototypes/kernel-model
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ${{ env.PG_PASSWORD }}
+        ports: ['5432']
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: prototypes/kernel-model/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-kernel-prototype-nuget-${{ hashFiles('prototypes/kernel-model/**/packages.lock.json', 'essentials/tests/ActorFoundation/Native/Run/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-prototype-nuget-
+
+      - name: Build
+        run: |
+          dotnet restore ../../essentials/tests/ActorFoundation/Native/Run --locked-mode
+          dotnet build ../../essentials/tests/ActorFoundation/Native/Run -c Release --no-restore
+
+      # Every lane goes ahead; the step fails at the end if any phase's exit code was not 0.
+      - name: Workflow history birth, restart and tenant
+        env:
+          PG_PORT: ${{ job.services.postgres.ports[5432] }}
+          PG_ID: ${{ job.services.postgres.id }}
+        run: |
+          NAT=(dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-workflow-history)
+          failed=()
+          for writer in owned ef; do
+            for fence in checked in-batch; do
+              label="$writer $fence"
+              db="history_${writer}_${fence//-/_}"
+              echo "::group::$label"
+              docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
+              export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
+              ok=false
+              if out=$("${NAT[@]}" "$writer" "$fence" birth); then
+                printf '%s\n' "$out"
+                bookmark=$(awk '$1 == "projection-bookmark" { print $2 }' <<<"$out")
+                reference=$(awk '$1 == "tenant-reference" { print $2 }' <<<"$out")
+                if [ -n "$bookmark" ] && [ -n "$reference" ] &&
+                    "${NAT[@]}" "$writer" "$fence" restart "$bookmark" &&
+                    "${NAT[@]}" "$writer" "$fence" tenant "$bookmark" "$reference"; then
+                  ok=true
+                fi
+              else
+                printf '%s\n' "$out"
+              fi
+              if [ "$ok" != true ]; then
+                echo "::error::Workflow history chain failed: $label"
+                failed+=("$label")
+              fi
+              echo "::endgroup::"
+            done
+          done
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
 
   nightly-kernel-mysql:

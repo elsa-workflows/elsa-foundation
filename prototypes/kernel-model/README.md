@@ -460,7 +460,9 @@ The chronology route uses inclusive UTC bounds at the precision of the caller's 
 timestamp descending and exact reference ascending. It joins the timestamp and actor-list projections. Reads
 check both format markers and the trigger chain on the current owner relation in the same statement. A canonical
 replacement must have all the required triggers. A rename with no canonical replacement can still serve the
-existing projection from the same installation schema. Re-enable a trigger only if owner writes were quiesced throughout the disabled interval or
+existing projection from the same installation schema. The read cursor then takes its issuer only from the schema
+that holds the store marker and the actor list, and refuses an `"Instances"` that is not a table there. A store without the actor list is refused at read open
+until the installer runs again. Admission and ingress still require the source. Re-enable a trigger only if owner writes were quiesced throughout the disabled interval or
 after an explicit rebuild from authoritative data. Missed silent checkpoint timestamps cannot be reconstructed
 from a later checkpoint or from the public journal. The generic actor list still shows prior roots, which enter chronological history
 on their first checkpoint observed after installation. Physical workflow retirement, legacy timestamps and
@@ -470,7 +472,8 @@ On a fresh disposable PostgreSQL database, run `pg-root-workflow-history <owned|
 with the Native runner. Birth checks that a run finishing at revision 1 shares its terminal time and database
 transaction with the journal and both projections. Then it renames the checkpoint and journal tables so
 `restart <projection-bookmark>` and `tenant <projection-bookmark> <tenant-reference>` exercise both projections
-from separate processes. Use the bookmark and reference printed by birth.
+from separate processes. Use the bookmark and reference printed by birth. The nightly CI job
+`Kernel prototype nightly, PostgreSQL workflow history` runs this chain in all four writer and fence lanes.
 
 On a fresh PostgreSQL database, `pg-root-history <owned|ef> <checked|in-batch>` on the same runner
 exercises two ordinary turns with no journal entries. The Minimal workflow saves its first approval. The Full

@@ -327,7 +327,7 @@ public sealed partial class EfStore
         await using var db = create();
         if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
             throw new NotSupportedException("Ingress requires the ordinary or Native job PostgreSQL Core Preview format.");
-        await PostgresRootAdmission.OpenJournalCursorAsync(db, cancellationToken);
+        await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
         return new PostgresRootIngress(new(create, deduplicationWindow, lockOrdinaryWrites: true), actorType);
     }
 }

@@ -42,12 +42,20 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         return await OpenJournalCursorAsync(db, cancellationToken);
     }
 
-    internal static async Task<FoundationReadCursor> OpenJournalCursorAsync(KernelDb db, CancellationToken cancellationToken)
+    internal static Task<FoundationReadCursor> OpenJournalCursorAsync(KernelDb db, CancellationToken cancellationToken) =>
+        OpenCursorAsync(db, RootReadIssuerSource, ReadIssuerMissing, cancellationToken);
+
+    // Ingress opens on the strict admission source. Only reads may open while the source is renamed.
+    internal static Task RequireIngressIssuerAsync(KernelDb db, CancellationToken cancellationToken) =>
+        OpenCursorAsync(db, RootIssuerSource, RootIssuerMissing, cancellationToken);
+
+    private static async Task<FoundationReadCursor> OpenCursorAsync(KernelDb db, string source, string missing,
+        CancellationToken cancellationToken)
     {
         await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
         try
         {
-            return await ReadJournalCursorAsync(db, cancellationToken);
+            return await ReadCursorAsync(db, source, missing, cancellationToken);
         }
         catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
         {
@@ -64,16 +72,42 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             AND marker.relnamespace = i.relnamespace AND marker.relkind = 'r'
         """;
 
-    private static async Task<FoundationReadCursor> ReadJournalCursorAsync(KernelDb db, CancellationToken cancellationToken)
-    {
-        var issuerKey = await ReadRootIssuerKeyAsync(db, cancellationToken);
-        return new(HMACSHA256.HashData(issuerKey, "elsa-preview/journal-cursor/1"u8));
-    }
+    // Reads pin the issuer to the schema of the marker and the actor list, which every generated-root install
+    // creates. Journal and inbox tails do not read the list, so a store installed before it existed is refused here
+    // until the installer runs again. A checkpoint relation that resolves must share that schema, but a
+    // renamed source is allowed: projections such as workflow history keep serving without it. A schema earlier
+    // on the search path that holds all three relations is treated as the store; that is out of scope here.
+    private const string RootReadIssuerSource = """
+        FROM "FoundationRootIssuer" issuer
+        JOIN pg_catalog.pg_class i ON i.oid = issuer.tableoid AND i.relkind = 'r'
+        JOIN pg_catalog.pg_class marker ON marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
+            AND marker.relnamespace = i.relnamespace AND marker.relkind = 'r'
+        JOIN pg_catalog.pg_class list ON list.oid = pg_catalog.to_regclass('"FoundationActorList"')
+            AND list.relnamespace = i.relnamespace AND list.relkind = 'r'
+        WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_class source
+            WHERE source.oid = pg_catalog.to_regclass('"Instances"')
+                AND (source.relnamespace <> i.relnamespace OR source.relkind <> 'r'))
+        """;
 
-    internal static async Task<byte[]> ReadRootIssuerKeyAsync(KernelDb db, CancellationToken cancellationToken) =>
-        await db.Database.SqlQueryRaw<byte[]>("""SELECT issuer."Key" AS "Value" """ + RootIssuerSource)
+    // Operator selections write, so they keep the strict admission source.
+    private static Task<FoundationReadCursor> ReadSelectionCursorAsync(KernelDb db, CancellationToken cancellationToken) =>
+        ReadCursorAsync(db, RootIssuerSource, RootIssuerMissing, cancellationToken);
+
+    private static async Task<FoundationReadCursor> ReadCursorAsync(KernelDb db, string source, string missing,
+        CancellationToken cancellationToken) =>
+        new(HMACSHA256.HashData(await ReadIssuerKeyAsync(db, source, missing, cancellationToken), "elsa-preview/journal-cursor/1"u8));
+
+    private const string RootIssuerMissing = "The root issuer is missing from the checkpoint's store schema.";
+    private const string ReadIssuerMissing = "The root read issuer must share one schema with the store marker and actor list, " +
+        "and an \"Instances\" relation that resolves must be a table in it.";
+
+    internal static Task<byte[]> ReadRootIssuerKeyAsync(KernelDb db, CancellationToken cancellationToken) =>
+        ReadIssuerKeyAsync(db, RootIssuerSource, RootIssuerMissing, cancellationToken);
+
+    private static async Task<byte[]> ReadIssuerKeyAsync(KernelDb db, string source, string missing, CancellationToken cancellationToken) =>
+        await db.Database.SqlQueryRaw<byte[]>("""SELECT issuer."Key" AS "Value" """ + source)
             .SingleOrDefaultAsync(cancellationToken)
-        ?? throw new StoreFormatException("The root issuer is missing from the checkpoint's store schema.");
+        ?? throw new StoreFormatException(missing);
 
     internal async Task InstallAsync(CancellationToken cancellationToken = default)
     {
