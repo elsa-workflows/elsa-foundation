@@ -20,8 +20,8 @@ public sealed partial class StepVariableSessionUnitTests
     public void Retention_only_typed_reads_protect_warning_paths_without_changing_the_stored_value()
     {
         var registry = SerializationServices.TypeRegistry();
-        registry.RegisterType(typeof(ValidationWarningRecord), "ValidationWarningRecord");
-        var type = new ValueTypeDescriptor("ValidationWarningRecord");
+        registry.RegisterType(typeof(ValidationWarningRecord), "Test.ValidationWarningRecord");
+        var type = new ValueTypeDescriptor("Test.ValidationWarningRecord");
         var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, retentionPolicy: "retain");
         using var document = JsonDocument.Parse(RawValidationValue);
         var frame = Root((CountKey, ValueEnvelope.Inline(type, document.RootElement, policy)));
@@ -52,8 +52,8 @@ public sealed partial class StepVariableSessionUnitTests
     public void Typed_raw_writes_keep_validation_warnings_and_select_protection_from_the_written_value(string protection)
     {
         var registry = SerializationServices.TypeRegistry();
-        registry.RegisterType(typeof(ValidationWarningRecord), "ValidationWarningRecord");
-        var type = new ValueTypeDescriptor("ValidationWarningRecord");
+        registry.RegisterType(typeof(ValidationWarningRecord), "Test.ValidationWarningRecord");
+        var type = new ValueTypeDescriptor("Test.ValidationWarningRecord");
         var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline,
             isSensitive: protection == "sensitive", redactionMode: protection == "redacted" ? "mask" : null,
             retentionPolicy: protection == "retained" ? "retain" : null);
@@ -82,8 +82,8 @@ public sealed partial class StepVariableSessionUnitTests
     public void Invalid_typed_raw_writes_still_fault_before_staging_a_write_or_a_success_warning()
     {
         var registry = SerializationServices.TypeRegistry();
-        registry.RegisterType(typeof(ValidationWarningRecord), "ValidationWarningRecord");
-        var type = new ValueTypeDescriptor("ValidationWarningRecord");
+        registry.RegisterType(typeof(ValidationWarningRecord), "Test.ValidationWarningRecord");
+        var type = new ValueTypeDescriptor("Test.ValidationWarningRecord");
         var frame = Root((CountKey, ValueEnvelope.Null(type, ValueProtectionPolicy.InstanceInline)));
         var session = Session(frame, registry: registry, countType: type, validator: new WorkflowExecutableInputValidator(registry));
         var warnings = new ExecutionWarningCollector(); session.SetWarnings(warnings);
@@ -101,8 +101,8 @@ public sealed partial class StepVariableSessionUnitTests
     public void Generated_unassigned_enum_JSON_uses_the_relaxed_baseline_without_assigning_the_variable()
     {
         var registry = SerializationServices.TypeRegistry();
-        registry.RegisterType(typeof(BaselineDefaultEnum), "BaselineDefaultEnum");
-        var type = new ValueTypeDescriptor("BaselineDefaultEnum");
+        registry.RegisterType(typeof(BaselineDefaultEnum), "Test.BaselineDefaultEnum");
+        var type = new ValueTypeDescriptor("Test.BaselineDefaultEnum");
         var frame = Root((CountKey, ValueEnvelope.Absent(type, ValueProtectionPolicy.InstanceInline)));
         var session = Session(frame, registry: registry, countType: type);
 

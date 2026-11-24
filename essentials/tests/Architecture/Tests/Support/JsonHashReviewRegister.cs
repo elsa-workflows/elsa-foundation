@@ -124,6 +124,7 @@ internal static class JsonHashReviewRegister
     private static string EvidenceDigest(string path)
     {
         var bytes = File.ReadAllBytes(path);
+        if (bytes.Length == 0) throw new InvalidOperationException("Golden evidence file is empty.");
         // Text witnesses are portable across checkout encoding/EOL. Byte-oriented data fixtures stay exact.
         var text = Path.GetExtension(path).ToLowerInvariant() is ".cs" or ".json" or ".jsonc" or ".py" or ".md" or ".txt" or
             ".ts" or ".tsx" or ".js" or ".jsx" or ".mjs" or ".cjs" or ".mts" or ".cts" or ".xml" or ".props" or ".targets" or ".csproj" or ".yml" or ".yaml";
@@ -135,7 +136,9 @@ internal static class JsonHashReviewRegister
         else if (bytes.AsSpan().StartsWith(new byte[] { 0xff, 0xfe })) { encoding = new UnicodeEncoding(false, false, true); offset = 2; }
         else if (bytes.AsSpan().StartsWith(new byte[] { 0xfe, 0xff })) { encoding = new UnicodeEncoding(true, false, true); offset = 2; }
         else if (bytes.AsSpan().StartsWith(new byte[] { 0xef, 0xbb, 0xbf })) offset = 3;
-        var normalized = encoding.GetString(bytes, offset, bytes.Length - offset).Replace("\r\n", "\n", StringComparison.Ordinal);
+        var decoded = encoding.GetString(bytes, offset, bytes.Length - offset);
+        if (decoded.Length == 0) throw new InvalidOperationException("Decoded golden evidence text is empty.");
+        var normalized = decoded.Replace("\r\n", "\n", StringComparison.Ordinal);
         return "text:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
     }
 }

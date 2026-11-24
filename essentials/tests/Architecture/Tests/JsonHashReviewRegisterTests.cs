@@ -96,6 +96,32 @@ public sealed class JsonHashReviewRegisterTests
         Assert.NotEqual(bytes.Signature, JsonHashReviewRegister.ReadGoldenEvidence(files.Root, [EvidenceOwner("Payload.bin")]).Signature);
     }
 
+    [Theory]
+    [InlineData("Empty.cs", "")]
+    [InlineData("Empty.bin", "")]
+    [InlineData("BomUtf8.cs", "EFBBBF")]
+    [InlineData("BomUtf16Le.cs", "FFFE")]
+    [InlineData("BomUtf16Be.cs", "FEFF")]
+    [InlineData("BomUtf32Le.cs", "FFFE0000")]
+    [InlineData("BomUtf32Be.cs", "0000FEFF")]
+    public void Empty_files_and_BOM_only_text_cannot_supply_golden_evidence(string name, string hex)
+    {
+        using var files = new GoldenFiles();
+        File.WriteAllBytes(Path.Join(files.Root, name), Convert.FromHexString(hex));
+        var result = JsonHashReviewRegister.ReadGoldenEvidence(files.Root, [EvidenceOwner(name)]);
+        Assert.True(result.Errors.Count != 0 && result.Signature.Length == 0, "Empty golden evidence must refuse: " + name);
+    }
+
+    [Fact]
+    public void Nonempty_whitespace_text_and_nonempty_binary_bytes_remain_eligible_file_witnesses()
+    {
+        using var files = new GoldenFiles();
+        File.WriteAllText(Path.Join(files.Root, "Whitespace.cs"), " \t\r\n", new UTF8Encoding(false));
+        File.WriteAllBytes(Path.Join(files.Root, "Byte.bin"), [0]);
+        File.WriteAllBytes(Path.Join(files.Root, "Bom.bin"), [0xef, 0xbb, 0xbf]);
+        Assert.Empty(JsonHashReviewRegister.ReadGoldenEvidence(files.Root, [EvidenceOwner("Whitespace.cs", "Byte.bin", "Bom.bin")]).Errors);
+    }
+
     [Fact]
     public void Golden_evidence_requires_ordinary_contained_relative_files_and_cannot_hash_its_register()
     {

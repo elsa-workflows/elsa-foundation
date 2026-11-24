@@ -205,7 +205,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         public bool TryGetAlias(Type type, out string alias) { alias = "Int32"; return type == typeof(int); }
         public bool TryGetType(string alias, out Type type)
         {
-            type = alias switch { "Int32" => typeof(int), "Guid" => typeof(Guid), "DateTime" => typeof(DateTime), "TimeSpan" => typeof(TimeSpan), "Any" => typeof(JsonElement), "ValidationWarningRecord" => typeof(ValidationWarningRecord), _ => typeof(void) };
+            type = alias switch { "Int32" => typeof(int), "Guid" => typeof(Guid), "DateTime" => typeof(DateTime), "TimeSpan" => typeof(TimeSpan), "Any" => typeof(JsonElement), "Test.ValidationWarningRecord" => typeof(ValidationWarningRecord), _ => typeof(void) };
             return type != typeof(void);
         }
         public IEnumerable<Type> ListTypes() => [typeof(int)];

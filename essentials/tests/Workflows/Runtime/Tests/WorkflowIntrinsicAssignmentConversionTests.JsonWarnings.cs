@@ -73,7 +73,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
 
     private static ExecutableNode ValidationWarningNode(bool output, string source, JsonElement raw, ValueProtectionPolicy policy)
     {
-        var type = new ValueTypeDescriptor("ValidationWarningRecord");
+        var type = new ValueTypeDescriptor("Test.ValidationWarningRecord");
         var binding = source switch
         {
             "literal" => new RuntimeInputBinding("value", type, policy, RuntimeInputBindingSource.Literal,

@@ -14,14 +14,14 @@ public sealed partial class WorkflowExecutableInputValidatorTests
     [InlineData(true)]
     public void Generated_enum_defaults_use_the_shared_relaxed_encoder_for_omitted_and_explicit_null_inputs(bool omitted)
     {
-        var registry = Registry(("BaselineDefaultEnum", typeof(BaselineDefaultEnum)));
+        var registry = Registry(("Test.BaselineDefaultEnum", typeof(BaselineDefaultEnum)));
         var validator = new WorkflowExecutableInputValidator(registry);
-        var result = validator.Validate(Contract(new WorkflowDeclaredInput("value", new("BaselineDefaultEnum"), false)),
+        var result = validator.Validate(Contract(new WorkflowDeclaredInput("value", new("Test.BaselineDefaultEnum"), false)),
             omitted ? [] : [Pair("value", Json("null"))], new(DefaultOnNull: true));
 
         Assert.True(result.IsValid);
         Assert.Equal("\"<+>\"", result.NormalizedInputs["value"].GetRawText());
-        var normalized = NullPolicyDefaults.NormalizeNull(ValueEnvelope.Null(new("BaselineDefaultEnum"), ValueProtectionPolicy.InstanceInline),
+        var normalized = NullPolicyDefaults.NormalizeNull(ValueEnvelope.Null(new("Test.BaselineDefaultEnum"), ValueProtectionPolicy.InstanceInline),
             acceptsNull: false, new(DefaultOnNull: true), "value", registry);
         Assert.Equal("\"<+>\"", normalized.InlineValue!.Value.GetRawText());
     }
