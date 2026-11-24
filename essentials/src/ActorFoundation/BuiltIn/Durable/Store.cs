@@ -190,7 +190,11 @@ public sealed record TurnCommit(
     internal IReadOnlyList<FoundationValue>? FoundationValues { get; init; }
 }
 
-internal sealed record FoundationDispatchHeader(string Tenant, string Reference, FoundationHeaderChange Header, long TerminalGrowth = 0);
+internal sealed record FoundationDispatchHeader(string Tenant, string Reference, FoundationHeaderChange Header, long TerminalGrowth = 0)
+{
+    internal FoundationTerminalStamp? Terminal { get; init; }
+    internal bool RefreshTerminal { get; init; }
+}
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);
 

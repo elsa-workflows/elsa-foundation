@@ -9,7 +9,11 @@ internal sealed partial class PostgresRootAdmission
 {
     private const string OperatorPrefix = "!kernel-operator/1:";
     private sealed record StoredOperator(string Reference, string Operation, long Creation, string Kind,
-        [property: JsonRequired] bool ExplicitZeroDue);
+        [property: JsonRequired] bool ExplicitZeroDue)
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public FoundationTerminalStamp? Terminal { get; init; }
+    }
     internal const string OperatorOccurrencePrefix = "operator/";
     internal static bool IsStoredOperator(string? header) => header?.StartsWith(OperatorPrefix, StringComparison.Ordinal) == true;
     internal static bool IsOperatorOccurrence(InboxKey key) => key.Scope == InboxKey.FoundationOccurrenceScope && key.Match is null &&
@@ -28,9 +32,9 @@ internal sealed partial class PostgresRootAdmission
             """, token);
 
     internal async Task<Receipt?> AdmitRootOperatorAsync(string tenant, string reference, string operation, string kind, long? due,
-        TimeSpan? keepFor, CancellationToken token, string? runningSelection = null)
+        TimeSpan? keepFor, CancellationToken token, string? selection = null)
     {
-        if (kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate) || !FoundationMetadataLimits.IsOutsideMessageId(operation))
+        if (kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete) || !FoundationMetadataLimits.IsOutsideMessageId(operation))
             throw new ArgumentException("Expected a one-way exact-root operator command.");
         var window = keepFor is { } keep && keep < deduplicationWindow ? keep : deduplicationWindow;
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
@@ -38,16 +42,25 @@ internal sealed partial class PostgresRootAdmission
         var digest = FoundationRootCreator.OperationDigest(operation);
         await using var db = create();
         if (!db.UsesRootOperatorProtocol || kind == Kinds.Terminate && !db.UsesRootTermination) return null;
-        var selectedTermination = db.UsesRootTerminalSelection && kind == Kinds.Terminate;
-        if (selectedTermination != (runningSelection is not null)) return null;
+        var deletion = kind == Kinds.Delete;
+        if (deletion && !db.UsesRootRetirement) return null;
+        var selected = deletion || db.UsesRootTerminalSelection && kind == Kinds.Terminate;
+        if (selected != (selection is not null)) return null;
 
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
         try
         {
-            if (selectedTermination)
+            FoundationTerminalStamp? terminal = null;
+            if (selected)
             {
                 await PinSelectedOperatorSchemaAsync(db, token);
-                if (!PostgresRootSelection.MatchesRunning(await ReadJournalCursorAsync(db, token), runningSelection, tenant, reference))
+                var cursor = await ReadJournalCursorAsync(db, token);
+                if (deletion)
+                {
+                    terminal = PostgresRootSelection.OpenTerminal(cursor, selection, tenant, reference);
+                    if (terminal is not { Revision: > 0 }) return null;
+                }
+                else if (!PostgresRootSelection.MatchesRunning(cursor, selection, tenant, reference))
                     return null;
             }
             else
@@ -60,7 +73,8 @@ internal sealed partial class PostgresRootAdmission
             }
             // Lock the selected checkpoint before reading its receipt. If the command already
             // ended this actor, the receipt committed before the owner could consume it.
-            var selectedStatus = selectedTermination
+            var exactTerminal = terminal is not null && await LocksRootDeleteSelectionAsync(db, address, tenant, reference, terminal, token);
+            var selectedStatus = selected && !deletion
                 ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
                 : null;
             var prior = await db.Database.SqlQuery<string>($"""
@@ -70,10 +84,11 @@ internal sealed partial class PostgresRootAdmission
             if (prior is not null)
             {
                 await tx.CommitAsync(token);
-                return selectedTermination && prior != reference ? null : new(prior, true);
+                return selected && prior != reference ? null : new(prior, true);
             }
-            var status = selectedTermination ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
-            if (status != InstanceStatus.Running)
+            if (!deletion)
+                selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
+            if (deletion ? !exactTerminal : selectedStatus != InstanceStatus.Running)
             {
                 await tx.RollbackAsync(token);
                 return null;
@@ -92,11 +107,11 @@ internal sealed partial class PostgresRootAdmission
                     SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts" WHERE "Tenant" = {tenant} AND "Operation" = {digest}
                     """).SingleAsync(token);
                 await tx.CommitAsync(token);
-                return selectedTermination && prior != reference ? null : new(prior, true);
+                return selected && prior != reference ? null : new(prior, true);
             }
             var actor = new InstanceRef(address.Id);
             var id = $"{OperatorOccurrencePrefix}{reference}/{digest}/{Guid.NewGuid():N}";
-            var header = OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0));
+            var header = OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0) { Terminal = terminal });
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
                 VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {actor.Partition}, {address.Id}, {kind}, {header}, {due ?? 0}, {receipt.Single()}, false, 0, 0, 0)
@@ -104,10 +119,23 @@ internal sealed partial class PostgresRootAdmission
             await tx.CommitAsync(token);
             return new(reference, false);
         }
-        catch (PostgresException error) when (selectedTermination && IsUnavailableSelectedSchema(error))
+        catch (PostgresException error) when (selected && IsUnavailableSelectedSchema(error))
         {
             throw new StoreFormatException("The selected operator admission schema is unreadable.", error);
         }
+    }
+
+    private static async Task<bool> LocksRootDeleteSelectionAsync(KernelDb db, CreationAddress address, string tenant,
+        string reference, FoundationTerminalStamp mark, CancellationToken token)
+    {
+        var rows = await db.Database.SqlQuery<long>($"""
+            SELECT "Revision" AS "Value" FROM "Instances"
+            WHERE "Id" = {address.Id} AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference}
+                AND "Status" <> {(int)InstanceStatus.Running} AND NOT "Retired"
+                AND "FoundationTerminalRevision" = {mark.Revision} AND "FoundationTerminalAt" = {mark.At}
+            FOR SHARE
+            """).ToListAsync(token);
+        return rows.Count == 1;
     }
 
     private static bool IsUnavailableSelectedSchema(PostgresException error) =>
@@ -116,7 +144,16 @@ internal sealed partial class PostgresRootAdmission
 
     private sealed record SelectedOperatorStore(int StoreSchema, int MessageProtocol, int JournalCodec, string Namespace);
 
-    private static async Task PinSelectedOperatorSchemaAsync(KernelDb db, CancellationToken token)
+    internal static async Task PinSelectedOperatorSchemaAsync(KernelDb db, CancellationToken token)
+    {
+        try { await PinSelectedOperatorSourceAsync(db, token); }
+        catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
+        {
+            throw new StoreFormatException("The selected operator admission schema is unreadable.", error);
+        }
+    }
+
+    private static async Task PinSelectedOperatorSourceAsync(KernelDb db, CancellationToken token)
     {
         var marker = await db.Database.SqlQuery<SelectedOperatorStore>($"""
             SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", ns.nspname AS "Namespace"
@@ -135,12 +172,19 @@ internal sealed partial class PostgresRootAdmission
             LOCK TABLE "FoundationRootIssuer", "FoundationRootBirths", "Instances", "FoundationOperatorReceipts", "Messages"
             IN ACCESS SHARE MODE
             """, token);
+        if (db.UsesRootRetirement)
+            await db.Database.ExecuteSqlRawAsync("""
+                LOCK TABLE "Partitions", "Nodes", "Journal", "Subscriptions", "FoundationDirectReceipts", "FoundationActorList",
+                    "FoundationRootReceipts" IN ACCESS SHARE MODE
+                """, token);
         var sameSchema = await db.Database.SqlQuery<bool>($"""
-            SELECT count(*) = 6 AS "Value"
+            SELECT count(*) = {(db.UsesRootRetirement ? 13 : 6)} AS "Value"
             FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
-                ('"Instances"'), ('"FoundationOperatorReceipts"'), ('"Messages"')) required(name)
+                ('"Instances"'), ('"FoundationOperatorReceipts"'), ('"Messages"'), ('"Partitions"'), ('"Nodes"'), ('"Journal"'), ('"Subscriptions"'),
+                ('"FoundationDirectReceipts"'), ('"FoundationActorList"'), ('"FoundationRootReceipts"')) required(name)
             JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name)
             JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = {source}
+            WHERE {db.UsesRootRetirement} OR required.name NOT IN ('"Partitions"', '"Nodes"', '"Journal"', '"Subscriptions"', '"FoundationDirectReceipts"', '"FoundationActorList"', '"FoundationRootReceipts"')
             """).SingleAsync(token);
         if (!sameSchema)
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
@@ -151,20 +195,21 @@ internal sealed partial class PostgresRootAdmission
     {
         await using var db = create();
         if (!db.UsesRootOperatorProtocol) return null;
-        await EfStore.RequireStoreVersionsAsync(db, token);
+        await using var pinned = await EfStore.BeginRootRetirementOperationAsync(db, token);
+        if (pinned is null) await EfStore.RequireStoreVersionsAsync(db, token);
         var row = await db.Messages.FromSqlInterpolated($"""
             SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1
                 AND m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" LIKE 'operator/%' AND NOT m."Done"
                 AND m."Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint ORDER BY m."Seq" LIMIT 1
             """).AsNoTracking().SingleOrDefaultAsync(token);
-        return row is null ? null : DecodeOperator(row, reference, db.UsesRootTermination);
+        return row is null ? null : DecodeOperator(row, reference, db.UsesRootTermination, db.UsesRootRetirement);
     }
 
-    internal static Message DecodeOperator(MessageEntity row, string reference, bool terminations)
+    internal static Message DecodeOperator(MessageEntity row, string reference, bool terminations, bool retirements)
     {
-        if (!IsOperatorOccurrence(new(row.Id, row.InboxScope)) || !IsStoredOperator(row.Start) || row.Kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate) ||
-            row.Kind == Kinds.Terminate && !terminations || row.EventMatch is not null || row.Payload is not null || row.ReplyTo is not null || row.Sender is not null ||
+        if (!IsOperatorOccurrence(new(row.Id, row.InboxScope)) || !IsStoredOperator(row.Start) || row.Kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete) ||
+            row.Kind == Kinds.Terminate && !terminations || row.Kind == Kinds.Delete && !retirements || row.EventMatch is not null || row.Payload is not null || row.ReplyTo is not null || row.Sender is not null ||
             row.JobGeneration != 0 || row.KeepUntil is not { } until)
             throw new StoreException(Failure.Definite, "Unexpected stored one-way operator envelope.");
         StoredOperator? header;
@@ -172,11 +217,12 @@ internal sealed partial class PostgresRootAdmission
         catch (JsonException error) { throw new StoreException(Failure.Definite, "Invalid stored operator framing.", error); }
         if (header is null) throw new StoreException(Failure.Definite, "Invalid stored operator framing.");
         if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != row.Kind ||
+            (row.Kind == Kinds.Delete ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
             header.ExplicitZeroDue && row.Due != 0 || !MatchesDirectOccurrence(reference, header.Operation, row.Id[OperatorOccurrencePrefix.Length..]))
             throw new StoreException(Failure.Definite, "The operator occurrence differs from its bound reference and operation.");
         var suffix = row.Id.LastIndexOf('/');
         return FoundationIngressAddress.Occurrence(header.Operation, row.Id[..suffix], row.Id[(suffix + 1)..],
-            new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, null, new(null));
+            new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, null, new(null) { QualifiedTerminal = header.Terminal });
     }
 
     internal async Task<int> SweepOperatorReceiptsAsync(CancellationToken token)

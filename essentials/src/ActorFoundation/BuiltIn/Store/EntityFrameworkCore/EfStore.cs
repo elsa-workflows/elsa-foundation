@@ -123,6 +123,7 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     private sealed class RootTerminationDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootStableBodyDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootTerminalSelectionDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootRetirementDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootJobDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootTimedJobIssuanceDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootValueDb(DbContextOptions<KernelDb> options) : KernelDb(options);
@@ -139,6 +140,7 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
         RootTerminationDb => StoreFormat.RootTerminations,
         RootStableBodyDb => StoreFormat.RootStableBody,
         RootTerminalSelectionDb => StoreFormat.RootTerminalSelection,
+        RootRetirementDb => StoreFormat.RootRetirement,
         RootTimerDb => StoreFormat.RootTimers,
         RootSelfDb => StoreFormat.RootSelf,
         _ => StoreFormat.Current
@@ -156,8 +158,10 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     internal static KernelDb ForPostgresRootTimedJobSettlement(DbContextOptions<KernelDb> options) => new RootTimedJobSettlementDb(options);
     internal bool UsesRootOperatorProtocol => this is RootOperatorDb || UsesRootTermination;
     internal bool UsesRootTermination => this is RootTerminationDb || UsesRootStableBody;
-    internal bool UsesRootStableBody => this is RootStableBodyDb or RootTerminalSelectionDb;
-    internal bool UsesRootTerminalSelection => this is RootTerminalSelectionDb;
+    internal bool UsesRootStableBody => this is RootStableBodyDb || UsesRootTerminalSelection;
+    internal bool UsesRootTerminalSelection => this is RootTerminalSelectionDb or RootRetirementDb;
+    internal bool UsesRootRetirement => this is RootRetirementDb;
+    internal static KernelDb ForPostgresRootRetirement(DbContextOptions<KernelDb> options) => new RootRetirementDb(options);
     internal static KernelDb ForPostgresRootTerminalSelection(DbContextOptions<KernelDb> options) => new RootTerminalSelectionDb(options);
     internal static KernelDb ForPostgresRootStableBody(DbContextOptions<KernelDb> options) => new RootStableBodyDb(options);
     internal static KernelDb ForPostgresRootTerminations(DbContextOptions<KernelDb> options) => new RootTerminationDb(options);
@@ -384,7 +388,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        await RequireStoreVersionsAsync(db, cancellationToken);
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
+        if (pinned is null) await RequireStoreVersionsAsync(db, cancellationToken);
         return await db.Partitions.CountAsync(cancellationToken);
     }
 
@@ -448,10 +453,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         var now = Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken) : (await db.Database.SqlQueryRaw<long>(
             $"""INSERT INTO "Nodes" ("Id", "SeenAt", {NodeAdvertisement.Columns}) VALUES ({"{0}"}, {Now}, {NodeAdvertisement.Parameters}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", {NodeAdvertisement.Update} RETURNING "SeenAt" AS "Value" """,
             NodeAdvertisement.Arguments(node, messageProtocol: db.RequiredFormat.MessageProtocol)).ToListAsync(cancellationToken))[0];
-        return await MembershipAsync(db, now, window, cancellationToken);
+        var membership = await MembershipAsync(db, now, window, cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
+        return membership;
     }
 
     // The membership reads: the nodes heard within the window, and the free partitions. Under the node lease a partition
@@ -466,7 +474,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Partitions" SET "Owner" = NULL WHERE "Id" = {0} AND "Epoch" = {1}"""), [partition, epoch], cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
     }
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
@@ -584,6 +594,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
         db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        if (root is not null && db.UsesRootRetirement)
+            await PinRootRetirementSchemaAsync(db, cancellationToken);
         var now = 0L;
         if (FenceInBatch)
         {
@@ -656,7 +668,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 db.Add(entity);
             }
             if (turn.Journal is not null)
-                db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = turn.Instance, Revision = turn.Delete ? -1 : root?.RevisionFor(turn.Instance) ?? turn.Row?.Revision ?? 0, Entries = turn.Journal });
+            {
+                position++;
+                if (root?.WritesJournal(turn.Instance) != true)
+                    db.Add(new JournalEntity { Partition = batch.Partition, Position = position, Instance = turn.Instance, Revision = turn.Delete ? -1 : root?.RevisionFor(turn.Instance) ?? turn.Row?.Revision ?? 0, Entries = turn.Journal });
+            }
         }
         if (!careful)
             foreach (var ((key, instance, wait), there) in waits)
@@ -719,6 +735,16 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
     }
 
+    private async Task PinRootRetirementSchemaAsync(KernelDb db, CancellationToken cancellationToken)
+    {
+        try { await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, cancellationToken); }
+        catch (Exception error) when (error is not OperationCanceledException &&
+            Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
+        {
+            throw new RootPreflightFailure(failure);
+        }
+    }
+
     private async Task<bool> HoldsAfterFailureAsync(CommitBatch batch, CancellationToken cancellationToken)
     {
         try { return await HoldsAsync(batch, cancellationToken); }
@@ -729,6 +755,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private async Task<bool> HoldsAsync(CommitBatch batch, CancellationToken cancellationToken)
     {
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         var fenced = batch.Fenced;
         var ids = fenced.Select(f => f.Partition).ToList();
         var rows = await db.Partitions.AsNoTracking().Where(p => ids.Contains(p.Id)).Select(p => new PartitionFence(p.Id, p.Epoch, p.Position)).ToListAsync(cancellationToken);
@@ -738,6 +765,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         // A plain read. The left join returns database time even when no message does.
         var sql = PollSql(db.UsesRootOperatorProtocol);
         if (_ordinaryRoots is { } root)
@@ -746,9 +774,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             if (root.Discover)
             {
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
-                return ToGeneratedPoll(page, root, db.UsesRootOperatorProtocol, db.UsesRootReplyProtocol, db.UsesRootTermination);
+                return ToGeneratedPoll(page, root, db.UsesRootOperatorProtocol, db.UsesRootReplyProtocol, db.UsesRootTermination, db.UsesRootRetirement);
             }
-            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db.UsesRootOperatorProtocol, db.UsesRootReplyProtocol, db.UsesRootTermination);
+            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db.UsesRootOperatorProtocol, db.UsesRootReplyProtocol, db.UsesRootTermination, db.UsesRootRetirement);
         }
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
     }
@@ -809,14 +837,14 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
 
-    private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope, bool operators, bool replies, bool terminations)
+    private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope, bool operators, bool replies, bool terminations, bool retirements)
     {
         var found = page.Where(r => r.Target is not null).Select(r =>
             new WorkerRoot(r.BirthTenant!, r.BirthReference!, r.Target!, r.BirthPartition!.Value, r.BirthFingerprint!)).Distinct().ToArray();
-        return ToPolled(page, new(scope.FixedPartition, found), operators, replies, terminations);
+        return ToPolled(page, new(scope.FixedPartition, found), operators, replies, terminations, retirements);
     }
 
-    private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null, bool operators = false, bool replies = false, bool terminations = false)
+    private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null, bool operators = false, bool replies = false, bool terminations = false, bool retirements = false)
     {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
@@ -834,7 +862,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
-                    : DecodeRootInput(entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled, replies, terminations);
+                    : DecodeRootInput(entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled, replies, terminations, retirements);
                 if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)
                 {

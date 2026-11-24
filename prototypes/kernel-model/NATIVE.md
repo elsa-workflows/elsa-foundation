@@ -690,6 +690,22 @@ the same tenant is refused. The fixture submits through the public contract, the
 delivers under a later epoch. The command path supports a one-way Terminate.
 Reason text, ThenDelete, held replies and cascades keep their own qualification.
 
+The opt-in format-14 retirement fixture sends a qualified Delete to an ended
+generated root through the host and real Worker. The model's deletion protection
+receives the committed terminal time. A successful fenced retirement keeps the
+identity marker and deduplication window, removes the public projection and
+physical state, clears pending payloads, and replaces that actor's history with
+one deletion marker. Ownership, checkpoint reads and retirement use the schema
+of the same format marker. The commit verifies that the projection and payloads
+are gone and that the deletion marker was inserted. The fixture also exercises
+same-owner deletion, original receipt replay and complete rollback when a store
+write is suppressed. The runnable fixture is
+`pg-root-retirement owned checked` against an empty PostgreSQL database.
+
+This profile qualifies generated roots with no attached work. Protected ThenDelete,
+descendant and job cascades, retention and held operator replies have separate
+acceptance cases.
+
 ## 10. Private durable lexical-resource probe
 
 The [lexical runner](../../essentials/tests/Workflows/Runtime/Native/Scopes/Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.

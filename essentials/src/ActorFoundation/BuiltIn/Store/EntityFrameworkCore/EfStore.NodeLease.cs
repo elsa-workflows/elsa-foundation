@@ -102,7 +102,8 @@ public sealed partial class EfStore
         try
         {
             deadline.CheckRenewalWindow();
-            await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
+            if (db.UsesRootRetirement) await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, deadline.Token);
+            else await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
             var expired = new List<string>();
             if (ids is not null)
             {
@@ -172,7 +173,8 @@ public sealed partial class EfStore
                 await using var transaction = await BeginReadCommittedAsync(db, deadline.Token);
                 // PostgreSQL bounds the heartbeat on the server too (NL-10's bound rests on it); SET LOCAL ends with the transaction.
                 if (Engine is null && postgres) await db.Database.ExecuteSqlRawAsync(FormattableString.Invariant($"SET LOCAL statement_timeout = {Math.Max(1, (long)(lease / 3).TotalMilliseconds)}"), deadline.Token);
-                await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
+                if (db.UsesRootRetirement) await PostgresRootAdmission.PinSelectedOperatorSchemaAsync(db, deadline.Token);
+                else await RequireStoreVersionsAsync(db, deadline.Token, FormatLock.Shared);
                 deadline.CheckRenewalWindow();
                 now = await RenewAsync(db, node, lease, deadline.Token);
                 deadline.CheckRenewalWindow();
@@ -194,6 +196,7 @@ public sealed partial class EfStore
         }
         if (inside is not null) return new NodeBeat(owned, now, inside);
         await using var read = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(read, cancellationToken);
         return new NodeBeat(owned, now, await MembershipAsync(read, now, window, cancellationToken));
     }
 

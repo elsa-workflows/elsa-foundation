@@ -92,6 +92,11 @@ public sealed partial class EfStore
 
             CREATE OR REPLACE FUNCTION kernel_project_root_actor_list_v13() RETURNS trigger LANGUAGE plpgsql AS $fn$
             BEGIN
+                IF NEW."Retired" THEN
+                    EXECUTE format('DELETE FROM %I."FoundationActorList" WHERE "Tenant" = $1 AND "Reference" = $2', TG_TABLE_SCHEMA)
+                        USING NEW."FoundationTenant", NEW."FoundationReference";
+                    RETURN NEW;
+                END IF;
                 EXECUTE format($project$
                     INSERT INTO %1$I."FoundationActorList" ("Tenant", "Reference", "Status", "EndedAt", "TerminalRevision", "Header", "Type", "Labels")
                     SELECT $1, $2, $3, $4, $5, $6, f.header->'Model', f.header->'Labels'
@@ -106,13 +111,14 @@ public sealed partial class EfStore
             END
             $fn$;
             CREATE OR REPLACE TRIGGER kernel_project_root_actor_list_v13
-            AFTER UPDATE OF "FoundationHeader", "Status", "FoundationTerminalAt", "FoundationTerminalRevision"
+            AFTER UPDATE OF "FoundationHeader", "Status", "FoundationTerminalAt", "FoundationTerminalRevision", "Retired"
             ON "Instances" FOR EACH ROW WHEN (NEW."FoundationReference" IS NOT NULL AND (
                 OLD."FoundationReference" IS DISTINCT FROM NEW."FoundationReference" OR
                 OLD."FoundationHeader" IS DISTINCT FROM NEW."FoundationHeader" OR
                 OLD."Status" IS DISTINCT FROM NEW."Status" OR
                 OLD."FoundationTerminalAt" IS DISTINCT FROM NEW."FoundationTerminalAt" OR
-                OLD."FoundationTerminalRevision" IS DISTINCT FROM NEW."FoundationTerminalRevision"))
+                OLD."FoundationTerminalRevision" IS DISTINCT FROM NEW."FoundationTerminalRevision" OR
+                OLD."Retired" IS DISTINCT FROM NEW."Retired"))
             EXECUTE FUNCTION kernel_project_root_actor_list_v13();
 
             CREATE OR REPLACE FUNCTION kernel_require_root_actor_list_v13() RETURNS trigger LANGUAGE plpgsql AS $fn$

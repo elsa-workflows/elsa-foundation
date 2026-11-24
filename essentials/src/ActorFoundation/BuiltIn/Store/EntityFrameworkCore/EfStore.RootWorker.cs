@@ -27,6 +27,7 @@ public sealed partial class EfStore
         internal int Partition => FixedPartition ?? throw new InvalidOperationException("This node serves a runtime-owned set.");
         internal bool Includes(int home) => FixedPartition is null || FixedPartition == home;
         internal bool Discover { get; } = discover;
+        internal bool RequiresCommittedTerminal { get; set; }
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
         private readonly Dictionary<string, WorkerRoot> _actors = roots.ToDictionary(r => r.Actor, StringComparer.Ordinal);
         private readonly Dictionary<string, WorkerRoot> _references = roots.ToDictionary(r => r.Reference, StringComparer.Ordinal);
@@ -53,6 +54,8 @@ public sealed partial class EfStore
             var root = roots.ForActor(creator.Target.Id);
             return root.Owns(creator.InboxKey) ? (root.Tenant, root.Reference) : throw new InvalidOperationException("Unexpected root creator.");
         }
+
+        public bool RequiresCommittedTerminal => roots.RequiresCommittedTerminal;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
@@ -101,6 +104,7 @@ public sealed partial class EfStore
                 throw new NotSupportedException("The timed job fixture binds exactly one generated root.");
             if (db.UsesRootValueProtocol != RootValuesEnabled)
                 throw new StoreFormatException("The PostgreSQL owner must initialize its value capability before binding to the value qualification profile.");
+            scope.RequiresCommittedTerminal = db.UsesRootRetirement;
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
         }
@@ -121,6 +125,7 @@ public sealed partial class EfStore
         var ids = actorIds.ToArray();
         var refs = references.ToArray();
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, token);
         var found = await db.Database.SqlQuery<WorkerRoot>($"""
             SELECT "Tenant", "Reference", "Actor", "Partition", "Fingerprint" FROM "FoundationRootBirths"
             WHERE ({scope.FixedPartition}::integer IS NULL OR "Partition" = {scope.FixedPartition}) AND "Creation" = 1 AND ("Actor" = ANY({ids}) OR "Reference" = ANY({refs}))
@@ -144,6 +149,7 @@ public sealed partial class EfStore
         var references = requested.Select(r => r.Reference).ToArray();
         var tenants = requested.Select(r => r.Tenant).ToArray();
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         var bindings = await db.Database.SqlQuery<WorkerRoot>($"""
             SELECT "Tenant", "Reference", "Actor", "Partition", "Fingerprint" FROM "FoundationRootBirths"
             WHERE ("Tenant", "Reference") IN (SELECT * FROM unnest({tenants}::text[], {references}::text[])) AND "Creation" = 1
@@ -167,7 +173,14 @@ public sealed partial class EfStore
         return new InstanceRow(image.Actor.Id, image.Model, image.Definition, image.Status, "null", image.Revision, null,
             History: image.History, Suspended: image.Suspended, StateVersion: image.StateVersion, Creation: image.Actor.Creation,
             StartIntent: root.Fingerprint, Jobs: image.Jobs).WithFoundationState(image.State)
-            with { NextJobGeneration = image.NextJobGeneration ?? 0, FoundationDispatchHeader = new(root.Tenant, root.Reference, new(image.TypeData, image.Labels)) };
+            with
+            {
+                NextJobGeneration = image.NextJobGeneration ?? 0,
+                FoundationDispatchHeader = new(root.Tenant, root.Reference, new(image.TypeData, image.Labels))
+                {
+                    Terminal = image.TerminalRevision is { } revision && image.TerminalAt is { } at ? new(revision, at) : null
+                }
+            };
     }
 
     private sealed record ScopedMarks(WorkerRoot Root, long Epoch, IReadOnlyList<InboxKey> Seen, IReadOnlyList<InboxKey> Trial) : QualifiedRootCheckpoint(0)
@@ -239,10 +252,11 @@ public sealed partial class EfStore
     }
 
     private sealed record RootCheckpoints(IReadOnlyList<QualifiedRootCheckpoint> Commands, IReadOnlyDictionary<string, long> Revisions,
-        bool JobProfile, bool TimedJobIssuance, bool TimedJobSettlement, bool ValueProfile)
+        bool JobProfile, bool TimedJobIssuance, bool TimedJobSettlement, bool ValueProfile, IReadOnlySet<string> DeferredJournal)
         : QualifiedRootCheckpoint(0)
     {
         internal override long RevisionFor(string actor) => Revisions[actor];
+        internal override bool WritesJournal(string actor) => DeferredJournal.Contains(actor);
         internal override async ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken)
         {
             foreach (var command in Commands) await command.CheckBeforeWriteAsync(db, cancellationToken);
@@ -295,6 +309,8 @@ public sealed partial class EfStore
         var commands = new List<QualifiedRootCheckpoint>();
         var turns = new List<TurnCommit>();
         var revisions = new Dictionary<string, long>(StringComparer.Ordinal);
+        var positions = batch.Fenced.ToDictionary(fence => fence.Partition, fence => fence.Position);
+        var deferred = new HashSet<string>(StringComparer.Ordinal);
         var seen = batch.Seen.ToLookup(roots.ForInput);
         var trials = batch.Trial.ToLookup(roots.ForInput);
         foreach (var root in seen.Select(g => g.Key).Union(trials.Select(g => g.Key)))
@@ -304,15 +320,25 @@ public sealed partial class EfStore
             var root = roots.ForActor(turn.Instance);
             var prepared = await PrepareWorkerTurnAsync(root, turn, FenceFor(root), cancellationToken);
             if (prepared is null) return null;
-            commands.Add(prepared.Checkpoint);
+            var checkpoint = prepared.Checkpoint;
             if (prepared.JournalTurn is { } journal)
             {
                 turns.Add(journal);
-                revisions.Add(journal.Instance, prepared.Checkpoint.JournalRevision);
+                revisions.Add(journal.Instance, checkpoint.JournalRevision);
+                if (journal.Journal is not null)
+                {
+                    var position = ++positions[root.Partition];
+                    if (checkpoint is RootRetirement retirement)
+                    {
+                        checkpoint = retirement with { Position = position };
+                        deferred.Add(journal.Instance);
+                    }
+                }
             }
+            commands.Add(checkpoint);
         }
         return (batch with { Turns = turns, Seen = [], Trial = [] },
-            new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootTimedJobSettlementEnabled, RootValuesEnabled));
+            new RootCheckpoints(commands, revisions, RootJobsEnabled, RootTimedJobIssuanceEnabled, RootTimedJobSettlementEnabled, RootValuesEnabled, deferred));
     }
 
     private static bool InputsMatch(WorkerRoot root, TurnCommit turn, bool jobs = false) =>
@@ -328,6 +354,7 @@ public sealed partial class EfStore
 
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
+        if (turn.Delete) return await PrepareRootRetirementAsync(root, turn, cancellationToken);
         if (turn.Row is null)
         {
             var ended = new TurnCommit(root.Actor, null, null, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed,
@@ -404,11 +431,12 @@ public sealed partial class EfStore
         if (RootTimedJobSettlementEnabled)
             return await PrepareRootTimedTurnAsync(root, turn, row, state, current, fence, wires, cancellationToken);
         await using var db = create();
+        await using var pinned = await BeginRootRetirementOperationAsync(db, cancellationToken);
         var ids = turn.Done.Concat(turn.Consumed).Select(key => key.Scope > 0 ? StoredJobId(key) : key.Id).ToArray();
         var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
             (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope || RootJobsEnabled && m.InboxScope == RootJobScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
-        var inputs = records.Select(record => DecodeRootInput(record, root.Reference, RootSelfIssuer, RootJobsEnabled, replies: db.UsesRootReplyProtocol, terminations: db.UsesRootTermination)).ToArray();
+        var inputs = records.Select(record => DecodeRootInput(record, root.Reference, RootSelfIssuer, RootJobsEnabled, replies: db.UsesRootReplyProtocol, terminations: db.UsesRootTermination, retirements: db.UsesRootRetirement)).ToArray();
         if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;
         if (turn.FoundationRootOperator is { } command)
         {

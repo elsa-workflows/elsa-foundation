@@ -23,12 +23,15 @@ internal static class PostgresRootSelection
         return cursor.Seal(Context("postgres-root-terminal-selection/1", tenant, reference), mark);
     }
 
-    internal static bool MatchesTerminal(FoundationReadCursor cursor, string? selection, string tenant, string reference, long revision, long at)
+    internal static bool MatchesTerminal(FoundationReadCursor cursor, string? selection, string tenant, string reference, long revision, long at) =>
+        OpenTerminal(cursor, selection, tenant, reference) is { } stamp && stamp.Revision == revision && stamp.At == at;
+
+    internal static FoundationTerminalStamp? OpenTerminal(FoundationReadCursor cursor, string? selection, string tenant, string reference)
     {
         Span<byte> mark = stackalloc byte[Size];
         return cursor.TryOpen(Context("postgres-root-terminal-selection/1", tenant, reference), selection, mark)
-            && BinaryPrimitives.ReadInt64LittleEndian(mark) == revision
-            && BinaryPrimitives.ReadInt64LittleEndian(mark[sizeof(long)..]) == at;
+            ? new(BinaryPrimitives.ReadInt64LittleEndian(mark), BinaryPrimitives.ReadInt64LittleEndian(mark[sizeof(long)..]))
+            : null;
     }
 
     private static byte[] Context(string read, string tenant, string reference) =>

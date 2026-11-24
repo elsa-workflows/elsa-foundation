@@ -74,6 +74,8 @@ internal sealed partial class PostgresRootAdmission
         var digest = FoundationRootCreator.OperationDigest(id);
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+        if (db.UsesRootRetirement)
+            await PinSelectedOperatorSchemaAsync(db, cancellationToken);
         if (reply is not null)
         {
             if (!db.UsesRootReplyProtocol) return await RefuseAsync(DirectResult.Refused);
@@ -84,7 +86,11 @@ internal sealed partial class PostgresRootAdmission
             : await RootAddressAsync(db, tenant, reference, cancellationToken);
         if (address is null) return await RefuseAsync(DirectResult.MissingTarget);
         var status = await AdmissionStatusAsync(db, address, tenant, reference, cancellationToken, requireCheckpoint: reply is not null);
-        if (status is null) return await RefuseAsync(DirectResult.MissingTarget);
+        if (status is null)
+        {
+            if (db.UsesRootRetirement && await HasReceiptAsync()) return await DuplicateAsync();
+            return await RefuseAsync(DirectResult.MissingTarget);
+        }
         if (status != InstanceStatus.Running)
         {
             var terminal = status == InstanceStatus.Finished ||
@@ -94,15 +100,7 @@ internal sealed partial class PostgresRootAdmission
                 status == InstanceStatus.Cancelled && db.UsesRootTermination &&
                 await IsQualifiedTerminalAsync(db, address, tenant, reference, InstanceStatus.Cancelled,
                     EfStore.RootTerminationStateFamily(db), cancellationToken);
-            if (terminal && await db.Database.SqlQuery<bool>($"""
-                SELECT EXISTS (SELECT 1 FROM "FoundationDirectReceipts"
-                    WHERE "Reference" = {reference} AND "Operation" = {digest}
-                        AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
-                """).SingleAsync(cancellationToken))
-            {
-                await transaction.CommitAsync(cancellationToken);
-                return DirectResult.Duplicate;
-            }
+            if (terminal && await HasReceiptAsync()) return await DuplicateAsync();
             return await RefuseAsync(DirectResult.Refused);
         }
 
@@ -144,6 +142,18 @@ internal sealed partial class PostgresRootAdmission
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return DirectResult.Accepted;
+
+        Task<bool> HasReceiptAsync() => db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM "FoundationDirectReceipts"
+                WHERE "Reference" = {reference} AND "Operation" = {digest}
+                    AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
+            """).SingleAsync(cancellationToken);
+
+        async Task<DirectResult> DuplicateAsync()
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return DirectResult.Duplicate;
+        }
 
         async Task<DirectResult> RefuseAsync(DirectResult reason)
         {
