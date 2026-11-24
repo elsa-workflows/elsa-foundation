@@ -19,7 +19,7 @@ and no assertion is weakened to make Elsa 4 pass.
 
 The work runs in three phases, each gated on the previous one:
 
-1. **Baseline**: the corpus runs green on the pinned Elsa 3 server, after classified and approved suite fixes.
+1. **Baseline**: the corpus runs green on the pinned Elsa 3.6.3 server, after classified and approved suite fixes.
 2. **Engine-neutral suites**: Elsa 3-specific values move out of the suite files into templates, environment or
    suite parameters, while the suites stay green on Elsa 3.
 3. **Elsa 4**: an Elsa 4 template set with the same template names, parameters and outputs; the definitions load
@@ -130,8 +130,9 @@ blocks it, and J-001 through J-005 are open in the tasks.
 **Corpus**
 
 - **FR-001**: The complete corpus MUST be the JTest-Nexxbiz repository at commit `b1cde13`: 36 Elsa 3 workflow
-  definitions, 42 suite files, the shared templates, test files, environment file and global configuration. The first
-  commit MUST copy it unchanged into the suite folder; every later change MUST be a reviewable diff from that copy.
+  definitions, 42 suite files, the shared templates, test files, environment file, global configuration and the Elsa 3
+  setup suite. The first commit MUST copy these unchanged into the suite folder (the original's delivery pipelines and
+  README are not test content and are not copied); every later change MUST be a reviewable diff from that copy.
 - **FR-002**: The suite folder MUST live in the Elsa 3 converter test area (`extensions/Elsa3/tests/`), holding the
   original definitions, the suites, an Elsa 3 template set, an Elsa 4 template set, environment files per engine and
   any adjusted definition copies. It MUST NOT be part of any CI tier.
@@ -145,7 +146,9 @@ blocks it, and J-001 through J-005 are open in the tasks.
 - **FR-005**: The suites MUST run with the public `jtest` command-line tool, latest released version, invoked as
   `jtest run`. They MUST NOT be wrapped in or rewritten as xunit tests. Report collection and pipeline integration are
   out of scope.
-- **FR-006**: The Elsa 3 baseline MUST be the `elsaworkflows/elsa-server-v3-6-3` image. The suite assertions are the
+- **FR-006**: The Elsa 3 baseline MUST be an Elsa server built from `docker/ElsaServer.Dockerfile` at elsa-core
+  release tag `3.6.3` (commit `d6a57f5f`), the version production pins; no such image is published. The build
+  command and image digest MUST be recorded with each baseline run. The suite assertions are the
   baseline; no Elsa 3 host runs alongside Elsa 4 during acceptance. An Elsa 3 run settles a disputed assertion only.
 - **FR-007**: Before conversion work starts, the corpus MUST run on the Elsa 3 baseline. Every failing assertion MUST
   be classified as one of: suite defect, behaviour the pinned version corrected, or defect of the pinned version,
@@ -173,7 +176,7 @@ blocks it, and J-001 through J-005 are open in the tasks.
 **Elsa 4 run and dispositions**
 
 - **FR-014**: The Elsa 4 run MUST start a fresh host with the Elsa 3 startup reconciliation reading the corpus's
-  definitions folder, and MUST keep the reconciliation receipt with the run.
+  definitions, with each approved adjusted copy taking the place of its original, and MUST keep the reconciliation receipt with the run.
 - **FR-015**: Every definition MUST end with exactly one bucket: `convert-as-is` (unchanged source passes its suites),
   `convert-with-adjustments` (an adjusted copy, kept next to the unchanged original, with the exact change and reason,
   approved by the coordinator) or `incompatible` (refused with a diagnostic and guidance, or a feature with no Elsa 4
@@ -218,7 +221,7 @@ blocks it, and J-001 through J-005 are open in the tasks.
 | Q1 | Which material is the complete corpus? | The JTest-Nexxbiz repository at `b1cde13`. Its 36 definitions are the set the earlier smoke export measured; the 42 suites are new to this initiative's evidence. |
 | Q2 | Where does the suite live? | In the Elsa 3 converter test area, because the flow is reconcile-then-run. A broader Elsa 4-native workflow-regression suite is a later, separate piece of work. |
 | Q3 | Can the corpus be committed? | Yes, unchanged; it carries no secrets. |
-| Q4 | What is the Elsa 3 baseline? | The suite assertions, made green on `elsa-server-v3-6-3` (the version production pins). No paired dual-host runs. |
+| Q4 | What is the Elsa 3 baseline? | The suite assertions, made green on an Elsa server built from elsa-core tag `3.6.3` (the version production pins; no published image exists). No paired dual-host runs. |
 | Q5 | How are failures on the baseline settled? | Classified into three kinds and approved as one list by the coordinator before any fix (FR-007, FR-008). |
 | Q6 | Which runner? | `jtest run`, latest version; no xunit wrapper; CI and reports later. |
 | Q7 | How are engine differences expressed? | Same-name Elsa 4 templates; Elsa 3-specific values in suite files move behind templates or parameters first. |
@@ -231,7 +234,7 @@ blocks it, and J-001 through J-005 are open in the tasks.
 
 ### Measurable Outcomes
 
-- **SC-001 - Baseline**: Every one of the 42 suites passes on `elsa-server-v3-6-3`, or is marked blocked by a named
+- **SC-001 - Baseline**: Every one of the 42 suites passes on the Elsa 3.6.3 baseline server, or is marked blocked by a named
   defect of that version, with every suite change approved and reasoned.
 - **SC-002 - Engine-neutral**: Every suite file is identical between the Elsa 3 and Elsa 4 runs, and still passes on
   the Elsa 3 baseline.

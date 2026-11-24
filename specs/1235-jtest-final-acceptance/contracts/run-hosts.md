@@ -1,0 +1,25 @@
+# Contract: run hosts
+
+## Elsa 3 baseline
+
+| Item | Value |
+|---|---|
+| Source | elsa-core release tag `3.6.3`, commit `d6a57f5f`, `docker/ElsaServer.Dockerfile` |
+| Container settings | `ASPNETCORE_ENVIRONMENT=Development`, `HTTP_PORTS=8080`, `HTTP__BASEURL={published base}` |
+| Ready when | `GET {base}/` returns 200 with body `Healthy` |
+| Definitions | Imported by the corpus's `import-and-publish-workflows.json` |
+| Templates and environment | `templates/`, `environments/dev.json` (`ELSA_API_BASE_URL`, `ELSA_EXECUTOR_BASE_URL={base}/workflows`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `CORRELATION_ID`, `DATE_NOW_ISO_STRING`) |
+| Fresh state | A new container per run |
+
+## Elsa 4 run
+
+| Item | Value |
+|---|---|
+| Host | `apps/Elsa.Workbench`, built from the commit under test, default SQLite store deleted before the run |
+| Features enabled for the run | `Elsa3JsonReconciliation` with `SourceId` `jtest` and `FolderPath` the suite's `workflow-definitions/` (or `adjusted/` overlay, see data model); `WorkflowsRuntimeCheckpointPersistence` mode `Durable`; value and variable payload capture on |
+| Ready when | The reconciliation summary is logged and the API answers an authenticated request |
+| Receipt | The reconciliation summary and per-item diagnostics, kept with the run record |
+| Templates and environment | `templates-elsa4/`, `environments/elsa4.json` (`ELSA_API_BASE_URL={base}`, `ELSA_EXECUTOR_BASE_URL={base}/workflows/http`, Workbench's seeded development admin through `ADMIN_USERNAME`/`ADMIN_PASSWORD`) |
+| Default shell | Unchanged: the reconciliation feature stays off unless the run enables it |
+
+The committed environment files contain only `${VARIABLE}` references, as the corpus's `dev.json` does.
