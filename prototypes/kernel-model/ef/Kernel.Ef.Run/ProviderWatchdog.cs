@@ -9,17 +9,20 @@ using Npgsql;
 static class ProviderWatchdog
 {
     private const string Actor = "0/watchdog";
+    private const string OldOwner = "watchdog-old";
     private const string ChildConnection = "KERNEL_WATCHDOG_TEST_CONNECTION";
     private const int Escalated = 71;
     private static readonly TimeSpan LeaseTime = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan ProcessExitBudget = TimeSpan.FromSeconds(3);
 
     public static async Task<int> RunAsync(Target target, string connection, string[] options)
     {
         var stage = target.Get("stage", "before-fence");
-        if (stage == "owned-fence") return await RunPostgresOwnedFenceAsync(target, connection);
+        if (stage is "owned-fence" or "owner-exit")
+            return await RunPostgresHeldFenceAsync(target, connection, options, stage == "owner-exit");
         if (stage != "before-fence")
         {
-            Console.Error.WriteLine("Choose stage=before-fence or stage=owned-fence.");
+            Console.Error.WriteLine("Choose stage=before-fence, stage=owned-fence or stage=owner-exit.");
             return 2;
         }
 
@@ -55,7 +58,7 @@ static class ProviderWatchdog
         var store = target.Store(target.Workers());
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var token = limit.Token;
-        var first = await store.TakeAsync(0, "watchdog-old", LeaseTime, token)
+        var first = await store.TakeAsync(0, OldOwner, LeaseTime, token)
             ?? throw new InvalidOperationException("The old owner did not take the partition.");
 
         string result;
@@ -97,11 +100,19 @@ static class ProviderWatchdog
         }
     }
 
-    private static async Task<int> RunPostgresOwnedFenceAsync(Target target, string connection)
+    private static async Task<int> RunPostgresHeldFenceAsync(Target target, string connection, string[] options, bool ownerExit)
     {
         if (target.Engine != "postgres" || new NpgsqlConnectionStringBuilder(connection).SslMode != SslMode.VerifyFull)
         {
             Console.Error.WriteLine("The held-fence stage requires PostgreSQL and SSL Mode=VerifyFull.");
+            return 2;
+        }
+
+        var disconnectDetection = target.Get("disconnect-check", "on");
+        if (ownerExit && (disconnectDetection is not ("on" or "off") ||
+            Wire.ReferenceEndpoint("postgres", connection) is not { Port: not 5095 } || target.Proxy is not null))
+        {
+            Console.Error.WriteLine("The owner-exit stage requires a direct loopback PostgreSQL port and disconnect-check=on or off.");
             return 2;
         }
 
@@ -114,36 +125,30 @@ static class ProviderWatchdog
 
         await target.ResetAsync(1);
         var store = target.Store(target.Workers());
-        var first = await store.TakeAsync(0, "watchdog-old", LeaseTime, token)
+        var first = await store.TakeAsync(0, OldOwner, LeaseTime, token)
             ?? throw new InvalidOperationException("The old owner did not take the partition.");
+        if (ownerExit)
+        {
+            await CheckOwnerExitAsync(target, connection, options, first, disconnectDetection == "on", token);
+            await VerifySuccessorAsync(store, first, token);
+            Console.WriteLine($"PostgreSQL {target.CommitWriter} {(target.FenceInBatch ? "in-batch" : "checked")} owner exit with disconnect-check={disconnectDetection}");
+            return 0;
+        }
+
         string interrupted;
         Task<Committed>? blocked = null;
         try
         {
             await using var blocker = target.Admins()();
             await using var hold = await blocker.Database.BeginTransactionAsync(token);
-            var blockerPid = await blocker.Database.SqlQueryRaw<int>("""SELECT pg_backend_pid() AS "Value" """).SingleAsync(token);
-            await blocker.Database.ExecuteSqlRawAsync(AwaitAdvisoryLock, token);
+            var blockerPid = await HoldPostgresBlockerAsync(blocker, token);
             var pause = new PauseBeforeCommit();
             var owner = target.Store(target.Workers(pause));
             long monotonic = 0;
             List<string> escalated = [];
             var watchdog = new Watchdog(LeaseTime, escalated.Add, () => monotonic);
             blocked = watchdog.Watch(owner).CommitAsync(Flush(first), token).AsTask();
-            await using var observer = target.Admins()();
-            while (!await observer.Database.SqlQuery<bool>($"""
-                SELECT EXISTS (
-                    SELECT 1 FROM pg_stat_activity activity JOIN pg_stat_ssl ssl ON ssl.pid = activity.pid
-                    WHERE activity.datname = current_database() AND activity.application_name = 'kernel-worker'
-                        AND ssl.ssl AND {blockerPid} = ANY(pg_blocking_pids(activity.pid))
-                ) AS "Value"
-                """).SingleAsync(token))
-            {
-                if (blocked.IsCompleted)
-                    throw new InvalidOperationException("The owner stopped before its TLS session reached the advisory lock.");
-                await Task.Delay(25, token);
-            }
-            Require(!await FenceCanBeLockedAsync(target, token), "the waiting TLS worker owns the physical partition row lock");
+            await WaitForPostgresFenceAsync(target, blockerPid, () => blocked.IsCompleted, token);
             Require(!blocked.IsCompleted && watchdog.Check() == 0, "the transaction is still open before the watchdog threshold");
 
             monotonic = (long)(LeaseTime.TotalMilliseconds * 2);
@@ -153,7 +158,8 @@ static class ProviderWatchdog
                 "the waiting PostgreSQL command reported cancellation on the watchdog token");
             monotonic += (long)(LeaseTime.TotalMilliseconds / 3);
             Require(watchdog.Check() == 0 && escalated.Count == 0, "the provider returned before process escalation");
-            Require(await FenceCanBeLockedAsync(target, token), "the fence lock cleared while the advisory blocker was still held");
+            Require(await FenceCanBeLockedAsync(target, token), "the worker's fence lock cleared after cancellation");
+            await RequirePostgresBlockerAsync(blocker, blockerPid, token);
         }
         finally
         {
@@ -172,9 +178,100 @@ static class ProviderWatchdog
         return 0;
     }
 
+    private static async Task CheckOwnerExitAsync(Target target, string connection, string[] options, Lease first,
+        bool detectDisconnect, CancellationToken token)
+    {
+        await using var blocker = target.Admins()();
+        await using var hold = await blocker.Database.BeginTransactionAsync(token);
+        var blockerPid = await HoldPostgresBlockerAsync(blocker, token);
+        using var child = StartWorker(target, connection, options, first);
+        try
+        {
+            await WaitForPostgresFenceAsync(target, blockerPid, () => child.HasExited, token);
+            Require(!child.HasExited, "the isolated owner is still running with an open transaction");
+            var elapsed = Stopwatch.StartNew();
+            child.Kill();
+            await child.WaitForExitAsync(token);
+            Require(child.ExitCode != 0, "the isolated owner process exited abruptly");
+
+            if (detectDisconnect)
+            {
+                using var clearance = CancellationTokenSource.CreateLinkedTokenSource(token);
+                clearance.CancelAfter(ProcessExitBudget);
+                while (!await FenceCanBeLockedAsync(target, clearance.Token))
+                    await Task.Delay(25, clearance.Token);
+                elapsed.Stop();
+                await RequirePostgresBlockerAsync(blocker, blockerPid, token);
+                Require(elapsed.Elapsed <= ProcessExitBudget,
+                    $"PostgreSQL released the fence {elapsed.ElapsedMilliseconds} ms after the exit signal while the advisory blocker remained");
+            }
+            else
+            {
+                // Give the disconnected session the entire positive budget. The lease expires sooner.
+                await Task.Delay(ProcessExitBudget, token);
+                await using var observer = target.Admins()();
+                Require(await observer.Database.SqlQuery<bool>($"""
+                    SELECT EXISTS (
+                        SELECT 1 FROM "Partitions" p JOIN "Nodes" n ON n."Id" = p."Owner"
+                        WHERE p."Id" = 0 AND p."Epoch" = {first.Epoch} AND p."Owner" = {OldOwner}
+                            AND n."LeaseUntil" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                    ) AS "Value"
+                    """).SingleAsync(token), "the database clock is past the original owner's persisted lease");
+                Require(!await FenceCanBeLockedAsync(target, token),
+                    "without disconnect detection the exited owner's transaction still holds the fence past lease expiry");
+                await RequirePostgresBlockerAsync(blocker, blockerPid, token);
+            }
+        }
+        finally
+        {
+            if (!child.HasExited)
+            {
+                try { child.Kill(); }
+                catch (InvalidOperationException) when (child.HasExited) { }
+                await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(3));
+            }
+        }
+    }
+
+    private static async Task<int> HoldPostgresBlockerAsync(DbContext blocker, CancellationToken token)
+    {
+        await blocker.Database.ExecuteSqlRawAsync("SET LOCAL idle_in_transaction_session_timeout = 0", token);
+        if (blocker.Database.GetDbConnection() is NpgsqlConnection { PostgreSqlVersion.Major: >= 17 })
+            await blocker.Database.ExecuteSqlRawAsync("SET LOCAL transaction_timeout = 0", token);
+        var pid = await blocker.Database.SqlQueryRaw<int>("""SELECT pg_backend_pid() AS "Value" """).SingleAsync(token);
+        await blocker.Database.ExecuteSqlRawAsync(AwaitAdvisoryLock, token);
+        return pid;
+    }
+
+    private static async Task RequirePostgresBlockerAsync(DbContext blocker, int pid, CancellationToken token) =>
+        Require(await blocker.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (
+                SELECT 1 FROM pg_locks WHERE pid = {pid} AND pid = pg_backend_pid() AND locktype = 'advisory'
+                    AND classid = 4229 AND objid = 5 AND objsubid = 2 AND granted
+            ) AS "Value"
+            """).SingleAsync(token), "the original advisory lock is still held by the blocking transaction");
+
+    private static async Task WaitForPostgresFenceAsync(Target target, int blockerPid, Func<bool> ended, CancellationToken token)
+    {
+        await using var observer = target.Admins()();
+        while (!await observer.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (
+                SELECT 1 FROM pg_stat_activity activity JOIN pg_stat_ssl ssl ON ssl.pid = activity.pid
+                WHERE activity.datname = current_database() AND activity.application_name = 'kernel-worker'
+                    AND ssl.ssl AND {blockerPid} = ANY(pg_blocking_pids(activity.pid))
+            ) AS "Value"
+            """).SingleAsync(token))
+        {
+            if (ended())
+                throw new InvalidOperationException("The owner stopped before its TLS session reached the advisory lock.");
+            await Task.Delay(25, token);
+        }
+        Require(!await FenceCanBeLockedAsync(target, token), "the waiting TLS worker owns the physical partition row lock");
+    }
+
     private const string AwaitAdvisoryLock = "SELECT pg_advisory_xact_lock(4229, 5)";
 
-    private sealed class PauseBeforeCommit : DbTransactionInterceptor
+    private sealed class PauseBeforeCommit(string? disconnectCheck = null) : DbTransactionInterceptor
     {
         public bool ObservedCancellation { get; private set; }
 
@@ -186,6 +283,18 @@ static class ProviderWatchdog
             command.CommandTimeout = 0;
             command.CommandText = "SET LOCAL statement_timeout = 0; SET LOCAL lock_timeout = 0";
             await command.ExecuteNonQueryAsync(cancellationToken);
+            if (disconnectCheck is not null)
+            {
+                if (command.Connection is NpgsqlConnection { PostgreSqlVersion.Major: >= 17 })
+                {
+                    command.CommandText = "SET LOCAL transaction_timeout = 0";
+                    await command.ExecuteNonQueryAsync(cancellationToken);
+                }
+                command.CommandText = disconnectCheck == "on"
+                    ? "SET LOCAL client_connection_check_interval = '100ms'"
+                    : "SET LOCAL client_connection_check_interval = 0";
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
             command.CommandText = AwaitAdvisoryLock;
             try
             {
@@ -238,13 +347,7 @@ static class ProviderWatchdog
     {
         // Some drivers may leave a cancelled command blocked. Only the disposable child
         // takes the runtime's process-escalation callback in this fixture.
-        var start = new ProcessStartInfo("dotnet") { UseShellExecute = false, RedirectStandardInput = true };
-        string[] arguments = [typeof(ProviderWatchdog).Assembly.Location, "x", "watchdog-worker", target.Engine, "isolated", .. options,
-            $"epoch={lease.Epoch.ToString(CultureInfo.InvariantCulture)}", $"position={lease.Position.ToString(CultureInfo.InvariantCulture)}"];
-        foreach (var argument in arguments)
-            start.ArgumentList.Add(argument);
-        start.Environment[ChildConnection] = connection;
-        using var child = Process.Start(start) ?? throw new InvalidOperationException("The disposable worker did not start.");
+        using var child = StartWorker(target, connection, options, lease);
         try
         {
             await waitForLock(() => child.HasExited);
@@ -266,6 +369,17 @@ static class ProviderWatchdog
         }
     }
 
+    private static Process StartWorker(Target target, string connection, string[] options, Lease lease)
+    {
+        var start = new ProcessStartInfo("dotnet") { UseShellExecute = false, RedirectStandardInput = true };
+        string[] arguments = [typeof(ProviderWatchdog).Assembly.Location, "x", "watchdog-worker", target.Engine, "isolated", .. options,
+            $"epoch={lease.Epoch.ToString(CultureInfo.InvariantCulture)}", $"position={lease.Position.ToString(CultureInfo.InvariantCulture)}"];
+        foreach (var argument in arguments)
+            start.ArgumentList.Add(argument);
+        start.Environment[ChildConnection] = connection;
+        return Process.Start(start) ?? throw new InvalidOperationException("The disposable worker did not start.");
+    }
+
     internal static async Task<int> RunWorkerAsync(string engine, Dictionary<string, string> options)
     {
         var connection = Environment.GetEnvironmentVariable(ChildConnection) ??
@@ -273,6 +387,14 @@ static class ProviderWatchdog
         var target = new Target(engine, connection, options);
         var lease = new Lease(long.Parse(options["epoch"], CultureInfo.InvariantCulture),
             long.Parse(options["position"], CultureInfo.InvariantCulture), 0);
+        if (target.Get("stage", "") == "owner-exit")
+        {
+            var waiter = target.Store(target.Workers(new PauseBeforeCommit(target.Get("disconnect-check", "on"))));
+            // The coordinator bounds this process's lifetime. This wait must have no independent cancellation.
+            await waiter.CommitAsync(Flush(lease), CancellationToken.None);
+            throw new InvalidOperationException("The disposable worker returned before the owner-exit check.");
+        }
+
         using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var token = limit.Token;
         long monotonic = 0;
