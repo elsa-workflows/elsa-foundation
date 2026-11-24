@@ -264,7 +264,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 location.Node.Inputs.FirstOrDefault(input => input.ReferenceKey == "name")?.Value is { } nameArgument &&
                 StringComparer.OrdinalIgnoreCase.Equals(nameArgument.ExpressionType, "Literal"))
             {
-                var name = nameArgument.Value switch { string text => text, JsonElement { ValueKind: JsonValueKind.String } json => json.GetString(), _ => null };
+                var name = nameArgument.Value is JsonElement { ValueKind: JsonValueKind.String } json ? json.GetString() : null;
                 type = context.Document.Outputs.FirstOrDefault(output => StringComparer.Ordinal.Equals(output.Name, name))?.Type ?? type;
             }
             definition = new("value", "Value", type, StorageDriverType: null, DisplayName: "Value", Category: null,
