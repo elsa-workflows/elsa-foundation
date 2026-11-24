@@ -178,6 +178,11 @@ internal static class NativeTerminalEnvelopeChecks
             notice.Read<FoundationChildNotice>() == new FoundationChildNotice(candidateId, expectedStatus, null, finished.Creation, !oversize),
             "the qualified cascade commits one bound terminate and the correct parent notice lands at its required boundary");
 
+        if (oversize)
+            Report(cascading is [{ Row: { } checkpoint }] && checkpoint.State == afterGrowth.State &&
+                checkpoint.CustomHandles == oldHandles && finished?.State == afterGrowth.State && finished.CustomHandles == oldHandles,
+                "the parked cascade preserves the saved faulted state and the predecessor handles");
+
         if (!oversize && finished is not null)
         {
             var terminalView = (await reads.GetAsync(scope, reference))!;
@@ -195,8 +200,8 @@ internal static class NativeTerminalEnvelopeChecks
                 var queued = priorInboxes[receivingFrame].Receipts["retained"];
                 var retained = endedInboxes?[receivingFrame].Receipts.GetValueOrDefault("retained");
                 Report(queued is { Status: "Queued", Retention: 3_600_000 } &&
-                    retained == (queued with { Status = "NotProcessed", Outcome = "cancelled", Clock = retained?.Clock }) &&
-                    retained?.Clock is not null && endedInboxes![receivingFrame].Pending.Count == 0,
+                    retained == (queued with { Status = "NotProcessed", Outcome = "cancelled", Clock = "workflow:end" }) &&
+                    retained is not null && endedInboxes![receivingFrame].Pending.Count == 0,
                     "the original invocation receipt retains its identity and window and ends NotProcessed");
             }
         }
