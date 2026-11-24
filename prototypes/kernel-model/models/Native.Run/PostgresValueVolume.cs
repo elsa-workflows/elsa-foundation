@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using Kernel.EntityFramework;
-using Kernel.Foundation.Postgres;
 using Kernel.Foundation.InMemory;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -42,7 +41,7 @@ internal static class PostgresValueVolume
         var scope = EmbeddedTenant.Bind("value-volume");
         var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(stop), turns + 2), ActorType);
         var (roots, partitions) = await store.BindWorkerPartitionAsync(0, stop);
-        var actor = new ActorAdapter(new PostgresPreviewHosting.RootHeaders(roots), new VolumeActor(byReference, changes, pad, turns),
+        var actor = new ActorAdapter(new EfStore.RootHeaders(roots), new VolumeActor(byReference, changes, pad, turns),
             store.ReadRootValueAsync);
         var worker = new Worker("volume-writer", 0, store, actor,
             new WorkerOptions { Partitions = partitions, PassTurnBudget = 1 });

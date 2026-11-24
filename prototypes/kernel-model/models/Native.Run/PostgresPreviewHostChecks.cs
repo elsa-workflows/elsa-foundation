@@ -59,20 +59,30 @@ internal static class PostgresPreviewHostChecks
         var hang = new StalledHeartbeat();
         var watched = new DbContextOptionsBuilder<KernelDb>(data).AddInterceptors(hang).Options;
         var escalated = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var runtime = await PostgresPreviewHosting.StartAsync(() => new(watched), "preview-host",
-            actor, message => escalated.TrySetResult(message), new() { PollInterval = TimeSpan.FromMilliseconds(25) }, stop);
+        await using var service = new PostgresPreviewHostedService(() => new(watched), "preview-host",
+            actor, message => escalated.TrySetResult(message), new() { PollInterval = TimeSpan.FromMilliseconds(25) });
+        if (service.LastError is not null)
+            throw new InvalidOperationException("A node that has not started has no runtime error.");
+        await service.StartAsync(stop);
         try
         {
             Contract.ActorView? view;
             while ((view = await reads.GetAsync(scope, root, stop)) is not { Header.Status: Contract.ActorStatus.Finished })
             {
-                if (runtime.LastError is { } error) throw new InvalidOperationException("The host failed before serving the actor.", error);
+                if (service.LastError is { } error) throw new InvalidOperationException("The host failed before serving the actor.", error);
                 await Task.Delay(25, stop);
             }
             if (view.Header.Type != actor.Type || actor.Turns != 1 ||
                 (await reads.TailAsync(scope, root, cancellationToken: stop)).Items.Count == 0)
                 throw new InvalidOperationException("The launcher must serve the public actor and journal its one terminal turn.");
             Console.WriteLine("ok the terminal header preserves the escaped actor type and the journal is nonempty");
+
+            var failure = new InvalidOperationException("Fixture heartbeat failure.");
+            hang.FailNext(failure);
+            while (service.LastError is null) await Task.Delay(25, stop);
+            if (service.LastError != failure)
+                throw new InvalidOperationException("The hosted service must report the runtime loop error.", service.LastError);
+            Console.WriteLine("ok the hosted service reports the runtime loop error");
 
             hang.Arm();
             await hang.Entered.Task.WaitAsync(stop);
@@ -86,25 +96,30 @@ internal static class PostgresPreviewHostChecks
             // This fixture records the process-termination policy and releases the synthetic call to leave normally.
             hang.Released.TrySetResult();
         }
-        await runtime.StopAsync(stop);
+        await service.StopAsync(stop);
         return 0;
     }
 
     private sealed class StalledHeartbeat : DbCommandInterceptor
     {
         private int _armed;
+        private Exception? _failure;
         internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal void Arm() => Volatile.Write(ref _armed, 1);
+        internal void FailNext(Exception error) => Volatile.Write(ref _failure, error);
 
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (command.CommandText.Contains("""INSERT INTO "Nodes" """, StringComparison.Ordinal) &&
-                Interlocked.Exchange(ref _armed, 0) == 1)
+            if (command.CommandText.Contains("""INSERT INTO "Nodes" """, StringComparison.Ordinal))
             {
-                Entered.TrySetResult();
-                await Released.Task;
+                if (Interlocked.Exchange(ref _failure, null) is { } failure) throw failure;
+                if (Interlocked.Exchange(ref _armed, 0) == 1)
+                {
+                    Entered.TrySetResult();
+                    await Released.Task;
+                }
             }
             return result;
         }

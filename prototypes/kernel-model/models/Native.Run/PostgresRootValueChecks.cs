@@ -1,6 +1,5 @@
 using System.Data.Common;
 using Kernel.EntityFramework;
-using Kernel.Foundation.Postgres;
 using Kernel.Foundation.InMemory;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -46,7 +45,7 @@ internal static class PostgresRootValueChecks
         var api = new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(token), 32), ActorType);
         var (roots, partitions) = await store.BindWorkerPartitionAsync(0, token);
         var node = $"values-{Environment.ProcessId}";
-        var adapter = new ActorAdapter(new PostgresPreviewHosting.RootHeaders(roots), new ValueActor(), rootValueReader: store.ReadRootValueAsync);
+        var adapter = new ActorAdapter(new EfStore.RootHeaders(roots), new ValueActor(), rootValueReader: store.ReadRootValueAsync);
         var worker = new Worker(node, 0, store, adapter, new WorkerOptions { Partitions = partitions });
         var host = new DurableHost([worker]);
         await host.HeartbeatAsync(Defaults.Lease, token);

@@ -1,6 +1,5 @@
 using System.Text.Json.Nodes;
 using Kernel.EntityFramework;
-using Kernel.Foundation.Postgres;
 using Kernel.Foundation.InMemory;
 using Kernel.Native;
 using Kernel.Runtime.Hosting;
@@ -202,7 +201,7 @@ internal static class PostgresHeldDirectChecks
         WorkflowRegistry registry, WorkerOptions options, CancellationToken stop)
     {
         var (roots, count) = await source.BindWorkerPartitionAsync(0, stop);
-        var type = new ActorAdapter(new PostgresPreviewHosting.RootHeaders(roots), new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]),
+        var type = new ActorAdapter(new EfStore.RootHeaders(roots), new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]),
             rootHeldReplies: true);
         var worker = new Worker(node, 0, source, type, options with { Partitions = count });
         return (new DurableHost([worker]), worker);
