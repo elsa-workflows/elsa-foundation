@@ -1222,6 +1222,12 @@
       "elsa.actorfoundation.contracts": {
         "type": "Project"
       },
+      "elsa.actorfoundation.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "elsa.actorfoundation.model.contracts": {
         "type": "Project",
         "dependencies": {
@@ -2508,6 +2514,7 @@
           "Elsa.Activities.Scheduling": "[4.0.0-dev, )",
           "Elsa.Activities.Sequence": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.BuiltIn.PostgreSql": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
           "Elsa.Agent": "[4.0.0-dev, )",
           "Elsa.Agent.Anthropic": "[4.0.0-dev, )",
           "Elsa.Agent.Api": "[4.0.0-dev, )",
