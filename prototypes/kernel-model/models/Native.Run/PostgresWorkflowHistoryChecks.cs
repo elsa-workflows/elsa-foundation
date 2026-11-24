@@ -287,6 +287,31 @@ internal static class PostgresWorkflowHistoryChecks
             await db.Database.ExecuteSqlRawAsync("""DROP TABLE "Instances" """, ct);
             Check((await runs.ListAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
                 "the history route refuses a canonical replacement and accepts a renamed-only source");
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "FixtureArchivedOwner" DISABLE TRIGGER kernel_project_root_actor_list;
+                CREATE SCHEMA fixture_other_history;
+                CREATE TABLE fixture_other_history."Instances" (id integer);
+                DO $fixture$
+                DECLARE trigger_name text;
+                BEGIN
+                    FOREACH trigger_name IN ARRAY ARRAY['kernel_require_root_checkpoint_writer',
+                        'kernel_project_root_actor_list', 'kernel_project_root_workflow_history_v1']
+                    LOOP
+                        EXECUTE format('CREATE FUNCTION fixture_other_history.%I() RETURNS trigger LANGUAGE plpgsql AS %L',
+                            trigger_name, 'BEGIN RETURN NEW; END');
+                        EXECUTE format('CREATE TRIGGER %1$I AFTER UPDATE ON fixture_other_history."Instances"
+                            FOR EACH ROW EXECUTE FUNCTION fixture_other_history.%1$I()', trigger_name);
+                    END LOOP;
+                END
+                $fixture$;
+                """, ct);
+            await RequireFormatRefusal(() => runs.ListAsync(scope, query, cancellationToken: ct).AsTask());
+            await db.Database.ExecuteSqlRawAsync("""
+                DROP SCHEMA fixture_other_history CASCADE;
+                ALTER TABLE "FixtureArchivedOwner" ENABLE TRIGGER kernel_project_root_actor_list;
+                """, ct);
+            Check((await runs.ListAsync(scope, query, cancellationToken: ct)).Items.Count == 2,
+                "a complete trigger chain in another schema cannot certify the renamed history source");
             await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "FixtureArchivedOwner" RENAME TO "Instances" """, ct);
         }
         async Task RequireSourceRefusal()

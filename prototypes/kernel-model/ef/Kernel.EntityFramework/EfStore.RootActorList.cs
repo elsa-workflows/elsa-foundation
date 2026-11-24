@@ -14,8 +14,24 @@ public sealed partial class EfStore
     private sealed record RootPointRow(string? Reference, int? Status, long? EndedAt, string? Header, long AsOf, bool SourceReady,
         int? StoreSchema, int? MessageProtocol, int? JournalCodec);
 
-    internal static Task InstallRootActorListAsync(KernelDb db, CancellationToken cancellationToken) =>
-        db.Database.ExecuteSqlRawAsync("""
+    internal static async Task RequirePreviewInstallSchemaAsync(KernelDb db, CancellationToken token)
+    {
+        if (!await db.Database.SqlQueryRaw<bool>("""
+            SELECT to_regclass('"Instances"') IS NOT NULL AND NOT EXISTS (
+                SELECT 1 FROM (VALUES ('"Instances"'), ('"Journal"'), ('"Partitions"'), ('"KernelStoreVersions"'),
+                    ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'), ('"FoundationRootReceipts"'),
+                    ('"FoundationActorList"'), ('"FoundationWorkflowHistory"'), ('"FoundationWorkflowHistoryFormat"')) expected(name)
+                JOIN pg_catalog.pg_class relation ON relation.oid = to_regclass(expected.name)
+                WHERE relation.relnamespace IS DISTINCT FROM to_regnamespace(current_schema())
+            ) AS "Value"
+            """).SingleAsync(token))
+            throw new StoreFormatException("PostgreSQL preview installation requires the store relations in the active schema.");
+    }
+
+    internal static async Task InstallRootActorListAsync(KernelDb db, CancellationToken cancellationToken)
+    {
+        await RequirePreviewInstallSchemaAsync(db, cancellationToken);
+        await db.Database.ExecuteSqlRawAsync("""
             -- Keep the original header for decoding in .NET. PostgreSQL jsonb cannot represent a NUL.
             -- Escape both NUL and literal backslashes injectively before using jsonb for comparisons.
             -- The scanner consumes complete JSON escapes, including a backslash paired with another.
@@ -67,6 +83,7 @@ public sealed partial class EfStore
             END
             $install$;
             """, cancellationToken);
+    }
 
     internal async Task<(RootListItem Item, long AsOf)?> ReadRootActorAsync(string tenant, string reference,
         CancellationToken cancellationToken)

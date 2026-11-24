@@ -322,7 +322,8 @@ The preview's public `IActorReads.GetAsync` and `ListAsync` use a persisted, ten
 updates the list within the fenced metadata commit, including suspension changes that leave no public journal entry.
 Point queries use the tenant and exact reference. Point and list queries refuse when either required source trigger
 is missing, disabled or bound to a different function.
-The trigger functions belong to the source table's installation schema.
+The trigger functions belong to the source table's installation schema. Run preview setup with that schema
+active so all preview relations and trigger functions are installed together.
 If the projection trigger was disabled while writing checkpoints, rebuild the projection from committed metadata before serving it again. List queries use a reference bookmark bound to the tenant and filters. The existing root schema
 installer backfills public metadata for earlier preview databases. This slice represents running and finished roots,
 and leaves the release-wide projector, Park, and operator selections to K9 follow-up.
@@ -343,7 +344,7 @@ The chronology route uses inclusive UTC bounds at the precision of the caller's 
 timestamp descending and exact reference ascending. It joins the timestamp and actor-list projections. Reads
 check both format markers and the trigger chain on the current owner relation in the same statement. A canonical
 replacement must have all the required triggers. A rename with no canonical replacement can still serve the
-existing projection. Re-enable a trigger only if owner writes were quiesced throughout the disabled interval or
+existing projection from the same installation schema. Re-enable a trigger only if owner writes were quiesced throughout the disabled interval or
 after an explicit rebuild from authoritative data. Missed silent checkpoint timestamps cannot be reconstructed
 from a later checkpoint or from the public journal. The generic actor list still shows prior roots, which enter chronological history
 on their first checkpoint observed after installation. Physical workflow retirement, legacy timestamps and

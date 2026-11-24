@@ -20,6 +20,7 @@ public sealed partial class EfStore
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(token);
         await RequireStoreVersionsAsync(db, token, FormatLock.Shared);
+        await RequirePreviewInstallSchemaAsync(db, token);
         await db.Database.ExecuteSqlRawAsync("""
             SELECT pg_advisory_xact_lock(48602345, 1);
             CREATE TABLE IF NOT EXISTS "FoundationWorkflowHistoryFormat" (
@@ -115,7 +116,9 @@ public sealed partial class EfStore
                         JOIN pg_catalog.pg_class relation ON relation.oid = source.tgrelid
                         JOIN pg_catalog.pg_proc installed ON installed.oid = source.tgfoid
                             AND installed.pronamespace = relation.relnamespace AND installed.proname = source.tgname
-                        WHERE (to_regclass('"Instances"') IS NULL OR source.tgrelid = to_regclass('"Instances"'))
+                        WHERE relation.relnamespace = (SELECT relnamespace FROM pg_catalog.pg_class
+                                WHERE oid = to_regclass('"FoundationWorkflowHistory"'))
+                            AND (to_regclass('"Instances"') IS NULL OR source.tgrelid = to_regclass('"Instances"'))
                             AND source.tgname::text = ANY({WorkflowHistorySourceTriggers}) AND source.tgenabled IN ('O', 'A')
                         GROUP BY source.tgrelid HAVING count(*) = {WorkflowHistorySourceTriggers.Length}
                     ) AS "TriggerEnabled"
