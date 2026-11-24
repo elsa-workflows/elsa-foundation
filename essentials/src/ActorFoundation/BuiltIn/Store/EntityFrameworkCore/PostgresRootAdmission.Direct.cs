@@ -249,15 +249,34 @@ internal sealed partial class PostgresRootAdmission
         if (held != (row.ReplyTo is not null) || held &&
             (!replies || ReplyTo.Parse(row.ReplyTo!) is not { Node.Length: > 0, Request.Length: > 0, Deadline: > 0 }))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public reply route.");
-        if (row.JobGeneration != 0 || !IsStoredDirect(row.Start))
+        if (row.JobGeneration != 0)
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
-        var header = DurableKeyJson.Read<StoredDirect>(row.Start![(held ? HeldDirectPrefix.Length : DirectPrefix.Length)..]);
-        if (header.Creation != 1 || !MatchesDirectOccurrence(reference, header.Operation, row.Id))
-            throw new StoreException(Failure.Definite, "Public input occurrence differs from its admitted identity.");
+        var header = ReadDirectHeader(row.Start, reference, row.Id);
         var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
         return new Message(header.Operation, new(row.Target), header.EscapedKind ?? row.Kind, payload,
             Due: row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, KeepUntil: row.KeepUntil, ReplyTo: row.ReplyTo, TargetCreation: header.Creation)
             { StorageId = row.Id }.WithInboxScope(row.InboxScope);
+    }
+
+    private static StoredDirect ReadDirectHeader(string? wire, string reference, string occurrence)
+    {
+        if (!IsStoredDirect(wire))
+            throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
+        var prefix = IsHeldDirect(wire) ? HeldDirectPrefix : DirectPrefix;
+        var header = DurableKeyJson.Read<StoredDirect>(wire![prefix.Length..]);
+        if (header is not { Creation: 1 } || !MatchesDirectOccurrence(reference, header.Operation, occurrence))
+            throw new StoreException(Failure.Definite, "Public input occurrence differs from its admitted identity.");
+        return header;
+    }
+
+    internal static (string Id, string Kind, long? Due) InspectDirectHeader(KernelDb db, string? wire, string reference,
+        string occurrence, string kind, long due, bool hasReply)
+    {
+        var held = IsHeldDirect(wire);
+        if (held != hasReply || held && !db.UsesRootReplyProtocol)
+            throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public reply route.");
+        var header = ReadDirectHeader(wire, reference, occurrence);
+        return (header.Operation, header.EscapedKind ?? kind, due != 0 || header.ExplicitZeroDue ? due : null);
     }
 
     internal async Task<int> SweepDirectReceiptsAsync(CancellationToken cancellationToken = default)

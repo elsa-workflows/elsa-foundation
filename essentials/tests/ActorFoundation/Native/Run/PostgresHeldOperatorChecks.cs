@@ -79,6 +79,9 @@ internal static class PostgresHeldOperatorChecks
                 "an expired request and a before-commit request leave the inbox empty");
             removal = Call(selection, "remove", now + 15_000).AsTask();
             var pending = await ReadPending(remove);
+            Check((await reads.InboxAsync(tenant, remove, cancellationToken: stop)).Items is
+                [{ Id: "remove", Kind: Contract.Kinds.Terminate, State: Contract.DeliveryState.Pending, Sender: null }],
+                "held operator inspection reports only the pending operation's public metadata");
             var registration = ReplyTo.Parse(pending.ReplyTo!).Request;
             Remember(pending);
             Check(requests.All.Single().Registration == registration && !removal.IsCompleted &&

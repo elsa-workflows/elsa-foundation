@@ -100,6 +100,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 "Reference" text COLLATE "C" NOT NULL REFERENCES "FoundationRootBirths" ("Reference") DEFERRABLE INITIALLY DEFERRED,
                 "Until" bigint NOT NULL, PRIMARY KEY ("Tenant", "Operation"));
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootReceipts_Until" ON "FoundationRootReceipts" ("Until");
+            CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Pending"
+                ON "Messages" ("Partition", "Target", "Seq", "Id" COLLATE "C")
+                WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND NOT "Done";
             """, cancellationToken);
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
