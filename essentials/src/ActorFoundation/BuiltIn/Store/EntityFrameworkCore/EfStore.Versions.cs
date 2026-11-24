@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using MySql.Data.MySqlClient;
 using Npgsql;
 
@@ -54,6 +55,83 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";
+}
+
+// What a store format selects in the generated-root protocol. A later protocol in one chain carries the earlier
+// capabilities of that chain, so a set is always written out closed. Marker and refusal checks compare formats.
+[Flags]
+internal enum RootCapabilities
+{
+    None = 0,
+    SelfProtocol = 1 << 0,
+    Timers = 1 << 1,
+    OperatorProtocol = 1 << 2,
+    Termination = 1 << 3,
+    StableBody = 1 << 4,
+    TerminalSelection = 1 << 5,
+    Retirement = 1 << 6,
+    TerminateThenDelete = 1 << 7,
+    Retention = 1 << 8,
+    OperatorReplies = 1 << 9,
+    JobProtocol = 1 << 10,
+    JobPreview = 1 << 11,
+    TimedJobIssuance = 1 << 12,
+    TimedJobSettlement = 1 << 13,
+    TimedJobPreview = 1 << 14,
+    ValueProtocol = 1 << 15,
+    ReplyProtocol = 1 << 16,
+    ParkOpening = 1 << 17,
+    ParkInspection = 1 << 18,
+    ParkArrivals = 1 << 19
+}
+
+internal static class RootProfiles
+{
+    private const RootCapabilities Operators = RootCapabilities.OperatorProtocol;
+    private const RootCapabilities Terminations = Operators | RootCapabilities.Termination;
+    private const RootCapabilities StableBody = Terminations | RootCapabilities.StableBody;
+    private const RootCapabilities TerminalSelection = StableBody | RootCapabilities.TerminalSelection;
+    private const RootCapabilities Retirement = TerminalSelection | RootCapabilities.Retirement;
+    private const RootCapabilities TerminateThenDelete = Retirement | RootCapabilities.TerminateThenDelete;
+    private const RootCapabilities Retention = TerminateThenDelete | RootCapabilities.Retention;
+    private const RootCapabilities TimedJobSettlement = RootCapabilities.JobProtocol | RootCapabilities.TimedJobSettlement;
+    private const RootCapabilities ParkInspection = RootCapabilities.ParkOpening | RootCapabilities.ParkInspection;
+
+    // Each format and the closed capability set its profile carries.
+    internal static IReadOnlyDictionary<StoreFormat, RootCapabilities> Formats { get; } = new Dictionary<StoreFormat, RootCapabilities>
+    {
+        [StoreFormat.Current] = RootCapabilities.None,
+        [StoreFormat.RootSelf] = RootCapabilities.SelfProtocol,
+        [StoreFormat.RootTimers] = RootCapabilities.SelfProtocol | RootCapabilities.Timers,
+        [StoreFormat.RootOperators] = Operators,
+        [StoreFormat.RootJobs] = RootCapabilities.JobProtocol | RootCapabilities.JobPreview,
+        [StoreFormat.RootTimedJobIssuance] = RootCapabilities.JobProtocol | RootCapabilities.TimedJobIssuance,
+        [StoreFormat.RootValues] = RootCapabilities.ValueProtocol,
+        [StoreFormat.RootTimedJobSettlement] = TimedJobSettlement,
+        [StoreFormat.RootReplies] = RootCapabilities.ReplyProtocol,
+        [StoreFormat.RootTerminations] = Terminations,
+        [StoreFormat.RootStableBody] = StableBody,
+        [StoreFormat.RootTerminalSelection] = TerminalSelection,
+        [StoreFormat.RootRetirement] = Retirement,
+        [StoreFormat.RootTerminateThenDelete] = TerminateThenDelete,
+        [StoreFormat.RootRetention] = Retention,
+        [StoreFormat.RootOperatorReplies] = Retention | RootCapabilities.OperatorReplies,
+        [StoreFormat.RootTimedJobPreview] = TimedJobSettlement | RootCapabilities.TimedJobPreview,
+        [StoreFormat.RootParkOpening] = RootCapabilities.ParkOpening,
+        [StoreFormat.RootParkInspection] = ParkInspection,
+        [StoreFormat.RootParkArrivals] = ParkInspection | RootCapabilities.ParkArrivals
+    };
+
+    internal static RootCapabilities CapabilitiesOf(StoreFormat format) =>
+        Formats.TryGetValue(format, out var capabilities) ? capabilities : throw new ArgumentOutOfRangeException(nameof(format), format, "No kernel store profile has this format.");
+}
+
+// EF caches one model per key. Profiles seed different markers, so the key carries the format and the capabilities.
+internal sealed class KernelModelCacheKeyFactory : IModelCacheKeyFactory
+{
+    public object Create(DbContext context, bool designTime) => context is KernelDb db
+        ? (context.GetType(), db.RequiredFormat, db.Capabilities, designTime)
+        : (context.GetType(), designTime);
 }
 
 // The same parameters are part of every relational node upsert. A readable family currently has one
