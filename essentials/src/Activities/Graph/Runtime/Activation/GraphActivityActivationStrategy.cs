@@ -58,7 +58,7 @@ public sealed class GraphActivityActivationStrategy(IServiceScopeFactory scopeFa
                 scope.ServiceProvider.GetRequiredService<IDurableValueStateStore>(),
                 scope.ServiceProvider.GetService<IPortableExpressionEvaluator>(),
                 scope.ServiceProvider.GetService<IWellKnownTypeRegistry>()).WithTypeDescriptors(
-                    scope.ServiceProvider.GetService<IVariableTypeDescriptorCatalog>());
+                    scope.ServiceProvider.GetService<IRuntimeTypeNullability>());
             return new ActivityActivationLease(activity, scope);
         }
         catch (Exception activationException)

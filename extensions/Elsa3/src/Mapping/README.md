@@ -338,7 +338,7 @@ Known differences that convert without a diagnostic, because they depend on how 
 - With the converter's default `ApplyElsa3NullPolicies=true`, undefined object members retain their keys as null,
   and null bound to a supported non-nullable scalar uses its type default (`0`, `false`, enum zero).
   With that option off, undefined object members are omitted (#3170) and null bound to a non-nullable input
-  is refused with `VF-ACT-004` (#3172). See [workflow value policies](../../../../../docs/reference/workflow-definition-values.md).
+  is refused with `VF-ACT-004` (#3172). See [workflow value policies](../../../../docs/reference/workflow-definition-values.md).
 - Elsa 3 handed scripts mutable .NET values; Elsa 4 hands them frozen JSON values.
 
 ## Missing, blank and deliberately null members (spec 267 follow-up)

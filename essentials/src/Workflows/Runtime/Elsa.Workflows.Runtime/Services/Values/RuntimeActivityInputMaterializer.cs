@@ -51,8 +51,20 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         IWellKnownTypeRegistry? wellKnownTypeRegistry = null,
         IPortableExpressionEvaluator? portableExpressionEvaluator = null,
         IRuntimeValueConversionExecutor? valueConversionExecutor = null,
-        IExternalPayloadStore? externalPayloadStore = null,
-        IVariableTypeDescriptorCatalog? typeDescriptors = null)
+        IExternalPayloadStore? externalPayloadStore = null)
+        : this(typeDescriptors: null, inputBindingResolver, structurePolicies, wellKnownTypeRegistry, portableExpressionEvaluator,
+            valueConversionExecutor, externalPayloadStore)
+    {
+    }
+
+    public RuntimeActivityInputMaterializer(
+        IRuntimeTypeNullability? typeDescriptors,
+        IRuntimeInputBindingResolver inputBindingResolver,
+        IEnumerable<IRuntimeStructureInputMaterializationPolicy> structurePolicies,
+        IWellKnownTypeRegistry? wellKnownTypeRegistry = null,
+        IPortableExpressionEvaluator? portableExpressionEvaluator = null,
+        IRuntimeValueConversionExecutor? valueConversionExecutor = null,
+        IExternalPayloadStore? externalPayloadStore = null)
     {
         ArgumentNullException.ThrowIfNull(inputBindingResolver);
         _inputBindingResolver = inputBindingResolver;

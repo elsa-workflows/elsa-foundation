@@ -29,7 +29,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
     IActivityBindingConversionPreviewer? conversionPreviewer = null, IVariableTypeDescriptorCatalog? typeDescriptors = null) : IActivityDataSelectionAnalyzer
 {
     private bool AuthoredAllowsNull(TypeReference type) => type.CollectionKind != CollectionKind.Single ||
-        (typeDescriptors?.GetDescriptors().FirstOrDefault(descriptor => descriptor.Alias == type.Alias)?.SupportsNull
+        (typeDescriptors?.GetDescriptors().FirstOrDefault(descriptor => StringComparer.OrdinalIgnoreCase.Equals(descriptor.Alias, type.Alias))?.SupportsNull
          ?? (TypeAliasConvention.IsAny(type.Alias) || type.Alias is "String" or "System.String" or
              "JsonElement" or "System.Text.Json.JsonElement" or "JsonNode" or "System.Text.Json.Nodes.JsonNode"));
 
@@ -255,6 +255,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 ? Visible(context, location).FirstOrDefault(item => item.Variable.ReferenceKey == variable.ReferenceKey &&
                     item.ScopeId == NormalizeScope(context.Document, variable.DeclaringScopeId))?.Variable.Type ?? valueType
                 : valueType;
+            if (intrinsic.Kind == AuthoredWorkflowIntrinsicKind.SetOutput &&
+                location.Node.Inputs.FirstOrDefault(input => input.ReferenceKey == "name")?.Value is { ExpressionType: "Literal" } nameArgument)
+            {
+                var name = nameArgument.Value switch { string text => text, JsonElement { ValueKind: JsonValueKind.String } json => json.GetString(), _ => null };
+                type = context.Document.Outputs.FirstOrDefault(output => StringComparer.Ordinal.Equals(output.Name, name))?.Type ?? type;
+            }
             definition = new("value", "Value", type, StorageDriverType: null, DisplayName: "Value", Category: null,
                 IsNullable: AuthoredAllowsNull(type), IsRequired: true);
         }

@@ -31,9 +31,9 @@ public sealed class WorkflowIntrinsicExecutor(
     private readonly IRuntimePayloadCapturePolicy _payloadCapturePolicy = payloadCapturePolicy ?? new Elsa.Workflows.Runtime.Services.ActivityExecutions.DefaultRuntimePayloadCapturePolicy();
     private readonly IRuntimeDurableValueStorageDriverRegistry? _storageDrivers;
     private readonly IWellKnownTypeRegistry? _typeRegistry;
-    private readonly IVariableTypeDescriptorCatalog? _typeDescriptors;
+    private readonly IRuntimeTypeNullability? _typeDescriptors;
 
-    public WorkflowIntrinsicExecutor(IWellKnownTypeRegistry typeRegistry, IVariableTypeDescriptorCatalog typeDescriptors,
+    public WorkflowIntrinsicExecutor(IWellKnownTypeRegistry typeRegistry, IRuntimeTypeNullability typeDescriptors,
         IWorkflowExecutionStateStore workflowExecutionStateStore, IActivityExecutionStateStore activityExecutionStateStore,
         IRuntimeInputBindingResolver inputBindingResolver, IDurableValueStateStore durableValueStateStore,
         IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator, TimeProvider timeProvider,
@@ -46,7 +46,7 @@ public sealed class WorkflowIntrinsicExecutor(
     {
         _typeRegistry = typeRegistry;
         _typeDescriptors = typeDescriptors;
-        _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore, valueConversionExecutor, typeRegistry);
+        _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore, valueConversionExecutor, typeRegistry, typeDescriptors);
     }
 
     public WorkflowIntrinsicExecutor(IWorkflowExecutionStateStore workflowExecutionStateStore,

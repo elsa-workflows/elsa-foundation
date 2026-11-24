@@ -43,7 +43,7 @@ internal sealed class StepVariableSession : IStepVariableSession
     private readonly bool _engineConsumer;
     private readonly WorkflowValuePolicies _valuePolicies;
     private readonly IWellKnownTypeRegistry? _registry;
-    private readonly IVariableTypeDescriptorCatalog? _typeDescriptors;
+    private readonly IRuntimeTypeNullability? _typeDescriptors;
     private IExecutionWarningSink? _warnings;
     internal void SetWarnings(IExecutionWarningSink warnings) => _warnings = warnings;
     private readonly Dictionary<(string ScopeId, string Key), VariableSessionRead> _reads = new();
@@ -71,7 +71,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         IReadOnlyDictionary<(string ScopeId, string Key), bool>? boundReferences = null,
         bool engineConsumer = false,
         IWellKnownTypeRegistry? registry = null,
-        IVariableTypeDescriptorCatalog? typeDescriptors = null)
+        IRuntimeTypeNullability? typeDescriptors = null)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(invocation);
@@ -264,7 +264,7 @@ internal sealed class StepVariableSession : IStepVariableSession
             throw Fault(new InvalidOperationException(
                 $"Variable '{resolved.Name}' is transient: a script cannot write it."));
         if (!_valuePolicies.UndefinedAsNull)
-            throw Fault(new InvalidOperationException($"VF-UNDEF-001: Variable '{resolved.Name}' cannot be assigned undefined; produce a value or enable UndefinedAsNull."));
+            throw Fault(new InvalidOperationException($"VF-UNDEF-001: Variable '{resolved.Name}' cannot be assigned undefined; assign a value or null, or enable UndefinedAsNull."));
         Stage(resolved, null, StepVariableWriteKind.WholeAssignment, droppedMembers: null);
     }
 

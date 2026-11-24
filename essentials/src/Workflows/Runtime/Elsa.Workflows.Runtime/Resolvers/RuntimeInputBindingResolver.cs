@@ -1,3 +1,5 @@
+using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -10,6 +12,17 @@ namespace Elsa.Workflows.Runtime.Resolvers;
 
 public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
 {
+    private readonly IWellKnownTypeRegistry? _types;
+    private readonly IRuntimeTypeNullability? _nullability;
+
+    public RuntimeInputBindingResolver() { }
+
+    public RuntimeInputBindingResolver(IWellKnownTypeRegistry types, IRuntimeTypeNullability nullability)
+    {
+        _types = types;
+        _nullability = nullability;
+    }
+
     public RuntimeResolvedInput Resolve(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context)
     {
         ArgumentNullException.ThrowIfNull(binding);
@@ -66,16 +79,26 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         return ResolveWorkflowRequestEnvelope(binding, reference, RequireReadable(envelope, binding));
     }
 
-    private static RuntimeResolvedInput ResolveVariable(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context)
+    private RuntimeResolvedInput ResolveVariable(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context)
     {
         var reference = binding.Variable!;
         var address = new RuntimeVariableValueAddress(reference.DeclaringScopeId, reference.VariableKey);
         if (context.VariableEnvelopes.TryGetValue(address, out var envelope))
         {
             context.VariableReadRecorder?.Record(envelope);
+            envelope = RequireReadable(envelope, binding);
+            // Materialize the declared variable's read value without assigning its retained Absent frame row.
+            if (envelope.Presence == ValuePresence.Absent && envelope.Policy.Lifecycle != DurableValueLifecycle.None)
+            {
+                if (NullPolicyDefaults.AcceptsNull(envelope.Type.ToTypeReference(), _types, _nullability))
+                    envelope = ValueEnvelope.Null(envelope.Type, envelope.Policy);
+                else if (envelope.Type.CollectionKind == CollectionKind.Single &&
+                         NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, _types, out var typeDefault))
+                    envelope = ValueEnvelope.Inline(envelope.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType()), envelope.Policy);
+            }
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
-                Envelope = Retype(RequireReadable(envelope, binding), binding.ConversionPlan?.SourceType ?? binding.TargetType)
+                Envelope = Retype(envelope, binding.ConversionPlan?.SourceType ?? binding.TargetType)
             };
         }
 

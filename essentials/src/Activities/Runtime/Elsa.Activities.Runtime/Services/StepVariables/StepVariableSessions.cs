@@ -1,3 +1,4 @@
+using Elsa.Serialization.Core;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -49,7 +50,7 @@ internal static class StepVariableSessions
         return new StepVariableSession(frames, executable, invocation, node, services.GetService<IWorkflowExecutableInputValidator>(), attemptId, suspends,
             BoundReferences(node, contract), activity is IStepVariableSessionConsumer,
             services.GetService<Elsa.Serialization.Core.IWellKnownTypeRegistry>(),
-            services.GetService<Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog>());
+            services.GetService<Elsa.Serialization.Core.IRuntimeTypeNullability>());
     }
 
     // The variables this node's reference inputs are bound to, from their pinned bindings, and whether each is writable.

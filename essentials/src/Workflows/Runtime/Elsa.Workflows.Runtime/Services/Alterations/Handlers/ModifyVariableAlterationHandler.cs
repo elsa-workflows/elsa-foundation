@@ -13,10 +13,10 @@ public sealed class ModifyVariableAlterationHandler(IWorkflowExecutableStore exe
 {
     private readonly IWorkflowExecutableStore _executableStore = executableStore ?? throw new ArgumentNullException(nameof(executableStore));
     private readonly IWellKnownTypeRegistry? _registry;
-    private readonly IVariableTypeDescriptorCatalog? _typeDescriptors;
+    private readonly IRuntimeTypeNullability? _typeDescriptors;
 
     public ModifyVariableAlterationHandler(IWorkflowExecutableStore executableStore,
-        IWellKnownTypeRegistry registry, IVariableTypeDescriptorCatalog typeDescriptors, TimeProvider? timeProvider = null)
+        IWellKnownTypeRegistry registry, IRuntimeTypeNullability typeDescriptors, TimeProvider? timeProvider = null)
         : this(executableStore, timeProvider)
     {
         _registry = registry;

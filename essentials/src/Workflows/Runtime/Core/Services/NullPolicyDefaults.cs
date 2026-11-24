@@ -38,7 +38,7 @@ public static class NullPolicyDefaults
         ArgumentNullException.ThrowIfNull(type);
         if (type.CollectionKind != CollectionKind.Single)
             return true;
-        if (descriptors?.GetDescriptors().FirstOrDefault(item => StringComparer.Ordinal.Equals(item.Alias, type.Alias)) is { } descriptor)
+        if (descriptors?.GetDescriptors().FirstOrDefault(item => StringComparer.OrdinalIgnoreCase.Equals(item.Alias, type.Alias)) is { } descriptor)
             return descriptor.SupportsNull;
         if (type.CollectionKind != CollectionKind.Single || TypeAliasConvention.IsAny(type.Alias) ||
             type.Alias is "String" or "System.String" or "JsonElement" or "System.Text.Json.JsonElement" or "JsonNode" or "System.Text.Json.Nodes.JsonNode")
@@ -48,6 +48,16 @@ public static class NullPolicyDefaults
             return false;
         return registry is not null && registry.TryGetTypeOrDefault(type.Alias, out var clrType) &&
                (!clrType.IsValueType || Nullable.GetUnderlyingType(clrType) is not null);
+    }
+
+    /// <summary>Uses the independently dispatched runtime null contract, without resolving a design picker catalog.</summary>
+    public static bool AcceptsNull(TypeReference type, IWellKnownTypeRegistry? registry,
+        IRuntimeTypeNullability? nullability)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        if (type.CollectionKind != CollectionKind.Single) return true;
+        if (nullability?.TryGetSupportsNull(type.Alias, out var supportsNull) == true) return supportsNull;
+        return AcceptsNull(type, registry);
     }
 
     /// <summary>Resolves contributed scalar aliases, including enum zero, through the activated type registry.</summary>

@@ -37,6 +37,7 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
   const sequence = await version("Elsa.Activities.Sequence.Activities.Sequence");
   const write = await version("Elsa.Activities.Primitives.Activities.WriteLine");
   const script = await version("Elsa.Activities.Scripting.Activities.RunJavaScript");
+  const publishEvent = await version("Elsa.Activities.Primitives.Activities.PublishEvent");
   const sequenceContract = await api<{ contract: { outcomes: { referenceKey: string; name: string; isEmitted: boolean }[] } }>(`/design/activities/versions/${sequence}`);
   const done = sequenceContract.contract.outcomes.find(item => item.isEmitted && item.name.toLowerCase() === "done")!;
   const type = (alias: string) => ({ alias, collectionKind: "Single" });
@@ -51,7 +52,7 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     ], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }] },
     provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", payload: { rootActivity: root([line()]), variables: [], outputMappings: [], outcomeMappings: [{ sourceOutcomeReferenceKey: done.referenceKey, boundaryOutcomeReferenceKey: "done" }] } }, layout: [], activityPresentation: []
   });
-  const activityRoute = `/workflows/activity-definitions?backend=legacy&definition=${created.definition.definitionId}&section=editor&draft=${created.draft.draftId}`;
+  const activityRoute = `/workflows/activity-definitions?definition=${created.definition.definitionId}&section=editor&draft=${created.draft.draftId}`;
   const saved = () => api<Draft>(`/design/activities/drafts/${created.draft.draftId}`);
   const note = async () => (await saved()).contract.inputs.find(member => member.referenceKey === "note")!;
   const row = () => page.locator('[data-contract-row-kind="input"][data-contract-reference-key="note"]');
@@ -119,6 +120,28 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     proof.activityTestRequest = requests.at(-1);
     await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
 
+    // A type edit must persist and change the reopened test-drive contract.
+    const countRow = () => page.locator('[data-contract-row-kind="input"][data-contract-reference-key="count"]');
+    await countRow().locator('[data-contract-field="type.alias"]').selectOption("String");
+    await expect.poll(async () => (await saved()).contract.inputs.find(member => member.referenceKey === "count")!.type.alias).toBe("String");
+    await page.reload(); await inputs();
+    await expect(countRow().locator('[data-contract-field="type.alias"]')).toHaveValue("String");
+    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await dialog.getByRole("combobox", { name: "Note", exact: true }).selectOption("Null");
+    const changedCount = dialog.getByRole("combobox", { name: "Count", exact: true });
+    await expect(changedCount.locator('option[value="Null"]')).toBeEnabled(); await changedCount.selectOption("Null");
+    await capture(page, info, "contract-type-nullable");
+    await runTest.click(); await expect(dialog.getByRole("region", { name: "Test run result", exact: true })).toContainText("Completed", { timeout: 30_000 });
+    proof.changedTypeRequest = requests.at(-1);
+    await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
+    await countRow().locator('[data-contract-field="type.alias"]').selectOption("Int32");
+    await expect.poll(async () => (await saved()).contract.inputs.find(member => member.referenceKey === "count")!.type.alias).toBe("Int32");
+    await page.reload(); await inputs();
+    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await expect(dialog.getByRole("combobox", { name: "Count", exact: true }).locator('option[value="Null"]')).toBeDisabled();
+    await capture(page, info, "contract-type-nonnullable");
+    await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
+
     const workflow = await api<{ definition: { id: string }; draft: { id: string } }>("/design/workflows/definitions", "POST", {
       name: `Null admission ${info.project.name} ${Date.now()}`, state: { variables: [], inputs: [
         { referenceKey: "topic", name: "topic", displayName: "Topic", type: type("String"), isRequired: true },
@@ -127,7 +150,7 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
       ], outputs: [], rootActivity: root([line()]) }, layout: [], activityPresentation: []
     });
     registerWorkflow(workflow.definition.id);
-    await page.goto(`/workflows/definitions?backend=legacy&definition=${workflow.definition.id}&section=editor&draft=${workflow.draft.id}`);
+    await page.goto(`/workflows/definitions?definition=${workflow.definition.id}&section=editor&draft=${workflow.draft.id}`);
     await page.getByRole("button", { name: "Test Run", exact: true }).click();
     const start = page.getByRole("button", { name: "Start Test Run", exact: true });
     await expect(start).toBeEnabled(); const beforeWorkflow = requests.length;
@@ -151,6 +174,21 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
 
     const promoted = await api<{ id: string }>(`/design/workflows/drafts/${workflow.draft.id}/promote`, "POST", { operationKey: crypto.randomUUID() });
     const published = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${promoted.id}/publish`, "POST", {});
+    // Deliberate isolated transport failure, followed by a real owned-server recovery.
+    // This qualifies metadata loading/refusal UX only; successful admission below uses real responses.
+    await page.goto(`/workflows/executables/${published.artifactId}?ref=${encodeURIComponent(published.sourceReferenceId)}`);
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
+    let releaseMetadata!: () => void;
+    const metadataGate = new Promise<void>(resolve => { releaseMetadata = resolve; });
+    const metadataUrl = (url: URL) => url.pathname.endsWith(`/runtime/workflows/executables/${published.artifactId}`);
+    await page.route(metadataUrl, async route => { await metadataGate; await route.abort("failed"); });
+    const heldMetadata = page.waitForRequest(request => request.method() === "GET" && metadataUrl(new URL(request.url())));
+    await page.getByRole("button", { name: "Run", exact: true }).click(); await heldMetadata;
+    await expect(page.getByRole("dialog", { name: "Run workflow", exact: true })).toHaveCount(0);
+    await capture(page, info, "published-metadata-loading");
+    releaseMetadata(); await expect(page.getByRole("heading", { name: "The executable could not be run", exact: true })).toBeVisible();
+    await capture(page, info, "published-metadata-refused"); await page.unroute(metadataUrl);
+    proof.metadataTransportControl = { isolatedAbort: true, noRunDialogBeforeContract: true, recoveryUsesRealServer: true };
     const runCases: unknown[] = [];
     for (const memo of [null, "null", ""]) {
       await page.goto(`/workflows/executables/${published.artifactId}?ref=${encodeURIComponent(published.sourceReferenceId)}`);
@@ -182,7 +220,7 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
     const diagnostics = await api<{ definition: { id: string }; draft: { id: string } }>("/design/workflows/definitions", "POST", {
       name: `Null diagnostics ${info.project.name} ${Date.now()}`, state: { variables: [{ referenceKey: "count", name: "count", type: type("Int32") }], inputs: [], outputs: [],
         strategyOptions: { nullHandling: { defaultOnNull: true, undefinedAsNull: false } },
-        rootActivity: root([{ nodeId: "substitute", activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueType: type("Any"), variable: { referenceKey: "count", declaringScopeId: "workflow" } }, inputs: [literal("value", null)], outputs: [] }, js("boundary", false), js("protected-boundary", true)]) }, layout: [], activityPresentation: []
+        rootActivity: root([{ nodeId: "substitute-input", activityVersionId: publishEvent, inputs: [literal("EventName", "s2-no-subscriber"), literal("IsLocalEvent", null)], outputs: [] }, { nodeId: "substitute", activityVersionId: "elsa.intrinsic.set@1", intrinsic: { kind: "Set", valueType: type("Any"), variable: { referenceKey: "count", declaringScopeId: "workflow" } }, inputs: [literal("value", null)], outputs: [] }, js("boundary", false), js("protected-boundary", true)]) }, layout: [], activityPresentation: []
     });
     registerWorkflow(diagnostics.definition.id);
     const diagVersion = await api<{ id: string }>(`/design/workflows/drafts/${diagnostics.draft.id}/promote`, "POST", { operationKey: crypto.randomUUID() });
@@ -200,12 +238,12 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
       await inspector.getByRole("tablist", { name: "Activity execution views", exact: true }).getByRole("tab", { name: "Data", exact: true }).click();
       const section = inspector.getByTestId("execution-warnings"); await expect(section).toBeVisible(); await section.scrollIntoViewIfNeeded(); return section;
     }
-    let section = await warnings("substitute"); await expect(section).toContainText("Information · VF-NULL-001"); await capture(page, info, "run-null-information");
+    let section = await warnings("substitute-input"); await expect(section).toContainText("Information · VF-NULL-001"); await capture(page, info, "run-null-information");
     section = await warnings("boundary");
     for (const code of ["VF-UNDEF-002", "VF-UNDEF-003", "VF-NUM-001"]) await expect(section).toContainText(code);
     await expect(section).toContainText("customer.privateKey"); await capture(page, info, "run-boundary-warnings");
     section = await warnings("protected-boundary"); await expect(section).toContainText("VF-UNDEF-002"); await expect(section).not.toContainText("customer.privateKey");
-    await capture(page, info, "run-protected-warning"); proof.diagnostics = { publication: diagPublication, run, inspectedNodes: ["substitute", "boundary", "protected-boundary"] };
+    await capture(page, info, "run-protected-warning"); proof.diagnostics = { publication: diagPublication, run, inspectedNodes: ["substitute-input", "boundary", "protected-boundary"] };
 
     const activity = await saved();
     const preflight = await api<{ isPublishable: boolean; reviewToken: string; minimumVersion: string; definitionHeadVersionId: string | null; diagnostics: unknown[] }>(`/design/activities/drafts/${activity.draftId}/publication-preflight`, "POST", { expectedDraftRevision: activity.revision, expectedDefinitionHeadVersionId: null });

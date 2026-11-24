@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Elsa.Serialization.Core;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
@@ -50,7 +52,7 @@ public sealed class ScriptVariableReadMaterializationTests
         foreach (var computed in new[] { false, true })
         {
             var snapshot = await MaterializeAsync(new Script(request => computed ? request.VariableReader!.Read("unset").Value : request.ParameterValues["variables.unset"]),
-                pinned: computed ? null : ("unset", "workflow", "unset"), computed: computed, visible: visible, registry: new EnumRegistry(), descriptors: supportsNull.HasValue ? new EnumCatalog(supportsNull.Value) : null);
+                pinned: computed ? null : ("unset", "workflow", "unset"), computed: computed, visible: visible, registry: new EnumRegistry(), descriptors: supportsNull.HasValue ? new EnumCatalog(supportsNull.Value) : null, useDi: supportsNull == true);
             Assert.Equal(ValuePresence.Absent, visible[0].Envelope.Presence);
             if (expected == "null") Assert.Equal(ValuePresence.ExplicitNull, snapshot.Values["value"].Presence);
             else Assert.Equal(expected, snapshot.Values["value"].InlineValue!.Value.GetRawText());
@@ -224,7 +226,7 @@ public sealed class ScriptVariableReadMaterializationTests
         bool computed = false,
         CountingPayloadStore? store = null,
         RuntimeVariableReadRecorder? recorder = null,
-        IReadOnlyList<RuntimeReadableVariable>? visible = null, IWellKnownTypeRegistry? registry = null, IVariableTypeDescriptorCatalog? descriptors = null)
+        IReadOnlyList<RuntimeReadableVariable>? visible = null, IWellKnownTypeRegistry? registry = null, IRuntimeTypeNullability? descriptors = null, bool useDi = false)
     {
         visible ??= Visible;
         var parameters = new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal);
@@ -239,11 +241,19 @@ public sealed class ScriptVariableReadMaterializationTests
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding("JavaScript", "script", parameters: parameters, variableReadFallback: fallback));
-        var materializer = new RuntimeActivityInputMaterializer(
-            new RuntimeInputBindingResolver(),
-            [],
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddSingleton<IWellKnownTypeRegistry>(registry ?? new EnumRegistry());
+        services.AddSingleton<IPortableExpressionEvaluator>(script);
+        if (descriptors is not null) services.AddSingleton<IRuntimeTypeNullability>(descriptors);
+        using var runtimeOnly = services.BuildServiceProvider();
+        Assert.Null(runtimeOnly.GetService<IVariableTypeDescriptorCatalog>());
+        Assert.Null(runtimeOnly.GetService<IExternalPayloadStore>());
+        IRuntimeActivityInputMaterializer materializer = useDi ? runtimeOnly.GetRequiredService<IRuntimeActivityInputMaterializer>() : new RuntimeActivityInputMaterializer(
+            inputBindingResolver: new RuntimeInputBindingResolver(),
+            structurePolicies: [],
             wellKnownTypeRegistry: registry,
-            portableExpressionEvaluator: script,
+            portableExpressionEvaluator: script, valueConversionExecutor: null,
             externalPayloadStore: store ?? new CountingPayloadStore(), typeDescriptors: descriptors);
         return await materializer.MaterializeSnapshotAsync(
             Consumer(binding),
@@ -297,11 +307,9 @@ public sealed class ScriptVariableReadMaterializationTests
         public bool TryGetTypeOrDefault(string alias, out Type type) { type = GetTypeOrDefault(alias); return type != typeof(object); }
     }
 
-    private sealed class EnumCatalog(bool supportsNull) : IVariableTypeDescriptorCatalog
+    private sealed class EnumCatalog(bool supportsNull) : IRuntimeTypeNullability
     {
-        public IEnumerable<TypeDescriptor> GetDescriptors() =>
-            [new("Acme.Status", typeof(Status), "Status", "Test", "select", new HashSet<CollectionKind>([CollectionKind.Single]), supportsNull, true, new HashSet<string> { "elsa.json" })];
-        public IEnumerable<IGrouping<string, TypeDescriptor>> GetDescriptorsByCategory() => GetDescriptors().GroupBy(item => item.Category);
+        public bool TryGetSupportsNull(string alias, out bool value) { value = supportsNull; return StringComparer.OrdinalIgnoreCase.Equals(alias, "Acme.Status"); }
     }
 
     private sealed class Script(Func<ExpressionEvaluationRequest, JsonElement> run) : IPortableExpressionEvaluator

@@ -56,3 +56,10 @@ Run dialog obtains nullability from its exact executable input contract through 
 its metadata loading/refusal path is included in the acceptance scope. Client-side requiredness refusals send no
 start request, and an independent API refusal verifies non-nullable null admission. Policies remain engineer JSON,
 without a Studio policy control. A locally downloadable owned-run archive is used while CI is explicitly deferred.
+
+
+The expanded journey changes an existing activity input from Int32 to String and back through the editor, saves and
+reopens each state, and verifies that the test drive follows the persisted type. It inspects an actual non-nullable
+Publish Event input substitution. A deliberately held then aborted metadata read qualifies only the published-Run
+loading/refusal experience; the subsequent recovery and admission use the owned server's real responses. Those
+controlled transport captures do not establish a server outage or a successful workflow admission.

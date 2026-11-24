@@ -64,11 +64,9 @@ public sealed class StepVariableSessionUnitTests
         Assert.Null(session.PendingFault);
     }
 
-    private sealed class NullableEnumCatalog : IVariableTypeDescriptorCatalog
+    private sealed class NullableEnumCatalog : IRuntimeTypeNullability
     {
-        public IEnumerable<TypeDescriptor> GetDescriptors() =>
-            [new("Acme.Status", typeof(UnassignedStatus), "Status", "Test", "select", new HashSet<CollectionKind>([CollectionKind.Single]), true, true, new HashSet<string> { "elsa.json" })];
-        public IEnumerable<IGrouping<string, TypeDescriptor>> GetDescriptorsByCategory() => GetDescriptors().GroupBy(item => item.Category);
+        public bool TryGetSupportsNull(string alias, out bool value) { value = true; return StringComparer.OrdinalIgnoreCase.Equals(alias, "Acme.Status"); }
     }
 
     private enum UnassignedStatus { First = 1 }
@@ -303,7 +301,7 @@ public sealed class StepVariableSessionUnitTests
         Dictionary<(string, string), bool>? bound = null,
         bool suspends = false,
         bool engineConsumer = false,
-        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null, IVariableTypeDescriptorCatalog? descriptors = null) =>
+        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null, IRuntimeTypeNullability? descriptors = null) =>
         Session([root], mode, bound, suspends, engineConsumer, policies, registry, countType, descriptors);
 
     private static StepVariableSession Session(
@@ -312,7 +310,7 @@ public sealed class StepVariableSessionUnitTests
         Dictionary<(string, string), bool>? bound = null,
         bool suspends = false,
         bool engineConsumer = false,
-        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null, IVariableTypeDescriptorCatalog? descriptors = null)
+        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null, IRuntimeTypeNullability? descriptors = null)
     {
         var node = StepVariableTestGraph.CountLeaf("node-root", typeof(SessionIncrementActivity), mode: mode);
         var executable = WorkflowExecutionHarness.NewExecutable(node,

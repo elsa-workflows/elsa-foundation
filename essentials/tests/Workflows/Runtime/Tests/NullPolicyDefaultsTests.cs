@@ -1,3 +1,6 @@
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText;
+using Microsoft.Extensions.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -23,6 +26,29 @@ public sealed class NullPolicyDefaultsTests
         public IEnumerable<TypeDescriptor> GetDescriptors() =>
             [new("Acme.Reference", typeof(Uri), "Reference", "Test", "text", new HashSet<CollectionKind>(Enum.GetValues<CollectionKind>()), supportsNull, true, new HashSet<string> { "elsa.json" })];
         public IEnumerable<IGrouping<string, TypeDescriptor>> GetDescriptorsByCategory() => GetDescriptors().GroupBy(item => item.Category);
+    }
+
+    [Theory]
+    [InlineData("Acme.Reference")]
+    [InlineData("acme.reference")]
+    [InlineData("System.Uri")]
+    public void Runtime_only_hosts_use_the_shared_type_null_contract_without_a_picker(string alias)
+    {
+        var services = new ServiceCollection();
+        new SerializationFeature().ConfigureServices(services);
+        services.AddSingleton<IVariableTypeDescriptorProvider>(new RuntimeProvider());
+        using var host = services.BuildServiceProvider();
+        Assert.Null(host.GetService<IVariableTypeDescriptorCatalog>());
+        var registry = host.GetRequiredService<IWellKnownTypeRegistry>();
+        registry.RegisterType(typeof(Uri), "Acme.Reference");
+        var authority = host.GetRequiredService<IRuntimeTypeNullability>();
+        Assert.False(NullPolicyDefaults.AcceptsNull(new TypeReference(alias), registry, authority));
+        Assert.True(NullPolicyDefaults.AcceptsNull(new TypeReference(alias, CollectionKind.Array), registry, authority));
+    }
+
+    private sealed class RuntimeProvider : IVariableTypeDescriptorProvider
+    {
+        public IEnumerable<TypeDescriptor> GetDescriptors() => new TestCatalog(false).GetDescriptors();
     }
 
     private enum TestChoice { First = 1 }

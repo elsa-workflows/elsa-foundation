@@ -89,8 +89,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
     /// <param name="mode">
     /// <see cref="Elsa3JavaScriptMode.Expression"/>: the result is one expression, as Elsa 4 evaluates it; a statement
-    /// form is wrapped in a function returning its completion value (plan D-15). Every value that leaves it ends in
-    /// <c>?? null</c>, because Elsa 3 returned null where Elsa 4 refuses undefined (spec 262).
+    /// form is wrapped in a function returning its completion value (plan D-15). Source values are preserved;
+    /// the workflow's pinned null and undefined policies govern the durable boundary (spec 1232 FR-023).
     /// <see cref="Elsa3JavaScriptMode.Script"/>: a RunJavaScript body, whose completion value becomes a <c>return</c>
     /// (plan D-16).
     /// </param>

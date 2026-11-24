@@ -47,7 +47,7 @@ internal sealed class RuntimeVariableReadFallback : IExpressionVariableReader
         IReadOnlyList<RuntimeReadableVariable> visibleVariables,
         IExternalPayloadStore? externalPayloadStore,
         CancellationToken cancellationToken, IWellKnownTypeRegistry? registry = null,
-        IVariableTypeDescriptorCatalog? typeDescriptors = null)
+        IRuntimeTypeNullability? typeDescriptors = null)
     {
         ArgumentNullException.ThrowIfNull(visibleVariables);
         var values = new Dictionary<string, JsonElement>(StringComparer.Ordinal);

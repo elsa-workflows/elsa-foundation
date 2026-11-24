@@ -866,7 +866,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
 
     private readonly record struct NullableRecord(int Value);
     private enum NullableStatus { First = 1 }
-    private sealed class NullableRecordCatalog : IVariableTypeDescriptorCatalog
+    private sealed class NullableRecordCatalog : IVariableTypeDescriptorCatalog, IVariableTypeDescriptorProvider
     {
         public IEnumerable<TypeDescriptor> GetDescriptors() => [new("Acme.NullableRecord", typeof(NullableRecord), "Record", "Test", "json",
             new HashSet<CollectionKind>([CollectionKind.Single]), true, true, new HashSet<string> { "elsa.json" }),
@@ -1081,6 +1081,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);
         new ExpressionsFeature().ConfigureServices(services);
         services.AddSingleton<IVariableTypeDescriptorCatalog, NullableRecordCatalog>();
+        services.AddSingleton<IVariableTypeDescriptorProvider, NullableRecordCatalog>();
         services.AddSingleton<IPortableExpressionHandler, TestExpressionHandler>();
         new SerializationFeature().ConfigureServices(services);
         var provider = services.BuildServiceProvider();

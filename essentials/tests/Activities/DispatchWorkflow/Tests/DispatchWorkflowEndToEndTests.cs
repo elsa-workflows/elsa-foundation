@@ -19,6 +19,35 @@ public sealed class DispatchWorkflowEndToEndTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Child_admission_uses_its_pinned_null_policy_independently_of_parent(bool childDefaultOnNull)
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync(
+            childValuePolicies: new(childDefaultOnNull, false));
+        var inputs = new Dictionary<string, object?> { ["message"] = "child null contract", ["count"] = null };
+        async Task<ParentDispatchRun> Start() => await fixture.StartParentAsync("null-policy", "parent-null-policy", "correlation",
+            dispatchInputs: inputs, parentValuePolicies: new(!childDefaultOnNull, false));
+        if (!childDefaultOnNull)
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(Start);
+            Assert.Contains("null", error.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(await fixture.ListDispatchesAsync("parent-null-policy"));
+            Assert.Empty(fixture.ChildProbe.Observations);
+            Assert.DoesNotContain(fixture.Actors.Envelopes, envelope => envelope.WorkflowExecutionId != "parent-null-policy" &&
+                envelope.Command.Kind == WorkflowExecutionCommandKind.Start);
+            return;
+        }
+        var run = await Start();
+        Assert.Equal(1, (await fixture.SweepAsync()).OutboxDeliveredCount);
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId))!.Status);
+        var observed = Assert.Single(fixture.ChildProbe.Observations).WorkflowInputs;
+        Assert.Equal(0, observed["count"]);
+        Assert.Null(observed["tenant"]);
+        Assert.Equal("from-default", observed["defaulted"]);
+    }
+
     [Fact]
     public async Task Detached_test_child_survives_parent_completion_until_scope_teardown()
     {

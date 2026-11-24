@@ -21,7 +21,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
     IExternalPayloadStore? externalPayloadStore,
     IRuntimeValueConversionExecutor? valueConversionExecutor = null,
     IWellKnownTypeRegistry? wellKnownTypeRegistry = null,
-    IVariableTypeDescriptorCatalog? typeDescriptors = null)
+    IRuntimeTypeNullability? typeDescriptors = null)
 {
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
 

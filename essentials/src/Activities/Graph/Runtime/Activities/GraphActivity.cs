@@ -53,8 +53,8 @@ public sealed class GraphActivity(
     /// </summary>
     public const string EntryCompletedWithoutMappingFaultCode = "activity.graph.entry-completed-without-mapping";
 
-    private IVariableTypeDescriptorCatalog? _typeDescriptors;
-    internal GraphActivity WithTypeDescriptors(IVariableTypeDescriptorCatalog? descriptors)
+    private IRuntimeTypeNullability? _typeDescriptors;
+    internal GraphActivity WithTypeDescriptors(IRuntimeTypeNullability? descriptors)
     {
         _typeDescriptors = descriptors;
         return this;

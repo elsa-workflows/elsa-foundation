@@ -63,8 +63,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
     }
 
     private IWellKnownTypeRegistry? _types;
-    private IVariableTypeDescriptorCatalog? _typeDescriptors;
-    internal GraphActivityScope WithTypes(IWellKnownTypeRegistry? types, IVariableTypeDescriptorCatalog? descriptors)
+    private IRuntimeTypeNullability? _typeDescriptors;
+    internal GraphActivityScope WithTypes(IWellKnownTypeRegistry? types, IRuntimeTypeNullability? descriptors)
     {
         _types = types;
         _typeDescriptors = descriptors;

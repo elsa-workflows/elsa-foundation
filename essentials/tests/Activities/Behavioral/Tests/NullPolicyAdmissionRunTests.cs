@@ -96,6 +96,48 @@ public sealed class NullPolicyAdmissionRunTests
         else { Assert.Equal(ActivityExecutionStatus.Faulted, run.State("script").Status); Assert.Contains("VF-ACT-004", run.State("script").Fault!.Message); Assert.Equal(3, stored.InlineValue!.Value.GetInt32()); }
     }
 
+    [Theory]
+    [InlineData("String")]
+    [InlineData("Any")]
+    public async Task Unassigned_nullable_direct_Set_reads_null_without_assigning_source(string alias)
+    {
+        using var publication = new MemberReadPublicationRunTests.Publication(false, false);
+        var read = new ArgumentState("value", new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "source", declaringScopeId = "workflow" }), "Variable"), null, null, null, null);
+        var root = new ActivityNode("set", "", [read], [])
+            { Intrinsic = new(AuthoredWorkflowIntrinsicKind.Set, new(alias), new VariableReference("target", "workflow")) };
+        var executable = await publication.Compile(root, variables: [new("source", "source", new(alias), null, null), new("target", "target", new(alias), null, null)]);
+        Assert.Null(executable.WorkflowVariables.Single(variable => variable.Name == "source").InitialBinding);
+        await using var harness = Harness();
+        var run = await harness.RunAsync(executable);
+        run.AssertWorkflowCompleted(); run.AssertCompleted("set");
+        Assert.Equal(ValuePresence.Absent, run.WorkflowState!.RootVariableFrame!.Values["source"].Presence);
+        Assert.Equal(ValuePresence.ExplicitNull, run.WorkflowState.RootVariableFrame.Values["target"].Presence);
+    }
+
+    [Fact]
+    public async Task Unassigned_nullable_direct_input_satisfies_required_presence_without_assigning_source()
+    {
+        using var publication = new MemberReadPublicationRunTests.Publication(false, false,
+            (typeof(NullableRequiredReader), "nullable-required", [new("Value", "Value", new("String"), null, "Value", null, IsNullable: true, IsRequired: true)]));
+        var root = new ActivityNode("reader", "nullable-required", [new("Value", new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "source", declaringScopeId = "workflow" }), "Variable"), null, null, null, null)], []);
+        var executable = await publication.Compile(root, variables: [new("source", "source", new("String"), null, null)]);
+        await using var harness = Harness();
+        var run = await harness.RunAsync(executable);
+        run.AssertWorkflowCompleted();
+        var step = run.AssertCompleted("reader");
+        Assert.Equal(ValuePresence.ExplicitNull, step.InputSnapshot!.Values["Value"].Presence);
+        Assert.True(step.Completion!.Result.InlineValue!.Value.GetBoolean());
+        var read = Assert.Single(step.InputSnapshot.InputReadSet!.Entries);
+        Assert.Equal(("workflow", "source", 0L), (read.ScopeId, read.VariableKey, read.Version));
+        Assert.Equal(ValuePresence.Absent, run.WorkflowState!.RootVariableFrame!.Values["source"].Presence);
+    }
+
+    public sealed class NullableRequiredReader : Activity<bool>
+    {
+        [ActivityInput] public required string? Value { get; set; }
+        protected override ValueTask<ActivityTransition<bool>> ExecuteAsync(ActivityExecutionContext context) => ValueTask.FromResult(ActivityTransition.Complete(Value is null));
+    }
+
     private static async Task<WorkflowExecutionRun> RunScript(string body, string alias, string name, bool undefinedAsNull, bool defaultOnNull)
     {
         using var publication = new MemberReadPublicationRunTests.Publication(false, false,
@@ -129,6 +171,7 @@ public sealed class NullPolicyAdmissionRunTests
         registry.RegisterType(typeof(bool), "Boolean");
         registry.RegisterType(typeof(string), "String");
         registry.RegisterType(typeof(JsonElement), "Any");
+        registry.RegisterType(typeof(NullableRequiredReader), typeof(NullableRequiredReader).FullName!);
         registry.RegisterType(typeof(BooleanReader), typeof(BooleanReader).FullName!);
         registry.RegisterType(typeof(RunJavaScript), typeof(RunJavaScript).FullName!);
         return registry;

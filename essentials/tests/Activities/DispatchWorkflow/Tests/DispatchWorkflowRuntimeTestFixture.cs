@@ -71,7 +71,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         bool authoredNotificationChild = false,
         bool terminalAfterNotification = false,
         bool ordinaryFaultAfterNotification = false,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        WorkflowValuePolicies? childValuePolicies = null)
     {
         var services = new ServiceCollection();
         var timeProvider = new FakeTimeProvider(Now);
@@ -115,7 +116,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 terminalAfterNotification ? typeof(NotificationThenCompleteRootProbeActivity) : typeof(NotificationRootProbeActivity) :
             authoredFaultChild ? typeof(AuthoredFaultChildProbeActivity) :
             replaySafeChild ? typeof(ReplaySafeChildProbeActivity) : typeof(ChildProbeActivity));
-        await fixture.SeedChildAsync();
+        await fixture.SeedChildAsync(childValuePolicies);
         return fixture;
     }
 
@@ -134,7 +135,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         WorkflowTestScope? testScope = null,
         int? controlConsumerVersion = null,
         string controlResponse = "auto",
-        WorkflowExecutionPartition? parentPartition = null)
+        WorkflowExecutionPartition? parentPartition = null,
+        WorkflowValuePolicies? parentValuePolicies = null)
     {
         var parentExecutable = NewParentExecutable(
             caseId,
@@ -145,6 +147,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             cancelChildOnParentCancellation,
             controlConsumerVersion,
             controlResponse);
+        if (parentValuePolicies is not null) parentExecutable = WithValuePolicies(parentExecutable, parentValuePolicies);
         var parentReference = NewSourceReference(
             sourceReferenceId: $"source-parent-{caseId}",
             identity: parentExecutable.Identity,
@@ -333,11 +336,19 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
 
     public ValueTask DisposeAsync() => _provider.DisposeAsync();
 
-    private async ValueTask SeedChildAsync()
+    private async ValueTask SeedChildAsync(WorkflowValuePolicies? policies = null)
     {
-        await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewChildExecutable(activityType: _childActivityType));
+        var child = NewChildExecutable(activityType: _childActivityType);
+        if (policies is not null) child = WithValuePolicies(child, policies);
+        await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(child);
         await _provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(ChildSourceReference());
     }
+
+    private static WorkflowExecutable WithValuePolicies(WorkflowExecutable executable, WorkflowValuePolicies policies) =>
+        new(executable.Identity, executable.RootActivity, executable.ResumeTargets, executable.CreatedAt,
+            executable.CompatibilityMetadata, executable.InputContract, executable.Dependencies,
+            executable.RuntimeRequirements, executable.StorageDriverRequirements, executable.IncidentStrategy,
+            executable.PersistenceMode, executable.WorkflowVariables, policies);
 
     internal static WorkflowExecutableSourceReference ChildSourceReference() =>
         NewSourceReference("source-child", ChildIdentity, "publication-child", "slot-child");
@@ -376,7 +387,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 [
                     new WorkflowDeclaredInput("message", new Elsa.Primitives.Models.TypeReference("String"), true),
                     new WorkflowDeclaredInput("count", new Elsa.Primitives.Models.TypeReference("Int32"), true),
-                    new WorkflowDeclaredInput("tenant", new Elsa.Primitives.Models.TypeReference("String"), false),
+                    new WorkflowDeclaredInput("tenant", new Elsa.Primitives.Models.TypeReference("String"), false, isNullable: true),
                     new WorkflowDeclaredInput(
                         "defaulted",
                         new Elsa.Primitives.Models.TypeReference("String"),

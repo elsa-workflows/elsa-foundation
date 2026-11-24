@@ -24,7 +24,7 @@ public sealed class RuntimeOutputCaptureProjector
     private readonly IRuntimeDurableValueStorageDriverRegistry _storageDrivers;
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor;
     private readonly IWellKnownTypeRegistry? _types;
-    private readonly IVariableTypeDescriptorCatalog? _typeDescriptors;
+    private readonly IRuntimeTypeNullability? _typeDescriptors;
     private WorkflowValuePolicies _policies = WorkflowValuePolicies.Off;
     private IExecutionWarningSink? _warnings;
 
@@ -32,7 +32,7 @@ public sealed class RuntimeOutputCaptureProjector
         IRuntimeDurableValueStorageDriverRegistry storageDrivers,
         IRuntimeValueConversionExecutor valueConversionExecutor,
         IWellKnownTypeRegistry types,
-        IVariableTypeDescriptorCatalog typeDescriptors) : this(storageDrivers, valueConversionExecutor)
+        IRuntimeTypeNullability typeDescriptors) : this(storageDrivers, valueConversionExecutor)
     {
         _types = types;
         _typeDescriptors = typeDescriptors;
