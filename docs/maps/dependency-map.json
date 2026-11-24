@@ -3098,6 +3098,57 @@
       ]
     },
     {
+      "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj",
+      "name": "Elsa.ActorFoundation.Contracts",
+      "kind": "source",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "Contracts",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.ActorFoundation.Contracts",
+      "line": "B",
+      "edges": []
+    },
+    {
+      "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj",
+      "name": "Elsa.ActorFoundation.Hosting",
+      "kind": "source",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "Hosting",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.ActorFoundation.Hosting",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Contracts",
+          "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj"
+        }
+      ]
+    },
+    {
+      "path": "essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj",
+      "name": "Elsa.ActorFoundation.Model.Contracts",
+      "kind": "source",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "Model.Contracts",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.ActorFoundation.Model.Contracts",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Contracts",
+          "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj"
+        }
+      ]
+    },
+    {
       "path": "essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
       "name": "Elsa.Api.AspNetCore",
       "kind": "source",
@@ -14717,6 +14768,25 @@
       ]
     },
     {
+      "path": "essentials/tests/ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj",
+      "name": "Elsa.ActorFoundation.TestSupport",
+      "kind": "test",
+      "domain": "Elsa.ActorFoundation",
+      "sub_domain": "TestSupport",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Contracts",
+          "path": "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj"
+        }
+      ]
+    },
+    {
       "path": "essentials/tests/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj",
       "name": "Elsa.Api.Capabilities.Tests",
       "kind": "test",
@@ -15087,6 +15157,16 @@
           "type": "internal",
           "id": "Elsa.Activities.Sequence",
           "path": "essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Hosting",
+          "path": "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ActorFoundation.Model.Contracts",
+          "path": "essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj"
         },
         {
           "type": "internal",
