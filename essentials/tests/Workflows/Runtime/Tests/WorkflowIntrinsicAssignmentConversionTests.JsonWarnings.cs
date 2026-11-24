@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Expressions.Core.Constants;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -78,7 +79,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
             "literal" => new RuntimeInputBinding("value", type, policy, RuntimeInputBindingSource.Literal,
                 literal: ValueEnvelope.Inline(type, raw, policy)),
             "member" => new RuntimeInputBinding("value", type, policy, RuntimeInputBindingSource.WorkflowRequestMember,
-                new RuntimeReadSelection(1, ["count"], RuntimeReadSelectionMode.DeferredFit), workflowRequest: new RuntimeWorkflowRequestReference("source")),
+                selection: new RuntimeReadSelection(1, ["count"], RuntimeReadSelectionMode.DeferredFit), workflowRequest: new RuntimeWorkflowRequestReference("source")),
             _ => new RuntimeInputBinding("value", type, policy, RuntimeInputBindingSource.Expression,
                 expression: new RuntimeExpressionBinding("test", "raw", capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1))
         };
