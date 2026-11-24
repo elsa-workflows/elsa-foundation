@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "659bb30f96829f94ce16f7458c8c79c64fe60dcb",
+  "last_publish_commit": "4532df61f907cfd62b7ad7e06640c1a0d8b52fd5",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -141,6 +141,31 @@
       "package_id": "Elsa.Activities.Sequence",
       "version": "4.0.22-preview",
       "commit": "3fb6c8ec2cb87183be99087f4d5d1f31c1e4a7ba"
+    },
+    {
+      "package_id": "Elsa.ActorFoundation.BuiltIn.Hosting",
+      "version": "4.0.0-preview",
+      "commit": "4532df61f907cfd62b7ad7e06640c1a0d8b52fd5"
+    },
+    {
+      "package_id": "Elsa.ActorFoundation.BuiltIn.Runtime",
+      "version": "4.0.0-preview",
+      "commit": "4532df61f907cfd62b7ad7e06640c1a0d8b52fd5"
+    },
+    {
+      "package_id": "Elsa.ActorFoundation.Contracts",
+      "version": "4.0.0-preview",
+      "commit": "4532df61f907cfd62b7ad7e06640c1a0d8b52fd5"
+    },
+    {
+      "package_id": "Elsa.ActorFoundation.Hosting",
+      "version": "4.0.0-preview",
+      "commit": "4532df61f907cfd62b7ad7e06640c1a0d8b52fd5"
+    },
+    {
+      "package_id": "Elsa.ActorFoundation.Model.Contracts",
+      "version": "4.0.0-preview",
+      "commit": "4532df61f907cfd62b7ad7e06640c1a0d8b52fd5"
     },
     {
       "package_id": "Elsa.Agent",
