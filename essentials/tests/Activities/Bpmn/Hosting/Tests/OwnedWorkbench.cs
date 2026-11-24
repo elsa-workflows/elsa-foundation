@@ -253,7 +253,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
 
     internal object[] DescribeBinaries(string? sourceRevision, bool includePublishing = false, bool includeBpmnAuthoring = false)
     {
-        var binaries = new[] { "Elsa.Workbench", "Elsa.Workflows.Runtime.Core", "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+        var binaries = new[] { "Elsa.Workbench.Host", "Elsa.Workflows.Runtime.Core", "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
             "Elsa.Activities.Bpmn.Core", "Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Api", "Bpmn.Model", "Bpmn.Semantics",
             "Elsa.Workflows.Design.Core", "Elsa.Workflows.Design.Api", "Elsa.Workflows.Design.Persistence.EntityFrameworkCore", "Elsa.Persistence.EntityFramework" }
             .Concat(includePublishing ? new[] { "Elsa.Workflows.Publishing.Core", "Elsa.Workflows.Publishing" } : [])
@@ -261,7 +261,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             .Select(name => Path.Combine(Path.GetDirectoryName(AssemblyPath)!, name + ".dll"))
             .Select(path => new { file = Path.GetFileName(path), productVersion = FileVersionInfo.GetVersionInfo(path).ProductVersion,
                 sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) }).ToArray();
-        if (sourceRevision is not null && binaries.Single(binary => binary.file == "Elsa.Workbench.dll").productVersion?.Contains(sourceRevision, StringComparison.Ordinal) != true)
+        if (sourceRevision is not null && binaries.Single(binary => binary.file == "Elsa.Workbench.Host.dll").productVersion?.Contains(sourceRevision, StringComparison.Ordinal) != true)
             throw Failure("The owned Workbench product revision does not match its expected evidence source.");
         return binaries.Cast<object>().ToArray();
     }

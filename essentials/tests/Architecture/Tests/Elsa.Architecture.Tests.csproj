@@ -42,8 +42,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Cli\Elsa.Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\extensions\Integrations\src\Templates\Elsa.Integrations.Templates.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\apps\Elsa.Workbench.Host\Elsa.Workbench.Host.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\apps\Elsa.Essentials.Host\Elsa.Essentials.Host.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\src\Cli\Worker\Elsa.Cli.Worker.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\src\Workflows\Design\CodeGeneration\Elsa.Workflows.Design.CodeGeneration.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
@@ -212,6 +213,7 @@
     <ProjectReference Include="..\..\..\src\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
+    <ProjectReference Include="..\..\..\src\Foundation\Identity\OpenIddict\EntityFrameworkCore\Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Http\JavaScript\Elsa.Http.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\src\Locking\Database\Elsa.Locking.Database.csproj" />
     <ProjectReference Include="..\..\..\src\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />

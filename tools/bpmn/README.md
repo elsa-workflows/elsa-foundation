@@ -10,7 +10,7 @@ Build `DeliveryRecoveryRead/DeliveryRecoveryRead.csproj` through the normal buil
 
 ```sh
 python3 tools/bpmn/qualify-hosting.py capture-baseline \
-  --assembly /absolute/owned/build/Elsa.Workbench.dll \
+  --assembly /absolute/owned/build/Elsa.Workbench.Host.dll \
   --content-root /absolute/owned/content \
   --owner-manifest /absolute/owned/controller-manifest.json \
   --base-url http://127.0.0.1:53186 \

@@ -351,12 +351,6 @@
       "medianMinutes": 0.01
     },
     {
-      "project": "essentials/tests/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj",
-      "tier": "integration",
-      "trait": "testcontainers",
-      "medianMinutes": null
-    },
-    {
       "project": "essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.17
@@ -1108,7 +1102,6 @@
           "rules",
           "runtime-distributed",
           "transaction-topology",
-          "workbench-openiddict",
           "connections",
           "agent-journal"
         ]
@@ -1185,11 +1178,6 @@
       "require": "ELSA_COMPENSATION_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
-      "suite": "workbench-openiddict",
-      "project": "essentials/tests/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj",
-      "require": "ELSA_WORKBENCH_OPENIDDICT_REQUIRE_NATIVE_PROVIDERS"
-    },
-    {
       "suite": "cluster-membership",
       "project": "essentials/tests/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_CLUSTER_MEMBERSHIP_EF_REQUIRE_NATIVE_PROVIDERS"
@@ -1217,7 +1205,7 @@
     {
       "suite": "identity",
       "project": "essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj",
-      "require": ""
+      "require": "ELSA_OPENIDDICT_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
       "suite": "opentelemetry",

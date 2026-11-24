@@ -2,7 +2,7 @@
   "solution": {
     "path": "Elsa.Server.slnx",
     "projects": [
-      "apps/Elsa.Workbench/Elsa.Workbench.csproj",
+      "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj",
       "essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj",
       "essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj",
       "essentials/src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj",
@@ -87,6 +87,7 @@
       "essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj",
       "essentials/src/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj",
       "essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj",
+      "essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj",
       "essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj",
       "essentials/src/Git/Elsa.Git.csproj",
       "essentials/src/Http/Core/Elsa.Http.Core.csproj",

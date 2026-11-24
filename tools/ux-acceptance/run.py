@@ -809,7 +809,7 @@ class OwnedBackendRestart:
             self.started = time.time_ns()
             self.processes[name] = process
             self.report['ownedPids'][name] = process.pid
-        self.process = self.stack.enter_context(host(self.item['backend'], 'Elsa.Workbench.dll',
+        self.process = self.stack.enter_context(host(self.item['backend'], 'Elsa.Workbench.Host.dll',
             self.item['backendUrl'], '/__qualification/ready', self.output / f'{name}.log', self.env, on_started=record))
 
     def pump(self):
@@ -901,7 +901,7 @@ def playback_profiles(stack, data, backend_project, studio_project, output, env,
                           'historyReaderOmission': 'PlaybackQualificationWithoutHistory' if name == 'unsupported' else None,
                           'features': {'backend': sorted(features), 'studio': sorted(studio_shells['CShells']['Shells']['Default']['Features'])},
                           'binaryAndConfigHashes': {'backend': fingerprints(backend), 'studio': fingerprints(studio)}}
-        backend_process = stack.enter_context(host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / f'playback-{name}-backend.log', env))
+        backend_process = stack.enter_context(host(backend, 'Elsa.Workbench.Host.dll', backend_url, '/__qualification/ready', output / f'playback-{name}-backend.log', env))
         owned_processes[f'playback-{name}-backend'] = backend_process
         owned_pids[f'playback-{name}-backend'] = backend_process.pid
         studio_process = stack.enter_context(host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / f'playback-{name}-studio.log',
@@ -1083,7 +1083,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
     coverage_profiles = 'recorded activity playback coverage and access' in selected
     fixture_built = False
     owned_processes = {}
-    backend_project = ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj'
+    backend_project = ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
     report = {'sourceSha': sha, 'headSha': head, 'dirty': bool(dirty),
               'kind': 'composed-source', 'studioSourceSha': studio_sha, 'studioDirty': bool(studio_dirty), 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review',
@@ -1184,7 +1184,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                 password = f'Ux-{secrets.token_urlsafe(18)}-9a'
                 seed = {'user': RESTRICTED_USER, 'password': password, 'role': RESTRICTED_SEED_ROLE}
                 configure_owned_host(combined, seed=seed)
-                with host(combined['backend'], 'Elsa.Workbench.dll', combined['backendUrl'], '/health/ready', output / 'backend-restricted-seed.log', env) as seed_process:
+                with host(combined['backend'], 'Elsa.Workbench.Host.dll', combined['backendUrl'], '/health/ready', output / 'backend-restricted-seed.log', env) as seed_process:
                     owned_processes['restrictedSeedBackend'] = seed_process
                     report['ownedPids']['restrictedSeedBackend'] = seed_process.pid
                 receipt = restrict_seeded_reader(combined['backend'])
@@ -1218,7 +1218,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                         browser_env['UX_RESTART_CONTROL_DIR'] = str(restart.control)
                         backend_process = restart.process
                     else:
-                        backend_process = owned.enter_context(host(item['backend'], 'Elsa.Workbench.dll', item['backendUrl'], '/__qualification/ready' if item['name'] == 'combined' else '/health/ready', output / f"{item['prefix']}backend.log", backend_env))
+                        backend_process = owned.enter_context(host(item['backend'], 'Elsa.Workbench.Host.dll', item['backendUrl'], '/__qualification/ready' if item['name'] == 'combined' else '/health/ready', output / f"{item['prefix']}backend.log", backend_env))
                     owned_processes[f'{prefix}backend'] = backend_process
                     report['ownedPids'][f'{prefix}backend'] = backend_process.pid
                     studio_process = owned.enter_context(host(item['studio'], 'Elsa.Studio.Web.dll', item['studioUrl'], '/studio-runtime.js', output / f"{item['prefix']}studio.log",
@@ -1256,7 +1256,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
         if fixture_built:
             try:
                 command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=false', '-m:1', '-nr:false', '-v:q', '-nologo'], output / 'fixture-cleanup-build.log')
-                dll = backend_project.parent / 'bin/Debug/net10.0/Elsa.Workbench.dll'
+                dll = backend_project.parent / 'bin/Debug/net10.0/Elsa.Workbench.Host.dll'
                 markers = ('DashboardQualificationBootstrap', 'QualificationPrincipals', 'DashboardQualificationServiceExclusions', 'ActivityDataSelectionProof')
                 marker_absence = {marker: marker.encode() not in dll.read_bytes() and marker.encode('utf-16-le') not in dll.read_bytes() for marker in markers}
                 if not all(marker_absence.values()):

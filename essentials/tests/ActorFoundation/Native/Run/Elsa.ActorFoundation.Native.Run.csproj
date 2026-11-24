@@ -35,6 +35,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../../../../tools/ci/actor-foundation/WorkbenchPostgresPreview.cs" Link="WorkbenchPostgresPreview.cs" />
-    <Compile Include="../../../../../apps/Elsa.Workbench/CorePreview/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
+    <Compile Include="../../../../../apps/Elsa.Workbench.Host/CorePreview/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
   </ItemGroup>
 </Project>

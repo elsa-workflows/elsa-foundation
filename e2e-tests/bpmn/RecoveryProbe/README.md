@@ -7,12 +7,12 @@ Build two separate Workbench outputs outside the checkout. The fault feature is 
 ```powershell
 $probe = '/absolute/private/probe'
 $normal = '/absolute/private/normal'
-dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -c Release --artifacts-path $probe -p:ElsaBpmnRecoveryProbe=true -p:RestoreLockedMode=true
-dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -c Release --artifacts-path $normal -p:ElsaBpmnRecoveryProbe=false -p:RestoreLockedMode=true
+dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Release --artifacts-path $probe -p:ElsaBpmnRecoveryProbe=true -p:RestoreLockedMode=true
+dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -c Release --artifacts-path $normal -p:ElsaBpmnRecoveryProbe=false -p:RestoreLockedMode=true
 dotnet build tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj -p:RestoreLockedMode=true
 ./e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1 `
-  -ProbeAssembly "$probe/bin/Elsa.Workbench/release/Elsa.Workbench.dll" `
-  -NormalAssembly "$normal/bin/Elsa.Workbench/release/Elsa.Workbench.dll" `
+  -ProbeAssembly "$probe/bin/Elsa.Workbench.Host/release/Elsa.Workbench.Host.dll" `
+  -NormalAssembly "$normal/bin/Elsa.Workbench.Host/release/Elsa.Workbench.Host.dll" `
   -ReaderAssembly tools/bpmn/DeliveryRecoveryRead/bin/Debug/net10.0/DeliveryRecoveryRead.dll `
   -EvidencePath /absolute/private/recovery.json `
   -SourceRevision "$(git rev-parse HEAD)+explicit-candidate-worktree"

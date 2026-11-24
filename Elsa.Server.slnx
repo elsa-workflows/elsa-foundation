@@ -228,8 +228,9 @@
     <Project Path="extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/apps/">
+    <Project Path="apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj" />
     <Project Path="apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
-    <Project Path="apps/Elsa.Workbench/Elsa.Workbench.csproj" />
+    <Project Path="apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj" />
   </Folder>
   <Folder Name="/essentials/" />
   <Folder Name="/essentials/build/">
@@ -427,6 +428,7 @@
   <Folder Name="/essentials/src/Foundation/Identity/OpenIddict/">
     <Project Path="essentials/src/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj" />
     <Project Path="essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
+    <Project Path="essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Foundation/Identity/Persistence/">
     <Project Path="essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
@@ -789,7 +791,6 @@
     <Project Path="essentials/tests/Locking/Database/ProviderTests/Elsa.Locking.Database.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Modularity/">
-    <Project Path="essentials/tests/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj" />
     <Project Path="essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/Modularity/EntityFramework/">

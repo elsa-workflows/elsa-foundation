@@ -24,7 +24,7 @@ class WorkflowScopeTests(unittest.TestCase):
     def test_composed_acceptance_inputs_and_deletions_select_studio(self):
         for path in ['tools/ux-acceptance/run.py', 'tools/ci/studio_gate.py',
                      'Studio/tests/acceptance/journeys.spec.ts',
-                     'apps/Elsa.Workbench/shells.json',
+                     'apps/Elsa.Workbench.Host/shells.json',
                      'extensions/Agent/agents/Core/Manifest.cs']:
             with self.subTest(path=path):
                 self.assertTrue(self.selected(paths=[path], pull_request={'draft': True})['studio'])

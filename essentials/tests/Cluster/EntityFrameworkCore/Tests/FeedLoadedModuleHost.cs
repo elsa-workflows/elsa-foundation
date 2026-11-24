@@ -26,7 +26,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 internal sealed class FeedLoadedModuleHost : IAsyncDisposable
 {
     public const string FoundationHost = "Elsa.Foundation.Host";
-    public const string Workbench = "Elsa.Workbench";
+    public const string Workbench = "Elsa.Workbench.Host";
     private const string ShellName = "default";
 
     private readonly ServiceProvider _root;

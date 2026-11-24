@@ -284,7 +284,7 @@ class OwnedBackend:
         if self.process is not None:
             raise ValueError('The owned backend is already running')
         self.generation += 1
-        self.context = host(self.directory, 'Elsa.Workbench.dll', self.url, '/health/ready',
+        self.context = host(self.directory, 'Elsa.Workbench.Host.dll', self.url, '/health/ready',
                             self.output / f'backend-{self.generation}.log', self.env, cancelled=self.closing)
         self.process = self.context.__enter__()
 
@@ -363,7 +363,7 @@ class OwnedBackend:
             raise ValueError('Concurrent qualification requires one running owned primary and its selected source boundary')
         directory = self.concurrent_directory
         if not directory.exists():
-            prepare_host(ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj', directory)
+            prepare_host(ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj', directory)
         settings = json.loads((self.directory / 'appsettings.json').read_text())
         connection = f'Data Source={self.directory / "elsa.db"}'
         settings['ConnectionStrings']['Elsa'] = connection
@@ -386,7 +386,7 @@ class OwnedBackend:
         shutil.copytree(self.directory / 'packages', directory / 'packages', dirs_exist_ok=True)
         self.concurrent_url = f'http://localhost:{free_port()}'
         self.concurrent_generation += 1
-        self.concurrent_context = host(directory, 'Elsa.Workbench.dll', self.concurrent_url, '/health/ready',
+        self.concurrent_context = host(directory, 'Elsa.Workbench.Host.dll', self.concurrent_url, '/health/ready',
             self.output / f'concurrent-node-{self.concurrent_generation}.log', self.env, cancelled=self.closing)
         self.concurrent_process = self.concurrent_context.__enter__()
 
@@ -574,7 +574,7 @@ class OwnedBackend:
             if self.peer_process is None:
                 peer_directory, peer_url = self.scope_peer
                 self.peer_generation += 1
-                self.peer_context = host(peer_directory, 'Elsa.Workbench.dll', peer_url, '/health/ready', self.output / f'scope-peer-{self.peer_generation}.log', self.env, cancelled=self.closing)
+                self.peer_context = host(peer_directory, 'Elsa.Workbench.Host.dll', peer_url, '/health/ready', self.output / f'scope-peer-{self.peer_generation}.log', self.env, cancelled=self.closing)
                 self.peer_process = self.peer_context.__enter__()
             peer = {'url': self.scope_peer[1], 'processId': self.peer_process.pid, 'runtimeAndDesignStoresIsolated': True,
                 'identityStoreSharedWithOwnedPrimary': True, 'sourceSha': self.env['UX_SOURCE_SHA']}
@@ -821,7 +821,7 @@ def run(output, suite='standalone-triggers', journey=None, studio_shape='coordin
         report['executionSuite'] = execution_suite
         if dirty:
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
-        backend_project = ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj'
+        backend_project = ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
         if studio_shape not in {'application', 'coordinated-sdk'}:
             raise ValueError('Unknown owned Studio composition')
         application_project = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
