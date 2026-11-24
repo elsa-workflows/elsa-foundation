@@ -42,12 +42,13 @@ recorded approval before the tasks after them start.
 - [ ] T005 Add `typeof(Elsa3JsonReconciliationFeature).Assembly` to the Elsa 3 feature assemblies in
   `apps/Elsa.Workbench/Program.cs`, next to the four existing Elsa 3 entries; leave the feature disabled in
   `apps/Elsa.Workbench/shells.json`.
-- [ ] T006 Run `dotnet restore Elsa.Server.slnx` and commit the updated `apps/Elsa.Workbench/packages.lock.json` (CI
+- [ ] T006 Run `dotnet restore Elsa.Server.slnx` and commit every `packages.lock.json` it changes (at least
+  `apps/Elsa.Workbench/`, `Essentials/tests/Modularity/Tests/` and `Essentials/tests/Modularity/ProviderTests/`; CI
   restores in locked mode); regenerate the maps (`dotnet run --project tools/maps/Elsa.Maps.Generator -- all`) and
   commit any changed solution filters; build the Workbench and run the architecture tests that cover feature
   composition and the Elsa 3 boundary (`Essentials/tests/Architecture/Tests/`).
-- [ ] T007 Find and verify the configuration override that enables `Elsa3JsonReconciliation` (`SourceId`, `Files` or
-  `FolderPath`) together with `Elsa3ImportActivitiesEntityFrameworkCore`, and sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` for one Workbench run without editing the
+- [ ] T007 Find and verify the configuration override that enables `Elsa3JsonReconciliation` (`Options:SourceId`, and
+  `Options:FolderPath` or `Options:Files` with `{Order, FilePath}` entries) together with `Elsa3ImportActivitiesEntityFrameworkCore`, and sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` for one Workbench run without editing the
   committed `shells.json` (environment variables or a run-specific shells file, R-5); after start, set activity input
   and output capture to snapshot level and a `variableWrites` override with `PUT /runtime/workflows/diagnostics/settings`
   (in-memory, so after every start). Record the exact commands in `JTest/README.md`.
@@ -85,7 +86,7 @@ recorded approval before the tasks after them start.
   list; record the approval link in `JTest/ledger/baseline-failures.md`.
 - [ ] T017 [US1] Apply the approved fixes to `JTest/tests/`, `JTest/templates/` and `JTest/import-and-publish-workflows.json`
   (which omits the two `performance-baseline-dispatch*` definitions its suite needs),
-  one commit, with the ledger row named per change; mark 3.6.3-defect suites `blocked: <defect>` in
+  one commit, with the ledger row named per change; mark 3.6.3-defect suites `blocked: 3.6.3 defect <defect>` in
   `JTest/ledger/suites.md` (FR-008).
 - [ ] T018 [US1] Rerun all suites on a fresh container and confirm every unblocked suite passes (SC-001); record the
   run.
@@ -138,7 +139,8 @@ cannot produce with the same meaning fails the template with the output named (F
 - [ ] T024 [P] [US3] Write `templates-elsa4/elsa-api-login-template.json`: `elsa-authenticate` per
   contracts/templates.md.
 - [ ] T025 [P] [US3] Write the Elsa 4 versions of the templates added in T020, in `templates-elsa4/`, with outputs of
-  the same meaning (the execute call is `POST /runtime/workflows/executables/{artifactId}/execute`). The definition
+  the same meaning (the execute template follows contracts/templates.md, *Execute*: resolve the published artifact, start, read the
+  instance until terminal within a deadline, take its `outputs`). The definition
   import, publish, delete and composite templates are not written for Elsa 4 (contracts/templates.md).
 - [ ] T026 [P] [US3] Write `templates-elsa4/elsa-api-workflow-instance-templates.json`: get, search, not-exists and
   variable value, with the status and version translations.
@@ -174,7 +176,8 @@ cannot produce with the same meaning fails the template with the output named (F
 - [ ] T038 [US3] Once spec 1207 is implemented on the initiative branch (its status Implemented), merge the initiative branch into this branch and
   make the qualifying run: all suites on a fresh Workbench from that head; record it as the non-JOIN milestone run
   (FR-020, SC-004). Before recording it, confirm with `git diff` that `JTest/tests/**` differs from the T022 state
-  only by approved T029 rows, and rerun those changed suites on 3.6.3 (SC-002).
+  only by approved T029 rows, that `JTest/templates/` differs only by approved rows too, and rerun the changed suites
+  on 3.6.3 (SC-002).
 
 **Checkpoint**: non-JOIN milestone. The specification stays Draft/in progress while J-tasks are open.
 

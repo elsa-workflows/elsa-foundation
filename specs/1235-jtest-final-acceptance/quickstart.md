@@ -39,6 +39,8 @@ $env:ELSA_API_BASE_URL = 'http://localhost:5095'; $env:ELSA_EXECUTOR_BASE_URL = 
 $env:ADMIN_USERNAME = 'admin'; $env:ADMIN_PASSWORD = '<workbench development admin password>'
 $env:CORRELATION_ID = [guid]::NewGuid().ToString('N'); $env:DATE_NOW_ISO_STRING = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
 $env:JTEST_CONFIG_FILE = "$PWD/global-configuration.elsa4.json"
+# after every start: set capture (in memory) - variableWrites override and activity snapshot level
+#   PUT $env:ELSA_API_BASE_URL/runtime/workflows/diagnostics/settings   (exact body recorded by task T007)
 jtest run "tests/**/*" --env-file environments/elsa4.json
 ```
 

@@ -18,12 +18,13 @@ PR diff; no tooling parses it.
 |---|---|
 | Suite | path under `tests/` |
 | Definitions | definition files it exercises |
-| Elsa 3 result | `not run`, `pass`, `fail`, `blocked: <3.6.3 defect>` |
-| Elsa 4 result | `pass`, `fail`, `not run`, `blocked: JOIN`, `blocked: <issue>`, `blocked: <prerequisite>`, `blocked: 3.6.3 defect` (carried from the Elsa 3 result), `incompatible` |
+| Elsa 3 result | `not run`, `pass`, `fail`, `blocked: 3.6.3 defect <defect>` |
+| Elsa 4 result | `pass`, `fail`, `not run`, `blocked: JOIN`, `blocked: <issue>`, `blocked: <prerequisite>`, `blocked: 3.6.3 defect <defect>` (carried from the Elsa 3 result; not run on Elsa 4), `incompatible` |
 | Last run | run id |
 
 State flow per engine: `not run` → `fail` or `pass`; `fail` → `pass` after a recorded fix, or → `blocked`/`incompatible`
-with its reason. A row never returns to `not run`.
+with its reason; `blocked` → `pass` once the cause is fixed and the suite reruns, or → `incompatible`. A row never
+returns to `not run`.
 
 ## Baseline failure (`ledger/baseline-failures.md`, one row per failing assertion on 3.6.3)
 

@@ -252,7 +252,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
   approved incompatibility passes on
   Elsa 4, on an initiative head with spec 1207 implemented (its status Implemented). This is a milestone, not completion.
 - **SC-005 - Full acceptance**: SC-001 to SC-004 hold on the final initiative head, J-001 to J-005 are closed with
-  evidence, and every suite passes or carries an approved incompatibility.
+  evidence, and every suite passes, carries an approved incompatibility, or is blocked by a named 3.6.3 defect
+  (SC-001).
 
 ## Deferred JOIN tasks retained in this specification
 

@@ -109,7 +109,9 @@ repository unless they name the corpus.
   too short is raised as a recorded suite change (FR-012); a template wait is changed in the engine set that needs it
   and recorded in the same ledger.
 - **Rationale**: Changing waits silently would hide timing behaviour the suite was written to tolerate.
-- **Alternatives considered**: Template-level polling; possible later, but it changes how suites wait.
+- **Alternatives considered**: Template-level polling to replace suite waits; possible later, but it changes how suites
+  wait. (The Elsa 4 execute template polls to keep the synchronous meaning of the Elsa 3 execute call; that is part
+  of its output contract, not a replacement for a wait.)
 
 ## R-11 Prerequisites and known defects
 

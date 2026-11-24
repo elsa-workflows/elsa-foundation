@@ -75,3 +75,11 @@ During the engine-neutral refactor a template may gain a parameter (for example 
 `/elsa/api/workflow-instances` and read `workflowState.status`). Each such change lands in **both** sets, with
 outputs of the same meaning, and the refactored suites pass on Elsa 3 first. Suite files then stay identical between
 engines.
+
+**Execute.** The Elsa 3 execute call runs the workflow and returns its final state, which suites assert on at once
+(`workflowState.status`/`subStatus`, `workflowState.output.*`, `workflowState.id`, `workflowState.correlationId`).
+Elsa 4's `POST /runtime/workflows/executables/{artifactId}/execute` only starts a run and returns its workflow
+execution id. The Elsa 4 execute template therefore resolves the definition id to its published artifact, starts
+the run, then reads the instance (`GET /runtime/workflows/instances/{id}`) until it reaches a terminal status within a
+bounded deadline, and takes outputs from the instance's `outputs`. This polling is how the template keeps the Elsa 3
+call's meaning (a finished run); it is not a suite wait, and a run still unfinished at the deadline fails the template.

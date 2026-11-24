@@ -116,7 +116,7 @@ extensions/Elsa3/tests/JTest/
 
 apps/Elsa.Workbench/
 ├── Elsa.Workbench.csproj              # + reference to the Elsa 3 reconciliation project
-├── packages.lock.json                 # restored after the new reference
+├── packages.lock.json                 # restored after the new reference (with the Modularity test lock files)
 └── Program.cs                         # + its assembly in the feature catalog
 ```
 
