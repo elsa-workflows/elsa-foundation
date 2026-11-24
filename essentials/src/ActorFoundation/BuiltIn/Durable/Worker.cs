@@ -3254,6 +3254,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationReleasedHolds = releases,
             OpensPark = unit.OpensPark,
             FoundationKept = kept,
+            FoundationRootParkInputs = unit.OpensPark && unit.Row?.FoundationDispatchHeader is not null && kept is { Count: > 0 }
+                ? unit.Consumed.Where(item => kept.ContainsKey(item.Message.InboxKey)).Select(item => item.Message).ToArray()
+                : null,
             FoundationParkClear = unit.FoundationParkClear,
             FoundationRecoveryPage = unit.FoundationRecoveryPage,
             FoundationRetry = unit.FoundationRetry,

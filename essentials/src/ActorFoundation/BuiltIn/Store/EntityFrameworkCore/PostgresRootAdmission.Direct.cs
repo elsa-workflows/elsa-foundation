@@ -75,8 +75,8 @@ internal sealed partial class PostgresRootAdmission
         var digest = FoundationRootCreator.OperationDigest(id);
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
-        if (db.UsesRootRetirement)
-            await PinSelectedOperatorSchemaAsync(db, cancellationToken);
+        if (db.RequiresPinnedRootNamespace)
+            await PinRootNamespaceAsync(db, cancellationToken);
         if (reply is not null)
         {
             if (!db.UsesRootReplyProtocol) return await RefuseAsync(DirectResult.Refused);
@@ -95,6 +95,7 @@ internal sealed partial class PostgresRootAdmission
         if (status != InstanceStatus.Running)
         {
             var terminal = status == InstanceStatus.Finished ||
+                status == InstanceStatus.Faulted && db.UsesRootParkOpening ||
                 status == InstanceStatus.Faulted && db.UsesRootTimedJobSettlement &&
                 await IsQualifiedTerminalAsync(db, address, tenant, reference, InstanceStatus.Faulted,
                     EfStore.TimedRootStateFamily, cancellationToken) ||
@@ -282,8 +283,11 @@ internal sealed partial class PostgresRootAdmission
     internal async Task<int> SweepDirectReceiptsAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        return await db.Database.ExecuteSqlRawAsync("""
+        await using var pinned = db.UsesRootParkOpening ? await EfStore.BeginPinnedRootOperationAsync(db, cancellationToken) : null;
+        var removed = await db.Database.ExecuteSqlRawAsync("""
             DELETE FROM "FoundationDirectReceipts" WHERE "Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
             """, cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
+        return removed;
     }
 }

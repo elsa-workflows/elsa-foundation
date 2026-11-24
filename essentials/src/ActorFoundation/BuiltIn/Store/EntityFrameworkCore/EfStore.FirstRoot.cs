@@ -271,7 +271,7 @@ public sealed partial class EfStore
     {
         await using var db = create();
         // The model's protection decision must see the same physical checkpoint as retirement.
-        await using var transaction = await BeginRootRetirementOperationAsync(db, cancellationToken);
+        await using var transaction = await BeginPinnedRootOperationAsync(db, cancellationToken);
         var family = RootStateFamily(db);
         if (transaction is null && (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol || db.UsesRootStableBody))
             await RequireStoreVersionsAsync(db, cancellationToken);
