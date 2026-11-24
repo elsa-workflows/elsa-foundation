@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json.Nodes;
+using Elsa.Workflows.Runtime.Native.Migration.SqliteFixture;
 using Kernel.EntityFramework;
 using Kernel.Native;
 using Kernel.Native.Run;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 // Usage:
@@ -23,37 +23,7 @@ if (args is ["pg-root-operators", var operatorWriter and ("owned" or "ef"), var 
     if (operatorArgs is [var operatorPhase and ("read" or "resume"), var a, var b, var c])
         return await PostgresRootOperatorChecks.RunAsync([a, b, c], operatorWriter == "owned", operatorFence == "in-batch", operatorPhase == "resume");
 }
-if (args is ["sqlite-plan-projection", "inspect-neighbor", var neighborFile, var neighborPlan, var neighborActor, .. var neighborToken] &&
-    neighborToken.Length <= 1)
-    return await SqlitePlanProjectionChecks.InspectNeighborAsync(neighborFile, neighborPlan, neighborActor, neighborToken.SingleOrDefault());
-if (args is ["sqlite-plan-projection", "build", var planFile]) return await SqlitePlanProjectionChecks.BuildAsync(planFile);
-if (args is ["sqlite-plan-projection", "inspect", var existingPlanFile, var issuedPlan, var expectedDigest])
-    return await SqlitePlanProjectionChecks.InspectAsync(existingPlanFile, issuedPlan, expectedDigest);
-if (args is ["sqlite-plan-projection", "enable-paging", var viewFile])
-{
-    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-    try { await SqliteMigrationPlanReads.EnableAsync(viewFile, timeout.Token); return 0; }
-    catch (Exception error) when (error is InvalidOperationException or SqliteException)
-    { Console.Error.WriteLine(error.Message); return 1; }
-}
-if (args is ["sqlite-plan-projection", "list", var listFile, var listPlan, var limit, .. var continuation] &&
-    int.TryParse(limit, out var pageSize) && pageSize is >= 1 and <= 500 && continuation.Length <= 1)
-{
-    try { return await SqlitePlanProjectionChecks.ListAsync(listFile, listPlan, pageSize, continuation.SingleOrDefault()); }
-    catch (Exception error) when (error is ArgumentException or InvalidOperationException or SqliteException)
-    { Console.Error.WriteLine(error.Message); return 1; }
-}
-if (args is ["sqlite-plan-projection", ..])
-{
-    Console.Error.WriteLine("""
-        Usage
-          sqlite-plan-projection build <file>
-          sqlite-plan-projection inspect <file> <plan-ref> <digest>
-          sqlite-plan-projection enable-paging <file>
-          sqlite-plan-projection list <file> <plan-ref> <page-size 1-500> [continuation]
-        """);
-    return 2;
-}
+if (args is ["sqlite-plan-projection", ..]) return await SqlitePlanFixtureCommand.RunAsync(args);
 if (args is ["pg-http-owner-loss", var ownerFence and ("checked" or "in-batch"), var loss and ("before" or "before-late" or "after")])
     return await PostgresHttpOwnerLoss.RunAsync(ownerFence, loss);
 if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batch"), var pause and ("before" or "after" or "resume"), var ownerRef])

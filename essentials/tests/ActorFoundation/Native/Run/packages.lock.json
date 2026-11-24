@@ -267,6 +267,16 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime.native.migration.sqlitefixture": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.BuiltIn.Hosting": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Hosting": "[4.0.0-dev, )",
+          "Kernel.Foundation.InMemory": "[1.0.0, )",
+          "Kernel.WorkflowActor": "[1.0.0, )"
+        }
+      },
       "elsa.workflows.runtime.native.model": {
         "type": "Project",
         "dependencies": {

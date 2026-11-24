@@ -7,7 +7,7 @@ using Kernel.WorkflowActor;
 using Microsoft.Data.Sqlite;
 using Contract = Kernel.Foundation.Contracts;
 
-namespace Kernel.Native.Run;
+namespace Elsa.Workflows.Runtime.Native.Migration.SqliteFixture;
 
 internal static class SqlitePlanProjectionChecks
 {
@@ -24,9 +24,10 @@ internal static class SqlitePlanProjectionChecks
         var now = initial;
         var store = new InMemoryStore(1, () => now);
         var publisher = new Publisher();
-        Contract.IIngress ingress = new InMemoryIngress(store, new Requests("plan"), "plan");
-        Contract.IActorReads source = new ActorList(store, 32);
-        var worker = new Worker("plan-owner", 0, store, new ActorAdapter(store, publisher),
+        var fixture = new InMemoryActorFixture(store, "plan", 32);
+        var ingress = fixture.Ingress;
+        var source = fixture.Reads;
+        var worker = new Worker("plan-owner", 0, store, fixture.Bind(publisher),
             new WorkerOptions { Monotonic = () => now - initial });
         await using var owner = await new DurableHost([worker]).ActivateAsync(0, stop)
             ?? throw new InvalidOperationException("The journal producer could not activate.");
@@ -87,7 +88,7 @@ internal static class SqlitePlanProjectionChecks
         now++;
         await AnswerAsync(migrated, "not-at-source", MigrationPlanOutcome.NotAtSource);
         await RecordAsync("close", new MigrationPlanJournal.Closed());
-        var one = new ActorList(store, 1);
+        var one = fixture.OpenReads(1);
         var beforeClose = await projection.BookmarkAsync(stop);
         await CheckCancelledReadAsync(projection, plan, one, expectEmpty: false);
         var closeRetry = new TailWitness(one);
@@ -106,7 +107,7 @@ internal static class SqlitePlanProjectionChecks
         await AnswerAsync(migrated, "late-migrated", MigrationPlanOutcome.Migrated);
         await AnswerAsync(refusedActor, "late-refused", MigrationPlanOutcome.Refused);
         await AnswerAsync(migrated, "repeat-migrated", MigrationPlanOutcome.NotAtSource);
-        var reopened = new TailWitness(new ActorList(store, 1));
+        var reopened = new TailWitness(fixture.OpenReads(1));
         Check(await secondWriter.ProjectNextAsync(reopened, stop) &&
             (await new SqlitePlanProjection(file, Scope, plan).ReadPageAsync(null, 4, stop)).AsOf == closed.AsOf,
             "A partial catch-up must retain the previously confirmed time, including after reopening SQLite.");
@@ -271,7 +272,7 @@ internal static class SqlitePlanProjectionChecks
         CancellationToken stop, Contract.PageToken? token = null)
     {
         var start = new ProcessStartInfo("dotnet") { UseShellExecute = false };
-        foreach (var value in new[] { typeof(SqlitePlanProjectionChecks).Assembly.Location, "sqlite-plan-projection",
+        foreach (var value in new[] { System.Reflection.Assembly.GetEntryAssembly()!.Location, "sqlite-plan-projection",
                      "inspect-neighbor", file, plan.Id, actor.Id })
             start.ArgumentList.Add(value);
         if (token is { } foreign) start.ArgumentList.Add(foreign.Value);

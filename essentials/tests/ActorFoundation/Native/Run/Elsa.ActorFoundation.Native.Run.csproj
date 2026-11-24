@@ -16,6 +16,7 @@
     <Compile Include="../../../../../prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs" Link="Wire.cs" />
     <Compile Include="../../Simulation/Models.cs" Link="Models.cs" />
     <ProjectReference Include="../../../Workflows/Runtime/Statecharts/OrderFixture/Elsa.Workflows.Runtime.Statecharts.OrderFixture.csproj" />
+    <ProjectReference Include="../../../Workflows/Runtime/Native/Migration/SqliteFixture/Elsa.Workflows.Runtime.Native.Migration.SqliteFixture.csproj" />
     <ProjectReference Include="../../../Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
     <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj" />
