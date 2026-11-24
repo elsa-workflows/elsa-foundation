@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { formatStudioDate, getStudioTimeZonePreference, setStudioTimeZonePreference } from "@elsa-workflows/studio-sdk";
 import { EtlConnectorPartitionTable, EtlPartitionTable, EtlRunInspection } from "../EtlRunInspection";
 import type { EtlRunConnectorPartitionView, EtlRunDetailView } from "../etlTypes";
 
@@ -16,6 +17,33 @@ describe("ETL run inspection", () => {
   afterEach(() => {
     flushSync(() => root.unmount());
     container.remove();
+  });
+
+  it("reacts to the selected zone for completion and settlement without changing their retained instants", () => {
+    const previous = getStudioTimeZonePreference();
+    const completion = "2026-10-28T08:15:00Z";
+    const settlement = "2026-07-28T07:15:00Z";
+    try {
+      setStudioTimeZonePreference("Europe/Amsterdam");
+      const run = { ...fixture(), connector: { sourceKind: "http", mainKind: "jsonl", errorKind: "jsonl", acceptedMainEffects: 2, acceptedErrorEffects: 0,
+        mode: "continuous" as const, completionRequestedAt: completion }, terminalResult: { ...fixture().terminalResult!, settledAt: settlement } };
+      flushSync(() => root.render(<EtlRunInspection run={run} />));
+      const completedAt = container.querySelector<HTMLTimeElement>(`time[datetime="${completion}"]`)!;
+      const settledAt = container.querySelector<HTMLTimeElement>(`time[datetime="${settlement}"]`)!;
+      expect(completedAt.textContent).toBe(formatStudioDate(completion, "Europe/Amsterdam"));
+      expect(completedAt.textContent).toContain("UTC+01:00");
+      expect(settledAt.textContent).toBe(formatStudioDate(settlement, "Europe/Amsterdam"));
+      expect(settledAt.textContent).toContain("UTC+02:00");
+
+      flushSync(() => setStudioTimeZonePreference("UTC"));
+
+      expect(completedAt.textContent).toBe(formatStudioDate(completion, "UTC"));
+      expect(settledAt.textContent).toBe(formatStudioDate(settlement, "UTC"));
+      expect(completedAt.textContent).toContain("UTC+00:00");
+      expect(settledAt.textContent).toContain("UTC+00:00");
+      expect(completedAt.dateTime).toBe(completion);
+      expect(settledAt.dateTime).toBe(settlement);
+    } finally { flushSync(() => setStudioTimeZonePreference(previous)); }
   });
 
   it("shows retained input fingerprints and partial accepted work without promising rollback", () => {
@@ -65,7 +93,7 @@ describe("ETL run inspection", () => {
     };
     flushSync(() => root.render(<EtlRunInspection run={run} />));
     expect(container.textContent).toContain("Run modeContinuous");
-    expect(container.textContent).toContain("Completion requested2026-11-02T18:00:00Z");
+    expect(container.textContent).toContain("Completion requested" + formatStudioDate("2026-11-02T18:00:00Z"));
 
     const http = { pageSequence: 1, nextItem: 0, pageRecordCount: null, exhausted: false, fetch: null };
     flushSync(() => root.render(<EtlConnectorPartitionTable partitions={[

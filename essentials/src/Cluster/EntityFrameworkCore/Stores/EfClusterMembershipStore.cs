@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
@@ -175,11 +176,11 @@ internal sealed class EfClusterMembershipStore(IServiceScopeFactory scopes)
 
     private static void Republish(ClusterMemberEntity row, string reportJson)
     {
-        // Only a report stored at the current version is compared, as the bytes the chain would return unchanged;
+        // Only a report stored at the current version is compared, as the value the chain would return unchanged;
         // one stored at an older version is rewritten whatever it says, so the row moves to the current version
         // with it rather than keeping an older stamp over bytes compared with the current format (#2140).
         if (StringComparer.Ordinal.Equals(row.SchemaVersion, ClusterMembershipEfModule.Chain.CurrentVersion) &&
-            string.Equals(row.ReportJson, reportJson, StringComparison.Ordinal))
+            SameReport(row.ReportJson, reportJson))
             return;
 
         // The report is the row's one content column and is written whole in the current format, so the row is stamped
@@ -187,6 +188,13 @@ internal sealed class EfClusterMembershipStore(IServiceScopeFactory scopes)
         row.ReportJson = reportJson;
         row.ReportRevision = checked(row.ReportRevision + 1);
         row.SchemaVersion = ClusterMembershipEfModule.SchemaVersion;
+    }
+
+    private static bool SameReport(string? stored, string current)
+    {
+        try { return Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(stored, current); }
+        // An unreadable previous report is repaired by the next valid publication, as before.
+        catch (JsonException) { return false; }
     }
 
     private Task<T> WriteAsync<T>(EfWriteRetry retry, string operation, Func<ClusterMembershipDbContext, Task<T>> attempt, CancellationToken cancellationToken) =>

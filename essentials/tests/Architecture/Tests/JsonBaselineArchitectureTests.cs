@@ -42,6 +42,25 @@ public sealed class JsonBaselineArchitectureTests
     [InlineData("class C { object x = new JsonSerializerOptions(); }", "construction")]
     [InlineData("class C { JsonSerializerOptions x = new(); }", "construction")]
     [InlineData("class C { JsonSerializerOptions Create() => new(); }", "construction")]
+    [InlineData("class C { void M(object value) { JsonSerializerOptions options = JsonBaseline.CreateCopy(); options = new(); JsonSerializer.Serialize(value, options); } }", "construction")]
+    [InlineData("class C { JsonSerializerOptions profile; void M() { profile = new(); } }", "construction")]
+    [InlineData("class C { JsonSerializerOptions profile; void M(object profile) { this.profile = new(); } }", "construction")]
+    [InlineData("class C { JsonSerializerOptions Profile { get; set; } void M() { Profile = new(); } }", "construction")]
+    [InlineData("class C { JsonSerializerOptions Profile { get; set; } void M(object Profile) { this.Profile = new(); } }", "construction")]
+    [InlineData("class C { void M(JsonSerializerOptions profile) { profile = (new()); } }", "construction")]
+    [InlineData("class C { static System.Text.Json.JsonSerializerOptions profile; void M() { C.profile = new(); } }", "construction")]
+    [InlineData("using Opt = System.Text.Json.JsonSerializerOptions; class C { void M() { Opt profile = JsonBaseline.CreateCopy(); profile = new(); } }", "construction")]
+    [InlineData("class Holder { public JsonSerializerOptions Profile { get; set; } } class C { void M(Holder target) { target.Profile = new(); } }", "construction")]
+    [InlineData("class Holder { public JsonSerializerOptions SerializerOptions { get; set; } } class C { void M(Holder target) { target.SerializerOptions = new(); } }", "construction")]
+    [InlineData("class C { void M(object value) { JsonSerializer.Serialize(value, options: new()); } }", "construction")]
+    [InlineData("class C { void M(object value) { System.Text.Json.JsonSerializer.Serialize(value, options: new()); } }", "construction")]
+    [InlineData("using JS = System.Text.Json.JsonSerializer; class C { void M(object value) { JS.Serialize(value, options: new()); } }", "construction")]
+    [InlineData("using static System.Text.Json.JsonSerializer; class C { void M(object value) { Serialize(value, options: new()); } }", "construction")]
+    [InlineData("class C { void Use(JsonSerializerOptions options) {} void M() { Use(new()); } }", "construction")]
+    [InlineData("using Opt = System.Text.Json.JsonSerializerOptions; class C { void Use(Opt options) {} void M() { this.Use(new()); } }", "construction")]
+    [InlineData("class C { void Use(JsonSerializerOptions options, bool flag) {} void M() { Use(flag: true, options: new()); } }", "construction")]
+    [InlineData("class C { void M() { void Use(JsonSerializerOptions options) {} Use(new()); } }", "construction")]
+    [InlineData("class Factory { public static void Use(JsonSerializerOptions options) {} } class C { void M() { Factory.Use(new()); } }", "construction")]
     [InlineData("using Opt = System.Text.Json.JsonSerializerOptions; class C { object x = new Opt(); }", "construction")]
     [InlineData("class C { object x = JsonSerializerOptions.Web; }", "defaults")]
     [InlineData("class C { object x = JsonSerializerOptions.Default; }", "defaults")]
@@ -205,6 +224,26 @@ public sealed class JsonBaselineArchitectureTests
         const string source = "class C { JsonSerializerOptions options = new(JsonBaseline.Options); void M() { options.PropertyNameCaseInsensitive = false; options.NumberHandling = JsonNumberHandling.Strict; JsonSerializer.Serialize(value, options); JsonSerializer.Serialize(value, Context.WireContext.Value); /* new JsonSerializerOptions() */ var text = \"JsonSerializer.Serialize(value)\"; } }";
         Assert.Empty(JsonBaselineSourceScan.Scan(source));
     }
+
+    [Theory]
+    [InlineData("class C { void M(JsonSerializerOptions profile) { profile = new(JsonBaseline.Options); } }")]
+    [InlineData("class C { JsonSerializerOptions Profile { get; set; } void M() { this.Profile = new(JsonBaseline.Options); } }")]
+    [InlineData("using Opt = System.Text.Json.JsonSerializerOptions; class C { Opt profile; void M() { profile = new(JsonBaseline.Options); } }")]
+    [InlineData("class C { JsonSerializerOptions M() { object value; value = new(); return JsonBaseline.CreateCopy(); } }")]
+    [InlineData("class C { object profile; JsonSerializerOptions M(JsonSerializerOptions profile) { this.profile = new(); return profile; } }")]
+    [InlineData("class C { object Profile { get; set; } JsonSerializerOptions M(JsonSerializerOptions Profile) { this.Profile = new(); return Profile; } }")]
+    [InlineData("class Holder { public object Profile { get; set; } } class C { JsonSerializerOptions M(Holder target) { target.Profile = new(); return JsonBaseline.CreateCopy(); } }")]
+    [InlineData("class Holder { public object SerializerOptions { get; set; } } class C { void M(Holder target) { target.SerializerOptions = new(); } }")]
+    [InlineData("class C { JsonSerializerOptions M(object value) { value = new(); return JsonBaseline.CreateCopy(); } }")]
+    [InlineData("class C { void M() { JsonDocumentOptions value; value = new(); } }")]
+    [InlineData("class C { void M(object value) { JsonSerializer.Serialize(value, options: new(JsonBaseline.Options)); } }")]
+    [InlineData("class C { void Use(JsonSerializerOptions options) {} void M() { Use(new(JsonBaseline.Options)); } }")]
+    [InlineData("class C { void Use(object options) {} JsonSerializerOptions M() { Use(new()); return JsonBaseline.CreateCopy(); } }")]
+    [InlineData("class C { void Use(JsonSerializerOptions options) {} JsonSerializerOptions M() { void Use(object options) {} Use(new()); return JsonBaseline.CreateCopy(); } }")]
+    [InlineData("class Other { public static void Use(object options) {} } class C { void Use(JsonSerializerOptions options) {} void M() { Other.Use(new()); } }")]
+    [InlineData("class JsonSerializer { public static void Serialize(object value, object options) {} } class C { void M(object value) { JsonSerializer.Serialize(value, options: new()); } }")]
+    public void Target_typed_constructions_accept_baseline_copies_and_respect_declared_types(string source) =>
+        Assert.Empty(JsonBaselineSourceScan.Scan(source));
 
     [Fact]
     public void Reordered_explicit_baseline_profile_and_null_body_are_accepted()

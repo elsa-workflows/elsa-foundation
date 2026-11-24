@@ -18,6 +18,7 @@ import {
   type StructuredLogEntry
 } from "../module";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate, getStudioTimeZonePreference, setStudioTimeZonePreference } from "@elsa-workflows/studio-sdk";
 
 const renderedPanelCleanups = new Set<() => Promise<void>>();
 
@@ -39,6 +40,31 @@ describe("structured logs module", () => {
       restoreProperty(globalThis, "EventSource", originalEventSource);
       restoreProperty(navigator, "clipboard", originalClipboard);
     }
+  });
+
+  it("reacts to the selected zone in inspected metadata while retaining raw JSON and exports", async () => {
+    const previous = getStudioTimeZonePreference();
+    const timestamp = "2026-10-28T08:15:00Z";
+    setStudioTimeZonePreference("Europe/Amsterdam");
+    register(stubApi({ getJson: async url => url.includes("/sources") ? [] : [{ ...wireEntry(1), timestamp }] }));
+    const view = await renderPanel(StructuredLogsPage);
+    try {
+      await vi.waitFor(() => expect(view.container.querySelector(".structured-log-row")).not.toBeNull());
+      flushSync(() => (view.container.querySelector(".structured-log-row") as HTMLElement).click());
+      const inspector = view.container.querySelector('[aria-label="Structured log details"]')!;
+      const metadataTime = inspector.querySelector<HTMLTimeElement>("dl time")!;
+      expect(metadataTime.textContent).toBe(formatStudioDate(timestamp, "Europe/Amsterdam"));
+      expect(metadataTime.textContent).toContain("UTC+01:00");
+
+      flushSync(() => setStudioTimeZonePreference("UTC"));
+
+      expect(metadataTime.textContent).toBe(formatStudioDate(timestamp, "UTC"));
+      expect(metadataTime.textContent).toContain("UTC+00:00");
+      expect(metadataTime.dateTime).toBe(timestamp);
+      expect(inspector.textContent).toContain(timestamp);
+      const retained = { ...entry(1), timestamp };
+      expect(JSON.parse(createStructuredLogExportContent([retained])).timestamp).toBe(timestamp);
+    } finally { await view.unmount(); setStudioTimeZonePreference(previous); }
   });
 
   it("keeps recent logs visible when an anonymous custom transport cannot stream",async()=>{

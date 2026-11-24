@@ -95,6 +95,50 @@ public sealed class JsonConversionContractTests
         Assert.NotNull(contract.Read(input, typeof(CustomHolder)));
     }
 
+    [Theory]
+    [InlineData("{\"child\":{\"customer_name\":\"Ann\",\"unexpected\":1}}", "$[\"child\"][\"unexpected\"]")]
+    [InlineData("{\"child\":{\"Customer_Name\":\"Ann\"}}", "$[\"child\"][\"Customer_Name\"]")]
+    public void Custom_matcher_refuses_unmatched_members_under_the_child_scoped_contract(string json, string expectedPath)
+    {
+        var contract = JsonConversionContract.For(typeof(MatchedChildEnvelope<StrictMatchedChild>));
+        var input = Element(json);
+        var error = Assert.Throws<JsonConversionException>(() => contract.Read(input, typeof(MatchedChildEnvelope<StrictMatchedChild>)));
+        Assert.Equal("json-unmatched-member-refused", error.Code);
+        Assert.Equal(expectedPath, error.Path);
+        Assert.Equal(json, input.GetRawText());
+    }
+
+    [Fact]
+    public void Custom_matcher_uses_child_scoped_naming_and_case_without_rewriting_json()
+    {
+        const string raw = """{ "Name":"Ren\u00e9", "N":1.0, "nil":null }""";
+        var strictInput = Element($$"""{ "child": { "customer_name":"Ann", "raw_data":{{raw}} } }""");
+        var strictBefore = strictInput.GetRawText();
+        var strictWarnings = new List<JsonConversionDiagnostic>();
+        var strictContract = JsonConversionContract.For(typeof(MatchedChildEnvelope<StrictMatchedChild>));
+        var strict = (MatchedChildEnvelope<StrictMatchedChild>)strictContract.Read(strictInput, typeof(MatchedChildEnvelope<StrictMatchedChild>), strictWarnings.Add)!;
+        Assert.Equal("Ann", strict.Child.CustomerName);
+        Assert.Empty(strictWarnings);
+        Assert.Equal(raw, strict.Child.RawData.GetRawText());
+        Assert.Equal(strictBefore, strictInput.GetRawText());
+        var strictWritten = strictContract.Write(strict, typeof(MatchedChildEnvelope<StrictMatchedChild>)).GetProperty("child");
+        Assert.Equal("Ann", strictWritten.GetProperty("customer_name").GetString());
+        Assert.Equal(raw, strictWritten.GetProperty("raw_data").GetRawText());
+
+        var insensitiveInput = Element($$"""{ "child": { "CUSTOMER_NAME":"Ada", "RAW_DATA":{{raw}} } }""");
+        var insensitiveBefore = insensitiveInput.GetRawText();
+        var insensitiveWarnings = new List<JsonConversionDiagnostic>();
+        var insensitiveContract = JsonConversionContract.For(typeof(MatchedChildEnvelope<InsensitiveMatchedChild>));
+        var insensitive = (MatchedChildEnvelope<InsensitiveMatchedChild>)insensitiveContract.Read(insensitiveInput, typeof(MatchedChildEnvelope<InsensitiveMatchedChild>), insensitiveWarnings.Add)!;
+        Assert.Equal("Ada", insensitive.Child.CustomerName);
+        Assert.Empty(insensitiveWarnings);
+        Assert.Equal(raw, insensitive.Child.RawData.GetRawText());
+        Assert.Equal(insensitiveBefore, insensitiveInput.GetRawText());
+        var insensitiveWritten = insensitiveContract.Write(insensitive, typeof(MatchedChildEnvelope<InsensitiveMatchedChild>)).GetProperty("child");
+        Assert.Equal("Ada", insensitiveWritten.GetProperty("customer_name").GetString());
+        Assert.Equal(raw, insensitiveWritten.GetProperty("raw_data").GetRawText());
+    }
+
     [Fact]
     public void Strict_and_required_contracts_refuse()
     {
@@ -203,6 +247,42 @@ public sealed class JsonConversionContractTests
     private sealed class RequiredOrder { public required string Name { get; set; } }
     private sealed class AnnotatedNumber { [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] public int Number { get; set; } }
     private sealed class CustomHolder { [JsonConverter(typeof(CustomOrderConverter))] public Order? Value { get; set; } }
+    [JsonConversion(NamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower, RefuseUnmatchedMembers = true)]
+    private sealed class StrictMatchedChild { public string? CustomerName { get; set; } public JsonElement RawData { get; set; } }
+    [JsonConversion(NamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower, CaseInsensitive = true)]
+    private sealed class InsensitiveMatchedChild { public string? CustomerName { get; set; } public JsonElement RawData { get; set; } }
+    [JsonConverter(typeof(MatchedChildEnvelopeConverterFactory))]
+    private sealed record MatchedChildEnvelope<T>(T Child);
+
+    private sealed class MatchedChildEnvelopeConverterFactory : JsonConverterFactory
+    {
+        public MatchedChildEnvelopeConverterFactory() { }
+        public override bool CanConvert(Type typeToConvert) => typeToConvert.IsGenericType && typeToConvert.GetGenericTypeDefinition() == typeof(MatchedChildEnvelope<>);
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) =>
+            (JsonConverter)Activator.CreateInstance(typeof(MatchedChildEnvelopeConverter<>).MakeGenericType(typeToConvert.GetGenericArguments()[0]))!;
+    }
+
+    private sealed class MatchedChildEnvelopeConverter<T> : JsonConverter<MatchedChildEnvelope<T>>, IJsonConversionMemberMatcher
+    {
+        public MatchedChildEnvelopeConverter() { }
+        public bool TryGetMemberType(string name, out Type memberType)
+        {
+            memberType = typeof(T);
+            return name == "child";
+        }
+        public override MatchedChildEnvelope<T> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            using var document = JsonDocument.ParseValue(ref reader);
+            return new(document.RootElement.GetProperty("child").Deserialize<T>(options)!);
+        }
+        public override void Write(Utf8JsonWriter writer, MatchedChildEnvelope<T> value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("child");
+            JsonSerializer.Serialize(writer, value.Child, options);
+            writer.WriteEndObject();
+        }
+    }
     [JsonConversion(RefuseUnmatchedMembers = true)] private struct StrictValue { public int Number { get; set; } }
     private sealed class NestedDateHolder { public ScopedDate? Invoice { get; set; } }
     [JsonConversion] private sealed class ScopedDate { public DateTime StartAt { get; set; } }

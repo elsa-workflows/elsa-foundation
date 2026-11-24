@@ -50,7 +50,7 @@ public static class UnmatchedMemberScanner
                 foreach (var property in value.EnumerateObject())
                 {
                     var memberPath = MemberPath(path, property.Name);
-                    if (matcher.TryGetMemberType(property.Name, out var memberType)) Visit(property.Value, memberType, contract, memberPath, result, operation);
+                    if (matcher.TryGetMemberType(property.Name, out var memberType)) Visit(property.Value, memberType, operation.ChildContract(memberType, contract), memberPath, result, operation);
                     else Unmatched(memberPath, type, contract, result);
                 }
             }

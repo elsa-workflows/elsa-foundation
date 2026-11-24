@@ -576,7 +576,7 @@ function StructuredLogInspector({ entry, sources, onClose }: { entry: Structured
         <h4>Metadata</h4>
         <dl>
           <DetailRow name="Sequence" value={String(entry.sequence)} />
-          <DetailRow name="Timestamp" value={entry.timestamp} />
+          <dt>Timestamp</dt><dd><StudioTimestamp value={entry.timestamp} format="date-time" /></dd>
           <DetailRow name="Source" value={source ? formatStructuredLogSourceLabel(source) : entry.sourceId} />
           <DetailRow name="Source ID" value={entry.sourceId} />
           <DetailRow name="Category" value={entry.category} />

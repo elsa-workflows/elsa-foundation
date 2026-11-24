@@ -80,16 +80,18 @@ public sealed class JsonConversionContract
     /// <summary>Reads a typed copy without modifying stored JSON. Reports every unmatched key through the supplied recording sink.</summary>
     public object? Read(JsonElement value, Type type, Action<JsonConversionDiagnostic>? report = null)
     {
-        var operation = new Operation();
-        foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, this, operation)) report?.Invoke(diagnostic);
         // These fixed BCL contracts have no member naming, custom converter or temporal policy.
         // Reusing their baseline metadata avoids rebuilding a reflection resolver on every scalar input.
         // User, enum, collection and object contracts remain operation-local, including nested collectible types.
         if (IsBaselineScalar(Nullable.GetUnderlyingType(type) ?? type))
         {
             _ = Naming(namingPolicy); // Invalid selections must still refuse even though scalar naming has no effect.
+            if (value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+                foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, this)) report?.Invoke(diagnostic);
             return value.Deserialize(type, JsonBaseline.Options);
         }
+        var operation = new Operation();
+        foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, this, operation)) report?.Invoke(diagnostic);
         return value.Deserialize(type, operation.GetOptions(this));
     }
 

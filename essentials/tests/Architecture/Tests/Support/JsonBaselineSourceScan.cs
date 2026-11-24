@@ -59,9 +59,7 @@ internal static class JsonBaselineSourceScan
             if (OptionsType(creation.Type.ToString()) && !BaselineCopy(creation.ArgumentList)) Add("construction", creation);
         foreach (var creation in root.DescendantNodes().OfType<ImplicitObjectCreationExpressionSyntax>())
         {
-            var type = creation.Ancestors().OfType<VariableDeclarationSyntax>().FirstOrDefault()?.Type.ToString()
-                ?? creation.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault()?.Type.ToString()
-                ?? creation.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.ReturnType.ToString();
+            var type = ImplicitConstructionType(creation);
             if (type is not null && OptionsType(type) && !BaselineCopy(creation.ArgumentList)) Add("construction", creation);
         }
         foreach (var access in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
@@ -207,6 +205,58 @@ internal static class JsonBaselineSourceScan
         {
             var alias = root.DescendantNodes().OfType<UsingDirectiveSyntax>().FirstOrDefault(usingDirective => usingDirective.Alias?.Name.Identifier.ValueText == name);
             return (alias?.Name?.ToString() ?? name).Split('.').Last();
+        }
+
+        string? ImplicitConstructionType(ImplicitObjectCreationExpressionSyntax creation)
+        {
+            ExpressionSyntax value = creation;
+            while (value.Parent is ParenthesizedExpressionSyntax parentheses) value = parentheses;
+            // Assignments and arguments have their own target contracts. They never borrow the
+            // enclosing method's return type when the target is unrelated or cannot be resolved.
+            if (value.Parent is AssignmentExpressionSyntax assignment && assignment.Right == value)
+                return DeclaredType(assignment.Left, assignment);
+            if (value.Parent is ArgumentSyntax argument)
+                return ArgumentTargetType(argument);
+            return creation.Ancestors().OfType<VariableDeclarationSyntax>().FirstOrDefault()?.Type.ToString()
+                ?? creation.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault()?.Type.ToString()
+                ?? creation.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.ReturnType.ToString();
+        }
+
+        string? ArgumentTargetType(ArgumentSyntax argument)
+        {
+            if (argument.Parent is not ArgumentListSyntax arguments || arguments.Parent is not InvocationExpressionSyntax invocation) return null;
+            var member = invocation.Expression as MemberAccessExpressionSyntax;
+            var name = member?.Name.Identifier.ValueText ?? (invocation.Expression as SimpleNameSyntax)?.Identifier.ValueText;
+            if (name is null) return null;
+            var enclosingType = invocation.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+            var owner = member is null || member.Expression is ThisExpressionSyntax ? enclosingType
+                : root.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(type =>
+                    type.Identifier.ValueText == ContextTypeName(DeclaredType(member.Expression, invocation) ?? member.Expression.ToString()));
+            // A local function shadows same-named members. Otherwise only declarations on the
+            // selected owner are candidates; unrelated methods elsewhere cannot supply the type.
+            var local = member is null ? invocation.Ancestors().OfType<BlockSyntax>()
+                .Select(block => block.Statements.OfType<LocalFunctionStatementSyntax>().Where(function => function.Identifier.ValueText == name).ToArray())
+                .FirstOrDefault(functions => functions.Length != 0) : null;
+            var declarations = local is not null ? local.Select(function => function.ParameterList).ToArray()
+                : owner?.Members.OfType<MethodDeclarationSyntax>().Where(method => method.Identifier.ValueText == name)
+                    .Select(method => method.ParameterList).ToArray() ?? [];
+            if (declarations.Length != 0)
+            {
+                var types = declarations.Where(parameters => arguments.Arguments.Count <= parameters.Parameters.Count &&
+                        arguments.Arguments.Count >= parameters.Parameters.Count(parameter => parameter.Default is null))
+                    .Select(parameters => argument.NameColon is { } named
+                        ? parameters.Parameters.FirstOrDefault(parameter => parameter.Identifier.ValueText == named.Name.Identifier.ValueText)?.Type?.ToString()
+                        : parameters.Parameters.ElementAtOrDefault(arguments.Arguments.IndexOf(argument))?.Type?.ToString())
+                    .Distinct(StringComparer.Ordinal).ToArray();
+                return types.Length == 1 ? types[0] : null; // Do not guess an unresolved overload.
+            }
+            var receiver = member?.Expression.ToString();
+            var serializer = owner is null && receiver is ("JsonSerializer" or "System.Text.Json.JsonSerializer" or "global::System.Text.Json.JsonSerializer") ||
+                receiver is not null && root.DescendantNodes().OfType<UsingDirectiveSyntax>().Any(usingDirective =>
+                    usingDirective.Alias?.Name.Identifier.ValueText == receiver && usingDirective.Name?.ToString().Replace("global::", "", StringComparison.Ordinal) == "System.Text.Json.JsonSerializer") ||
+                member is null && root.DescendantNodes().OfType<UsingDirectiveSyntax>().Any(usingDirective =>
+                    usingDirective.StaticKeyword.IsKind(SyntaxKind.StaticKeyword) && usingDirective.Name?.ToString().Replace("global::", "", StringComparison.Ordinal) == "System.Text.Json.JsonSerializer");
+            return serializer && argument.NameColon?.Name.Identifier.ValueText == "options" ? "JsonSerializerOptions" : null;
         }
     }
 
@@ -416,9 +466,21 @@ internal static class JsonBaselineSourceScan
         if (expression is PostfixUnaryExpressionSyntax suppression && suppression.IsKind(SyntaxKind.SuppressNullableWarningExpression)) return DeclaredType(suppression.Operand, site, visited, inferDynamic);
         if (expression is MemberAccessExpressionSyntax member)
         {
-            if (member.Name.Identifier.ValueText == "SerializerOptions" || IsBaselineExpression(member)) return "JsonSerializerOptions";
-            if (member.Expression is ThisExpressionSyntax or BaseExpressionSyntax)
-                return DeclaredType(SyntaxFactory.IdentifierName(member.Name.Identifier), site, visited, inferDynamic);
+            if (IsBaselineExpression(member)) return "JsonSerializerOptions";
+            if (member.Expression is ThisExpressionSyntax)
+            {
+                // An explicit this member cannot bind to a same-named local or parameter.
+                var enclosingType = site.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+                var ownProperty = enclosingType?.Members.OfType<PropertyDeclarationSyntax>()
+                    .FirstOrDefault(property => property.Identifier.ValueText == member.Name.Identifier.ValueText);
+                var ownField = enclosingType?.Members.OfType<FieldDeclarationSyntax>()
+                    .FirstOrDefault(field => field.Declaration.Variables.Any(variable => variable.Identifier.ValueText == member.Name.Identifier.ValueText));
+                return ownProperty?.Type.ToString() ?? ownField?.Declaration.Type.ToString()
+                    ?? (member.Name.Identifier.ValueText == "SerializerOptions" ? "JsonSerializerOptions" : null);
+            }
+            if (member.Expression is BaseExpressionSyntax)
+                return member.Name.Identifier.ValueText == "SerializerOptions" ? "JsonSerializerOptions"
+                    : DeclaredType(SyntaxFactory.IdentifierName(member.Name.Identifier), site, visited, inferDynamic);
             var owner = DeclaredType(member.Expression, site, visited, inferDynamic);
             if (member.Name.Identifier.ValueText == "Options" && owner?.Split('.').Last() == "JsonConversionContract") return "JsonSerializerOptions";
             if (member.Name.Identifier.ValueText == "Value" && owner?.EndsWith("?", StringComparison.Ordinal) == true) return owner[..^1];
@@ -428,6 +490,7 @@ internal static class JsonBaselineSourceScan
             if (property is not null) return property.Type.ToString();
             var field = ownerDeclaration?.Members.OfType<FieldDeclarationSyntax>().FirstOrDefault(field => field.Declaration.Variables.Any(variable => variable.Identifier.ValueText == member.Name.Identifier.ValueText));
             if (field is not null) return field.Declaration.Type.ToString();
+            if (member.Name.Identifier.ValueText == "SerializerOptions") return "JsonSerializerOptions";
             if (member.Name.Identifier.ValueText == "Converters" && KnownType(owner, "JsonSerializerOptions")) return "JsonConverters";
             if (member.Name.Identifier.ValueText == "Modifiers" && KnownType(owner, "DefaultJsonTypeInfoResolver")) return "JsonModifiers";
             if (member.ToString().Contains(".WireContext.", StringComparison.Ordinal)) return "JsonTypeInfo";

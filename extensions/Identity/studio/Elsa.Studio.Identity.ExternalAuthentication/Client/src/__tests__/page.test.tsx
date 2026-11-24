@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate, getStudioTimeZonePreference, setStudioTimeZonePreference } from "@elsa-workflows/studio-sdk";
 import { ExternalAuthenticationPage } from "../ExternalAuthenticationPage";
 import { connectionChanges, type ConnectionCatalog, type ConnectionCommand, type ConnectionPreview, type ConnectionTest } from "../sdk";
 import { catalog as fixtureCatalog, connectionDocument, view } from "./fixtures";
@@ -69,6 +70,29 @@ function type(input: HTMLInputElement, value: string) {
 function select(input: HTMLSelectElement, value: string) { flushSync(() => { input.value = value; input.dispatchEvent(new Event("change", { bubbles: true })); }); }
 
 describe("connection administration page", () => {
+  it("reacts to the selected zone for a configuration-test observation while keeping its instant", async () => {
+    const previous = getStudioTimeZonePreference();
+    try {
+      setStudioTimeZonePreference("Europe/Amsterdam");
+      const host = harness();
+      host.observed.observedAt = "2026-10-28T08:15:00Z";
+      await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
+      click(host.container.querySelector(".external-auth-row")!);
+      click(await button(host.container, "Test configuration"));
+      await vi.waitFor(() => expect(host.container.textContent).toContain("Configuration test passed"));
+      const observed = host.container.querySelector<HTMLTimeElement>(`time[datetime="${host.observed.observedAt}"]`)!;
+      expect(observed.textContent).toBe(formatStudioDate(host.observed.observedAt, "Europe/Amsterdam"));
+      expect(observed.textContent).toContain("UTC+01:00");
+
+      flushSync(() => setStudioTimeZonePreference("UTC"));
+
+      expect(observed.textContent).toBe(formatStudioDate(host.observed.observedAt, "UTC"));
+      expect(observed.textContent).toContain("UTC+00:00");
+      expect(observed.dateTime).toBe(host.observed.observedAt);
+      expect(host.container.querySelector(".external-auth-callout time")).toBe(observed);
+    } finally { flushSync(() => setStudioTimeZonePreference(previous)); }
+  });
+
   it("returns keyboard focus to the action after cancelling its asynchronous confirmation", async () => {
     const host = harness();
     await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());

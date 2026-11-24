@@ -254,11 +254,18 @@ public sealed class EfDesignAtomicWrite(
         if (!StringComparer.Ordinal.Equals(marker.TenantId, tenantId) || !StringComparer.Ordinal.Equals(marker.TenantScopeKey, ActivitiesDesignDbContext.NormalizeTenantKey(tenantId)) || !StringComparer.Ordinal.Equals(marker.OperationKind, request.Operation.OperationKind) || !StringComparer.Ordinal.Equals(marker.OperationKey, request.Operation.OperationKey))
             throw new InvalidDataException("The EF design operation marker identity does not match its key.");
         if (!StringComparer.Ordinal.Equals(marker.CanonicalRequestFingerprint, request.CanonicalRequestFingerprint) ||
-            !StringComparer.Ordinal.Equals(marker.MutatedUnitsJson, SerializeOrThrow(request.MutatedUnits, "atomic-replay")))
+            !SameMutatedUnits(marker.MutatedUnitsJson, SerializeOrThrow(request.MutatedUnits, "atomic-replay")))
             return EfDesignAtomicWriteResult.Conflict();
         return reconciled
             ? EfDesignAtomicWriteResult.Reconciled(marker.AuthoritativeResultFingerprint, marker.AuthoritativeResultJson)
             : EfDesignAtomicWriteResult.Replayed(marker.AuthoritativeResultFingerprint, marker.AuthoritativeResultJson);
+    }
+
+    private static bool SameMutatedUnits(string? stored, string current)
+    {
+        try { return Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(stored, current); }
+        // A damaged marker never matched a valid fresh serialization. Keep that conflict outcome.
+        catch (JsonException) { return false; }
     }
 
     private static string MarkerId(EfDesignOperationIdentity operation, string? tenantId)
