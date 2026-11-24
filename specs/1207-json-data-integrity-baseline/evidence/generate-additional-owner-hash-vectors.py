@@ -7,6 +7,7 @@ from pathlib import Path
 import base64
 from datetime import datetime, timezone
 import hashlib
+import hmac
 import importlib.util
 import json
 import re
@@ -74,7 +75,7 @@ def generate():
         [{"json": ["OwnerKey", "Count"]}, {"json": values}], [dict(key=key, type=values[key]["type"], literal=values[key]["literal"]) for key in ["OwnerKey", "Count"]])
     scalars = ["tenant-é", "reader", "Mixed"]
     add("management-scope/opaque-strings", api, "Elsa.Activities.Design.Api.Services.ActivityDefinitionManagementProjectionService", "Scope",
-        [{"objectArray": scalars}], [dict(representation="clr", value=base64.b64encode(value.encode("utf-16-le")).decode()) for value in scalars])
+        [{"objectArray": scalars}], [dict(representation="clr", value=base64.b64encode(value.encode("utf-16-le", errors="surrogatepass")).decode()) for value in scalars])
     projection = dict(rebuildId="rebuild-é", sequence=3, asOf="2026-07-15T09:30:00+00:00", items=[])
     add("dependency-snapshot/owned-fields", ef, "Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores.EfActivityDesignStores", "Fingerprint",
         [{"json": projection}], projection, uppercase=True)
@@ -92,7 +93,7 @@ def generate():
         [{"json": None}, {"rawJson": "null"}], dict(hint=None, specifications=None), "sha256-")
 
     def opaque(value):
-        if isinstance(value, str): return base64.b64encode(value.encode("utf-16-le")).decode()
+        if isinstance(value, str): return base64.b64encode(value.encode("utf-16-le", errors="surrogatepass")).decode()
         if isinstance(value, list): return [opaque(item) for item in value]
         if isinstance(value, dict): return {key: opaque(item) for key, item in value.items()}
         return value
@@ -370,6 +371,69 @@ def generate():
             add('alteration-request/' + branch + '-' + label, 'Elsa.Workflows.Runtime',
                 'Elsa.Workflows.Runtime.Services.Alterations.WorkflowAlterationRequestCanonicalizer', 'Hash',
                 [submission], projected, terminalMethod='HashRequest')
+    # Source-reviewed typed projections; no production serializer contributes expected bytes.
+    version = dict(id="version-é", definitionId="omitted-definition", version="1.2.3", hash=None,
+        providerKey="provider-é", providerSchemaVersion="1.0.0", consumerKey="consumer-é", consumerSchemaVersion="2.0.0",
+        sourceKind="ClrDiscovery", sourceId="source-é", executionType=0)
+    for label, raw in variants:
+        value = dict(version, descriptorPayload=helper.load_json(raw))
+        typed = dict(version, descriptorPayload=None)
+        projection = opaque({key: value[key] for key in ["id", "version", "hash", "providerKey", "providerSchemaVersion", "consumerKey", "consumerSchemaVersion", "sourceKind", "sourceId"]})
+        projection.update(descriptorPayload=value['descriptorPayload'], projectionKey=opaque('projection-é'))
+        add('serialized-shape-revision/' + label, 'Elsa.Activities.Design.Reconciliation.Clr',
+            'Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource', 'ResultRevision',
+            [dict(clrType='Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion', clrAssembly='Elsa.Activities.Design.Persistence.Core', value=dict(json=typed), propertyArguments={'DescriptorPayload':dict(rawJson=raw)}), dict(text='projection-é')], projection, 'sha256:')
+    for label, changes in [('selected-id', dict(id='other')), ('selected-hash', dict(hash='other')), ('selected-version', dict(version='2.0.0')),
+                           ('selected-provider', dict(providerKey='other')), ('selected-consumer', dict(consumerSchemaVersion='other')),
+                           ('ignored-definition', dict(definitionId='other'))]:
+        value = dict(version, descriptorPayload=None, **changes)
+        projection = opaque({key: value[key] for key in ['id','version','hash','providerKey','providerSchemaVersion','consumerKey','consumerSchemaVersion','sourceKind','sourceId']})
+        projection.update(descriptorPayload=None, projectionKey=opaque('projection-é'))
+        add('serialized-shape-revision/' + label, 'Elsa.Activities.Design.Reconciliation.Clr',
+            'Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource', 'ResultRevision',
+            [dict(clrType='Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion', clrAssembly='Elsa.Activities.Design.Persistence.Core', json=value), dict(text='projection-é')], projection, 'sha256:')
+    for unit in [0xD800, 0xD801]:
+        value = dict(version, descriptorPayload=None)
+        selected = dict(value, id=chr(unit))
+        projection = opaque({key: selected[key] for key in ['id','version','hash','providerKey','providerSchemaVersion','consumerKey','consumerSchemaVersion','sourceKind','sourceId']})
+        projection.update(descriptorPayload=None, projectionKey=opaque('projection-é'))
+        add('serialized-shape-revision/utf16-' + str(unit), 'Elsa.Activities.Design.Reconciliation.Clr',
+            'Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource', 'ResultRevision',
+            [dict(clrType='Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion', clrAssembly='Elsa.Activities.Design.Persistence.Core', value=dict(json=value), propertyArguments={'Id':dict(utf16=[unit])}), dict(text='projection-é')], projection, 'sha256:')
+    for key in ['Fixed Unicode Revision Key é雪', 'Rotated Unicode Revision Key é雪']:
+        instance = dict(constructorArguments=dict(environment=dict(clrNull=True), shellSettings=dict(clrNull=True),
+            options=dict(optionsValue=dict(json=dict(revisionKey=key))), hostContext=dict(clrNull=True)))
+        for label, raw in [*variants, ('root-null', 'null')]:
+            text = helper.canonical(helper.load_json(raw))
+            rows.append(dict(name='feature-revision/' + ('rotated-' if key.startswith('Rotated') else '') + label,
+                assembly='Elsa.Modularity.Api', type='Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore', method='CreateRevision',
+                arguments=[dict(rawJson=raw)], instance=instance, canonical=text,
+                expected=hmac.new(key.encode('utf-8'), text.encode('utf-8'), hashlib.sha256).hexdigest()))
+    pin = dict(artifactId='artifact-é', definitionId='definition-é', definitionVersionId='version-é', artifactVersion='1.0.0', artifactHash='hash-é')
+    for label, changed, completed in [('base', {}, '2026-07-15T09:30:00+02:00'), ('offset', {}, '2026-07-15T07:30:00+00:00'),
+        ('one-tick', {}, '2026-07-15T07:30:00.0000001+00:00'), ('tenant', dict(tenantId='tenant-é'), '2026-07-15T09:30:00+02:00'),
+        ('status', dict(status=4), '2026-07-15T09:30:00+02:00'), ('ignored-completed', dict(completedAt='2025-01-01T00:00:00Z'), '2026-07-15T09:30:00+02:00')]:
+        parent = dict(workflowExecutionId='run-é', pinnedExecutable=pin, status=5, subStatus=None, createdAt='2026-01-01T00:00:00Z',
+            startedAt=None, updatedAt=None, completedAt=None, correlationId=None, parentWorkflowExecutionId=None, tenantId=None, systemMetadata={})
+        parent.update(changed)
+        projected = dict(version=1, workflowExecutionId=parent['workflowExecutionId'], partition='partition-é', tenantId=parent['tenantId'], **pin,
+                         status=['Pending','Running','Suspended','Completed','Faulted','Cancelled'][parent['status']], completedAtUtcTicks=ticks(completed))
+        add('rules-parent-terminal/' + label, 'Elsa.Rules.Workflows.Runtime', 'Elsa.Rules.Workflows.Runtime.Services.RulesNativeDeliveryInspector',
+            'ParentTerminalIdentity', [dict(json=parent), dict(text='partition-é'), dict(json=completed)], projected, 'rules-parent-terminal-v1:')
+    reservation = dict(reservationId='reservation-é', scope=dict(persistence=dict(value='partition-é'), tenantId=None), stimulusType='omitted-type', stimulusHash='stimulus-é',
+        ownerKind='omitted-owner-kind', ownerId='owner-é', ownerRevision=9007199254740993, configurationRevision=7, metadata={'ZOwner':'René','aOwner':'a|b'})
+    for label, changes in [('base',{}), ('metadata-order',dict(metadata={'aOwner':'a|b','ZOwner':'René'})),
+        ('metadata-case',dict(metadata={'zOwner':'René','aOwner':'a|b'})), ('owner-revision',dict(ownerRevision=9007199254740992)),
+        ('configuration-revision',dict(configurationRevision=8)), ('ignored-stimulus',dict(stimulusType='other')), ('ignored-kind',dict(ownerKind='other'))]:
+        value = dict(reservation, **changes)
+        projected = {key:value[key] for key in ['reservationId','ownerId','ownerRevision','configurationRevision','scope','stimulusHash']}
+        projected['metadata'] = [dict(key=key,value=item) for key,item in sorted(value['metadata'].items())]
+        add('http-reservation/' + label, 'Elsa.Workflows.Runtime.Http', 'Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver',
+            'ReservationIdentity', [dict(json=value)], projected, 'standalone-http:', uppercase=True)
+    for label, value in [('absent',{}), ('explicit-null',dict(variables=None,rootActivity=None,inputs=None,outputs=None,strategyOptions=None)),
+                         ('empty',dict(variables=[],rootActivity=None,inputs=[],outputs=[],strategyOptions=None))]:
+        add('authoring-snapshot/' + label, 'Elsa.Workflows.Design.Api', 'Elsa.Workflows.Design.Api.Services.WorkflowAuthoringRevision', 'Snapshot',
+            [dict(json=value)], dict(variables=[],rootActivity=None,inputs=[],outputs=[],strategyOptions=None), returnField='Item2')
     return rows
 
 

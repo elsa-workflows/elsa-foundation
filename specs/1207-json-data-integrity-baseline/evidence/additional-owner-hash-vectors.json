@@ -7297,5 +7297,1460 @@
     "canonical": "{\"alterations\":[{\"kind\":\"cgBlAHAAbABhAGMAZQAtAOkA\",\"payload\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]},\"schemaVersion\":1e0}],\"authority\":{\"metadata\":{\"WgBPAHcAbgBlAHIA\":\"UgBlAG4A6QA=\",\"YQBPAHcAbgBlAHIA\":\"YQB8AGIA\"},\"rootInitiator\":\"bwBwAGUAcgBhAHQAbwByAC0A6QA=\",\"systemIdentity\":\"cwB5AHMAdABlAG0ALQDpAA==\",\"tenantPartition\":\"cABhAHIAdABpAHQAaQBvAG4ALQDpAA==\"},\"target\":{\"query\":{\"artifactId\":null,\"correlationId\":\"YwBvAHIAcgBlAGwAYQB0AGkAbwBuAC0A6QA=\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgAtAOkA\",\"from\":\"MgAwADIANgAtADAANwAtADEANQBUADAANwA6ADMAMAA6ADAAMAAuADAAMAAwADAAMAAwADAAKwAwADAAOgAwADAA\",\"matchAllAuthorized\":false,\"runKind\":\"UAB1AGIAbABpAHMAaABlAGQAUgB1AG4A\",\"status\":\"QwBvAG0AcABsAGUAdABlAGQA\",\"to\":\"MgAwADIANgAtADAANwAtADEANgBUADAANwA6ADMAMAA6ADAAMAAuADAAMAAwADAAMAAwADAAKwAwADAAOgAwADAA\",\"workflowExecutionId\":null}}}",
     "expected": "9c35577d1df093003afdbe7a67071739cfecc074aa18be17b965497cb3dbc05b",
     "terminalMethod": "HashRequest"
+  },
+  {
+    "name": "serialized-shape-revision/base",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "value": {
+          "json": {
+            "id": "version-\u00e9",
+            "definitionId": "omitted-definition",
+            "version": "1.2.3",
+            "hash": null,
+            "providerKey": "provider-\u00e9",
+            "providerSchemaVersion": "1.0.0",
+            "consumerKey": "consumer-\u00e9",
+            "consumerSchemaVersion": "2.0.0",
+            "sourceKind": "ClrDiscovery",
+            "sourceId": "source-\u00e9",
+            "executionType": 0,
+            "descriptorPayload": null
+          }
+        },
+        "propertyArguments": {
+          "DescriptorPayload": {
+            "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+          }
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]},\"hash\":null,\"id\":\"dgBlAHIAcwBpAG8AbgAtAOkA\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:ca4b629b5dd1dc72267ba777e13a77bdca66e8d6e82c380fe0725e1737b5e65c"
+  },
+  {
+    "name": "serialized-shape-revision/spelling",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "value": {
+          "json": {
+            "id": "version-\u00e9",
+            "definitionId": "omitted-definition",
+            "version": "1.2.3",
+            "hash": null,
+            "providerKey": "provider-\u00e9",
+            "providerSchemaVersion": "1.0.0",
+            "consumerKey": "consumer-\u00e9",
+            "consumerSchemaVersion": "2.0.0",
+            "sourceKind": "ClrDiscovery",
+            "sourceId": "source-\u00e9",
+            "executionType": 0,
+            "descriptorPayload": null
+          }
+        },
+        "propertyArguments": {
+          "DescriptorPayload": {
+            "rawJson": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+          }
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]},\"hash\":null,\"id\":\"dgBlAHIAcwBpAG8AbgAtAOkA\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:ca4b629b5dd1dc72267ba777e13a77bdca66e8d6e82c380fe0725e1737b5e65c"
+  },
+  {
+    "name": "serialized-shape-revision/missing",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "value": {
+          "json": {
+            "id": "version-\u00e9",
+            "definitionId": "omitted-definition",
+            "version": "1.2.3",
+            "hash": null,
+            "providerKey": "provider-\u00e9",
+            "providerSchemaVersion": "1.0.0",
+            "consumerKey": "consumer-\u00e9",
+            "consumerSchemaVersion": "2.0.0",
+            "sourceKind": "ClrDiscovery",
+            "sourceId": "source-\u00e9",
+            "executionType": 0,
+            "descriptorPayload": null
+          }
+        },
+        "propertyArguments": {
+          "DescriptorPayload": {
+            "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+          }
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0},\"hash\":null,\"id\":\"dgBlAHIAcwBpAG8AbgAtAOkA\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:0ae9702e60de9201242e0cc260cdd35d940227c882b28f3ddd920a49e100ba57"
+  },
+  {
+    "name": "serialized-shape-revision/null",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "value": {
+          "json": {
+            "id": "version-\u00e9",
+            "definitionId": "omitted-definition",
+            "version": "1.2.3",
+            "hash": null,
+            "providerKey": "provider-\u00e9",
+            "providerSchemaVersion": "1.0.0",
+            "consumerKey": "consumer-\u00e9",
+            "consumerSchemaVersion": "2.0.0",
+            "sourceKind": "ClrDiscovery",
+            "sourceId": "source-\u00e9",
+            "executionType": 0,
+            "descriptorPayload": null
+          }
+        },
+        "propertyArguments": {
+          "DescriptorPayload": {
+            "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+          }
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null},\"hash\":null,\"id\":\"dgBlAHIAcwBpAG8AbgAtAOkA\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:ab7df452a7210350eeceee0596f2fc513f2ffb0a278e90af5607463787acc9b8"
+  },
+  {
+    "name": "serialized-shape-revision/order",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "value": {
+          "json": {
+            "id": "version-\u00e9",
+            "definitionId": "omitted-definition",
+            "version": "1.2.3",
+            "hash": null,
+            "providerKey": "provider-\u00e9",
+            "providerSchemaVersion": "1.0.0",
+            "consumerKey": "consumer-\u00e9",
+            "consumerSchemaVersion": "2.0.0",
+            "sourceKind": "ClrDiscovery",
+            "sourceId": "source-\u00e9",
+            "executionType": 0,
+            "descriptorPayload": null
+          }
+        },
+        "propertyArguments": {
+          "DescriptorPayload": {
+            "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+          }
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]},\"hash\":null,\"id\":\"dgBlAHIAcwBpAG8AbgAtAOkA\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:31d580f919cfadffa74f0264c22b86a8fc3b895593888967148d44b9e83a6422"
+  },
+  {
+    "name": "serialized-shape-revision/number",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "value": {
+          "json": {
+            "id": "version-\u00e9",
+            "definitionId": "omitted-definition",
+            "version": "1.2.3",
+            "hash": null,
+            "providerKey": "provider-\u00e9",
+            "providerSchemaVersion": "1.0.0",
+            "consumerKey": "consumer-\u00e9",
+            "consumerSchemaVersion": "2.0.0",
+            "sourceKind": "ClrDiscovery",
+            "sourceId": "source-\u00e9",
+            "executionType": 0,
+            "descriptorPayload": null
+          }
+        },
+        "propertyArguments": {
+          "DescriptorPayload": {
+            "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+          }
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]},\"hash\":null,\"id\":\"dgBlAHIAcwBpAG8AbgAtAOkA\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:162d57efa577bd9610d259fc1b82165da728ec825010517e8327cb67736779bc"
+  },
+  {
+    "name": "serialized-shape-revision/selected-id",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "json": {
+          "id": "other",
+          "definitionId": "omitted-definition",
+          "version": "1.2.3",
+          "hash": null,
+          "providerKey": "provider-\u00e9",
+          "providerSchemaVersion": "1.0.0",
+          "consumerKey": "consumer-\u00e9",
+          "consumerSchemaVersion": "2.0.0",
+          "sourceKind": "ClrDiscovery",
+          "sourceId": "source-\u00e9",
+          "executionType": 0,
+          "descriptorPayload": null
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":null,\"hash\":null,\"id\":\"bwB0AGgAZQByAA==\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:897708cbdbb521758583495cb32a0d02563836a26288ba5efc8569ced85c4808"
+  },
+  {
+    "name": "serialized-shape-revision/selected-hash",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "json": {
+          "id": "version-\u00e9",
+          "definitionId": "omitted-definition",
+          "version": "1.2.3",
+          "hash": "other",
+          "providerKey": "provider-\u00e9",
+          "providerSchemaVersion": "1.0.0",
+          "consumerKey": "consumer-\u00e9",
+          "consumerSchemaVersion": "2.0.0",
+          "sourceKind": "ClrDiscovery",
+          "sourceId": "source-\u00e9",
+          "executionType": 0,
+          "descriptorPayload": null
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":null,\"hash\":\"bwB0AGgAZQByAA==\",\"id\":\"dgBlAHIAcwBpAG8AbgAtAOkA\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:bbbcdfc1b4fdaf9464f6a77318103f0d0b8de785ff645dfa872be44034993ac2"
+  },
+  {
+    "name": "serialized-shape-revision/selected-version",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "json": {
+          "id": "version-\u00e9",
+          "definitionId": "omitted-definition",
+          "version": "2.0.0",
+          "hash": null,
+          "providerKey": "provider-\u00e9",
+          "providerSchemaVersion": "1.0.0",
+          "consumerKey": "consumer-\u00e9",
+          "consumerSchemaVersion": "2.0.0",
+          "sourceKind": "ClrDiscovery",
+          "sourceId": "source-\u00e9",
+          "executionType": 0,
+          "descriptorPayload": null
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":null,\"hash\":null,\"id\":\"dgBlAHIAcwBpAG8AbgAtAOkA\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MgAuADAALgAwAA==\"}",
+    "expected": "sha256:a4aa86ff5c91066a102496d615a3d2ea0a4d0660fc6c19f777663055b7f3a331"
+  },
+  {
+    "name": "serialized-shape-revision/selected-provider",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "json": {
+          "id": "version-\u00e9",
+          "definitionId": "omitted-definition",
+          "version": "1.2.3",
+          "hash": null,
+          "providerKey": "other",
+          "providerSchemaVersion": "1.0.0",
+          "consumerKey": "consumer-\u00e9",
+          "consumerSchemaVersion": "2.0.0",
+          "sourceKind": "ClrDiscovery",
+          "sourceId": "source-\u00e9",
+          "executionType": 0,
+          "descriptorPayload": null
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":null,\"hash\":null,\"id\":\"dgBlAHIAcwBpAG8AbgAtAOkA\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"bwB0AGgAZQByAA==\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:473364de79d1f4329b0101a61e8a43e9d086789bac7e6855749352256877a438"
+  },
+  {
+    "name": "serialized-shape-revision/selected-consumer",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "json": {
+          "id": "version-\u00e9",
+          "definitionId": "omitted-definition",
+          "version": "1.2.3",
+          "hash": null,
+          "providerKey": "provider-\u00e9",
+          "providerSchemaVersion": "1.0.0",
+          "consumerKey": "consumer-\u00e9",
+          "consumerSchemaVersion": "other",
+          "sourceKind": "ClrDiscovery",
+          "sourceId": "source-\u00e9",
+          "executionType": 0,
+          "descriptorPayload": null
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"bwB0AGgAZQByAA==\",\"descriptorPayload\":null,\"hash\":null,\"id\":\"dgBlAHIAcwBpAG8AbgAtAOkA\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:d397d4a6661768572aba4f319559655fd2b5752551db1451fc792400dfdbfb16"
+  },
+  {
+    "name": "serialized-shape-revision/ignored-definition",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "json": {
+          "id": "version-\u00e9",
+          "definitionId": "other",
+          "version": "1.2.3",
+          "hash": null,
+          "providerKey": "provider-\u00e9",
+          "providerSchemaVersion": "1.0.0",
+          "consumerKey": "consumer-\u00e9",
+          "consumerSchemaVersion": "2.0.0",
+          "sourceKind": "ClrDiscovery",
+          "sourceId": "source-\u00e9",
+          "executionType": 0,
+          "descriptorPayload": null
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":null,\"hash\":null,\"id\":\"dgBlAHIAcwBpAG8AbgAtAOkA\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:c76767b289f523149cdbb981ce3bea5698cd003e8b9df2a6c9c68d020ac1d739"
+  },
+  {
+    "name": "serialized-shape-revision/utf16-55296",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "value": {
+          "json": {
+            "id": "version-\u00e9",
+            "definitionId": "omitted-definition",
+            "version": "1.2.3",
+            "hash": null,
+            "providerKey": "provider-\u00e9",
+            "providerSchemaVersion": "1.0.0",
+            "consumerKey": "consumer-\u00e9",
+            "consumerSchemaVersion": "2.0.0",
+            "sourceKind": "ClrDiscovery",
+            "sourceId": "source-\u00e9",
+            "executionType": 0,
+            "descriptorPayload": null
+          }
+        },
+        "propertyArguments": {
+          "Id": {
+            "utf16": [
+              55296
+            ]
+          }
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":null,\"hash\":null,\"id\":\"ANg=\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:a22d2062e3b9735efe447c11757e7c10fe1d8f43aba5686042e590b5da7a7d52"
+  },
+  {
+    "name": "serialized-shape-revision/utf16-55297",
+    "assembly": "Elsa.Activities.Design.Reconciliation.Clr",
+    "type": "Elsa.Activities.Design.Reconciliation.Clr.Services.ClrActivitySerializedShapeSource",
+    "method": "ResultRevision",
+    "arguments": [
+      {
+        "clrType": "Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion",
+        "clrAssembly": "Elsa.Activities.Design.Persistence.Core",
+        "value": {
+          "json": {
+            "id": "version-\u00e9",
+            "definitionId": "omitted-definition",
+            "version": "1.2.3",
+            "hash": null,
+            "providerKey": "provider-\u00e9",
+            "providerSchemaVersion": "1.0.0",
+            "consumerKey": "consumer-\u00e9",
+            "consumerSchemaVersion": "2.0.0",
+            "sourceKind": "ClrDiscovery",
+            "sourceId": "source-\u00e9",
+            "executionType": 0,
+            "descriptorPayload": null
+          }
+        },
+        "propertyArguments": {
+          "Id": {
+            "utf16": [
+              55297
+            ]
+          }
+        }
+      },
+      {
+        "text": "projection-\u00e9"
+      }
+    ],
+    "canonical": "{\"consumerKey\":\"YwBvAG4AcwB1AG0AZQByAC0A6QA=\",\"consumerSchemaVersion\":\"MgAuADAALgAwAA==\",\"descriptorPayload\":null,\"hash\":null,\"id\":\"Adg=\",\"projectionKey\":\"cAByAG8AagBlAGMAdABpAG8AbgAtAOkA\",\"providerKey\":\"cAByAG8AdgBpAGQAZQByAC0A6QA=\",\"providerSchemaVersion\":\"MQAuADAALgAwAA==\",\"sourceId\":\"cwBvAHUAcgBjAGUALQDpAA==\",\"sourceKind\":\"QwBsAHIARABpAHMAYwBvAHYAZQByAHkA\",\"version\":\"MQAuADIALgAzAA==\"}",
+    "expected": "sha256:02b7f7b1de184cae084fd5139b6794113c825d393dc478482119333fcac8b0b3"
+  },
+  {
+    "name": "feature-revision/base",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Fixed Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "06248b25a3034e483bcced4eb0f31d0dce95cb1c25e485be15e31218be4ab4f8"
+  },
+  {
+    "name": "feature-revision/spelling",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Fixed Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "06248b25a3034e483bcced4eb0f31d0dce95cb1c25e485be15e31218be4ab4f8"
+  },
+  {
+    "name": "feature-revision/missing",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Fixed Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "9ae5250b57f50d2b1b77bbc1e0c477ff864bbed1b45d280655cde98ce5552bca"
+  },
+  {
+    "name": "feature-revision/null",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Fixed Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "44f200d75477ed2876b970beb7e72e91aa112a6acf8167741e58696310746e1c"
+  },
+  {
+    "name": "feature-revision/order",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Fixed Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "faeb395452fd20313f112ec6ca0afa846af743fc111cea6bd58761a6bfacba74"
+  },
+  {
+    "name": "feature-revision/number",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Fixed Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "0bcf36dbcb3fce5cbdaaf86750e3d73c1b3e083d39acc7c347a9451c9e511f5e"
+  },
+  {
+    "name": "feature-revision/root-null",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "null"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Fixed Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "null",
+    "expected": "7633bcb76a5763a28b195b7903ca0f2abe2a23c5c96756a7968e30b3c433b88a"
+  },
+  {
+    "name": "feature-revision/rotated-base",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[1,null]}"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Rotated Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "f98843cbaa64a782f3f42c47275f9605f17d7a20f070ccdc9967e39cd9a63a18"
+  },
+  {
+    "name": "feature-revision/rotated-spelling",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": " { \"rows\": [1e0,null], \"n\":9007199254740993.0,\"OwnerKey\":\"Ren\\u00e9\" } "
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Rotated Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[1e0,null]}",
+    "expected": "f98843cbaa64a782f3f42c47275f9605f17d7a20f070ccdc9967e39cd9a63a18"
+  },
+  {
+    "name": "feature-revision/rotated-missing",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993}"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Rotated Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0}",
+    "expected": "2880a55291b410e96c9dabfabebd2ed1dffc58f26b99468f8145c78fbeeed9ae"
+  },
+  {
+    "name": "feature-revision/rotated-null",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":null}"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Rotated Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":null}",
+    "expected": "a07e7565cbf73b02d35a32d339d1ca872bbdfde524facad677bd2b4083c0e356"
+  },
+  {
+    "name": "feature-revision/rotated-order",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740993,\"rows\":[null,1]}"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Rotated Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740993e0,\"rows\":[null,1e0]}",
+    "expected": "4d3ce57a5cbe167f518cdd32452fa4481d69d6ccee4acad59a4a0f812a798f04"
+  },
+  {
+    "name": "feature-revision/rotated-number",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "{\"OwnerKey\":\"Ren\u00e9\",\"n\":9007199254740992,\"rows\":[1,null]}"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Rotated Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"n\":9007199254740992e0,\"rows\":[1e0,null]}",
+    "expected": "c16edae93ce52acfc7a2abf934c273188376f114490b5f8cef6cc30924a3c6d2"
+  },
+  {
+    "name": "feature-revision/rotated-root-null",
+    "assembly": "Elsa.Modularity.Api",
+    "type": "Elsa.Modularity.Api.Services.JsonShellFeatureConfigurationStore",
+    "method": "CreateRevision",
+    "arguments": [
+      {
+        "rawJson": "null"
+      }
+    ],
+    "instance": {
+      "constructorArguments": {
+        "environment": {
+          "clrNull": true
+        },
+        "shellSettings": {
+          "clrNull": true
+        },
+        "options": {
+          "optionsValue": {
+            "json": {
+              "revisionKey": "Rotated Unicode Revision Key \u00e9\u96ea"
+            }
+          }
+        },
+        "hostContext": {
+          "clrNull": true
+        }
+      }
+    },
+    "canonical": "null",
+    "expected": "39e8fc866ebb45ce637278df91442647952b8438bda703b9100ecd991fec7f28"
+  },
+  {
+    "name": "rules-parent-terminal/base",
+    "assembly": "Elsa.Rules.Workflows.Runtime",
+    "type": "Elsa.Rules.Workflows.Runtime.Services.RulesNativeDeliveryInspector",
+    "method": "ParentTerminalIdentity",
+    "arguments": [
+      {
+        "json": {
+          "workflowExecutionId": "run-\u00e9",
+          "pinnedExecutable": {
+            "artifactId": "artifact-\u00e9",
+            "definitionId": "definition-\u00e9",
+            "definitionVersionId": "version-\u00e9",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "hash-\u00e9"
+          },
+          "status": 5,
+          "subStatus": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "startedAt": null,
+          "updatedAt": null,
+          "completedAt": null,
+          "correlationId": null,
+          "parentWorkflowExecutionId": null,
+          "tenantId": null,
+          "systemMetadata": {}
+        }
+      },
+      {
+        "text": "partition-\u00e9"
+      },
+      {
+        "json": "2026-07-15T09:30:00+02:00"
+      }
+    ],
+    "canonical": "{\"artifactHash\":\"hash-\\u00E9\",\"artifactId\":\"artifact-\\u00E9\",\"artifactVersion\":\"1.0.0\",\"completedAtUtcTicks\":639196974e9,\"definitionId\":\"definition-\\u00E9\",\"definitionVersionId\":\"version-\\u00E9\",\"partition\":\"partition-\\u00E9\",\"status\":\"Cancelled\",\"tenantId\":null,\"version\":1e0,\"workflowExecutionId\":\"run-\\u00E9\"}",
+    "expected": "rules-parent-terminal-v1:75a85187ca1b72d5c52e227047dbcddfbc73b3ab5e99a06de2c3e0e3120ca234"
+  },
+  {
+    "name": "rules-parent-terminal/offset",
+    "assembly": "Elsa.Rules.Workflows.Runtime",
+    "type": "Elsa.Rules.Workflows.Runtime.Services.RulesNativeDeliveryInspector",
+    "method": "ParentTerminalIdentity",
+    "arguments": [
+      {
+        "json": {
+          "workflowExecutionId": "run-\u00e9",
+          "pinnedExecutable": {
+            "artifactId": "artifact-\u00e9",
+            "definitionId": "definition-\u00e9",
+            "definitionVersionId": "version-\u00e9",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "hash-\u00e9"
+          },
+          "status": 5,
+          "subStatus": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "startedAt": null,
+          "updatedAt": null,
+          "completedAt": null,
+          "correlationId": null,
+          "parentWorkflowExecutionId": null,
+          "tenantId": null,
+          "systemMetadata": {}
+        }
+      },
+      {
+        "text": "partition-\u00e9"
+      },
+      {
+        "json": "2026-07-15T07:30:00+00:00"
+      }
+    ],
+    "canonical": "{\"artifactHash\":\"hash-\\u00E9\",\"artifactId\":\"artifact-\\u00E9\",\"artifactVersion\":\"1.0.0\",\"completedAtUtcTicks\":639196974e9,\"definitionId\":\"definition-\\u00E9\",\"definitionVersionId\":\"version-\\u00E9\",\"partition\":\"partition-\\u00E9\",\"status\":\"Cancelled\",\"tenantId\":null,\"version\":1e0,\"workflowExecutionId\":\"run-\\u00E9\"}",
+    "expected": "rules-parent-terminal-v1:75a85187ca1b72d5c52e227047dbcddfbc73b3ab5e99a06de2c3e0e3120ca234"
+  },
+  {
+    "name": "rules-parent-terminal/one-tick",
+    "assembly": "Elsa.Rules.Workflows.Runtime",
+    "type": "Elsa.Rules.Workflows.Runtime.Services.RulesNativeDeliveryInspector",
+    "method": "ParentTerminalIdentity",
+    "arguments": [
+      {
+        "json": {
+          "workflowExecutionId": "run-\u00e9",
+          "pinnedExecutable": {
+            "artifactId": "artifact-\u00e9",
+            "definitionId": "definition-\u00e9",
+            "definitionVersionId": "version-\u00e9",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "hash-\u00e9"
+          },
+          "status": 5,
+          "subStatus": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "startedAt": null,
+          "updatedAt": null,
+          "completedAt": null,
+          "correlationId": null,
+          "parentWorkflowExecutionId": null,
+          "tenantId": null,
+          "systemMetadata": {}
+        }
+      },
+      {
+        "text": "partition-\u00e9"
+      },
+      {
+        "json": "2026-07-15T07:30:00.0000001+00:00"
+      }
+    ],
+    "canonical": "{\"artifactHash\":\"hash-\\u00E9\",\"artifactId\":\"artifact-\\u00E9\",\"artifactVersion\":\"1.0.0\",\"completedAtUtcTicks\":639196974000000001e0,\"definitionId\":\"definition-\\u00E9\",\"definitionVersionId\":\"version-\\u00E9\",\"partition\":\"partition-\\u00E9\",\"status\":\"Cancelled\",\"tenantId\":null,\"version\":1e0,\"workflowExecutionId\":\"run-\\u00E9\"}",
+    "expected": "rules-parent-terminal-v1:94671fd73f5408d71b87702b03b7fb3a1fb8ca656b604ade577cfb993af521a7"
+  },
+  {
+    "name": "rules-parent-terminal/tenant",
+    "assembly": "Elsa.Rules.Workflows.Runtime",
+    "type": "Elsa.Rules.Workflows.Runtime.Services.RulesNativeDeliveryInspector",
+    "method": "ParentTerminalIdentity",
+    "arguments": [
+      {
+        "json": {
+          "workflowExecutionId": "run-\u00e9",
+          "pinnedExecutable": {
+            "artifactId": "artifact-\u00e9",
+            "definitionId": "definition-\u00e9",
+            "definitionVersionId": "version-\u00e9",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "hash-\u00e9"
+          },
+          "status": 5,
+          "subStatus": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "startedAt": null,
+          "updatedAt": null,
+          "completedAt": null,
+          "correlationId": null,
+          "parentWorkflowExecutionId": null,
+          "tenantId": "tenant-\u00e9",
+          "systemMetadata": {}
+        }
+      },
+      {
+        "text": "partition-\u00e9"
+      },
+      {
+        "json": "2026-07-15T09:30:00+02:00"
+      }
+    ],
+    "canonical": "{\"artifactHash\":\"hash-\\u00E9\",\"artifactId\":\"artifact-\\u00E9\",\"artifactVersion\":\"1.0.0\",\"completedAtUtcTicks\":639196974e9,\"definitionId\":\"definition-\\u00E9\",\"definitionVersionId\":\"version-\\u00E9\",\"partition\":\"partition-\\u00E9\",\"status\":\"Cancelled\",\"tenantId\":\"tenant-\\u00E9\",\"version\":1e0,\"workflowExecutionId\":\"run-\\u00E9\"}",
+    "expected": "rules-parent-terminal-v1:4754af4dc3c0d16952e4ac546495d49b126d766b21e59c52f27ed7120d4353b3"
+  },
+  {
+    "name": "rules-parent-terminal/status",
+    "assembly": "Elsa.Rules.Workflows.Runtime",
+    "type": "Elsa.Rules.Workflows.Runtime.Services.RulesNativeDeliveryInspector",
+    "method": "ParentTerminalIdentity",
+    "arguments": [
+      {
+        "json": {
+          "workflowExecutionId": "run-\u00e9",
+          "pinnedExecutable": {
+            "artifactId": "artifact-\u00e9",
+            "definitionId": "definition-\u00e9",
+            "definitionVersionId": "version-\u00e9",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "hash-\u00e9"
+          },
+          "status": 4,
+          "subStatus": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "startedAt": null,
+          "updatedAt": null,
+          "completedAt": null,
+          "correlationId": null,
+          "parentWorkflowExecutionId": null,
+          "tenantId": null,
+          "systemMetadata": {}
+        }
+      },
+      {
+        "text": "partition-\u00e9"
+      },
+      {
+        "json": "2026-07-15T09:30:00+02:00"
+      }
+    ],
+    "canonical": "{\"artifactHash\":\"hash-\\u00E9\",\"artifactId\":\"artifact-\\u00E9\",\"artifactVersion\":\"1.0.0\",\"completedAtUtcTicks\":639196974e9,\"definitionId\":\"definition-\\u00E9\",\"definitionVersionId\":\"version-\\u00E9\",\"partition\":\"partition-\\u00E9\",\"status\":\"Faulted\",\"tenantId\":null,\"version\":1e0,\"workflowExecutionId\":\"run-\\u00E9\"}",
+    "expected": "rules-parent-terminal-v1:53b960277976f7c89e4c3e36d9ac633350e64147c8b4328a7cb8720cef04115d"
+  },
+  {
+    "name": "rules-parent-terminal/ignored-completed",
+    "assembly": "Elsa.Rules.Workflows.Runtime",
+    "type": "Elsa.Rules.Workflows.Runtime.Services.RulesNativeDeliveryInspector",
+    "method": "ParentTerminalIdentity",
+    "arguments": [
+      {
+        "json": {
+          "workflowExecutionId": "run-\u00e9",
+          "pinnedExecutable": {
+            "artifactId": "artifact-\u00e9",
+            "definitionId": "definition-\u00e9",
+            "definitionVersionId": "version-\u00e9",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "hash-\u00e9"
+          },
+          "status": 5,
+          "subStatus": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "startedAt": null,
+          "updatedAt": null,
+          "completedAt": "2025-01-01T00:00:00Z",
+          "correlationId": null,
+          "parentWorkflowExecutionId": null,
+          "tenantId": null,
+          "systemMetadata": {}
+        }
+      },
+      {
+        "text": "partition-\u00e9"
+      },
+      {
+        "json": "2026-07-15T09:30:00+02:00"
+      }
+    ],
+    "canonical": "{\"artifactHash\":\"hash-\\u00E9\",\"artifactId\":\"artifact-\\u00E9\",\"artifactVersion\":\"1.0.0\",\"completedAtUtcTicks\":639196974e9,\"definitionId\":\"definition-\\u00E9\",\"definitionVersionId\":\"version-\\u00E9\",\"partition\":\"partition-\\u00E9\",\"status\":\"Cancelled\",\"tenantId\":null,\"version\":1e0,\"workflowExecutionId\":\"run-\\u00E9\"}",
+    "expected": "rules-parent-terminal-v1:75a85187ca1b72d5c52e227047dbcddfbc73b3ab5e99a06de2c3e0e3120ca234"
+  },
+  {
+    "name": "http-reservation/base",
+    "assembly": "Elsa.Workflows.Runtime.Http",
+    "type": "Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver",
+    "method": "ReservationIdentity",
+    "arguments": [
+      {
+        "json": {
+          "reservationId": "reservation-\u00e9",
+          "scope": {
+            "persistence": {
+              "value": "partition-\u00e9"
+            },
+            "tenantId": null
+          },
+          "stimulusType": "omitted-type",
+          "stimulusHash": "stimulus-\u00e9",
+          "ownerKind": "omitted-owner-kind",
+          "ownerId": "owner-\u00e9",
+          "ownerRevision": 9007199254740993,
+          "configurationRevision": 7,
+          "metadata": {
+            "ZOwner": "Ren\u00e9",
+            "aOwner": "a|b"
+          }
+        }
+      }
+    ],
+    "canonical": "{\"configurationRevision\":7e0,\"metadata\":[{\"key\":\"ZOwner\",\"value\":\"Ren\\u00E9\"},{\"key\":\"aOwner\",\"value\":\"a|b\"}],\"ownerId\":\"owner-\\u00E9\",\"ownerRevision\":9007199254740993e0,\"reservationId\":\"reservation-\\u00E9\",\"scope\":{\"persistence\":{\"value\":\"partition-\\u00E9\"},\"tenantId\":null},\"stimulusHash\":\"stimulus-\\u00E9\"}",
+    "expected": "standalone-http:CDE57CECBC4EE2C84CE60B0FE8738EC2CCC24B22A97558790DF7E813014F8A86"
+  },
+  {
+    "name": "http-reservation/metadata-order",
+    "assembly": "Elsa.Workflows.Runtime.Http",
+    "type": "Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver",
+    "method": "ReservationIdentity",
+    "arguments": [
+      {
+        "json": {
+          "reservationId": "reservation-\u00e9",
+          "scope": {
+            "persistence": {
+              "value": "partition-\u00e9"
+            },
+            "tenantId": null
+          },
+          "stimulusType": "omitted-type",
+          "stimulusHash": "stimulus-\u00e9",
+          "ownerKind": "omitted-owner-kind",
+          "ownerId": "owner-\u00e9",
+          "ownerRevision": 9007199254740993,
+          "configurationRevision": 7,
+          "metadata": {
+            "aOwner": "a|b",
+            "ZOwner": "Ren\u00e9"
+          }
+        }
+      }
+    ],
+    "canonical": "{\"configurationRevision\":7e0,\"metadata\":[{\"key\":\"ZOwner\",\"value\":\"Ren\\u00E9\"},{\"key\":\"aOwner\",\"value\":\"a|b\"}],\"ownerId\":\"owner-\\u00E9\",\"ownerRevision\":9007199254740993e0,\"reservationId\":\"reservation-\\u00E9\",\"scope\":{\"persistence\":{\"value\":\"partition-\\u00E9\"},\"tenantId\":null},\"stimulusHash\":\"stimulus-\\u00E9\"}",
+    "expected": "standalone-http:CDE57CECBC4EE2C84CE60B0FE8738EC2CCC24B22A97558790DF7E813014F8A86"
+  },
+  {
+    "name": "http-reservation/metadata-case",
+    "assembly": "Elsa.Workflows.Runtime.Http",
+    "type": "Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver",
+    "method": "ReservationIdentity",
+    "arguments": [
+      {
+        "json": {
+          "reservationId": "reservation-\u00e9",
+          "scope": {
+            "persistence": {
+              "value": "partition-\u00e9"
+            },
+            "tenantId": null
+          },
+          "stimulusType": "omitted-type",
+          "stimulusHash": "stimulus-\u00e9",
+          "ownerKind": "omitted-owner-kind",
+          "ownerId": "owner-\u00e9",
+          "ownerRevision": 9007199254740993,
+          "configurationRevision": 7,
+          "metadata": {
+            "zOwner": "Ren\u00e9",
+            "aOwner": "a|b"
+          }
+        }
+      }
+    ],
+    "canonical": "{\"configurationRevision\":7e0,\"metadata\":[{\"key\":\"aOwner\",\"value\":\"a|b\"},{\"key\":\"zOwner\",\"value\":\"Ren\\u00E9\"}],\"ownerId\":\"owner-\\u00E9\",\"ownerRevision\":9007199254740993e0,\"reservationId\":\"reservation-\\u00E9\",\"scope\":{\"persistence\":{\"value\":\"partition-\\u00E9\"},\"tenantId\":null},\"stimulusHash\":\"stimulus-\\u00E9\"}",
+    "expected": "standalone-http:8CE5945134F66C3D578C5521CAA96B49B25A1BD0F2809DF01F03ABA635ADBDE6"
+  },
+  {
+    "name": "http-reservation/owner-revision",
+    "assembly": "Elsa.Workflows.Runtime.Http",
+    "type": "Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver",
+    "method": "ReservationIdentity",
+    "arguments": [
+      {
+        "json": {
+          "reservationId": "reservation-\u00e9",
+          "scope": {
+            "persistence": {
+              "value": "partition-\u00e9"
+            },
+            "tenantId": null
+          },
+          "stimulusType": "omitted-type",
+          "stimulusHash": "stimulus-\u00e9",
+          "ownerKind": "omitted-owner-kind",
+          "ownerId": "owner-\u00e9",
+          "ownerRevision": 9007199254740992,
+          "configurationRevision": 7,
+          "metadata": {
+            "ZOwner": "Ren\u00e9",
+            "aOwner": "a|b"
+          }
+        }
+      }
+    ],
+    "canonical": "{\"configurationRevision\":7e0,\"metadata\":[{\"key\":\"ZOwner\",\"value\":\"Ren\\u00E9\"},{\"key\":\"aOwner\",\"value\":\"a|b\"}],\"ownerId\":\"owner-\\u00E9\",\"ownerRevision\":9007199254740992e0,\"reservationId\":\"reservation-\\u00E9\",\"scope\":{\"persistence\":{\"value\":\"partition-\\u00E9\"},\"tenantId\":null},\"stimulusHash\":\"stimulus-\\u00E9\"}",
+    "expected": "standalone-http:B88522DAE0338FA0FFFBAEEF0A67043A077C01F348428EF5D7A6DA71BF8ABE0B"
+  },
+  {
+    "name": "http-reservation/configuration-revision",
+    "assembly": "Elsa.Workflows.Runtime.Http",
+    "type": "Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver",
+    "method": "ReservationIdentity",
+    "arguments": [
+      {
+        "json": {
+          "reservationId": "reservation-\u00e9",
+          "scope": {
+            "persistence": {
+              "value": "partition-\u00e9"
+            },
+            "tenantId": null
+          },
+          "stimulusType": "omitted-type",
+          "stimulusHash": "stimulus-\u00e9",
+          "ownerKind": "omitted-owner-kind",
+          "ownerId": "owner-\u00e9",
+          "ownerRevision": 9007199254740993,
+          "configurationRevision": 8,
+          "metadata": {
+            "ZOwner": "Ren\u00e9",
+            "aOwner": "a|b"
+          }
+        }
+      }
+    ],
+    "canonical": "{\"configurationRevision\":8e0,\"metadata\":[{\"key\":\"ZOwner\",\"value\":\"Ren\\u00E9\"},{\"key\":\"aOwner\",\"value\":\"a|b\"}],\"ownerId\":\"owner-\\u00E9\",\"ownerRevision\":9007199254740993e0,\"reservationId\":\"reservation-\\u00E9\",\"scope\":{\"persistence\":{\"value\":\"partition-\\u00E9\"},\"tenantId\":null},\"stimulusHash\":\"stimulus-\\u00E9\"}",
+    "expected": "standalone-http:1DAB9738565B121B93C9B63961227784201B968AAA79A40D5350FACCEBD56B06"
+  },
+  {
+    "name": "http-reservation/ignored-stimulus",
+    "assembly": "Elsa.Workflows.Runtime.Http",
+    "type": "Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver",
+    "method": "ReservationIdentity",
+    "arguments": [
+      {
+        "json": {
+          "reservationId": "reservation-\u00e9",
+          "scope": {
+            "persistence": {
+              "value": "partition-\u00e9"
+            },
+            "tenantId": null
+          },
+          "stimulusType": "other",
+          "stimulusHash": "stimulus-\u00e9",
+          "ownerKind": "omitted-owner-kind",
+          "ownerId": "owner-\u00e9",
+          "ownerRevision": 9007199254740993,
+          "configurationRevision": 7,
+          "metadata": {
+            "ZOwner": "Ren\u00e9",
+            "aOwner": "a|b"
+          }
+        }
+      }
+    ],
+    "canonical": "{\"configurationRevision\":7e0,\"metadata\":[{\"key\":\"ZOwner\",\"value\":\"Ren\\u00E9\"},{\"key\":\"aOwner\",\"value\":\"a|b\"}],\"ownerId\":\"owner-\\u00E9\",\"ownerRevision\":9007199254740993e0,\"reservationId\":\"reservation-\\u00E9\",\"scope\":{\"persistence\":{\"value\":\"partition-\\u00E9\"},\"tenantId\":null},\"stimulusHash\":\"stimulus-\\u00E9\"}",
+    "expected": "standalone-http:CDE57CECBC4EE2C84CE60B0FE8738EC2CCC24B22A97558790DF7E813014F8A86"
+  },
+  {
+    "name": "http-reservation/ignored-kind",
+    "assembly": "Elsa.Workflows.Runtime.Http",
+    "type": "Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver",
+    "method": "ReservationIdentity",
+    "arguments": [
+      {
+        "json": {
+          "reservationId": "reservation-\u00e9",
+          "scope": {
+            "persistence": {
+              "value": "partition-\u00e9"
+            },
+            "tenantId": null
+          },
+          "stimulusType": "omitted-type",
+          "stimulusHash": "stimulus-\u00e9",
+          "ownerKind": "other",
+          "ownerId": "owner-\u00e9",
+          "ownerRevision": 9007199254740993,
+          "configurationRevision": 7,
+          "metadata": {
+            "ZOwner": "Ren\u00e9",
+            "aOwner": "a|b"
+          }
+        }
+      }
+    ],
+    "canonical": "{\"configurationRevision\":7e0,\"metadata\":[{\"key\":\"ZOwner\",\"value\":\"Ren\\u00E9\"},{\"key\":\"aOwner\",\"value\":\"a|b\"}],\"ownerId\":\"owner-\\u00E9\",\"ownerRevision\":9007199254740993e0,\"reservationId\":\"reservation-\\u00E9\",\"scope\":{\"persistence\":{\"value\":\"partition-\\u00E9\"},\"tenantId\":null},\"stimulusHash\":\"stimulus-\\u00E9\"}",
+    "expected": "standalone-http:CDE57CECBC4EE2C84CE60B0FE8738EC2CCC24B22A97558790DF7E813014F8A86"
+  },
+  {
+    "name": "authoring-snapshot/absent",
+    "assembly": "Elsa.Workflows.Design.Api",
+    "type": "Elsa.Workflows.Design.Api.Services.WorkflowAuthoringRevision",
+    "method": "Snapshot",
+    "arguments": [
+      {
+        "json": {}
+      }
+    ],
+    "canonical": "{\"inputs\":[],\"outputs\":[],\"rootActivity\":null,\"strategyOptions\":null,\"variables\":[]}",
+    "expected": "61bb98490cc4c345a365bd9103f83604164ddf728bbcad3131c5faeae0d1ee79",
+    "returnField": "Item2"
+  },
+  {
+    "name": "authoring-snapshot/explicit-null",
+    "assembly": "Elsa.Workflows.Design.Api",
+    "type": "Elsa.Workflows.Design.Api.Services.WorkflowAuthoringRevision",
+    "method": "Snapshot",
+    "arguments": [
+      {
+        "json": {
+          "variables": null,
+          "rootActivity": null,
+          "inputs": null,
+          "outputs": null,
+          "strategyOptions": null
+        }
+      }
+    ],
+    "canonical": "{\"inputs\":[],\"outputs\":[],\"rootActivity\":null,\"strategyOptions\":null,\"variables\":[]}",
+    "expected": "61bb98490cc4c345a365bd9103f83604164ddf728bbcad3131c5faeae0d1ee79",
+    "returnField": "Item2"
+  },
+  {
+    "name": "authoring-snapshot/empty",
+    "assembly": "Elsa.Workflows.Design.Api",
+    "type": "Elsa.Workflows.Design.Api.Services.WorkflowAuthoringRevision",
+    "method": "Snapshot",
+    "arguments": [
+      {
+        "json": {
+          "variables": [],
+          "rootActivity": null,
+          "inputs": [],
+          "outputs": [],
+          "strategyOptions": null
+        }
+      }
+    ],
+    "canonical": "{\"inputs\":[],\"outputs\":[],\"rootActivity\":null,\"strategyOptions\":null,\"variables\":[]}",
+    "expected": "61bb98490cc4c345a365bd9103f83604164ddf728bbcad3131c5faeae0d1ee79",
+    "returnField": "Item2"
   }
 ]

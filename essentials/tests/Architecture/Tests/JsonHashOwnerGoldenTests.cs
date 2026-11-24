@@ -37,7 +37,8 @@ public sealed class JsonHashOwnerGoldenTests
             if (vector.TryGetProperty("validateWith", out var validation))
                 ResolveType(validation.GetProperty("type").GetString()!, validation.GetProperty("assembly").GetString()!, inventory.Assemblies)
                     .GetMethod(validation.GetProperty("method").GetString()!, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [values[0]]);
-            var instance = vector.TryGetProperty("instanceKeyHex", out var key)
+            var instance = vector.TryGetProperty("instance", out var instanceArgument) ? Argument(instanceArgument, type, inventory.Assemblies)
+                : vector.TryGetProperty("instanceKeyHex", out var key)
                 ? Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.NonPublic, null, [Convert.FromHexString(key.GetString()!)], null)
                 : null;
             object? returned;
@@ -71,6 +72,8 @@ public sealed class JsonHashOwnerGoldenTests
                 }
             if (vector.TryGetProperty("returnProperty", out var returnedProperty))
                 returned = returned!.GetType().GetProperty(returnedProperty.GetString()!)!.GetValue(returned);
+            if (vector.TryGetProperty("returnField", out var returnedField))
+                returned = returned!.GetType().GetField(returnedField.GetString()!)!.GetValue(returned);
             if (vector.GetProperty("expected").ValueKind is JsonValueKind.True or JsonValueKind.False)
             {
                 Assert.True(Assert.IsType<bool>(returned) == vector.GetProperty("expected").GetBoolean(),
@@ -106,6 +109,12 @@ public sealed class JsonHashOwnerGoldenTests
     {
         if (argument.TryGetProperty("baselineOptions", out _)) return JsonBaseline.Options;
         if (argument.TryGetProperty("clrNull", out _)) return null;
+        if (argument.TryGetProperty("optionsValue", out var options))
+        {
+            var valueType = type.GetGenericArguments().Single();
+            return Activator.CreateInstance(type.Assembly.GetType("Microsoft.Extensions.Options.OptionsWrapper`1", throwOnError: true)!.MakeGenericType(valueType),
+                [Argument(options, valueType, assemblies)]);
+        }
         if (argument.TryGetProperty("arrayArguments", out var elements))
         {
             var itemType = type.IsArray ? type.GetElementType()! : type.GetGenericArguments().Single();
@@ -116,6 +125,16 @@ public sealed class JsonHashOwnerGoldenTests
         }
         if (argument.TryGetProperty("clrType", out var clrType))
             type = ResolveType(clrType.GetString()!, argument.GetProperty("clrAssembly").GetString()!, assemblies);
+        if (argument.TryGetProperty("propertyArguments", out var properties))
+        {
+            var instance = Argument(argument.GetProperty("value"), type, assemblies)!;
+            foreach (var property in properties.EnumerateObject())
+            {
+                var member = type.GetProperty(property.Name)!;
+                member.SetValue(instance, Argument(property.Value, member.PropertyType, assemblies));
+            }
+            return instance;
+        }
         if (argument.TryGetProperty("constructorArguments", out var constructorFields))
         {
             var constructor = Assert.Single(type.GetConstructors(), candidate => candidate.GetParameters().All(parameter => constructorFields.TryGetProperty(parameter.Name!, out _)));
@@ -136,6 +155,7 @@ public sealed class JsonHashOwnerGoldenTests
             JsonValueKind.Number => value.GetInt64(), _ => value.Clone()
         }).ToArray();
         if (argument.TryGetProperty("text", out var text)) return text.GetString();
+        if (argument.TryGetProperty("utf16", out var units)) return new string(units.EnumerateArray().Select(unit => checked((char)unit.GetInt32())).ToArray());
         if (argument.TryGetProperty("keyHex", out var key)) return Convert.FromHexString(key.GetString()!);
         if (argument.TryGetProperty("utf8", out var utf8))
         {
