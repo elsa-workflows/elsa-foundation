@@ -1,9 +1,11 @@
+using System.Data.Common;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Kernel.EntityFramework;
 using Kernel.Native.Preview;
 using Kernel.WorkflowActor;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using Contract = Kernel.Foundation.Contracts;
 using PublicModel = Kernel.Model.Contracts;
@@ -61,6 +63,8 @@ internal static class PostgresRootTerminateChecks
         var selectedRuntime = selectedIngress is null ? null : new WorkflowRuntime(selectedIngress, reads);
         Contract.ActorView? chosen = null;
         Contract.ActorView? competing = null;
+        CommandPause? latePause = null;
+        Task<Contract.Admission>? lateReceipt = null;
         var secondActor = terminalSelection
             ? (await runtime.StartAsync(tenant, "other-selection", NativeExecutionModel.Start(definition), cancellationToken: stop)).Actor
             : null;
@@ -176,29 +180,60 @@ internal static class PostgresRootTerminateChecks
                     { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
                 "even an authorized second actor cannot use the first actor's selection");
             authorized = actor;
+            var ambiguous = Wire(new(selected.Selection)).Insert(1, "\"ThenDelete\":true,");
             Check((await Propose(null)).Outcome == Contract.AdmissionOutcome.Refused &&
+                  (await Propose(ambiguous)).Outcome == Contract.AdmissionOutcome.Refused &&
                   (await Propose(Wire(new(selected.Selection, ThenDelete: true, ExpectedTarget: actor)))).Outcome == Contract.AdmissionOutcome.Refused &&
-                  (await Propose(Wire(new(selected.Selection, ExpectedTarget: other)))).Outcome == Contract.AdmissionOutcome.Refused &&
+                  (await Propose(Wire(new(selected.Selection, ExpectedTarget: other)))) is
+                    { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch } &&
                   (await Propose(Wire(new(PostgresRootSelection.SealRunning(cursor, "other", actor.Id))))).Outcome == Contract.AdmissionOutcome.Refused &&
                   await admission.AdmitRootOperatorAsync(tenant.Tenant, actor.Id, operation, Contract.Kinds.Terminate, null, null, stop) is null &&
                   await admission.ReadDueRootOperatorAsync(tenant.Tenant, actor.Id, stop) is null &&
                   await admission.ReadDueRootOperatorAsync(tenant.Tenant, other.Id, stop) is null,
                 "missing, mismatched and unsupported selections leave both command queues untouched");
 
-            var attempts = await Task.WhenAll(Control(tenant, operation, Contract.Kinds.Terminate).AsTask(),
-                Control(tenant, operation, Contract.Kinds.Terminate).AsTask());
+            latePause = new CommandPause("""SELECT "Status" AS "Value" FROM "Instances" """.TrimEnd());
+            var delayed = await SelectedRuntime(connection, latePause);
+            lateReceipt = delayed.TerminateAsync(tenant, operation, selected, cancellationToken: stop).AsTask();
+            await latePause.Reached.Task.WaitAsync(stop);
+
             await using var db = Open();
-            Check(attempts.All(attempt => attempt.Actor == actor) &&
-                  attempts.Count(attempt => attempt.Outcome == Contract.AdmissionOutcome.Accepted) == 1 &&
-                  attempts.Count(attempt => attempt.Outcome == Contract.AdmissionOutcome.Duplicate) == 1 &&
-                  await db.Messages.CountAsync(row => row.Target == prior.Actor.Id && row.Kind == Kinds.Terminate && !row.Done, stop) == 1,
-                "concurrent authorized selection replay creates one durable command for the exact creation");
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA operator_parallel", stop);
+            var installationSchema = await SourceSchema(db);
+            using var identifiers = new NpgsqlCommandBuilder();
+            var secondaryRoute = new NpgsqlConnectionStringBuilder(connection)
+            {
+                SearchPath = "operator_parallel," + identifiers.QuoteIdentifier(installationSchema)
+            };
+            var firstPause = new CommandPause("""INSERT INTO "Messages" """.TrimEnd());
+            var first = await SelectedRuntime(secondaryRoute.ConnectionString, firstPause);
+            var original = first.TerminateAsync(tenant, operation, selected, cancellationToken: stop).AsTask();
+            await firstPause.Reached.Task.WaitAsync(stop);
+
+            var otherPause = new CommandPause("""INSERT INTO "FoundationOperatorReceipts" """.TrimEnd());
+            var competingRuntime = await SelectedRuntime(connection, otherPause);
             authorized = other;
-            Check((await selectedRuntime!.TerminateAsync(tenant, operation, competing!, cancellationToken: stop)) is
-                    { Outcome: Contract.AdmissionOutcome.Refused, Actor: null } &&
-                  await admission.ReadDueRootOperatorAsync(tenant.Tenant, other.Id, stop) is null,
-                "a reused operation id cannot disclose a receipt from an actor outside the current permission");
+            var competingOperation = competingRuntime.TerminateAsync(tenant, operation, competing!, cancellationToken: stop).AsTask();
+            await otherPause.Reached.Task.WaitAsync(stop);
+
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE TABLE operator_parallel."Messages" (LIKE "Messages" INCLUDING ALL)
+                """, stop);
+            firstPause.Release.SetResult();
+            var accepted = await original;
+            otherPause.Release.SetResult();
+            var refused = await competingOperation;
             authorized = actor;
+            Check(accepted is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: var originalActor } && originalActor == actor &&
+                  refused is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null } &&
+                  await admission.ReadDueRootOperatorAsync(tenant.Tenant, other.Id, stop) is null,
+                "concurrent same-operation calls for two authorized actors keep the receipt with its target");
+            var duplicates = await Task.WhenAll(Control(tenant, operation, Contract.Kinds.Terminate).AsTask(),
+                Control(tenant, operation, Contract.Kinds.Terminate).AsTask());
+            Check(duplicates.All(attempt => attempt is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var identity } && identity == actor) &&
+                  await db.Messages.CountAsync(row => row.Target == prior.Actor.Id && row.Kind == Kinds.Terminate && !row.Done, stop) == 1 &&
+                  await db.Database.SqlQueryRaw<long>("""SELECT count(*) AS "Value" FROM operator_parallel."Messages" """).SingleAsync(stop) == 0,
+                "selected admission keeps the command in its source schema while another schema is created");
         }
         else
             Check((await Control(tenant, operation, Contract.Kinds.Terminate)).Outcome == Contract.AdmissionOutcome.Accepted,
@@ -212,6 +247,13 @@ internal static class PostgresRootTerminateChecks
             var ended = await Drive(owner, image => image?.Status == InstanceStatus.Cancelled);
             Check(ended is { Revision: 4, TerminalRevision: 4, TerminalAt: > 0 } && reader.OrdinaryTurns == 0,
                 "the terminal checkpoint lands before any ordinary upgraded turn");
+            if (latePause is not null)
+            {
+                latePause.Release.SetResult();
+                Check(await lateReceipt!.WaitAsync(stop) is
+                    { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var delayedActor } && delayedActor == actor,
+                    "a retry suspended before the checkpoint read still gets its receipt after delivery");
+            }
             var encoded = await ReadEncodedContent(ended.Actor.Id);
             if (fallback)
             {
@@ -301,6 +343,21 @@ internal static class PostgresRootTerminateChecks
         if (terminalSelection) await CheckTerminalSelections();
         return 0;
 
+        async Task<WorkflowRuntime> SelectedRuntime(string route, IInterceptor interceptor)
+        {
+            var testOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(route).AddInterceptors(interceptor).Options;
+            var provider = new EfStore(() => KernelDb.ForPostgresRootTerminalSelection(testOptions), postgres: true);
+            var ingress = await provider.OpenSelectedRootIngressAsync(PublicActor.ActorType, TimeSpan.FromHours(1),
+                (scope, target) => ReferenceEquals(scope, tenant) && allowSelected && target == authorized, stop);
+            return new(ingress, reads);
+        }
+
+        Task<string> SourceSchema(KernelDb db) => db.Database.SqlQueryRaw<string>("""
+            SELECT ns.nspname AS "Value" FROM pg_catalog.pg_class relation
+            JOIN pg_catalog.pg_namespace ns ON ns.oid = relation.relnamespace
+            WHERE relation.oid = to_regclass('"Instances"')
+            """).SingleAsync(stop);
+
         async Task CheckTerminalSelections()
         {
             var mark = (await cold.ReadFirstRootAsync(tenant.Tenant, actor.Id, stop))!;
@@ -351,11 +408,7 @@ internal static class PostgresRootTerminateChecks
             string installationSchema;
             await using (var db = Open())
             {
-                installationSchema = await db.Database.SqlQueryRaw<string>("""
-                    SELECT ns.nspname AS "Value" FROM pg_catalog.pg_class relation
-                    JOIN pg_catalog.pg_namespace ns ON ns.oid = relation.relnamespace
-                    WHERE relation.oid = to_regclass('"Instances"')
-                    """).SingleAsync(stop);
+                installationSchema = await SourceSchema(db);
                 await db.Database.ExecuteSqlRawAsync("""
                     CREATE SCHEMA selection_shadow;
                     CREATE TABLE selection_shadow."FoundationActorList" (LIKE "FoundationActorList" INCLUDING ALL);
@@ -410,6 +463,13 @@ internal static class PostgresRootTerminateChecks
                   shadowFiltered.Items.Single().Header.Ref == instant &&
                   shadowFiltered.Items.Single().Header.Labels["definition"] == instantDefinition && notMatched.Items.Count == 0,
                 "a conflicting filter overload cannot alter canonical matching of NUL and literal escape labels");
+
+            await using (var db = Open())
+                await db.Database.ExecuteSqlRawAsync("""
+                    CREATE TABLE selection_shadow."FoundationRootIssuer" (LIKE "FoundationRootIssuer" INCLUDING ALL);
+                    INSERT INTO selection_shadow."FoundationRootIssuer" SELECT true, decode(repeat('23', 32), 'hex'), 1;
+                    """, stop);
+            await RequireUnavailable(async () => { _ = await shadow.OpenPreviewRootReadsAsync(cancellationToken: stop); });
         }
 
         async Task RequireWriterRefusal(Contract.ActorRef reference)
@@ -571,6 +631,31 @@ internal static class PostgresRootTerminateChecks
         {
             await using var db = Open();
             return await db.Messages.AsNoTracking().SingleAsync(row => row.InboxScope == key.Scope && row.Id == key.Id, stop);
+        }
+    }
+
+    private sealed class CommandPause(string statement) : DbCommandInterceptor
+    {
+        private int _paused;
+        internal TaskCompletionSource Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken token = default) =>
+            WaitAsync(command, result, token);
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<int> result, CancellationToken token = default) =>
+            WaitAsync(command, result, token);
+
+        private async ValueTask<InterceptionResult<T>> WaitAsync<T>(DbCommand command, InterceptionResult<T> result, CancellationToken token)
+        {
+            if (command.CommandText.Contains(statement, StringComparison.Ordinal) && Interlocked.Exchange(ref _paused, 1) == 0)
+            {
+                Reached.SetResult();
+                await Release.Task.WaitAsync(token);
+            }
+            return result;
         }
     }
 

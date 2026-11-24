@@ -8,7 +8,11 @@ namespace Kernel.EntityFramework;
 internal sealed class PostgresRootIngress(PostgresRootAdmission admission, string actorType,
     Func<Contract.BoundScope, Contract.ActorRef, bool>? authorizeTerminate = null) : Contract.IIngress
 {
-    private static readonly JsonSerializerOptions OperatorJson = new() { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
+    private static readonly JsonSerializerOptions OperatorJson = new()
+    {
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        AllowDuplicateProperties = false
+    };
 
     public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
@@ -21,7 +25,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         {
             cancellationToken.ThrowIfCancellationRequested();
             return kind == Contract.Kinds.Terminate && target is Contract.Target.Ref exact &&
-                authorizeTerminate?.Invoke(scope, exact.Actor) == true
+                PostgresRootAdmission.IsIssuedReferenceShape(exact.Actor.Id) && authorizeTerminate?.Invoke(scope, exact.Actor) == true
                 ? await TerminateAsync(scope, exact.Actor, id, payload, options, cancellationToken)
                 : new(Contract.AdmissionOutcome.Refused);
         }
@@ -62,19 +66,21 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
     private async ValueTask<Contract.Admission> TerminateAsync(Contract.BoundScope scope, Contract.ActorRef actor, string id,
         string? payload, Contract.AddOptions? options, CancellationToken token)
     {
-        if (!PostgresRootAdmission.IsIssuedReferenceShape(actor.Id) || !FoundationMetadataLimits.IsOutsideMessageId(id) ||
-            payload is null || payload.Length > 2_048)
-            return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
+        if (!FoundationMetadataLimits.IsOutsideMessageId(id) || payload is null || payload.Length > 2_048)
+            return new(Contract.AdmissionOutcome.Refused);
 
         Contract.OperatorCommand? command;
         try { command = JsonSerializer.Deserialize<Contract.OperatorCommand>(payload, OperatorJson); }
-        catch (JsonException) { return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection); }
+        catch (JsonException) { return new(Contract.AdmissionOutcome.Refused); }
 
-        if (command is not { Selection.Length: > 0, ThenDelete: false, Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null } ||
-            command.ExpectedTarget is { } selected && selected != actor)
+        if (command is not { ThenDelete: false, Mode: Contract.RecoverMode.Resume, Handles: null, Reason: null })
+            return new(Contract.AdmissionOutcome.Refused);
+        if (command.ExpectedTarget is { } selected && selected != actor)
+            return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch);
+        if (command.Selection is not { Length: > 0 } selection)
             return new(Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection);
         var receipt = await admission.AdmitRootOperatorAsync(scope.Tenant, actor.Id, id, Contract.Kinds.Terminate,
-            options?.DueAt, options?.KeepFor, token, command.Selection);
+            options?.DueAt, options?.KeepFor, token, selection);
         return receipt switch
         {
             { Duplicate: true } => new(Contract.AdmissionOutcome.Duplicate, new Contract.ActorRef(receipt.Reference)),

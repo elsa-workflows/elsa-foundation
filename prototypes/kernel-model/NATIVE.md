@@ -682,9 +682,9 @@ read layout.
 
 Format 13 also issues a running selection for the committed generated creation.
 A host can open the selected ingress with permission for the exact actor. The
-public workflow runtime submits that selection with Terminate. PostgreSQL checks
-permission, selection, format and the current running checkpoint before writing
-the operator occurrence and receipt together. A duplicate to the same actor
+public workflow runtime submits that selection with Terminate. The trusted host
+authorizes the target. PostgreSQL checks the selection, format and current
+checkpoint before writing the operator occurrence and receipt together. A duplicate to the same actor
 returns its original receipt. Using that operation ID with another actor under
 the same tenant is refused. The fixture submits through the public contract, then
 delivers under a later epoch. The command path supports a one-way Terminate.

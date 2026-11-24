@@ -43,8 +43,7 @@ internal sealed partial class PostgresRootAdmission
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, token);
         if (selectedTermination)
         {
-            await EfStore.LockCompatibleStoreFormatAsync(db, token);
-            await RequireSelectedOperatorSchemaAsync(db, token);
+            await PinSelectedOperatorSchemaAsync(db, token);
             if (!PostgresRootSelection.MatchesRunning(await ReadJournalCursorAsync(db, token), runningSelection, tenant, reference))
                 return null;
         }
@@ -56,6 +55,11 @@ internal sealed partial class PostgresRootAdmission
             await tx.RollbackAsync(token);
             return null;
         }
+        // Lock the selected checkpoint before reading its receipt. If the command already
+        // ended this actor, the receipt committed before the owner could consume it.
+        var selectedStatus = selectedTermination
+            ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
+            : null;
         var prior = await db.Database.SqlQuery<string>($"""
             SELECT "Reference" AS "Value" FROM "FoundationOperatorReceipts"
             WHERE "Tenant" = {tenant} AND "Operation" = {digest} AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
@@ -65,7 +69,8 @@ internal sealed partial class PostgresRootAdmission
             await tx.CommitAsync(token);
             return selectedTermination && prior != reference ? null : new(prior, true);
         }
-        if (await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: selectedTermination) != InstanceStatus.Running)
+        var status = selectedTermination ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
+        if (status != InstanceStatus.Running)
         {
             await tx.RollbackAsync(token);
             return null;
@@ -97,13 +102,33 @@ internal sealed partial class PostgresRootAdmission
         return new(reference, false);
     }
 
-    private static async Task RequireSelectedOperatorSchemaAsync(KernelDb db, CancellationToken token)
+    private sealed record SelectedOperatorStore(int StoreSchema, int MessageProtocol, int JournalCodec, string Namespace);
+
+    private static async Task PinSelectedOperatorSchemaAsync(KernelDb db, CancellationToken token)
     {
-        var sameSchema = await db.Database.SqlQueryRaw<bool>("""
-            SELECT count(*) = 6 AND count(DISTINCT c.relnamespace) = 1 AS "Value"
+        var marker = await db.Database.SqlQuery<SelectedOperatorStore>($"""
+            SELECT v."StoreSchema", v."MessageProtocol", v."JournalCodec", ns.nspname AS "Namespace"
+            FROM "KernelStoreVersions" v
+            JOIN pg_catalog.pg_class c ON c.oid = v.tableoid
+            JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace
+            WHERE v."Id" = {StoreVersionEntity.MarkerId}
+            FOR SHARE OF v
+            """).SingleOrDefaultAsync(token);
+        EfStore.RequireSnapshotFormat(db.RequiredFormat, marker?.StoreSchema, marker?.MessageProtocol, marker?.JournalCodec);
+        var source = marker!.Namespace;
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            SELECT pg_catalog.set_config('search_path', 'pg_catalog,' || pg_catalog.quote_ident({source}) || ',pg_temp', true)
+            """, token);
+        await db.Database.ExecuteSqlRawAsync("""
+            LOCK TABLE "FoundationRootIssuer", "FoundationRootBirths", "Instances", "FoundationOperatorReceipts", "Messages"
+            IN ACCESS SHARE MODE
+            """, token);
+        var sameSchema = await db.Database.SqlQuery<bool>($"""
+            SELECT count(*) = 6 AS "Value"
             FROM (VALUES ('"KernelStoreVersions"'), ('"FoundationRootIssuer"'), ('"FoundationRootBirths"'),
                 ('"Instances"'), ('"FoundationOperatorReceipts"'), ('"Messages"')) required(name)
-            JOIN pg_catalog.pg_class c ON c.oid = to_regclass(required.name)
+            JOIN pg_catalog.pg_class c ON c.oid = pg_catalog.to_regclass(required.name)
+            JOIN pg_catalog.pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = {source}
             """).SingleAsync(token);
         if (!sameSchema)
             throw new StoreFormatException("Selected operator admission requires the source relations in one schema.");
