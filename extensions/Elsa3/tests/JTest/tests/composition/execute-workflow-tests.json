@@ -134,8 +134,12 @@
                     }
                 },
                 {
-                    "type": "wait",
-                    "ms": 500
+                    "type": "use",
+                    "name": "Wait until instance data is available",
+                    "template": "elsa-wait-for-persistence",
+                    "with": {
+                        "ms": 500
+                    }
                 },
                 {
                     "type": "use",

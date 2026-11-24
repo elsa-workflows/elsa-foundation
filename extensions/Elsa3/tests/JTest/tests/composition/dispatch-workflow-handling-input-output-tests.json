@@ -65,9 +65,12 @@
                     ]
                 },
                 {
-                  "type": "wait",
-                  "name": "Wait until instance is available",
-                  "ms": 1000
+                    "type": "use",
+                    "name": "Wait until instance is available",
+                    "template": "elsa-wait-for-persistence",
+                    "with": {
+                        "ms": 1000
+                    }
                 },
                 {
                     "type": "use",
@@ -128,9 +131,12 @@
                     }
                 },
                 {
-                    "type": "wait",
-                    "ms": 500,
-                    "name": "Ensure to wait so journal items are available"
+                    "type": "use",
+                    "name": "Ensure to wait so journal items are available",
+                    "template": "elsa-wait-for-persistence",
+                    "with": {
+                        "ms": 500
+                    }
                 },
                 {
                     "type": "use",
@@ -255,9 +261,12 @@
                     ]
                 },
                 {
-                    "type": "wait",
-                    "ms": 1500,
-                    "name": "Wait for instance availability"
+                    "type": "use",
+                    "name": "Wait for instance availability",
+                    "template": "elsa-wait-for-persistence",
+                    "with": {
+                        "ms": 1500
+                    }
                 },
                 {
                     "type": "use",

@@ -31,8 +31,10 @@ repository at the end of the initiative (task T047).
 
 ## Tools
 
-JTest CLI 2.0.3 (`dotnet tool update --global JTest.Cli`, run outside this repository: its NuGet source mapping does
-not allow the package). Docker for the baseline server.
+JTest CLI 2.0.4 or later (`dotnet tool update --global JTest.Cli`, run outside this repository: its NuGet source mapping
+does not allow the package). The Elsa 4 templates need 2.0.4: array-append `save` targets (`"$.instances[]"`), object
+save values resolved at save time, and `for` `items` read as a JSONPath node list. The Elsa 3 runs were made with 2.0.3
+(runs 1–11) and behave the same on 2.0.4. Docker for the baseline server.
 
 ## Elsa 3.6.3 baseline server
 

@@ -1,0 +1,321 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Elsa 4 templates: workflow instances",
+        "description": "Elsa 4 versions of the workflow-instance templates (spec 1235 contracts/templates.md): same names, parameters and outputs as templates-elsa3."
+    },
+    "components": {
+        "templates": [
+            {
+                "name": "elsa-get-workflow-instance",
+                "description": "Gets the workflow instance with the specified identifier (Elsa 4: instance keeps the Elsa 4 shape)",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "statusMap": {
+                        "type": "object",
+                        "required": false,
+                        "default": {
+                            "Completed": "Finished",
+                            "Faulted": "Finished",
+                            "Cancelled": "Finished",
+                            "Suspended": "Running",
+                            "Running": "Running",
+                            "Pending": "Running"
+                        },
+                        "description": "Elsa 4 status -> Elsa 3 status (contracts/templates.md); internal, callers do not pass it"
+                    },
+                    "subStatusMap": {
+                        "type": "object",
+                        "required": false,
+                        "default": {
+                            "Completed": "Finished",
+                            "Faulted": "Faulted",
+                            "Cancelled": "Cancelled",
+                            "Suspended": "Suspended",
+                            "Running": "Executing",
+                            "Pending": "Pending"
+                        },
+                        "description": "Elsa 4 status -> Elsa 3 sub-status; internal, callers do not pass it"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: 'Get Workflow Instance' (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            },
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.body.instance.workflowExecutionId}}",
+                                "expectedValue": "{{ $.workflowInstanceId }}"
+                            },
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.statusMap['{{ $.this.body.instance.status }}'] }}",
+                                "description": "The Elsa 4 status has an Elsa 3 translation (an unknown status fails the template)"
+                            }
+                        ],
+                        "save": {
+                            "workflowStatus": "{{ $.statusMap['{{ $.this.body.instance.status }}'] }}",
+                            "workflowSubStatus": "{{ $.subStatusMap['{{ $.this.body.instance.status }}'] }}",
+                            "instance": "{{ $.this.body }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "workflowStatus": "{{ $.workflowStatus }}",
+                    "workflowSubStatus": "{{ $.workflowSubStatus }}",
+                    "instance": "{{ $.instance }}"
+                }
+            },
+            {
+                "name": "elsa-assert-workflow-instance-not-exists",
+                "description": "Asserts that workflow instances with the search criteria does not exist",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowDefinitionId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "workflowDefinitionVersion": {
+                        "type": "integer",
+                        "required": false
+                    },
+                    "correlationId": {
+                        "type": "string",
+                        "required": false,
+                        "default": ""
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "wait",
+                        "name": "Wait for journal availability",
+                        "ms": 500
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: 'Query Workflow Instances' (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/page?definitionId={{ $.workflowDefinitionId }}&correlationId={{ $.correlationId }}&take=10",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "pageItems": "{{ $.this.body.items }}"
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Instances of the requested version",
+                        "items": "{{ $.pageItems[?(@.artifactVersion == '{{ $.workflowDefinitionVersion }}.0.0')] }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "No instance of this version may exist",
+                                "assert": [
+                                    {
+                                        "op": "notexists",
+                                        "actualValue": "{{ $.item.workflowExecutionId }}",
+                                        "description": "Expected no workflow instance for the search criteria"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "elsa-search-workflow-instances",
+                "description": "Search workflow instances with the search criteria (Elsa 4: version filtered in the template, items projected to Elsa 3 names and statuses)",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowDefinitionId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "workflowDefinitionVersion": {
+                        "type": "integer",
+                        "required": false
+                    },
+                    "correlationId": {
+                        "type": "string",
+                        "required": false,
+                        "default": ""
+                    },
+                    "pageSize": {
+                        "type": "integer",
+                        "required": false,
+                        "default": 10
+                    },
+                    "statusMap": {
+                        "type": "object",
+                        "required": false,
+                        "default": {
+                            "Completed": "Finished",
+                            "Faulted": "Finished",
+                            "Cancelled": "Finished",
+                            "Suspended": "Running",
+                            "Running": "Running",
+                            "Pending": "Running"
+                        },
+                        "description": "Elsa 4 status -> Elsa 3 status (contracts/templates.md); internal, callers do not pass it"
+                    },
+                    "subStatusMap": {
+                        "type": "object",
+                        "required": false,
+                        "default": {
+                            "Completed": "Finished",
+                            "Faulted": "Faulted",
+                            "Cancelled": "Cancelled",
+                            "Suspended": "Suspended",
+                            "Running": "Executing",
+                            "Pending": "Pending"
+                        },
+                        "description": "Elsa 4 status -> Elsa 3 sub-status; internal, callers do not pass it"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "wait",
+                        "name": "Wait for journal availability",
+                        "ms": 500
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: 'Query Workflow Instances' (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/page?definitionId={{ $.workflowDefinitionId }}&correlationId={{ $.correlationId }}&take={{ $.pageSize }}",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "pageItems": "{{ $.this.body.items }}"
+                        }
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Start an empty result",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.workflowDefinitionId }}",
+                                "description": "The search names a workflow definition"
+                            }
+                        ],
+                        "save": {
+                            "$.instances": []
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Project each instance of the requested version",
+                        "items": "{{ $.pageItems[?(@.artifactVersion == '{{ $.workflowDefinitionVersion }}.0.0')] }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Project the instance",
+                                "assert": [
+                                    {
+                                        "op": "exists",
+                                        "actualValue": "{{ $.statusMap['{{ $.item.status }}'] }}",
+                                        "description": "The Elsa 4 status has an Elsa 3 translation (an unknown status fails the template)"
+                                    }
+                                ],
+                                "save": {
+                                    "$.instances[]": {
+                                        "id": "{{ $.item.workflowExecutionId }}",
+                                        "definitionId": "{{ $.item.definitionId }}",
+                                        "definitionVersionId": "{{ $.item.definitionVersionId }}",
+                                        "version": "{{ $.workflowDefinitionVersion }}",
+                                        "correlationId": "{{ $.item.correlationId }}",
+                                        "name": "{{ $.item.instanceName }}",
+                                        "status": "{{ $.statusMap['{{ $.item.status }}'] }}",
+                                        "subStatus": "{{ $.subStatusMap['{{ $.item.status }}'] }}"
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "At least one instance of the requested version",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.instances[0].id }}",
+                                "description": "Expected at least one workflow instance for the search criteria"
+                            }
+                        ]
+                    }
+                ],
+                "output": {
+                    "instances": "{{ $.instances }}"
+                }
+            }
+        ]
+    }
+}

@@ -1,0 +1,560 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Elsa 4 templates: running workflows and reading workflow instance data",
+        "description": "Elsa 4 versions of the templates the engine-neutral refactor added (spec 1235 T025): same names, parameters and outputs as templates-elsa3, except where a description says an output is not supplied."
+    },
+    "components": {
+        "templates": [
+            {
+                "name": "elsa-execute-workflow-definition",
+                "description": "Runs the published workflow definition to its end and returns the finished run, with the variables of its root scope keyed by variable id. Elsa 4: resolves the published artifact, starts the run and reads the instance until it is no longer Pending or Running. Elsa 4 exposes workflow outputs and variable values only as diagnostic snapshot trees, not as plain JSON; until a plain value read exists (value-capture initiative #5647) this template does not supply them. Outputs not supplied: output, variables.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowDefinitionId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "input": {
+                        "type": "object",
+                        "required": false,
+                        "default": {},
+                        "description": "Workflow input, keyed by input name"
+                    },
+                    "statusMap": {
+                        "type": "object",
+                        "required": false,
+                        "default": {
+                            "Completed": "Finished",
+                            "Faulted": "Finished",
+                            "Cancelled": "Finished",
+                            "Suspended": "Running",
+                            "Running": "Running",
+                            "Pending": "Running"
+                        },
+                        "description": "internal"
+                    },
+                    "subStatusMap": {
+                        "type": "object",
+                        "required": false,
+                        "default": {
+                            "Completed": "Finished",
+                            "Faulted": "Faulted",
+                            "Cancelled": "Cancelled",
+                            "Suspended": "Suspended",
+                            "Running": "Executing",
+                            "Pending": "Pending"
+                        },
+                        "description": "internal"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "List published executables (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/executables",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "executables": "{{ $.this.body.items }}"
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Published artifact of the definition",
+                        "items": "{{ $.executables[?(@.definitionId == '{{ $.workflowDefinitionId }}')] }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Take the artifact",
+                                "assert": [
+                                    {
+                                        "op": "exists",
+                                        "actualValue": "{{ $.item.artifactId }}"
+                                    }
+                                ],
+                                "save": {
+                                    "artifactId": "{{ $.item.artifactId }}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "The definition is published",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.artifactId }}",
+                                "description": "Expected a published Elsa 4 executable for the workflow definition"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: 'Execute Executable' (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/executables/{{ $.artifactId }}/execute",
+                        "method": "POST",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "body": {
+                            "input": "{{ $.input }}"
+                        },
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "workflowInstanceId": "{{ $.this.body.workflowExecutionId }}"
+                        }
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Run accepted",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.workflowInstanceId }}"
+                            }
+                        ],
+                        "save": {
+                            "elsa4Status": "Pending"
+                        }
+                    },
+                    {
+                        "type": "while",
+                        "name": "Read the instance until the run settles",
+                        "timeoutMs": 120000,
+                        "delayMs": 250,
+                        "condition": {
+                            "op": "in",
+                            "actualValue": "{{ $.elsa4Status }}",
+                            "expectedValue": [
+                                "Pending",
+                                "Running"
+                            ]
+                        },
+                        "steps": [
+                            {
+                                "type": "http",
+                                "name": "Execute endpoint: 'Get Workflow Instance' (Elsa 4)",
+                                "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}",
+                                "method": "GET",
+                                "headers": [
+                                    {
+                                        "name": "Authorization",
+                                        "value": "{{$.authHeader}}"
+                                    }
+                                ],
+                                "save": {
+                                    "elsa4Status": "{{ $.this.body.instance.status }}",
+                                    "correlationId": "{{ $.this.body.instance.correlationId }}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Translate the status",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.statusMap['{{ $.elsa4Status }}'] }}",
+                                "description": "The Elsa 4 status has an Elsa 3 translation"
+                            }
+                        ],
+                        "save": {
+                            "workflowStatus": "{{ $.statusMap['{{ $.elsa4Status }}'] }}",
+                            "workflowSubStatus": "{{ $.subStatusMap['{{ $.elsa4Status }}'] }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "workflowInstanceId": "{{ $.workflowInstanceId }}",
+                    "correlationId": "{{ $.correlationId }}",
+                    "workflowStatus": "{{ $.workflowStatus }}",
+                    "workflowSubStatus": "{{ $.workflowSubStatus }}"
+                }
+            },
+            {
+                "name": "elsa-execute-workflow-definition-from-file",
+                "description": "As elsa-execute-workflow-definition, with the request body ({ \"input\": { ... } }) read from a file. Elsa 4: resolves the published artifact, starts the run and reads the instance until it is no longer Pending or Running. Elsa 4 exposes workflow outputs and variable values only as diagnostic snapshot trees, not as plain JSON; until a plain value read exists (value-capture initiative #5647) this template does not supply them. Outputs not supplied: output, variables.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowDefinitionId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "requestFile": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Path of a JSON file holding { \"input\": { ... } }"
+                    },
+                    "statusMap": {
+                        "type": "object",
+                        "required": false,
+                        "default": {
+                            "Completed": "Finished",
+                            "Faulted": "Finished",
+                            "Cancelled": "Finished",
+                            "Suspended": "Running",
+                            "Running": "Running",
+                            "Pending": "Running"
+                        },
+                        "description": "internal"
+                    },
+                    "subStatusMap": {
+                        "type": "object",
+                        "required": false,
+                        "default": {
+                            "Completed": "Finished",
+                            "Faulted": "Faulted",
+                            "Cancelled": "Cancelled",
+                            "Suspended": "Suspended",
+                            "Running": "Executing",
+                            "Pending": "Pending"
+                        },
+                        "description": "internal"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "List published executables (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/executables",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "executables": "{{ $.this.body.items }}"
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Published artifact of the definition",
+                        "items": "{{ $.executables[?(@.definitionId == '{{ $.workflowDefinitionId }}')] }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Take the artifact",
+                                "assert": [
+                                    {
+                                        "op": "exists",
+                                        "actualValue": "{{ $.item.artifactId }}"
+                                    }
+                                ],
+                                "save": {
+                                    "artifactId": "{{ $.item.artifactId }}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "The definition is published",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.artifactId }}",
+                                "description": "Expected a published Elsa 4 executable for the workflow definition"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: 'Execute Executable' (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/executables/{{ $.artifactId }}/execute",
+                        "method": "POST",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "file": "{{ $.requestFile }}",
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "workflowInstanceId": "{{ $.this.body.workflowExecutionId }}"
+                        }
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Run accepted",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.workflowInstanceId }}"
+                            }
+                        ],
+                        "save": {
+                            "elsa4Status": "Pending"
+                        }
+                    },
+                    {
+                        "type": "while",
+                        "name": "Read the instance until the run settles",
+                        "timeoutMs": 120000,
+                        "delayMs": 250,
+                        "condition": {
+                            "op": "in",
+                            "actualValue": "{{ $.elsa4Status }}",
+                            "expectedValue": [
+                                "Pending",
+                                "Running"
+                            ]
+                        },
+                        "steps": [
+                            {
+                                "type": "http",
+                                "name": "Execute endpoint: 'Get Workflow Instance' (Elsa 4)",
+                                "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}",
+                                "method": "GET",
+                                "headers": [
+                                    {
+                                        "name": "Authorization",
+                                        "value": "{{$.authHeader}}"
+                                    }
+                                ],
+                                "save": {
+                                    "elsa4Status": "{{ $.this.body.instance.status }}",
+                                    "correlationId": "{{ $.this.body.instance.correlationId }}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Translate the status",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.statusMap['{{ $.elsa4Status }}'] }}",
+                                "description": "The Elsa 4 status has an Elsa 3 translation"
+                            }
+                        ],
+                        "save": {
+                            "workflowStatus": "{{ $.statusMap['{{ $.elsa4Status }}'] }}",
+                            "workflowSubStatus": "{{ $.subStatusMap['{{ $.elsa4Status }}'] }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "workflowInstanceId": "{{ $.workflowInstanceId }}",
+                    "correlationId": "{{ $.correlationId }}",
+                    "workflowStatus": "{{ $.workflowStatus }}",
+                    "workflowSubStatus": "{{ $.workflowSubStatus }}"
+                }
+            },
+            {
+                "name": "elsa-get-workflow-instance-variables",
+                "description": "Gets the variables the workflow instance keeps, keyed by variable id; a variable the instance does not keep is absent. Elsa 4: Elsa 4 exposes workflow outputs and variable values only as diagnostic snapshot trees, not as plain JSON; until a plain value read exists (value-capture initiative #5647) this template does not supply them.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "assert",
+                        "name": "Values not readable as plain JSON on Elsa 4",
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "snapshot tree",
+                                "expectedValue": "plain JSON",
+                                "description": "blocked: value capture - Elsa 4 has no plain-JSON read for variables"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "elsa-get-workflow-instance-input-output",
+                "description": "Gets the workflow instance's input and output, keyed by input and output name. Elsa 4: Elsa 4 exposes workflow outputs and variable values only as diagnostic snapshot trees, not as plain JSON; until a plain value read exists (value-capture initiative #5647) this template does not supply them.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "assert",
+                        "name": "Values not readable as plain JSON on Elsa 4",
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "snapshot tree",
+                                "expectedValue": "plain JSON",
+                                "description": "blocked: value capture - Elsa 4 has no plain-JSON read for input, output"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "elsa-count-workflow-instances",
+                "description": "Counts the workflow instances with the correlation id, status and sub-status (Elsa 3 status words). Elsa 4: the Elsa 3 status and sub-status translate to one Elsa 4 status.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "correlationId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "workflowStatus": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Elsa 3 status, for example Finished"
+                    },
+                    "workflowSubStatus": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Elsa 3 sub-status, for example Finished"
+                    },
+                    "toElsa4": {
+                        "type": "object",
+                        "required": false,
+                        "default": {
+                            "Finished": {
+                                "Finished": "Completed",
+                                "Faulted": "Faulted",
+                                "Cancelled": "Cancelled"
+                            },
+                            "Running": {
+                                "Suspended": "Suspended",
+                                "Executing": "Running",
+                                "Pending": "Pending"
+                            }
+                        },
+                        "description": "internal"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "assert",
+                        "name": "Translate the status",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.toElsa4['{{ $.workflowStatus }}']['{{ $.workflowSubStatus }}'] }}",
+                                "description": "The Elsa 3 status and sub-status have an Elsa 4 translation"
+                            }
+                        ],
+                        "save": {
+                            "elsa4Status": "{{ $.toElsa4['{{ $.workflowStatus }}']['{{ $.workflowSubStatus }}'] }}"
+                        }
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: 'Query Workflow Instances' (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/page?correlationId={{ $.correlationId }}&status={{ $.elsa4Status }}&take=10",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "count": "{{ $.this.body.totalCount }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "count": "{{ $.count }}"
+                }
+            }
+        ]
+    }
+}

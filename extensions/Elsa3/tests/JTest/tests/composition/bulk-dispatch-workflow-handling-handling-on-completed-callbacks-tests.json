@@ -82,9 +82,12 @@
                     }
                 },
                 {
-                  "type": "wait",
-                  "name": "Wait until instance is available",
-                  "ms": "{{ $.env.dispatchWaitTimeMilliseconds }}"
+                    "type": "use",
+                    "name": "Wait until instance is available",
+                    "template": "elsa-wait-for-persistence",
+                    "with": {
+                        "ms": "{{ $.env.dispatchWaitTimeMilliseconds }}"
+                    }
                 },
                 {
                     "type": "use",

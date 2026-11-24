@@ -1,0 +1,35 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Elsa 4 templates: engine timing",
+        "description": "elsa-wait-for-persistence (spec 1235, coordinator request 2026-11-24): the fixed waits the suites made for Elsa 3's persistence lag live here, so each engine decides whether to wait."
+    },
+    "components": {
+        "templates": [
+            {
+                "name": "elsa-wait-for-persistence",
+                "description": "Waits until data the previous steps produced can be read back. Elsa 3: waits the given milliseconds. Elsa 4: does not wait.",
+                "params": {
+                    "ms": {
+                        "type": "number",
+                        "required": true,
+                        "description": "The delay the suite used on Elsa 3, in milliseconds"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "assert",
+                        "name": "No wait needed",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.ms }}",
+                                "description": "Elsa 4 persists before it answers; the Elsa 3 delay is not used"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,195 @@
+{
+    "version": "1.0",
+    "info": {
+        "name": "Elsa 4 templates: activity instances",
+        "description": "Elsa 4 versions of the activity-instance templates (spec 1235 T027). Only the templates a suite that runs on Elsa 4 needs are written."
+    },
+    "components": {
+        "templates": [
+            {
+                "name": "elsa-activity-instance-get",
+                "description": "Gets the activity instance. Elsa 4: Elsa 4 exposes activity input and output values only as diagnostic snapshot trees, not as plain JSON; until a plain value read exists (value-capture initiative #5647) activityState and outputs are not supplied.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true,
+                        "description": "The workflow instance the activity ran in; Elsa 3 needs only the activity instance id"
+                    },
+                    "activityInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityStatusMap": {
+                        "type": "object",
+                        "required": false,
+                        "default": {
+                            "Completed": "Completed",
+                            "Faulted": "Faulted",
+                            "Cancelled": "Canceled",
+                            "Running": "Running",
+                            "Waiting": "Running",
+                            "Suspended": "Running"
+                        },
+                        "description": "internal"
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: activity execution (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}/activity-executions/{{ $.activityInstanceId }}",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            },
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.activityStatusMap['{{ $.this.body.status }}'] }}",
+                                "description": "The Elsa 4 activity status has an Elsa 3 translation"
+                            }
+                        ],
+                        "save": {
+                            "status": "{{ $.activityStatusMap['{{ $.this.body.status }}'] }}",
+                            "id": "{{ $.this.body.activityExecutionId }}",
+                            "startedAt": "{{ $.this.body.startedAt }}",
+                            "completedAt": "{{ $.this.body.completedAt }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "status": "{{ $.status }}",
+                    "id": "{{ $.id }}",
+                    "startedAt": "{{ $.startedAt }}",
+                    "completedAt": "{{ $.completedAt }}"
+                }
+            },
+            {
+                "name": "elsa-activity-instance-find",
+                "description": "Finds and activity instance by id in the specified workflow instance. Elsa 4: the first execution of the node whose id equals the activity id or ends with ':' and it. Elsa 4 exposes activity input and output values only as diagnostic snapshot trees, not as plain JSON; until a plain value read exists (value-capture initiative #5647) activityState and outputs are not supplied.",
+                "params": {
+                    "baseUrl": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Base URL for the Elsa API (note that this is not the same base URL as the Executor API)"
+                    },
+                    "authHeader": {
+                        "type": "string",
+                        "required": true,
+                        "description": "Bearer token authentication header value"
+                    },
+                    "workflowInstanceId": {
+                        "type": "string",
+                        "required": true
+                    },
+                    "activityId": {
+                        "type": "string",
+                        "required": true
+                    }
+                },
+                "steps": [
+                    {
+                        "type": "wait",
+                        "ms": 1000
+                    },
+                    {
+                        "type": "http",
+                        "name": "Execute endpoint: activity executions (Elsa 4)",
+                        "url": "{{ $.baseUrl }}/runtime/workflows/instances/{{ $.workflowInstanceId }}/activity-executions?limit=500",
+                        "method": "GET",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "{{$.authHeader}}"
+                            }
+                        ],
+                        "assert": [
+                            {
+                                "op": "equals",
+                                "actualValue": "{{$.this.status}}",
+                                "expectedValue": 200
+                            }
+                        ],
+                        "save": {
+                            "executions": "{{ $.this.body.items }}"
+                        }
+                    },
+                    {
+                        "type": "assert",
+                        "name": "Start an empty result",
+                        "assert": [
+                            {
+                                "op": "exists",
+                                "actualValue": "{{ $.activityId }}"
+                            }
+                        ],
+                        "save": {
+                            "$.ids": []
+                        }
+                    },
+                    {
+                        "type": "for",
+                        "name": "Executions of the node",
+                        "items": "{{ $.executions[?(@.execution.executableNodeId == '{{ $.activityId }}' || match(@.execution.executableNodeId, '.*:{{ $.activityId }}'))] }}",
+                        "steps": [
+                            {
+                                "type": "assert",
+                                "name": "Collect",
+                                "assert": [
+                                    {
+                                        "op": "exists",
+                                        "actualValue": "{{ $.item.execution.activityExecutionId }}"
+                                    }
+                                ],
+                                "save": {
+                                    "$.ids[]": "{{ $.item.execution.activityExecutionId }}"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "use",
+                        "name": "Get the first execution",
+                        "template": "elsa-activity-instance-get",
+                        "with": {
+                            "baseUrl": "{{ $.baseUrl }}",
+                            "authHeader": "{{ $.authHeader }}",
+                            "workflowInstanceId": "{{ $.workflowInstanceId }}",
+                            "activityInstanceId": "{{ $.ids[0] }}"
+                        },
+                        "save": {
+                            "startedAt": "{{ $.this.startedAt }}",
+                            "completedAt": "{{ $.this.completedAt }}",
+                            "status": "{{ $.this.status }}",
+                            "id": "{{ $.this.id }}"
+                        }
+                    }
+                ],
+                "output": {
+                    "status": "{{ $.status }}",
+                    "id": "{{ $.id }}",
+                    "startedAt": "{{ $.startedAt }}",
+                    "completedAt": "{{ $.completedAt }}"
+                }
+            }
+        ]
+    }
+}

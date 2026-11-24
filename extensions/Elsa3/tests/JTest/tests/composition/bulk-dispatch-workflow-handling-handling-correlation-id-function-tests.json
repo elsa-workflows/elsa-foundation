@@ -83,9 +83,12 @@
                     }
                 },
                 {
-                  "type": "wait",
-                  "name": "Wait until instance is available",
-                  "ms": 1000
+                    "type": "use",
+                    "name": "Wait until instance is available",
+                    "template": "elsa-wait-for-persistence",
+                    "with": {
+                        "ms": 1000
+                    }
                 },
                 {
                     "type": "use",

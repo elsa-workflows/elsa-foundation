@@ -88,9 +88,12 @@
                     ]
                 },
                 {
-                  "type": "wait",
-                  "name": "Wait for instances to be queryable",
-                  "ms": 1000
+                    "type": "use",
+                    "name": "Wait for instances to be queryable",
+                    "template": "elsa-wait-for-persistence",
+                    "with": {
+                        "ms": 1000
+                    }
                 },
                 {
                     "type": "use",
