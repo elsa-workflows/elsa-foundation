@@ -24,6 +24,7 @@ granularity in [PARTITIONS.md](PARTITIONS.md), and write volume and bloat on Pos
 | `../../essentials/tests/ActorFoundation/Simulation` | Toy execution models, the deterministic simulation, the invariant checks, the shrinker and the mutation check; `NativeSim.cs` puts native instances in the mix |
 | [`Graph`](../../essentials/src/Workflows/Runtime/Graph) | The graph engine: main's Flowchart engine (paths, arrivals, dead paths, gateways) as a library with no kernel or Elsa reference; README says what was adapted |
 | `../../essentials/tests/Workflows/Runtime/Graph/Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
+| [Workflow actor](../../essentials/src/Workflows/Runtime/WorkflowActor) | Hosts an Elsa execution model as a durable actor through the Actor Foundation contract |
 | [Native model](../../essentials/src/Workflows/Runtime/Native/Model) | Native workflow definitions, interpretation and structural activities, including Flowchart on the graph engine |
 | [Native activities](../../essentials/src/Workflows/Runtime/Native/Activities) | Activity contracts, bindings and built-in leaf activities |
 | `../../essentials/tests/Workflows/Runtime/Native/Legacy` | Nonpackable adapter that runs Native through the legacy simulation turn contract |

@@ -88,18 +88,18 @@
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime.workflowactor": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
+          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
+        }
+      },
       "Kernel.Foundation.InMemory": {
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.BuiltIn.Durable": "[4.0.0-dev, )",
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )"
-        }
-      },
-      "kernel.workflowactor": {
-        "type": "Project",
-        "dependencies": {
-          "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",
-          "Elsa.ActorFoundation.Model.Contracts": "[4.0.0-dev, )"
         }
       }
     }

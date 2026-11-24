@@ -6,7 +6,7 @@
     <ProjectReference Include="../../../../../ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
     <ProjectReference Include="../../../../../../src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
     <ProjectReference Include="../../../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
-    <ProjectReference Include="../../../../../../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
+    <ProjectReference Include="../../../../../../src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
     <Using Include="Elsa.ActorFoundation.Hosting" />

@@ -9,7 +9,7 @@
     <ProjectReference Include="../../../../../ActorFoundation/Simulation/Elsa.ActorFoundation.Simulation.csproj" />
     <ProjectReference Include="../../../../../ActorFoundation/TestSupport/Elsa.ActorFoundation.TestSupport.csproj" />
     <ProjectReference Include="../../../../../../src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />
-    <ProjectReference Include="../../../../../../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
+    <ProjectReference Include="../../../../../../src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
     <Using Include="Elsa.ActorFoundation.TestSupport" />
     <Using Include="Kernel.Durable" />
     <Using Include="Kernel.Runtime" />
