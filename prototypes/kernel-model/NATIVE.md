@@ -854,23 +854,38 @@ format carries the Park opening, inspection and arrival capabilities, the
 new Park recovery capability, and operator occurrence admission. It admits
 no other operator command. A parked root's public view returns a Park
 selection that seals the tenant, reference, opening revision and Park time.
-The ingress refuses Retry, RetryAll, handles, a reason and ThenDelete. Under a
+The ingress refuses Retry, RetryAll, handles, a reason, ThenDelete and a due
+time, since Recover is immediate. Under a
 share lock on the root it accepts a selection only while the root is
 Faulted with that exact Park mark, and it writes an operator receipt with
 the occurrence, so a repeated operation id is a duplicate.
 
 The owner reads the Park mark and kept set when it polls the command and
 decides there. When the mark still matches, the actor's restore plan is
-empty and the kept set fits one page (170 rows and 4 MiB), one fenced commit
-makes the root Running, clears the fault, the Park mark and its projection,
-and increments the root's release generation. The commit puts each Arrived
-row back in the inbox with that generation and clears the Consumed fault
-input, which stays settled. The journal gets the in-memory recovery entry.
-A stale mark, a restore plan or a larger kept set consumes the command and
-journals a refusal at the next revision, and the Park stays as it was.
+empty and the kept set fits one page, one fenced commit makes the root
+Running, clears the fault, the Park mark and its projection, and increments
+the root's release generation. A page holds at most 170 rows and 4 MiB,
+counting each row's stored size as the inbox inspection does (id, kind,
+header and payload), and always has room for its first row, so a single
+kept row over 4 MiB fits alone. The commit puts each Arrived row back in the
+inbox with that generation and clears the Consumed fault input, which stays
+settled. Both take the ordinary admission window from the commit as their
+KeepUntil; the recover carries that window from its admission. The journal
+gets the in-memory recovery entry. A stale mark, a restore plan or a larger
+kept set consumes the command and journals a refusal at the next revision,
+and the Park stays as it was. A mismatched instance or creation is refused
+as "target". A recover that reaches a root that has ended, for example one
+that a released arrival finished, settles like any other operator command on
+an ended root: it is consumed with no checkpoint write. The checkpoint
+trigger accepts a "recovered" entry only with the Faulted to Running write
+that moves the release generation by exactly one, and a "refused" entry
+only with the row unchanged apart from its revision.
 While released rows of the current generation are pending, the poll and the
 settled prefix offer only them, in Seq order, so they reach the model before
-any later input.
+any later input. An earlier operator row does not hold them back; it is
+offered once the cohort has drained. When a recover commits, the owner drops
+the inputs it had already read for that root, so the next poll reads them
+again behind the cohort.
 
 Run `pg-root-park-recovery owned checked` from the locked Release build of
 Native.Run against an empty dedicated PostgreSQL database. Repeat with each
@@ -879,8 +894,14 @@ public ingress with the selection from the public view, moves a fresh
 post-recover input ahead of the released rows by raw SQL, and shows a second
 recover refused once the root runs. It rolls back recover commits for a
 stale epoch, a kept payload changed after the poll, a vetoed restore, a
-rewritten state and a disabled projection trigger, and refuses an oversized
-kept set built from filler rows. The multi-page drain under a cursor, with
+rewritten state, a disabled projection trigger and a Park mark moved before
+the bind, probes the trigger branches with raw writes, and refuses an
+oversized kept set built from filler rows. It refuses a delayed recover and
+an old selection after the root parks again, recovers that second Park at
+generation 2 with the second recover moved ahead of the released row by raw
+SQL, and shows that second recover settle on the Finished root. A neighbor
+root then shows the byte bound: a fault input over 4 MiB with one more kept
+row is refused as "page", and alone it recovers. The multi-page drain under a cursor, with
 only released inputs eligible during it, remains open, as do Retry and
 RetryAll, timers, jobs and subscriptions in the restore plan, Park expiry,
 discard, and terminate or delete of a parked root.
