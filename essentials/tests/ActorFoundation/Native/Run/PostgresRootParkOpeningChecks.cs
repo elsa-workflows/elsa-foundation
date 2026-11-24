@@ -202,11 +202,24 @@ internal static class PostgresRootParkOpeningChecks
                             DROP TRIGGER park_hold_wait ON "Subscriptions"; DROP FUNCTION park_hold_wait();
                             """, token);
                     }
+                    await db.Database.ExecuteSqlRawAsync("""
+                        CREATE FUNCTION park_change_kept() RETURNS trigger LANGUAGE plpgsql
+                            AS $$BEGIN NEW."Payload" := 'changed by the keep write'; RETURN NEW; END$$;
+                        CREATE TRIGGER park_change_kept BEFORE UPDATE OF "FoundationKeptBy" ON "Messages"
+                            FOR EACH ROW EXECUTE FUNCTION park_change_kept();
+                        """, token);
+                    try { await Refused(ownerStore, batch, "a keep write that rewrites the captured envelope rolls Park back", token); }
+                    finally
+                    {
+                        await db.Database.ExecuteSqlRawAsync("""
+                            DROP TRIGGER park_change_kept ON "Messages"; DROP FUNCTION park_change_kept();
+                            """, token);
+                    }
                     Check((await ReadInputs(park.Instance)).SequenceEqual(physical) &&
                         (await store.ReadFirstRootAsync(tenant.Tenant, actor.Id, token)) is { Revision: 1, Status: InstanceStatus.Running } &&
                         (await store.ReadJournalOfAsync(0, park.Instance, 0, token)).SequenceEqual(journalBeforePark) &&
                         await db.Subscriptions.AnyAsync(row => row.Instance == park.Instance, token),
-                        "both refusals keep the original checkpoint, journal, subscriptions and occurrence");
+                        "the refused writes keep the original checkpoint, journal, subscriptions and occurrence");
                 }
                 catch (Exception error)
                 {

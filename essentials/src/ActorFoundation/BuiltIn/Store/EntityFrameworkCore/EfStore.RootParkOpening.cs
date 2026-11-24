@@ -76,6 +76,17 @@ public sealed partial class EfStore
                     AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
                 """, cancellationToken);
             if (kept != keys.Length) return false;
+            var retained = await db.Messages.AsNoTracking()
+                .Where(row => row.Target == Root.Actor && row.Partition == Root.Partition &&
+                    row.InboxScope == InboxKey.FoundationOccurrenceScope && row.EventMatch == null && keys.Contains(row.Id))
+                .OrderBy(row => row.Seq).ToArrayAsync(cancellationToken);
+            var envelope = (MessageEntity row) => new
+            {
+                row.Id, row.Seq, row.Kind, row.Payload, row.Start, row.Sender, row.Due, row.KeepUntil, row.ReplyTo,
+                row.JobGeneration, row.Seen, row.Attempts
+            };
+            if (!retained.Select(envelope).SequenceEqual(pending.Select(envelope))) return false;
+
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 DELETE FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition}
                 """, cancellationToken);
@@ -92,6 +103,7 @@ public sealed partial class EfStore
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                 AS "Value"
                 """).SingleAsync(cancellationToken);
+
         }
     }
 }
