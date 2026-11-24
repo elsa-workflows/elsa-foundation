@@ -236,12 +236,12 @@ it, and read every variable's starting value back; compare each with Elsa 3's ru
   collection's starting value MUST be a JSON array and a dictionary's a JSON object; text is never split on commas
   (clarification 2026-10-22).
 - **FR-004**: The converter MUST refuse a variable whose Elsa 3 starting value cannot be converted to its type in
-  strict mode, with a stable diagnostic that names the variable and gives guidance in Elsa 3 terms. The variable's type
-  alone is never a reason to refuse it, except for a resource (#3194). A type Elsa 4's type registry does not know
-  converts as Any. When that type is a custom class or an unregistered enum, alone or as a collection's element, the
-  converter also reports the info `ELS3-VARIABLE-TYPE-UNREGISTERED`, naming the variable and that type. On such a type a
-  starting value that is a JSON object or array starts as that JSON; any other starting value is refused, because Elsa 3
-  converted it in a way the converter cannot know (clarification 2026-11-24).
+  strict mode, with a stable diagnostic that names the variable and gives guidance in Elsa 3 terms. That Elsa 4's type
+  registry does not know a variable's type is never on its own a reason to refuse it: such a variable converts as Any.
+  When that type is a custom class or an unregistered enum, alone or as a collection's element, the converter also
+  reports the info `ELS3-VARIABLE-TYPE-UNREGISTERED`, naming the variable and that type. On such a type a starting value
+  that is a JSON object or array starts as that JSON; any other starting value is refused, because Elsa 3 converted it
+  in a way the converter cannot know (clarification 2026-11-24).
   - *Clarification 2026-11-24 ([#5684](https://github.com/elsa-workflows/elsa-foundation/issues/5684)):* this
     requirement first also refused a variable "whose type Elsa 4's type registry does not know". The converter never
     did that: such a variable ran as `Object` (now Any, spec 1228), and only a starting value on it was refused. The
