@@ -35,6 +35,8 @@ internal static class ContractStatechartChecks
             return (await new DurableHost([worker]).ActivateAsync(0))!;
         }
 
+        var foundationAssembly = typeof(Contract.ActorRef).Assembly.GetName().Name;
+        var modelAssembly = typeof(Models.ITurn).Assembly.GetName().Name;
         var activityAssembly = typeof(Kernel.Native.Delay).Assembly;
         var activityReferences = activityAssembly.GetReferencedAssemblies().Select(assembly => assembly.Name).ToArray();
         check(typeof(Kernel.Native.WriteLine).Assembly == activityAssembly &&
@@ -42,13 +44,13 @@ internal static class ContractStatechartChecks
             typeof(Kernel.Native.SendHttpRequest).Assembly == activityAssembly &&
             typeof(Kernel.Native.SendEmail).Assembly == activityAssembly &&
             typeof(Kernel.Native.ActivityContext).GetProperty(nameof(Kernel.Native.ActivityContext.Instance))?.PropertyType == typeof(Contract.ActorRef) &&
-            activityReferences.Contains("Kernel.Foundation.Contracts") &&
-            activityReferences.All(name => name == "Kernel.Foundation.Contracts" || name?.StartsWith("System.", StringComparison.Ordinal) == true),
+            activityReferences.Contains(foundationAssembly) &&
+            activityReferences.All(name => name == foundationAssembly || name?.StartsWith("System.", StringComparison.Ordinal) == true),
             "the compiled Native activities depend only on the foundation contract and framework and receive an opaque ref");
 
         var modelReferences = typeof(StatechartModel).Assembly.GetReferencedAssemblies().Select(assembly => assembly.Name).ToArray();
-        check(modelReferences.Contains("Kernel.Model.Contracts") &&
-            modelReferences.All(name => name is "Kernel.Foundation.Contracts" or "Kernel.Model.Contracts" or "netstandard" ||
+        check(modelReferences.Contains(modelAssembly) &&
+            modelReferences.All(name => name == foundationAssembly || name == modelAssembly || name == "netstandard" ||
                 name?.StartsWith("System.", StringComparison.Ordinal) == true),
             "the compiled statechart model depends only on the public contracts and framework");
 

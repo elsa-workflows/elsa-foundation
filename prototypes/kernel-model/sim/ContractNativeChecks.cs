@@ -13,8 +13,10 @@ internal static class ContractNativeChecks
     {
         var direct = typeof(NativeExecutionModel).Assembly.GetReferencedAssemblies().Select(assembly => assembly.Name).ToArray();
         var graph = typeof(Kernel.Graph.Models.FlowchartConnection).Assembly.GetReferencedAssemblies().Select(assembly => assembly.Name);
-        check(direct.Contains("Kernel.Foundation.Contracts") && direct.Contains("Kernel.Model.Contracts") &&
-            direct.All(name => name is "Kernel.Foundation.Contracts" or "Kernel.Model.Contracts" or "Kernel.Graph" or "Kernel.Native.Activities" ||
+        var foundationAssembly = typeof(Contract.ActorRef).Assembly.GetName().Name;
+        var modelAssembly = typeof(Models.ITurn).Assembly.GetName().Name;
+        check(direct.Contains(foundationAssembly) && direct.Contains(modelAssembly) &&
+            direct.All(name => name == foundationAssembly || name == modelAssembly || name is "Kernel.Graph" or "Kernel.Native.Activities" ||
                 name?.StartsWith("System.", StringComparison.Ordinal) == true) &&
             graph.All(name => name?.StartsWith("System.", StringComparison.Ordinal) == true),
             "the compiled Native execution model uses the public contracts and its layer-three libraries");
