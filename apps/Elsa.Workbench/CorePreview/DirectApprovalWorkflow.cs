@@ -6,10 +6,22 @@ namespace Kernel.Native.Preview;
 internal sealed class DirectApprovalWorkflow : CompositeActivity, ISignalledComposite
 {
     internal const string Definition = "direct-approval";
+    internal const string JobDefinition = "direct-approval-with-job";
+    internal const string JobNode = "approval-job";
+    internal const string JobResult = "approval processed";
     internal const string WaitEntry = "awaiting-approval:";
     public DirectApprovalWorkflow() { }
 
     internal static Workflow Build() => Wf.Workflow(Definition, Wf.Node<DirectApprovalWorkflow>("approve"));
+
+    internal static Workflow BuildWithJob() => Wf.Workflow(JobDefinition, Wf.Sequence("main",
+        Wf.Node<DirectApprovalWorkflow>("approve"), Wf.Node<ProcessApproval>(JobNode)));
+
+    [Background]
+    public sealed class ProcessApproval : Activity<string>
+    {
+        protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) => ValueTask.FromResult(Complete(JobResult));
+    }
 
     protected override void Execute(CompositeContext context)
     {

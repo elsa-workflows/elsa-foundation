@@ -313,21 +313,28 @@ Run from the repository root with Docker available:
 bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release
 ```
 
-The receipt builds the ordinary Workbench executable, provisions a disposable PostgreSQL 17 database
-and starts Workbench on ephemeral loopback ports. The disabled run supplies the preview connection
-string with the opt-in absent and checks that no preview connection opens. The enabled runs first
-persist an approval wait and stop, then start a different process on the same database. They check
-the unchanged state and journal after the duplicate, and the one new journal revision after a
-different approval. The client prints PostgreSQL wire trips for each enabled phase, including host
-lifetime and its public ingress and journal reads. Schema setup and direct observations bypass the meter.
-Use `Debug` as the argument to qualify a Debug build.
+The receipt builds the ordinary Workbench executable, provisions separate disposable PostgreSQL 17
+databases for the ordinary and Native background-job profiles, and starts Workbench on ephemeral
+loopback ports. Both profiles check that disabled Workbench opens no preview connection, and that a
+host using the other preview format refuses startup. A first process saves an approval wait and stops.
+A second process takes the same actor at a later epoch. Replaying the first approval leaves state and
+journal unchanged. Sending a new approval finishes the ordinary workflow. In the Native job profile,
+the new approval issues an untimed background job and the next revision records its result and
+workflow completion. Each generated root supports one outstanding untimed job. The receipt checks
+the ticket insertion, result, journal and physical ticket removal.
+The client prints PostgreSQL wire trips for each enabled phase, including host lifetime and public
+client operations. Schema setup and direct observations bypass the meter. Set `PG_VERSION=16` to
+repeat with PostgreSQL 16, or pass `Debug` to qualify a Debug build.
 
-For an existing dedicated PostgreSQL preview database with the ordinary preview schema installed,
-set `Elsa__CorePreview__Enabled=true` and supply `ConnectionStrings__KernelCorePreview` through trusted
-host configuration. Run a single Workbench process against that database for this preview. Workbench
-starts the Native approval actor and validates the installed store format. The app does not install the
-schema during startup. The approval client uses the public Actor Foundation contracts. This preview
-leaves existing workflow and Studio endpoints on their current runtime.
+For an existing dedicated PostgreSQL preview database, set `Elsa__CorePreview__Enabled=true` and
+supply `ConnectionStrings__KernelCorePreview` in trusted host configuration. Add
+`Elsa__CorePreview__NativeJobs=true` for a separate database initialized with
+`PostgresPreviewHosting.CreateNativeJobContext(options)`. Use that context with `EfStore.CreateAsync`
+and `InstallPreviewRootSchemaAsync` during setup, and with `OpenPreviewRootIngressAsync` and
+`OpenPreviewRootReadsAsync` for the client. Use `direct-approval-with-job` as the workflow definition
+for this path. Workbench validates the installed store format at startup. Run one Workbench process
+against the preview database. The host still routes existing workflow and Studio endpoints to their
+current runtime. Timed jobs and Park recovery remain separate qualification work.
 
 ### Standalone CLI
 
@@ -378,8 +385,9 @@ must refuse the changed schema without a lock cycle. The probe restores the mark
 A host can use `EfStore.OpenPreviewRootReadsAsync` to open `IActorReads` for an already-installed ordinary
 PostgreSQL generated-root store. Compose the store with the public `new KernelDb(options)` PostgreSQL context.
 The trusted hosting layer supplies the caller's `BoundScope`. The provider supplies point, list and journal reads
-with bookmarks that cross process restarts. Other preview profiles require their matching internal context.
-Inbox inspection and operator selections remain full-provider work.
+with bookmarks that cross process restarts. The Native job profile uses
+`PostgresPreviewHosting.CreateNativeJobContext(options)` for the same read API. The remaining
+qualification profiles use their corresponding internal contexts.
 
 The preview's public `IActorReads.GetAsync` and `ListAsync` use a persisted, tenant-indexed projection of generated roots. PostgreSQL
 updates the list within the fenced metadata commit, including suspension changes that leave no public journal entry.

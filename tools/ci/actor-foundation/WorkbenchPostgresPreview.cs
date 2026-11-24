@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.ActorFoundation.Hosting;
+using Kernel.Durable;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Native;
@@ -22,13 +23,16 @@ namespace Elsa.Workbench.Qualification;
 
 internal static class WorkbenchPostgresPreview
 {
+    private const int JobTicketScope = -6;
+
     private sealed record Receipt(string Actor, string Bookmark, string Frame, string StateHash, string JournalHash, long Epoch, int Process);
     private sealed record Checkpoint(long Revision, string State, long Epoch, string? Owner);
 
     internal static async Task RunAsync(string[] arguments, string? executable = null)
     {
-        if (arguments is not [var phase and ("birth" or "restart" or "disabled"), var receiptPath])
-            throw new ArgumentException("Expected birth, restart or disabled and a receipt file.");
+        var nativeJobs = arguments is [_, _, "jobs"];
+        if ((nativeJobs ? arguments[..2] : arguments) is not [var phase and ("birth" or "restart" or "disabled"), var receiptPath])
+            throw new ArgumentException("Expected birth, restart or disabled, a receipt file and optional jobs profile.");
 
         if (phase == "disabled" && executable is null)
             throw new ArgumentException("The disabled check requires a Workbench executable.");
@@ -48,12 +52,12 @@ internal static class WorkbenchPostgresPreview
 
         var scope = EmbeddedTenant.Bind("workbench-preview");
         var observationOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings.ConnectionString).Options;
-        KernelDb OpenObservation() => new(observationOptions);
+        KernelDb OpenObservation() => OpenProfile(observationOptions, nativeJobs);
         var wire = Wire.Start("postgres", $"Host={settings.Host};Port={settings.Port}");
         settings.Port = wire.LocalPort;
         if (phase == "disabled")
         {
-            using var disabled = WorkbenchProcess.Start(executable!, settings.ConnectionString, enabled: false);
+            using var disabled = WorkbenchProcess.Start(executable!, settings.ConnectionString, enabled: false, nativeJobs);
             try
             {
                 await disabled.WaitReadyAsync(token);
@@ -73,6 +77,7 @@ internal static class WorkbenchPostgresPreview
             var setup = new EfStore(OpenObservation, postgres: true);
             await setup.CreateAsync();
             await setup.InstallPreviewRootSchemaAsync(token);
+            if (nativeJobs) await InstallJobWitnessAsync(db, token);
         }
 
         Receipt? previous = null;
@@ -95,14 +100,32 @@ internal static class WorkbenchPostgresPreview
         }
 
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(settings.ConnectionString).Options;
-        KernelDb Open() => new(options);
+        KernelDb Open() => OpenProfile(options, nativeJobs);
         var store = new EfStore(Open, postgres: true);
         var ingress = await store.OpenPreviewRootIngressAsync(WorkflowActorType.ActorType, TimeSpan.FromHours(1), token);
         var reads = await store.OpenPreviewRootReadsAsync(64, token);
-        var definition = DirectApprovalWorkflow.Build();
+        var definition = nativeJobs ? DirectApprovalWorkflow.BuildWithJob() : DirectApprovalWorkflow.Build();
+        var model = new NativeExecutionModel(new WorkflowRegistry().Add(definition));
+        var workflowActor = new WorkflowActorType([model]);
+        if (phase == "birth")
+        {
+            try
+            {
+                var wrong = await PostgresPreviewHosting.StartAsync(() => OpenProfile(observationOptions, !nativeJobs),
+                    "wrong-preview-format", workflowActor, Environment.FailFast, cancellationToken: token);
+                await wrong.StopAsync();
+                throw new InvalidOperationException("The wrong preview profile started on this database.");
+            }
+            catch (StoreFormatException)
+            {
+                await using var observation = OpenObservation();
+                Require(!await observation.Nodes.AnyAsync(node => node.Id == "wrong-preview-format", token),
+                    "preview startup refused the other profile before registering a node");
+            }
+        }
         var node = $"workbench-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
         using var host = executable is null ? CreateFixtureHost() : null;
-        using var workbench = executable is null ? null : WorkbenchProcess.Start(executable, settings.ConnectionString, enabled: true);
+        using var workbench = executable is null ? null : WorkbenchProcess.Start(executable, settings.ConnectionString, enabled: true, nativeJobs);
         var ownerPid = workbench?.Id ?? Environment.ProcessId;
         var nodePrefix = workbench is null ? node : $"workbench-core-preview-{ownerPid}-";
         Receipt? receipt = null;
@@ -152,13 +175,41 @@ internal static class WorkbenchPostgresPreview
                     "the replay leaves checkpoint bytes and the full journal unchanged");
                 Require(await Approve(actor, "approval-2", "Grace", previous.Frame) == Contract.AdmissionOutcome.Accepted,
                     "a new approval was admitted");
-                var completion = await WaitFor(actor, 3);
+                var finalRevision = nativeJobs ? 4L : 3L;
+                var completion = await WaitFor(actor, finalRevision);
                 Require(await reads.GetAsync(scope, actor, token) is { Header.Status: Contract.ActorStatus.Finished } &&
                     Native(completion).Results["approve"]!.AsArray().Select(item => item!.GetValue<string>()).SequenceEqual(["Ada", "Grace"]),
                     "the persisted result contains both approvals exactly once");
                 var suffix = await reads.TailAsync(scope, actor, bookmark, token);
-                Require(suffix.Items.Count(entry => Entry(entry) == "approved:approval-2") == 1 && suffix.Items.All(entry => entry.Revision == 3),
+                Require(suffix.Items.Where(entry => Entry(entry) == "approved:approval-2").Select(entry => entry.Revision).SequenceEqual([3L]) &&
+                    suffix.Items.All(entry => entry.Revision >= 3 && entry.Revision <= finalRevision),
                     "the saved bookmark returns the one resumed approval at revision three");
+                if (nativeJobs)
+                {
+                    Require(Native(completion).Results[DirectApprovalWorkflow.JobNode]?.GetValue<string>() == DirectApprovalWorkflow.JobResult,
+                        "the restarted Workbench persisted the background activity result");
+                    Require(suffix.Items.Where(entry => Entry(entry).StartsWith("c:", StringComparison.Ordinal) &&
+                            Entry(entry).EndsWith(":" + DirectApprovalWorkflow.JobNode, StringComparison.Ordinal))
+                            .Select(entry => entry.Revision).SequenceEqual([4L]) &&
+                        suffix.Items.Where(entry => Entry(entry) == "end").Select(entry => entry.Revision).SequenceEqual([4L]),
+                        "one background result and the end appear in the fourth revision");
+                    await using var observation = OpenObservation();
+                    var settled = await observation.Database.SqlQuery<bool>($"""
+                        SELECT i."Jobs" IS NULL AND i."NextJobGeneration" = 1 AND NOT EXISTS (
+                            SELECT 1 FROM "Messages" m WHERE m."Partition" = i."Partition" AND m."Target" = i."Id"
+                                AND (m."InboxScope" = {JobTicketScope} OR NOT m."Done")
+                        ) AS "Value" FROM "Instances" i
+                        WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
+                        """).SingleAsync(token);
+                    Require(settled, "settlement clears the job registry and physically removes the job ticket");
+                    var issuance = await observation.Database.SqlQuery<bool>($"""
+                        SELECT count(*) = 1 AND bool_and(w."Generation" = 0 AND j."Revision" = 3) AS "Value"
+                        FROM "WorkbenchJobWitness" w JOIN "Instances" i ON i."Partition" = w."Partition" AND i."Id" = w."Target"
+                        JOIN "Journal" j ON j."Partition" = w."Partition" AND j."Instance" = w."Target" AND j.xmin = w."Transaction"
+                        WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
+                        """).SingleAsync(token);
+                    Require(issuance, "one physical generation-zero ticket was inserted in journal revision three's transaction");
+                }
                 last = completion;
             }
         }
@@ -184,11 +235,10 @@ internal static class WorkbenchPostgresPreview
 
         IHost CreateFixtureHost()
         {
-            var model = new NativeExecutionModel(new WorkflowRegistry().Add(definition));
             var builder = Host.CreateEmptyApplicationBuilder(new());
             builder.Logging.ClearProviders();
             builder.Services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node,
-                new WorkflowActorType([model]), Environment.FailFast));
+                workflowActor, Environment.FailFast));
             return builder.Build();
         }
 
@@ -225,7 +275,7 @@ internal static class WorkbenchPostgresPreview
     {
         internal int Id => process.Id;
 
-        internal static WorkbenchProcess Start(string executable, string connection, bool enabled)
+        internal static WorkbenchProcess Start(string executable, string connection, bool enabled, bool nativeJobs)
         {
             var binary = Path.GetFullPath(executable);
             var workspace = Directory.CreateTempSubdirectory("elsa-workbench-core-preview-");
@@ -255,6 +305,8 @@ internal static class WorkbenchPostgresPreview
             start.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
             if (enabled)
                 start.Environment["Elsa__CorePreview__Enabled"] = "true";
+            if (nativeJobs)
+                start.Environment["Elsa__CorePreview__NativeJobs"] = "true";
             start.Environment["ConnectionStrings__KernelCorePreview"] = connection;
             var process = Process.Start(start) ?? throw new InvalidOperationException("Workbench did not start.");
             return new WorkbenchProcess(process, workspace, process.StandardError.ReadToEndAsync());
@@ -303,6 +355,27 @@ internal static class WorkbenchPostgresPreview
             workspace.Delete(recursive: true);
         }
     }
+
+    // Preserve the physical insertion witness after the owner deletes the ticket during normal result settlement.
+    private static Task<int> InstallJobWitnessAsync(KernelDb db, CancellationToken token)
+    {
+        var sql = FormattableString.Invariant($"""
+            CREATE TABLE "WorkbenchJobWitness" ("Partition" int, "Target" text, "Generation" bigint, "Transaction" xid);
+            CREATE FUNCTION capture_workbench_job() RETURNS trigger LANGUAGE plpgsql AS $fn$
+            BEGIN
+                IF NEW."InboxScope" = {JobTicketScope} THEN
+                    INSERT INTO "WorkbenchJobWitness" VALUES (NEW."Partition", NEW."Target", NEW."JobGeneration", NEW.xmin);
+                END IF;
+                RETURN NEW;
+            END;
+            $fn$;
+            CREATE TRIGGER capture_workbench_job AFTER INSERT ON "Messages" FOR EACH ROW EXECUTE FUNCTION capture_workbench_job();
+            """);
+        return db.Database.ExecuteSqlRawAsync(sql, token);
+    }
+
+    private static KernelDb OpenProfile(DbContextOptions<KernelDb> options, bool nativeJobs) =>
+        nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);
 
     private static void PrintVersion(Assembly assembly) =>
         Console.WriteLine($"provider {assembly.GetName().Name} {assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]}");

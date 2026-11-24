@@ -19,9 +19,14 @@ internal static class WorkbenchCorePreview
             throw new InvalidOperationException("The core preview requires its own ConnectionStrings:KernelCorePreview.");
 
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        var model = new NativeExecutionModel(new WorkflowRegistry().Add(DirectApprovalWorkflow.Build()));
+        var nativeJobs = configuration.GetValue<bool>("Elsa:CorePreview:NativeJobs");
+        var workflows = new WorkflowRegistry().Add(DirectApprovalWorkflow.Build());
+        if (nativeJobs) workflows.Add(DirectApprovalWorkflow.BuildWithJob());
+        var model = new NativeExecutionModel(workflows);
         var actor = new WorkflowActor([model]);
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
-        services.AddHostedService(_ => new PostgresPreviewHostedService(() => new KernelDb(options), node, actor, Environment.FailFast));
+        services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node, actor, Environment.FailFast));
+
+        KernelDb Open() => nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);
     }
 }
