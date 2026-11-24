@@ -129,6 +129,23 @@ def protected_worker_schema(version, content, expected):
             and not any(name.lower() == 'ingressorigin' for name in origin))
 
 
+def protected_product_inventory(products, source, direct, version):
+    if version not in (1, 2) or version == 2 and not direct:
+        return False
+    names = {'Elsa.Workbench.dll', 'Elsa.Etl.Core.dll', 'Elsa.Etl.Runtime.dll', 'Elsa.Etl.Workflows.Runtime.dll',
+             'Elsa.Etl.Persistence.EntityFrameworkCore.dll', 'Elsa.Etl.Runtime.Api.dll'}
+    if direct:
+        names |= {'Elsa.Activities.Bpmn.Core.dll', 'Elsa.Activities.Bpmn.dll', 'Elsa.Activities.Bpmn.Api.dll',
+                  'Elsa.Workflows.Runtime.Core.dll', 'Elsa.Workflows.Runtime.dll', 'Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll'}
+    if version == 2:
+        names |= {'Elsa.Serialization.Core.dll', 'Elsa.Activities.Runtime.Core.dll'}
+    rows = products.get('actualProductVersions', [])
+    return (products.get('sourceCommit') == source and products.get('metadataOnly') is True
+            and len(rows) == len(names) and {row.get('name') for row in rows} == names
+            and all(row.get('productVersion', '').endswith('+' + source)
+                    and re.fullmatch('[0-9a-f]{64}', row.get('sha256', '')) is not None for row in rows))
+
+
 def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=False,embedded=False,parent_settlement_owed=False,final_refusal=None,worker_schema='2.0.0'):
     observed=checked[phase];model=observed["model"]
     row=connection.execute("SELECT Lifecycle,Revision,ContentJson FROM elsa_runtime_model_execution WHERE ExecutionId=?",(key(model["executionId"]),)).fetchone()
@@ -876,7 +893,7 @@ def verify(path):
         if (business or technical) and process.get('resumptionSweepIntervalSeconds')!=.2:raise ValueError('The actual error recovery lost its declared production resumption configuration.')
         if (process["sourceRevision"]!=source or process["parent"]!=parent or process["businessError"] is not business_error or process["predecessorExitCode"]!=-9 or
                 [item["role"] for item in process["processes"]]!=(["http-fixture","workbench","workbench","consumption-sdk","workbench","workbench"] if post_ack or parent_pending or success_parent is not None else ["http-fixture"]+["workbench"]*(4 if pending_crash else 3)) or len({item["processId"] for item in process["processes"]})!=(6 if post_ack or parent_pending or success_parent is not None else 5 if pending_crash else 4)):raise ValueError("The actual ETL reference lacks its distinct process-loss/restart provenance.")
-        if products["sourceCommit"]!=source or products["metadataOnly"] is not True or len(products["actualProductVersions"])!=(12 if direct else 6) or any(not item["productVersion"].endswith("+"+source) for item in products["actualProductVersions"]):raise ValueError("The actual Workbench and ETL products differ from their declared source.")
+        if not protected_product_inventory(products,source,direct,manifest.get('productInventoryVersion',1)):raise ValueError("The actual Workbench and ETL products differ from their declared source.")
         before=read("before.json");finished=read("finished.json");recovered=read("recovered.json")
         before_wire=read("before-wire.json");wire=read("finished-wire.json")
         if technical:

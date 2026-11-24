@@ -47,7 +47,7 @@ def inspect(folder, name):
     manifest = json.loads(manifest_path.read_text())
     cancellation = name == 'native-cancellation'
     kind = 'actual-direct-bpmn-native-etl-worker-cancellation' if cancellation else 'actual-bpmn-cancellation-before-native-admission'
-    if manifest.get('kind') != kind or cancellation and manifest.get('workflowStateSchemaVersion') != '2.1.0':
+    if manifest.get('kind') != kind or cancellation and (manifest.get('workflowStateSchemaVersion') != '2.1.0' or manifest.get('productInventoryVersion') != 2):
         raise ValueError('The current family must pin its actual scenario and worker schema')
     process_paths = [row['path'] for row in manifest['assets'] if Path(row['path']).name == 'process.json']
     if len(process_paths) != 1:
@@ -65,7 +65,8 @@ def record(retirement, cancellation, output):
     checked = [(name, folder, *inspect(folder, name)) for name, folder in
                [('native-start-retirement', retirement), ('native-cancellation', cancellation)]]
     source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip()
-    bound_files = [Path(__file__).resolve(), VERIFIERS / 'verify_http_recovery.py', VERIFIERS / 'verify_native_start_retirement.py']
+    bound_files = [Path(__file__).resolve(), VERIFIERS / 'verify_http_recovery.py', VERIFIERS / 'verify_native_start_retirement.py',
+                   VERIFIERS / 'qualify_http_recovery.py', REPO / 'tools/bpmn/qualify-hosting.py']
     verifier_hashes = {}
     for file in bound_files:
         relative = file.relative_to(REPO).as_posix()
