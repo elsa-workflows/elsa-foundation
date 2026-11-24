@@ -89,6 +89,9 @@ switch (args)
     case ["postgres", var connection, "root-turn", .. var options]:
         await new EfProvider("postgres", connection, options).CheckRootTurnAsync();
         return 0;
+    case ["postgres", var connection, "root-checkpoint-limit", .. var options]:
+        await new EfProvider("postgres", connection, options).CheckRootCheckpointLimitAsync();
+        return 0;
     case ["postgres", var connection, "root-checkpoint", .. var options]:
         await new EfProvider("postgres", connection, options).CheckFirstRootAsync();
         return 0;
@@ -199,6 +202,16 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
         await RootTurnChecks.Run(provided.CreateContext, (EfStore)provided.Store, (EfStore)provided.NewClient());
     }
 
+    internal async Task CheckRootCheckpointLimitAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(1, new());
+        Console.WriteLine(Name);
+        if (flags.Contains("--job-registry"))
+            await RootCheckpointLimitChecks.RunJobs(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        else
+            await RootCheckpointLimitChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient(), flags.Contains("--mixed-text"), flags.Contains("--unrepresentable-text"));
+    }
+
     internal async Task CheckFirstRootAsync()
     {
         await using var provided = (Provided)await CreateAsync(2, new());
@@ -222,7 +235,8 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
             _ => builder.UseSqlite(connection),
         };
         var options = builder.AddInterceptors(interceptors).Options;
-        return () => new KernelDb(options);
+        return engine == "postgres" && flags.Contains("--job-registry")
+            ? () => KernelDb.ForPostgresRootJobs(options) : () => new KernelDb(options);
     }
 
     private EfStore Store(Func<KernelDb> create, bool fenceInBatch, bool unfenced = false) => new(create, engine != "sqlite", fenceInBatch)

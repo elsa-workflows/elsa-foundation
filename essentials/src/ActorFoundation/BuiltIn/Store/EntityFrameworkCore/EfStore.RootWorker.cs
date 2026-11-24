@@ -239,6 +239,11 @@ public sealed partial class EfStore
         : QualifiedRootCheckpoint(0)
     {
         internal override long RevisionFor(string actor) => Revisions[actor];
+        internal override async ValueTask CheckBeforeWriteAsync(KernelDb db, CancellationToken cancellationToken)
+        {
+            foreach (var command in Commands) await command.CheckBeforeWriteAsync(db, cancellationToken);
+        }
+
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             if (db.UsesRootJobProtocol != JobProfile || db.UsesRootTimedJobIssuance != TimedJobIssuance ||
