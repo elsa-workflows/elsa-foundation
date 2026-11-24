@@ -16,10 +16,15 @@ public sealed partial class EtlRuntimeJourneyTests
     private static readonly JsonSerializerOptions V1FixtureJson = new(JsonSerializerDefaults.Web);
 
     [Fact]
-    public async Task CaptureAuthenticPreChangeV1Fixture()
+    public Task CaptureAuthenticPreChangeV1Fixture() => CaptureV1FixtureAsync(currentWriter: false);
+
+    [Fact]
+    public Task CaptureCurrentWriterV1Fixture() => CaptureV1FixtureAsync(currentWriter: true);
+
+    private async Task CaptureV1FixtureAsync(bool currentWriter)
     {
-        var destination = Environment.GetEnvironmentVariable("ETL_V1_FIXTURE_CAPTURE_ROOT");
-        var captureBaseCommit = Environment.GetEnvironmentVariable("ETL_V1_FIXTURE_CAPTURE_BASE_COMMIT");
+        var destination = Environment.GetEnvironmentVariable(currentWriter ? "ETL_S9_FIXTURE_CAPTURE_ROOT" : "ETL_V1_FIXTURE_CAPTURE_ROOT");
+        var captureBaseCommit = currentWriter ? await CurrentEtlCaptureSourceAsync() : Environment.GetEnvironmentVariable("ETL_V1_FIXTURE_CAPTURE_BASE_COMMIT");
         Assert.False(string.IsNullOrWhiteSpace(destination));
         Assert.False(string.IsNullOrWhiteSpace(captureBaseCommit));
         Assert.False(Directory.Exists(destination));
@@ -36,6 +41,7 @@ public sealed partial class EtlRuntimeJourneyTests
 
         var worker = await files.StartWorkerAsync("v1-compatibility-capture", deadline.Token,
             storeGate: EtlWorkerStoreGate.BeforeAcceptance);
+        var workerWriters = currentWriter ? CurrentEtlCaptureWriters(Path.GetDirectoryName(worker.ExecutingAssemblyPath)!, captureBaseCommit!) : null;
         var receipt = await worker.WaitForAcceptanceAsync(deadline.Token);
         Assert.Equal(1, receipt.Acceptance.AcceptedRecords);
         await using (var operation = host.Services.CreateAsyncScope())
@@ -98,15 +104,25 @@ public sealed partial class EtlRuntimeJourneyTests
         var runtimeDirectory = Path.Combine(destination!, "runtime");
         Directory.CreateDirectory(publishedDirectory);
         Directory.CreateDirectory(runtimeDirectory);
-        File.Copy(published.WorkflowDatabase, Path.Combine(publishedDirectory, "workflow.db"));
-        File.Copy(published.EtlDesignDatabase, Path.Combine(publishedDirectory, "etl-design.db"));
+        if (currentWriter)
+        {
+            await BackupCurrentEtlDatabaseAsync(published.WorkflowDatabase, Path.Combine(publishedDirectory, "workflow.db"));
+            await BackupCurrentEtlDatabaseAsync(published.EtlDesignDatabase, Path.Combine(publishedDirectory, "etl-design.db"));
+        }
+        else
+        {
+            File.Copy(published.WorkflowDatabase, Path.Combine(publishedDirectory, "workflow.db"));
+            File.Copy(published.EtlDesignDatabase, Path.Combine(publishedDirectory, "etl-design.db"));
+        }
         File.WriteAllBytes(Path.Combine(destination!, "etl-artifact.json"),
             JsonSerializer.SerializeToUtf8Bytes(published.OriginalArtifact, V1FixtureJson));
         File.WriteAllBytes(Path.Combine(destination!, "workflow-executable.json"),
             JsonSerializer.SerializeToUtf8Bytes(published.Executable, V1FixtureJson));
 
-        File.Copy(Path.Combine(Directory.GetParent(files.SnapshotRoot)!.FullName, "runtime.db"),
-            Path.Combine(runtimeDirectory, "runtime.db"));
+        if (currentWriter)
+            await BackupCurrentEtlDatabaseAsync(Path.Combine(Directory.GetParent(files.SnapshotRoot)!.FullName, "runtime.db"), Path.Combine(runtimeDirectory, "runtime.db"));
+        else
+            File.Copy(Path.Combine(Directory.GetParent(files.SnapshotRoot)!.FullName, "runtime.db"), Path.Combine(runtimeDirectory, "runtime.db"));
         EtlV1CompatibilityFixture.CopyDirectory(files.SnapshotRoot, Path.Combine(runtimeDirectory, "snapshots"));
         EtlV1CompatibilityFixture.CopyDirectory(files.OutputRoot, Path.Combine(runtimeDirectory, "output"));
         File.WriteAllBytes(Path.Combine(runtimeDirectory, "acceptance.json"),
@@ -115,14 +131,35 @@ public sealed partial class EtlRuntimeJourneyTests
         var publicationPath = published.RootDirectory;
         AssertNoHostPaths(destination!, runtimePath, publicationPath);
 
+        if (currentWriter)
+        {
+            Assert.Equal(captureBaseCommit, await CurrentEtlCaptureSourceAsync());
+            Assert.Equal(workerWriters, CurrentEtlCaptureWriters(Path.GetDirectoryName(worker.ExecutingAssemblyPath)!, captureBaseCommit!));
+            File.WriteAllBytes(Path.Combine(destination!, "capture-provenance.json"), JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                schemaVersion = 1, sourceSha = captureBaseCommit, sourceDirty = false,
+                producerKind = "current-writer-v1-output-before-acceptance", capturedAtUtc = DateTimeOffset.UtcNow,
+                workerProcessId = worker.ProcessId, workerWriters,
+                hostWriters = CurrentEtlCaptureWriters(AppContext.BaseDirectory, captureBaseCommit!)
+            }, Elsa.Serialization.Core.JsonBaseline.Options));
+        }
+
         var manifest = new EtlV1CompatibilityManifest(
             1,
-            V1ProducerBaseline,
+            currentWriter ? captureBaseCommit! : V1ProducerBaseline,
             captureBaseCommit!,
-            "uncommitted working-tree harness; CaptureBaseCommit does not contain these harness files",
+            currentWriter ? "clean committed current writer; historical predecessor retained separately" : "uncommitted working-tree harness; CaptureBaseCommit does not contain these harness files",
             EtlV1CompatibilityFixture.DescribeFiles(
                 EtlV1CompatibilityFixture.FindRepositoryRoot(),
-                [
+                currentWriter ? [
+                    "extensions/Etl/tests/Tests/EtlV1CompatibilityFixtureCaptureTests.cs",
+                    "extensions/Etl/tests/Tests/EtlCurrentWriterCapture.cs",
+                    "extensions/Etl/tests/Tests/EtlWorkerProcess.cs",
+                    "extensions/Etl/tests/Tests/EtlRuntimeJourneyTests.cs",
+                    "extensions/Etl/tests/Tests/EtlPublishedWorkflowFixture.cs",
+                    "extensions/Etl/tests/WorkerHost/Program.cs",
+                    "extensions/Etl/tests/Shared/EtlV1CompatibilityFixture.cs"
+                ] : [
                     "Extensions/Etl/tests/Shared/EtlV1CompatibilityFixture.cs",
                     "Extensions/Etl/tests/Shared/capture-v1-compat-fixtures.sh",
                     "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",

@@ -15,6 +15,7 @@ internal sealed class EtlWorkerProcess(string root, string configurationPath, st
     private Task[] _pumps = [];
     private bool _started;
     public int ProcessId => _process.Id;
+    public string ExecutingAssemblyPath => _started ? _process.StartInfo.ArgumentList[0] : throw new InvalidOperationException("The fixture worker has not started.");
     public bool HasExited => !_started || _process.HasExited;
     public string CapturedOutput => Output;
     public string AcceptancePath => EtlWorkerProtocol.AcceptancePath(root, role);
