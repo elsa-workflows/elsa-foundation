@@ -63,6 +63,16 @@ internal static class HttpTemplateChecks
         var named = Conflict(new WorkflowRegistry().Add(Waits("w1", "orders/{id}/cancel")).Add(Waits("w2", "orders/{order}/cancel")));
         check(waits.Routes.Count(route => !route.Start) == 2 && named is { Kind: HttpRouteConflict.TwoWaits, First: ("w1", "wait"), Second: ("w2", "wait") },
             "two waits on one shape are fine when they name their parameters alike; with other names a request could not read both, so they are refused");
+        var overlapLiteral = Conflict(new WorkflowRegistry().Add(Waits("by-id", "orders/{id}/cancel"))
+            .Add(Wf.Workflow("special", Wf.Sequence("main", Wf.HttpEndpoint("in", "begin/special"), Wf.HttpEndpoint("wait", "orders/special/cancel")))));
+        var overlapShapes = Conflict(new WorkflowRegistry().Add(Waits("by-id", "orders/{id}/cancel")).Add(Waits("by-pair", "{x}/{y}/cancel")));
+        var apart = new HttpRoutes(new WorkflowRegistry().Add(Waits("by-id", "orders/{id}/cancel")).Add(Waits("by-ship", "orders/{id}/ship")));
+        check(overlapLiteral is { Kind: HttpRouteConflict.TwoWaits } && overlapShapes is { Kind: HttpRouteConflict.TwoWaits } && apart.Routes.Count(r => !r.Start) == 2,
+            "waits of different shapes that can match one path are refused unless they read alike; waits that cannot are fine");
+        var computed = TemplateRefused(new WorkflowRegistry().Add(Wf.Workflow("computed-values", Wf.Sequence("main", Wf.HttpEndpoint("in", "begin"),
+            Wf.HttpEndpoint("wait", Binding.Expr("'comp/{id}/' + 'go'"), routeValues: Binding.Result("in", "RouteValues"))))));
+        check(computed is { } computedRefused && computedRefused.Message.Contains("computed", StringComparison.Ordinal),
+            "route values on a path an expression computes are refused when the table is built: the edge never sees that template");
         var noValues = TemplateRefused(new WorkflowRegistry().Add(Wf.Workflow("no-values", Wf.Sequence("main", Wf.HttpEndpoint("in", "begin"), Wf.HttpEndpoint("wait", "orders/{id}")))));
         check(noValues is { } missing && missing.Message.Contains("no RouteValues", StringComparison.Ordinal),
             "a wait whose literal route has parameters and no RouteValues is refused when the table is built");
@@ -89,6 +99,8 @@ internal static class HttpTemplateChecks
             .Add(Wf.Workflow("computed", Wf.Sequence("main", Wf.HttpEndpoint("in", "computed").Capture("order", "Body"),
                 Wf.Respond("waiting", "waiting"), Wf.HttpEndpoint("wait", Binding.Expr("'computed/' + order.id + '/go'")),
                 Wf.Respond("went", Binding.Expr("'went ' + order.id"))), ("order", null)))
+            .Add(Wf.Workflow("null-values", Wf.Sequence("main", Wf.HttpEndpoint("in", "null-values/{id}"),
+                Wf.HttpEndpoint("wait", "null-values/{id}/go", routeValues: Binding.Result("in", "Nope")), Wf.Respond("out", "never"))))
             .Add(Wf.Workflow("unbound", Wf.Sequence("main", Wf.HttpEndpoint("in", "unbound/{id}"),
                 Wf.HttpEndpoint("wait", "unbound/{id}/later", routeValues: Binding.Literal(new JsonObject())), Wf.Respond("out", "never"))));
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
@@ -136,6 +148,11 @@ internal static class HttpTemplateChecks
             var went = await Send("POST", $"computed/{Uri.EscapeDataString(odd)}/go", poll: true);
             check(went.Body?.GetValue<string>() == $"went {odd}",
                 $"{mode}: a wait whose path an expression computes keeps its literal key, braces and all, and the request's decoded path meets it ({went.StatusCode} {went.Body})");
+
+            var dots = await Send("POST", "orders/%2E%2E/cancel");
+            var nulled = await Send("POST", "null-values/5");
+            check(dots.StatusCode == 404 && nulled.StatusCode == 500,
+                $"{mode}: a '..' segment matches no parameter, and route values that come out null fault the wait instead of hanging it ({dots.StatusCode}, {nulled.StatusCode})");
 
             var unbound = await Send("POST", "unbound/1");
             check(unbound.StatusCode == 500, $"{mode}: a wait whose route has no value for a parameter faults its workflow, and the caller gets 500 ({unbound.StatusCode})");

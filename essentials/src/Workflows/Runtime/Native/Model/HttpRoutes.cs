@@ -32,8 +32,8 @@ public sealed class HttpRoutes
 
     /// <summary>
     /// The subscription key of a literal method and path: <c>http:{METHOD}:{path}</c>, with the path trimmed and in lower
-    /// case, or <c>http:{METHOD}:#{sha-256 of the path}</c> past <see cref="MaxReadableKeyBytes"/> ('#' never reaches a
-    /// request path).
+    /// case, or <c>http:{METHOD}:#{sha-256 of the path}</c> past <see cref="MaxReadableKeyBytes"/>. A readable key whose
+    /// path is '#' and a hash equals that hashed key; reaching it takes knowing the long path's hash.
     /// </summary>
     public static string Key(string method, string path) => Readable(method, Normalize(path));
 
@@ -69,7 +69,14 @@ public sealed class HttpRoutes
             var starts = StartsOf(workflow.Root).ToHashSet();
             foreach (var node in workflow.Nodes.Values.Where(n => n.Type == typeof(HttpEndpoint)))
             {
-                if (node.Inputs.GetValueOrDefault("Path") is not LiteralBinding { Value: { } literal }) continue;
+                if (node.Inputs.GetValueOrDefault("Path") is not LiteralBinding { Value: { } literal })
+                {
+                    // A path an expression computes is a literal route known only at run time: the edge cannot match a
+                    // template it never sees, so it takes no route values.
+                    if (node.Inputs.ContainsKey("RouteValues"))
+                        throw new HttpRouteTemplateException($"Workflow '{workflow.Id}', endpoint '{node.Id}': RouteValues need a literal route template, and this path is computed.");
+                    continue;
+                }
                 HttpRouteTemplate template;
                 try { template = HttpRouteTemplate.Parse(literal.GetValue<string>()); }
                 catch (HttpRouteTemplateException refused) { throw new HttpRouteTemplateException($"Workflow '{workflow.Id}', endpoint '{node.Id}': {refused.Message}"); }
@@ -88,6 +95,11 @@ public sealed class HttpRoutes
                     (claimed.Start || start || claimed.Template.Text != template.Text || claimed.RespondBeforeCommit != early))
                     throw new HttpRouteConflictException(route.Method, template.Text, (claimed.Workflow, claimed.Node), (workflow.Id, node.Id),
                         claimed.Start && start ? HttpRouteConflict.TwoStarts : claimed.Start || start ? HttpRouteConflict.StartAndWait : HttpRouteConflict.TwoWaits);
+                // Waits of different shapes can still match one path (orders/special/cancel and orders/{id}/cancel): the edge
+                // takes the more specific, so they must read alike too.
+                if (!start && _routes.FirstOrDefault(other => !other.Start && other.Method == route.Method && Overlap(other.Template, template) &&
+                        (other.Template.Text != template.Text || other.RespondBeforeCommit != early)) is { } overlapping)
+                    throw new HttpRouteConflictException(route.Method, template.Text, (overlapping.Workflow, overlapping.Node), (workflow.Id, node.Id), HttpRouteConflict.TwoWaits);
                 if (start || !shapes.ContainsKey($"{route.Method} {template.Shape}")) shapes[$"{route.Method} {template.Shape}"] = route;
                 _routes.Add(route);
                 if (start) _starts[Key(route.Method, template.Text)] = (workflow.Id, node.Id);
@@ -96,6 +108,11 @@ public sealed class HttpRoutes
         }
         _routes.Sort((a, b) => HttpRouteTemplate.Compare(a.Template, b.Template));
     }
+
+    // Two fully bound templates match one path when they have as many segments and no position holds two different literals.
+    private static bool Overlap(HttpRouteTemplate a, HttpRouteTemplate b) =>
+        a.Segments.Count == b.Segments.Count && a.Segments.Zip(b.Segments).All(pair =>
+            pair.First.Kind != HttpRouteSegmentKind.Literal || pair.Second.Kind != HttpRouteSegmentKind.Literal || pair.First.Text == pair.Second.Text);
 
     // The nodes a run of the root can begin at. In a Flowchart, a run triggered at a child begins there (the graph
     // engine's SelectEntryNode), so every child without an inbound connection is an entry, as the old core's start-path

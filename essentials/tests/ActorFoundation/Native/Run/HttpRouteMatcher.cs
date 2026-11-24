@@ -24,6 +24,10 @@ public static class HttpRouteMatcher
         return new(null, HttpRoutes.Key(verb, string.Join('/', segments)), new Dictionary<string, string>());
     }
 
+    // A parameter takes a segment a client keeps: '.' and '..' are path steps, not values (HttpRouteTemplate.Resolve
+    // refuses them, so a wait cannot be waiting on one).
+    private static bool IsValue(string segment) => segment.Length > 0 && segment is not ("." or "..");
+
     private static bool TryMatch(HttpRouteTemplate template, string[] segments, out IReadOnlyDictionary<string, string> values)
     {
         var matched = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -36,11 +40,13 @@ public static class HttpRouteMatcher
                 case HttpRouteSegmentKind.Literal when i < segments.Length && string.Equals(segments[i], segment.Text, StringComparison.OrdinalIgnoreCase):
                     i++;
                     break;
-                case HttpRouteSegmentKind.Parameter when i < segments.Length && segments[i].Length > 0:
+                case HttpRouteSegmentKind.Parameter when i < segments.Length && IsValue(segments[i]):
                     matched[segment.Text] = segments[i++];
                     break;
-                case HttpRouteSegmentKind.Optional:
-                    if (i < segments.Length) matched[segment.Text] = segments[i++];
+                case HttpRouteSegmentKind.Optional when i >= segments.Length:
+                    break;
+                case HttpRouteSegmentKind.Optional when IsValue(segments[i]):
+                    matched[segment.Text] = segments[i++];
                     break;
                 case HttpRouteSegmentKind.CatchAll:
                     matched[segment.Text] = string.Join('/', segments[i..]);

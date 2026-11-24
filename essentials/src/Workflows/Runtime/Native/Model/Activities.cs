@@ -536,8 +536,12 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
     {
         if (context.TryGetTrigger(out var request)) return new(Complete(request));
         // Without route values the path is a literal route, as before templates: an expression may compute it, braces and
-        // all, so it is not parsed. (A literal template with parameters and no route values is refused by HttpRoutes.)
-        if (RouteValues is null) return new(Suspend(new HttpWaitState(Method, Path), new HttpTrigger(Method, Path)));
+        // all. A path that is a template with parameters needs values, so bound values that came out null fault here
+        // rather than wait on a key no request reaches (HttpRoutes refuses a literal template with no RouteValues bound).
+        if (RouteValues is null)
+            return new(IsTemplate(Path)
+                ? Fault("http.route.invalid", $"The route '{Path}' has parameters and its route values are null.")
+                : Suspend(new HttpWaitState(Method, Path), new HttpTrigger(Method, Path)));
         string path;
         try
         {
@@ -552,6 +556,12 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
     }
 
     protected override ValueTask<Transition> ResumeAsync(ResumeContext<HttpWaitState, HttpRequest> context) => new(Complete(context.Trigger));
+
+    private static bool IsTemplate(string path)
+    {
+        try { return HttpRouteTemplate.Parse(path).Segments.Any(segment => segment.Kind != HttpRouteSegmentKind.Literal); }
+        catch (HttpRouteTemplateException) { return false; }
+    }
 }
 
 /// <summary>The response is the activity's result and goes out on the live channel. It does not end the workflow.</summary>
