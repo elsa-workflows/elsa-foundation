@@ -262,8 +262,6 @@
     <Project Path="essentials/tests/ActorFoundation/Native/Run/Elsa.ActorFoundation.Native.Run.csproj" />
   </Folder>
   <Folder Name="/prototypes/kernel-model/models/">
-    <Project Path="prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
-    <Project Path="prototypes/kernel-model/models/Native.Activities/Kernel.Native.Activities.csproj" />
     <Project Path="prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
   </Folder>
   <Folder Name="/essentials/tests/ActorFoundation/Legacy/">
@@ -562,6 +560,10 @@
   </Folder>
   <Folder Name="/essentials/src/Workflows/Runtime/Inspection/">
     <Project Path="essentials/src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj" />
+  </Folder>
+  <Folder Name="/essentials/src/Workflows/Runtime/Native/">
+    <Project Path="essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />
+    <Project Path="essentials/src/Workflows/Runtime/Native/Activities/Elsa.Workflows.Runtime.Native.Activities.csproj" />
   </Folder>
   <Folder Name="/essentials/src/Workflows/Runtime/">
     <Project Path="essentials/src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj" />

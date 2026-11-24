@@ -10,7 +10,7 @@
     <InternalsVisibleTo Include="Kernel.Statecharts.Run" />
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Statecharts.OrderFixture" />
     <ProjectReference Include="../../../../../../prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
-    <ProjectReference Include="../../../../../../prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />
   </ItemGroup>
-  <Import Project="../../../../../../prototypes/kernel-model/Directory.Build.targets" />
+  <Import Project="../../../../../../tools/architecture/check-kernel-model-references.targets" />
 </Project>

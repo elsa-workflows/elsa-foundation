@@ -58,11 +58,14 @@ if not native_runner.is_dir():
     native_runner = Path('prototypes/kernel-model/models/Native.Run')
 if not all((native_runner / name).is_file() for name in ('DirectApprovalWorkflow.cs', 'PostgresFixtureDatabase.cs')):
     raise SystemExit('Cannot find Native workflow fixtures in the selected source revision.')
+native_model = Path('essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj')
+if not native_model.is_file():
+    native_model = Path('prototypes/kernel-model/models/Native/Kernel.Native.csproj')
 project.write_text(text.replace('</Project>', f'''
   <ItemGroup>
     <ProjectReference Include="../../essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
     <ProjectReference Include="../../{postgres_host}" />
-    <ProjectReference Include="../../prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../../{native_model}" />
     <ProjectReference Include="../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <Compile Include="../../tools/ci/actor-foundation/WorkbenchPostgresPreview.cs" Link="Qualification/WorkbenchPostgresPreview.cs" />
     <Compile Include="../../{native_runner}/DirectApprovalWorkflow.cs" Link="Qualification/DirectApprovalWorkflow.cs" />
