@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../../ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
+    <ProjectReference Include="../../../../../../src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+    <ProjectReference Include="../../../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
+    <ProjectReference Include="../../../../../../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+    <Using Include="Elsa.ActorFoundation.Hosting" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Runtime" />
+  </ItemGroup>
+</Project>

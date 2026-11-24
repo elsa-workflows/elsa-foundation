@@ -2,13 +2,14 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Kernel.Foundation.Contracts;
+using Kernel.Foundation.InMemory;
 using Kernel.WorkflowActor;
 using Microsoft.Data.Sqlite;
 
-namespace Kernel.Native.Run;
+namespace Elsa.Workflows.Runtime.Native.Migration.SqliteFixture;
 
 /// <summary>The SQLite adapter for the operator's plan outcomes read model.</summary>
-internal sealed class SqliteMigrationPlanReads(string file, FoundationReadCursor cursor) : IMigrationPlanReads
+internal sealed class SqliteMigrationPlanReads(string file, FoundationReadCursorFixture cursor) : IMigrationPlanReads
 {
     internal static async Task EnableAsync(string file, CancellationToken stop)
     {

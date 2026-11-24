@@ -2,7 +2,7 @@ using Kernel.Foundation.Contracts;
 using Kernel.WorkflowActor;
 using Microsoft.Data.Sqlite;
 
-namespace Kernel.Native.Run;
+namespace Elsa.Workflows.Runtime.Native.Migration.SqliteFixture;
 
 /// <summary>A physical read model for one exact plan, updated independently from the actor's commit.</summary>
 internal sealed class SqlitePlanProjection(string file, BoundScope scope, ActorRef plan)

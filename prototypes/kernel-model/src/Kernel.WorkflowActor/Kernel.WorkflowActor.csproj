@@ -5,7 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.Migration.Run" />
-    <InternalsVisibleTo Include="Kernel.Native.Run" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Runtime.Native.Migration.SqliteFixture" />
     <ProjectReference Include="../../../../essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
     <ProjectReference Include="../../../../essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
   </ItemGroup>
