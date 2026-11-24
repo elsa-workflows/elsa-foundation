@@ -69,6 +69,6 @@ public sealed class GraphActivityProviderReferenceRewriter(IActivityStructureSer
         if (missing.Length != 0)
             throw new InvalidOperationException($"Upgrade occurrences were not found: {string.Join(", ", missing)}.");
         var rewrittenGraph = graph with { RootActivity = JsonSerializer.SerializeToElement(updated[root.NodeId], JsonOptions) };
-        return ValueTask.FromResult(manifest with { Payload = rewrittenGraph.ToCanonicalJsonElement() });
+        return ValueTask.FromResult(manifest with { Payload = rewrittenGraph.ToJsonElement() });
     }
 }

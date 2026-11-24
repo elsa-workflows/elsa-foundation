@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Reflection;
 using System.Collections.ObjectModel;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -962,11 +961,11 @@ public sealed class ActivityTemplatePlacer(
         // the compiled declarations are put back unchanged after routing.
         var payload = structure.Payload;
         var hasCompiledVariables = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("variables", out _);
-        JsonNode? compiledVariables = null;
+        JsonElement compiledVariables = default;
         if (hasCompiledVariables)
         {
-            var routed = JsonNode.Parse(payload.GetRawText())!.AsObject();
-            compiledVariables = routed["variables"]?.DeepClone();
+            var routed = payload.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
+            compiledVariables = routed["variables"];
             routed.Remove("variables");
             payload = JsonSerializer.SerializeToElement(routed, options: DescriptorPayloadSerializer.Options);
         }
@@ -976,8 +975,9 @@ public sealed class ActivityTemplatePlacer(
             placedNodeIds);
         if (!hasCompiledVariables)
             return new(rewritten.Kind, rewritten.SchemaVersion, rewritten.Payload);
-        var restored = JsonNode.Parse(rewritten.Payload.GetRawText()) as JsonObject
-            ?? throw new InvalidOperationException($"Structure '{rewritten.Kind}@{rewritten.SchemaVersion}' remapped to a non-object payload.");
+        if (rewritten.Payload.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException($"Structure '{rewritten.Kind}@{rewritten.SchemaVersion}' remapped to a non-object payload.");
+        var restored = rewritten.Payload.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
         restored["variables"] = compiledVariables;
         return new(rewritten.Kind, rewritten.SchemaVersion, JsonSerializer.SerializeToElement(restored, options: DescriptorPayloadSerializer.Options));
     }

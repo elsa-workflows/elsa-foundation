@@ -4,7 +4,6 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
@@ -347,7 +346,7 @@ public sealed class GraphActivityProvider(
                 EffectiveInputArray(node),
                 structures[node.NodeId],
                 // A body node's captures into graph variables; absent when it captures nothing.
-                ReadCanonicalArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null)
+                ReadCarriedArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null)
             { StructureInputs = OptionalInputProjection(node.Activity) })
             .ToArray();
 
@@ -401,13 +400,13 @@ public sealed class GraphActivityProvider(
 
     private JsonElement EffectiveInputArray(GraphNode node) => OptionalInputProjection(node.Activity) is { } projection
         ? JsonSerializer.SerializeToElement(projection.ApplyToInputs(node.Activity.Inputs), NodeSerializerOptions)
-        : ReadCanonicalArray(node.Element, "inputs");
+        : ReadCarriedArray(node.Element, "inputs");
 
     private JsonElement EffectiveReferenceElement(GraphNode node)
     {
         if (OptionalInputProjection(node.Activity) is null) return node.Element;
-        var element = JsonNode.Parse(node.Element.GetRawText())!.AsObject();
-        element["inputs"] = JsonNode.Parse(EffectiveInputArray(node).GetRawText());
+        var element = node.Element.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
+        element["inputs"] = EffectiveInputArray(node);
         return JsonSerializer.SerializeToElement(element, NodeSerializerOptions);
     }
 
@@ -473,7 +472,7 @@ public sealed class GraphActivityProvider(
                 OutcomeMappings = []
             }
             : graph;
-        var migrated = new ActivityProviderManifest(Key, request.TargetSchemaVersion, migratedGraph.ToCanonicalJsonElement());
+        var migrated = new ActivityProviderManifest(Key, request.TargetSchemaVersion, migratedGraph.ToJsonElement());
         return ValueTask.FromResult(new ActivityManifestMigration(migrated, diagnostics));
     }
 
@@ -1049,8 +1048,8 @@ public sealed class GraphActivityProvider(
         var structure = activityStructureService.CompileExecutableStructure(node.Activity);
         var variables = activityStructureService.ProjectScopedVariables(node.Activity);
         if (structure is null || variables.Count == 0) return structure;
-        var payload = JsonNode.Parse(structure.Payload.GetRawText())!.AsObject();
-        payload["variables"] = JsonNode.Parse(compiler!.CompileGraphVariables(node.NodeId, variables).GetRawText());
+        var payload = structure.Payload.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
+        payload["variables"] = compiler!.CompileGraphVariables(node.NodeId, variables);
         return new ActivityNodeStructure(structure.Kind, structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, NodeSerializerOptions));
     }
 
@@ -1591,16 +1590,6 @@ public sealed class GraphActivityProvider(
         _ => false
     };
 
-    private static JsonElement Canonicalize(JsonElement element)
-    {
-        using var document = JsonDocument.Parse(element.GetRawText());
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            ActivityGraphCanonicalJson.Write(writer, document.RootElement);
-        using var canonical = JsonDocument.Parse(stream.ToArray());
-        return canonical.RootElement.Clone();
-    }
-
     private bool TryGraphVariableDefault(TypeReference type, out object? value)
     {
         value = null;
@@ -1650,7 +1639,7 @@ public sealed class GraphActivityProvider(
                     childIndex = dependency.ChildIndex,
                     authoredDepth = node.Depth,
                     inputBindings = EffectiveInputArray(node),
-                    outputBindings = ReadCanonicalArray(node.Element, "outputs")
+                    outputBindings = ReadCarriedArray(node.Element, "outputs")
                 };
             }).ToArray(),
             variables = graph.Variables.Select(variable => variable.InitialValue is null &&
@@ -1688,17 +1677,17 @@ public sealed class GraphActivityProvider(
         };
         var serializerOptions = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         var payload = JsonSerializer.SerializeToElement(plan, serializerOptions);
-        var closedPayload = JsonNode.Parse(payload.GetRawText())!.AsObject();
+        var closedPayload = payload.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
         // The body is a closed value scope. Placement reads this to remap body references and mark the
         // boundary; versions compiled before it keep resolving their body against the caller.
-        closedPayload["scopeModel"] = Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScopeClosed;
+        closedPayload["scopeModel"] = JsonSerializer.SerializeToElement(Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScopeClosed, serializerOptions);
         if (!StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion))
-            return Canonicalize(JsonSerializer.SerializeToElement(closedPayload, serializerOptions));
+            return JsonSerializer.SerializeToElement(closedPayload, serializerOptions);
 
         var schemaTwoPayload = closedPayload;
-        schemaTwoPayload["outcomeMappings"] = JsonSerializer.SerializeToNode(outcomeMappings, serializerOptions);
+        schemaTwoPayload["outcomeMappings"] = JsonSerializer.SerializeToElement(outcomeMappings, serializerOptions);
 
-        // Written only when the body has a Complete node, so every other graph compiles to the same bytes as before.
+        // Only graphs with a Complete node need explicit completion routes.
         if (completeNodes.Count != 0)
         {
             var completeOutcomes = completeNodes
@@ -1711,10 +1700,10 @@ public sealed class GraphActivityProvider(
                     boundaryOutcomeName = boundaryOutcomes[referenceKey].Name
                 })
                 .ToArray();
-            schemaTwoPayload["completeOutcomes"] = JsonSerializer.SerializeToNode(completeOutcomes, serializerOptions);
+            schemaTwoPayload["completeOutcomes"] = JsonSerializer.SerializeToElement(completeOutcomes, serializerOptions);
         }
 
-        return Canonicalize(JsonSerializer.SerializeToElement(schemaTwoPayload, serializerOptions));
+        return JsonSerializer.SerializeToElement(schemaTwoPayload, serializerOptions);
     }
 
     private Elsa.Activities.Runtime.Core.Models.ActivityContract BuildRuntimeContract(
@@ -1764,11 +1753,11 @@ public sealed class GraphActivityProvider(
                 WellKnownRuntimeActivityConsumers.GraphActivity));
     }
 
-    private static JsonElement ReadCanonicalArray(JsonElement node, string propertyName)
+    private static JsonElement ReadCarriedArray(JsonElement node, string propertyName)
     {
         if (!node.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.Array)
             return EmptyArray();
-        return Canonicalize(value);
+        return value.Clone();
     }
 
     private static ActivityTemplateCompilation EmptyCompilation(
