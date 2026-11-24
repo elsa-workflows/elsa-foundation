@@ -25,7 +25,7 @@ plan: the ADR's non-goals for release 1, and anything not named there.
 Sipke trimmed the program to the **Actor Foundation** and the **Elsa engine**. He set the goal as end-to-end delivery
 through gate 4, the default switch, and gate 5, old-core removal, with his decision at each gate
 ([owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7142657677)). This section
-replaces the release 1 scope of ADR 0099 section 10 where the two differ. Milestone acceptance, including K13's "K1 to
+replaces the release 1 scope of ADR 0099 section 10 where the two differ, until the ADR is amended to match. Milestone acceptance, including K13's "K1 to
 K12 accepted on main", is measured against the rows as trimmed here.
 
 His decisions:
@@ -51,18 +51,23 @@ His decisions:
 Claude's reading of these decisions, which the owner can correct:
 
 - Terminate and delete of a parked root stay in scope, because a parked root must be endable. The design defines both
-  as bounded drains. Until the drain returns, they are bounded to one page as recover is, and a Park larger than one
-  page is refused with a recorded reason.
+  as bounded drains. Until the multi-page drain ships, they are bounded to one page as recover is, and a Park larger
+  than one page is refused with a recorded reason. As a result, a Park that keeps more than one page cannot be
+  recovered, terminated, deleted or discarded before the release. Claude brings this to the owner as a decision
+  before the parked-root terminate slice (composition S5).
 - K10's StateMachine journeys go with the StateMachine engine.
-- Work for SQL Server, MySQL and MongoDB moves after the release. That includes:
+- Instance migration moves after the release with the plan runner. The runner is the only path that sends `Migrate`,
+  which also covers ADR 0099 section 10's "simple instance migration".
+- Work for SQL Server and MySQL moves after the release. That includes:
   - condition RP;
   - the SQL Server and MySQL legs of NL-C1;
   - MySQL TLS cancellation;
   - the `max_allowed_packet` start refusal;
-  - SQL Server sizing and Entra qualification;
-  - the three-engine deadlock cases.
+  - SQL Server's UTF-16 state sizing;
+  - the Entra qualification that the resume handoff ties to the SQL Server integration;
+  - the SQL Server and MySQL legs of the deadlock acceptance cases.
 
-  MongoDB stays on hold.
+  MongoDB stays on its existing owner hold.
 
 Rows that mix kept and cut work keep only their kept part until the release:
 
@@ -70,10 +75,12 @@ Rows that mix kept and cut work keep only their kept part until the release:
 - K7 is Flowchart G1 to G5.
 - K9 drops the plan-outcome read model.
 - K10 drops the StateMachine journeys.
-- K11's "parked-work inspect, retry and discard" keeps inspection and the one-page recover.
+- K11's "parked-work inspect, retry and discard" keeps inspection and the one-page recover. The Kept list's
+  "parked-work inspection" means the same.
 - FC-C4 is judged on the instance list and the retention worker.
 - The `pad=` values-by-reference run in "Release 1 qualification" moves after the release.
 - So do the StateMachine demo increment and the #3815 carry-over row.
+- Any other row, case or condition below that names only cut work also applies after the release.
 
 ## How the work lands
 
