@@ -157,6 +157,7 @@ public sealed class WorkflowExecutableCompiler(
 
             var rootActivity = state.RootActivity
                 ?? throw new ArgumentException(ActivityTreeProjector.NoRootActivityMessage);
+            EnsureBuiltInStorageDrivers(state.Inputs, state.Outputs);
 
             var sourceAuthority = _dataSelectionAnalyzer
                 ?? throw new InvalidOperationException("Workflow compilation requires the scoped activity data selection analyzer. Compose WorkflowDesignValidations and use the source-authority constructor.");
@@ -592,6 +593,18 @@ public sealed class WorkflowExecutableCompiler(
         // Pin the descriptor identity so case-insensitive alias lookup cannot leak a non-canonical authored spelling
         // into an executable's durable behavior or identity hash.
         return descriptor.Reference;
+    }
+
+    // A workflow's own inputs and outputs are seeded and written inline; no other storage driver is implemented for
+    // them yet (#5698). Refuse the choice instead of storing the value inline against it.
+    private static void EnsureBuiltInStorageDrivers(IEnumerable<InputDefinition> inputs, IEnumerable<OutputDefinition> outputs)
+    {
+        foreach (var input in inputs)
+            if (!UnsupportedStorageDriverDiagnostics.IsBuiltIn(input.StorageDriverType))
+                throw UnsupportedStorageDriverDiagnostics.WorkflowInput(input.Name, input.StorageDriverType!);
+        foreach (var output in outputs)
+            if (!UnsupportedStorageDriverDiagnostics.IsBuiltIn(output.StorageDriverType))
+                throw UnsupportedStorageDriverDiagnostics.WorkflowOutput(output.Name, output.StorageDriverType!);
     }
 
     private static WorkflowExecutableInputContract BuildInputContract(IEnumerable<InputDefinition> inputs)

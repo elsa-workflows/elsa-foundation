@@ -60,8 +60,8 @@ internal static class Elsa3VariableMapper
 
     /// <summary>
     /// Whether <paramref name="storageDriverTypeName"/> is Elsa 3's default storage driver, which kept the value with the
-    /// workflow instance: Elsa 4's default, so no storage driver. Elsa 4 cannot resolve the Elsa 3 type, and would read its
-    /// fallback alias as an external storage profile it refuses.
+    /// workflow instance: Elsa 4's default, so no storage driver. Elsa 4 cannot resolve the Elsa 3 type, and would refuse
+    /// its fallback alias as an unsupported storage driver.
     /// </summary>
     internal static bool IsDefaultStorageDriver(string storageDriverTypeName)
     {

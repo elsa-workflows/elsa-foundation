@@ -125,6 +125,75 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("hello", input.DefaultValue!.Value.GetString());
     }
 
+    [Fact]
+    public async Task Workflow_input_on_a_storage_driver_other_than_elsa_json_is_refused()
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        version.State = version.State! with
+        {
+            Inputs = [new InputDefinition("input-1", "Document", new TypeReference("String"), "Acme.BlobStorageDriver",
+                "Document", null, IsNullable: true)]
+        };
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => CompileAsync(version));
+
+        Assert.IsType<ArgumentException>(exception.InnerException);
+        Assert.StartsWith("VF-ACT-005: Workflow input 'Document' uses storage driver 'Acme.BlobStorageDriver'.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Workflow_output_on_a_storage_driver_other_than_elsa_json_is_refused()
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        version.State = version.State! with
+        {
+            Outputs = [new OutputDefinition("output-1", "Report", new TypeReference("String"), "Acme.BlobStorageDriver",
+                "Report", null, IsNullable: true)]
+        };
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => CompileAsync(version));
+
+        Assert.StartsWith("VF-ACT-005: Workflow output 'Report' uses storage driver 'Acme.BlobStorageDriver'.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Workflow_variable_on_a_storage_driver_other_than_elsa_json_is_refused()
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        version.State = version.State! with
+        {
+            Variables = [new Elsa.Expressions.Core.Models.VariableDefinition("var-draft", "Draft", new("String"), "Acme.BlobStorageDriver", null)]
+        };
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => CompileAsync(version));
+
+        Assert.Contains("VF-ACT-005: Variable 'var-draft'", exception.Message);
+        Assert.Contains("uses storage driver 'Acme.BlobStorageDriver'", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("elsa.json")]
+    public async Task Workflow_inputs_and_outputs_on_the_built_in_driver_compile(string? storageDriverType)
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        version.State = version.State! with
+        {
+            Inputs = [new InputDefinition("input-1", "Document", new TypeReference("String"), storageDriverType,
+                "Document", null, IsNullable: true)],
+            Outputs = [new OutputDefinition("output-1", "Report", new TypeReference("String"), storageDriverType,
+                "Report", null, IsNullable: true)]
+        };
+
+        var executable = await CompileAsync(version);
+
+        Assert.Single(executable.InputContract!.Inputs);
+    }
+
+    private Task<WorkflowExecutable> CompileAsync(WorkflowDefinitionVersion version) =>
+        TestCompiler.Create(new FakeVersionStore(version), new FakeActivityVersionStore([_writeLineActivity]),
+            _activityStructureService, TestWellKnownTypeRegistry.Create()).CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask();
+
     [Theory]
     [InlineData("Int32", "10", "0", false)]
     [InlineData("Boolean", "true", "false", false)]
