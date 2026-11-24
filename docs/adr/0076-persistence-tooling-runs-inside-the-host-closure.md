@@ -796,13 +796,15 @@ can ship on its own schedule.
 ### D14 — The worker may reach further frozen entry points, one per command group, each named and frozen
 
 The worker of D1 is not tied to persistence. A command group that must run product code inside a host's closure may
-reach its own frozen entry point there, by type name and through the same worker, instead of adding a second worker or
+reach its own frozen entry point there, by type name and through the same worker. The entry point's assembly comes from
+the host's deps closure, or from a package the group loads under D10's second exception, and the worker looks for it
+in both, instead of adding a second worker or
 loading product code into the tool. Each such entry point:
 
 - is a `public static Task<int> RunAsync(Stream request, Stream response)` on a named type in a named assembly, taking
   versioned JSON on stdin and answering on stdout, exactly as `EfToolingHost` does;
-- is a frozen compatibility surface the moment it ships. A host without it is refused by name, with the minimum
-  version that carries it, never with an opaque reflection failure;
+- is a frozen compatibility surface the moment it ships. A closure without it (host and loaded packages) is
+  refused by name, with the minimum package version that carries it, never with an opaque reflection failure;
 - lives in the assembly that owns its product code, so the tool and the worker gain no reference to it. In particular
   an entry point that runs Elsa 3 code lives under `extensions/Elsa3/`, which keeps Elsa 3 behind the import boundary
   (Elsa constitution §E2.7);
