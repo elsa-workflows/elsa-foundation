@@ -62,12 +62,15 @@ public sealed partial class BpmnDirectExecutionTests
         await using (var scope = await ScopeAsync(host))
         {
             var before = await FaultFixtureRowsAsync();
-            var state = Assert.Single((await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().ListPageAsync(new())).Items,
-                item => item.ExecutionId.StartsWith("bpmn:", StringComparison.Ordinal));
+            var states = (await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().ListPageAsync(new())).Items;
+            var state = fixture == "ActualPriorScopeCancellation.sqlite.gz"
+                ? Assert.Single(states, item => item.ExecutionId == "bpmn:723068f9ada40fbde52746a0678a2f5c65e61ef6831c683f85b0098a3daaa044")
+                : Assert.Single(states);
             var error = await Assert.ThrowsAsync<InvalidDataException>(async () =>
                 await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindMaterialAsync(state.Executable.ArtifactId));
             Assert.Equal("The persisted model material payload is corrupt.", error.Message);
             var cause = Assert.IsType<ArgumentException>(error.InnerException);
+            Assert.Equal("material", cause.ParamName);
             Assert.StartsWith("Model material requires its complete behavioral content hash and a supported artifact ID.", cause.Message);
             Assert.Equal(before, await FaultFixtureRowsAsync());
         }

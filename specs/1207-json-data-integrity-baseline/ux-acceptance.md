@@ -1,5 +1,12 @@
 # S-9 Studio acceptance
 
+**Owner direction, 24 November 2026:** Studio acceptance is removed from this implementation stream. The active
+`345f78c146bda1321994ee710621537dfd8afad9` native-dashboard rerun was stopped through its owned process tree and has an
+`owner-stopped-studio-acceptance.json` receipt. Existing failed, interrupted and not-run states below remain incomplete.
+Further composed journeys, Foundation feed acceptance and visual artifact delivery are outside this stream's remaining
+delivery work. Code implementation, affected local backend checks, conflict resolution and independent local code review
+continue. This direction does not turn earlier acceptance results into passes.
+
 User goal: read and enter workflow times in a chosen time zone without silently changing the instant or guessing the server's zone.
 
 Reference: the existing Settings › Appearance cards, standard Run workflow dialog, instance From/To controls and timestamp typography. Preserve their keyboard, validation, busy, read-only and responsive behavior.
