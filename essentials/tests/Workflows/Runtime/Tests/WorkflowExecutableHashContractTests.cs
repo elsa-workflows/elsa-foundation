@@ -25,7 +25,7 @@ public sealed partial class WorkflowExecutableHashContractTests
     {
         var legacy = LegacyWorkflowHashFixture.Load();
 
-        Assert.Equal("sha256:90c8cd4b830e94d9b305b6cca2477aada5dc673d0d46fcf5cfb7878b9a9ff1fb", legacy.Identity.ArtifactHash);
+        Assert.Equal("sha256:354c49dcf733ba1a2ed2a4b66584df9c9b3e8e930c89e12d385f4d6fe165e029", legacy.Identity.ArtifactHash);
         Assert.True(_hasher.MatchesHash(legacy), $"Regenerate the pre-stable fixture once for S-9. Actual={Hash(legacy)}. From Elsa 4's first stable release, this JSON hash is frozen and changes require an explicit decision.");
         Assert.Equal(legacy.Identity.ArtifactHash, Hash(legacy));
         Assert.Equal(_hasher.CreateArtifactId("artifact-", legacy.Identity.ArtifactHash), legacy.Identity.ArtifactId);

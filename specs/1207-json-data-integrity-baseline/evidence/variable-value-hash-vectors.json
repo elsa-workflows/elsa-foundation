@@ -131,5 +131,12 @@
     "json": null,
     "canonical": "{\"presence\":3e0,\"withheld\":{\"conversionPlan\":{\"fingerprint\":\"sha256:396d0ad07cbbf5b8074a8be3c6163e4db086b2b9445730c7d71794be59b22736\",\"limits\":{\"maxCollectionItems\":1e4,\"maxDepth\":64e0,\"maxPayloadBytes\":1048576e0},\"mode\":\"Auto\",\"operation\":\"Identity\",\"options\":{},\"profile\":null,\"schemaVersion\":1e0,\"sourceRepresentation\":\"TextValue\",\"sourceType\":{\"alias\":\"String\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"targetType\":{\"alias\":\"String\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null}},\"kind\":\"SecretReference\",\"secret\":{\"name\":\"api-key\",\"scope\":\"tenant-a\",\"typeName\":\"String\"}}}",
     "sha256": "d1ba68a7013509642f21e75cf4f7dffbc6a202366b41e35cb87f9775f33f2e9b"
+  },
+  {
+    "name": "withheld-secret-plan-absent-schema",
+    "presence": 3,
+    "json": null,
+    "canonical": "{\"presence\":3e0,\"withheld\":{\"conversionPlan\":{\"fingerprint\":\"sha256:396d0ad07cbbf5b8074a8be3c6163e4db086b2b9445730c7d71794be59b22736\",\"limits\":{\"maxCollectionItems\":1e4,\"maxDepth\":64e0,\"maxPayloadBytes\":1048576e0},\"mode\":\"Auto\",\"operation\":\"Identity\",\"options\":{},\"profile\":null,\"schemaVersion\":1e0,\"sourceRepresentation\":\"TextValue\",\"sourceType\":{\"alias\":\"String\",\"collectionKind\":\"Single\",\"schemaVersion\":null},\"targetType\":{\"alias\":\"String\",\"collectionKind\":\"Single\",\"schemaVersion\":null}},\"kind\":\"SecretReference\",\"secret\":{\"name\":\"api-key\",\"scope\":\"tenant-a\",\"typeName\":\"String\"}}}",
+    "sha256": "8db24023ae3e315f95949fc8be5d42315ed3feebb48475dd4e3ef386cd382ae5"
   }
 ]

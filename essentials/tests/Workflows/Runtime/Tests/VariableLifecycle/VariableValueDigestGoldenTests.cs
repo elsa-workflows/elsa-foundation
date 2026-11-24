@@ -28,13 +28,21 @@ public sealed class VariableValueDigestGoldenTests
             "explicit-null" => ValueEnvelope.Null(Type, ValueProtectionPolicy.InstanceInline),
             "external" => ValueEnvelope.External(Type, new("blob", "object-1", new Dictionary<string, string> { ["OwnerKey"] = "René" }), ValueProtectionPolicy.InstanceInline),
             "withheld-policy" => ValueEnvelope.Withheld(Type, WithheldValue.PolicyRequiresEncryption(), ValueProtectionPolicy.InstanceInline),
-            "withheld-secret-plan" => ValueEnvelope.Withheld(Type, WithheldValue.SecretReference(new("api-key", "String", "tenant-a"),
-                ValueConversionPlan.Identity(new("String"), ValueRepresentation.TextValue)), ValueProtectionPolicy.InstanceInline),
+            "withheld-secret-plan" => WithheldSecretPlan(JsonSerializer.SerializeToElement<object?>(null, JsonBaseline.Options)),
+            "withheld-secret-plan-absent-schema" => WithheldSecretPlan(null),
             _ => Parse(vector.GetProperty("json").GetString()!)
         };
         var expected = "sha256:" + vector.GetProperty("sha256").GetString();
         Assert.True(expected == Frame(value).CurrentDigestOf("value"), vector.GetProperty("name").GetString() + ": " + FreezeRule);
         Assert.True(expected == "sha256:" + JsonHashInput.HashJson(vector.GetProperty("canonical").GetString()!), FreezeRule);
+    }
+
+    [Fact]
+    public void Withheld_secret_plans_keep_absent_schema_distinct_from_present_JSON_null()
+    {
+        var explicitSchema = WithheldSecretPlan(JsonSerializer.SerializeToElement<object?>(null, JsonBaseline.Options));
+        var absentSchema = WithheldSecretPlan(null);
+        Assert.NotEqual(Frame(explicitSchema).CurrentDigestOf("value"), Frame(absentSchema).CurrentDigestOf("value"));
     }
 
     [Theory]
@@ -71,6 +79,10 @@ public sealed class VariableValueDigestGoldenTests
         using var document = JsonDocument.Parse(json);
         return ValueEnvelope.Inline(Type, document.RootElement, ValueProtectionPolicy.InstanceInline);
     }
+
+    private static ValueEnvelope WithheldSecretPlan(JsonElement? schema) =>
+        ValueEnvelope.Withheld(Type, WithheldValue.SecretReference(new("api-key", "String", "tenant-a"),
+            ValueConversionPlan.Identity(new("String", schema: schema), ValueRepresentation.TextValue)), ValueProtectionPolicy.InstanceInline);
 
     private static VariableFrameState Frame(ValueEnvelope value) => new("frame:golden", "workflow", "execution", null,
         VariableFrameKind.Root, new Dictionary<string, ValueEnvelope> { ["value"] = value });

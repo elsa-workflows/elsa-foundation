@@ -18,8 +18,8 @@ public sealed partial class WorkflowExecutableHashContractTests
     [InlineData(true, false, "4d912a2edf11bcfac2851bd6d7e6710e709561f8d9bf16fdecb5152b5f5e5e78", "788acd9eb47d0fd3bbf34d380033705758f141b301823ba4c3fa66029c136c06", "nullable-v1")]
     [InlineData(false, false, "fc7261b5d327339ee2f48f078d9886277c5440ff1925ef4707608240aed1e993", "7fecf8879670cd1961a3e0ae0e71a711fff0e2bc864a6856e4fd2dc7d125e251", "nonnull-v2-alias")]
     [InlineData(true, false, "75ac6cf2f03223d24aed226394e95235f7e03875a4ba44b82b82b9a13e9add65", "788acd9eb47d0fd3bbf34d380033705758f141b301823ba4c3fa66029c136c06", "nullable-v2-alias")]
-    [InlineData(false, true, "7bc5e620fb003209aa715e86c1057e7c35a4af7f18005722b6bda32885f307f9", "11f78f6804ca0e392d87654bb2ae3288302f50d5ad6db6c9fd0bb2a453fa7a66", "member-nonnull")]
-    [InlineData(true, true, "8626a4c3d081258946fb6917ff5185c3de89a592adf4d0ef5a56e21a11b3ab24", "0c58e9fa8cd484d059cf1a44c0bed61bb37e9eac0581ea36229df600ce91a0f5", "member-nullable")]
+    [InlineData(false, true, "7bc5e620fb003209aa715e86c1057e7c35a4af7f18005722b6bda32885f307f9", "4205505aecdc1a3f2de7b73b38513137935a257722b7b0ffa7bdd0e4450b1fd8", "member-nonnull")]
+    [InlineData(true, true, "8626a4c3d081258946fb6917ff5185c3de89a592adf4d0ef5a56e21a11b3ab24", "95818d6351880576a5263aec5eaad6de684b82b2a8f90105eabc9740f4ac286a", "member-nullable")]
     public void Legacy_input_hashes_are_refused_and_current_pins_bind_nullability_and_value_policies(bool nullable, bool member, string oldPin, string newPin, string fixtureName)
     {
         var vector = CurrentInputHashVectors().Single(row => row.GetProperty("name").GetString() == CurrentInputHashFixturePrefix + fixtureName);

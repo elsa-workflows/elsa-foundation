@@ -4,6 +4,7 @@ No production serializer/hash code is invoked. Input spelling, canonical preimag
 and outputs are retained; the recipe freezes with Elsa 4's first stable release.
 """
 from pathlib import Path
+import copy
 import hashlib
 import json
 
@@ -95,11 +96,18 @@ def generate():
                 targetType=descriptor, mode='Auto', operation='Identity', profile=None,
                 limits=dict(maxDepth=Number('64'), maxCollectionItems=Number('10000'), maxPayloadBytes=Number('1048576')), options={})
     plan['fingerprint'] = 'sha256:' + hashlib.sha256(canonical(plan).encode()).hexdigest()
+    # The existing pin describes explicit JSON-null schemas. An absent CLR Schema is omitted
+    # by ValueTypeDescriptor's member contract, while the plan's own WriteType preimage is unchanged.
+    absent_schema_plan = copy.deepcopy(plan)
+    for name in ['sourceType', 'targetType']:
+        absent_schema_plan[name].pop('schema', None)
     markers = [
         ('external', Number('2'), dict(external=dict(storageProfile='blob', locator='object-1', metadata={'OwnerKey': 'René'}))),
         ('withheld-policy', Number('3'), dict(withheld=dict(kind='PolicyRequiresEncryption'))),
         ('withheld-secret-plan', Number('3'), dict(withheld=dict(kind='SecretReference',
              secret=dict(name='api-key', typeName='String', scope='tenant-a'), conversionPlan=plan))),
+        ('withheld-secret-plan-absent-schema', Number('3'), dict(withheld=dict(kind='SecretReference',
+             secret=dict(name='api-key', typeName='String', scope='tenant-a'), conversionPlan=absent_schema_plan))),
     ]
     for name, presence, marker in markers:
         preimage = canonical(dict(presence=presence, **marker))

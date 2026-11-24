@@ -36,7 +36,7 @@ def generate():
         contract = dict(activityTypeKey='test.activity', contractVersion='1', descriptorKind='test',
                         descriptorPayload=dict(x=1), inputs=[], outcomes=[],
                         activation=dict(descriptorKind='test', capability='execute'),
-                        result=dict(Type=dict(alias='Int32', collectionKind='Single', schema=None, schemaVersion=None),
+                        result=dict(Type=dict(alias='Int32', collectionKind='Single', schemaVersion=None),
                                     IsRequired=False, Policy=dict(isPersistable=True, isSensitive=False, requiresEncryption=False,
                                     redactionMode=None, lifecycle='Instance', storage='Inline', storageProfile=None, retentionPolicy=None), projections=[]))
         node = dict(nodeId='node', activityType='test.activity', activityTypeVersion='1', sideEffectProfile='External',
