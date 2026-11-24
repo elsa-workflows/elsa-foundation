@@ -63,6 +63,8 @@ public class NativeExecutionOptions
     public int MaxActivitiesPerTurn { get; init; } = 1000;
     public AdmissionFlaw AdmissionFlaws { get; init; }
     public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
+    /// <summary>The host's outbound HTTP for SendHttpRequest's job; without it the activity faults.</summary>
+    public NativeHttpOptions? Http { get; init; }
 }
 
 // ---- the state: live frames, scheduled work, waits, variables, results ---------------------------------------------
@@ -285,14 +287,15 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             var wait = NewId("w");
             var path = IterationPath(frame);
             var arguments = new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope)), path, EffectKeyOf(frame, path));
+            var jobTimeout = node.JobTimeout ?? TimeoutInput(node, arguments.Inputs);
             _s.Waits[wait] = new WaitEntry(frame.Id, "job", wait)
             {
                 Job = turn.SavesWaitRecipes ? new Contract.JobSpec(wait, System.Text.Json.JsonSerializer.Serialize(arguments))
                 {
-                    Deadline = node.JobTimeout is { } timeout ? checked(turn.Now + (long)timeout.TotalMilliseconds) : null
+                    Deadline = jobTimeout is { } timeout ? checked(turn.Now + (long)timeout.TotalMilliseconds) : null
                 } : null
             };
-            turn.StartJob(wait, arguments, node.JobTimeout);
+            turn.StartJob(wait, arguments, jobTimeout);
             return;
         }
         var pinned = frame.RecoveryInputs is { } saved ? (JsonObject)saved.DeepClone() : PinRecoveryInputs(frame, node, scope);
@@ -353,7 +356,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         if (node.Background)
         {
             var finished = Values.To<Contract.JobFinished>(work.Payload)!;
-            if (finished.Error is { } error) Fail(frame, new ActivityFault("job", error));
+            // A job whose deadline passed completes an activity that names a timeout outcome on it (SendHttpRequest's Timeout).
+            if (finished.Error == "timeout" && node.Type.GetCustomAttributes(typeof(BackgroundAttribute), false) is [BackgroundAttribute { TimeoutOutcome: { } timedOut }])
+                Apply(frame, new Transition(TransitionKind.Complete, null, timedOut));
+            else if (finished.Error is { } error) Fail(frame, new ActivityFault("job", error));
             else if (System.Text.Json.JsonSerializer.Deserialize<BackgroundResult>(finished.Result!)! is var r) Apply(frame, new Transition(r.Kind, r.Result, r.Outcome, r.Fault));
             return;
         }
@@ -561,6 +567,16 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     internal void RecordJoin(Frame frame, string node) => turn.Record($"j:{frame.Id}:{node}");
 
     internal void Record(string entry) => turn.Record(entry);
+
+    // The job timeout a background activity takes from one of its inputs (BackgroundAttribute.TimeoutInput), else its default.
+    private static TimeSpan? TimeoutInput(Node node, JsonObject inputs)
+    {
+        if (node.Type.GetCustomAttributes(typeof(BackgroundAttribute), false) is not [BackgroundAttribute { TimeoutInput: { } input } background]) return null;
+        // One rule with the activity: milliseconds or a time span, at most a day; an unbound or refused one takes the default
+        // (the activity faults on a refused one when its job runs).
+        return ActivityTimeouts.TryParse(inputs[input], ActivityTimeouts.MaxTimeout, out var bound) && bound is { } given ? given
+            : background.DefaultTimeoutMilliseconds > 0 ? TimeSpan.FromMilliseconds(background.DefaultTimeoutMilliseconds) : null;
+    }
 
     internal void Fail(Frame frame, ActivityFault fault)
     {

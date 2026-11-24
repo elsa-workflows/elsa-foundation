@@ -10,7 +10,59 @@ public sealed class InputAttribute : Attribute;
 
 /// <summary>Elsa 4's background placement: the leaf runs as a background job (the kernel's <c>StartJob</c>), not inside the turn.</summary>
 [AttributeUsage(AttributeTargets.Class)]
-public sealed class BackgroundAttribute : Attribute;
+public sealed class BackgroundAttribute : Attribute
+{
+    /// <summary>The input whose time span is the job's timeout (the <c>StartJob</c> deadline), when the node sets no timeout itself.</summary>
+    public string? TimeoutInput { get; init; }
+
+    /// <summary>The job's timeout when <see cref="TimeoutInput"/> is unbound or not positive, in milliseconds; 0 for none.</summary>
+    public long DefaultTimeoutMilliseconds { get; init; }
+
+    /// <summary>The outcome the activity completes on when its job's deadline passes; without one, the deadline faults it.</summary>
+    public string? TimeoutOutcome { get; init; }
+}
+
+/// <summary>How a background activity's timeout input reads: one rule for the activity and for its job's deadline.</summary>
+public static class ActivityTimeouts
+{
+    /// <summary>The longest timeout an input may give: one day.</summary>
+    public static readonly TimeSpan MaxTimeout = TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// A timeout as milliseconds (a number, or a string of one) or a time span (<c>c</c> format with a colon, as
+    /// <c>00:00:30</c>, or ISO 8601, as <c>PT30S</c>), positive and at most <paramref name="max"/>; null for an unbound one.
+    /// False for anything else. A number is read by its JSON kind, whatever CLR value an expression put behind it.
+    /// </summary>
+    public static bool TryParse(JsonNode? value, TimeSpan max, out TimeSpan? timeout)
+    {
+        timeout = null;
+        if (value is null) return true;
+        if (value is not JsonValue scalar) return false;
+        var text = scalar.GetValueKind() switch
+        {
+            System.Text.Json.JsonValueKind.Number => scalar.ToJsonString(),
+            System.Text.Json.JsonValueKind.String => scalar.TryGetValue<string>(out var s) ? s : null,
+            _ => null,
+        };
+        if (text is null) return false;
+        TimeSpan span;
+        if (double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var milliseconds))
+        {
+            if (!double.IsFinite(milliseconds) || milliseconds > max.TotalMilliseconds) return false;
+            span = TimeSpan.FromMilliseconds(milliseconds);
+        }
+        else if (!(text.Contains(':') && TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out span)) && !TryIso(text, out span)) return false;
+        if (span <= TimeSpan.Zero || span > max) return false;
+        timeout = span;
+        return true;
+
+        static bool TryIso(string text, out TimeSpan span)
+        {
+            try { span = System.Xml.XmlConvert.ToTimeSpan(text); return true; }
+            catch (FormatException) { span = default; return false; }
+        }
+    }
+}
 
 /// <summary>Elsa 4's side-effect profile External: an attempt is not safe to replay. In Durable mode it is committed before it runs.</summary>
 [AttributeUsage(AttributeTargets.Class)]
@@ -101,6 +153,37 @@ public class ActivityContext
     /// </summary>
     public string EffectKey { get; }
     public CancellationToken CancellationToken { get; }
+
+    /// <summary>The host's outbound HTTP, for an activity that runs as a background job; null where the host composes none.</summary>
+    public NativeHttpOptions? Http { get; internal init; }
+}
+
+/// <summary>
+/// The host's outbound HTTP for <see cref="SendHttpRequest"/>'s job: the client it sends with, the most response bytes it
+/// keeps, and how it turns a Connection name into credential headers, which never sit in the job's stored arguments.
+/// The client must not follow redirects or keep cookies (for a <see cref="SocketsHttpHandler"/>: <c>AllowAutoRedirect</c>
+/// and <c>UseCookies</c> false): a redirect would carry a Connection's headers to a host the partner names, and a cookie
+/// one workflow's partner set would go out with another workflow's request.
+/// </summary>
+public sealed class NativeHttpOptions
+{
+    /// <summary>The default for <see cref="MaxResponseBytes"/>: 256 KiB.</summary>
+    public const int DefaultMaxResponseBytes = 256 * 1_024;
+
+    public HttpMessageInvoker? Client { get; init; }
+
+    /// <summary>
+    /// A client as the activity needs one: it follows no redirect, keeps no cookie, and has no timeout of its own, since the
+    /// activity's Timeout and its job's deadline bound each call (an HttpClient's default 100 s would cut a longer one short).
+    /// </summary>
+    public static HttpClient CreateClient() =>
+        new(new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
+
+    /// <summary>A longer response body completes the activity on its ResponseTooLarge outcome, with no body.</summary>
+    public int MaxResponseBytes { get; init; } = DefaultMaxResponseBytes;
+
+    /// <summary>The credential headers for a Connection name, resolved when the job runs.</summary>
+    public Func<string, CancellationToken, ValueTask<IReadOnlyDictionary<string, string>>>? Connection { get; init; }
 }
 
 public sealed class StartContext<TTrigger> : ActivityContext
