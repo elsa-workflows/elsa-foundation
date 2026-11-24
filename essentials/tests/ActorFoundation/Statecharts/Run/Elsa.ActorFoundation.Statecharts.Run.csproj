@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>Kernel.Statecharts.Run</AssemblyName>
+    <RootNamespace>Kernel.Statecharts.Run</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+    <Using Include="Elsa.ActorFoundation.Hosting" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../../prototypes/kernel-model/models/Statecharts.Native/Kernel.Statecharts.Native.csproj" />
+    <ProjectReference Include="../../Simulation/Elsa.ActorFoundation.Simulation.csproj" />
+    <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Hosting/Elsa.ActorFoundation.BuiltIn.Hosting.csproj" />
+  </ItemGroup>
+</Project>

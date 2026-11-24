@@ -60,7 +60,7 @@ once. [Flowchart run instructions](../../prototypes/kernel-model/README.md#flowc
 
 The in-memory Embedded order StateMachine waits for payment, resumes under a replacement owner, and follows
 the approved or declined path in Balanced and Durable. The declined path waits for separate shipment and stock release
-acknowledgements. [StateMachine run instructions](../../prototypes/kernel-model/models/Statecharts.Run/README.md#order-statemachine-on-the-public-actor-foundation)
+acknowledgements. [StateMachine run instructions](../../essentials/tests/ActorFoundation/Statecharts/Run/README.md#order-statemachine-on-the-public-actor-foundation)
 
 A later operator increment can demonstrate inspecting and recovering a parked workflow. Publish demo readiness and
 milestone acceptance separately. Full Flowchart, provider and operator qualification follow the milestones below.

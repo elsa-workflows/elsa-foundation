@@ -483,7 +483,7 @@
           "System.Security.Cryptography.Pkcs": "[9.0.21, )"
         }
       },
-      "kernel.foundation.inmemory": {
+      "Kernel.Foundation.InMemory": {
         "type": "Project",
         "dependencies": {
           "Elsa.ActorFoundation.Contracts": "[4.0.0-dev, )",

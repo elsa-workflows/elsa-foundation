@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>Kernel.Foundation.InMemory</AssemblyName>
+    <RootNamespace>Kernel.Foundation.InMemory</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../../prototypes/kernel-model/src/Kernel.Durable/Kernel.Durable.csproj" />
+    <ProjectReference Include="../../../../src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj" />
+    <InternalsVisibleTo Include="Kernel.Native.Run" />
+    <InternalsVisibleTo Include="Kernel.Sim" />
+    <InternalsVisibleTo Include="Kernel.Statecharts.Run" />
+  </ItemGroup>
+</Project>

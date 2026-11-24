@@ -16,7 +16,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Compile Include="../Native/Run/DirectApprovalWorkflow.cs" Link="DirectApprovalWorkflow.cs" />
     <ProjectReference Include="../Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
-    <ProjectReference Include="../../../../prototypes/kernel-model/src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
+    <ProjectReference Include="../Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
     <ProjectReference Include="../../../../prototypes/kernel-model/models/Native.Legacy/Kernel.Native.Legacy.csproj" />
     <ProjectReference Include="../../../../prototypes/kernel-model/models/Statecharts/Kernel.Statecharts.csproj" />
     <ProjectReference Include="../../../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />

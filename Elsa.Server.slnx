@@ -270,7 +270,11 @@
   <Folder Name="/essentials/tests/ActorFoundation/Legacy/">
     <Project Path="essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
   </Folder>
+  <Folder Name="/essentials/tests/ActorFoundation/Statecharts/">
+    <Project Path="essentials/tests/ActorFoundation/Statecharts/Run/Elsa.ActorFoundation.Statecharts.Run.csproj" />
+  </Folder>
   <Folder Name="/essentials/tests/ActorFoundation/Store/">
+    <Project Path="essentials/tests/ActorFoundation/Store/InMemory/Elsa.ActorFoundation.Store.InMemory.csproj" />
     <Project Path="essentials/tests/ActorFoundation/Store/Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
     <Project Path="essentials/tests/ActorFoundation/Store/EntityFramework/Elsa.ActorFoundation.Store.EntityFramework.csproj" />
   </Folder>
@@ -278,7 +282,6 @@
     <Project Path="prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
   </Folder>
   <Folder Name="/prototypes/kernel-model/src/">
-    <Project Path="prototypes/kernel-model/src/Kernel.Foundation.InMemory/Kernel.Foundation.InMemory.csproj" />
     <Project Path="prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
     <Project Path="prototypes/kernel-model/src/Kernel.Durable/Kernel.Durable.csproj" />
   </Folder>
