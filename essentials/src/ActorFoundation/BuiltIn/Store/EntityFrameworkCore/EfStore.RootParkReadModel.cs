@@ -5,9 +5,7 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     internal static Task InstallRootParkReadModelAsync(KernelDb db, CancellationToken token) =>
-        db.Database.ExecuteSqlRawAsync(ParkReadModelSql(db), token);
-
-    private static string ParkReadModelSql(KernelDb db) => """
+        db.Database.ExecuteSqlRawAsync("""
             ALTER TABLE "FoundationActorList" ADD COLUMN IF NOT EXISTS "ParkAt" bigint,
                 ADD COLUMN IF NOT EXISTS "ParkFault" text /*park-revision-column*/;
             CREATE INDEX IF NOT EXISTS "IX_FoundationActorList_Parked" ON "FoundationActorList" ("Tenant", "Reference")
@@ -48,7 +46,7 @@ public sealed partial class EfStore
             .Replace("/*park-revision-value*/", db.UsesRootParkRecovery ? """, NEW."FoundationParkRevision" """ : "", StringComparison.Ordinal)
             .Replace("/*park-revision-backfill*/", db.UsesRootParkRecovery ? """, "ParkRevision" = i."FoundationParkRevision" """ : "", StringComparison.Ordinal)
             .Replace("/*park-revision-old*/", db.UsesRootParkRecovery ? """, p."ParkRevision" """ : "", StringComparison.Ordinal)
-            .Replace("/*park-revision-new*/", db.UsesRootParkRecovery ? """, i."FoundationParkRevision" """ : "", StringComparison.Ordinal);
+            .Replace("/*park-revision-new*/", db.UsesRootParkRecovery ? """, i."FoundationParkRevision" """ : "", StringComparison.Ordinal), token);
 
     internal static Task InstallRootParkArrivalReasonAsync(KernelDb db, CancellationToken token) =>
         db.Database.ExecuteSqlRawAsync("""

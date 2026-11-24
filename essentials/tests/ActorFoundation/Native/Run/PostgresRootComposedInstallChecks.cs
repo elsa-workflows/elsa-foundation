@@ -162,7 +162,9 @@ internal static class PostgresRootComposedInstallChecks
             }
         }
 
-        // The history reader refuses a filter function or an actor list that an earlier search-path schema shadows.
+        // The history reader encodes its filters itself, so no kernel_actor_list_filter of an earlier search-path schema, an
+        // overload with a default or a variadic one included, takes part in a read. It refuses an actor list, kernel marker,
+        // history table or history format that such a schema shadows.
         async Task ShadowedHistoryRefused()
         {
             var schema = await db.Database.SqlQueryRaw<string>("""SELECT current_schema() AS "Value" """).SingleAsync(stop);
@@ -170,17 +172,31 @@ internal static class PostgresRootComposedInstallChecks
             var shadowed = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(new NpgsqlConnectionStringBuilder(connection)
                 { SearchPath = ShadowSchema + "," + identifiers.QuoteIdentifier(schema) }.ConnectionString).Options;
             var shadow = new EfStore(() => KernelDb.ForUnshippedComposition(shadowed, Composed, capabilities), postgres: true);
-            await db.Database.ExecuteSqlRawAsync($$"""
-                CREATE SCHEMA {{ShadowSchema}};
-                CREATE FUNCTION {{ShadowSchema}}.kernel_actor_list_filter(source_json text) RETURNS jsonb LANGUAGE sql IMMUTABLE STRICT
-                    AS $fn$ SELECT source_json::jsonb $fn$;
-                """, stop);
-            await Refused(() => History(shadow), "the history reader refuses a shadowed kernel_actor_list_filter");
-            await db.Database.ExecuteSqlRawAsync($$"""
-                DROP FUNCTION {{ShadowSchema}}.kernel_actor_list_filter(text);
-                CREATE TABLE {{ShadowSchema}}."FoundationActorList" AS TABLE "FoundationActorList";
-                """, stop);
-            await Refused(() => History(shadow), "the history reader refuses a shadowed actor list");
+            Check(type != Model && (await Typed(shadow)).Items is [{ Reference: "ref-parked" }],
+                "the history read of the parked root's type lists it alone, beside a kept root of another type");
+            // Each shadow filter returns the kept root's type, so a read whose call it captured would list the kept root.
+            await db.Database.ExecuteSqlRawAsync($"""CREATE SCHEMA {ShadowSchema}; CREATE TABLE {ShadowSchema}.fixture_capture ("Type" jsonb)""", stop);
+            Check(await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO composed_shadow.fixture_capture
+                SELECT "Type" FROM "FoundationActorList" WHERE "Tenant" = {tenant.Tenant} AND "Reference" = {kept.Id}
+                """, stop) == 1, "the shadow filters capture the kept root's type");
+            foreach (var signature in new[] { "source_json text", "source_json text, extra integer DEFAULT 0", "VARIADIC source_json text[]" })
+            {
+                await db.Database.ExecuteSqlRawAsync($"""
+                    CREATE FUNCTION {ShadowSchema}.kernel_actor_list_filter({signature}) RETURNS jsonb LANGUAGE sql STABLE
+                        AS $fn$ SELECT "Type" FROM {ShadowSchema}.fixture_capture $fn$;
+                    """, stop);
+                Check((await Typed(shadow)).Items is [{ Reference: "ref-parked" }] && (await History(shadow)).Items is [{ Reference: "ref-parked" }],
+                    $"a shadow kernel_actor_list_filter({signature}) has no effect on the history read");
+                await db.Database.ExecuteSqlRawAsync($"DROP FUNCTION {ShadowSchema}.kernel_actor_list_filter", stop);
+            }
+            foreach (var (relation, label) in new[] { ("FoundationActorList", "actor list"), ("KernelStoreVersions", "kernel marker"),
+                ("FoundationWorkflowHistory", "history table"), ("FoundationWorkflowHistoryFormat", "history format") })
+            {
+                await db.Database.ExecuteSqlRawAsync($"""CREATE TABLE {ShadowSchema}."{relation}" AS TABLE "{relation}" """, stop);
+                await Refused(() => History(shadow), "the history reader refuses a shadowed " + label);
+                await db.Database.ExecuteSqlRawAsync($"""DROP TABLE {ShadowSchema}."{relation}" """, stop);
+            }
             await db.Database.ExecuteSqlRawAsync($"""DROP SCHEMA {ShadowSchema} CASCADE""", stop);
             Check((await History(shadow)).Items.Count == 1, "the history reader reads again once nothing shadows its schema");
         }
@@ -203,10 +219,12 @@ internal static class PostgresRootComposedInstallChecks
                 await wider.InstallAsync(stop);
                 throw new InvalidOperationException("A wider install kept the narrower definitions.");
             }
-            catch (StoreFormatException error) when (error.Message.Contains("FoundationKeptBy", StringComparison.Ordinal) &&
-                error.Message.Contains("IX_FoundationRootInbox_Inspectable", StringComparison.Ordinal))
+            catch (StoreFormatException error) when (error.Message.StartsWith("The installed root definitions differ", StringComparison.Ordinal))
             {
-                Check(true, "a wider install over a narrower one is refused for its KeptBy CHECK and inspectable index predicate");
+                Check(error.Message.Contains("the FoundationKeptBy CHECK", StringComparison.Ordinal),
+                    "a wider install over a narrower one is refused for its KeptBy CHECK");
+                Check(error.Message.Contains("IX_FoundationRootInbox_Inspectable", StringComparison.Ordinal),
+                    "a wider install over a narrower one is refused for its inspectable index predicate");
             }
             await using (var check = KernelDb.ForUnshippedComposition(narrow, Composed, capabilities))
                 Check(await check.Database.SqlQueryRaw<bool>("""
@@ -219,6 +237,9 @@ internal static class PostgresRootComposedInstallChecks
 
         Task<EfStore.RootWorkflowHistoryPage> History(EfStore store) =>
             store.ReadRootWorkflowHistoryAsync(tenant.Tenant, Model, Definition, null, null, null, null, null, 10, stop);
+
+        Task<EfStore.RootWorkflowHistoryPage> Typed(EfStore store) =>
+            store.ReadRootWorkflowHistoryAsync(tenant.Tenant, Model, null, null, null, null, null, null, 10, stop);
 
         async Task<int> HistoryRows(Contract.ActorRef root) => await db.Database.SqlQuery<int>($"""
             SELECT count(*)::integer AS "Value" FROM "FoundationWorkflowHistory" WHERE "Tenant" = {tenant.Tenant} AND "Reference" = {root.Id}

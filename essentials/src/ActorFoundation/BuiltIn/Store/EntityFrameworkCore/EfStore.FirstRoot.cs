@@ -114,9 +114,7 @@ public sealed partial class EfStore
     }
 
     internal static Task InstallFirstRootCheckpointsAsync(KernelDb db, CancellationToken cancellationToken) =>
-        db.Database.ExecuteSqlRawAsync(FirstRootCheckpointSql(db), cancellationToken);
-
-    private static string FirstRootCheckpointSql(KernelDb db) => """
+        db.Database.ExecuteSqlRawAsync("""
             ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationReference" text COLLATE "C" REFERENCES "FoundationRootBirths" ("Reference"),
                                   ADD COLUMN IF NOT EXISTS "FoundationTenant" text COLLATE "C",
                                   ADD COLUMN IF NOT EXISTS "FoundationHeader" text,
@@ -217,7 +215,7 @@ public sealed partial class EfStore
             .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
-            .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal);
+            .Replace("/*cancelled*/", FormattableString.Invariant($"{(int)InstanceStatus.Cancelled}"), StringComparison.Ordinal), cancellationToken);
 
     /// <summary>The manual first Running checkpoint of a generated root, with its creator as the sole input.
     /// The Worker qualifies immediate completion through its regular turn path.</summary>
