@@ -36,7 +36,7 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
    rerun until every remaining item is clean or an accepted refusal.
 4. **Handoff (outside the tool).** The user keeps their feature projects in any repository, publishes their NuGet
    packages through any pipeline, and stores the converted workflow JSON wherever they want. Going live means
-   starting the essentials engine image with their `appsettings.json`, their packages and `converted/` mounted.
+   starting the essentials engine image with their `appsettings.json`, their packages and `migrated/` mounted.
 
 ### Custom components
 
@@ -49,7 +49,8 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
 - **Variable types:** register the type in an Elsa 4 feature under a dotted alias and it converts typed. This is not
   related to proxies (#4103); a script calling .NET members on a value stays refused (`VF-IMP-012`). The converter
   gains the missing diagnostics: **#5666**.
-- **Storage drivers** are migrated in stage 1 as custom features, with the refusal from #5666.
+- **Storage drivers** are not migrated: every member converts to `elsa.json` with an `ELS3-BEHAVIOUR-*` warning
+  (Reconsider) that starts the conversation in [Elsa 3 storage drivers](../../migration/elsa3-storage-drivers.md).
 
 ### The CLI: `dotnet elsa elsa3-migration workflows inventory|assess`
 
@@ -81,8 +82,12 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
   published version of each definition, plus any version a reusable reference pins, is converted. Other versions
   are listed, not converted. `--all-versions` converts everything.
 - **Output:** the folder `--out` names holds `report.json` and `report.html` side by side, overwritten on each run,
-  plus `converted/`.
-  - `converted/` holds Elsa 4 definitions in the JSON workflow reconciliation format, marked "not published".
+  plus `migrated/`.
+  - `migrated/` is exported from the run's own Elsa 4 store after publish: workflows in the JSON workflow
+    reconciliation format under `migrated/workflows/`, reusables in the JSON activity reconciliation format under
+    `migrated/activities/activities.json`.
+  - The `report.json` schema is `specs/1237-elsa3-migration-cli/contracts/report.schema.json` (schemaVersion 1;
+    consumers ignore unknown fields and read category/remedy/componentKind, never hard-coded codes).
   - Refused definitions appear only in the report.
   - The CLI prints the output path.
 - **Exit codes:** 0 clean, 1 findings, 2 refused to run (bad input, a user package or setting the composition
@@ -127,7 +132,9 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
 - The essentials feature list is defined once and feeds the engine image, and through it the migration image.
 - **Acceptance:** the S-15 JTest acceptance set passes against the essentials engine image. S-15 itself stays on the
   Workbench, unchanged.
-- The engine image includes JSON workflow reconciliation, so `converted/` can be mounted and loaded at startup.
+- The engine image includes JSON workflow reconciliation and JSON activity reconciliation, so `migrated/` can be
+  mounted and loaded at startup. Source-owned composites with activity dependencies are currently refused by the
+  engine; fixed separately in PR #5685.
 
 ### The skill and its documentation
 
@@ -136,7 +143,10 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
   - Thin adapters only point to it: a Claude Code plugin through `marketplace.json`, and an `.agents/skills/` copy.
   - It is readable as ordinary documentation. The main README gets a short "Migrating from Elsa 3" section that says
     which file to read, so installing it as a skill is optional.
-- Lives in this repository in a user-facing folder, separate from the contributor skills in `.claude/skills/`. It is
+- Lives in this repository in one self-contained folder, `plugins/elsa3-migration/skills/elsa3-workflows-migration/`
+  (`SKILL.md`, the plan template and the porting catalog), separate from the contributor skills in `.claude/skills/`.
+  The repo-root `.claude-plugin/marketplace.json` and the plugin's `plugin.json` are metadata only; `.agents/skills/`
+  users copy the folder. No sync script (decided 2026-11-24, spec 1238). It is
   released with the `dotnet-elsa` CLI and the essentials images.
 - **Prerequisite check:** Docker is available and the migration image matching the CLI version can be pulled.
 - **Privacy is stated up front.** Before reading anything, the skill tells the user what can reach the model
@@ -174,6 +184,11 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
   18. Feature registration: an Elsa 4 `ShellFeature` and a Nuplane package
   19. Tests (xunit)
 
+  Checked against the code in spec 1238: cases 7 (custom composites), 8 (signals; bookmarks do port), 15 (custom
+  Liquid filters become JS host functions) and 17 (per-variable storage drivers) are **redesign** entries. Case 10
+  inverts: Elsa 4 uses constructor injection instead of the service locator. Case 12 becomes background placement
+  (`[BackgroundExecutionSafe]`).
+
 ### Staying correct
 
 - The CLI's stability comes from the JTest corpus that proves the essentials images. Users never run JTest, and
@@ -201,15 +216,14 @@ folder of converted Elsa 4 workflows. Only conversion happens, never publishing.
 | # | Unit | Depends on | Status |
 |---|------|------------|--------|
 | 0 | #5664 converter maps Elsa 3 functions to prefixed host functions | — | PR #5667 |
-| 0 | #5666 converter diagnoses unregistered variable types and unmapped storage drivers | — | in progress |
-| 1 | **Essentials images**: engine and designer-only Studio, one feature list, JTest acceptance | — | to define |
-| 2 | **Workflows migration CLI**: `elsa3-migration workflows inventory\|assess`, running inside the Elsa 3 migration image (`extensions/Elsa3/`, `FROM` essentials), in-memory SQLite, report, `converted/` | 1 (engine image), #5664, #5666 | to define |
-| 3 | **Migration skill and docs**: plan template, porting catalog, provider-neutral skill, README section, contributor triggers | 2 (report schema) | to define |
+| 0 | #5666 converter diagnoses unregistered variable types and unmapped storage drivers | — | PR #5668 |
+| 1 | **Essentials images**: engine and designer-only Studio, one feature list, JTest acceptance, base-image contract | — | spec 1236, PR #5682 |
+| 2 | **Workflows migration CLI**: `elsa3-migration workflows inventory\|assess`, running inside the Elsa 3 migration image (`extensions/Elsa3/`, `FROM` essentials), in-memory SQLite, report, `migrated/` | 1 (engine image), #5664, #5666 | spec 1237, PR #5678 |
+| 3 | **Migration skill and docs**: plan template, porting catalog, provider-neutral skill, README section, contributor triggers | 2 (report schema) | spec 1238, PR #5679 |
 
 All three specs can be defined in parallel now. Implementation follows the dependency order.
 
 ## Open questions
 
 - Whether the two images are new images or Workbench profiles (spec 1).
-- The `report.json` schema (spec 2; spec 3 consumes it).
-- Where the skill folder lives exactly, and the plugin and marketplace layout (spec 3).
+

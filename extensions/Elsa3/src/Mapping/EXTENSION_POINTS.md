@@ -74,6 +74,17 @@ Replace both: implement both contracts on one class, or register a node converte
   `[ReplacesActivityType]` on the Elsa 4 activity. Any change alters converter output (spec 235's converter revision
   rule).
 
+### Replaced Elsa 3 JavaScript functions (consumed contribution)
+
+- **Contract:** `JavaScriptHostFunctionDeclaration.ReplacesGlobalFunctions` (Elsa.Expressions.JavaScript.Core), read
+  from every registered declaration by `Elsa3ExpressionRewriter` (#5664).
+- **Purpose:** an Elsa 3 custom function rebuilt as a prefixed Elsa 4 host function: `getSettings()` converts to
+  `acme.getSettings()`. A name two functions claim, a name that is also a variable's or input's generated accessor, or
+  a script that declares the namespace root is refused with `VF-IMP-002`. An Elsa 3 built-in the converter converts
+  itself keeps that conversion.
+- **When to use:** for each Elsa 3 custom JavaScript function a host rebuilt for Elsa 4; the migration plan records the
+  prefix. Adding or removing a declaration alters converter output (spec 235's converter revision rule).
+
 ### `IReusableActivityImportMaterializer` contribution
 
 - **Implementation:** `Elsa3ReusableActivityImportMaterializer`.

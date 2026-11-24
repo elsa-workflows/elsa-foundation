@@ -218,8 +218,8 @@ it, and read every variable's starting value back; compare each with Elsa 3's ru
 - An empty-string starting value: a `String` variable starts as `""`; for other types it follows Elsa 3's conversion
   rule.
 - A variable with an array flag (`isArray`) and a starting value.
-- A variable whose type the converter cannot resolve already falls back to `Object`; its starting value follows the
-  `Object` rule.
+- A variable whose type the converter cannot resolve already falls back to `Object` (now Any); its starting value
+  follows FR-004 (clarification 2026-11-24).
 - A variable declared on a container activity instead of the workflow keeps its existing refusal
   (`ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`).
 - A reusable activity (`usableAsActivity: true`) with variables goes through the same variable mapping and must get the
@@ -236,12 +236,35 @@ it, and read every variable's starting value back; compare each with Elsa 3's ru
   collection's starting value MUST be a JSON array and a dictionary's a JSON object; text is never split on commas
   (clarification 2026-10-22).
 - **FR-004**: The converter MUST refuse a variable whose Elsa 3 starting value cannot be converted to its type in
-  strict mode, or whose type Elsa 4's type registry does not know, with a stable diagnostic that names the variable and
-  gives guidance in Elsa 3 terms.
+  strict mode, with a stable diagnostic that names the variable and gives guidance in Elsa 3 terms. That Elsa 4's type
+  registry does not know a variable's type is never on its own a reason to refuse it: such a variable converts as Any.
+  `ObjectDictionary` and `HttpHeaders` convert as Any too, and their starting value follows FR-003's dictionary rule.
+  For the other types Elsa 4 does not know (a custom class, an unregistered enum, a collection of either, a nested
+  collection and a collection of dictionaries), a starting value that is a JSON object or array starts as that JSON,
+  and any other starting value is refused, because Elsa 3 converted it in a way the converter cannot know. When the
+  type is a custom class or an unregistered enum, alone or as a collection's element, the converter also reports the
+  info `ELS3-VARIABLE-TYPE-UNREGISTERED`, naming the variable and that type (clarification 2026-11-24).
+  - *Clarification 2026-11-24 ([#5684](https://github.com/elsa-workflows/elsa-foundation/issues/5684)):* this
+    requirement first also refused a variable "whose type Elsa 4's type registry does not know". The converter never
+    did that: such a variable ran as `Object` (now Any, spec 1228), and only a starting value on it was refused. The
+    review revision of 2026-10-22 let a JSON starting value through.
+    [#5666](https://github.com/elsa-workflows/elsa-foundation/issues/5666) (PR
+    [#5668](https://github.com/elsa-workflows/elsa-foundation/pull/5668)) kept that and added the info. For example,
+    `Acme.Orders.OrderDto` with no starting value converts and publishes as Any with the info; with `{"id":1}` it
+    starts as that object, with the info; with `order-1` the info is reported and the starting value is refused.
 - **FR-005**: Publication, the runtime and the Elsa 4 variable model MUST NOT change.
 - **FR-006**: An integration test MUST import an Elsa 3 workflow with a workflow variable, capture the Event payload
   into it, publish and run the workflow, and read the value back.
-- **FR-007**: Every starting-value kind of FR-003 and every refusal of FR-004 MUST have a test.
+- **FR-007**: Every starting-value kind of FR-003 and every refusal of FR-004 MUST have a test. As of 2026-11-24 they
+  are in `extensions/Elsa3/tests/Mapping/Tests/`: `Elsa3VariableStartingValueTests` covers the strict refusals and the
+  refused non-JSON text on an unknown type
+  (`A_starting_value_that_cannot_start_as_in_Elsa_3_is_refused_with_how_to_fix_it`), a refusal stopping the whole
+  definition (`A_workflow_variable_whose_value_cannot_start_refuses_the_definition`,
+  `A_container_variable_whose_value_cannot_start_refuses_the_definition`) and an unknown type's JSON starting value
+  (`An_unknown_type_ObjectDictionary_HttpHeaders_or_Object_converts_to_Any`). `Elsa3VariableCustomComponentTests`
+  covers the conversion as Any with the info (`A_workflow_variable_of_an_unregistered_type_converts_as_Any_with_an_info`,
+  `A_container_variable_of_an_unregistered_type_converts_with_an_info`,
+  `The_info_names_the_type_Elsa_4_does_not_register`).
 - **FR-008**: The Mapping README's migration story MUST describe how variable starting values convert.
 
 ### Key Entities

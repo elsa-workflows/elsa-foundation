@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.ActivityMap;
 using Elsa3.Mapping.ActivityMap.Rewrites;
 using Elsa3.Mapping.Resolution;
+using Elsa3.Mapping.Services;
 using Elsa3.Models;
 using static Elsa3.Models.Elsa3ActivityDiagnosticCodes;
 
@@ -68,6 +69,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
 
         CheckWorkflowVariables(plan);
         CheckWorkflowInputs(plan);
+        CheckArgumentStorageDrivers(plan, plan.Definition.Inputs, "Input", "inputs");
+        CheckArgumentStorageDrivers(plan, plan.Definition.Outputs, "Output", "outputs");
 
         var pending = new Dictionary<Elsa3Activity, string>(ReferenceEqualityComparer.Instance);
         await VisitAsync(plan, clone.Root, "$.root", null, RootJsonLevel, pending, cancellationToken);
@@ -113,11 +116,36 @@ internal sealed partial class Elsa3ActivityNormalizer(
             context.Activity.AdditionalProperties[Elsa3IntrinsicContracts.ValueKey] = Elsa3TypedValues.CreateNull(type.Alias);
     }
 
+    /// <summary>
+    /// A workflow input or output on Elsa 3's Memory driver or a custom one converts to Elsa 4's default storage with a
+    /// behaviour warning (<see cref="Elsa3StorageDriverCorrections"/>), reusable workflow or not.
+    /// </summary>
+    private static void CheckArgumentStorageDrivers(Elsa3ConversionPlan plan, IList<Elsa3WorkflowArgumentDefinition>? arguments, string kind, string member)
+    {
+        for (var index = 0; index < (arguments?.Count ?? 0); index++)
+            if (Elsa3StorageDriverCorrections.Describe(kind, arguments![index].Name, arguments[index].StorageDriverType) is { } correction)
+                plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Warning,
+                    correction.Code, correction.Message, correction.Guidance, $"$.{member}[{index}]", correction.Metadata));
+    }
+
     private void CheckWorkflowVariables(Elsa3ConversionPlan plan)
     {
         var variables = plan.Definition.Variables;
         for (var index = 0; index < variables.Count; index++)
         {
+            var variableMetadata = new Dictionary<string, string> { ["VariableName"] = variables[index].Name };
+            if (Elsa3VariableMapper.DescribeUnregisteredType(wellKnownTypeRegistry, variables[index]) is { } notice)
+                plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
+                    plan,
+                    Elsa3MigrationDiagnosticSeverity.Info,
+                    Elsa3ImportDiagnosticCodes.VariableTypeUnregistered,
+                    notice.Message,
+                    notice.Guidance,
+                    $"$.variables[{index}]",
+                    variableMetadata));
+            if (Elsa3StorageDriverCorrections.Describe("Variable", variables[index].Name, variables[index].StorageDriverTypeName) is { } correction)
+                plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Warning,
+                    correction.Code, correction.Message, correction.Guidance, $"$.variables[{index}]", correction.Metadata));
             if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variables[index], out var mapped, out var refusal, typeDescriptors))
             {
                 plan.WorkflowVariableTypes[variables[index]] = mapped.Type;
@@ -126,11 +154,11 @@ internal sealed partial class Elsa3ActivityNormalizer(
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
                 plan,
                 Elsa3MigrationDiagnosticSeverity.Error,
-                VariableValueUnconvertible,
-                refusal!.Message,
+                refusal!.Code,
+                refusal.Message,
                 refusal.Guidance,
                 $"$.variables[{index}]",
-                new Dictionary<string, string> { ["VariableName"] = variables[index].Name }));
+                variableMetadata));
         }
     }
 
@@ -1026,10 +1054,14 @@ internal sealed partial class Elsa3ActivityNormalizer(
                 var variable = item.Deserialize<Elsa3Variable>(Elsa3JsonOptions);
                 if (variable is null || string.IsNullOrWhiteSpace(variable.Id))
                     continue;
+                if (Elsa3VariableMapper.DescribeUnregisteredType(wellKnownTypeRegistry, variable) is { } notice)
+                    context.Info(Elsa3ImportDiagnosticCodes.VariableTypeUnregistered, notice.Message, notice.Guidance, property);
+                if (Elsa3StorageDriverCorrections.Describe("Variable", variable.Name, variable.StorageDriverTypeName) is { } correction)
+                    context.Warning(correction.Code, correction.Message, correction.Guidance, property, metadata: correction.Metadata);
                 if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variable, out var mapped, out var refusal, typeDescriptors))
                     context.Node.Variables.Add(mapped);
                 else
-                    context.Error(VariableValueUnconvertible, refusal!.Message, refusal.Guidance, property);
+                    context.Error(refusal!.Code, refusal.Message, refusal.Guidance, property);
             }
         }
         catch (JsonException exception)

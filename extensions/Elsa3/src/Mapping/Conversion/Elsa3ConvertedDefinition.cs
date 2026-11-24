@@ -21,7 +21,7 @@ public sealed record Elsa3ConvertedDefinition(
 /// <param name="OutputReferenceKey">The declared output's reference key.</param>
 /// <param name="VariableReferenceKey">The synthesized variable, <c>output.{sha256(outputReferenceKey)[..16]}</c>.</param>
 /// <param name="Type">The output's type alias.</param>
-/// <param name="StorageDriverKey">The output's storage driver, or null for the default.</param>
+/// <param name="StorageDriverKey">The output's storage driver, or null for the default; the converter always sets null, since every Elsa 3 driver becomes the default storage.</param>
 public sealed record Elsa3GraphOutputMapping(
     string OutputReferenceKey,
     string VariableReferenceKey,
