@@ -31,7 +31,7 @@ internal static class WorkbenchPostgresPreview
     private sealed record ActiveJob(long Epoch, string Owner, string State, string Registry,
         string TicketId, long TicketSeq, string TicketPayload, string DeadlineId, long DeadlineSeq, string DeadlinePayload,
         long Deadline, long Now);
-    private sealed record ReplayRows(string Messages, string Receipts);
+    private sealed record ReplayRows(string Checkpoint, string Messages, string Receipts);
 
     internal static async Task RunAsync(string[] arguments, string? executable = null)
     {
@@ -415,7 +415,8 @@ internal static class WorkbenchPostgresPreview
         {
             await using var db = OpenObservation();
             return await db.Database.SqlQuery<ReplayRows>($"""
-                SELECT coalesce((SELECT jsonb_agg(to_jsonb(m) ORDER BY m."Seq", m."Id") FROM "Messages" m
+                SELECT to_jsonb(i)::text AS "Checkpoint",
+                    coalesce((SELECT jsonb_agg(to_jsonb(m) ORDER BY m."Seq", m."Id") FROM "Messages" m
                             WHERE m."Partition" = i."Partition" AND m."Target" = i."Id"), '[]'::jsonb)::text AS "Messages",
                     coalesce((SELECT jsonb_agg(to_jsonb(r) ORDER BY r."Operation") FROM "FoundationDirectReceipts" r
                             WHERE r."Reference" = i."FoundationReference"), '[]'::jsonb)::text AS "Receipts"
