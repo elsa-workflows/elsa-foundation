@@ -25,7 +25,8 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 - [ ] T001 Add `/extensions/Elsa3/tests/JTest/** -text` to the repository `.gitattributes` first (the corpus stores
   `import-and-publish-workflows.json` with CRLF line endings, which `core.autocrlf` would otherwise change), then copy
   the corpus at `b1cde13` unchanged into `JTest/` from the commit, not a working tree (for example
-  `git -C <corpus> archive b1cde13 <paths> | tar -x -C extensions/Elsa3/tests/JTest`): `workflow-definitions/`, `tests/`, `templates/`,
+  `git -C <corpus> -c core.autocrlf=false archive b1cde13 <paths> | tar -x -C extensions/Elsa3/tests/JTest`; line-ending
+  conversion must be off, or LF files come out as CRLF): `workflow-definitions/`, `tests/`, `templates/`,
   `environments/`, `test-files/`, `global-configuration.json`, `import-and-publish-workflows.json`; leave out
   `pipelines/` and the repository README. Commit the attribute and the copy alone, with the source commit in the message, and check with
   `git ls-files --eol` that every file matches the source index (FR-001).
@@ -47,8 +48,8 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   `apps/Elsa.Workbench/shells.json`.
 - [ ] T006 Run `dotnet restore Elsa.Server.slnx` and commit every `packages.lock.json` it changes (at least
   `apps/Elsa.Workbench/`, `Essentials/tests/Modularity/Tests/` and `Essentials/tests/Modularity/ProviderTests/`; CI
-  restores in locked mode); regenerate the maps (`dotnet run --project tools/maps/Elsa.Maps.Generator -- all`) and
-  commit any changed solution filters; build the Workbench and run the architecture tests that cover feature
+  restores in locked mode); regenerate the solution filters (`dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters`),
+  commit the changed `Elsa.Server.Workbench.slnf` and confirm with `-- solution-filters-check`; build the Workbench and run the architecture tests that cover feature
   composition and the Elsa 3 boundary (`Essentials/tests/Architecture/Tests/`).
 - [ ] T007 Find and verify the configuration override that enables `Elsa3JsonReconciliation` (`Options:SourceId`, and
   `Options:FolderPath` or `Options:Files` with `{Order, FilePath}` entries) together with `Elsa3ImportActivitiesEntityFrameworkCore`, and sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` for one Workbench run without editing the
