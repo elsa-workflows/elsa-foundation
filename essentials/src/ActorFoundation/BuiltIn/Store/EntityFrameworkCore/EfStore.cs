@@ -129,6 +129,13 @@ public class KernelDb : DbContext
     private static KernelDb Profile(DbContextOptions<KernelDb> options, StoreFormat format) =>
         new(options, format, RootProfiles.CapabilitiesOf(format));
 
+    // A capability set that no shipped format carries, for database-backed composition guards only. Its format must be unshipped,
+    // so that its marker is refused by every shipped profile.
+    internal static KernelDb ForUnshippedComposition(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) =>
+        RootProfiles.Formats.ContainsKey(format)
+            ? throw new ArgumentOutOfRangeException(nameof(format), format, "A shipped format carries its own capabilities.")
+            : new(options, format, capabilities);
+
     internal StoreFormat RequiredFormat { get; }
     internal RootCapabilities Capabilities { get; }
     private bool Has(RootCapabilities capability) => (Capabilities & capability) != 0;
