@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Agent.Core.Models;
 using Elsa.Primitives.Models;
@@ -76,9 +75,9 @@ internal static class AgentNativeControls
     {
         if (!Enabled(descriptor)) return accepted.Result;
         var session = accepted.Session ?? throw Invalid();
-        var result = JsonNode.Parse(accepted.Result.GetRawText())!.AsObject();
+        var result = accepted.Result.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
         if (result.ContainsKey(AgentInvocationControls.OutputName)) throw Invalid();
-        result.Add(AgentInvocationControls.OutputName, JsonSerializer.SerializeToNode(new { conversationId = session.ConversationId, revision = session.Revision }, Elsa.Serialization.Core.JsonBaseline.Options));
+        result.Add(AgentInvocationControls.OutputName, JsonSerializer.SerializeToElement(new { conversationId = session.ConversationId, revision = session.Revision }, Elsa.Serialization.Core.JsonBaseline.Options));
         return JsonSerializer.SerializeToElement(result, Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
