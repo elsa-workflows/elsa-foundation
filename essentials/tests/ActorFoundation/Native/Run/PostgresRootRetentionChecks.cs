@@ -71,6 +71,10 @@ internal static class PostgresRootRetentionChecks
             originalEpoch = ((Worker)owner).Epoch;
         }
 
+        var policyHistory = await cold.ReadJournalOfAsync(0, laterBefore.Actor.Id, 0, stop);
+        var modelHistory = await cold.ReadJournalOfAsync(0, protectedBefore.Actor.Id, 0, stop);
+        Check(policyHistory.Count > 0 && modelHistory.Count > 0,
+            "both retained checkpoints have committed history before the retention scan");
         var chosen = (await reads.GetAsync(blue, expired, stop))!;
         var reissued = (await reads.GetAsync(blue, expired, stop))!;
         Check(chosen.Selection != reissued.Selection && chosen.Header.EndedAt == reissued.Header.EndedAt,
@@ -125,10 +129,9 @@ internal static class PostgresRootRetentionChecks
             "the eligible expired root uses the fenced physical retirement path");
         var policyKept = (await cold.ReadFirstRootAsync(blue.Tenant, later.Id, stop))!;
         var modelKept = (await cold.ReadFirstRootAsync(blue.Tenant, protectedActor.Id, stop))!;
-        Check(policyKept.Revision == laterBefore.Revision && policyKept.TerminalAt == laterBefore.TerminalAt &&
-              modelKept.Revision == protectedBefore.Revision && modelKept.State == protectedBefore.State &&
-              (await cold.ReadJournalOfAsync(0, laterBefore.Actor.Id, 0, stop)).All(row => row.Revision > 0) &&
-              (await cold.ReadJournalOfAsync(0, protectedBefore.Actor.Id, 0, stop)).All(row => row.Revision > 0),
+        Check(SameCheckpoint(laterBefore, policyKept) && SameCheckpoint(protectedBefore, modelKept) &&
+              (await cold.ReadJournalOfAsync(0, laterBefore.Actor.Id, 0, stop)).SequenceEqual(policyHistory) &&
+              (await cold.ReadJournalOfAsync(0, protectedBefore.Actor.Id, 0, stop)).SequenceEqual(modelHistory),
             "the extended policy and protected Native receipt independently preserve state and history");
         Check(await reads.GetAsync(blue, indefinite, stop) is not null && await reads.GetAsync(blue, running, stop) is not null &&
               await reads.GetAsync(red, otherTenant, stop) is not null,
@@ -212,6 +215,11 @@ internal static class PostgresRootRetentionChecks
             }
         }
     }
+
+    private static bool SameCheckpoint(EfStore.RootImage before, EfStore.RootImage after) =>
+        (after with { AsOf = before.AsOf, Labels = before.Labels }) == before &&
+        before.Labels.Count == after.Labels.Count &&
+        before.Labels.All(pair => after.Labels.TryGetValue(pair.Key, out var value) && value == pair.Value);
 
     private static void Check(bool pass, string description)
     {
