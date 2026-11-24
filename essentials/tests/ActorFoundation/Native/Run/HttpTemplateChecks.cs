@@ -36,9 +36,11 @@ internal static class HttpTemplateChecks
         var longPath = new string('x', 600);
         var hashed = HttpRoutes.Key("post", longPath);
         check(HttpRoutes.Key("post", "Orders/42") == "http:POST:orders/42" && hashed.StartsWith("http:POST:#", StringComparison.Ordinal) &&
+              HttpRoutes.WaitKey("POST", cancel, new Dictionary<string, string> { ["id"] = "ab3" }) == "http:POST=orders/ab3/cancel" &&
+              HttpRoutes.WaitKey("POST", HttpRouteTemplate.Parse("Orders/List"), null) == HttpRoutes.Key("POST", "orders/list") &&
               hashed.Length == "http:POST:#".Length + 64 && hashed == HttpRoutes.Key("POST", "/" + longPath.ToUpperInvariant() + "/") &&
               HttpRoutes.WaitKey("POST", cancel, new Dictionary<string, string> { ["id"] = "aB3" }) != HttpRoutes.WaitKey("POST", cancel, new Dictionary<string, string> { ["id"] = "Ab3" }),
-            $"a key past {HttpRoutes.MaxReadableKeyBytes} bytes is the SHA-256 of its normalized path, the same on both sides, and a resolved key keeps its values' case");
+            $"a key past {HttpRoutes.MaxReadableKeyBytes} bytes is the SHA-256 of its normalized path, the same on both sides; a resolved key keeps its values' case and has its own separator, and a template without parameters keys as a literal");
         var request = new HttpRequest("POST", "x") { RouteValues = new Dictionary<string, string> { ["ID"] = "Ab" } };
         var back = Values.To<HttpRequest>(Values.From(request))!;
         check(back.RouteValues["id"] == "Ab" && back.RouteValues.Keys.Single() == "id" && Values.Path(Values.From(request), "RouteValues.id")?.GetValue<string>() == "Ab",
@@ -141,6 +143,11 @@ internal static class HttpTemplateChecks
 
             var longId = new string('k', 600);
             foreach (var order in new[] { "Ab", "aB", longId }) await Send("POST", $"orders/{order}/ship");
+            await Send("POST", "orders/ab3/ship");
+            var otherCase = await Send("POST", "orders/AB3/cancel", poll: true);
+            var own = await Send("POST", "orders/ab3/cancel", poll: true);
+            check(otherCase.StatusCode == 404 && own.Body?.GetValue<string>() == "cancelled ab3 by ab3",
+                $"{mode}: a request for another case of a waiting id finds nothing, not even through the literal retry ({otherCase.StatusCode} {otherCase.Body}, {own.Body})");
             var lower = await Send("POST", "orders/aB/cancel", poll: true);
             var upper = await Send("POST", "orders/Ab/cancel", poll: true);
             var hashedWait = await Send("POST", $"orders/{longId}/cancel", poll: true);

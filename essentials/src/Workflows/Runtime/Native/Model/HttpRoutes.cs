@@ -38,22 +38,31 @@ public sealed class HttpRoutes
     public static string Key(string method, string path) => Readable(method, Normalize(path));
 
     /// <summary>
-    /// The key of a path a route template resolved (<see cref="HttpRouteTemplate.Resolve"/>): its literals are already in
-    /// lower case and its values keep their case, so that ids that differ only in case are two keys.
+    /// The key of a path a route template with parameters resolved (<see cref="HttpRouteTemplate.Resolve"/>):
+    /// <c>http:{METHOD}={path}</c>. Its literals are already in lower case and its values keep their case, so that ids
+    /// that differ only in case are two keys; and it has its own separator, which no method contains, so that no literal
+    /// key (a computed wait's, or an edge's literal retry) can meet it.
     /// </summary>
-    public static string ResolvedKey(string method, string path) => Readable(method, path.Trim().Trim('/'));
+    public static string ResolvedKey(string method, string path) => Readable(method, '=', path.Trim().Trim('/'));
 
-    /// <summary>The key a wait route subscribes on for these route values, and a matched request is delivered to.</summary>
+    /// <summary>
+    /// The key a wait route subscribes on for these route values, and a matched request is delivered to: the resolved key
+    /// for a template with parameters, the literal key for one without.
+    /// </summary>
     public static string WaitKey(string method, HttpRouteTemplate template, IReadOnlyDictionary<string, string>? values) =>
-        ResolvedKey(method, template.Resolve(values));
+        template.Segments.Any(segment => segment.Kind != HttpRouteSegmentKind.Literal)
+            ? ResolvedKey(method, template.Resolve(values))
+            : Key(method, template.Text);
 
-    private static string Readable(string method, string path)
+    private static string Readable(string method, string path) => Readable(method, ':', path);
+
+    private static string Readable(string method, char separator, string path)
     {
         var verb = method.ToUpperInvariant();
-        var key = $"http:{verb}:{path}";
+        var key = $"http:{verb}{separator}{path}";
         return System.Text.Encoding.UTF8.GetByteCount(key) <= MaxReadableKeyBytes
             ? key
-            : $"http:{verb}:#{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(path)))}";
+            : $"http:{verb}{separator}#{Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(path)))}";
     }
 
     private static string Normalize(string path) => path.Trim().Trim('/').ToLowerInvariant();
@@ -109,9 +118,8 @@ public sealed class HttpRoutes
         _routes.Sort((a, b) => HttpRouteTemplate.Compare(a.Template, b.Template));
     }
 
-    // A RouteValues input bound to a literal null (an importer that writes every input) binds none.
-    private static bool BindsRouteValues(Node node) =>
-        node.Inputs.TryGetValue("RouteValues", out var binding) && binding is not LiteralBinding { Value: null };
+    // A RouteValues input counts as bound whatever it holds, a literal null too, as HttpEndpoint counts it.
+    private static bool BindsRouteValues(Node node) => node.Inputs.ContainsKey("RouteValues");
 
     // Two fully bound templates match one path when they have as many segments and no position holds two different literals.
     private static bool Overlap(HttpRouteTemplate a, HttpRouteTemplate b) =>

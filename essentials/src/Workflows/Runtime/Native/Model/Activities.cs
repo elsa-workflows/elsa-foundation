@@ -544,16 +544,20 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
             return new(Suspend(new HttpWaitState(Method, Path), new HttpTrigger(Method, Path)));
         if (RouteValues is null) return new(Fault("http.route.invalid", $"The route '{Path}' has parameters and its route values are null."));
         string path;
+        bool parameters;
         try
         {
             var values = RouteValues is null ? null : HttpFields.RouteValues(HttpFields.Scalars(RouteValues, "route value"));
-            path = HttpRouteTemplate.Parse(Path).Resolve(values);
+            var template = HttpRouteTemplate.Parse(Path);
+            parameters = template.Segments.Any(segment => segment.Kind != HttpRouteSegmentKind.Literal);
+            path = template.Resolve(values);
         }
         catch (ArgumentException refused) when (refused is HttpRouteTemplateException or HttpFieldsException)
         {
             return new(Fault("http.route.invalid", refused.Message));
         }
-        return new(Suspend(new HttpWaitState(Method, path), new HttpTrigger(Method, path, Resolved: true)));
+        // A template without parameters is a literal route (HttpRoutes.WaitKey keys it so too).
+        return new(Suspend(new HttpWaitState(Method, path), new HttpTrigger(Method, path, Resolved: parameters)));
     }
 
     protected override ValueTask<Transition> ResumeAsync(ResumeContext<HttpWaitState, HttpRequest> context) => new(Complete(context.Trigger));
