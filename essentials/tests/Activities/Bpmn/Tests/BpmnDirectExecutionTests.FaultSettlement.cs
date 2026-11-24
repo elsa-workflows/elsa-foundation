@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Text.Json;
 using Bpmn.Model;
 using Elsa.Activities.Bpmn.Core;
@@ -66,19 +65,21 @@ public sealed partial class BpmnDirectExecutionTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task The_actual_legacy_fault_checkpoint_recovers_its_owed_start_without_reopening_the_fault(bool admitted)
+    public async Task A_current_retained_fault_checkpoint_settles_original_debt_without_reopening_the_fault(bool admitted)
     {
-        await using (var input = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", admitted ? "ActualConcurrentAdmittedFault.sqlite.gz" : "ActualConcurrentFault.sqlite.gz")))
-        await using (var zipped = new GZipStream(input, CompressionMode.Decompress))
-        await using (var output = File.Create(database)) await zipped.CopyToAsync(output);
-        await using var host = await OpenAsync(activityIds: Enumerable.Range(1, 32).Select(i => "legacy-fault-settlement-" + i).ToArray());
+        var captured = await RestoreCurrentFaultAsync(admitted);
+        await using var host = await OpenAsync(admitNewExecutions: false, activityIds: Enumerable.Range(1, 32).Select(i => "retained-fault-settlement-" + i).ToArray());
         await using var scope = await ScopeAsync(host);
         var reader = scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>();
         var before = Assert.Single((await reader.ListPageAsync(new())).Items);
-        Assert.Equal(RuntimeModelLifecycle.TerminalSettled, before.Lifecycle);
-        var owed = Assert.Single(BpmnDirectExecutionDriver.Read(before).Work).NativeWork!;
-        Assert.Null(BpmnDirectExecutionDriver.Read(before).Cancellations);
-        await SettleFaultAsync(host, scope.ServiceProvider, before.ExecutionId, [owed], admitted ? 2 : 1);
+        Assert.Equal(JsonSerializer.Serialize(captured, Web), JsonSerializer.Serialize(before, Web));
+        Assert.Equal(RuntimeModelLifecycle.TerminalPendingSettlement, before.Lifecycle);
+        var document = BpmnDirectExecutionDriver.Read(before);
+        Assert.Empty(document.Work);
+        var owed = Assert.Single(document.Cancellations!);
+        Assert.False(owed.Settled);
+        var originalFault = Assert.Single(document.NativeResults!);
+        await SettleFaultAsync(host, scope.ServiceProvider, before.ExecutionId, [originalFault.Origin, owed.Origin], admitted ? 2 : 1);
     }
 
     private static async Task SettleFaultAsync(WorkflowExecutionHarness host, IServiceProvider services, string executionId,
