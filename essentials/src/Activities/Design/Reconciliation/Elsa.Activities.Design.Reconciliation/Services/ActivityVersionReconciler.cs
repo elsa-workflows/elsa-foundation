@@ -180,19 +180,14 @@ public sealed class ActivityVersionReconciler(
                     newDefinition,
                     newVersion,
                     cancellationToken);
-            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, pass, newDefinition, newVersion, MirrorCreate, cancellationToken))
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, pass, newDefinition, newVersion, cancellationToken))
                 return;
-
-            MirrorCreate();
-            return;
 
             // Mirror the write into the indexes so a later candidate targeting the same definition
             // observes it exactly as a per-candidate re-read would (the same-new-definition-twice case).
-            void MirrorCreate()
-            {
-                definitionIndex.Add(newDefinition);
-                versionIndex.Add(newVersion);
-            }
+            definitionIndex.Add(newDefinition);
+            versionIndex.Add(newVersion);
+            return;
         }
 
         // Definition exists. Lookup the specific version by (DefinitionId, Version) — build-metadata-
@@ -212,7 +207,7 @@ public sealed class ActivityVersionReconciler(
                     CreateOperationKey("append", incomingVersion),
                     appended,
                     cancellationToken);
-            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, pass, definition, appended, () => versionIndex.Add(appended), cancellationToken))
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, pass, definition, appended, cancellationToken))
                 return;
             versionIndex.Add(appended);
             return;
@@ -246,7 +241,7 @@ public sealed class ActivityVersionReconciler(
                 if (sourceVersionPublisher is not null)
                 {
                     existingVersion.Definition ??= definition;
-                    await PublishSourceVersionAsync(sourceVersionPublisher, pass, definition, existingVersion, null, cancellationToken);
+                    await PublishSourceVersionAsync(sourceVersionPublisher, pass, definition, existingVersion, cancellationToken);
                 }
                 return;
             }
@@ -268,7 +263,7 @@ public sealed class ActivityVersionReconciler(
         if (sourceVersionPublisher is not null)
         {
             existingVersion.Definition ??= definition;
-            await PublishSourceVersionAsync(sourceVersionPublisher, pass, definition, existingVersion, null, cancellationToken);
+            await PublishSourceVersionAsync(sourceVersionPublisher, pass, definition, existingVersion, cancellationToken);
         }
     }
 
@@ -296,21 +291,21 @@ public sealed class ActivityVersionReconciler(
 
     /// <summary>
     /// Publishes one source-owned version and says whether it was published. A refused version is held for the pass's
-    /// retry rounds; nothing of it was written, so the caller skips it and the pass goes on. <paramref name="onPublished"/>
-    /// mirrors the publication into the pass's indexes when a retry round publishes the version.
+    /// retry rounds, once per version; nothing of it was written, so the caller skips it and the pass goes on.
     /// </summary>
     private async Task<bool> PublishSourceVersionAsync(
         IActivitySourceVersionPublisher publisher,
         SourcePublicationPass pass,
         ActivityDefinition definition,
         ActivityDefinitionVersion version,
-        Action? onPublished,
         CancellationToken cancellationToken)
     {
-        var publication = new PendingSourcePublication(definition, version, onPublished);
+        var publication = new PendingSourcePublication(definition, version);
         if (await TryPublishSourceVersionAsync(publisher, pass, publication, cancellationToken))
             return true;
-        pass.Retries.Add(publication);
+        // A version a source contributes twice is retried once.
+        if (!pass.Retries.Any(x => StringComparer.Ordinal.Equals(x.Version.Id, version.Id)))
+            pass.Retries.Add(publication);
         return false;
     }
 
@@ -324,13 +319,12 @@ public sealed class ActivityVersionReconciler(
         PendingSourcePublication publication,
         CancellationToken cancellationToken)
     {
-        var (definition, version, onPublished) = publication;
+        var (definition, version) = publication;
         var result = await publisher.PublishAsync(definition, version, cancellationToken);
         if (result.IsPublished)
         {
             pass.Refusals.Remove(version.Id);
             diagnosticStore?.Clear(version.Id);
-            onPublished?.Invoke();
             return true;
         }
 
@@ -370,7 +364,7 @@ public sealed class ActivityVersionReconciler(
         public Dictionary<string, SourceRefusal> Refusals { get; } = new(StringComparer.Ordinal);
     }
 
-    private sealed record PendingSourcePublication(ActivityDefinition Definition, ActivityDefinitionVersion Version, Action? OnPublished);
+    private sealed record PendingSourcePublication(ActivityDefinition Definition, ActivityDefinitionVersion Version);
 
     private sealed record SourceRefusal(ActivityDefinition Definition, ActivityDefinitionVersion Version, IReadOnlyList<ActivityDiagnostic> Diagnostics);
 

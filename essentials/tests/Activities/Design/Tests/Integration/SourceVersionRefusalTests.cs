@@ -31,7 +31,8 @@ public sealed class SourceVersionRefusalTests
             .Reconcile(CancellationToken.None);
 
         var refusedId = ActivityCatalogStableIds.VersionId(TypeKey, "1.0.0")!;
-        Assert.Equal(["1.0.0", "2.0.0"], publisher.Calls.Select(x => x.Version));
+        // One retry round, which publishes nothing, ends the pass.
+        Assert.Equal(["1.0.0", "2.0.0", "1.0.0"], publisher.Calls.Select(x => x.Version));
         Assert.Equal("acme.refused", Assert.Single(diagnostics.Find(refusedId)).Code);
         Assert.Empty(diagnostics.Find(ActivityCatalogStableIds.VersionId(TypeKey, "2.0.0")!));
         var warning = Assert.Single(logger.Entries);
@@ -50,7 +51,41 @@ public sealed class SourceVersionRefusalTests
         await InMemoryReconcilerHarness.BuildReconciler(new(), source, DuplicateHandling.Throw, sourceVersionPublisher: publisher)
             .Reconcile(CancellationToken.None);
 
-        Assert.Equal(2, publisher.Calls.Count);
+        // Both candidates were tried; the version was retried once, not once per candidate.
+        Assert.Equal(3, publisher.Calls.Count);
+    }
+
+    [Fact]
+    public async Task A_version_refused_until_a_later_candidate_publishes_is_published_in_the_same_pass_without_a_recorded_refusal()
+    {
+        // 1.0.0 uses 2.0.0, which comes later; 2.0.0 uses 3.0.0, which comes last. Two retry rounds publish both.
+        var publisher = new DependentPublisher(("1.0.0", "2.0.0"), ("2.0.0", "3.0.0"));
+        var diagnostics = new InMemoryActivityReconciliationDiagnosticStore();
+        var logger = new RecordingLogger();
+        var source = new InMemoryReconcilerHarness.InMemorySource("acme", "Configuration", Model("1.0.0"), Model("2.0.0"), Model("3.0.0"));
+
+        await InMemoryReconcilerHarness.BuildReconciler(new(), source, sourceVersionPublisher: publisher, diagnosticStore: diagnostics, logger: logger)
+            .Reconcile(CancellationToken.None);
+
+        Assert.Equal(["3.0.0", "2.0.0", "1.0.0"], publisher.Published);
+        Assert.Equal(["1.0.0", "2.0.0", "3.0.0", "1.0.0", "2.0.0", "1.0.0"], publisher.Calls);
+        Assert.Empty(diagnostics.List());
+        Assert.Empty(logger.Entries);
+    }
+
+    [Fact]
+    public async Task Versions_that_use_each_other_are_refused_and_the_pass_ends()
+    {
+        var publisher = new DependentPublisher(("1.0.0", "2.0.0"), ("2.0.0", "1.0.0"));
+        var diagnostics = new InMemoryActivityReconciliationDiagnosticStore();
+        var source = new InMemoryReconcilerHarness.InMemorySource("acme", "Configuration", Model("1.0.0"), Model("2.0.0"));
+
+        await InMemoryReconcilerHarness.BuildReconciler(new(), source, sourceVersionPublisher: publisher, diagnosticStore: diagnostics)
+            .Reconcile(CancellationToken.None);
+
+        Assert.Empty(publisher.Published);
+        Assert.Equal(4, publisher.Calls.Count);
+        Assert.Equal(2, diagnostics.List().Count);
     }
 
     [Fact]
@@ -151,6 +186,22 @@ public sealed class SourceVersionRefusalTests
             return Task.FromResult(refused.Contains(version.Version)
                 ? ActivitySourceVersionPublicationResult.Refused([Diagnostic(version.Id)])
                 : ActivitySourceVersionPublicationResult.Published);
+        }
+    }
+
+    /// <summary>Refuses a version until the version it uses is published, as the template compiler refuses an unpublished dependency.</summary>
+    private sealed class DependentPublisher(params (string Version, string Uses)[] uses) : IActivitySourceVersionPublisher
+    {
+        public List<string> Calls { get; } = [];
+        public List<string> Published { get; } = [];
+
+        public Task<ActivitySourceVersionPublicationResult> PublishAsync(IActivityDefinition definition, IActivityDefinitionVersion version, CancellationToken cancellationToken = default)
+        {
+            Calls.Add(version.Version);
+            if (uses.Any(x => x.Version == version.Version && !Published.Contains(x.Uses)))
+                return Task.FromResult(ActivitySourceVersionPublicationResult.Refused([Diagnostic(version.Id)]));
+            Published.Add(version.Version);
+            return Task.FromResult(ActivitySourceVersionPublicationResult.Published);
         }
     }
 
