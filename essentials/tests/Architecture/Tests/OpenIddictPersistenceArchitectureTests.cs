@@ -5,18 +5,17 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Guards the durable split: Elsa's OpenIddict package is provider-neutral while Workbench owns its explicit
-/// third-party vendor persistence choice.
+/// Guards the durable split: Elsa's OpenIddict feature package is provider-neutral, and the third-party vendor EF store is
+/// one opt-in, host-composed package beside it that hosts select explicitly (owner decision 2026-11-24).
 /// </summary>
 public sealed class OpenIddictPersistenceArchitectureTests
 {
-    private static readonly string[] WorkbenchOpenIddictEfPackages =
+    private static readonly string[] StoreOpenIddictEfPackages =
     [
         "Microsoft.EntityFrameworkCore.Design",
         "Microsoft.EntityFrameworkCore.InMemory",
         "Microsoft.EntityFrameworkCore.SqlServer",
         "Microsoft.EntityFrameworkCore.Sqlite",
-        "MySql.EntityFrameworkCore",
         "Npgsql.EntityFrameworkCore.PostgreSQL",
         "OpenIddict.EntityFrameworkCore"
     ];
@@ -63,8 +62,8 @@ public sealed class OpenIddictPersistenceArchitectureTests
 
     [Fact]
     /// <summary>
-    /// Elsa's reusable OpenIddict package ships no concrete persistence implementation. The only retained EF
-    /// implementation is the vendor-owned model selected explicitly by Workbench.
+    /// Elsa's reusable OpenIddict feature package ships no concrete persistence implementation. The only EF
+    /// implementation is the vendor-owned model in the sibling store package, which a host composes explicitly.
     /// </summary>
     public void Elsa_OpenIddict_package_has_no_EF_packages_or_wrapper_sources()
     {
@@ -90,29 +89,32 @@ public sealed class OpenIddictPersistenceArchitectureTests
         Assert.True(nestedProjects.Length == 0,
             "No project may sit inside the OpenIddict package folder, or its sources compile into the package: " + string.Join(", ", nestedProjects));
 
-        // No EF wrapper, neither inside the package folder nor as a sibling project of it.
+        // No EF wrapper inside the package folder. The one EF store is the sibling package the next test pins.
         Assert.False(Directory.Exists(Path.Combine(packageRoot, "EntityFrameworkCore")));
-        Assert.False(Directory.Exists(Path.Combine(openIddictRoot, "EntityFrameworkCore")));
     }
 
     [Fact]
-    public void Workbench_owns_the_vendor_package()
+    public void The_store_package_owns_the_vendor_package_and_hosts_reference_it()
     {
         var project = XDocument.Load(Path.Combine(
             RepoRoot,
-            "apps",
-            "Elsa.Workbench",
-            "Elsa.Workbench.csproj"));
-
-        Assert.Contains(
-            project.Descendants("PackageReference"),
-            element => string.Equals((string?)element.Attribute("Include"), "OpenIddict.EntityFrameworkCore", StringComparison.Ordinal));
+            "essentials", "src", "Foundation", "Identity", "OpenIddict", "EntityFrameworkCore",
+            "Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj"));
         var vendorPackages = project.Descendants("PackageReference")
             .Select(element => (string?)element.Attribute("Include"))
             .Where(include => include?.Contains("EntityFrameworkCore", StringComparison.Ordinal) == true)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(WorkbenchOpenIddictEfPackages, vendorPackages);
+        Assert.Equal(StoreOpenIddictEfPackages, vendorPackages);
+
+        // Workbench takes the store from the package, never from a vendor package of its own.
+        var workbench = XDocument.Load(Path.Combine(RepoRoot, "apps", "Elsa.Workbench", "Elsa.Workbench.csproj"));
+        Assert.DoesNotContain(
+            workbench.Descendants("PackageReference"),
+            element => string.Equals((string?)element.Attribute("Include"), "OpenIddict.EntityFrameworkCore", StringComparison.Ordinal));
+        Assert.Contains(
+            workbench.Descendants("ProjectReference"),
+            element => ((string?)element.Attribute("Include"))?.EndsWith("Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj", StringComparison.Ordinal) == true);
 
         var testProject = XDocument.Load(Path.Combine(
             RepoRoot,

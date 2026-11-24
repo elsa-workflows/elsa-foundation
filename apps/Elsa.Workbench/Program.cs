@@ -45,6 +45,7 @@ using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.Oidc;
 using Elsa.Foundation.Identity.OpenIddict;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Locking.Database;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
@@ -136,19 +137,12 @@ if (Environment.GetEnvironmentVariable("ELSA_WORKBENCH_STARTUP_ARTIFACT_PROBE") 
 var configuration = startupArtifact?.Configuration ?? builder.Configuration;
 builder.Services.AddWorkbenchCorePreview(configuration);
 
-// OpenIddict's protocol behavior is composed by the shell feature, but its vendor EF store is host-owned. Bind the
-// default shell's persistence settings at the root so the host-level initializer and every copied shell service
-// provider select the same demo in-memory store or durable SQLite store. The behavior composite deliberately does not
-// register a DbContext, an EF store, or an initializer; this is the Workbench's explicit vendor choice.
-builder.Services.AddWorkbenchOpenIddictVendor(configuration);
-// The engine under that store, SQLite unless the default shell's OpenIddict settings name another. A token issued on one node is
-// valid on another only when every node reads one store, so a multi-node deployment selects a shared engine here.
-builder.Services.AddWorkbenchOpenIddictStoreProvider(configuration);
-// Elsa's migration policy for that store, kept out of the vendor sources: it migrates the durable store and reports a SQLite
-// migration lock a killed process left behind instead of hanging the start (#2196).
-builder.Services.AddWorkbenchOpenIddictMigrationPolicy(configuration);
-// Every access and refresh token is a row in that store, and nothing else deletes one: prune the expired and redeemed ones, on every node.
-builder.Services.AddWorkbenchOpenIddictPruning(configuration);
+// OpenIddict's protocol behavior is composed by the shell feature, but its vendor EF token store is host-owned: one store on the
+// root container, which CShells copies into every shell. It binds the default shell's OpenIddict settings, selects the engine
+// (SQLite unless those settings name SQL Server or PostgreSQL; a multi-node deployment needs a shared one, since a token issued on
+// one node is valid on another only when both read one store), migrates it under Elsa's policy (a SQLite migration lock a killed
+// process left behind fails the start instead of hanging it, #2196) and prunes expired and redeemed tokens on every node.
+builder.Services.AddOpenIddictEntityFrameworkCoreStore(configuration);
 
 // Opt-in cold-start phase instrument. Null unless Elsa:Boot:PhaseTiming:Enabled is set, so the host
 // registers no boot services and pays nothing when the switch is off. When on, the timeline is a root singleton

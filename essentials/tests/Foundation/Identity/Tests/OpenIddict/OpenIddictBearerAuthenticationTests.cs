@@ -4,7 +4,7 @@ using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.OpenIddict;
-using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+using Elsa.Foundation.Identity.Tests.OpenIddict.VendorStore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
