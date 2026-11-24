@@ -257,12 +257,17 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   3. apply, excluding refused items and their dependents;
   4. `PublishWorkflow` per imported workflow.
 
-  It collects every diagnostic and skip into the report instead of the log. As in startup reconciliation, only the
-  newest selected version of each definition is published and exported. An older selected version is converted and
-  imported for its findings only, and is marked with the Info code `ELS3-MIGRATION-SUPERSEDED-VERSION`. A refusal that
-  the shared sequence cannot pin on one definition (a plan error that names no item, a refusal that covers the whole
-  selection at apply) is not thrown: it becomes a run-level Must fix finding, with its code and the code table's text,
-  and the run exits 1 with a report.
+  It collects every diagnostic and skip into the report instead of the log. As in startup reconciliation, the import
+  publishes the activity version of every selected reusable version, older pinned ones included, and all of them are
+  exported to `activities.json`. For workflows, wrappers included, only the newest selected version of each
+  definition is published and exported. An older selected workflow version, or the wrapper of an older reusable
+  version, is imported for its findings only and is marked with the Info code `ELS3-MIGRATION-SUPERSEDED-VERSION`.
+
+  A refusal that the shared sequence cannot pin on one definition (a plan error that names no item, a refusal that
+  covers the whole selection at apply) is not thrown. It becomes a run-level Must fix finding with its code; the text
+  is the code table's fixed text for that code, or for a converter-owned code its redacted message. Every selected
+  definition that the refusal kept from being applied gets an Error finding `ELS3-MIGRATION-RUN-REFUSED` (remedy
+  `patch-definition`), so none of them buckets as `convert-as-is` or goes smoothly. The run exits 1 with a report.
 - **FR-014**: Publish MUST stop at the first error per definition. The finding states that the publish stage was
   reached and that later errors may be hidden.
 
@@ -276,8 +281,13 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   A definition **goes smoothly** when it has no finding other than routine ones. A code is routine when the code table
   marks it so: an Info the converter adds to every definition, such as the null-policy record.
 - **FR-016a**: A component finding MUST name its component from structured diagnostic data, never by parsing a
-  message. The converter attaches a `ComponentName` metadata entry (the Elsa 3 activity type, function name, variable
-  type name or storage driver type) to every component diagnostic. A call of an undeclared JavaScript function gets
+  message. Every component diagnostic carries a `ComponentName` metadata entry (the Elsa 3 activity type, function name,
+  variable type name or storage driver key). The converter attaches it to its own component diagnostics. A missing
+  storage driver may instead be refused at publication, by the Elsa 4 code `workflow.runtime.storage-driver-missing`
+  (specification 1240); that diagnostic must carry the driver key as structured metadata, and the code table lists it
+  as a `storage-driver` component code with remedy `build-component`. Because publish stops at the first error
+  (FR-014), a publish-stage component finding may hide further ones in the same definition, and the report says so
+  through `publishStoppedHere`. A call of an undeclared JavaScript function gets
   its own code, separate from the forbidden-capability code it otherwise shares, so that refused capabilities (forbidden globals) do not count as
   components.
 - **FR-016**: Every Must fix finding MUST carry one of three remedies:
@@ -362,7 +372,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 | Q1 | Where does the migrated content come from? | It is exported from the run's own Elsa 4 store after publish, not written from the converter's output. The folder is `migrated/`. Workflows use the workflow format, and reusables use the activity format. |
 | Q2 | Converted reusables depend on other activity versions, and the engine's source reconciliation refuses such content. | The engine gap is fixed by specification 1239, outside this one. The CLI exports reusables anyway, and the report flags every reusable and every workflow that uses one. Only that part of SC-004 waits on the fix. |
 | Q3 | Where does the CLI's Elsa 4 closure come from? | The Elsa 3 migration image, built `FROM` the essentials engine at the same version, with the Elsa 3 additions baked in. The CLI ships no closure, and Docker is a prerequisite. |
-| Q4 | Does using the ADR 0076 worker for this group need an ADR change? | Yes. A small ADR 0076 amendment does two things. It lets the worker reach further named frozen entry points, one per command group (D1). It also lets such a group, by default, reconcile local directory feeds into a private, run-scoped install root that it deletes at the end, never a host's shared store and never the network (D1, D10). This specification is provisional on it. |
+| Q4 | Does using the ADR 0076 worker for this group need an ADR change? | Yes. A small ADR 0076 amendment does two things. It lets the worker reach further named frozen entry points, one per command group (D14). It also lets such a group, by default, reconcile local directory feeds into a private, run-scoped install root that it deletes at the end, never a host's shared store and never the network (D1, D10). This specification is provisional on it. |
 | Q5 | How is the run kept to one database when the shared transaction refuses a supplied connection? | Every module gets the same connection string, for a uniquely named in-memory shared-cache database that is kept alive for the run. |
 | Q6 | How far is the report versioned? | One integer `schemaVersion`. The skill and the image ship separately, so the skill must be able to refuse a version it does not know. Nothing more. |
 | Q7 | Is there an unredacted mode? | No. The user already holds the raw definitions, and the skill asks before reading them. |
@@ -404,7 +414,9 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   too. The engine must also include JSON activity reconciliation, so that `migrated/activities/` loads, and it must
   carry `Nuplane.Sources.Directory`, so that directory feeds load.
 - **Converter diagnostics this specification relies on.** The converter maps declared Elsa 3 JavaScript globals to
-  prefixed host functions (direct calls only), and diagnoses unregistered variable types and unmapped storage drivers. These supply
+  prefixed host functions (direct calls only), and diagnoses unregistered variable types and unmapped storage drivers.
+  Specification 1240 moves the storage-driver refusal from conversion to publication
+  (`workflow.runtime.storage-driver-missing`); this specification accepts either code, as FR-016a says. These supply
   the codes from which the custom-component inventory is built, and this specification adds their entries to the code
   table.
 - **Converter diagnostic for non-call references.** A declared global that a script references without calling it is

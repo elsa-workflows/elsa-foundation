@@ -53,9 +53,11 @@ without enabling the feature.
 
 Two behaviours of the startup sequence matter for the report:
 
-- `ImportedWorkflowPublisher.PublishAsync` groups by workflow definition and publishes only the newest imported
-  version. Older selected versions (from `--all-versions`, or a pinned reusable version's wrapper) are imported but
-  never published. The report marks them `ELS3-MIGRATION-SUPERSEDED-VERSION`.
+- The collection import's publish phase publishes the activity version of every committed reusable version, older
+  pinned ones included (`ReusableActivityCollectionImporter.cs`), so all of them are exported to `activities.json`.
+  `ImportedWorkflowPublisher.PublishAsync` acts on workflows only: it groups by workflow definition and publishes
+  only the newest imported version. Older selected workflow versions, and the wrappers of older reusable versions, are
+  imported but never published. The report marks them `ELS3-MIGRATION-SUPERSEDED-VERSION`.
 - The task throws `Elsa3ReconciliationFailedException`, ending the start, for a plan error that names no item and for
   refusals that name no single workflow, such as a credential-literal refusal over the whole selection at apply
   (`Elsa3FolderImportTask.cs`, `ReusableActivityCollectionImporter.cs`). `Elsa3ImportRun` returns these as run-level

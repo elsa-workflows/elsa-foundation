@@ -78,7 +78,10 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   string literals outside the constant classes, and fails on any (FR-016, FR-019).
 - [ ] T004b Make the converter carry component names as data (FR-016a). Add a `ComponentName` metadata key to every
   component diagnostic: unmapped activity types, undeclared and replaced-function references, unregistered variable
-  types and unmapped storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. Give a call of an
+  types and unmapped storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. Add
+  `workflow.runtime.storage-driver-missing` to the code table as a `storage-driver` component code; where
+  specification 1240 has moved that refusal to publication, read the driver key from that diagnostic's metadata, and
+  test both forms. Give a call of an
   undeclared JavaScript function a code of its own, separate from the forbidden-capability code, and update the
   mapping README and the affected converter tests. The report builder reads `componentName` only from that metadata.
 - [ ] T005 Extract `Elsa3ImportRun` from `Elsa3FolderImportTask` in
@@ -178,8 +181,11 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 - [ ] T018 [US1] Wire the entry point: read, select, run `Elsa3ImportRun`, and collect every diagnostic with its stage.
   Publish stops at the first error and marks `publishStoppedHere` (FR-013, FR-014). `Elsa3ImportRun` returns a refusal
   it cannot pin on one definition instead of throwing (the startup task still throws on it), and the report lists it
-  in `runFindings`. Mark older selected versions `ELS3-MIGRATION-SUPERSEDED-VERSION`. Test a plan error that names no
-  item, a credential-literal refusal at apply (exit 1, a report, no message text), and `--all-versions` with three
+  in `runFindings`. Mark older selected workflow versions and the wrappers of older reusable versions
+  `ELS3-MIGRATION-SUPERSEDED-VERSION`; older reusable versions' activities stay published. On a run-level refusal, give
+  every affected definition `ELS3-MIGRATION-RUN-REFUSED`. Test a plan error that names no
+  item, a credential-literal refusal at apply (exit 1, a report, no message text, no definition bucketed
+  `convert-as-is`), and `--all-versions` with three
   versions (only the newest published and exported).
 - [ ] T019 [US1] Add `Tooling/ReportBuilder.cs`. It provides:
   - categories (FR-015);
@@ -205,7 +211,9 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 - [ ] T022 [US4] Add `Tooling/MigratedExporter.cs` (FR-023, FR-024). It reads the published workflow versions and
   reusable activity versions back from the design stores and writes them through the T006 and T007 writers: one file
   per workflow definition, the wrapper workflow of each reusable among them, and one activities file in dependency
-  order. A reusable's `exportedTo` is the activities file, and its `wrapperExportedTo` is the wrapper's file. It sets `exportedTo`, and sets
+  order. A reusable's `exportedTo` is the activities file, and its `wrapperExportedTo` is the wrapper's file. Every
+  published reusable version goes into `activities.json`, older pinned ones included. Add a fixture case of a workflow
+  that pins an older reusable version, and test that it loads (T024). It sets `exportedTo`, and sets
   `needsCompositeSourceSupport` on every reusable, its wrapper, and every workflow that uses one. It leaves out refused and blocked
   definitions. It always creates `migrated/workflows/` and always writes `migrated/activities/activities.json`, as
   `[]` when no reusable is exported. Test the layout, the absence, and a run that exports no workflow and no reusable.

@@ -10,7 +10,8 @@ This is a compatibility surface, frozen as `EfToolingHost` is under ADR 0076 D1.
 - Method: `public static Task<int> RunAsync(Stream request, Stream response)`.
 
 The assembly arrives as a Nuplane package (`/app/elsa3/packages/`), not in the host closure. The worker therefore
-finds `Elsa3.Migration.Tooling` among the loaded package set's assemblies, then resolves the type with
+looks for `Elsa3.Migration.Tooling` in the host closure and among the loaded package set's assemblies (in the image it
+is found among the packages), then resolves the type with
 `Assembly.GetType(name, throwOnError: false)`. A missing assembly or type is an image build defect, refused as
 `entry-point-missing` (exit 2), naming the type and the minimum `Elsa3.Migration.Tooling` version.
 
