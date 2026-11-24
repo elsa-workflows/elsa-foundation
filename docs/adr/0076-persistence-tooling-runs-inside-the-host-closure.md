@@ -667,7 +667,8 @@ same way `Elsa.Modularity.Core` does.
 
 ### D10 — The tool never downloads packages by default
 
-Every command resolves the active package set already on disk: `store-state.json` for a Nuplane
+Every command, except a D14 group acting under the second exception below, resolves the active package set already
+on disk: `store-state.json` for a Nuplane
 host, or `--packages <dir>` for an override directory carrying no state file, honoring the
 `.nuplane-ready` marker and skipping `.tmp/` either way. No command reconciles or fetches from a feed
 by default, except under the two exceptions below. Spec 171 research item R4 turned this from a design default into a hard rule for
