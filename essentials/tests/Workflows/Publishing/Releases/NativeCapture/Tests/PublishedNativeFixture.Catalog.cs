@@ -1,3 +1,5 @@
+using Xunit;
+using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Contracts;
@@ -62,7 +64,7 @@ internal sealed partial class PublishedNativeFixture
         public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string hash, CancellationToken token = default) => actual.FindByHashAsync(hash, token);
         public ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(RuntimeStorePageRequest request, CancellationToken token = default) => actual.ListPageAsync(request, token);
     }
-    public async Task<string> PublishClrCatalog()
+    public async Task<string> PublishClrCatalog(bool currentScannerInputs = false)
     {
         const string id = "actual-clr-version"; var types = Service<IWellKnownTypeRegistry>(); types.RegisterType(typeof(WriteLine), typeof(WriteLine).FullName!);
         var serializer = Service<IPayloadSerializer>(); var structures = Service<IActivityStructureService>();
@@ -80,6 +82,19 @@ internal sealed partial class PublishedNativeFixture
             Inputs = [new("text", nameof(WriteLine.Text), new("String"), null, "Text", null, IsNullable: false, IsRequired: true)],
             DesignFacets = [new("elsa.outcomes", "1", JsonSerializer.SerializeToElement(new { ports = new[] { new { referenceKey = "Done", name = "Done", type = "outcome" } } }))]
         };
+        if (currentScannerInputs)
+        {
+            var folder = Directory.CreateTempSubdirectory("s2-current-clr-scan-");
+            try
+            {
+                File.Copy(typeof(WriteLine).Assembly.Location, Path.Join(folder.FullName, Path.GetFileName(typeof(WriteLine).Assembly.Location)));
+                var scanner = new ClrAssemblyScanner(new ActivityTypeVersionResolver(), new ActivityTypeCategoryResolver(), NullLogger<ClrAssemblyScanner>.Instance);
+                var scanned = Assert.Single(scanner.Scan(folder.FullName), item => item.ActivityTypeKey == typeof(WriteLine).FullName!);
+                Assert.True(Assert.Single(scanned.Inputs, input => input.ReferenceKey == "text").IsNullable);
+                version.Inputs = scanned.Inputs;
+            }
+            finally { folder.Delete(recursive: true); }
+        }
         var result = await new SourceOwnedActivityVersionPublisher(command, publications, nodes, TimeProvider.System,
             NullLogger<SourceOwnedActivityVersionPublisher>.Instance).PublishAsync(definition, version);
         if (!result.IsPublished) throw new InvalidOperationException("The real source-owned CLR publication did not succeed.");

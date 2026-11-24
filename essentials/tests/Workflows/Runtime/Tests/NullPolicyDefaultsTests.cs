@@ -46,6 +46,35 @@ public sealed class NullPolicyDefaultsTests
         Assert.True(NullPolicyDefaults.AcceptsNull(new TypeReference(alias, CollectionKind.Array), registry, authority));
     }
 
+    [Theory]
+    [InlineData("Acme.Reference", false)]
+    [InlineData("acme.reference", false)]
+    [InlineData("System.Uri", false)]
+    [InlineData("system.uri", true)]
+    public void Design_nullability_follows_the_same_registered_convention_alias(string alias, bool supportsNull)
+    {
+        var services = new ServiceCollection(); new SerializationFeature().ConfigureServices(services);
+        using var host = services.BuildServiceProvider(); var types = host.GetRequiredService<IWellKnownTypeRegistry>();
+        types.RegisterType(typeof(Uri), "Acme.Reference");
+        Assert.Equal(supportsNull, NullPolicyDefaults.AcceptsNull(new TypeReference(alias), types, new TestCatalog(supportsNull)));
+    }
+
+    [Fact]
+    public void Nullable_contributed_value_type_convention_alias_keeps_its_design_contract()
+    {
+        var services = new ServiceCollection(); new SerializationFeature().ConfigureServices(services);
+        using var host = services.BuildServiceProvider(); var types = host.GetRequiredService<IWellKnownTypeRegistry>();
+        types.RegisterType(typeof(TestChoice), "Acme.NullableChoice");
+        Assert.True(NullPolicyDefaults.AcceptsNull(new TypeReference(TypeAliasConvention.CanonicalAlias(typeof(TestChoice))), types, new ChoiceCatalog()));
+    }
+
+    private sealed class ChoiceCatalog : IVariableTypeDescriptorCatalog
+    {
+        public IEnumerable<TypeDescriptor> GetDescriptors() =>
+            [new("Acme.NullableChoice", typeof(TestChoice), "Choice", "Test", "select", new HashSet<CollectionKind>([CollectionKind.Single]), true, true, new HashSet<string> { "elsa.json" })];
+        public IEnumerable<IGrouping<string, TypeDescriptor>> GetDescriptorsByCategory() => GetDescriptors().GroupBy(item => item.Category);
+    }
+
     private sealed class RuntimeProvider : IVariableTypeDescriptorProvider
     {
         public IEnumerable<TypeDescriptor> GetDescriptors() => new TestCatalog(false).GetDescriptors();

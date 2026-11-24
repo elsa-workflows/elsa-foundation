@@ -753,7 +753,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 childScheduling.IdGenerator,
                 workItem,
                 invokePayload,
-                state,
+                WithSessionReads(state, stepSession, stepWarnings),
                 childScheduling.Requests,
                 parentNotificationWorkItems,
                 valueSnapshots,

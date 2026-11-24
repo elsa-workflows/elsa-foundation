@@ -147,6 +147,34 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         Assert.Equal(0, (await _workflowStore.FindAsync(WorkflowExecutionId))!.RootVariableFrame!.Revision);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Null_boundary_diagnostics_identify_the_variable_or_output(bool output, bool policy)
+    {
+        var bindings = new Dictionary<string, RuntimeInputBinding> { ["value"] = new("value", IntType, ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Null(IntType, ValueProtectionPolicy.InstanceInline)) };
+        if (output) bindings["name"] = new("name", new("String"), ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(new("String"), JsonSerializer.SerializeToElement("amount"), ValueProtectionPolicy.InstanceInline));
+        var node = new ExecutableNode("set-null", "set-null", "test.intrinsic", "1", "intrinsic", JsonSerializer.SerializeToElement(new { }), bindings,
+            new Dictionary<string, string>(), intrinsicKind: output ? WorkflowIntrinsicKind.SetOutput : WorkflowIntrinsicKind.Set,
+            intrinsicVariable: output ? null : new("counter", "workflow"));
+        var target = output ? "amount" : "counter";
+        if (!policy)
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteAsync(node, 0, false, policies: WorkflowValuePolicies.Off).AsTask());
+            Assert.Contains("VF-ACT-004", error.Message); Assert.Contains(target, error.Message);
+        }
+        else
+        {
+            var commit = await ExecuteAsync(node, 0, false, policies: new(true, false));
+            var warning = Assert.Single(Assert.Single(commit.StateChanges.ActivityExecutions).State!.Warnings!);
+            Assert.Equal("VF-NULL-001", warning.Code); Assert.Contains(target, warning.Message);
+        }
+    }
+
     private static ExecutableNode Node(string source, string alias = "Int32", ValueConversionPlan? plan = null, CollectionKind collectionKind = CollectionKind.Single)
     {
         var targetType = new ValueTypeDescriptor(alias, collectionKind);
@@ -186,7 +214,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         public bool TryGetTypeOrDefault(string alias, out Type type) => TryGetType(alias, out type);
     }
 
-    private async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(ExecutableNode node, object payloadValue, bool external, bool captureHistory = false)
+    private async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(ExecutableNode node, object payloadValue, bool external, bool captureHistory = false, WorkflowValuePolicies? policies = null)
     {
         var scheduled = ActivityState(IntrinsicExecutionId, node.ExecutableNodeId, ActivityExecutionStatus.Scheduled) with { Attempts = [] };
         var isProjection = node.InputBindings["value"].WorkflowRequest?.Path is not null || node.InputBindings["value"].Selection is not null;
@@ -212,7 +240,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         var executable = new WorkflowExecutable(
             Identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(),
             inputContract: null, dependencies: null, runtimeRequirements: null, storageDriverRequirements: null,
-            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference, persistenceMode: null, workflowVariables: null, valuePolicies: policies);
         var workItem = new RuntimeSchedulerWorkItem(
             "start-intrinsic",
             WorkflowExecutionId,

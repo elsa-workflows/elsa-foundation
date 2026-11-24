@@ -159,7 +159,7 @@ public sealed class WorkflowIntrinsicExecutor(
             executable,
             runtimeView,
             cancellationToken,
-            validateAssignmentPayload: true, warnings: warnings);
+            validateAssignmentPayload: true, warnings: warnings, targetLabel: $"Variable '{target.VariableKey}' in scope '{target.DeclaringScopeId}'");
         intrinsicState = intrinsicState.WithWarnings(warnings.Warnings);
         ValidateAssignment(frameOwner.Frame, target.VariableKey, valueBinding, value, node.ExecutableNodeId);
 
@@ -355,7 +355,8 @@ public sealed class WorkflowIntrinsicExecutor(
             : null;
         var warnings = new ExecutionWarningCollector();
         var value = await MaterializeValueAsync(node.InputBindings[WorkflowIntrinsicInputKeys.Value], workflow, intrinsicState,
-            executable, runtimeView, cancellationToken, validateAssignmentPayload: true, warnings: warnings);
+            executable, runtimeView, cancellationToken, validateAssignmentPayload: true, warnings: warnings,
+            targetLabel: $"{(scoped ? "Activity" : "Workflow")} output '{outputName}'");
         intrinsicState = intrinsicState.WithWarnings(warnings.Warnings);
         var durableChange = boundaryId is null
             ? NewWorkflowOutputChange(workflowId, intrinsicState.InvocationId, outputName, value, timeProvider.GetUtcNow())
@@ -707,7 +708,7 @@ public sealed class WorkflowIntrinsicExecutor(
         IReadOnlyCollection<ActivityExecutionState> runtimeView,
         CancellationToken cancellationToken,
         bool validateAssignmentPayload = false,
-        IExecutionWarningSink? warnings = null)
+        IExecutionWarningSink? warnings = null, string? targetLabel = null)
     {
         ThrowIfWithheld(binding);
         var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowState.WorkflowExecutionId, cancellationToken);
@@ -735,7 +736,7 @@ public sealed class WorkflowIntrinsicExecutor(
             visibleVariables: RuntimeContainerScopeService.ProjectReadableVariables(executable, visibleFrames, rootVariableNames),
             correlationId: projections.CorrelationId) { Warnings = warnings };
         if (binding.Selection is not null)
-            return await MaterializeMemberAsync(binding, workflowState, intrinsicState, context, cancellationToken);
+            return await MaterializeMemberAsync(binding, workflowState, intrinsicState, context, cancellationToken, targetLabel);
 
         var resolved = inputBindingResolver.Resolve(binding, context);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
@@ -756,7 +757,7 @@ public sealed class WorkflowIntrinsicExecutor(
             var envelope = evaluated.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
                 ? ValueEnvelope.Null(binding.TargetType, evaluated.EffectivePolicy)
                 : ValueEnvelope.Inline(binding.TargetType, evaluated.Value, evaluated.EffectivePolicy);
-            envelope = NormalizeTargetNull(binding, envelope, executable.ValuePolicies, warnings);
+            envelope = NormalizeTargetNull(binding, envelope, executable.ValuePolicies, warnings, targetLabel);
             if (validateAssignmentPayload)
                 ValidateAssignmentPayload(binding, envelope, intrinsicState.Execution.ExecutableNodeId);
             return await ApplyStorageAsync(
@@ -786,7 +787,7 @@ public sealed class WorkflowIntrinsicExecutor(
         // substituted scalar; an encryption requirement never permits a null in a non-nullable target.
         if (source.Presence == ValuePresence.ExplicitNull)
         {
-            var normalized = NormalizeTargetNull(binding, ValueEnvelope.Null(binding.TargetType, combinedPolicy), executable.ValuePolicies, warnings);
+            var normalized = NormalizeTargetNull(binding, ValueEnvelope.Null(binding.TargetType, combinedPolicy), executable.ValuePolicies, warnings, targetLabel);
             return await ApplyStorageAsync(workflowState.WorkflowExecutionId, intrinsicState.InvocationId, binding.InputName,
                 normalized, source.Policy, combinedPolicy, cancellationToken);
         }
@@ -831,7 +832,7 @@ public sealed class WorkflowIntrinsicExecutor(
         var combined = binding.ConversionPlan is null
             ? conversionSource.Retype(binding.TargetType)
             : _valueConversionExecutor.Convert(conversionSource, binding.ConversionPlan);
-        combined = NormalizeTargetNull(binding, combined, executable.ValuePolicies, warnings);
+        combined = NormalizeTargetNull(binding, combined, executable.ValuePolicies, warnings, targetLabel);
         if (validateAssignmentPayload)
             ValidateAssignmentPayload(binding, combined, intrinsicState.Execution.ExecutableNodeId);
         return await ApplyStorageAsync(
@@ -856,7 +857,7 @@ public sealed class WorkflowIntrinsicExecutor(
         WorkflowExecutionState workflowState,
         ActivityExecutionState intrinsicState,
         RuntimeInputBindingResolutionContext context,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string? targetLabel)
     {
         var nodeId = intrinsicState.Execution.ExecutableNodeId;
         var (source, selected) = await RuntimeMemberRead.ReadAsync(binding, nodeId, inputBindingResolver, context, externalPayloadStore, cancellationToken);
@@ -890,7 +891,7 @@ public sealed class WorkflowIntrinsicExecutor(
                 break;
         }
 
-        value = NormalizeTargetNull(binding, value, context.Executable?.ValuePolicies ?? WorkflowValuePolicies.Off, context.Warnings);
+        value = NormalizeTargetNull(binding, value, context.Executable?.ValuePolicies ?? WorkflowValuePolicies.Off, context.Warnings, targetLabel);
         return await ApplyStorageAsync(
             workflowState.WorkflowExecutionId,
             intrinsicState.InvocationId,
@@ -921,9 +922,9 @@ public sealed class WorkflowIntrinsicExecutor(
     }
 
     private ValueEnvelope NormalizeTargetNull(RuntimeInputBinding binding, ValueEnvelope value,
-        WorkflowValuePolicies policies, IExecutionWarningSink? warnings) =>
+        WorkflowValuePolicies policies, IExecutionWarningSink? warnings, string? targetLabel) =>
         NullPolicyDefaults.NormalizeNull(value, NullPolicyDefaults.AcceptsNull(binding.TargetType.ToTypeReference(), _typeRegistry, _typeDescriptors),
-            policies, $"Intrinsic target '{binding.InputName}'", _typeRegistry, warnings);
+            policies, targetLabel ?? $"Intrinsic input '{binding.InputName}'", _typeRegistry, warnings);
 
     private static bool HasExternalProjection(RuntimeInputBinding binding) =>
         binding.Source == RuntimeInputBindingSource.WorkflowRequest && !string.IsNullOrWhiteSpace(binding.WorkflowRequest!.Path) ||

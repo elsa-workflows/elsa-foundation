@@ -38,7 +38,10 @@ public static class NullPolicyDefaults
         ArgumentNullException.ThrowIfNull(type);
         if (type.CollectionKind != CollectionKind.Single)
             return true;
-        if (descriptors?.GetDescriptors().FirstOrDefault(item => StringComparer.OrdinalIgnoreCase.Equals(item.Alias, type.Alias)) is { } descriptor)
+        var canonicalAlias = registry?.TryGetTypeOrDefault(type.Alias, out var resolvedType) == true
+            ? registry.GetAliasOrDefault(resolvedType) : type.Alias;
+        if (descriptors?.GetDescriptors().FirstOrDefault(item => StringComparer.OrdinalIgnoreCase.Equals(item.Alias, type.Alias) ||
+                StringComparer.OrdinalIgnoreCase.Equals(item.Alias, canonicalAlias)) is { } descriptor)
             return descriptor.SupportsNull;
         if (type.CollectionKind != CollectionKind.Single || TypeAliasConvention.IsAny(type.Alias) ||
             type.Alias is "String" or "System.String" or "JsonElement" or "System.Text.Json.JsonElement" or "JsonNode" or "System.Text.Json.Nodes.JsonNode")

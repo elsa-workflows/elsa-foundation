@@ -239,11 +239,13 @@ export async function nullPoliciesJourney(page: Page, info: TestInfo, capture: C
       const section = inspector.getByTestId("execution-warnings"); await expect(section).toBeVisible(); await section.scrollIntoViewIfNeeded(); return section;
     }
     let section = await warnings("substitute-input"); await expect(section).toContainText("Information · VF-NULL-001"); await capture(page, info, "run-null-information");
+    section = await warnings("substitute"); await expect(section).toContainText("VF-NULL-001"); await expect(section).toContainText("count");
+    await capture(page, info, "run-variable-null-information");
     section = await warnings("boundary");
     for (const code of ["VF-UNDEF-002", "VF-UNDEF-003", "VF-NUM-001"]) await expect(section).toContainText(code);
     await expect(section).toContainText("customer.privateKey"); await capture(page, info, "run-boundary-warnings");
     section = await warnings("protected-boundary"); await expect(section).toContainText("VF-UNDEF-002"); await expect(section).not.toContainText("customer.privateKey");
-    await capture(page, info, "run-protected-warning"); proof.diagnostics = { publication: diagPublication, run, inspectedNodes: ["substitute-input", "boundary", "protected-boundary"] };
+    await capture(page, info, "run-protected-warning"); proof.diagnostics = { publication: diagPublication, run, inspectedNodes: ["substitute-input", "substitute", "boundary", "protected-boundary"] };
 
     const activity = await saved();
     const preflight = await api<{ isPublishable: boolean; reviewToken: string; minimumVersion: string; definitionHeadVersionId: string | null; diagnostics: unknown[] }>(`/design/activities/drafts/${activity.draftId}/publication-preflight`, "POST", { expectedDraftRevision: activity.revision, expectedDefinitionHeadVersionId: null });

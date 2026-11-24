@@ -38,11 +38,17 @@ def seed(root, draft_id, member_key):
     member[key(member, "isRequired")] = True
     changed = json.dumps(state, ensure_ascii=True, separators=(",", ":"))
     with sqlite3.connect(path, timeout=30) as db:
+        layouts = db.execute('SELECT "TenantScopeKey", "IdIdentityHash", "Revision" FROM "elsa_activity_definition_draft_layouts" WHERE "DraftId" IN (?,?)', (draft_id, encoded)).fetchall()
+        if len(layouts) != 1 or layouts[0][0] != tenant or layouts[0][2] != revision:
+            raise ValueError("The owned draft/layout pair does not share one exact revision")
         count = db.execute('UPDATE "elsa_activity_definition_drafts" SET "State"=?, "Revision"=? WHERE "TenantScopeKey"=? AND "IdIdentityHash"=? AND "Revision"=? AND "State"=?',
                            (changed, revision + 1, tenant, identity, revision, raw)).rowcount
         if count != 1: raise ValueError("The owned legacy seed lost its exact revision")
+        count = db.execute('UPDATE "elsa_activity_definition_draft_layouts" SET "Revision"=? WHERE "TenantScopeKey"=? AND "IdIdentityHash"=? AND "Revision"=?',
+                           (revision + 1, tenant, layouts[0][1], revision)).rowcount
+        if count != 1: raise ValueError("The owned legacy seed lost its paired layout revision")
     return {"fixture": "old required-with-default member", "database": str(path.relative_to(root)), "draftId": draft_id,
-            "beforeRevision": revision, "afterRevision": revision + 1,
+            "beforeRevision": revision, "afterRevision": revision + 1, "layoutRevisionAligned": True,
             "beforeSha256": hashlib.sha256(raw.encode()).hexdigest(), "afterSha256": hashlib.sha256(changed.encode()).hexdigest()}
 
 

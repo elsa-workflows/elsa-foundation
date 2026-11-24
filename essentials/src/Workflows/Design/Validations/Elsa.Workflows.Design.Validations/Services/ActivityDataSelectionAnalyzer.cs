@@ -1,3 +1,4 @@
+using Elsa.Serialization.Core;
 using Elsa.Expressions.Core.Contracts;
 using System.Collections.Immutable;
 using System.Text.Json;
@@ -26,12 +27,17 @@ internal sealed class ActivityDataSelectionAnalyzer(
     IEnumerable<IActivitySerializedShapeSource> shapeSources,
     IInlineEventPublisher events,
     IOptions<WorkflowDesignValidatorOptions> options,
-    IActivityBindingConversionPreviewer? conversionPreviewer = null, IVariableTypeDescriptorCatalog? typeDescriptors = null) : IActivityDataSelectionAnalyzer
+    IActivityBindingConversionPreviewer? conversionPreviewer = null, IVariableTypeDescriptorCatalog? typeDescriptors = null, IWellKnownTypeRegistry? types = null) : IActivityDataSelectionAnalyzer
 {
-    private bool AuthoredAllowsNull(TypeReference type) => type.CollectionKind != CollectionKind.Single ||
-        (typeDescriptors?.GetDescriptors().FirstOrDefault(descriptor => StringComparer.OrdinalIgnoreCase.Equals(descriptor.Alias, type.Alias))?.SupportsNull
-         ?? (TypeAliasConvention.IsAny(type.Alias) || type.Alias is "String" or "System.String" or
-             "JsonElement" or "System.Text.Json.JsonElement" or "JsonNode" or "System.Text.Json.Nodes.JsonNode"));
+    private bool AuthoredAllowsNull(TypeReference type)
+    {
+        if (type.CollectionKind != CollectionKind.Single) return true;
+        var canonicalAlias = types?.TryGetTypeOrDefault(type.Alias, out var clrType) == true ? types.GetAliasOrDefault(clrType) : type.Alias;
+        return typeDescriptors?.GetDescriptors().FirstOrDefault(descriptor => StringComparer.OrdinalIgnoreCase.Equals(descriptor.Alias, type.Alias) ||
+                StringComparer.OrdinalIgnoreCase.Equals(descriptor.Alias, canonicalAlias))?.SupportsNull
+            ?? (TypeAliasConvention.IsAny(type.Alias) || type.Alias is "String" or "System.String" or
+                "JsonElement" or "System.Text.Json.JsonElement" or "JsonNode" or "System.Text.Json.Nodes.JsonNode");
+    }
 
     public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(
         ActivityDataSelectionDocument document,
