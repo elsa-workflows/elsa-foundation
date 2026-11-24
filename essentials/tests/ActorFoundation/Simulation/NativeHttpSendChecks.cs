@@ -147,6 +147,8 @@ internal static partial class NativeHttpEdgeChecks
                     $"{mode}: with a longer job deadline, the HTTP client's own timeout completes the activity on Timeout ({longJob.Outcome} in {elapsed} ms)");
             }
 
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable })
+            await CheckOwnerLossRerunAsync(mode, Check, token);
         using (var created = NativeHttpOptions.CreateClient())
         {
             var settings = typeof(HttpMessageInvoker).GetField("_handler", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.GetValue(created) as SocketsHttpHandler;
