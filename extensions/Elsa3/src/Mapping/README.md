@@ -283,6 +283,7 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | `isNullOrEmpty(x)`, `isNullOrWhiteSpace(x)` | An inline function with .NET's semantics, including .NET's whitespace characters |
 | `newGuid()`, `newGuidString()`, `getGuidString()`, `newShortGuid()`, `getShortGuid()`, `parseGuid(s)` | The Elsa 4 built-ins of the same name, which return Elsa 3's text as a string: the canonical 36-character form, or Elsa 3's short form (Base64 of the GUID's bytes without `/`, `+`, `=`). A GUID used as text (`'id-' + newGuid()`, `newGuid().toString()`) gives the same text |
 | `stringToBase64(s)`, `stringFromBase64(s)` | The Elsa 4 built-ins of the same name: UTF-8 text and standard Base64, as in Elsa 3 |
+| A custom function `getSettings(…)` that a registered host function declares it replaces (`new JavaScriptHostFunctionDeclaration("acme.getSettings", …) { ReplacesGlobalFunctions = ["getSettings"] }`) | A call to that host function, `acme.getSettings(…)`, with its arguments converted as written. Elsa 4 host functions carry a namespace prefix (ADR 0045 §5 D-5); the migration plan records which prefix each function gets. Two functions claiming one name, a variable or input whose generated accessor has the same name, or a script that declares the namespace root are refused as ambiguous (`VF-IMP-002`) |
 | `toJson(x)` | `JSON.stringify(x)`, with the warning `ELS3-BEHAVIOUR-TOJSON-STRINGIFY`: Elsa 3 escaped `<`, `>`, `&`, `'`, `+`, `` ` `` and characters outside the Basic Multilingual Plane, trimmed a `Date`'s fractional seconds, wrote `undefined` as `null` and failed on `NaN`. Elsa 4 has no `toJson` |
 | `Math.random()` | Native `Math.random()` |
 | `Date.now()`, `new Date()` as an instant, `getTime()`, epoch arithmetic, `new Date(number)`, `Date.UTC(…)`, `toISOString()`, the `getUTC*`/`setUTC*` methods, parsing text with `Z` or an offset, parsing a date-only text | Native `Date` on the host clock, under every date interpretation |
@@ -312,7 +313,7 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | `setOutcome(…)`, `setOutcomes(…)` with a computed name in a RunJavaScript whose possible outcomes are empty | `VF-IMP-005` | List every outcome the script can set in the activity's possible outcomes |
 | A RunJavaScript body that calls `setOutcome` and declares its own `complete` | `VF-IMP-005` | Rename the script's `complete`. Elsa 4 reserves it for the returned completion form |
 | Byte and stream helpers (`bytesToString`, `bytesToBase64`, `streamToBytes`, …) | `VF-IMP-005` | Move the conversion into an activity. Binary data is not a JSON value |
-| `getConfig(…)`, `getConfiguration(…)`, definition and instance-name readers, `getLastResult()` | `VF-IMP-005` | Pass the value in as a workflow input, or capture the producing output into a variable |
+| `getConfig(…)`, `getConfiguration(…)`, definition and instance-name readers, `getLastResult()` | `VF-IMP-005` | Pass the value in as a workflow input, or capture the producing output into a variable. A host that rebuilt one of them as a prefixed host function can declare it replaces the name (`ReplacesGlobalFunctions`) instead |
 | `setVariable`, `set{Name}(…)`, mutating a value read from the workflow, in an input expression | `VF-IMP-005` | Move the assignment into a Set Variable activity, or into a RunJavaScript, whose script can set variables. Elsa 4 input expressions only read |
 | The same in a RunJavaScript body of a reusable workflow; a member mutation through a variable alias, local helper or loop; passing workflow state or nested callbacks to opaque code; dynamic code or engine-global exposure; executing a generator that can yield a workflow-owned value | `VF-IMP-005` | Return the value from the script and capture the result. A step cannot write a reusable workflow's variables yet (#4805). Opaque execution and generator ownership exposure are refused conservatively when their read-only behavior cannot be established; a refusal does not claim they definitely mutate the value. Pure local helper reads/returns and mutations of independent local copies remain convertible |
 | `setVariable('x', v)` for a variable the workflow does not declare (Elsa 3 created it on its first write) | `ELS3-SETTER-UNDECLARED-VARIABLE` | Declare the variable in the Elsa 3 workflow |
@@ -324,14 +325,11 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | A script that declares its own `args` or `variables` around a converted read, a Liquid loop variable named `variables`, or a Liquid input or output named `variables` | `VF-IMP-002` | Rename the script's own name, or the input or output (#3296) |
 | A variable or input whose accessor is a built-in name (`CorrelationId`) | `VF-IMP-002` | Rename it |
 | lodash `_`, `moment`, CLR globals, Elsa 3 `args` | `VF-IMP-005` | Rewrite with plain JavaScript and declared reads |
-| Any other undeclared function | `VF-IMP-005` | Replace it with plain JavaScript, or move it into an activity |
+| Any other undeclared function | `VF-IMP-005` | If the host rebuilt it for Elsa 4, register it as a prefixed host function that declares the name it replaces (`ReplacesGlobalFunctions`); otherwise replace it with plain JavaScript, or move it into an activity |
 | Syntax that only parses in sloppy mode: `with`, a legacy octal literal such as `010`, duplicate parameter names, `delete` of a variable, a reserved word such as `let`, `static` or `yield` as a name | `VF-IMP-007` | Rewrite it without that syntax (write `0o10` or `8` for an octal literal). Elsa 4 runs JavaScript in strict mode |
 | An assignment to a name the script never declares (`total = 1`) | `VF-IMP-007` | Declare it with `let` first. Elsa 3 created a global; Elsa 4's strict mode fails |
 | `this` or `arguments` outside a function | `VF-IMP-007` | Read the value through `getVariable`, `getInput` or a local variable |
 | Changing `arguments[i]`, or a parameter, in a function that reads `arguments` | `VF-IMP-007` | Copy the value into a local `let` variable and change that. Elsa 3 kept them linked; Elsa 4 does not |
-
-A workflow that genuinely needs the current time or a fresh unique value cannot migrate until Elsa 4 has an explicit
-capability for them (#3026). Elsa 4 deliberately strips them from expressions to keep them deterministic.
 
 Known differences that convert without a diagnostic, because they depend on how the script is called or on the data:
 - `this` in a function called without a receiver was Elsa 3's global object; in Elsa 4 it is `undefined`.
