@@ -1,3 +1,5 @@
+import type { ActivityContractTypeCapability } from "./activityDefinitionTypes";
+import { typeAllowsNull } from "./typeNullability";
 import { StatusChip, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import {
   useCallback,
@@ -73,6 +75,7 @@ export function ActivityDefinitionTestRunDialog({
   publishedRunAvailability = null,
   definitionLabel,
   inputEditors,
+  typeCapabilities = [],
   prepareExactRevision,
   onFocusDiagnostic,
   onClose,
@@ -85,6 +88,7 @@ export function ActivityDefinitionTestRunDialog({
   publishedRunAvailability?: "unavailable" | "unverified" | null;
   definitionLabel: string;
   inputEditors: StudioWorkflowRunInputEditorContribution[];
+  typeCapabilities?: readonly ActivityContractTypeCapability[];
   expressionEditors: StudioExpressionEditorContribution[];
   prepareExactRevision(onPhase: (phase: "saving" | "validating") => void): Promise<PreparedActivityTestRunRevision | null>;
   onFocusDiagnostic(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
@@ -244,7 +248,7 @@ export function ActivityDefinitionTestRunDialog({
       contractInputs,
       inputDrafts,
       inputEditors,
-      failedEditorKeys);
+      failedEditorKeys, typeCapabilities);
     const contributionFailureKeys = Object.keys(parsed.contributionFailures ?? {});
     if (contributionFailureKeys.length > 0) {
       setFailedEditorKeys(current => new Set([...current, ...contributionFailureKeys]));
@@ -376,7 +380,7 @@ export function ActivityDefinitionTestRunDialog({
                         }}
                       >
                         <option value="Absent">{contractInput.default ? "Use default" : "Omit"}</option>
-                        <option value="Null" disabled={!contractInput.isNullable}>Send null</option>
+                        <option value="Null" disabled={!typeAllowsNull(contractInput.type, typeCapabilities)}>Send null</option>
                         <option value="Value">Enter a value</option>
                       </select>
                     </StudioField>

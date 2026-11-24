@@ -1,3 +1,6 @@
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Core.Services;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Activities.Bpmn.Core;
@@ -152,14 +155,14 @@ internal static class BpmnAuthoredDirectProjection
         return value.TryGetProperty("claimRequired", out var required) && required.ValueKind == JsonValueKind.True;
     }
 
-    internal static WorkflowExecutableInputContract InputContract(WorkflowDefinitionVersion version)
+    internal static WorkflowExecutableInputContract InputContract(WorkflowDefinitionVersion version, IWellKnownTypeRegistry? types = null, IVariableTypeDescriptorCatalog? descriptors = null)
     {
         var inputs = ReadState(version)?.Inputs ?? throw new BpmnModelValidationException("The authored workflow inputs are missing.");
         return new(WorkflowExecutableInputContract.CurrentVersion, inputs.Select(input =>
         {
             if (!string.IsNullOrWhiteSpace(input.DefaultSyntax) && input.DefaultSyntax != "Literal")
                 throw new BpmnModelValidationException($"Workflow input '{input.Name}' supports only a literal default.");
-            return new WorkflowDeclaredInput(input.Name, input.Type, input.IsRequired, input.DefaultValue, input.IsNullable);
+            return new WorkflowDeclaredInput(input.Name, input.Type, input.IsRequired, input.DefaultValue, NullPolicyDefaults.AcceptsNull(input.Type, types, descriptors));
         }).ToArray());
     }
 

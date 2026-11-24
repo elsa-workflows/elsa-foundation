@@ -8,4 +8,5 @@ public interface IActivityExecutionContext
     CancellationToken CancellationToken { get; }
     bool DefaultOnNull => false;
     bool UndefinedAsNull => false;
+    Elsa.Expressions.Core.Contracts.IExecutionWarningSink? Warnings => null;
 }

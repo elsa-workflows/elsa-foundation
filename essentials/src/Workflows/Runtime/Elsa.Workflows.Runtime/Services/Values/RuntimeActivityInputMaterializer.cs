@@ -58,7 +58,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
         _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor, _wellKnownTypeRegistry);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
         _structurePolicies = IndexStructurePolicies(structurePolicies);
     }
@@ -101,7 +101,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _inputBindingResolver = inputBindingResolver;
         _valueConversionExecutor = new RuntimeValueConversionExecutor();
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor, wellKnownTypeRegistry: _wellKnownTypeRegistry);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -117,7 +117,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _valueConversionExecutor = new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator: null, externalPayloadStore: externalPayloadStore, valueConversionExecutor: _valueConversionExecutor, wellKnownTypeRegistry: _wellKnownTypeRegistry);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -135,7 +135,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _valueConversionExecutor = new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor, _wellKnownTypeRegistry);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -155,7 +155,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
         _externalPayloadStore = externalPayloadStore;
         _valueConversionExecutor = valueConversionExecutor;
-        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor, _wellKnownTypeRegistry);
         _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
     }
 
@@ -325,6 +325,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                     JsonSerializer.SerializeToElement(materialized, materialized.GetType()),
                     expressionPolicy);
             return await ApplyDestinationStorageAsync(
+                node.ExecutableNodeId,
                 invocationId,
                 input,
                 ApplyConversionPlan(binding, envelope),
@@ -391,6 +392,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 projected.ExternalReference,
                 effectivePolicy));
         return await ApplyDestinationStorageAsync(
+            node.ExecutableNodeId,
             invocationId,
             input,
             retyped,
@@ -431,7 +433,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 value = ValueEnvelope.Absent(binding.TargetType, effectivePolicy);
                 break;
             case RuntimeReadSelectionOutcome.Null:
-                if (!input.IsNullable)
+                if (!input.IsNullable && resolutionContext.Executable?.ValuePolicies.DefaultOnNull != true)
                     throw RuntimeReadSelectionException.Null(binding, node.ExecutableNodeId, selected.SegmentIndex);
                 value = ValueEnvelope.Null(binding.TargetType, effectivePolicy);
                 break;
@@ -452,6 +454,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         }
 
         return await ApplyDestinationStorageAsync(
+            node.ExecutableNodeId,
             invocationId,
             input,
             value,
@@ -486,6 +489,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     }
 
     private async ValueTask<ValueEnvelope> ApplyDestinationStorageAsync(
+        string nodeId,
         string invocationId,
         ActivityInputContract input,
         ValueEnvelope value,
@@ -495,6 +499,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         CancellationToken cancellationToken,
         string? fallbackStorageProfile = null)
     {
+        value = ValidatePresence(input, value, nodeId, resolutionContext);
         return await _externalEnvelopeStorage.RewriteAsync(
             new RuntimeExternalEnvelopeRewriteRequest(
                 resolutionContext.WorkflowExecutionId,
@@ -524,11 +529,10 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         var path = ResolveProjectionPath(binding, node.ExecutableNodeId, resolutionContext);
         payload = RuntimeExternalProjection.Apply(payload, path, input.Key, node.ExecutableNodeId);
 
-        if (payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
-            return ValueEnvelope.Null(binding.ConversionPlan?.TargetType ?? binding.TargetType, effectivePolicy);
-
-        var projected = ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, payload.Clone(), effectivePolicy);
-        var converted = ApplyConversionPlan(binding, projected);
+        var projected = payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+            ? ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, effectivePolicy)
+            : ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, payload.Clone(), effectivePolicy);
+        var converted = ValidatePresence(input, ApplyConversionPlan(binding, projected), node.ExecutableNodeId, resolutionContext);
         return await _externalEnvelopeStorage.RewriteAsync(
             new RuntimeExternalEnvelopeRewriteRequest(
                 resolutionContext.WorkflowExecutionId,
@@ -560,6 +564,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             ? ValueEnvelope.Null(source.Type, effectivePolicy)
             : ValueEnvelope.Inline(source.Type, payload, effectivePolicy);
         return await ApplyDestinationStorageAsync(
+            node.ExecutableNodeId,
             invocationId,
             input,
             ApplyConversionPlan(binding, conversionSource),

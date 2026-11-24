@@ -1,3 +1,4 @@
+import { typeAllowsNull } from "./typeNullability";
 import type {
   ArgumentType,
   ArgumentValue,
@@ -184,8 +185,8 @@ export function parseWorkflowInputDefault(input: WorkflowInput, draft: string, e
     if (!hasSafeJsonNumbers(draft)) return { error: "Unsafe JSON number." };
     try {
       const value = JSON.parse(draft) as unknown;
-      if (input.type.collectionKind !== "Single" && !Array.isArray(value)) return { error: "Enter an array." };
-      if (value === null && (input.isRequired || !input.isNullable)) return { error: "Null requires optional nullable." };
+      if (value !== null && input.type.collectionKind !== "Single" && !Array.isArray(value)) return { error: "Enter an array." };
+      if (value === null && !typeAllowsNull(input.type)) return { error: "This type does not accept null." };
       return { value };
     } catch {
       return { error: "Invalid JSON." };
@@ -258,7 +259,6 @@ export function createInput(options: { name: string; alias?: string; storageDriv
     uiHint: defaultInputUiHint,
     storageDriverType: options.storageDriver ?? null,
     isRequired: false,
-    isNullable: false
   };
 }
 
@@ -281,7 +281,6 @@ export function createOutput(options: { name: string; alias?: string }): Workflo
     displayName: options.name,
     description: "",
     category: "",
-    isNullable: false
   };
 }
 

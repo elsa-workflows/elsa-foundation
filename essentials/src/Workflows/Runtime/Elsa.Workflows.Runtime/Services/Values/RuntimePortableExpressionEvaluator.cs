@@ -1,3 +1,4 @@
+using Elsa.Serialization.Core;
 using System.Text.Json;
 using Elsa.Expressions.Core.Constants;
 using Elsa.Expressions.Core.Contracts;
@@ -6,6 +7,7 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
 
@@ -17,7 +19,8 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 internal sealed class RuntimePortableExpressionEvaluator(
     IPortableExpressionEvaluator? portableExpressionEvaluator,
     IExternalPayloadStore? externalPayloadStore,
-    IRuntimeValueConversionExecutor? valueConversionExecutor = null)
+    IRuntimeValueConversionExecutor? valueConversionExecutor = null,
+    IWellKnownTypeRegistry? wellKnownTypeRegistry = null)
 {
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
 
@@ -72,7 +75,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
             // parameters and nothing else.
             fallback = expression.VariableReadFallback is null
                 ? null
-                : await RuntimeVariableReadFallback.LoadAsync(resolutionContext.VisibleVariables, externalPayloadStore, cancellationToken);
+                : await RuntimeVariableReadFallback.LoadAsync(resolutionContext.VisibleVariables, externalPayloadStore, cancellationToken, wellKnownTypeRegistry);
             request = new ExpressionEvaluationRequest(definition, parameters.Values, fallback, cancellationToken)
             {
                 Warnings = warnings,
@@ -406,7 +409,12 @@ internal sealed class RuntimePortableExpressionEvaluator(
         context.VariableReadRecorder?.Record(envelope);
         // Spec 1222 FR-006: a script reads a declared variable with no value as JSON null, never undefined.
         if (binding.IsVariablesSurface && envelope.Presence == ValuePresence.Absent && envelope.Policy.Lifecycle != DurableValueLifecycle.None)
-            return new PortableExpressionParameter(JsonSerializer.SerializeToElement<object?>(null), envelope.Policy);
+        {
+            var value = envelope.Type.CollectionKind == CollectionKind.Single && NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, wellKnownTypeRegistry, out var typeDefault)
+                ? JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType())
+                : JsonSerializer.SerializeToElement<object?>(null);
+            return new PortableExpressionParameter(value, envelope.Policy);
+        }
         return new PortableExpressionParameter(
             await ReadPersistableEnvelopeAsync(envelope, parameterName, nodeId, inputName, cancellationToken, binding.VariableKey),
             envelope.Policy);

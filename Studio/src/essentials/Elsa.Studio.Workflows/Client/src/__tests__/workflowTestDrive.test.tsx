@@ -456,7 +456,7 @@ describe("workflow Test Run setup", () => {
   it("retains compiled defaults and restores omission after an explicit override", async () => {
     publishingMocks.getOptions.mockResolvedValue({
       options: [],
-      inputContract: { version: 1, inputs: [{ name: "customerId", type: { alias: "String", collectionKind: "Single" }, isRequired: true, defaultValue: "default-customer" }] }
+      inputContract: { version: 1, inputs: [{ name: "customerId", type: { alias: "String", collectionKind: "Single" }, isRequired: false, defaultValue: "default-customer" }] }
     });
     const capturedInputs = vi.fn();
     const onStart = vi.fn(async (_snapshot: WorkflowDraft, inputs: WorkflowExecutionInputs) => {

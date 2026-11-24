@@ -868,3 +868,4 @@ Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.DefaultOnNull.get -
 Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.DefaultOnNull.init -> void
 Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.UndefinedAsNull.get -> bool
 Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext.UndefinedAsNull.init -> void
+Elsa.Activities.Runtime.Core.Contracts.IActivityExecutionContext.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?

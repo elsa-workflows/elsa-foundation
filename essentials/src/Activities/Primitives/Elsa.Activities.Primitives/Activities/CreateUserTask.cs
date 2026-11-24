@@ -21,11 +21,11 @@ public sealed class CreateUserTask(IUserTaskRuntime tasks) : StatefulActivity<Us
 {
     public const string ActivityType = UserTaskProtocol.ActivityType;
 
-    [ActivityInput(DefaultValue = "User task", DefaultSyntax = "Literal"), Required] public string Title { get; set; } = "User task";
+    [ActivityInput(DefaultValue = "User task", DefaultSyntax = "Literal")] public string Title { get; set; } = "User task";
     [ActivityInput] public string? Description { get; set; }
     [ActivityInput(UIHint = "user-task-user")] public string? AssigneeId { get; set; }
     [ActivityInput(UIHint = "user-task-group")] public string? GroupId { get; set; }
-    [ActivityInput(UIHint = "user-task-actions", DefaultValue = "[\"Approve\",\"Reject\"]", DefaultSyntax = "Object"), Required] public ICollection<string> Actions { get; set; } = ["Approve", "Reject"];
+    [ActivityInput(UIHint = "user-task-actions", DefaultValue = "[\"Approve\",\"Reject\"]", DefaultSyntax = "Object")] public ICollection<string> Actions { get; set; } = ["Approve", "Reject"];
     [ActivityInput(DefaultValue = "[]", DefaultSyntax = "Object")] public ICollection<string> OptionalFormActions { get; set; } = [];
     [ActivityInput(UIHint = "user-task-form")] public string? FormId { get; set; }
     [ActivityInput(UIHint = "user-task-form-version")] public string? FormVersion { get; set; }

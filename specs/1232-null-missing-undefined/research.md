@@ -222,3 +222,10 @@ spec approval or implementation.
 - **Decision**: to verify in T031 against Elsa 3 3.6.3 `InputDefinition`. If Elsa 3 has no enforced required flag, the
   converter maps every input as optional. Nullability is not mapped: it follows the converted type (Q8), so an
   omitted `Any` input reads `null` and an omitted `Boolean` input reads `false`.
+
+### R-11 implementation verification
+
+Elsa 3 tag 3.6.3 [InputDefinition](https://github.com/elsa-workflows/elsa-core/blob/3.6.3/src/modules/Elsa.Workflows.Core/Models/InputDefinition.cs)
+and its [ArgumentDefinition base](https://github.com/elsa-workflows/elsa-core/blob/3.6.3/src/modules/Elsa.Workflows.Core/Models/ArgumentDefinition.cs)
+contain neither requiredness nor declared-default metadata. T031 therefore maps converted inputs optional. This verifies
+the approved R-11 branch; it introduces no new choice.

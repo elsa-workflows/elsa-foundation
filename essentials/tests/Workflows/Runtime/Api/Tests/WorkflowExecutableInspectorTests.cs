@@ -1054,6 +1054,8 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Equal(new TypeReference("Int32"), alpha.Type);
         Assert.True(alpha.IsRequired);
         Assert.Equal(42, alpha.DefaultValue!.Value.GetInt32());
+        Assert.Equal(contract.Inputs.First(input => input.Name == "alpha").IsNullable, alpha.SupportsNull);
+        Assert.Equal(contract.Inputs.First(input => input.Name == "zeta").IsNullable, detail.InputContract.Inputs.Last().SupportsNull);
     }
 
     [Fact]

@@ -208,6 +208,11 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
                 return new ScriptValueWrite(null, []);
 
             var marked = Mark(value);
+            if (IsUndefinedMarker(marked.Root))
+            {
+                Forget(marked.Markers);
+                return new ScriptValueWrite(null, []);
+            }
             var losses = new List<JavaScriptPrecisionLoss>();
             var buffer = new ArrayBufferWriter<byte>();
             // Plain .NET over JSON: no script code runs here, so its memory is not the script's.
@@ -364,9 +369,11 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             // statement, so the bridge's work stays apart from the script's in the evaluation limits.
             return new ClrFunction(_engine, "replacer", (holder, arguments) =>
             {
-                var value = arguments.At(1);
-                if (value.IsUndefined() || holder is ObjectInstance array && array.IsArray() &&
+                if (holder is ObjectInstance array && array.IsArray() &&
                     array.GetOwnProperty(arguments.At(0)) == PropertyDescriptor.Undefined && arguments.At(0).ToString() != "")
+                    return new JsString(UndefinedMarkerText);
+                var value = UnboxNumber(arguments.At(1));
+                if (value.IsUndefined())
                     return new JsString(UndefinedMarkerText);
                 if (value.IsNumber() && !double.IsFinite(value.AsNumber()))
                     return infinity.Call(JsValue.Undefined, [value]);
@@ -410,13 +417,18 @@ internal sealed class CopyComparePatchValueBridge(IOptions<FeatureOptions> optio
             var infinity = InfinityMarker();
             return _infinityReplacer = new ClrFunction(_engine, "replacer", (holder, arguments) =>
             {
-                var value = arguments.At(1);
-                if (value.IsUndefined() || holder is ObjectInstance array && array.IsArray() &&
+                if (holder is ObjectInstance array && array.IsArray() &&
                     array.GetOwnProperty(arguments.At(0)) == PropertyDescriptor.Undefined && arguments.At(0).ToString() != "")
+                    return new JsString(UndefinedMarkerText);
+                var value = UnboxNumber(arguments.At(1));
+                if (value.IsUndefined())
                     return new JsString(UndefinedMarkerText);
                 return value.IsNumber() && !double.IsFinite(value.AsNumber()) ? infinity.Call(JsValue.Undefined, [value]) : value;
             });
         }
+
+        private static JsValue UnboxNumber(JsValue value) =>
+            value is IJsPrimitive { Type: Types.Number } ? JsNumber.Create(TypeConverter.ToNumber(value)) : value;
 
         private bool IsUnchanged(ObjectInstance instance)
         {

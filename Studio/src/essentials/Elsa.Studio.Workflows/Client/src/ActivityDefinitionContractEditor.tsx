@@ -1,3 +1,4 @@
+import { typeAllowsNull } from "./typeNullability";
 import { Fragment, forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, X } from "lucide-react";
 import { AdvancedSection, TechnicalDetails, StudioFactList, StudioTabs, StudioTabPanel, StudioField } from "@elsa-workflows/studio-ui";
@@ -342,7 +343,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
           <td data-label="Collection"><ContractCollectionCell member={entry.member} type={findContractType(capabilities, entry.member.type.alias)} readOnly={readOnly || capabilitiesUnavailable} onChange={next => requestMemberChange("input", entry.member, next, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))} /></td>
           <td data-label="Default"><button type="button" className="ad-contract-default-summary" aria-label={`${defaultStatus ? `${defaultStatus}: ` : ""}Edit ${name} default`} onClick={() => selected ? undefined : selectMember(entry)}><span>{defaultSummary(entry.member.default)}</span>{defaultStatus ? <span className="ad-contract-default-status">{defaultStatus}</span> : null}</button></td>
           <td data-label="Storage"><StorageCell member={entry.member} type={findContractType(capabilities, entry.member.type.alias)} capabilities={capabilities} readOnly={readOnly || capabilitiesUnavailable} onChange={next => requestMemberChange("input", entry.member, next, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))} /></td>
-          <td data-label="Required" className="wf-properties-cell-center"><input data-contract-field="isRequired" type="checkbox" aria-label={`${name} required`} checked={entry.member.isRequired} onChange={event => requestMemberChange("input", entry.member, { ...entry.member, isRequired: event.target.checked }, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))} disabled={readOnly || capabilitiesUnavailable} /></td>
+          <td data-label="Required" className="wf-properties-cell-center"><input data-contract-field="isRequired" type="checkbox" aria-label={`${name} required`} checked={entry.member.isRequired} onChange={event => requestMemberChange("input", entry.member, { ...entry.member, isRequired: event.target.checked }, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))} disabled={readOnly || capabilitiesUnavailable || entry.member.default !== null} aria-describedby={entry.member.default !== null ? `contract-input-${entry.member.referenceKey}-default-hint` : undefined} />{entry.member.default !== null ? <small id={`contract-input-${entry.member.referenceKey}-default-hint`}>A member with a default is optional</small> : null}{entry.member.default !== null && entry.member.isRequired ? <button type="button" disabled={readOnly || capabilitiesUnavailable} onClick={() => requestMemberChange("input", entry.member, { ...entry.member, isRequired: false }, accepted => onChange({ ...contract, inputs: contract.inputs.map(item => item === entry.member ? accepted : item) }))}>Make optional</button> : null}</td>
           <WorkflowPropertyRemoveCell label={`Remove input ${name}`} disabled={readOnly} onRemove={onRemove} />
         </tr> : entry.kind === "output" ? <tr key={`${entry.id}-row`} data-contract-row-kind="output" data-contract-kind="output" data-contract-index={entry.index} data-contract-reference-key={entry.member.referenceKey}>
           <td data-label="Name"><div className="ad-contract-name-cell"><StagedNameField compact field="name" value={entry.member.name} readOnly={readOnly || capabilitiesUnavailable} inputRef={focusedNameRef} onApply={value => requestMemberChange("output", entry.member, { ...entry.member, name: value }, accepted => onChange({ ...contract, outputs: contract.outputs.map(item => item === entry.member ? accepted : item) }))} />{detailToggle}</div></td>
@@ -457,7 +458,7 @@ function ContractTypeCell<T extends ValueContractMember>({ member, capabilities,
     if (type && capabilities) onChange(selectTypeForMember(member, type, capabilities));
   }} disabled={readOnly || authorableTypes.length === 0}>
     {!known ? <option value={member.type.alias} disabled>{member.type.alias} · unavailable</option> : null}
-    {authorableTypes.map(type => <option key={type.alias} value={type.alias} disabled={!type.supportsNull && member.isNullable}>{type.displayName}{!type.supportsNull && member.isNullable ? " · first disable Allow null" : ""}</option>)}
+    {authorableTypes.map(type => <option key={type.alias} value={type.alias}>{type.displayName}</option>)}
   </select>;
 }
 
@@ -528,13 +529,6 @@ function InputEditor({ member, index, selected, capabilities, categories, expres
       <DefaultEditor member={member} type={type} expressions={expressionChoices} readOnly={readOnly} onStatusChange={onStatusChange} onChange={onChange} />
     </div>
     } presentation={<PresentationFields member={member} categories={categories} readOnly={readOnly} onChange={onChange} />} advanced={<div className="ad-contract-fields">
-      <NullabilityField
-        member={member}
-        type={type}
-        readOnly={readOnly}
-        preventsTightening={member.default?.syntax === "Literal" && member.default.value === null}
-        onChange={onChange}
-      />
       <ReferenceKeyField value={member.referenceKey} readOnly={readOnly} onApply={onReferenceKeyChange} />
     </div>} />
   </section>;
@@ -564,7 +558,6 @@ function OutputEditor({ member, valueEditor, index, selected, capabilities, cate
     </div>
     <AdvancedSection label="Presentation"><PresentationFields member={member} categories={categories} readOnly={readOnly} onChange={onChange} /></AdvancedSection>
     <AdvancedSection label="Advanced"><div className="ad-contract-fields">
-      <NullabilityField member={member} type={type} readOnly={readOnly} onChange={onChange} />
       <ReferenceKeyField value={member.referenceKey} readOnly={readOnly} onApply={onReferenceKeyChange} />
     </div></AdvancedSection>
   </section>;
@@ -588,22 +581,6 @@ function OutcomeEditor({ member, index, selected, providerRequired, readOnly, on
       <ReferenceKeyField value={member.referenceKey} readOnly={readOnly || providerRequired} onApply={onReferenceKeyChange} />
     </div></AdvancedSection>
   </section>;
-}
-
-function NullabilityField<T extends ActivityInputContract | ActivityOutputContract>({ member, type, readOnly, preventsTightening = false, onChange }: {
-  member: T;
-  type?: ActivityContractTypeCapability;
-  readOnly: boolean;
-  preventsTightening?: boolean;
-  onChange(member: T): void;
-}) {
-  const nullDefaultRequiresNullability = member.isNullable && preventsTightening;
-  const description = !type?.supportsNull
-    ? "This type does not allow null."
-    : nullDefaultRequiresNullability
-      ? "Remove or change the default value of null before turning this off."
-      : "A required value may still be null.";
-  return <label className="ad-contract-check"><input data-contract-field="isNullable" type="checkbox" checked={member.isNullable} onChange={event => onChange({ ...member, isNullable: event.target.checked })} disabled={readOnly || !type?.supportsNull || nullDefaultRequiresNullability} /><span>Allow null</span><small>{description}</small></label>;
 }
 
 function DefaultEditor({ member, type, expressions, readOnly, onStatusChange, onChange }: {
@@ -631,7 +608,7 @@ function DefaultEditor({ member, type, expressions, readOnly, onStatusChange, on
   const expressionAvailable = expressions.length > 0 || Boolean(currentExpression);
   const dirty = JSON.stringify(candidate) !== JSON.stringify(member.default);
   const primitiveEditor = primitiveDefaultEditor(type, member.type.collectionKind);
-  const supportsNull = member.isNullable && type?.supportsNull === true;
+  const supportsNull = typeAllowsNull(member.type, type ? [type] : []);
   const nullMode = mode === "literal" && candidate?.value === null;
   const simpleLiteral = mode === "literal" && candidate && primitiveEditor !== null && primitiveLiteralMatches(primitiveEditor, candidate.value, supportsNull);
   const selectedMode = nullMode ? "null" : mode;
@@ -677,7 +654,7 @@ function DefaultEditor({ member, type, expressions, readOnly, onStatusChange, on
       : null}
     {mode === "expression" && candidate ? <ExpressionDefaultFields value={candidate} expressions={expressions} readOnly={readOnly} onChange={updateCandidate} /> : null}
     {!expressionAvailable ? <div className="ad-inline-status" role="status">No authorized expression syntax is advertised, so Studio does not invent one.</div> : null}
-    <button type="button" onClick={() => onChange({ ...member, default: candidate })} disabled={readOnly || !dirty || !valid}>Apply default</button>
+    <button type="button" onClick={() => onChange({ ...member, default: candidate, isRequired: candidate === null ? member.isRequired : false })} disabled={readOnly || !dirty || !valid}>Apply default</button>
   </div>;
 }
 
@@ -895,7 +872,6 @@ function behavioralContractFields(member: ContractMember) {
       name: member.name,
       type: member.type,
       isRequired: member.isRequired,
-      isNullable: member.isNullable,
       storageDriverKey: member.storageDriverKey,
       durability: member.durability,
       ...("default" in member ? { default: member.default } : {})

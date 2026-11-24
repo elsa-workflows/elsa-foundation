@@ -13,7 +13,7 @@ namespace Elsa3.Mapping.Tests.Support;
 /// </summary>
 internal static class ConversionServices
 {
-    public static ServiceProvider Create(IActivityDefinitionLookup catalog, Elsa3MappingFeature? feature = null)
+    public static ServiceProvider Create(IActivityDefinitionLookup catalog, Elsa3MappingFeature? feature = null, Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(catalog);
@@ -24,6 +24,7 @@ internal static class ConversionServices
         // The converter checks converted scripts with the JavaScript strategy (the feature depends on JavaScriptExpressions).
         new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services);
         (feature ?? new Elsa3MappingFeature()).ConfigureServices(services);
+        configure?.Invoke(services);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 

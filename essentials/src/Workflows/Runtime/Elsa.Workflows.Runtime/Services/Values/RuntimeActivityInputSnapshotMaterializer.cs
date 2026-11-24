@@ -36,12 +36,17 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
         if (defaultMaterializer is not null &&
             ((executableNode.ActivityContract?.Inputs.Count == 0 && executableNode.InputBindings.Count == 0) ||
              defaultMaterializer.UsesExecutionIndependentBindings(executableNode)))
-            return await inputMaterializer.MaterializeSnapshotAsync(
+        {
+            var literalWarnings = new ExecutionWarningCollector();
+            var literalSnapshot = await inputMaterializer.MaterializeSnapshotAsync(
                 executableNode,
                 state.InvocationId,
-                new RuntimeInputBindingResolutionContext(state.Execution.WorkflowExecutionId, state.InvocationId, state, executable: executable),
+                new RuntimeInputBindingResolutionContext(state.Execution.WorkflowExecutionId, state.InvocationId, state, executable: executable)
+                { Warnings = literalWarnings },
                 materializedAt,
                 cancellationToken);
+            return literalWarnings.Warnings.Count == 0 ? literalSnapshot : literalSnapshot with { Warnings = literalWarnings.Warnings };
+        }
 
         var resolvedDurableValueStateStore = durableValueStateStore
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires a durable value state store.");

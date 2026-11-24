@@ -1,3 +1,7 @@
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Core.Services;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using Elsa.Activities.Graph.Runtime.Models;
@@ -14,6 +18,7 @@ public delegate ValueTask<object?> GraphActivityExpressionEvaluator(
 internal delegate ValueTask<object?> GraphActivityTypedExpressionEvaluator(
     GraphActivityExpression expression,
     JsonElement expectedType,
+    string target,
     CancellationToken cancellationToken);
 
 /// <summary>Read-only descendant access to public inputs captured by the nearest graph boundary.</summary>
@@ -57,6 +62,41 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         _storageDrivers = storageDrivers;
     }
 
+    private IWellKnownTypeRegistry? _types;
+    private IVariableTypeDescriptorCatalog? _typeDescriptors;
+    internal GraphActivityScope WithTypes(IWellKnownTypeRegistry? types, IVariableTypeDescriptorCatalog? descriptors)
+    {
+        _types = types;
+        _typeDescriptors = descriptors;
+        return this;
+    }
+
+    private object? VariableInitialValue(GraphActivityVariableDescriptor variable)
+    {
+        var type = JsonSerializer.Deserialize<TypeReference>(variable.Type, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            ?? throw new InvalidOperationException("A graph variable requires a type.");
+        if (NullPolicyDefaults.AcceptsNull(type, _types, _typeDescriptors)) return null;
+        object? value;
+        if ((_types is not null && _types.TryGetTypeOrDefault(type.Alias, out var clrType)
+            ? NullPolicyDefaults.TryGetTypeDefault(clrType, out value)
+            : NullPolicyDefaults.TryGetTypeDefault(type.Alias, out value))) return value;
+        throw new InvalidOperationException($"VF-ACT-003: Variable '{variable.Name}' requires a declared default.");
+    }
+
+    private IReadOnlyDictionary<string, ValueEnvelope> _inputPolicies = new Dictionary<string, ValueEnvelope>();
+    private readonly Dictionary<string, ValueProtectionPolicy> _expressionPolicies = new(StringComparer.Ordinal);
+    internal GraphActivityScope WithInputPolicies(IReadOnlyDictionary<string, ValueEnvelope>? policies)
+    {
+        _inputPolicies = policies ?? new Dictionary<string, ValueEnvelope>();
+        return this;
+    }
+    internal void RecordExpressionPolicy(string target, IEnumerable<DurableValueState> rows)
+    {
+        var policies = rows.Select(DurableValuePolicies.Read).ToArray();
+        if (policies.Length != 0)
+            _expressionPolicies[target] = policies.Skip(1).Aggregate(policies[0], (current, minimum) => ValuePolicyCombiner.Combine(current, minimum, target));
+    }
+
     public ActivityExecutionScope ExecutionScope { get; }
     private bool _outputsCaptured;
 
@@ -78,7 +118,7 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             descriptors,
             effectiveInputs,
             requiredReferenceKeys,
-            (expression, _, token) => evaluateExpression(expression, token),
+            (expression, _, target, token) => evaluateExpression(expression, token),
             capturedAt,
             cancellationToken);
     }
@@ -117,7 +157,7 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             }
             else if (descriptor.Default is not null)
             {
-                value = await evaluateExpression(descriptor.Default, descriptor.Type, cancellationToken);
+                value = await evaluateExpression(descriptor.Default, descriptor.Type, $"Graph input '{descriptor.ReferenceKey}'", cancellationToken);
             }
             else if (requiredReferenceKeys.Contains(descriptor.ReferenceKey))
             {
@@ -155,7 +195,7 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         ArgumentNullException.ThrowIfNull(evaluateExpression);
         return await InitializeVariablesAsync(
             descriptors,
-            (expression, _, token) => evaluateExpression(expression, token),
+            (expression, _, target, token) => evaluateExpression(expression, token),
             capturedAt,
             cancellationToken);
     }
@@ -177,8 +217,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         {
             cancellationToken.ThrowIfCancellationRequested();
             var value = descriptor.InitialValue is null
-                ? null
-                : await evaluateExpression(descriptor.InitialValue, descriptor.Type, cancellationToken);
+                ? VariableInitialValue(descriptor)
+                : await evaluateExpression(descriptor.InitialValue, descriptor.Type, $"Graph variable '{descriptor.ReferenceKey}'", cancellationToken);
             staged.Add(
                 descriptor.ReferenceKey,
                 await NewStateAsync(
@@ -210,7 +250,7 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             descriptors,
             mappings,
             requiredReferenceKeys,
-            (expression, _, token) => evaluateExpression(expression, token),
+            (expression, _, target, token) => evaluateExpression(expression, token),
             capturedAt,
             cancellationToken);
     }
@@ -245,7 +285,7 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
 
             if (_outputs.ContainsKey(descriptor.ReferenceKey))
                 throw new InvalidOperationException($"Graph output '{descriptor.ReferenceKey}' has both a Set Output assignment and a boundary mapping.");
-            var value = await evaluateExpression(mapping.Source, descriptor.Type, cancellationToken);
+            var value = await evaluateExpression(mapping.Source, descriptor.Type, $"Graph output '{descriptor.ReferenceKey}'", cancellationToken);
             staged.Add(
                 descriptor.ReferenceKey,
                 await NewStateAsync(
@@ -298,6 +338,9 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         ArgumentNullException.ThrowIfNull(descriptor);
         ValidateReference(descriptor.ReferenceKey, descriptor.StorageDriverKey);
         var driver = _storageDrivers.GetRequired(descriptor.StorageDriverKey);
+        if (_variables.TryGetValue(descriptor.ReferenceKey, out var existing) && DurableValuePolicies.Read(existing).RequiresEncryption &&
+            value is not null && value is not JsonElement { ValueKind: JsonValueKind.Null })
+            throw new InvalidOperationException($"VF-ACT-005: Graph variable '{descriptor.ReferenceKey}' requires encryption before encoding.");
         var state = await NewStateAsync(
             "variable",
             descriptor.ReferenceKey,
@@ -308,6 +351,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             capturedAt,
             cancellationToken,
             boundaryVariableName: descriptor.Name);
+        if (_variables.TryGetValue(descriptor.ReferenceKey, out var previous))
+            state = DurableValuePolicies.ApplyMinimum(state, DurableValuePolicies.Read(previous), $"Graph variable '{descriptor.ReferenceKey}'");
         _variables[descriptor.ReferenceKey] = state;
         return state;
     }
@@ -338,6 +383,12 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             _ => throw new ArgumentOutOfRangeException(nameof(role), role, "Unknown graph durable-value role.")
         };
 
+        ValueProtectionPolicy? minimum = role == "input" && _inputPolicies.TryGetValue(referenceKey, out var source) ? source.Policy : null;
+        var target = $"Graph {role} '{referenceKey}'";
+        if (_expressionPolicies.TryGetValue(target, out var expressionPolicy))
+            minimum = minimum is null ? expressionPolicy : ValuePolicyCombiner.Combine(minimum, expressionPolicy, target);
+        if (minimum?.RequiresEncryption == true && value is not null && value is not JsonElement { ValueKind: JsonValueKind.Null })
+            throw new InvalidOperationException($"VF-ACT-005: {target} requires encryption before encoding.");
         var typeDescriptor = TypeDescriptor(type, storageDriverKey);
         var encoding = await storageDriver.EncodeAsync(value, typeDescriptor, cancellationToken);
         // Body nodes read graph variables by name (variables.x), and the runtime has no graph descriptor.
@@ -349,7 +400,7 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             boundaryInputName,
             boundaryVariableName);
 
-        return new DurableValueState(
+        var state = new DurableValueState(
             durableValueId,
             ExecutionScope.WorkflowExecutionId,
             durableValueId,
@@ -361,6 +412,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             sourceActivityExecutionId: ExecutionScope.OuterActivityExecutionId,
             capturedAt,
             metadata);
+        if (minimum is not null) state = DurableValuePolicies.ApplyMinimum(state, minimum, target);
+        return state;
     }
 
     private static RuntimeValueTypeDescriptor TypeDescriptor(JsonElement type, string storageDriverKey)

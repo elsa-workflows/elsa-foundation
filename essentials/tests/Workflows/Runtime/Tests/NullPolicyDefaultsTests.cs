@@ -1,10 +1,30 @@
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class NullPolicyDefaultsTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Contributed_type_nullability_is_authoritative_for_reference_types(bool supportsNull)
+    {
+        var catalog = new TestCatalog(supportsNull);
+        Assert.Equal(supportsNull, NullPolicyDefaults.AcceptsNull(new TypeReference("Acme.Reference"), null, catalog));
+        Assert.True(NullPolicyDefaults.AcceptsNull(new TypeReference("Acme.Reference", CollectionKind.Array), null, catalog));
+    }
+
+    private sealed class TestCatalog(bool supportsNull) : IVariableTypeDescriptorCatalog
+    {
+        public IEnumerable<TypeDescriptor> GetDescriptors() =>
+            [new("Acme.Reference", typeof(Uri), "Reference", "Test", "text", new HashSet<CollectionKind>(Enum.GetValues<CollectionKind>()), supportsNull, true, new HashSet<string> { "elsa.json" })];
+        public IEnumerable<IGrouping<string, TypeDescriptor>> GetDescriptorsByCategory() => GetDescriptors().GroupBy(item => item.Category);
+    }
+
     private enum TestChoice { First = 1 }
 
     [Theory]

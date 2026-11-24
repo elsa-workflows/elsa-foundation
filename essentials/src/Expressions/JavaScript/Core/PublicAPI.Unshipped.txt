@@ -292,3 +292,5 @@ const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.Com
 const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.UndefinedArrayElement = "VF-UNDEF-003" -> string!
 const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.UndefinedPropertyDropped = "VF-UNDEF-002" -> string!
 const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.UndefinedValue = "VF-UNDEF-001" -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.HasReturnStatement.get -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.HasReturnStatement.init -> void

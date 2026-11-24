@@ -428,7 +428,7 @@ public sealed class ReusableActivityDraftCommandTests
         Assert.Equal("Recovered local work", copy.PresentationLabel);
         Assert.Equal("recovered", copy.Contract.ContractSchemaVersion);
         Assert.True(Assert.Single(copy.Contract.Inputs).IsNullable);
-        Assert.False(Assert.Single(copy.Contract.Outputs).IsNullable);
+        Assert.True(Assert.Single(copy.Contract.Outputs).IsNullable); // String TYPE accepts null.
         Assert.Equal(42, copy.Layout.Single().Data.GetProperty("x").GetInt32());
         var persistedCopy = await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(copy.DraftId);
         Assert.Equal("strict", persistedCopy!.State.Options["mode"]);

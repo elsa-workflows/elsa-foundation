@@ -411,7 +411,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 executableNode,
                 executionState,
                 variableScope: null,
-                scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies);
+                scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies).WithWarnings(stepWarnings);
             stepSession = await StepVariableSessions.CreateAsync(
                 serviceProvider, scopeService, activity, executable, executableNode, executionState, durableValues: null, cancellationToken,
                 attemptId: resumeAttempt.AttemptId);
@@ -690,10 +690,10 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             return;
         }
 
-        completedState = stepWrites.Apply(completedState).WithWarnings(stepWarnings.Warnings);
+        completedState = stepWrites.Apply(completedState);
         var captureProjection = typedCompletion is null
             ? RuntimeOutputCaptureProjection.Empty
-            : await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
+            : await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().WithValuePolicies(executable.ValuePolicies, stepWarnings).ProjectAsync(
                 workItem.WorkflowExecutionId,
                 executionState.InvocationId,
                 executableNode,
@@ -704,6 +704,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
                 closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken),
                 invocation: completedState, durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>());
+        completedState = completedState.WithWarnings(stepWarnings.Warnings);
         // Spec 1221 T003: a refused write into a closed scope's variable row refuses the completion, as a frame write does.
         if (captureProjection.LostUpdateFault is { } rowLostUpdate)
         {

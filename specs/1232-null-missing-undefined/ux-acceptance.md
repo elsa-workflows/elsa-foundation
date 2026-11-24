@@ -42,3 +42,17 @@ and PR head, and retains screenshots, accessibility snapshots and traces. An ind
 screenshots, inspects the complete affected experience and records the guide's acceptance receipt on that PR.
 Failures, omissions, skips and uninspected states remain failed or incomplete. Fix and rerun the affected whole
 suites and journeys on the final head, then refresh the independent inspection before delivery is accepted.
+
+## Implementation journey
+
+`nullability defaults and execution diagnostics` extends the owned composed runner across all six desktop/narrow
+light/dark projects. It retains exact-source screenshots, accessibility snapshots, traces and `null-policies-proof.json`.
+The recovery fixture changes one newly created draft in the runner-owned disposable database into an old
+required-with-default contract, recording before/after revision and hashes. This is explicitly a legacy fixture,
+not a claim that the current API accepts that invalid declaration. No HTTP response or UI is substituted.
+
+Nullable String input controls distinguish explicit null, the text "null", an empty string and omission. The published
+Run dialog obtains nullability from its exact executable input contract through existing runtime read permission;
+its metadata loading/refusal path is included in the acceptance scope. Client-side requiredness refusals send no
+start request, and an independent API refusal verifies non-nullable null admission. Policies remain engineer JSON,
+without a Studio policy control. A locally downloadable owned-run archive is used while CI is explicitly deferred.

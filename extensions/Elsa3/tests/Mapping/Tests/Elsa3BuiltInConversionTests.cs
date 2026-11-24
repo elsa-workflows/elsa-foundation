@@ -218,7 +218,7 @@ public sealed class Elsa3BuiltInConversionTests
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [variable]));
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.All(result.Diagnostics, diagnostic => Assert.Equal(Elsa3MigrationDiagnosticSeverity.Warning, diagnostic.Severity));
+        Assert.All(result.Diagnostics.Where(diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES"), diagnostic => Assert.Equal(Elsa3MigrationDiagnosticSeverity.Warning, diagnostic.Severity));
         Assert.Equal("200", Text(Input(Node(result.Value!.State, "respond"), "StatusCode")));
         var branches = Node(result.Value.State, "parallel").Structure!.Payload.GetProperty("branches").EnumerateArray().ToArray();
         Assert.Equal(["Branch 1", "Branch 2"], branches.Select(branch => branch.GetProperty("name").GetString()));

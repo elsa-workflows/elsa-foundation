@@ -10,8 +10,8 @@ namespace Elsa3.Mapping.Tests;
 
 /// <summary>
 /// Spec 262 User Story 1 (research R-1, R-2): Elsa 3 turned an <c>undefined</c> result into <c>null</c>, while the Elsa 4
-/// binding evaluator refuses it. Converted expressions end every value that leaves them with <c>?? null</c>; they are run
-/// in the Elsa 4 evaluator and compared with the value Elsa 3 returned.
+/// binding evaluator refuses it by default. Converted definitions pin UndefinedAsNull instead of rewriting the
+/// expression; evaluation uses that pinned policy and is compared with the value Elsa 3 returned.
 /// </summary>
 public sealed class Elsa3UndefinedResultTests
 {
@@ -43,7 +43,8 @@ public sealed class Elsa3UndefinedResultTests
         // Every declared parameter (here only the variable o) reads an empty object.
         var definition = ReadExpression(Input(Node(result.Value!.State, "node"), "text"));
         var value = await PortableJavaScript.EvaluateAsync(definition,
-            definition.Parameters.Keys.ToDictionary(name => name, _ => JsonSerializer.SerializeToElement(new { })));
+            definition.Parameters.Keys.ToDictionary(name => name, _ => JsonSerializer.SerializeToElement(new { })),
+            undefinedAsNull: result.Value.State.StrategyOptions!.NullHandling!.UndefinedAsNull);
         Assert.Equal(expected, value.GetRawText());
     }
 
@@ -53,7 +54,7 @@ public sealed class Elsa3UndefinedResultTests
         var result = await ConvertTextAsync("getVariable('o').x");
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("(variables.o.x) ?? null", Source(Input(Node(result.Value!.State, "node"), "text")));
+        Assert.Equal("variables.o.x", Source(Input(Node(result.Value!.State, "node"), "text")));
     }
 
     [Fact]
@@ -62,7 +63,7 @@ public sealed class Elsa3UndefinedResultTests
         var result = await ConvertTextAsync("var greeting = 'hi'; greeting + '!'");
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("(function () {\nvar greeting = 'hi'; return (greeting + '!') ?? null\n})()", Source(Input(Node(result.Value!.State, "node"), "text")));
+        Assert.Equal("(function () {\nvar greeting = 'hi'; return greeting + '!'\n})()", Source(Input(Node(result.Value!.State, "node"), "text")));
     }
 
     [Fact]
@@ -71,7 +72,7 @@ public sealed class Elsa3UndefinedResultTests
         var result = await ConvertTextAsync("[1, 2].map(function (x) { return x * 2 })[1]");
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("([1, 2].map(function (x) { return x * 2 })[1]) ?? null", Source(Input(Node(result.Value!.State, "node"), "text")));
+        Assert.Equal("[1, 2].map(function (x) { return x * 2 })[1]", Source(Input(Node(result.Value!.State, "node"), "text")));
     }
 
     [Fact]

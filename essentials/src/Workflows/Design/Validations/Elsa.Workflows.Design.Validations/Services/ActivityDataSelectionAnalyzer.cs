@@ -1,3 +1,4 @@
+using Elsa.Expressions.Core.Contracts;
 using System.Collections.Immutable;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
@@ -25,8 +26,13 @@ internal sealed class ActivityDataSelectionAnalyzer(
     IEnumerable<IActivitySerializedShapeSource> shapeSources,
     IInlineEventPublisher events,
     IOptions<WorkflowDesignValidatorOptions> options,
-    IActivityBindingConversionPreviewer? conversionPreviewer = null) : IActivityDataSelectionAnalyzer
+    IActivityBindingConversionPreviewer? conversionPreviewer = null, IVariableTypeDescriptorCatalog? typeDescriptors = null) : IActivityDataSelectionAnalyzer
 {
+    private bool AuthoredAllowsNull(TypeReference type) => type.CollectionKind != CollectionKind.Single ||
+        (typeDescriptors?.GetDescriptors().FirstOrDefault(descriptor => descriptor.Alias == type.Alias)?.SupportsNull
+         ?? (TypeAliasConvention.IsAny(type.Alias) || type.Alias is "String" or "System.String" or
+             "JsonElement" or "System.Text.Json.JsonElement" or "JsonNode" or "System.Text.Json.Nodes.JsonNode"));
+
     public async ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(
         ActivityDataSelectionDocument document,
         ActivityDataSelectionTarget? target = null,
@@ -250,7 +256,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
                     item.ScopeId == NormalizeScope(context.Document, variable.DeclaringScopeId))?.Variable.Type ?? valueType
                 : valueType;
             definition = new("value", "Value", type, StorageDriverType: null, DisplayName: "Value", Category: null,
-                IsNullable: false, IsRequired: true);
+                IsNullable: AuthoredAllowsNull(type), IsRequired: true);
         }
         if (definition is null) return null;
         var constraints = new List<ActivityDataInputConstraint>();
@@ -316,7 +322,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
                     : new ArgumentValue(new VariableReference(input.ReferenceKey), "Input")
                 : RequestRead(context.WorkflowBoundary ? input.Name : input.ReferenceKey, binding, memberOfInput);
             return new($"input:{input.ReferenceKey}", input.DisplayName, null, value,
-                ActivityChildResultAvailability.Definite, input.Type, null, null, input.IsNullable, input.IsSensitive, input.IsCredential,
+                ActivityChildResultAvailability.Definite, input.Type, null, null, context.WorkflowBoundary ? AuthoredAllowsNull(input.Type) : input.IsNullable, input.IsSensitive, input.IsCredential,
                 binding.Path is null ? null : "LegacyRequestPath")
             { ParameterSource = context.WorkflowBoundary ? new WorkflowRequestExpressionParameterBinding(input.Name, binding.Path) : null };
         }

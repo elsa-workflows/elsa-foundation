@@ -33,6 +33,18 @@ public sealed class SimpleActivityExecutionContext(
 {
     public bool DefaultOnNull { get; private set; }
     public bool UndefinedAsNull { get; private set; }
+    public Elsa.Expressions.Core.Contracts.IExecutionWarningSink? Warnings { get; private set; } = new Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector(
+        protect: activityExecutionState?.InputSnapshot?.Values.Values.Any(ProtectsWarnings) == true ||
+                 scopedVariableEnvelopes?.Values.Any(ProtectsWarnings) == true);
+
+    private static bool ProtectsWarnings(ValueEnvelope value) => value.Policy.IsSensitive || value.Policy.RequiresEncryption ||
+        !string.IsNullOrWhiteSpace(value.Policy.RedactionMode) || !string.IsNullOrWhiteSpace(value.Policy.RetentionPolicy);
+
+    public SimpleActivityExecutionContext WithWarnings(Elsa.Expressions.Core.Contracts.IExecutionWarningSink warnings)
+    {
+        Warnings = warnings;
+        return this;
+    }
 
     /// <summary>Sets the pinned workflow choices before this context is handed to an activity.</summary>
     public SimpleActivityExecutionContext WithValuePolicies(WorkflowValuePolicies policies)
@@ -233,7 +245,7 @@ public sealed class SimpleActivityExecutionContext(
         {
             DefaultOnNull = DefaultOnNull,
             UndefinedAsNull = UndefinedAsNull
-        }.WithResolvedOperationKeys(activityExecutionState);
+        }.WithWarnings(Warnings!).WithResolvedOperationKeys(activityExecutionState);
 
     /// <summary>
     /// The visible container-scope chain threaded by the runtime for this concrete activity execution.

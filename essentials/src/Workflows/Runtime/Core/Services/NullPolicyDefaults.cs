@@ -28,9 +28,18 @@ public static class NullPolicyDefaults
     }
 
     /// <summary>Type-derived nullability of an authored member, including JSON kinds and collections.</summary>
-    public static bool AcceptsNull(TypeReference type, IWellKnownTypeRegistry? registry = null)
+    public static bool AcceptsNull(TypeReference type, IWellKnownTypeRegistry? registry = null) =>
+        AcceptsNull(type, registry, descriptors: null);
+
+    /// <summary>Uses the activated type descriptor's null contract when one is contributed.</summary>
+    public static bool AcceptsNull(TypeReference type, IWellKnownTypeRegistry? registry,
+        IVariableTypeDescriptorCatalog? descriptors)
     {
         ArgumentNullException.ThrowIfNull(type);
+        if (type.CollectionKind != CollectionKind.Single)
+            return true;
+        if (descriptors?.GetDescriptors().FirstOrDefault(item => StringComparer.Ordinal.Equals(item.Alias, type.Alias)) is { } descriptor)
+            return descriptor.SupportsNull;
         if (type.CollectionKind != CollectionKind.Single || TypeAliasConvention.IsAny(type.Alias) ||
             type.Alias is "String" or "System.String" or "JsonElement" or "System.Text.Json.JsonElement" or "JsonNode" or "System.Text.Json.Nodes.JsonNode")
             return true;
@@ -40,6 +49,11 @@ public static class NullPolicyDefaults
         return registry is not null && registry.TryGetTypeOrDefault(type.Alias, out var clrType) &&
                (!clrType.IsValueType || Nullable.GetUnderlyingType(clrType) is not null);
     }
+
+    /// <summary>Resolves contributed scalar aliases, including enum zero, through the activated type registry.</summary>
+    public static bool TryGetTypeDefault(string alias, IWellKnownTypeRegistry? registry, out object? value) =>
+        registry is not null && registry.TryGetTypeOrDefault(alias, out var type)
+            ? TryGetTypeDefault(type, out value) : TryGetTypeDefault(alias, out value);
 
     /// <summary>Finds a default for a built-in scalar alias. Reference, JSON, date and duration types have none.</summary>
     public static bool TryGetTypeDefault(string alias, out object? value)

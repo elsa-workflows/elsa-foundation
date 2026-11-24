@@ -111,7 +111,7 @@ internal static class PlainJson
             if (value.IsNumber())
             {
                 var number = value.AsNumber();
-                if (!double.IsFinite(number) && infinity is not null)
+                if ((double.IsInfinity(number) || undefined is not null && double.IsNaN(number)) && infinity is not null)
                     Quote(infinity(number), json);
                 else
                     AppendNumber(number, json);

@@ -22,6 +22,15 @@ afterEach(() => {
 });
 
 describe("workflow run inputs", () => {
+  it("distinguishes explicit null, text null, empty text and omission for a nullable String", () => {
+    const input = workflowInput("note", "Note", "String", true);
+    expect(parseWorkflowRunInputs([input], { note: null })).toEqual({ values: { Note: null }, errors: {} });
+    expect(parseWorkflowRunInputs([input], { note: "null" }).values).toEqual({ Note: "null" });
+    expect(parseWorkflowRunInputs([input], { note: "" }).values).toEqual({ Note: "" });
+    expect(parseWorkflowRunInputs([input], {}).errors.note).toBe("Note is required.");
+    expect(parseWorkflowRunInputs([{ ...input, type: { ...input.type, supportsNull: false } }], { note: null }).errors.note).toBe("Note cannot be null.");
+  });
+
   it("resolves the highest-priority contribution supported by declared type metadata", () => {
     const input = workflowInput("status", "Status", "Contoso.OrderStatus", true);
     const fallback = editorContribution("fallback", 500, () => true);
@@ -283,8 +292,8 @@ describe("workflow run inputs", () => {
 
   it("leaves omitted inputs for server defaults and preserves explicit zero, false, and empty-string overrides", () => {
     const inputs = [
-      workflowInput("count", "Count", "Int32", true, "Single", { defaultValue: 10, defaultSyntax: "Literal" }),
-      workflowInput("enabled", "Enabled", "Boolean", true, "Single", { defaultValue: true, defaultSyntax: "Literal" }),
+      workflowInput("count", "Count", "Int32", false, "Single", { defaultValue: 10, defaultSyntax: "Literal" }),
+      workflowInput("enabled", "Enabled", "Boolean", false, "Single", { defaultValue: true, defaultSyntax: "Literal" }),
       workflowInput("label", "Label", "String", false, "Single", { defaultValue: "default", defaultSyntax: "Literal" })
     ];
 
@@ -295,14 +304,14 @@ describe("workflow run inputs", () => {
     });
   });
 
-  it("accepts explicit null only for nullable optional inputs", () => {
-    const nullable = workflowInput("nullable", "Nullable", "JsonElement", false, "Single", { isNullable: true });
-    const nonNullable = workflowInput("non-nullable", "NonNullable", "JsonElement", false);
-    const required = workflowInput("required", "Required", "JsonElement", true, "Single", { isNullable: true });
+  it("accepts explicit null for required and optional nullable types", () => {
+    const nullable = workflowInput("nullable", "Nullable", "JsonElement", false);
+    const nonNullable = workflowInput("non-nullable", "NonNullable", "Contoso.RequiredRecord", false);
+    const required = workflowInput("required", "Required", "JsonElement", true);
 
     expect(parseWorkflowRunInputs([nullable], { nullable: "null" })).toEqual({ values: { Nullable: null }, errors: {} });
     expect(parseWorkflowRunInputs([nonNullable], { "non-nullable": "null" }).errors).toEqual({ "non-nullable": "NonNullable cannot be null." });
-    expect(parseWorkflowRunInputs([required], { required: "null" }).errors).toEqual({ required: "Required is required." });
+    expect(parseWorkflowRunInputs([required], { required: "null" })).toEqual({ values: { Required: null }, errors: {} });
   });
 
   it("validates booleans, declared complex values, and every collection kind", () => {
@@ -591,7 +600,7 @@ describe("workflow run inputs", () => {
     const onSubmit = vi.fn();
     const container = render(
       <WorkflowRunInputDialog
-        inputs={[workflowInput("greeting", "Greeting", "String", true, "Single", { defaultValue: "hello", defaultSyntax: "Literal" })]}
+        inputs={[workflowInput("greeting", "Greeting", "String", false, "Single", { defaultValue: "hello", defaultSyntax: "Literal" })]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
       />
@@ -609,7 +618,7 @@ describe("workflow run inputs", () => {
     const onSubmit = vi.fn();
     const container = render(
       <WorkflowRunInputDialog
-        inputs={[workflowInput("greeting", "Greeting", "String", true, "Single", { defaultValue: "hello", defaultSyntax: "Literal" })]}
+        inputs={[workflowInput("greeting", "Greeting", "String", false, "Single", { defaultValue: "hello", defaultSyntax: "Literal" })]}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
       />
@@ -732,7 +741,7 @@ function workflowInput(
   alias: string,
   isRequired: boolean,
   collectionKind: WorkflowInput["type"]["collectionKind"] = "Single",
-  options: Partial<Pick<WorkflowInput, "defaultValue" | "defaultSyntax" | "isNullable">> = {}
+  options: Partial<Pick<WorkflowInput, "defaultValue" | "defaultSyntax">> = {}
 ): WorkflowInput {
   return {
     referenceKey,
@@ -744,7 +753,6 @@ function workflowInput(
     storageDriverType: null,
     type: { alias, collectionKind },
     isRequired,
-    isNullable: false,
     ...options
   };
 }

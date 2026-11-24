@@ -324,6 +324,7 @@ public sealed class MemberReadPublicationRunTests
             services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
             new ActivitiesSequenceFeature().ConfigureServices(services);
             new ActivitiesFlowchartFeature().ConfigureServices(services);
+            new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services);
             new WorkflowDesignValidationsFeature { MemberReads = memberReads }.ConfigureServices(services);
             services.AddSingleton<IActivityDefinitionLookup>(catalog);
             if (typed)
@@ -333,18 +334,23 @@ public sealed class MemberReadPublicationRunTests
             var structures = _scope.ServiceProvider.GetRequiredService<IActivityStructureService>();
             var analyzer = _scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>();
             var registry = ClrConstruction.RegistryFor([typeof(SequenceActivity), typeof(FlowchartActivity), typeof(AddressProducer), typeof(MemberReader), .. extraVersions.Select(extra => extra.Type)]);
+            registry.RegisterType(typeof(int), "Int32");
+            registry.RegisterType(typeof(bool), "Boolean");
+            registry.RegisterType(typeof(JsonElement), "Any");
             var inputs = new RuntimeInputBindingCompiler(registry);
             var outputs = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
             var unused = new UnusedReaders();
             _compiler = new(analyzer, unused, catalog, unused, unused, unused,
                 new ActivityTemplatePlacer(unused, unused, unused, new Sha256ActivityPlacementHasher(), structures, inputs, outputs),
                 inputs, outputs, new WorkflowExecutableHasher(), new ActivityTreeProjector(structures),
-                new ExecutableNodeCompiler(structures, registry, inputs, outputs));
+                new ExecutableNodeCompiler(structures, registry, inputs, outputs, null, null,
+                    _scope.ServiceProvider.GetRequiredService<Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver>(),
+                    _scope.ServiceProvider.GetRequiredService<Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptOutcomeAnalyzer>()));
         }
 
-        public ValueTask<WorkflowExecutable> Compile(ActivityNode root, VariableDefinition[]? variables = null, InputDefinition[]? inputs = null) => _compiler.CompileAsync(
+        public ValueTask<WorkflowExecutable> Compile(ActivityNode root, VariableDefinition[]? variables = null, InputDefinition[]? inputs = null, WorkflowStrategyOptions? strategies = null) => _compiler.CompileAsync(
             new("version", WorkflowExecutableReferenceScope.Published, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, "artifact-")
-            { Source = new("definition", "version", "1.0.0", new(variables ?? [], root, inputs ?? [], [], null), "WorkflowDefinitionVersion", "version", "1.0.0") });
+            { Source = new("definition", "version", "1.0.0", new(variables ?? [], root, inputs ?? [], [], strategies), "WorkflowDefinitionVersion", "version", "1.0.0") });
 
         public void Dispose()
         {

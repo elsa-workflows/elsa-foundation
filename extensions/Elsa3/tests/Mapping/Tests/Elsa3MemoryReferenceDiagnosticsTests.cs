@@ -59,7 +59,7 @@ public sealed class Elsa3MemoryReferenceDiagnosticsTests
         var result = await fixture.ImportAsync(testCase.Definition, "custom.json");
 
         Assert.False(result.Succeeded);
-        var diagnostic = Assert.Single(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnknownMember, diagnostic.Code);
         Assert.Equal("$.root.Mystery", diagnostic.Path);
         Assert.Equal("Mystery", diagnostic.Metadata["Property"]);
@@ -75,7 +75,7 @@ public sealed class Elsa3MemoryReferenceDiagnosticsTests
 
         var result = fixture.RejectWorkflowInstanceState("instance.json");
 
-        var diagnostic = Assert.Single(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.Equal("VF-IMP-009", diagnostic.Code);
         Assert.Equal("instance.json", diagnostic.Metadata["SourceName"]);
         Assert.Equal(Elsa3MigrationInputKind.WorkflowInstanceState.ToString(), diagnostic.Metadata["InputKind"]);

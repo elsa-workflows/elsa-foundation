@@ -1,3 +1,4 @@
+import { typeAllowsNull } from "../typeNullability";
 import { StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { Component, useId, useRef, useState, type ErrorInfo, type FormEvent, type ReactNode } from "react";
 import type { StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -54,6 +55,11 @@ export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onS
             input={input}
             editors={failedEditorKeys.has(input.referenceKey) ? [] : editors}
             value={ownValue(drafts, input.referenceKey) ?? ""}
+            isNull={ownValue(drafts, input.referenceKey) === null}
+            onNull={() => {
+              setDrafts(current => ({ ...current, [input.referenceKey]: null }));
+              setErrors(current => { const next = { ...current }; delete next[input.referenceKey]; return next; });
+            }}
             error={ownValue(errors, input.referenceKey)}
             disabled={busy}
             onEditorFailure={() => {
@@ -97,7 +103,7 @@ function describeEditorFallback(inputs: WorkflowInput[], inputKey: string, error
   return `${error} ${guidance}`;
 }
 
-export function WorkflowRunInputField({ input, editors, value, error, disabled, onEditorFailure, onChange, onOmit }: {
+export function WorkflowRunInputField({ input, editors, value, error, disabled, onEditorFailure, onChange, onOmit, isNull = false, onNull }: {
   input: WorkflowInput;
   editors: StudioWorkflowRunInputEditorContribution[];
   value: string;
@@ -106,6 +112,8 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
   onEditorFailure(): void;
   onChange(value: string): void;
   onOmit?(): void;
+  isNull?: boolean;
+  onNull?(): void;
 }) {
   const fieldId = useId();
   const descriptionId = `${fieldId}-description`;
@@ -113,10 +121,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
   const label = input.displayName || input.name;
   const describedBy = [input.description ? descriptionId : null, error ? errorId : null].filter(Boolean).join(" ") || undefined;
   const hasDefault = Object.prototype.hasOwnProperty.call(input, "defaultValue") && input.defaultValue !== undefined;
-  const defaultSatisfiesRequired = hasDefault
-    && (!input.defaultSyntax || input.defaultSyntax === "Literal")
-    && (input.defaultValue !== null || (!input.isRequired && input.isNullable));
-  const requiredWithoutDefault = Boolean(input.isRequired && !defaultSatisfiesRequired);
+  const required = Boolean(input.isRequired);
   const canUseEmptyString = input.type.collectionKind === "Single" && ["string", "timespan", "uri"].includes(input.type.alias.trim().split(".").pop()?.toLowerCase() ?? "");
   const controlProps = {
     id: fieldId,
@@ -124,7 +129,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
     "data-studio-field-control": "",
     "aria-describedby": describedBy,
     "aria-invalid": Boolean(error),
-    "aria-required": requiredWithoutDefault
+    "aria-required": required
   };
   const common = {
     ...controlProps,
@@ -136,8 +141,8 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
   const fallback = renderInputControl(input, common, onChange);
 
   return (
-    <StudioField className="wf-form-field" controlId={fieldId} label={<>{label}{requiredWithoutDefault ? " *" : ""}</>} meta={<small className="wf-run-input-type">{formatArgumentType(input.type)}</small>}>
-      {EditorComponent ? (
+    <StudioField className="wf-form-field" controlId={fieldId} label={<>{label}{required ? " *" : ""}</>} meta={<small className="wf-run-input-type">{formatArgumentType(input.type)}</small>}>
+      {isNull ? <><input {...controlProps} value="null" readOnly disabled={disabled} /><small role="status">Sending null for {label}</small></> : EditorComponent ? (
         <WorkflowRunInputEditorBoundary
           editorId={editor.id}
           inputKey={input.referenceKey}
@@ -153,13 +158,14 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
           />
         </WorkflowRunInputEditorBoundary>
       ) : fallback}
+      {onNull && typeAllowsNull(input.type) ? <button type="button" aria-label={`${isNull ? "Enter a value" : "Send null"} for ${label}`} onClick={isNull ? () => onChange("") : onNull} disabled={disabled}>{isNull ? "Enter a value" : "Send null"}</button> : null}
       {input.description ? <small id={descriptionId}>{input.description}</small> : null}
-      {hasDefault ? <small>Uses default if omitted.</small> : null}
+      {hasDefault && !input.isRequired ? <small>Uses default if omitted.</small> : null}
       {hasDefault && canUseEmptyString ? (
         <button type="button" onClick={() => onChange("")} disabled={disabled}>Use empty string</button>
       ) : null}
-      {defaultSatisfiesRequired && onOmit ? (
-        <button type="button" aria-label={`Use default for ${label}`} onClick={onOmit} disabled={disabled}>Use default</button>
+      {!input.isRequired && onOmit ? (
+        <button type="button" aria-label={`${hasDefault ? "Use default" : "Omit"} for ${label}`} onClick={onOmit} disabled={disabled}>{hasDefault ? "Use default" : "Omit"}</button>
       ) : null}
       {error ? <small id={errorId} role="alert">{error}</small> : null}
     </StudioField>

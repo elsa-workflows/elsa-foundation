@@ -65,7 +65,6 @@ export function createInputContract(
     uiSpecifications: null,
     type: { alias: selection.type.alias, collectionKind: selection.collectionKind },
     isRequired: false,
-    isNullable: false,
     default: null,
     storageDriverKey: selection.storageDriverKey,
     durability: "Required"
@@ -91,7 +90,6 @@ export function createOutputContract(
     uiSpecifications: null,
     type: { alias: selection.type.alias, collectionKind: selection.collectionKind },
     isRequired: false,
-    isNullable: false,
     storageDriverKey: selection.storageDriverKey,
     durability: "Required"
   };
@@ -155,8 +153,7 @@ export function selectTypeForMember<T extends ActivityInputContract | ActivityOu
     : drivers[0] ?? "";
   return {
     ...member,
-    type: { ...member.type, alias: type.alias, collectionKind },
-    isNullable: type.supportsNull ? member.isNullable : false,
+    type: { ...member.type, alias: type.alias, collectionKind, supportsNull: undefined },
     storageDriverKey
   };
 }
@@ -198,4 +195,19 @@ function normalizedDecimal(token: string) {
   if (!digits) return "0";
   const significant = digits.replace(/0+$/, "");
   return `${negative ? "-" : ""}${significant}e${Number(exponent) - fraction.length + digits.length - significant.length}`;
+}
+
+/** Shared descriptors may arrive from older servers; their retired authored flag is never sent back. */
+export function canonicalizeAuthoredContract<T extends { inputs: readonly unknown[]; outputs: readonly unknown[] }>(contract: T): T {
+  const member = (value: unknown) => {
+    const result = { ...(value as Record<string, unknown>) };
+    delete result.isNullable;
+    delete result.IsNullable;
+    if (result.type && typeof result.type === "object") {
+      result.type = { ...result.type as Record<string, unknown> };
+      delete (result.type as Record<string, unknown>).supportsNull;
+    }
+    return result;
+  };
+  return { ...contract, inputs: contract.inputs.map(member), outputs: contract.outputs.map(member) } as T;
 }

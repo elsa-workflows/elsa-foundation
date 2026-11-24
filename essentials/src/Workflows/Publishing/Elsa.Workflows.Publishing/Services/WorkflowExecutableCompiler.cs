@@ -159,6 +159,7 @@ public sealed class WorkflowExecutableCompiler(
                 state.StrategyOptions?.NullHandling?.UndefinedAsNull ?? false);
             var policyBindingCompiler = inputBindingCompiler.WithValuePolicies(valuePolicies);
             var policyNodeCompiler = executableNodeCompiler.WithInputBindingCompiler(policyBindingCompiler);
+            var policyTemplatePlacer = templatePlacer.WithInputBindingCompiler(policyBindingCompiler);
 
             var rootActivity = state.RootActivity
                 ?? throw new ArgumentException(ActivityTreeProjector.NoRootActivityMessage);
@@ -227,7 +228,7 @@ public sealed class WorkflowExecutableCompiler(
                 // structure addresses that child by its authored node id. A reusable that is the workflow root is
                 // addressed by nothing structural, so it keeps its content-addressed placement id.
                 var isWorkflowRoot = StringComparer.Ordinal.Equals(activity.NodeId, rootActivity.NodeId);
-                var placement = await templatePlacer.PlaceAsync(new(
+                var placement = await policyTemplatePlacer.PlaceAsync(new(
                     publication,
                     template,
                     sourceReference,
@@ -248,7 +249,7 @@ public sealed class WorkflowExecutableCompiler(
                 }
             }
 
-            var compiledRoot = policyNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs);
+            var compiledRoot = policyNodeCompiler.WithOutputDeclarations(state.Outputs).CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs);
             var sourceRevision = ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(new
             {
                 source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionId,

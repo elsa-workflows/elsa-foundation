@@ -64,7 +64,7 @@ internal sealed class WorkflowStimulusSubscriptionSelector(IStandaloneTriggerSto
                 WorkflowExecutableInputValidation? inputs = null;
                 if (reason is null)
                 {
-                    inputs = await mapper.MapAsync(target.InputContract!, subscription.Mappings, envelope, token);
+                    inputs = await mapper.MapAsync(target.InputContract!, subscription.Mappings, envelope, target.Native?.ValuePolicies ?? WorkflowValuePolicies.Off, token, target.Native is null ? TriggerInputSemantics.ModelOwned : TriggerInputSemantics.Native);
                     if (!inputs.IsValid) reason = inputs.Findings.First().ReasonCode;
                 }
                 if (reason is not null) { refused.Add(new(subscription.Id, subscription.Revision, "Admission", reason)); continue; }

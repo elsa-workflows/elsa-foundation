@@ -1,9 +1,11 @@
+using Elsa.Serialization.Core;
 using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
 
@@ -44,7 +46,7 @@ internal sealed class RuntimeVariableReadFallback : IExpressionVariableReader
     public static async ValueTask<RuntimeVariableReadFallback> LoadAsync(
         IReadOnlyList<RuntimeReadableVariable> visibleVariables,
         IExternalPayloadStore? externalPayloadStore,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IWellKnownTypeRegistry? registry = null)
     {
         ArgumentNullException.ThrowIfNull(visibleVariables);
         var values = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
@@ -53,7 +55,10 @@ internal sealed class RuntimeVariableReadFallback : IExpressionVariableReader
             var envelope = variable.Envelope;
             if (envelope.Presence == ValuePresence.Withheld || envelope.Policy.Lifecycle == DurableValueLifecycle.None)
                 continue;
-            if (envelope.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull)
+            if (envelope.Presence == ValuePresence.Absent && envelope.Type.CollectionKind == CollectionKind.Single &&
+                NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, registry, out var typeDefault))
+                values[variable.Name] = JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType());
+            else if (envelope.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull)
                 values[variable.Name] = JsonSerializer.SerializeToElement<object?>(null);
             else if (envelope.InlineValue.HasValue)
                 values[variable.Name] = envelope.InlineValue.Value.Clone();

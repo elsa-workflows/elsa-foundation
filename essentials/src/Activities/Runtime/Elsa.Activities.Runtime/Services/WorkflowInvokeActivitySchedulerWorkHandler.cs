@@ -287,7 +287,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     triggerPayload: projections.StimulusInput is JsonElement stimulusInput ? stimulusInput : null,
                     triggerNodeId: projections.TriggerNodeId,
                     triggerMetadata: projections.TriggerMetadata,
-                    scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies);
+                    scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies).WithWarnings(stepWarnings);
                 stepSession = await StepVariableSessions.CreateAsync(
                     serviceProvider, scopeService, activity, executable, executableNode, executionContextState, persistedDurableValues, cancellationToken);
                 stateSession = await StepWorkflowState.CreateAsync(serviceProvider, scopeService, activity, executableNode,
@@ -634,7 +634,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 TimeProvider.GetUtcNow(),
                 () => StepStateReadProtection.Read(stepSession, stateSession),
                 cancellationToken);
-            var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
+            var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().WithValuePolicies(executable.ValuePolicies, stepWarnings).ProjectAsync(
                 workItem.WorkflowExecutionId,
                 invokePayload.ActivityExecutionId,
                 executableNode,

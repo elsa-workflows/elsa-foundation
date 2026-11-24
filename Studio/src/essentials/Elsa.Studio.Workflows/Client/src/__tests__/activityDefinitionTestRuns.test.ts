@@ -43,14 +43,14 @@ describe("Activity Definition Test Runs", () => {
       order: { state: "Present", value: { id: "order-42" } }
     });
     expect(parsed.errors).toEqual({
-      required: "required is required and has no default."
+      required: "required is required."
     });
     expect(JSON.stringify(parsed.inputs)).not.toContain("EUR");
   });
 
   it("rejects Present null for a non-nullable contract input", () => {
     const parsed = parseActivityTestRunInputs(
-      [input("count")],
+      [input("count", { alias: "Int32" })],
       { count: { presence: "Null", draft: "" } });
 
     expect(parsed.inputs).toEqual({});

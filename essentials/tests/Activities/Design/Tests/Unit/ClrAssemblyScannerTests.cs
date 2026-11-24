@@ -863,9 +863,9 @@ public sealed class ClrAssemblyScannerTests
         // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
         // Spec 1228 FR-022: the CLR provider schema version went to 2 (nested collection types), which moves every snapshot.
         { typeof(HttpEndpoint), "F28E2D5C692AE81A7652872385379DDFC7D13A84C1EB196701AB439E277C9FCE" },
-        { typeof(WriteLine), "6447F219BF705C43390B61BF9478005F9C7AFD93FC07E9D3941EC0FF42BE1979" },
+        { typeof(WriteLine), "D7C4859CD197CF853C9DE44D423FA0586CD321D20BE73376DE95DEFE161DF8C3" },
         { typeof(ParallelActivity), "4748F128F029398F93C1D7BF29D3E266AFED437FCC4BD030DFDD4D4F8938FE61" },
-        { typeof(SendHttpRequest), "92CDE66B36CEAB09480364A18F334C879ECB5B0770730F2D427F0B8C1EB9634F" }
+        { typeof(SendHttpRequest), "9463F02873B61470EE33E088315B7A7BC92A28A35FC8A8553CFDB53F7844E328" }
     };
 
     [Theory]

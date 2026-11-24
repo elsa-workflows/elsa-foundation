@@ -19,9 +19,11 @@ public sealed class CreateEvent(
     public string Subject { get; set; } = "";
 
     [ActivityInput(Key = nameof(Start), DisplayName = "Start", Tier = InputTier.Essential)]
+    [Required]
     public DateTimeOffset Start { get; set; }
 
     [ActivityInput(Key = nameof(End), DisplayName = "End", Tier = InputTier.Essential)]
+    [Required]
     public DateTimeOffset End { get; set; }
 
     [ActivityInput(Key = nameof(TimeZone), DisplayName = "Time zone", Tier = InputTier.Optional, Description = "Windows or IANA time zone. Default UTC. Start and End are converted into this zone before they are sent.")]

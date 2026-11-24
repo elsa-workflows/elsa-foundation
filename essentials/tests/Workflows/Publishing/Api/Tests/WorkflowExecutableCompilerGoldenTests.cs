@@ -400,7 +400,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests(ITestOutputHelper outp
                         WorkflowInput(
                             "alpha",
                             new TypeReference("Object"),
-                            isRequired: true,
+                            isRequired: false,
                             JsonSerializer.SerializeToElement(new { b = 2, a = 1 }),
                             "Literal")
                     ]),

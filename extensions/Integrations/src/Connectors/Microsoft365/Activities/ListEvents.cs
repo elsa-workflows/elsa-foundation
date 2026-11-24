@@ -13,9 +13,11 @@ public sealed class ListEvents(
     : Microsoft365Activity<IReadOnlyList<GraphEvent>>(httpClientFactory, connectionApplicator)
 {
     [ActivityInput(Key = nameof(StartDateTime), DisplayName = "Start date time", Tier = InputTier.Essential, Description = "calendarView start, converted to UTC. Requires Calendars.Read.")]
+    [Required]
     public DateTimeOffset StartDateTime { get; set; }
 
     [ActivityInput(Key = nameof(EndDateTime), DisplayName = "End date time", Tier = InputTier.Essential, Description = "calendarView end, converted to UTC.")]
+    [Required]
     public DateTimeOffset EndDateTime { get; set; }
 
     [ActivityInput(Key = nameof(Top), DisplayName = "Top", Tier = InputTier.Optional, Description = "Page size (1-999). Default 50.")]

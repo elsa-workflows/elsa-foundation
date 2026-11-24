@@ -82,7 +82,7 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
             WorkflowExecutableInputValidation? inputs = null;
             if (reason is null)
             {
-                inputs = await mapper.MapAsync(target.InputContract!, subscription.Mappings, envelope, ct);
+                inputs = await mapper.MapAsync(target.InputContract!, subscription.Mappings, envelope, target.Native?.ValuePolicies ?? WorkflowValuePolicies.Off, ct, target.Native is null ? TriggerInputSemantics.ModelOwned : TriggerInputSemantics.Native);
                 if (!inputs.IsValid) reason = inputs.Findings.First().ReasonCode;
             }
             if (reason is null)

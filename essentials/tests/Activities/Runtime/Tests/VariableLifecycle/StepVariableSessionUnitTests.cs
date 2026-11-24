@@ -1,3 +1,5 @@
+using Elsa.Serialization.Core;
+using Elsa.Serialization.Testing;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -20,6 +22,56 @@ public sealed class StepVariableSessionUnitTests
 {
     private const string CountKey = VariableLifecycleTestGraph.CountKey;
     private static readonly ValueTypeDescriptor Int32Type = VariableLifecycleTestGraph.Int32Type;
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Registered_unassigned_enums_read_zero_in_CLR_and_script_body_sessions(bool script)
+    {
+        var registry = SerializationServices.TypeRegistry(); registry.RegisterType(typeof(UnassignedStatus), "Acme.Status");
+        var type = new ValueTypeDescriptor("Acme.Status");
+        var session = Session(Root((CountKey, ValueEnvelope.Absent(type, ValueProtectionPolicy.InstanceInline))),
+            engineConsumer: script, registry: registry, countType: type);
+        if (script)
+        {
+            Assert.True(session.TryResolve("count", out var target));
+            Assert.Equal(0, session.ReadJson(target)!.GetValue<int>());
+        }
+        else Assert.Equal((UnassignedStatus)0, session.Get(new VariableReference<UnassignedStatus>("count", "workflow", CountKey)));
+        Assert.Empty(session.Intents);
+        Assert.Null(session.PendingFault);
+    }
+
+    private enum UnassignedStatus { First = 1 }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Script_and_CLR_null_writes_use_the_pinned_target_policy(bool policy, bool script)
+    {
+        var session = Session(Root((CountKey, Int(3))), engineConsumer: script, policies: new(policy, false));
+        var warnings = new ExecutionWarningCollector();
+        session.SetWarnings(warnings);
+        void Write()
+        {
+            if (script) { Assert.True(session.TryResolve("count", out var target)); session.WriteJson(target, null); }
+            else session.Set(new VariableReference<object?>("count", "workflow", CountKey), null);
+        }
+        if (!policy)
+        {
+            Assert.Contains("VF-ACT-004", Assert.Throws<InvalidOperationException>(Write).Message);
+            Assert.NotNull(session.PendingFault);
+            Assert.Empty(session.Intents);
+        }
+        else
+        {
+            Write();
+            Assert.Equal(0, Assert.Single(session.Intents).Value.InlineValue!.Value.GetInt32());
+            Assert.Equal("VF-NULL-001", Assert.Single(warnings.Warnings).Code);
+        }
+    }
 
     [Fact]
     public void A_withheld_value_is_refused_with_VF_ACT_010_and_faults_on_the_host_side()
@@ -139,6 +191,17 @@ public sealed class StepVariableSessionUnitTests
         Assert.NotNull(session.PendingFault);
     }
 
+    [Fact]
+    public void Undefined_assignment_to_a_transient_variable_still_faults_under_policy()
+    {
+        var session = Session(Root(("var-handle", ValueEnvelope.Transient(new ValueTypeDescriptor("Object"), new object()))),
+            engineConsumer: true, policies: new WorkflowValuePolicies(UndefinedAsNull: true));
+        Assert.True(session.TryResolve("handle", out var target));
+        Assert.Throws<InvalidOperationException>(() => session.WriteUndefined(target));
+        Assert.NotNull(session.PendingFault);
+        Assert.Empty(session.Intents);
+    }
+
     // FR-025, FR-026: the marker (also inherited) and the engine-consumer interface are one pinned fact, so the engine
     // surface is never a way around publication, the concurrent-write rule or background eligibility.
     [Theory]
@@ -210,21 +273,27 @@ public sealed class StepVariableSessionUnitTests
         LostUpdateMode mode = LostUpdateMode.Default,
         Dictionary<(string, string), bool>? bound = null,
         bool suspends = false,
-        bool engineConsumer = false) =>
-        Session([root], mode, bound, suspends, engineConsumer);
+        bool engineConsumer = false,
+        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null) =>
+        Session([root], mode, bound, suspends, engineConsumer, policies, registry, countType);
 
     private static StepVariableSession Session(
         VariableFrameState[] frames,
         LostUpdateMode mode = LostUpdateMode.Default,
         Dictionary<(string, string), bool>? bound = null,
         bool suspends = false,
-        bool engineConsumer = false)
+        bool engineConsumer = false,
+        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null)
     {
         var node = StepVariableTestGraph.CountLeaf("node-root", typeof(SessionIncrementActivity), mode: mode);
         var executable = WorkflowExecutionHarness.NewExecutable(node,
-            VariableLifecycleTestGraph.CountDeclaration(),
+            countType is null ? VariableLifecycleTestGraph.CountDeclaration() : new RuntimeVariableDeclaration(CountKey, "count", countType, ValueProtectionPolicy.InstanceInline),
             // A declaration is always persistable; the frame holds the live (transient) value the session sees.
             new RuntimeVariableDeclaration("var-handle", "handle", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline));
+        executable = new WorkflowExecutable(executable.Identity, executable.RootActivity, executable.ResumeTargets,
+            executable.CreatedAt, executable.CompatibilityMetadata, executable.InputContract, executable.Dependencies,
+            executable.RuntimeRequirements, executable.StorageDriverRequirements, executable.IncidentStrategy,
+            executable.PersistenceMode, executable.WorkflowVariables, policies ?? WorkflowValuePolicies.Off);
         var invocation = new ActivityExecutionState(
             new ActivityExecution("actexec-root", "workflow-run", "node-root", "authored-node-root", node.ActivityType, "1.0.0"),
             ActivityExecutionStatus.Running, null, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, null, null, null, null, null, null,
@@ -232,6 +301,6 @@ public sealed class StepVariableSessionUnitTests
         return new StepVariableSession(new RuntimeVisibleVariableFrames(frames), executable, invocation, node, validator: null,
             attemptId: "attempt-1", suspends: suspends,
             boundReferences: bound ?? new Dictionary<(string, string), bool> { [("workflow", CountKey)] = true },
-            engineConsumer: engineConsumer);
+            engineConsumer: engineConsumer, registry: registry);
     }
 }

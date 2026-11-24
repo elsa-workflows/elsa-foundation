@@ -13,4 +13,15 @@ public interface ITriggerInputMapper
     /// <summary>Checks declared destinations, literal values and required mapping coverage without executing expressions.</summary>
     WorkflowExecutableInputValidation ValidateMappings(WorkflowExecutableInputContract contract,
         IReadOnlyList<TriggerInputMapping> mappings);
+    /// <summary>Maps with the selected native target's pinned policies; model inputs retain their model semantics.</summary>
+    ValueTask<WorkflowExecutableInputValidation> MapAsync(WorkflowExecutableInputContract contract,
+        IReadOnlyList<TriggerInputMapping> mappings, JsonElement sourceEnvelope, WorkflowValuePolicies policies,
+        CancellationToken cancellationToken = default, TriggerInputSemantics semantics = TriggerInputSemantics.Native);
+
+    /// <summary>Preflights literal mappings with the selected native target's pinned policies.</summary>
+    WorkflowExecutableInputValidation ValidateMappings(WorkflowExecutableInputContract contract,
+        IReadOnlyList<TriggerInputMapping> mappings, WorkflowValuePolicies policies, TriggerInputSemantics semantics = TriggerInputSemantics.Native);
 }
+
+/// <summary>Distinguishes native executable admission from the retained declared-default semantics of model-owned targets.</summary>
+public enum TriggerInputSemantics { Native, ModelOwned }

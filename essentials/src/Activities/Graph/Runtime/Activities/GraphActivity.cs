@@ -12,6 +12,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Activities.Graph.Runtime.Activities;
 
@@ -51,6 +52,13 @@ public sealed class GraphActivity(
     /// The fault code when the entry completes naturally in a body whose outcomes come only from <c>Complete</c> nodes.
     /// </summary>
     public const string EntryCompletedWithoutMappingFaultCode = "activity.graph.entry-completed-without-mapping";
+
+    private IVariableTypeDescriptorCatalog? _typeDescriptors;
+    internal GraphActivity WithTypeDescriptors(IVariableTypeDescriptorCatalog? descriptors)
+    {
+        _typeDescriptors = descriptors;
+        return this;
+    }
 
     private OutcomeSelection? _completeSelection;
     private OutcomeSelection? _mappedSelection;
@@ -215,8 +223,19 @@ public sealed class GraphActivity(
                 .Where(value => value.Metadata.ContainsKey(RuntimeMetadataKeys.RetrySourceActivityExecutionId))
                 .Where(value => value.Metadata.TryGetValue(RuntimeMetadataKeys.BoundaryValueRole, out var role) && StringComparer.Ordinal.Equals(role, "input"))
                 .ToArray();
-            if (retryInputs.Length == 0 && Descriptor.Inputs.Count != 0)
-                throw new InvalidOperationException("A graph boundary retry has no effective captured input snapshot.");
+            foreach (var input in Descriptor.Inputs)
+            {
+                if (retryInputs.Any(row => row.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BoundaryReferenceKey) == input.ReferenceKey)) continue;
+                var isKnownAbsent = false;
+                if (context.ActivityExecutionState.Provenance.Metadata.TryGetValue(RuntimeMetadataKeys.RetryAbsentBoundaryInputs, out var absentJson))
+                {
+                    using var absent = JsonDocument.Parse(absentJson);
+                    isKnownAbsent = absent.RootElement.ValueKind == JsonValueKind.Array && absent.RootElement.EnumerateArray()
+                        .Any(key => key.ValueKind == JsonValueKind.String && StringComparer.Ordinal.Equals(key.GetString(), input.ReferenceKey));
+                }
+                if (!isKnownAbsent || input.Default is not null || Descriptor.RequiredInputReferenceKeys.Contains(input.ReferenceKey, StringComparer.Ordinal))
+                    throw new InvalidOperationException($"A graph boundary retry has no effective captured input snapshot for '{input.ReferenceKey}'.");
+            }
             scope = scopeFactory.Rehydrate(Descriptor, context.WorkflowExecutionId, outerActivityExecutionId, retryInputs);
         }
         else
@@ -234,7 +253,8 @@ public sealed class GraphActivity(
             }
         }
 
-        var evaluator = NewEvaluator(scope);
+        scope.WithInputPolicies(context.ActivityExecutionState.InputSnapshot?.Values);
+        var evaluator = NewEvaluator(scope, context);
         var capturedInputs = isRetry
             ? []
             : await scope.CaptureInputsAsync(
@@ -244,7 +264,7 @@ public sealed class GraphActivity(
                 evaluator,
                 capturedAt,
                 cancellationToken);
-        var initializedVariables = await scope.InitializeVariablesAsync(
+        var initializedVariables = await scope.WithTypes(_wellKnownTypeRegistry, _typeDescriptors).InitializeVariablesAsync(
             Descriptor.Variables,
             evaluator,
             capturedAt,
@@ -278,7 +298,7 @@ public sealed class GraphActivity(
             Descriptor.Outputs,
             Descriptor.OutputMappings,
             Descriptor.RequiredOutputReferenceKeys.ToHashSet(StringComparer.Ordinal),
-            NewEvaluator(scope, evaluatingOutputs: true),
+            NewEvaluator(scope, context, evaluatingOutputs: true),
             capturedAt,
             cancellationToken);
 
@@ -287,7 +307,16 @@ public sealed class GraphActivity(
         {
             var captured = await scope.ReadOutputAsync(output.ReferenceKey, cancellationToken);
             if (captured.Exists)
+            {
+                var policy = DurableValuePolicies.Read(scope.Outputs[output.ReferenceKey]);
+                var resultPolicy = context.ExecutableNode.ActivityContract?.Result.Policy;
+                var destination = resultPolicy is null
+                    ? new ValueProtectionPolicy(DurableValueLifecycle.Result, DurableValueStorage.Inline)
+                    : ValuePolicyCombiner.ToProtectionPolicy(resultPolicy);
+                if (!destination.Satisfies(policy))
+                    throw new InvalidOperationException($"Graph output '{output.ReferenceKey}' cannot return a value whose protection policy its public result contract does not preserve.");
                 result.Add(output.ReferenceKey, captured.Value);
+            }
         }
 
         // A Complete exit selects its outcome even when the body has no outcome mappings. Without mappings and without a
@@ -304,24 +333,25 @@ public sealed class GraphActivity(
             ActivityTransition.Complete<IReadOnlyDictionary<string, object?>>(result, selection));
     }
 
-    private GraphActivityTypedExpressionEvaluator NewEvaluator(GraphActivityScope scope, bool evaluatingOutputs = false) =>
-        async (expression, expectedType, cancellationToken) =>
+    private GraphActivityTypedExpressionEvaluator NewEvaluator(GraphActivityScope scope, IActivityExecutionContext context, bool evaluatingOutputs = false) =>
+        async (expression, expectedType, target, cancellationToken) =>
         {
             cancellationToken.ThrowIfCancellationRequested();
+            IExecutionWarningSink? warnings = context.Warnings is null ? null : new GraphEvaluationWarnings(context.Warnings, scope);
             if (StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "Literal") ||
                 StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "Object"))
             {
-                return expression.Value.Clone();
+                return CoerceExpressionResult(expression.Value, expectedType, context, target);
             }
 
             if (StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "Input"))
             {
                 var referenceKey = ReadInputReferenceKey(expression);
-                if (!Descriptor.Inputs.Any(input => StringComparer.Ordinal.Equals(input.ReferenceKey, referenceKey)))
-                    throw new InvalidOperationException($"Graph Input expression references undeclared input '{referenceKey}'.");
-
-                var value = await scope.GetRequiredInputAsync(referenceKey, cancellationToken);
-                return CoerceExpressionResult(value, expectedType);
+                var input = Descriptor.Inputs.FirstOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, referenceKey))
+                    ?? throw new InvalidOperationException($"Graph Input expression references undeclared input '{referenceKey}'.");
+                scope.RecordExpressionPolicy(target, scope.Inputs.Values.Where(row => row.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BoundaryReferenceKey) == referenceKey));
+                var value = await ReadDeclaredInputAsync(scope, input, cancellationToken);
+                return CoerceExpressionResult(value, expectedType, context, target);
             }
 
             if (evaluatingOutputs && StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "Variable"))
@@ -333,10 +363,11 @@ public sealed class GraphActivity(
                 if (!Descriptor.Variables.Any(variable => StringComparer.Ordinal.Equals(variable.ReferenceKey, reference.ReferenceKey)))
                     throw new InvalidOperationException($"Graph Variable output mapping references undeclared variable '{reference.ReferenceKey}'.");
 
+                scope.RecordExpressionPolicy(target, scope.Variables.Values.Where(row => row.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BoundaryReferenceKey) == reference.ReferenceKey));
                 var captured = await scope.ReadVariableAsync(reference.ReferenceKey, cancellationToken);
                 if (!captured.Exists)
                     throw new InvalidOperationException($"Graph variable '{reference.ReferenceKey}' has no captured value for this invocation.");
-                return CoerceExpressionResult(captured.Value, expectedType);
+                return CoerceExpressionResult(captured.Value, expectedType, context, target);
             }
 
             var portableEvaluator = _portableExpressionEvaluator
@@ -355,11 +386,7 @@ public sealed class GraphActivity(
                 if (string.IsNullOrWhiteSpace(name) || !argumentNames.Add(name))
                     throw new InvalidOperationException($"Graph argument name '{name}' is blank or declared more than once.");
 
-                var captured = await scope.ReadInputAsync(input.ReferenceKey, cancellationToken);
-                if (!captured.Exists)
-                    continue;
-
-                var value = ToJsonElement(captured.Value);
+                var value = ToJsonElement(await ReadDeclaredInputAsync(scope, input, cancellationToken));
                 parameterValues.Add(name, value);
                 parameterBindings.Add(name, new LiteralExpressionParameterBinding(value));
             }
@@ -371,11 +398,17 @@ public sealed class GraphActivity(
                 if (!variableNames.Add(variable.Name))
                     throw new InvalidOperationException($"Graph variable name '{variable.Name}' is declared more than once and cannot be exposed through variables.");
 
-                // Spec 1222 FR-006: a declared variable with no value reads null, never undefined.
+                // A declared variable with no value reads its supported type default, or null.
                 var captured = await scope.ReadVariableAsync(variable.ReferenceKey, cancellationToken);
-                ambientVariables.Add(variable.Name, captured.Exists ? ToJsonElement(captured.Value) : JsonSerializer.SerializeToElement<object?>(null));
+                var variableType = ReadType(variable.Type);
+                object? initial = null;
+                if (variableType.CollectionKind == CollectionKind.Single &&
+                    _wellKnownTypeRegistry?.TryGetTypeOrDefault(variableType.Alias, out var clrType) == true)
+                    NullPolicyDefaults.TryGetTypeDefault(clrType, out initial);
+                ambientVariables.Add(variable.Name, captured.Exists ? ToJsonElement(captured.Value) : JsonSerializer.SerializeToElement(initial));
             }
 
+            scope.RecordExpressionPolicy(target, scope.Inputs.Values.Concat(scope.Variables.Values));
             var definition = new ExpressionDefinition(
                 expression.Syntax,
                 source.Text,
@@ -389,12 +422,38 @@ public sealed class GraphActivity(
                 definition,
                 parameterValues,
                 ambientVariables.Count == 0 ? null : new GraphVariableReader(ambientVariables),
-                cancellationToken);
+                cancellationToken) { UndefinedAsNull = context.UndefinedAsNull, Warnings = warnings };
             var result = await portableEvaluator.EvaluateAsync(request);
-            return CoerceExpressionResult(result, expectedType);
+            return CoerceExpressionResult(result, expectedType, context, target);
         };
 
-    private object? CoerceExpressionResult(object? value, JsonElement expectedType)
+    private sealed class GraphEvaluationWarnings(IExecutionWarningSink sink, GraphActivityScope scope) : IExecutionWarningSink
+    {
+        public void Report(ExecutionWarning warning)
+        {
+            var protect = scope.Inputs.Values.Concat(scope.Variables.Values).Select(DurableValuePolicies.Read)
+                .Any(policy => policy.HidesValue() || !string.IsNullOrWhiteSpace(policy.RedactionMode) || !string.IsNullOrWhiteSpace(policy.RetentionPolicy));
+            sink.Report(protect ? warning.ProtectedForm ?? warning : warning);
+        }
+    }
+
+    private async ValueTask<object?> ReadDeclaredInputAsync(GraphActivityScope scope, GraphActivityInputDescriptor input, CancellationToken cancellationToken)
+    {
+        var captured = await scope.ReadInputAsync(input.ReferenceKey, cancellationToken);
+        if (captured.Exists) return captured.Value;
+        if (Descriptor.RequiredInputReferenceKeys.Contains(input.ReferenceKey, StringComparer.Ordinal))
+            throw new InvalidOperationException($"Required graph input '{input.ReferenceKey}' has no captured value.");
+        var type = ReadType(input.Type).ToTypeReference();
+        if (NullPolicyDefaults.AcceptsNull(type, _wellKnownTypeRegistry, _typeDescriptors)) return null;
+        object? initial;
+        if (type.CollectionKind == CollectionKind.Single &&
+            (_wellKnownTypeRegistry?.TryGetTypeOrDefault(type.Alias, out var clrType) == true
+                ? NullPolicyDefaults.TryGetTypeDefault(clrType, out initial)
+                : NullPolicyDefaults.TryGetTypeDefault(type.Alias, out initial))) return initial;
+        throw new InvalidOperationException($"VF-ACT-003: Graph input '{input.ReferenceKey}' requires a declared default.");
+    }
+
+    private object? CoerceExpressionResult(object? value, JsonElement expectedType, IActivityExecutionContext context, string target)
     {
         var descriptor = ReadType(expectedType);
         var alias = descriptor.Alias;
@@ -411,8 +470,14 @@ public sealed class GraphActivity(
 
         var targetType = TypeReferenceFactory.Close(elementType, descriptor.CollectionKind);
         var json = ToJsonElement(value);
-        if (json.ValueKind == JsonValueKind.Null && targetType.IsValueType && Nullable.GetUnderlyingType(targetType) is null)
-            throw new InvalidOperationException($"Graph expression returned null for non-nullable result type '{alias}'.");
+        if (json.ValueKind == JsonValueKind.Null)
+        {
+            if (NullPolicyDefaults.AcceptsNull(descriptor.ToTypeReference(), registry, _typeDescriptors)) return null;
+            if (!context.DefaultOnNull || !NullPolicyDefaults.TryGetTypeDefault(targetType, out var typeDefault))
+                throw new InvalidOperationException($"VF-ACT-004: {target} returned null for non-nullable type '{alias}'.");
+            context.Warnings?.Report(new ExecutionWarning("VF-NULL-001", $"{target} of type '{alias}' used its type default because DefaultOnNull is enabled.", ExecutionWarningSeverity.Information));
+            return typeDefault;
+        }
 
         try
         {

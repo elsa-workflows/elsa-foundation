@@ -69,19 +69,17 @@ internal sealed class JintPortableJavaScriptEvaluator(
             }
         }
 
-        if (result.IsUndefined())
-        {
-            if (!request.UndefinedAsNull)
-                throw new InvalidOperationException("VF-UNDEF-001: A JavaScript binding must produce a value. Use an expression or return a value from the statement block; undefined is not supported.");
-            result = JsValue.Null;
-        }
-
         foreach (var warning in functions.Warnings)
             request.Warnings?.Report(warning);
         var written = JavaScriptValueWrites.Apply(values.Write(result, "result"), "result", precisionPolicy);
+        if (written.Value is null)
+        {
+            if (!request.UndefinedAsNull)
+                throw new InvalidOperationException("VF-UNDEF-001: A JavaScript binding must produce a value. Use an expression or return a value from the statement block; undefined is not supported.");
+        }
         foreach (var warning in values.Warnings)
             request.Warnings?.Report(warning);
         JavaScriptValueWrites.WarnLossyReads(values, written.Losses, request.Warnings, logger);
-        return written.Value!.Value;
+        return written.Value ?? JsonSerializer.SerializeToElement<object?>(null);
     }
 }

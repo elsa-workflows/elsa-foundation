@@ -313,7 +313,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         var document = Document(Sequence(intrinsic)) with { Variables = [Variable("customer", "Customer")] };
         var result = await Analyzer(provider).AnalyzeAsync(document, new("set", "value"));
         Assert.Equal(new TypeReference("String"), result.Target!.Type);
-        Assert.False(result.Target.IsNullable);
+        Assert.True(result.Target.IsNullable); // The selected String TYPE accepts null.
         Assert.True(result.Target.IsRequired);
         Assert.Empty(result.Findings);
     }

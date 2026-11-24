@@ -162,6 +162,9 @@ public sealed class Elsa3ActivityMapCoverageTests
             {
                 var input = contract.Inputs.Single(input => input.ReferenceKey == rule.Elsa4Key);
                 var name = $"'{entry.Elsa3TypeName}.{rule.Elsa3Name}'";
+                if (rule.OnNull is { Rule: Elsa3NullRule.TypedNull } && input.ReferenceKey == Elsa3IntrinsicContracts.ValueKey &&
+                    ((Elsa3ActivityTarget.Intrinsic)entry.Target).ActivityVersionId is "elsa.intrinsic.set@1" or "elsa.intrinsic.set-output@1")
+                    continue; // The selected target TYPE and workflow policy decide nullability (S-2), not this generic contract.
                 if (rule.OnNull is { Rule: Elsa3NullRule.TypedNull } or { Rule: Elsa3NullRule.Refuse, WhenBound: not null })
                     Assert.True(input.IsNullable && !input.IsRequired, $"{name} converts a null to a typed null, but intrinsic input '{input.ReferenceKey}' does not accept one.");
                 if (rule.OnNull is { Rule: Elsa3NullRule.NoBinding })

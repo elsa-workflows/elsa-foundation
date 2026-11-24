@@ -804,6 +804,37 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   }, 10_000);
 
+  it.each(["saved", null])("recovers Required with a declared default without changing that default (%s)", async value => {
+    const initial = fullDraft();
+    initial.contract.inputs = [{ referenceKey: "note", name: "Note", displayName: "Note", description: null,
+      category: null, order: 0, uiHint: null, uiSpecifications: {}, type: { alias: "String", collectionKind: "Single" },
+      isRequired: true, default: { syntax: "Literal", value }, storageDriverKey: "elsa.json", durability: "Required" }];
+    const putJson = vi.fn(async (_url: string, body: unknown) => ({ ...initial, revision: 2, contract: (body as { contract: typeof initial.contract }).contract }));
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [editingContribution()], putJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return initial;
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        if (url === "/expressions/descriptors") return { items: [] };
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+    await waitForText(rendered.container, "Note");
+    showContractView(rendered.container);
+    const action = buttonByText(rendered.container, "Make optional");
+    action.focus();
+    expect(document.activeElement).toBe(action);
+    click(action);
+    await waitFor(() => expect(putJson).toHaveBeenCalled());
+    const saved = (putJson.mock.calls.at(-1)![1] as { contract: typeof initial.contract }).contract.inputs[0];
+    expect(saved.isRequired).toBe(false);
+    expect(saved.default).toEqual({ syntax: "Literal", value });
+    expect(contractMemberRow(rendered.container, "input", "note").querySelector<HTMLInputElement>("[data-contract-field='isRequired']")!.disabled).toBe(true);
+    await rendered.unmount();
+  });
+
   it("authors capability-backed members and preserves exact default presence plus unknown wire fields", async () => {
     let revision = 3;
     const initial = fullDraft({ revision, payload: { edit: 0 } });
@@ -864,27 +895,10 @@ describe("Activity Definition authoring", () => {
     const customerNote = selectContractMember(rendered.container, "input", "customer-note");
     expect(controlByAriaLabel<HTMLSelectElement>(rendered.container, "Storage provider").value).toBe("elsa.json");
     const required = contractMemberRow(rendered.container, "input", "customer-note").querySelector<HTMLInputElement>("[data-contract-field='isRequired']")!;
-    const nullable = controlByLabel<HTMLInputElement>(rendered.container, "Allow null");
     expect(required.checked).toBe(false);
-    expect(nullable.checked).toBe(true);
-    expect(nullable.disabled).toBe(false);
-    expect(rendered.container.textContent).not.toContain("Remove or change the default value of null before turning this off");
-    click(required);
-    expect(nullable.checked).toBe(true);
-
-    await waitFor(() => expect(putJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({
-      contract: expect.objectContaining({
-        inputs: [expect.objectContaining({
-          isRequired: true,
-          isNullable: true,
-          default: { syntax: "Literal", value: "before", futureDefaultField: "retained" },
-          futureMemberField: { retained: true },
-          type: expect.objectContaining({ futureTypeField: "retained" }),
-          uiSpecifications: { futureUiField: "retained" }
-        })],
-        futureContractField: { retained: true }
-      })
-    })));
+    expect(required.disabled).toBe(true);
+    expect(rendered.container.textContent).not.toContain("Allow null");
+    expect(rendered.container.textContent).toContain("A member with a default is optional");
 
     change(controlByLabel<HTMLInputElement>(customerNote, "Value"), "present");
     click(buttonByText(customerNote, "Apply default"));
@@ -915,8 +929,9 @@ describe("Activity Definition authoring", () => {
     await waitFor(() => expect(putJson.mock.calls.some(([, body]) =>
       JSON.stringify((body as { contract: { inputs: Array<{ default: unknown }> } }).contract.inputs[0]?.default) === JSON.stringify({ syntax: "Literal", value: null })
     )).toBe(true));
-    expect(controlByLabel<HTMLInputElement>(customerNote, "Allow null").disabled).toBe(true);
-    expect(rendered.container.textContent).toContain("Remove or change the default value of null before turning this off");
+    expect(required.disabled).toBe(true);
+    expect(rendered.container.textContent).not.toContain("Allow null");
+    expect(rendered.container.textContent).toContain("A member with a default is optional");
 
     const defaultMode = controlByLabel<HTMLSelectElement>(customerNote, "Default");
     change(defaultMode, "expression");
@@ -943,7 +958,7 @@ describe("Activity Definition authoring", () => {
     await waitFor(() => expect(contractListButton(rendered.container, "output", "result").getAttribute("aria-expanded")).toBe("true"));
     const output = contractMemberPane(rendered.container, "output", "result");
     click(contractMemberRow(rendered.container, "output", "result").querySelector<HTMLInputElement>("[data-contract-field='isRequired']")!);
-    click(controlByLabel<HTMLInputElement>(output, "Allow null"));
+    expect(output.textContent).not.toContain("Allow null");
     await waitFor(() => expect(putJson.mock.calls.some(([, body]) => {
       const value = (body as { contract: { outputs: Array<Record<string, unknown>> } }).contract.outputs[0];
       return JSON.stringify(value) === JSON.stringify({
@@ -957,7 +972,6 @@ describe("Activity Definition authoring", () => {
         uiSpecifications: null,
         type: { alias: "String", collectionKind: "Single" },
         isRequired: true,
-        isNullable: true,
         storageDriverKey: "elsa.json",
         durability: "Required"
       });

@@ -1,3 +1,5 @@
+using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Core.Services;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
@@ -184,13 +186,13 @@ public sealed class GraphActivityProvider(
         return ValueTask.FromResult<ActivityDataSelectionDocument?>(new(
             "ActivityDefinition", resourceId, contractRevision, root,
             contract.Inputs.Select(x => new InputDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
-                x.DisplayName ?? x.Name, x.Category, x.IsNullable, Description: x.Description, Order: x.Order,
+                x.DisplayName ?? x.Name, x.Category, contractCapabilities.AllowsNull(x.Type), Description: x.Description, Order: x.Order,
                 UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,
                 DefaultValue: x.Default?.Value, DefaultSyntax: x.Default?.Syntax)).ToImmutableArray(),
             graph.Variables.Select(x => new VariableDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
                 x.InitialValue is null ? null : new ArgumentValue(x.InitialValue.Value, x.InitialValue.Syntax))).ToImmutableArray(),
             contract.Outputs.Select(x => new OutputDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
-                x.DisplayName ?? x.Name, x.Category, x.IsNullable, Description: x.Description, Order: x.Order,
+                x.DisplayName ?? x.Name, x.Category, contractCapabilities.AllowsNull(x.Type), Description: x.Description, Order: x.Order,
                 UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,
                 SourceRepresentation: x.SourceRepresentation)).ToImmutableArray()));
     }
@@ -645,8 +647,11 @@ public sealed class GraphActivityProvider(
                          subject,
                          $"/variables/{index}",
                          variable.ReferenceKey,
-                         variable.InitialValue?.Value.ValueKind == JsonValueKind.Null))
+                         variable.InitialValue?.Value.ValueKind == JsonValueKind.Null && !contractCapabilities.AllowsNull(variable.Type)))
                 diagnostics.Add(diagnostic);
+            if (variable.InitialValue is null && !contractCapabilities.AllowsNull(variable.Type) && !TryGraphVariableDefault(variable.Type, out _))
+                diagnostics.Add(Diagnostic("VF-ACT-003", $"Variable '{variable.Name}' requires a declared default.", subject,
+                    $"/variables/{index}/initialValue", variable.ReferenceKey));
         }
 
         ValidateBoundaryInputReads(graph, contract, subject, diagnostics);
@@ -1057,7 +1062,7 @@ public sealed class GraphActivityProvider(
         // argument envelope's storage or sensitivity hints as new requirements.
         var bindings = compiler.CompileGraphIntrinsicInputs(node.NodeId,
             [new InputDefinition(WorkflowIntrinsicInputKeys.Value, WorkflowIntrinsicInputKeys.Value, target.Type, null,
-                target.Name, null, IsNullable: false, IsRequired: true)], node.Activity.Inputs).ToDictionary(binding => binding.Key, binding => binding.Value, StringComparer.Ordinal);
+                target.Name, null, IsNullable: contractCapabilities.AllowsNull(target.Type), IsRequired: true)], node.Activity.Inputs).ToDictionary(binding => binding.Key, binding => binding.Value, StringComparer.Ordinal);
         var value = bindings[WorkflowIntrinsicInputKeys.Value];
         TypeReference? sourceType = null;
         if (value.Source == RuntimeInputBindingSource.VariableRead && value.Variable is { } variable)
@@ -1081,18 +1086,18 @@ public sealed class GraphActivityProvider(
             intrinsicVariable: new RuntimeVariableReference(target.ReferenceKey, node.Activity.Intrinsic!.Variable!.DeclaringScopeId!));
     }
 
-    private static ExecutableNode CompileSetOutput(GraphNode node, ActivityOutputContract output, IActivityTemplateInputBindingCompiler compiler)
+    private ExecutableNode CompileSetOutput(GraphNode node, ActivityOutputContract output, IActivityTemplateInputBindingCompiler compiler)
     {
         InputDefinition Input(string key, TypeReference type, bool nullable) =>
             new(key, key, type, null, key, null, IsNullable: nullable, IsRequired: true);
         var bindings = compiler.CompileGraphInputs(node.NodeId,
-            [Input(WorkflowIntrinsicInputKeys.Name, new TypeReference("String"), false), Input(WorkflowIntrinsicInputKeys.Value, output.Type, output.IsNullable)],
+            [Input(WorkflowIntrinsicInputKeys.Name, new TypeReference("String"), false), Input(WorkflowIntrinsicInputKeys.Value, output.Type, contractCapabilities.AllowsNull(output.Type))],
             node.Activity.Inputs);
         // Parent, slot and index let placement attach this local leaf alongside exact catalog dependencies.
         var payload = JsonSerializer.SerializeToElement(new
         {
             kind = "SetOutput", output.ReferenceKey, output.Type, output.StorageDriverKey,
-            isNullable = output.IsNullable, node.ParentOccurrenceId, node.ChildSlotName, node.ChildIndex
+            isNullable = contractCapabilities.AllowsNull(output.Type), node.ParentOccurrenceId, node.ChildSlotName, node.ChildIndex
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         return new ExecutableNode($"set-output:{node.NodeId}", node.NodeId, "elsa.intrinsic.setoutput", "1.0.0",
             WellKnownRuntimeActivityConsumers.Intrinsic, payload, bindings, new Dictionary<string, string>(),
@@ -1598,6 +1603,16 @@ public sealed class GraphActivityProvider(
         return canonical.RootElement.Clone();
     }
 
+    private bool TryGraphVariableDefault(TypeReference type, out object? value)
+    {
+        value = null;
+        if (type.CollectionKind != CollectionKind.Single) return false;
+        if (NullPolicyDefaults.TryGetTypeDefault(type.Alias, out value)) return true;
+        using var scope = scopeFactory?.CreateScope();
+        return scope?.ServiceProvider.GetService<IWellKnownTypeRegistry>() is { } types &&
+            types.TryGetTypeOrDefault(type.Alias, out var clrType) && NullPolicyDefaults.TryGetTypeDefault(clrType, out value);
+    }
+
     private JsonElement BuildBoundaryPayload(
         ActivityGraphManifest graph,
         DesignActivityContract contract,
@@ -1640,7 +1655,10 @@ public sealed class GraphActivityProvider(
                     outputBindings = ReadCanonicalArray(node.Element, "outputs")
                 };
             }).ToArray(),
-            variables = graph.Variables,
+            variables = graph.Variables.Select(variable => variable.InitialValue is null &&
+                !contractCapabilities.AllowsNull(variable.Type) && TryGraphVariableDefault(variable.Type, out var initial)
+                ? variable with { InitialValue = new ActivityInputDefault("Literal", JsonSerializer.SerializeToElement(initial, initial!.GetType())) }
+                : variable).ToArray(),
             outputMappings = graph.OutputMappings,
             inputs = contract.Inputs
                 .OrderBy(x => x.ReferenceKey, StringComparer.Ordinal)
@@ -1701,7 +1719,7 @@ public sealed class GraphActivityProvider(
         return Canonicalize(JsonSerializer.SerializeToElement(schemaTwoPayload, serializerOptions));
     }
 
-    private static Elsa.Activities.Runtime.Core.Models.ActivityContract BuildRuntimeContract(
+    private Elsa.Activities.Runtime.Core.Models.ActivityContract BuildRuntimeContract(
         ActivityTemplateCompilationRequest request,
         JsonElement descriptorPayload)
     {
@@ -1712,7 +1730,7 @@ public sealed class GraphActivityProvider(
             input.Name,
             new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind),
             input.IsRequired,
-            input.IsNullable,
+            contractCapabilities.AllowsNull(input.Type),
             input.Default is not null,
             input.Default?.Value,
             inputPolicy));

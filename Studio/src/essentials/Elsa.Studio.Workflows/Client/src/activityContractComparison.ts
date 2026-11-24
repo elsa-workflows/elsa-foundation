@@ -30,12 +30,10 @@ export function classifyBreakingContractTransition(
       reasons.push("Changing the capability type or collection kind is classified as breaking.");
     if (currentBoundary.storageDriverKey !== nextBoundary.storageDriverKey)
       reasons.push("Changing the durable storage driver is classified as breaking.");
-    if (currentBoundary.isNullable && !nextBoundary.isNullable)
-      reasons.push("Tightening nullability is classified as breaking.");
   }
   if (kind === "input" && "default" in current && "default" in next) {
-    if (!current.isRequired && next.isRequired && next.default === null)
-      reasons.push("Requiring an effective value without a default is classified as breaking.");
+    if (!current.isRequired && next.isRequired)
+      reasons.push("Requiring a supplied value is classified as breaking.");
     if (current.default !== null && next.default === null)
       reasons.push("Removing a configured default is classified as breaking.");
     if (current.default !== null && next.default !== null && JSON.stringify(current.default) !== JSON.stringify(next.default))

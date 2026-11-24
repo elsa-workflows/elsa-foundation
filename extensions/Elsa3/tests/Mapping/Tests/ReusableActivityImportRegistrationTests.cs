@@ -90,7 +90,7 @@ public sealed class ReusableActivityImportRegistrationTests
             Elsa3MigrationInputKind.WorkflowDefinitionExportJson,
             source));
 
-        var diagnostic = Assert.Single(result.Diagnostics);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
         Assert.False(result.Succeeded);
         Assert.Equal(ReusableActivityImportDiagnosticCodes.SelectionInvalid, diagnostic.Code);
         Assert.Contains("collection-aware", diagnostic.Message, StringComparison.Ordinal);

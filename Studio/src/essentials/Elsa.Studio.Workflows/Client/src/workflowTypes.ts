@@ -427,6 +427,7 @@ export const collectionKinds: CollectionKind[] = ["Single", "Array", "List", "Ha
 export interface ArgumentType extends StudioWorkflowRunInputTypeMetadata {
   alias: string;
   collectionKind: CollectionKind;
+  supportsNull?: boolean;
 }
 
 // Canonical scoped-variable declaration (Elsa.Expressions.Core.Models.VariableDefinition, ADR-0027).
@@ -505,7 +506,7 @@ export interface WorkflowManagementCapabilities {
 // Workflow inputs carry the argument-definition field set plus binding metadata. Collection-ness lives
 // on `type.collectionKind` (the legacy `isArray` boolean is gone). `referenceKey` is the stable identity
 // (a required positional on the backend InputDefinition). Defaults are typed JSON literals and use the
-// backend's `defaultSyntax: "Literal"` contract; `isRequired` and `isNullable` are first-class flags.
+// backend's `defaultSyntax: "Literal"` contract; requiredness is checked before defaults.
 export interface WorkflowInput extends StudioWorkflowRunInputDescriptor {
   referenceKey: string;
   name: string;
@@ -518,7 +519,6 @@ export interface WorkflowInput extends StudioWorkflowRunInputDescriptor {
   defaultValue?: unknown;
   defaultSyntax?: string | null;
   isRequired?: boolean;
-  isNullable: boolean;
   [key: string]: unknown;
 }
 
@@ -538,7 +538,6 @@ export interface WorkflowOutput {
   description: string;
   category: string;
   [key: string]: unknown;
-  isNullable: boolean;
 }
 
 // A selectable argument element type from the Expressions domain's variable-types capability.
@@ -546,6 +545,7 @@ export interface WorkflowOutput {
 // default-value editor (text/number/checkbox/date/none — tolerate unknown values). `typeName` is a
 // legacy fallback for older backends that returned it instead of `alias`.
 export interface VariableTypeDescriptor {
+  supportsNull?: boolean;
   alias: string;
   displayName?: string | null;
   category?: string | null;
@@ -633,6 +633,7 @@ export interface WorkflowTestRunInputContract {
     type: ArgumentType;
     isRequired: boolean;
     isNullable?: boolean;
+    supportsNull?: boolean;
     defaultValue?: unknown | null;
     hasDefaultValue?: boolean;
   }>;

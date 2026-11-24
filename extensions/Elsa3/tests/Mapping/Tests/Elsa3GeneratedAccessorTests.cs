@@ -24,7 +24,7 @@ public sealed class Elsa3GeneratedAccessorTests
 
         Assert.True(accessor.Succeeded, Describe(accessor.Diagnostics));
         var converted = ReadExpression(accessor);
-        Assert.Equal("(variables.HttpRequestBody.text) ?? null", converted.Source);
+        Assert.Equal("variables.HttpRequestBody.text", converted.Source);
         Assert.Equal(ReadExpression(explicitRead).Parameters, converted.Parameters);
         Assert.IsType<VariableExpressionParameterBinding>(converted.Parameters["variables.HttpRequestBody"]);
     }
@@ -36,7 +36,7 @@ public sealed class Elsa3GeneratedAccessorTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         // Spec 1222 FR-026: spelled as the variable is declared, not as the accessor.
-        Assert.Equal("(variables.orderId) ?? null", ReadExpression(result).Source);
+        Assert.Equal("variables.orderId", ReadExpression(result).Source);
         Assert.IsType<VariableExpressionParameterBinding>(ReadExpression(result).Parameters["variables.orderId"]);
     }
 

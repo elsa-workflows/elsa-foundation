@@ -5,6 +5,44 @@ namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 public sealed partial class ScriptValueAdapterTests
 {
+    [Fact]
+    public async Task An_inherited_boxed_value_does_not_replace_or_coerce_a_sparse_array_hole()
+    {
+        var sink = new RecordingWarningSink();
+        var value = await ExpressionAsync("(() => { const n = new Number(1); n.valueOf = () => { throw new Error('coerced hole'); }; Array.prototype[0] = n; const a = [,]; a.toJSON = () => a; return a; })()", sink: sink);
+        Assert.Equal("[null]", value.GetRawText());
+        Assert.Equal("VF-UNDEF-003", Assert.Single(sink.Warnings).Code);
+    }
+
+    [Fact]
+    public async Task Undefined_as_null_retains_warnings_from_lossy_reads()
+    {
+        var sink = new RecordingWarningSink();
+        var value = await ExpressionAsync("const id = variables.order.id; undefined;", sink: sink, undefinedAsNull: true);
+        Assert.Equal(JsonValueKind.Null, value.ValueKind);
+        Assert.Contains(sink.Warnings, warning => warning.Code == "VF-PREC-002");
+    }
+
+    [Fact]
+    public async Task A_root_toJSON_that_produces_undefined_obeys_the_same_result_policy()
+    {
+        const string source = "({toJSON(){return undefined;}})";
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExpressionAsync(source));
+        Assert.Contains("VF-UNDEF-001", exception.Message);
+        Assert.Equal(JsonValueKind.Null, (await ExpressionAsync(source, undefinedAsNull: true)).ValueKind);
+    }
+
+    [Theory]
+    [InlineData("({n:new Number(NaN)})")]
+    [InlineData("new Number(Infinity)")]
+    [InlineData("new Number(-Infinity)")]
+    public async Task Boxed_non_finite_numbers_are_diagnosed_after_unboxing(string source)
+    {
+        var sink = new RecordingWarningSink();
+        await ExpressionAsync(source, sink: sink);
+        Assert.Equal("VF-NUM-001", Assert.Single(sink.Warnings).Code);
+    }
+
     [Theory]
     [InlineData(false, "{\"b\":null,\"c\":[1,null,null]}", 4)]
     [InlineData(true, "{\"a\":null,\"b\":null,\"c\":[1,null,null]}", 3)]

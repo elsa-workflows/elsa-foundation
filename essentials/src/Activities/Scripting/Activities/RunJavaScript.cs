@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -215,5 +216,6 @@ public sealed record RunJavaScriptResult
     public RunJavaScriptResult(JsonElement? value) => Value = value?.Clone();
 
     [Output(Key = "result", Path = "value", IsRequired = false)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonElement? Value { get; }
 }

@@ -43,6 +43,7 @@ internal sealed class StepVariableSession : IStepVariableSession
     private readonly bool _engineConsumer;
     private readonly WorkflowValuePolicies _valuePolicies;
     private readonly IWellKnownTypeRegistry? _registry;
+    private readonly IVariableTypeDescriptorCatalog? _typeDescriptors;
     private IExecutionWarningSink? _warnings;
     internal void SetWarnings(IExecutionWarningSink warnings) => _warnings = warnings;
     private readonly Dictionary<(string ScopeId, string Key), VariableSessionRead> _reads = new();
@@ -69,7 +70,8 @@ internal sealed class StepVariableSession : IStepVariableSession
         bool suspends = false,
         IReadOnlyDictionary<(string ScopeId, string Key), bool>? boundReferences = null,
         bool engineConsumer = false,
-        IWellKnownTypeRegistry? registry = null)
+        IWellKnownTypeRegistry? registry = null,
+        IVariableTypeDescriptorCatalog? typeDescriptors = null)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(invocation);
@@ -88,6 +90,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         _engineConsumer = engineConsumer;
         _valuePolicies = executable.ValuePolicies;
         _registry = registry;
+        _typeDescriptors = typeDescriptors;
         AttemptId = attemptId
                     ?? invocation.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId
                     ?? invocation.Attempts?.LastOrDefault()?.AttemptId
@@ -257,6 +260,9 @@ internal sealed class StepVariableSession : IStepVariableSession
         ArgumentNullException.ThrowIfNull(target);
         EnsureEngineSurface();
         var resolved = ResolvePinned(target.ScopeId, target.VariableKey, target.Name);
+        if (resolved.IsTransient)
+            throw Fault(new InvalidOperationException(
+                $"Variable '{resolved.Name}' is transient: a script cannot write it."));
         if (!_valuePolicies.UndefinedAsNull)
             throw Fault(new InvalidOperationException($"VF-UNDEF-001: Variable '{resolved.Name}' cannot be assigned undefined; produce a value or enable UndefinedAsNull."));
         Stage(resolved, null, StepVariableWriteKind.WholeAssignment, droppedMembers: null);
@@ -341,6 +347,9 @@ internal sealed class StepVariableSession : IStepVariableSession
             _readOrder.Add(read);
         }
 
+        if (envelope.Presence == ValuePresence.Absent && envelope.Type.CollectionKind == CollectionKind.Single &&
+            NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, _registry, out var typeDefault))
+            return ValueEnvelope.Inline(envelope.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType()), envelope.Policy);
         return envelope;
     }
 
@@ -407,7 +416,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         try
         {
             envelope = NullPolicyDefaults.NormalizeNull(envelope,
-                NullPolicyDefaults.AcceptsNull(declared.Type.ToTypeReference(), _registry), _valuePolicies,
+                NullPolicyDefaults.AcceptsNull(declared.Type.ToTypeReference(), _registry, _typeDescriptors), _valuePolicies,
                 $"Variable '{variable.Name}'", _registry, _warnings);
         }
         catch (InvalidOperationException exception)

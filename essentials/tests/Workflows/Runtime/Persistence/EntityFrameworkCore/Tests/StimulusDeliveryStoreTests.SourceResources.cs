@@ -320,6 +320,12 @@ public sealed partial class StimulusDeliveryStoreTests
     }
     private sealed class ManagementMapper : ITriggerInputMapper
     {
+        WorkflowExecutableInputValidation ITriggerInputMapper.ValidateMappings(WorkflowExecutableInputContract contract,
+            IReadOnlyList<TriggerInputMapping> mappings, WorkflowValuePolicies policies, TriggerInputSemantics semantics) => ValidateMappings(contract, mappings);
+        ValueTask<WorkflowExecutableInputValidation> ITriggerInputMapper.MapAsync(WorkflowExecutableInputContract contract,
+            IReadOnlyList<TriggerInputMapping> mappings, JsonElement source, WorkflowValuePolicies policies,
+            CancellationToken cancellationToken, TriggerInputSemantics semantics) => MapAsync(contract, mappings, source, cancellationToken);
+
         public WorkflowExecutableInputValidation ValidateMappings(WorkflowExecutableInputContract contract, IReadOnlyList<TriggerInputMapping> mappings) =>
             contract.Inputs.Count == 0 && mappings.Count == 0 ? WorkflowExecutableInputValidation.Success([]) : throw new InvalidOperationException("Fixture only supports its actual empty stored contract.");
         public ValueTask<WorkflowExecutableInputValidation> MapAsync(WorkflowExecutableInputContract contract, IReadOnlyList<TriggerInputMapping> mappings,
