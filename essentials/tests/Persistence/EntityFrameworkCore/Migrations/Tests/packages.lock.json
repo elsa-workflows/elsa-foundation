@@ -608,6 +608,40 @@
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )"
         }
       },
+      "elsa.decisions.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.decisions.persistence.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Decisions.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.decisions.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Decisions.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
+        }
+      },
+      "elsa.decisions.tooling": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Decisions.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.10, )",
+          "MySql.EntityFrameworkCore": "[10.0.9, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.0, )"
+        }
+      },
       "elsa.diagnostics.opentelemetry": {
         "type": "Project",
         "dependencies": {
