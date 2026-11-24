@@ -39,34 +39,36 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         ? started.Result.LastError
         : null;
 
+    /// <param name="cancellationToken">The application's shutdown deadline (<c>HostOptions.ShutdownTimeout</c>). It also bounds
+    /// the node's drain: at the deadline the stop becomes a kill, nothing renews, and what is still owned runs out by its lease.</param>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        var shutdown = RequestStop();
+        var shutdown = RequestStop(cancellationToken);
         try { await shutdown.WaitAsync(cancellationToken).ConfigureAwait(false); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            if (!shutdown.IsCompleted)
-                Escalate("The PostgreSQL preview node did not stop within the application shutdown deadline.");
+            // The deadline also killed the node's stop, which may then finish at once: escalate on the expiry itself.
+            Escalate("The PostgreSQL preview node did not stop within the application shutdown deadline.");
             throw;
         }
     }
 
-    public ValueTask DisposeAsync() => new(RequestStop());
+    public ValueTask DisposeAsync() => new(RequestStop(CancellationToken.None));
 
-    private Task RequestStop()
+    private Task RequestStop(CancellationToken deadline)
     {
         lock (_lifecycle)
         {
             if (_shutdown is not null) return _shutdown;
             if (_startup is { IsCanceled: false, IsFaulted: false } startup)
-                return _shutdown = Task.Run(() => StopNodeAsync(startup));
+                return _shutdown = Task.Run(() => StopNodeAsync(startup, deadline));
 
             _cancelStartup.Dispose();
             return _shutdown = Task.CompletedTask;
         }
     }
 
-    private async Task StopNodeAsync(Task<RuntimeNode> startup)
+    private async Task StopNodeAsync(Task<RuntimeNode> startup, CancellationToken deadline)
     {
         try
         {
@@ -75,7 +77,7 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
             {
                 // Startup reports its own error. An owner that did start must be stopped even if cancellation failed.
                 await ((Task)startup).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-                if (startup.IsCompletedSuccessfully) await startup.Result.StopAsync();
+                if (startup.IsCompletedSuccessfully) await startup.Result.StopAsync(deadline);
             }
         }
         finally { _cancelStartup.Dispose(); }
