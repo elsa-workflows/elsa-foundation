@@ -185,10 +185,12 @@ function TriggerCollection({
                     {...studioRowInteraction<HTMLTableRowElement>(() => navigate(detailHref))}
                   >
                     <th scope="row">
-                      <StudioLink className="studio-row-link wf-trigger-row-title" href={detailHref} navigateToStudioPath={navigate}>
-                        {trigger.name}
-                      </StudioLink>
-                      {trigger.origin.configurationReadOnly ? <small className="wf-trigger-muted">Source-managed</small> : null}
+                      <div className="wf-trigger-cell-stack-tight">
+                        <StudioLink className="studio-row-link wf-trigger-row-title" href={detailHref} navigateToStudioPath={navigate}>
+                          {trigger.name}
+                        </StudioLink>
+                        {trigger.origin.configurationReadOnly ? <small className="wf-trigger-muted">Source-managed</small> : null}
+                      </div>
                     </th>
                     <td>
                       <span className="wf-trigger-type-badge" data-accent={typePresentation.accent}>
@@ -197,21 +199,23 @@ function TriggerCollection({
                       </span>
                     </td>
                     <td>
-                      <StatusChip tone={triggerStateTone(trigger.effectiveState)}>{label(trigger.effectiveState)}</StatusChip>
-                      <Findings items={trigger.findings} />
+                      <div className="wf-trigger-cell-stack">
+                        <StatusChip tone={triggerStateTone(trigger.effectiveState)}>{label(trigger.effectiveState)}</StatusChip>
+                        <Findings items={trigger.findings} variant="inline" />
+                      </div>
                     </td>
                     <td>{trigger.eligibleSubscriptionCount} / {trigger.subscriptionCount}</td>
                     <td>
                       {trigger.http ? (
-                        <>
-                          {trigger.http.proposedEndpoint || "No route"}
+                        <div className="wf-trigger-cell-stack-tight">
+                          <span>{trigger.http.proposedEndpoint || "No route"}</span>
                           <small className="wf-trigger-muted">{label(trigger.http.reservationState)}</small>
-                        </>
+                        </div>
                       ) : trigger.schedule?.nextDueUtc ? (
-                        <>
-                          {trigger.schedule.nextDueUtc}
+                        <div className="wf-trigger-cell-stack-tight">
+                          <span>{trigger.schedule.nextDueUtc}</span>
                           <small className="wf-trigger-muted">{trigger.schedule.timezone || "UTC"}</small>
-                        </>
+                        </div>
                       ) : "—"}
                     </td>
                     <td className="wf-trigger-actions-cell" onClick={event => event.stopPropagation()}>

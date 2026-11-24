@@ -1,3 +1,7 @@
+using Microsoft.Data.SqlClient;
+using MySql.Data.MySqlClient;
+using Npgsql;
+
 /// <summary>
 /// A TCP proxy in front of the database that counts round trips: a round trip begins each time the client sends after
 /// the server last spoke on that connection (or for the first time). Requests the driver pipelines without waiting
@@ -13,6 +17,7 @@ sealed class Wire
     private long _protocolRequests;
     private long _flushes, _executes, _limitedExecutes, _namedExecutes;
     private bool _postgres;
+    private string? _referenceEngine;
 
     private Wire(string host, int port) => (_host, _port) = (host, port);
 
@@ -36,20 +41,65 @@ sealed class Wire
 
     public int LocalPort => ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
 
-    public static Wire Start(string engine, string connection)
+    public static Wire Start(string engine, string connection, (string Host, int Port)? referenceEndpoint = null)
     {
-        var match = engine == "sqlserver"
-            ? System.Text.RegularExpressions.Regex.Match(connection, @"Server=([^,;]+),(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-            : System.Text.RegularExpressions.Regex.Match(connection, @"(?:Host|server)=([^;]+);.*?Port=(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (referenceEndpoint is { } endpoint)
+        {
+            var referenceMeter = Start(endpoint.Host, endpoint.Port);
+            referenceMeter._referenceEngine = engine;
+            return referenceMeter;
+        }
+        var match = Endpoint(engine, connection);
         var wire=Start(match.Groups[1].Value, int.Parse(match.Groups[2].Value));
-        wire._postgres=engine=="postgres";
+        wire._postgres = engine == "postgres";
         return wire;
     }
 
+    public static (string Host, int Port)? ReferenceEndpoint(string engine, string connection)
+    {
+        try
+        {
+            (string Host, int Port)? endpoint = engine switch
+            {
+                "postgres" when new NpgsqlConnectionStringBuilder(connection) is { Host: { } host } pg && pg.ShouldSerialize("Port")
+                    => (host, pg.Port),
+                "mysql" when new MySqlConnectionStringBuilder(connection) is
+                    { ConnectionProtocol: MySqlConnectionProtocol.Tcp, DnsSrv: false, Replication: false } my && my.ShouldSerialize("Port")
+                    => (my.Server, checked((int)my.Port)),
+                "sqlserver" => SqlServerReferenceEndpoint(new SqlConnectionStringBuilder(connection)),
+                _ => null,
+            };
+            return endpoint is { Host: "127.0.0.1" or "localhost", Port: > 0 and <= ushort.MaxValue } ? endpoint : null;
+        }
+        catch (ArgumentException) { return null; }
+        catch (FormatException) { return null; }
+        catch (OverflowException) { return null; }
+    }
+
+    private static (string Host, int Port)? SqlServerReferenceEndpoint(SqlConnectionStringBuilder settings)
+    {
+        if (!string.IsNullOrEmpty(settings.FailoverPartner)) return null;
+        var address = settings.DataSource;
+        if (address.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase)) address = address[4..];
+        return address.Split(',') is [string host, string port] && ushort.TryParse(port, out var parsed)
+            ? (host, parsed)
+            : null;
+    }
+
+    private static System.Text.RegularExpressions.Match Endpoint(string engine, string connection) =>
+        engine == "sqlserver"
+            ? System.Text.RegularExpressions.Regex.Match(connection, @"Server=([^,;]+),(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            : System.Text.RegularExpressions.Regex.Match(connection, @"(?:Host|server)=([^;]+);.*?Port=(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
     public string Rewrite(string connection)
     {
-        var port = ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
-        return System.Text.RegularExpressions.Regex.Replace(connection, @"(Server=[^,;]+,)\d+|(Port=)\d+", m => (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value) + port, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return _referenceEngine switch
+        {
+            "postgres" => new NpgsqlConnectionStringBuilder(connection) { Host = _host, Port = LocalPort }.ConnectionString,
+            "mysql" => new MySqlConnectionStringBuilder(connection) { Server = _host, Port = (uint)LocalPort }.ConnectionString,
+            "sqlserver" => new SqlConnectionStringBuilder(connection) { DataSource = $"tcp:{_host},{LocalPort}" }.ConnectionString,
+            _ => System.Text.RegularExpressions.Regex.Replace(connection, @"(Server=[^,;]+,)\d+|(Port=)\d+", m => (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value) + LocalPort, System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+        };
     }
 
     private async Task AcceptAsync()

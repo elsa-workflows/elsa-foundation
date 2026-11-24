@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertCircle, AlertTriangle, Info } from "lucide-react";
 import { authSessionEndedEvent, studioBackendCapabilitiesChangedEvent, StudioHttpError, useStudioWorkspaceWhenActive, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { SkeletonRows, StudioAlert, StudioButton, StudioResultState } from "@elsa-workflows/studio-ui";
 import { TriggerCapabilityError } from "./api";
+import { findingTone } from "./triggerTypePresentation";
 import type { ActionAvailability, Finding } from "./types";
 
 export const triggersPath = "/workflows/triggers";
@@ -13,7 +15,37 @@ export function actionReason(actions: readonly ActionAvailability[], action: str
 export function status(error: unknown) { return error instanceof StudioHttpError ? error.status : typeof error === "object" && error !== null && "status" in error ? Number(error.status) : undefined; }
 export function validationErrors(error: unknown): Record<string, string[]> { return error instanceof StudioHttpError ? error.validationErrors ?? {} : {}; }
 export function errorMessage(error: unknown) { return error instanceof Error ? error.message : "The request could not be completed. Try again."; }
-export function Findings({ items }: { items?: readonly Finding[] }) { return items?.length ? <ul className="wf-trigger-findings">{items.map((item, index) => <li key={`${item.code}:${item.inputName ?? item.field ?? index}`}>{item.inputName ? <strong>{item.inputName}: </strong> : null}{item.message}</li>)}</ul> : null; }
+export function Findings({
+  items,
+  variant = "panel"
+}: {
+  items?: readonly Finding[];
+  variant?: "panel" | "inline";
+}) {
+  if (!items?.length) return null;
+  const iconSize = variant === "inline" ? 13 : 14;
+  return (
+    <ul className="wf-trigger-findings" data-variant={variant}>
+      {items.map((item, index) => {
+        const tone = findingTone(item);
+        const Icon = tone === "danger" ? AlertCircle : tone === "warning" ? AlertTriangle : Info;
+        return (
+          <li
+            key={`${item.code}:${item.inputName ?? item.field ?? index}`}
+            className="wf-trigger-finding"
+            data-tone={tone}
+          >
+            <Icon size={iconSize} className="wf-trigger-finding-icon" aria-hidden />
+            <span className="wf-trigger-finding-text">
+              {item.inputName ? <strong>{item.inputName}: </strong> : null}
+              {item.message}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 export function ScheduleFailure({ reason, isActive }: { reason?: string | null; isActive?: boolean }) {
   return reason === "NoEligibleSubscribers" ? <p>{isActive === false
     ? "Last recorded failure: no eligible subscribers. No retry is scheduled while this cursor is inactive."

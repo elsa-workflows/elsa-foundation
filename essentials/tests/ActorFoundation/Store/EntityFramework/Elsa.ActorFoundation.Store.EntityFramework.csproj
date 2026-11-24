@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Kernel.Ef.Conformance</RootNamespace>
+    <AssemblyName>Kernel.Ef.Conformance</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);EF1002</NoWarn>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <!-- ENGINES.md E2: Microsoft.Data.SqlClient refuses to open a connection in invariant-globalization mode. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Native/Run/PostgresFixtureDatabase.cs" Link="PostgresFixtureDatabase.cs" />
+    <ProjectReference Include="../../../../src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../Conformance/Elsa.ActorFoundation.Store.Conformance.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+  </ItemGroup>
+</Project>

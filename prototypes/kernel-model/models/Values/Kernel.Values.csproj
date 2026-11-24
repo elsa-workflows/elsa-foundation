@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <ProjectReference Include="../../src/Kernel.Workflows/Kernel.Workflows.csproj" />
+    <ProjectReference Include="../../../../essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" />
   </ItemGroup>
 </Project>

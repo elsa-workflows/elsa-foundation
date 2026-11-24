@@ -5,7 +5,7 @@ import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointCont
 import { buildExecutableActivityGraph, type ExecutableActivityGraph } from "../executableGraph";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionStateSummary, WorkflowExecutableNode } from "../workflowTypes";
 import { prepareAttachedExecution } from "../workflow-editor/prepareAttachedExecution";
-import { findMatchingExecutionScope, loadExecutionScope, resolveExecutionScopeAncestorId, resolveKnownExecutionScope, sameExecutionScopes, trimExecutionScopesForTarget, type ExecutionScopeEntry } from "../workflow-editor/executionScope";
+import { findMatchingExecutionScope, isKnownExecutionInScope, loadExecutionScope, resolveExecutionScopeAncestorId, resolveKnownExecutionScope, sameExecutionScopes, trimExecutionScopesForTarget, type ExecutionScopeEntry } from "../workflow-editor/executionScope";
 import { useAttachedExecutionSelection, type AttachedExecutionSelection } from "../workflow-editor/useAttachedExecutionSelection";
 
 const api = vi.hoisted(() => ({ browse: vi.fn(), inspect: vi.fn(), layout: vi.fn(), supported: vi.fn(), payload: vi.fn() }));
@@ -447,4 +447,13 @@ it("resolves known outer-graph execution scopes synchronously and falls back whe
   expect(resolveKnownExecutionScope("run", summary("private-1", "private-child", "body-1"), {
     graph, includeSelf: false, currentScopes: iterScopes, knownActivities: known, labelFor
   })).toBeNull();
+
+  // Scope membership check validates run, node, and ancestor ancestry without guessing unknown parents.
+  expect(isKnownExecutionInScope("run", "write", writeA, undefined, known)).toBe(true);
+  expect(isKnownExecutionInScope("run", "write", writeA, "body-1", known)).toBe(true);
+  expect(isKnownExecutionInScope("run", "write", writeA, "root-1", known)).toBe(true);
+  expect(isKnownExecutionInScope("run", "write", writeA, "other-scope", known)).toBe(false);
+  expect(isKnownExecutionInScope("run", "write", unknownParent, "body-1", known)).toBe(false);
+  expect(isKnownExecutionInScope("other-run", "write", writeA, undefined, known)).toBe(false);
+  expect(isKnownExecutionInScope("run", "other-node", writeA, undefined, known)).toBe(false);
 });

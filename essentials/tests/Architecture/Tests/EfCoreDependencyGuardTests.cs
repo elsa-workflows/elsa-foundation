@@ -59,6 +59,29 @@ public sealed class EfCoreDependencyGuardTests
     ];
     private const string EfPackageToken = "EntityFrameworkCore";
 
+    private static readonly string[] BuiltInActorFoundationEfPackages =
+    [
+        "Microsoft.EntityFrameworkCore",
+        "Microsoft.EntityFrameworkCore.Abstractions",
+        "Microsoft.EntityFrameworkCore.Analyzers",
+        "Microsoft.EntityFrameworkCore.Relational",
+        "Microsoft.EntityFrameworkCore.Sqlite",
+        "Microsoft.EntityFrameworkCore.Sqlite.Core",
+        "Microsoft.EntityFrameworkCore.SqlServer",
+        "MySql.EntityFrameworkCore",
+        "Npgsql.EntityFrameworkCore.PostgreSQL"
+    ];
+
+    // ADR 0099 and #4229 admit these two packages. The Built-in runtime and contracts retain no EF edge.
+    private static readonly IReadOnlyDictionary<string, string[]> BuiltInActorFoundationEfClosures =
+        new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj"] =
+                BuiltInActorFoundationEfPackages,
+            ["essentials/src/ActorFoundation/BuiltIn/PostgreSql/Elsa.ActorFoundation.BuiltIn.PostgreSql.csproj"] =
+                BuiltInActorFoundationEfPackages
+        };
+
     [Fact]
     public void Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages()
     {
@@ -429,6 +452,14 @@ public sealed class EfCoreDependencyGuardTests
         Assert.True(offenders.Length == 0, Report("drift from the reviewed Data Protection key store EF closure", offenders));
     }
 
+    [Fact]
+    public void Every_admitted_built_in_actor_foundation_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = DriftFromReviewedClosures(BuiltInActorFoundationEfClosures);
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed Built-in Actor Foundation EF closure", offenders));
+    }
+
     /// <summary>Every EF package each project resolves that its reviewed closure lacks, and every reviewed one it no longer resolves.</summary>
     private static string[] DriftFromReviewedClosures(IReadOnlyDictionary<string, string[]> expectedByProject) =>
         expectedByProject
@@ -750,7 +781,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0076ActivationGuardEf.IsProjectPath(relativePath) ||
                     Spec183ReadabilityEf.IsProjectPath(relativePath) ||
                     Adr0078ClusterMembershipEf.IsProjectPath(relativePath) ||
-                    Adr0076DataProtectionKeyStoreEf.IsProjectPath(relativePath)));
+                    Adr0076DataProtectionKeyStoreEf.IsProjectPath(relativePath) ||
+                    BuiltInActorFoundationEfClosures.ContainsKey(relativePath)));
         }
         return projects;
     }

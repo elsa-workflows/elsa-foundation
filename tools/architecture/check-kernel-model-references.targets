@@ -1,0 +1,15 @@
+<Project>
+  <Target Name="CheckKernelContractReferences" BeforeTargets="ResolveReferences" Condition="'$(KernelContractOnly)' == 'true'">
+    <ItemGroup>
+      <!-- The repository analyzer has no reference assembly. A model only compiles against contracts and its model libraries. -->
+      <!-- Statecharts.Native declares Native and Statecharts. The SDK adds Graph and Native.Activities through Native. -->
+      <_UnexpectedKernelProject Include="@(ProjectReference)" Condition="
+        ('%(ProjectReference.Filename)' != 'Elsa.Architecture.Analyzers' Or '%(ProjectReference.ReferenceOutputAssembly)' != 'false' Or '%(ProjectReference.OutputItemType)' != 'Analyzer') And
+        '%(ProjectReference.Filename)' != 'Elsa.ActorFoundation.Contracts' And '%(ProjectReference.Filename)' != 'Elsa.ActorFoundation.Model.Contracts' And
+        ('$(AssemblyName)' != 'Kernel.Statecharts.Native' Or ('%(ProjectReference.Filename)' != 'Elsa.Workflows.Runtime.Native.Model' And '%(ProjectReference.Filename)' != 'Kernel.Statecharts')) And
+        (('$(AssemblyName)' != 'Kernel.Native' And ('$(AssemblyName)' != 'Kernel.Statecharts.Native' Or '%(ProjectReference.DefiningProjectName)' != 'Microsoft.PackageDependencyResolution')) Or
+          ('%(ProjectReference.Filename)' != 'Elsa.Workflows.Runtime.Graph' And '%(ProjectReference.Filename)' != 'Elsa.Workflows.Runtime.Native.Activities'))" />
+    </ItemGroup>
+    <Error Condition="'@(_UnexpectedKernelProject)' != ''" Text="Layer 3 may reference only the kernel contract projects. Unexpected project: @(_UnexpectedKernelProject)" />
+  </Target>
+</Project>
