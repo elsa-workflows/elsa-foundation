@@ -5,8 +5,9 @@ repository unless they name the corpus.
 
 ## R-1 JTest version reads the corpus
 
-- **Decision**: Use the latest `JTest.Cli` release (2.0.3 at planning time), installed as a global dotnet tool.
-- **Rationale**: `jtest validate "tests/**/*"` with 2.0.1 reports all 42 suite files valid against JTest language
+- **Decision**: Use the latest `JTest.Cli` release, installed as a global dotnet tool (install or update it
+  outside this repository: its package source mapping blocks `JTest.Cli`).
+- **Rationale**: `jtest validate` with 2.0.3 reports all 42 suite files and the setup suite valid against JTest language
   schema 1.0.0, so the 2.x line reads the corpus without conversion. The original pipelines pinned 0.1.3.
 - **Alternatives considered**: Pin 0.1.3 as the original pipelines did. Rejected by the coordinator: the latest CLI is
   wanted and reads the files.
@@ -43,12 +44,13 @@ repository unless they name the corpus.
 ## R-5 Elsa 4 host for the run
 
 - **Decision**: The Workbench, started fresh on its default SQLite store, with the Elsa 3 startup reconciliation
-  feature enabled through configuration and `WorkflowsRuntimeCheckpointPersistence` set to `Durable`. Two small
+  feature and the import persistence feature `Elsa3ImportActivitiesEntityFrameworkCore` (which no feature dependency
+  pulls in) enabled through configuration, and `WorkflowsRuntimeCheckpointPersistence` set to `Durable`. Two small
   Workbench changes are needed: a project reference to the reconciliation project and its assembly in the feature
   catalog (`apps/Elsa.Workbench/Elsa.Workbench.csproj`, `apps/Elsa.Workbench/Program.cs`). The feature stays off in
   the default shell; the run enables it.
-- **Rationale**: The Workbench already carries the Elsa 3 import features (Program.cs registers four Elsa 3
-  assemblies) but not `Elsa3JsonReconciliation`. Balanced persistence folds per-activity evidence to commit
+- **Rationale**: The Workbench already has the Elsa 3 import assemblies in its feature catalog (Program.cs registers
+  four), none enabled in the default shell, and not the `Elsa3JsonReconciliation` assembly. Balanced persistence folds per-activity evidence to commit
   boundaries (`RuntimePersistenceModeProjection`), and the suites count individual activity executions, so the run
   needs Durable.
 - **Alternatives considered**: A dedicated test host project (more code for the same result); Nuplane delivery of the
@@ -109,7 +111,7 @@ repository unless they name the corpus.
 ## R-11 Prerequisites and known defects
 
 - **Decision**: Phases 1 and 2 and the Elsa 4 template set do not wait for spec 1207. The qualifying Elsa 4 run
-  (SC-004) is made on an initiative head that includes it. The open defect where two definitions fail to publish with
-  a server error is read from the reconciliation receipt and dispositioned like any other result.
+  (SC-004) is made on an initiative head where spec 1207 is implemented. A definition that fails to publish is read
+  from the reconciliation receipt and dispositioned like any other result.
 - **Rationale**: FR-020; dispositions are evidence-led.
 - **Alternatives considered**: Waiting for spec 1207 before starting; it would idle the baseline work.

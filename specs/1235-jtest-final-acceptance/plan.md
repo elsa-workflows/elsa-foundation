@@ -33,7 +33,8 @@ composition tests green.
 **Constraints**: No CI tier, no xunit wrapper, no secrets committed, no converter workaround (FR-017), suite
 expectations never weakened.
 
-**Scale/Scope**: 36 definitions, 42 suites, 17 templates per engine.
+**Scale/Scope**: 36 definitions, 42 suites; 13 templates the suites call plus one internal helper, and any templates
+the engine-neutral refactor adds.
 
 ## Constitution Check
 
@@ -59,14 +60,14 @@ expectations never weakened.
 | P-1 | Layout | R-3: the corpus's own layout under `extensions/Elsa3/tests/JTest/`, plus `templates-elsa4/`, `environments/elsa4.json`, `global-configuration.elsa4.json`, `adjusted/`, `ledger/`, `README.md`. |
 | P-2 | Runner | R-1, R-4: latest `jtest run`, by hand. |
 | P-3 | Elsa 3 baseline | R-2: image built from elsa-core `3.6.3`; the corpus's setup suite imports the definitions. |
-| P-4 | Elsa 4 host | R-5: Workbench plus the reconciliation feature (reference and catalog entry), enabled only for the run, with Durable persistence and capture on. |
+| P-4 | Elsa 4 host | R-5: Workbench plus the reconciliation feature (reference and catalog entry), enabled only for the run together with the import persistence feature, with Durable persistence and capture on. |
 | P-5 | Trigger URLs | R-6: environment value only. |
 | P-6 | Ids | R-7: definition ids carry over; Elsa 4 templates match short activity ids against node-id suffixes. |
 | P-7 | Vocabulary | R-8: templates translate status and version words; table in [contracts/templates.md](contracts/templates.md). |
 | P-8 | Observation | R-9: Elsa 4 sources per template; gaps fail loudly. |
 | P-9 | Waits | R-10: unchanged; raising one is a recorded suite change. |
 | P-10 | Ledger | [data-model.md](data-model.md): Markdown files in `ledger/`. |
-| P-11 | Prerequisites | R-11: spec 1207 before the qualifying Elsa 4 run only. |
+| P-11 | Prerequisites | R-11: spec 1207 implemented before the qualifying Elsa 4 run only. |
 | P-12 | Order of suites | HTTP suites first, then single-outcome, then the rest; suites whose definitions contain a join run too and are marked blocked only when the join stops them. |
 
 ## Project Structure

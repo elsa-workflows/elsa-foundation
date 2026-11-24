@@ -18,7 +18,7 @@ PR diff; no tooling parses it.
 |---|---|
 | Suite | path under `tests/` |
 | Definitions | definition files it exercises |
-| Elsa 3 result | `pass`, `fail`, `blocked: <3.6.3 defect>` |
+| Elsa 3 result | `not run`, `pass`, `fail`, `blocked: <3.6.3 defect>` |
 | Elsa 4 result | `pass`, `fail`, `not run`, `blocked: JOIN`, `blocked: <prerequisite>`, `incompatible` |
 | Last run | run id |
 
@@ -72,7 +72,7 @@ copy taking the place of its original, passed to the reconciliation as an explic
 |---|---|
 | Run id | sequential |
 | Engine | Elsa 3 or Elsa 4 |
-| Source | for Elsa 3 the image digest; for Elsa 4 the commit and whether spec 1207 is included |
+| Source | for Elsa 3 the image digest; for Elsa 4 the commit and whether spec 1207 is implemented on it |
 | jtest | version |
 | Scope | suites run |
 | Result | per-suite pass/fail counts; failures by suite |

@@ -16,10 +16,10 @@
 | Item | Value |
 |---|---|
 | Host | `apps/Elsa.Workbench`, built from the commit under test, default SQLite store deleted before the run |
-| Features enabled for the run | `Elsa3JsonReconciliation` with `SourceId` `jtest` and `FolderPath` the suite's `workflow-definitions/` (or `adjusted/` overlay, see data model); `WorkflowsRuntimeCheckpointPersistence` mode `Durable`; value and variable payload capture on |
+| Features enabled for the run | `Elsa3JsonReconciliation` with `SourceId` `jtest` and `FolderPath` the suite's `workflow-definitions/` (or a `Files` list with adjusted copies in place, see data model); `Elsa3ImportActivitiesEntityFrameworkCore` (import persistence, not pulled in by dependencies); `WorkflowsRuntimeCheckpointPersistence` mode `Durable`; value and variable payload capture on |
 | Ready when | The reconciliation summary is logged and the API answers an authenticated request |
 | Receipt | The reconciliation summary and per-item diagnostics, kept with the run record |
-| Templates and environment | `templates-elsa4/`, `environments/elsa4.json` (`ELSA_API_BASE_URL={base}`, `ELSA_EXECUTOR_BASE_URL={base}/workflows/http`, Workbench's seeded development admin through `ADMIN_USERNAME`/`ADMIN_PASSWORD`) |
+| Templates and environment | `templates-elsa4/`, `environments/elsa4.json` (`ELSA_API_BASE_URL={base}`, `ELSA_EXECUTOR_BASE_URL={base}/workflows/http`, Workbench's seeded development admin through `ADMIN_USERNAME`/`ADMIN_PASSWORD`, plus `CORRELATION_ID` and `DATE_NOW_ISO_STRING` as for Elsa 3) |
 | Default shell | Unchanged: the reconciliation feature stays off unless the run enables it |
 
 The committed environment files contain only `${VARIABLE}` references, as the corpus's `dev.json` does.

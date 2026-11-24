@@ -1,9 +1,10 @@
 # Quickstart: running the JTest acceptance suite
 
-Run from `extensions/Elsa3/tests/JTest/`. Prerequisites: Docker running, the .NET SDK, and the JTest CLI:
+Run from `extensions/Elsa3/tests/JTest/`. Install or update the JTest CLI outside this repository: its NuGet package
+source mapping does not allow `JTest.Cli`. Prerequisites: Docker running, the .NET SDK, and the JTest CLI:
 
 ```powershell
-dotnet tool update --global JTest.Cli
+Push-Location $env:TEMP; dotnet tool update --global JTest.Cli; Pop-Location
 ```
 
 ## Elsa 3.6.3 baseline
@@ -36,6 +37,7 @@ configuration override is fixed by task T007 and written into the suite README),
 ```powershell
 $env:ELSA_API_BASE_URL = 'http://localhost:5095'; $env:ELSA_EXECUTOR_BASE_URL = 'http://localhost:5095/workflows/http'
 $env:ADMIN_USERNAME = 'admin'; $env:ADMIN_PASSWORD = '<workbench development admin password>'
+$env:CORRELATION_ID = [guid]::NewGuid().ToString('N'); $env:DATE_NOW_ISO_STRING = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
 $env:JTEST_CONFIG_FILE = "$PWD/global-configuration.elsa4.json"
 jtest run "tests/**/*" --env-file environments/elsa4.json
 ```

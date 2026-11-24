@@ -4,8 +4,6 @@
 
 **Status**: Draft
 
-**Maturity**: Intake agreed by the coordinator; awaiting coordinator approval of the specification, plan and tasks.
-
 **Input**: Prove the Elsa 3 to Elsa 4 conversion against the complete JTest corpus: the Elsa 3 workflow definitions are
 imported and converted by startup reconciliation, then the JTest suites written for those definitions run against
 Elsa 4 and pass. The suite lives in the Elsa 3 converter area as a lasting workflow-regression suite. Work that JOIN
@@ -177,7 +175,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
 
 - **FR-014**: The Elsa 4 run MUST start a fresh host with the Elsa 3 startup reconciliation reading the corpus's
   definitions, with each approved adjusted copy taking the place of its original, and MUST keep the reconciliation receipt with the run.
-- **FR-015**: Every definition MUST end with exactly one bucket: `convert-as-is` (unchanged source passes its suites),
+- **FR-015**: Every definition MUST end with exactly one bucket: `convert-as-is` (unchanged source passes its suites, or, for a
+  definition no suite exercises, is imported and published unchanged with no diagnostic),
   `convert-with-adjustments` (an adjusted copy, kept next to the unchanged original, with the exact change and reason,
   approved by the coordinator) or `incompatible` (refused with a diagnostic and guidance, or a feature with no Elsa 4
   equivalent). Execution status and JOIN blocking MUST be recorded separately from the bucket.
@@ -196,8 +195,8 @@ blocks it, and J-001 through J-005 are open in the tasks.
 
 **Prerequisites, evidence and hand-over**
 
-- **FR-020**: The Elsa 4 acceptance run MUST be repeated on an initiative head that includes the JSON data integrity
-  baseline (spec 1207). Phases 1 and 2 and Elsa 4 template development MAY start before that.
+- **FR-020**: The Elsa 4 acceptance run MUST be repeated on an initiative head where the JSON data integrity
+  baseline (spec 1207) is implemented (its status Implemented), not merely specified. Phases 1 and 2 and Elsa 4 template development MAY start before that.
 - **FR-021**: Each run MUST keep the commit, engine and image or build, `jtest` version, environment file (without
   secret values), per-suite result and the reconciliation receipt for Elsa 4. A failed run MUST stay recorded next to
   later runs.
@@ -218,7 +217,7 @@ blocks it, and J-001 through J-005 are open in the tasks.
 
 | ID | Question | Decision |
 |---|---|---|
-| Q1 | Which material is the complete corpus? | The JTest-Nexxbiz repository at `b1cde13`. Its 36 definitions are the set the earlier smoke export measured; the 42 suites are new to this initiative's evidence. |
+| Q1 | Which material is the complete corpus? | The JTest-Nexxbiz repository at `b1cde13`. 36 definitions and 42 suites. |
 | Q2 | Where does the suite live? | In the Elsa 3 converter test area, because the flow is reconcile-then-run. A broader Elsa 4-native workflow-regression suite is a later, separate piece of work. |
 | Q3 | Can the corpus be committed? | Yes, unchanged; it carries no secrets. |
 | Q4 | What is the Elsa 3 baseline? | The suite assertions, made green on an Elsa server built from elsa-core tag `3.6.3` (the version production pins; no published image exists). No paired dual-host runs. |
@@ -240,7 +239,7 @@ blocks it, and J-001 through J-005 are open in the tasks.
   the Elsa 3 baseline.
 - **SC-003 - Dispositions**: All 36 definitions have exactly one bucket with its evidence.
 - **SC-004 - Non-JOIN milestone**: Every suite not blocked by JOIN behaviour or a recorded incompatibility passes on
-  Elsa 4, on an initiative head that includes spec 1207. This is a milestone, not completion.
+  Elsa 4, on an initiative head with spec 1207 implemented (its status Implemented). This is a milestone, not completion.
 - **SC-005 - Full acceptance**: SC-001 to SC-004 hold on the final initiative head, J-001 to J-005 are closed with
   evidence, and every suite passes or carries an approved incompatibility.
 
@@ -262,8 +261,8 @@ These tasks are OPEN and carry into the tasks list.
   specification uses it as it is and changes no converter behaviour except through a separate defect or specification.
 - [Mapping rules](../../extensions/Elsa3/src/Mapping/README.md) and
   [migration readiness](../../docs/reference/elsa3-migration-readiness.md) explain expected diagnostics.
-- [JSON data integrity, spec 1207](../1207-json-data-integrity-baseline/spec.md) must be on the initiative head before
-  the qualifying Elsa 4 run.
+- [JSON data integrity, spec 1207](../1207-json-data-integrity-baseline/spec.md) must be implemented on the initiative head
+  before the qualifying Elsa 4 run.
 - JOIN behaviour belongs to the separate JOIN initiative; its acceptance in this corpus belongs here.
 - [Elsa constitution](../../.specify/memory/constitution.md) E2.7 keeps Elsa 3 behind the import boundary; the Elsa 3
   server runs only as a separate baseline container.

@@ -45,7 +45,7 @@ recorded approval before the tasks after them start.
   boundary (`Essentials/tests/Architecture/Tests/`); regenerate committed solution filters only if the maps check says
   they changed.
 - [ ] T007 Find and verify the configuration override that enables `Elsa3JsonReconciliation` (`SourceId`, `Files` or
-  `FolderPath`), sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` and turns on value and variable payload
+  `FolderPath`) together with `Elsa3ImportActivitiesEntityFrameworkCore`, sets `WorkflowsRuntimeCheckpointPersistence` to `Durable` and turns on value and variable payload
   capture for one Workbench run without editing the committed `shells.json` (environment variables or a run-specific
   shells file, R-5). Record the exact commands in `JTest/README.md`.
 
@@ -80,7 +80,8 @@ recorded approval before the tasks after them start.
   corpus definitions use that no suite covers as a finding in `JTest/ledger/baseline-failures.md` notes.
 - [ ] T016 [US1] **Approval gate**: post the classified list on the PR and get the coordinator's approval of the whole
   list; record the approval link in `JTest/ledger/baseline-failures.md`.
-- [ ] T017 [US1] Apply the approved fixes to the suite and template files under `JTest/tests/` and `JTest/templates/`,
+- [ ] T017 [US1] Apply the approved fixes to `JTest/tests/`, `JTest/templates/` and `JTest/import-and-publish-workflows.json`
+  (which omits the two `performance-baseline-dispatch*` definitions its suite needs),
   one commit, with the ledger row named per change; mark 3.6.3-defect suites `blocked: <defect>` in
   `JTest/ledger/suites.md` (FR-008).
 - [ ] T018 [US1] Rerun all suites on a fresh container and confirm every unblocked suite passes (SC-001); record the
@@ -96,12 +97,16 @@ recorded approval before the tasks after them start.
 
 **Independent test**: Elsa 3 rerun green; the diff of each suite shows only values moved behind parameters.
 
-- [ ] T019 [US2] List every Elsa 3-specific value in `JTest/tests/**` that the template contract cannot absorb (API
-  paths outside templates, response fields read directly from `http` steps, status words the translation table does
-  not cover, Elsa 3 generated identifiers); add the list to `JTest/ledger/suite-changes.md` as the refactor scope.
+- [ ] T019 [US2] List every Elsa 3-specific value in `JTest/tests/**` that the template contract cannot absorb: direct
+  Elsa 3 API calls in `http` steps (the `events` suite and three `performance` suites call
+  `/elsa/api/workflow-definitions/{id}/execute` and `/elsa/api/workflow-instances`), response fields read from those
+  steps, reads inside template outputs beyond the projected fields (for example
+  `instance.workflowState.activityExecutionContexts[0].properties.Variables[...]`), status words the translation table
+  does not cover, and Elsa 3 generated identifiers; add the list to `JTest/ledger/suite-changes.md` as the refactor scope.
 - [ ] T020 [US2] For each Elsa 4 template that needs a parameter its Elsa 3 version lacks (for example the workflow
   instance id for `elsa-activity-instance-get`, contracts/templates.md), add the parameter to the Elsa 3 template in
-  `JTest/templates/` without changing its outputs.
+  `JTest/templates/` without changing its outputs; for each direct API call or internal read listed in T019, add a new
+  Elsa 3 template in `JTest/templates/` that returns the value with a stated meaning.
 - [ ] T021 [US2] Move each listed value behind a template output, an environment value in `JTest/environments/dev.json`
   or a suite parameter, and pass any new template parameters, in `JTest/tests/**`; no expected business value or
   assertion changes (FR-010).
@@ -127,9 +132,9 @@ cannot produce with the same meaning fails the template with the output named (F
   per contracts/run-hosts.md.
 - [ ] T024 [P] [US3] Write `templates-elsa4/elsa-api-login-template.json`: `elsa-authenticate` per
   contracts/templates.md.
-- [ ] T025 [P] [US3] Write `templates-elsa4/elsa-api-workflow-definition-templates.json` and
-  `templates-elsa4/elsa-api-composite-templates.json`: import as lookup, publish as published-check, delete, and the
-  composite, per contracts/templates.md.
+- [ ] T025 [P] [US3] Write the Elsa 4 versions of the templates added in T020, in `templates-elsa4/`, with outputs of
+  the same meaning (the execute call is `POST /runtime/workflows/executables/{artifactId}/execute`). The definition
+  import, publish, delete and composite templates are not written for Elsa 4 (contracts/templates.md).
 - [ ] T026 [P] [US3] Write `templates-elsa4/elsa-api-workflow-instance-templates.json`: get, search, not-exists and
   variable value, with the status and version translations.
 - [ ] T027 [P] [US3] Write `templates-elsa4/elsa-api-activity-instance-templates.json`: the eight
@@ -156,7 +161,7 @@ cannot produce with the same meaning fails the template with the output named (F
   approval, and run the Elsa 4 host with the adjusted copy in place of the original via the reconciliation `Files`
   list (FR-014, FR-015).
 - [ ] T037 [US3] Bucket every definition in `JTest/ledger/dispositions.md` (SC-003).
-- [ ] T038 [US3] Once spec 1207 is merged into the initiative branch, merge the initiative branch into this branch and
+- [ ] T038 [US3] Once spec 1207 is implemented on the initiative branch (its status Implemented), merge the initiative branch into this branch and
   make the qualifying run: all suites on a fresh Workbench from that head; record it as the non-JOIN milestone run
   (FR-020, SC-004). Before recording it, confirm with `git diff` that `JTest/tests/**` differs from the T022 state
   only by approved T029 rows, and rerun those changed suites on 3.6.3 (SC-002).
@@ -202,7 +207,7 @@ exists.
 - Within US1: T008 to T015 in order; T016 gates T017; T018 closes the phase.
 - Within US2: T019 → T020 → T021 → T022.
 - Within US3: T023 to T027 can run in parallel; T028 needs T007 and T023 to T027; T030 to T037 follow; T038 waits for
-  spec 1207 on the initiative branch.
+  spec 1207 to be implemented on the initiative branch.
 - US4 waits for the JOIN initiative's delivery; T039 can be filled as soon as T035 is done.
 - T047 and T048 come last.
 
@@ -211,7 +216,7 @@ exists.
 ```text
 T023 environment and configuration
 T024 authenticate template
-T025 definition templates
+T025 templates added in the refactor
 T026 instance templates
 T027 activity templates
 ```

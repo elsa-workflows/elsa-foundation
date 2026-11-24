@@ -9,8 +9,8 @@ instead of assumptions. Decisions are in the spec's *Spec decisions* table.
 |---|---|
 | `workflow-definitions/` | 36 Elsa 3 definitions (schema `workflow-definition/v3.0.0`) |
 | `tests/` | 42 suite files: branching 10, composition 10, javascript 7, http 6, performance 4, correlate 1, events 1, logging 1, single-outcome 1, storage-drivers 1 |
-| `import-and-publish-workflows.json` | Elsa 3 setup suite that imports and publishes all 36 definitions (Elsa 3 baseline only) |
-| `templates/` | 5 files with 17 templates: `elsa-authenticate`, definition import/publish/delete, workflow-instance get/search/not-exists, variable value, and eight `elsa-activity-instance-*` templates |
+| `import-and-publish-workflows.json` | Elsa 3 setup suite that imports and publishes 34 definitions (Elsa 3 baseline only); it omits `performance-baseline-dispatch.json` and `performance-baseline-dispatch-sub.json`, which `performance/baseline-dispatch-tests.json` needs |
+| `templates/` | 5 files with 18 templates; suites call 13 of them (see [contracts/templates.md](contracts/templates.md)); one is an internal helper; four serve only the setup suite or nothing |
 | `test-files/` | 5 request fixtures, one about 6 MB (`big-mock-data.json`) |
 | `environments/dev.json` | Base URLs, credentials, correlation ID and date bound from environment variables; dispatch channels; dispatch wait time |
 | `global-configuration.json` | Template search path |
@@ -32,7 +32,7 @@ comparisons. Performance suites assert completion counts, not timings. No secret
 | `composition-*` (8 definitions, root and sub workflows) | 10 `composition/*` suites | Bulk-dispatch root: yes |
 | `javascript-*` (7 definitions) | 7 `javascript/*` suites | No |
 | `correlate-guid.json`, `events-publisher.json`/`events-listener.json`, `logging-workflow.json` | one suite each | No |
-| `performance-*` (6 definitions) | 4 `performance/*` suites | No |
+| `performance-*` (6 definitions) | 4 `performance/*` suites; `performance-minimal-baseline.json` has no suite | No |
 | `storage-drivers-variables-*` (2 definitions) | `storage-drivers/variables` | Root: yes |
 | `simple-write-hello-world.json` | none | No |
 
@@ -41,8 +41,9 @@ suite is blocked only when the join is what stops it on Elsa 4.
 
 ## Known starting points
 
-- Earlier smoke runs of these 36 definitions on Elsa 4 imported 16 and published 11 with no workflow inputs; that is
-  a converter measurement, not a suite result.
 - Some JavaScript suites use classic Elsa host functions (`date-methods`, `elsa-functions`, `script-handler-functions`);
   the expression-capability work decides which have Elsa 4 equivalents, and the rest are candidate incompatibilities.
-- An open defect makes two definitions fail to publish with a server error on Elsa 4; the plan accounts for it.
+- The setup suite misses two definitions (above), so `performance/baseline-dispatch-tests.json` cannot pass on the
+  baseline until the setup suite is fixed.
+- The `events` suite and three `performance` suites call the Elsa 3 API directly instead of through a template and
+  assert on `workflowState.status`; they need new templates in the engine-neutral refactor.

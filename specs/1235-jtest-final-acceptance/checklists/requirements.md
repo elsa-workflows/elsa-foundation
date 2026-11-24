@@ -19,7 +19,7 @@
 - [x] Engine-difference approach selected: same-name templates, engine-neutral suites (Q7).
 - [x] Observation rule: full values, no unrequested normalization (FR-013).
 - [x] JOIN blocking rule defined; J-001 to J-005 open (Q9).
-- [x] Spec 1207 prerequisite placed before the qualifying Elsa 4 run (FR-020).
+- [x] Spec 1207 implementation placed before the qualifying Elsa 4 run (FR-020).
 - [x] No secrets; corpus may be committed (Q3, FR-004).
 - [x] No Studio surface (FR-023).
 - [x] Hand-over to the original repository defined and out of scope (FR-022).
@@ -28,7 +28,7 @@
 
 - [x] Intake questions answered by the coordinator and recorded.
 - [ ] Coordinator approval of the specification, plan and tasks.
-- [ ] Plan and tasks retain J-001 to J-005.
+- [x] Plan and tasks retain J-001 to J-005 (T039 to T043).
 
 ## Notes
 
