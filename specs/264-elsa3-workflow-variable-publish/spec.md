@@ -238,10 +238,11 @@ it, and read every variable's starting value back; compare each with Elsa 3's ru
 - **FR-004**: The converter MUST refuse a variable whose Elsa 3 starting value cannot be converted to its type in
   strict mode, with a stable diagnostic that names the variable and gives guidance in Elsa 3 terms. That Elsa 4's type
   registry does not know a variable's type is never on its own a reason to refuse it: such a variable converts as Any.
-  When that type is a custom class or an unregistered enum, alone or as a collection's element, the converter also
-  reports the info `ELS3-VARIABLE-TYPE-UNREGISTERED`, naming the variable and that type. On such a type a starting value
-  that is a JSON object or array starts as that JSON; any other starting value is refused, because Elsa 3 converted it
-  in a way the converter cannot know (clarification 2026-11-24).
+  This covers a custom class, an unregistered enum, a collection of either, a nested collection and a collection of
+  dictionaries. Its starting value, if it has one, starts as that JSON when it is a JSON object or array; any other
+  starting value is refused, because Elsa 3 converted it in a way the converter cannot know. When the type is a custom
+  class or an unregistered enum, alone or as a collection's element, the converter also reports the info
+  `ELS3-VARIABLE-TYPE-UNREGISTERED`, naming the variable and that type (clarification 2026-11-24).
   - *Clarification 2026-11-24 ([#5684](https://github.com/elsa-workflows/elsa-foundation/issues/5684)):* this
     requirement first also refused a variable "whose type Elsa 4's type registry does not know". The converter never
     did that: such a variable ran as `Object` (now Any, spec 1228), and only a starting value on it was refused. The
