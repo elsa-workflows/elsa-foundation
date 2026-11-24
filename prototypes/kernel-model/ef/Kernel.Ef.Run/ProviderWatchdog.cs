@@ -233,7 +233,7 @@ static class ProviderWatchdog
         }
     }
 
-    private static async Task<int> HoldPostgresBlockerAsync(KernelDb blocker, CancellationToken token)
+    private static async Task<int> HoldPostgresBlockerAsync(DbContext blocker, CancellationToken token)
     {
         await blocker.Database.ExecuteSqlRawAsync("SET LOCAL idle_in_transaction_session_timeout = 0", token);
         if (blocker.Database.GetDbConnection() is NpgsqlConnection { PostgreSqlVersion.Major: >= 17 })
@@ -243,7 +243,7 @@ static class ProviderWatchdog
         return pid;
     }
 
-    private static async Task RequirePostgresBlockerAsync(KernelDb blocker, int pid, CancellationToken token) =>
+    private static async Task RequirePostgresBlockerAsync(DbContext blocker, int pid, CancellationToken token) =>
         Require(await blocker.Database.SqlQuery<bool>($"""
             SELECT EXISTS (
                 SELECT 1 FROM pg_locks WHERE pid = {pid} AND pid = pg_backend_pid() AND locktype = 'advisory'
