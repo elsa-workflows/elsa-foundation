@@ -530,11 +530,18 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ReplacedFunctionReference);
     }
 
-    /// <summary>A write to the name is an undeclared write, not a reference.</summary>
-    [Fact]
-    public async Task A_write_to_a_declared_global_is_an_undeclared_write()
+    /// <summary>A write to the name, directly or through a destructuring target, is an undeclared write, not a reference.</summary>
+    [Theory]
+    [InlineData("(() => { lookupCustomer = null; return 1; })()")]
+    [InlineData("(() => { lookupCustomer++; return 1; })()")]
+    [InlineData("(() => { [lookupCustomer] = [1]; return 1; })()")]
+    [InlineData("(() => { ({ lookupCustomer } = { lookupCustomer: 1 }); return 1; })()")]
+    [InlineData("(() => { ({ a: [lookupCustomer = 2] } = { a: [] }); return 1; })()")]
+    [InlineData("(() => { [...lookupCustomer] = [1]; return 1; })()")]
+    [InlineData("(() => { for ([lookupCustomer] of [[1]]) {} return 1; })()")]
+    public async Task A_write_to_a_declared_global_is_an_undeclared_write(string expression)
     {
-        var result = await ConvertTextAsync("(() => { lookupCustomer = null; return 1; })()", [LookupCustomer]);
+        var result = await ConvertTextAsync(expression, [LookupCustomer]);
 
         Assert.False(result.Succeeded);
         var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);

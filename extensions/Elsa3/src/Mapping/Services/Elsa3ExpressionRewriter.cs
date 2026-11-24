@@ -1745,7 +1745,7 @@ public sealed class Elsa3ExpressionRewriter(
             // reported as an undeclared write instead.
             if (node is Identifier replacedValue && !IsDeclared(replacedValue.Name) &&
                 !ConvertedGlobals.Contains(replacedValue.Name) && ReplacedGlobals.TryGetValue(replacedValue.Name, out var replacedBy) &&
-                !IsDirectWriteTarget(replacedValue))
+                !IsWriteTarget(replacedValue))
             {
                 if (_reportedReplacedReferences.Add(replacedValue.Name))
                 {
@@ -2070,16 +2070,36 @@ public sealed class Elsa3ExpressionRewriter(
             return names;
         }
 
-        /// <summary>Whether the identifier being visited is the name an assignment, update or for-in/of loop writes.</summary>
-        private bool IsDirectWriteTarget(Identifier identifier) =>
-            (_syntaxParents.Count > 1 ? _syntaxParents[^2] : null) switch
+        /// <summary>
+        /// Whether the identifier being visited is a name an assignment, update or for-in/of loop writes, directly or
+        /// through a destructuring target (<c>[x] = …</c>, <c>({ a: x } = …)</c>); <see cref="WrittenNames"/> reports those.
+        /// </summary>
+        private bool IsWriteTarget(Identifier identifier)
+        {
+            Node child = identifier;
+            for (var index = _syntaxParents.Count - 2; index >= 0; index--)
             {
-                AssignmentExpression assignment => ReferenceEquals(assignment.Left, identifier),
-                UpdateExpression update => ReferenceEquals(update.Argument, identifier),
-                ForInStatement forIn => ReferenceEquals(forIn.Left, identifier),
-                ForOfStatement forOf => ReferenceEquals(forOf.Left, identifier),
-                _ => false,
-            };
+                switch (_syntaxParents[index])
+                {
+                    case Property property when ReferenceEquals(property.Value, child):
+                    case ObjectPattern or ArrayPattern or RestElement:
+                    case AssignmentPattern pattern when ReferenceEquals(pattern.Left, child):
+                        child = _syntaxParents[index];
+                        continue;
+                    case AssignmentExpression assignment:
+                        return ReferenceEquals(assignment.Left, child);
+                    case UpdateExpression update:
+                        return ReferenceEquals(update.Argument, child);
+                    case ForInStatement forIn:
+                        return ReferenceEquals(forIn.Left, child);
+                    case ForOfStatement forOf:
+                        return ReferenceEquals(forOf.Left, child);
+                    default:
+                        return false;
+                }
+            }
+            return false;
+        }
 
         private static Elsa3ExpressionRewriteIssue UndeclaredWrite(string name) => new(
             Elsa3ImportDiagnosticCodes.UnsupportedShape,
