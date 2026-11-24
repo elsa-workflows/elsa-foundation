@@ -90,6 +90,7 @@ internal static class PostgresRootThenDeleteChecks
         await VerifyRollback(removable, RollbackFault.SuppressMarker);
         await VerifyRollback(removable, RollbackFault.RetainWireBeforeGuard);
         await VerifyRollback(removable, RollbackFault.RetainWireAfterGuard);
+        await VerifyRollback(removable, RollbackFault.ChangeTerminalTime);
         EfStore.RootImage endedBeforeDelivery;
         EfStore.RootImage finishedBeforeAdmission;
         await using (var owner = await Own("successor"))
@@ -197,18 +198,33 @@ internal static class PostgresRootThenDeleteChecks
                 else
                 {
                     await db.Database.ExecuteSqlRawAsync("""
-                        CREATE FUNCTION fixture_retain_retirement_wire() RETURNS trigger LANGUAGE plpgsql AS $fn$
-                        BEGIN NEW."FoundationStateWire" = OLD."FoundationStateWire"; RETURN NEW; END
+                        CREATE FUNCTION fixture_change_retirement_marker() RETURNS trigger LANGUAGE plpgsql AS $fn$
+                        BEGIN
+                            IF TG_ARGV[0] = 'time' THEN
+                                NEW."FoundationTerminalAt" = NEW."FoundationTerminalAt" + 1000;
+                            ELSE
+                                NEW."FoundationStateWire" = OLD."FoundationStateWire";
+                            END IF;
+                            RETURN NEW;
+                        END
                         $fn$;
                         """, stop);
                     // PostgreSQL runs same-event triggers by name. Also exercise retention after the checkpoint guard.
-                    await db.Database.ExecuteSqlRawAsync(fault == RollbackFault.RetainWireBeforeGuard ? """
-                        CREATE TRIGGER fixture_retain_retirement_wire BEFORE UPDATE ON "Instances"
-                        FOR EACH ROW WHEN (NEW."Retired") EXECUTE FUNCTION fixture_retain_retirement_wire();
-                        """ : """
-                        CREATE TRIGGER z_fixture_retain_retirement_wire BEFORE UPDATE ON "Instances"
-                        FOR EACH ROW WHEN (NEW."Retired") EXECUTE FUNCTION fixture_retain_retirement_wire();
-                        """, stop);
+                    await db.Database.ExecuteSqlRawAsync(fault switch
+                    {
+                        RollbackFault.RetainWireBeforeGuard => """
+                            CREATE TRIGGER fixture_change_retirement_marker BEFORE UPDATE ON "Instances"
+                            FOR EACH ROW WHEN (NEW."Retired") EXECUTE FUNCTION fixture_change_retirement_marker('wire');
+                            """,
+                        RollbackFault.RetainWireAfterGuard => """
+                            CREATE TRIGGER z_fixture_change_retirement_marker BEFORE UPDATE ON "Instances"
+                            FOR EACH ROW WHEN (NEW."Retired") EXECUTE FUNCTION fixture_change_retirement_marker('wire');
+                            """,
+                        _ => """
+                            CREATE TRIGGER z_fixture_change_retirement_marker BEFORE UPDATE ON "Instances"
+                            FOR EACH ROW WHEN (NEW."Retired") EXECUTE FUNCTION fixture_change_retirement_marker('time');
+                            """
+                    }, stop);
                 }
                 var stopped = false;
                 try
@@ -238,9 +254,9 @@ internal static class PostgresRootThenDeleteChecks
                 await db.Database.ExecuteSqlRawAsync("""
                     DROP TRIGGER IF EXISTS fixture_skip_termination_marker ON "Journal";
                     DROP FUNCTION IF EXISTS fixture_skip_termination_marker();
-                    DROP TRIGGER IF EXISTS fixture_retain_retirement_wire ON "Instances";
-                    DROP TRIGGER IF EXISTS z_fixture_retain_retirement_wire ON "Instances";
-                    DROP FUNCTION IF EXISTS fixture_retain_retirement_wire();
+                    DROP TRIGGER IF EXISTS fixture_change_retirement_marker ON "Instances";
+                    DROP TRIGGER IF EXISTS z_fixture_change_retirement_marker ON "Instances";
+                    DROP FUNCTION IF EXISTS fixture_change_retirement_marker();
                     """, cleanup.Token);
                 await store.ReleaseAsync(0, lease.Epoch, cleanup.Token);
             }
@@ -284,7 +300,7 @@ internal static class PostgresRootThenDeleteChecks
             """).SingleAsync(stop);
     }
 
-    private enum RollbackFault { SuppressMarker, RetainWireBeforeGuard, RetainWireAfterGuard }
+    private enum RollbackFault { SuppressMarker, RetainWireBeforeGuard, RetainWireAfterGuard, ChangeTerminalTime }
 
     private sealed record PhysicalMarker(string State, int? WireBytes, string? Header, bool Retired, InstanceStatus Status, long Revision, long? TerminalRevision, long? TerminalAt);
 

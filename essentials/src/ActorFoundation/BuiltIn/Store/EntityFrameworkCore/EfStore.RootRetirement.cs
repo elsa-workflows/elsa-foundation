@@ -55,17 +55,22 @@ public sealed partial class EfStore
             var revision = checked(Current.Revision + 1);
             var status = running ? InstanceStatus.Cancelled : Current.Status;
             var terminalRevision = running ? revision : Current.TerminalRevision;
-            if (await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Instances" SET "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL,
+            var updated = await db.Database.SqlQuery<long>($"""
+                WITH terminal AS MATERIALIZED (
+                    SELECT CASE WHEN {running} THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+                        ELSE {Current.TerminalAt} END AS "At")
+                UPDATE "Instances" i SET "State" = 'null', "FoundationHeader" = NULL, "FoundationStateWire" = NULL,
                     "Model" = '', "Definition" = '', "Fault" = NULL, "StateVersion" = 1, "History" = {(int)History.Minimal},
                     "NextJobGeneration" = NULL, "Suspended" = false, "Retired" = true,
                     "Revision" = {revision}, "FoundationWriteRevision" = {revision},
                     "Status" = {(int)status},
                     "FoundationTerminalRevision" = CASE WHEN {running} THEN {revision} ELSE "FoundationTerminalRevision" END,
-                    "FoundationTerminalAt" = CASE WHEN {running} THEN floor(extract(epoch from clock_timestamp()) * 1000)::bigint ELSE "FoundationTerminalAt" END
-                WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Current.Revision}
-                """, token) != 1)
-                return false;
+                    "FoundationTerminalAt" = terminal."At"
+                FROM terminal
+                WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND i."Revision" = {Current.Revision}
+                RETURNING terminal."At" AS "Value"
+                """).ToListAsync(token);
+            if (updated is not [var terminalAt]) return false;
 
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL
@@ -80,8 +85,7 @@ public sealed partial class EfStore
                     AND "Revision" = {revision} AND "FoundationWriteRevision" = {revision}
                     AND "Retired" AND "Status" = {(int)status} AND "State" = 'null'
                     AND "FoundationHeader" IS NULL AND "FoundationStateWire" IS NULL
-                    AND "FoundationTerminalRevision" = {terminalRevision} AND "FoundationTerminalAt" IS NOT NULL
-                    AND ({running} OR "FoundationTerminalAt" = {Current.TerminalAt}))
+                    AND "FoundationTerminalRevision" = {terminalRevision} AND "FoundationTerminalAt" = {terminalAt})
                     AND NOT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference})
                     AND NOT EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                     AND NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
