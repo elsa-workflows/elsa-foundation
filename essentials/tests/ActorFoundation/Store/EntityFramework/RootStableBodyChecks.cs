@@ -44,6 +44,8 @@ internal static class RootStableBodyChecks
         var final = live + suffix + new string('x', reservedGrowth);
         var startBody = live + new string('x', Encoding.UTF8.GetByteCount(suffix));
 
+        await RequireWorker(() => cold.CommitFirstRootAsync(tenant, target.Reference, target.Creator, fence, lease,
+            "state", 1, "", small, """["birth"]"""));
         await Reject(() => Birth(target, startBody + "x", reservedGrowth));
         Check(await cold.ReadFirstRootAsync(tenant, target.Reference) is null &&
               await ingress.ReadPendingCreatorAsync(tenant, target.Reference) == target.Creator &&
@@ -55,6 +57,8 @@ internal static class RootStableBodyChecks
 
         var update = await Add(target, "update");
         var saved = await Read(target);
+        await RequireWorker(() => cold.CommitRootTurnAsync(tenant, target.Reference, saved, [update], fence, lease,
+            InstanceStatus.Running, "state", 1, "", small, """["advance"]"""));
         await Reject(() => Write(target, update, startBody, ended: false, growth: reservedGrowth + 1));
         Check((await Read(target)).State == saved.State && (await Read(target)).Revision == saved.Revision &&
               await Position() == fence.Position && (await ingress.ReadPendingDirectAsync(tenant, target.Reference)).Single() == update,
@@ -174,6 +178,18 @@ internal static class RootStableBodyChecks
             return;
         }
         throw new InvalidOperationException("The provider accepted growth beyond the stable-body reserve.");
+    }
+
+    private static async Task RequireWorker(Func<ValueTask<Committed>> write)
+    {
+        try { await write(); }
+        catch (NotSupportedException error) when (
+            error.Message == "The PostgreSQL stable-body profile requires the qualified Worker checkpoint writer.")
+        {
+            Console.WriteLine("ok the format-12 manual write requires the qualified Worker");
+            return;
+        }
+        throw new InvalidOperationException("An unqualified checkpoint writer accepted format 12.");
     }
 
     private static void Check(bool pass, string description)

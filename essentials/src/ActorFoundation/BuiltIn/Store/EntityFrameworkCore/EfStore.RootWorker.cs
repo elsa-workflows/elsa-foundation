@@ -232,6 +232,8 @@ public sealed partial class EfStore
             throw new NotSupportedException("The PostgreSQL job profile requires the qualified Worker checkpoint writer.");
         if (db.UsesRootValueProtocol)
             throw new NotSupportedException("The PostgreSQL value qualification requires the qualified Worker checkpoint writer.");
+        if (db.UsesRootStableBody)
+            throw new NotSupportedException("The PostgreSQL stable-body profile requires the qualified Worker checkpoint writer.");
         return await CommitAsync(new CommitBatch(fence.Partition, fence.Epoch, fence.Position, lease, false, [prepared.JournalTurn!], [], []),
             prepared.Checkpoint, sentAt, token);
     }
