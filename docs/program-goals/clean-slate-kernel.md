@@ -585,8 +585,9 @@ Public production activation, Worker inline promotion and the remaining provider
 The [current-owner trial schedule](../../essentials/tests/ActorFoundation/Simulation/ContractJobTrialChecks.cs)
 also covers timeout while the callback is still unwinding. The [PostgreSQL Worker fixture](../../prototypes/kernel-model/README.md#timed-jobs-on-the-postgresql-worker)
 checks that part with an unrelated actor's admitted start. The job's timeout lands while its callback
-is still active. The unrelated start commits once after callback exit, and late job results leave the
-timeout state and journal unchanged. The public qualified-command schedule and physical runs on the
+is still active, with no model entry for the unrelated start. That start commits once after the
+current callback exits, even while the displaced callback is still active. The timeout checkpoint,
+inbox and journal stay unchanged after both Workers run again. The public qualified-command schedule and physical runs on the
 other release providers still need qualification. MongoDB-specific checks are deferred.
 
 ### K11 foundation contract cases

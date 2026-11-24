@@ -46,6 +46,8 @@ internal static class PostgresTimedJobChecks
         await using var next = Owner(NextOwner, nextModel);
         await Activate(first);
         var previousFence = first.Fences.Single();
+        (long Revision, string Entry)[] initialHistory =
+            [(1, "start:live"), (2, "result:live-result"), (3, "start:moved"), (4, "result:deadline")];
         try
         {
             var liveDue = await Issue(Live, birth: true);
@@ -103,8 +105,7 @@ internal static class PostgresTimedJobChecks
             await Pass(next);
             var final = await Snapshot();
             Check(final.Checkpoint.State == expired.Checkpoint.State && final.Checkpoint.Revision == 4 && final.Rows.Length == 0 &&
-                final.History.Select(entry => (entry.Revision, Json.Read<string[]>(entry.Entries).Single())).SequenceEqual(
-                    [(1L, "start:live"), (2L, "result:live-result"), (3L, "start:moved"), (4L, "result:deadline")]),
+                final.History.Select(Entry).SequenceEqual(initialHistory),
                 "The late callback must leave exactly one physical journal outcome for each job on the same actor.");
             Console.WriteLine($"ok PostgreSQL {(owned ? "owned" : "EF")} {(inBatch ? "in-batch" : "checked")}: {Actor.Id}, " +
                 $"epochs {previousFence.Epoch}->{retryFence.Epoch}->{takeoverFence.Epoch}, revision 4, timely completion wins and due takeover counts one trial.");
@@ -135,7 +136,8 @@ internal static class PostgresTimedJobChecks
                 var followUp = new Message("unrelated-start", Other, Kinds.Start, Start: new(Model, "unrelated-work"));
                 Check(await store.AddAsync(followUp, stop), "The later actor's independent birth must be admitted once.");
                 await Pass(active);
-                Check(await UnrelatedPending(), "The later actor must remain pending while the timed callback is on trial.");
+                Check(await DatabaseNow() < due && !activeDriver.IsCompleted && activeModel.UnrelatedTurns == 0 &&
+                    await UnrelatedPending(), "Before the deadline the admitted start must stay pending without entering an unrelated turn.");
 
                 await AtDeadline(due);
                 await Drive(active, async () => (await Snapshot()).Checkpoint.Revision >= 6);
@@ -144,26 +146,33 @@ internal static class PostgresTimedJobChecks
                 Check(activeModel.Cancellations[Unwinding].IsCancellationRequested && !activeDriver.IsCompleted &&
                     timedOut.Checkpoint.Revision == 6 && timedOut.Checkpoint.Jobs is null && timedOut.Rows.Length == 0 &&
                     StateOf(timedOut.Checkpoint) is { Active: null, Results: ["live-result", "deadline", "deadline"] } &&
-                    timedOut.History.Count(entry => entry.Revision >= 6) == 1,
+                    timedOut.History.Select(Entry).SequenceEqual([.. initialHistory, (5L, "start:unwinding"), (6L, "result:deadline")]),
                     "The timeout must commit once while the cancelled callback is still unwinding.");
-                Check(await UnrelatedPending(), "The unrelated actor committed before the cancelled trial callback exited.");
+                Check(activeModel.UnrelatedTurns == 0 && await UnrelatedPending(),
+                    "The unrelated actor ran before the cancelled trial callback exited.");
                 Console.WriteLine("ok the current owner commits its timeout while the callback keeps another admitted actor pending");
 
                 activeModel.Results[Unwinding].SetResult("late active result");
                 await activeDriver.WaitAsync(stop);
-                precedingModel.Results[Unwinding].SetResult("late prior result");
-                await originalDriver.WaitAsync(stop);
                 await Drive(active, async () => !await UnrelatedPending());
-                var afterExit = await Snapshot();
                 await using var db = open();
                 var otherHistory = await db.Journal.AsNoTracking().Where(row => row.Instance == Other.Id).ToArrayAsync(stop);
-                Check(otherHistory is [{ Revision: 1 }] &&
+                Check(!originalDriver.IsCompleted && activeModel.UnrelatedTurns == 1 && otherHistory is [{ Revision: 1 }] &&
                     Json.Read<string[]>(otherHistory[0].Entries).SequenceEqual(["unrelated"]) &&
                     await db.Instances.AsNoTracking().AnyAsync(row => row.Id == Other.Id && row.Status == InstanceStatus.Finished && row.Revision == 1, stop) &&
-                    !await db.Messages.AsNoTracking().AnyAsync(row => row.Target == Other.Id, stop) &&
-                    afterExit.Checkpoint.Revision == 6 && afterExit.Checkpoint.State == timedOut.Checkpoint.State &&
-                    afterExit.History.Select(row => row.Entries).SequenceEqual(timedOut.History.Select(row => row.Entries)),
-                    "Only callback exit should release the independent actor, and neither late callback may publish another job outcome.");
+                    !await db.Messages.AsNoTracking().AnyAsync(row => row.Target == Other.Id, stop),
+                    "The current callback's exit must release the independent actor even while the displaced callback remains active.");
+
+                precedingModel.Results[Unwinding].SetResult("late prior result");
+                await originalDriver.WaitAsync(stop);
+                await preceding.RunAsync(stop);
+                await Pass(active);
+                var afterExit = await Snapshot();
+                Check(afterExit is { Checkpoint.Revision: 6, Checkpoint.Jobs: null, Rows.Length: 0 } &&
+                    afterExit.Checkpoint.State == timedOut.Checkpoint.State &&
+                    afterExit.History.Select(row => (row.Position, row.Revision, row.Entries))
+                        .SequenceEqual(timedOut.History.Select(row => (row.Position, row.Revision, row.Entries))),
+                    "Neither late callback may change the checkpoint, inbox, or ordered timeout journal.");
                 Console.WriteLine("ok the unrelated actor commits once after callback exit and both late results leave the original journal unchanged");
             }
             finally
@@ -280,6 +289,7 @@ internal static class PostgresTimedJobChecks
         }
     }
 
+    private static (long Revision, string Entry) Entry(JournalEntity row) => (row.Revision, Json.Read<string[]>(row.Entries).Single());
     private static JobState StateOf(InstanceEntity row) => Json.Read<JobState>(row.State);
     private sealed record Physical(InstanceEntity Checkpoint, MessageEntity[] Rows, JournalEntity[] History);
     private sealed record Job(string Key, long Due);
@@ -288,6 +298,8 @@ internal static class PostgresTimedJobChecks
     private sealed class Probe(bool trialWithdrawal = false) : IActorType
     {
         bool IActorType.SupportsTrialWithdrawal => trialWithdrawal;
+        private int _unrelatedTurns;
+        internal int UnrelatedTurns => Volatile.Read(ref _unrelatedTurns);
         public Dictionary<string, IJob> Entries { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, CancellationToken> Cancellations { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, TaskCompletionSource<object?>> Results { get; } = new(StringComparer.Ordinal);
@@ -314,6 +326,7 @@ internal static class PostgresTimedJobChecks
             var message = turn.Inbox.Single();
             if (input.Actor == Other.Id && message.Kind == Kinds.Start)
             {
+                Interlocked.Increment(ref _unrelatedTurns);
                 var ended = new InstanceRow(input.Actor, Model, "unrelated-work", InstanceStatus.Finished, "null",
                     turn.Revision, null);
                 return ValueTask.FromResult(turn.Seal(turn.Outcome(ended.Status), ended, null, """["unrelated"]"""));

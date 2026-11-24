@@ -270,11 +270,13 @@ the journal shows one outcome per job even after the displaced callbacks return.
 
 The same fixture takes a third pending ticket before its deadline. The current owner
 commits the job's timeout while its cancelled callback is still unwinding. Another
-actor's admitted start remains pending and has no checkpoint or journal until the
-callback exits. Neither late callback changes the timeout checkpoint or journal.
+actor's admitted start stays pending without entering its model or writing a
+checkpoint. It runs once after the current callback exits, while the displaced
+callback stays active. After both Workers run again, the timed-out actor's
+checkpoint, empty inbox and ordered journal are unchanged.
 Append `without-trial-withdrawal` on a fresh database to run a failing control. The
 fixture disables trial withdrawal support at the actor-type boundary and detects
-the unrelated actor committing before callback exit.
+the unrelated actor running before callback exit.
 
 This covers the legacy relational actor protocol. In that path a Worker completion consumes the original issued
 ticket and commits the actor's result directly in its checkpoint and journal. The public generated-root path
