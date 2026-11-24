@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.ActivityMap;
 using Elsa3.Mapping.ActivityMap.Rewrites;
 using Elsa3.Mapping.Resolution;
+using Elsa3.Mapping.Services;
 using Elsa3.Models;
 using static Elsa3.Models.Elsa3ActivityDiagnosticCodes;
 
@@ -118,6 +119,16 @@ internal sealed partial class Elsa3ActivityNormalizer(
         var variables = plan.Definition.Variables;
         for (var index = 0; index < variables.Count; index++)
         {
+            var variableMetadata = new Dictionary<string, string> { ["VariableName"] = variables[index].Name };
+            if (Elsa3VariableMapper.DescribeUnregisteredType(wellKnownTypeRegistry, variables[index]) is { } notice)
+                plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
+                    plan,
+                    Elsa3MigrationDiagnosticSeverity.Info,
+                    Elsa3ImportDiagnosticCodes.VariableTypeUnregistered,
+                    notice.Message,
+                    notice.Guidance,
+                    $"$.variables[{index}]",
+                    variableMetadata));
             if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variables[index], out var mapped, out var refusal, typeDescriptors))
             {
                 plan.WorkflowVariableTypes[variables[index]] = mapped.Type;
@@ -126,11 +137,11 @@ internal sealed partial class Elsa3ActivityNormalizer(
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
                 plan,
                 Elsa3MigrationDiagnosticSeverity.Error,
-                VariableValueUnconvertible,
-                refusal!.Message,
+                refusal!.Code,
+                refusal.Message,
                 refusal.Guidance,
                 $"$.variables[{index}]",
-                new Dictionary<string, string> { ["VariableName"] = variables[index].Name }));
+                variableMetadata));
         }
     }
 
@@ -1026,10 +1037,12 @@ internal sealed partial class Elsa3ActivityNormalizer(
                 var variable = item.Deserialize<Elsa3Variable>(Elsa3JsonOptions);
                 if (variable is null || string.IsNullOrWhiteSpace(variable.Id))
                     continue;
+                if (Elsa3VariableMapper.DescribeUnregisteredType(wellKnownTypeRegistry, variable) is { } notice)
+                    context.Info(Elsa3ImportDiagnosticCodes.VariableTypeUnregistered, notice.Message, notice.Guidance, property);
                 if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variable, out var mapped, out var refusal, typeDescriptors))
                     context.Node.Variables.Add(mapped);
                 else
-                    context.Error(VariableValueUnconvertible, refusal!.Message, refusal.Guidance, property);
+                    context.Error(refusal!.Code, refusal.Message, refusal.Guidance, property);
             }
         }
         catch (JsonException exception)

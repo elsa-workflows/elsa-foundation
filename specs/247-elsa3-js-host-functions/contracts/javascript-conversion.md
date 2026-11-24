@@ -50,5 +50,5 @@ what to change so the workflow converts.
 | `DateTime`, `DateTimeOffset`, `TimeSpan`, `Guid`, `Random`, lodash `_`, `moment` | VF-IMP-005 | Unchanged from spec 236 |
 | Elsa 3 `args` | VF-IMP-005 | Unchanged from spec 236 |
 | `getOutputFrom` or helpers with a computed name, or an accessor used as a value | VF-IMP-006 | Unchanged from spec 236 |
-| Any other call to an undeclared function | VF-IMP-005 | Unchanged: "unknown or unapproved host function" |
+| Any other call to an undeclared function | VF-IMP-005 | "unknown or unapproved host function". Since #5664 the guidance names the declaration route: a prefixed host function that declares the Elsa 3 name it replaces (`ReplacesGlobalFunctions`) converts the call |
 | A body with a top-level `return` whose last statement is neither a `return` nor an expression | VF-IMP-006 | End the script with `return` |
