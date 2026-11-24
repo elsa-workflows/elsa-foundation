@@ -468,10 +468,9 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         ? $"{type.Namespace}.{type.Name[..type.Name.IndexOf('`')]}<{string.Join(", ", type.GetGenericArguments().Select(Describe))}>"
         : $"{type.Namespace}.{type.Name}";
 
-    private static Assembly EntryAssembly(string host) => host == "Elsa.Workbench"
-        ? Assembly.Load("Elsa.Workbench")
-        // Foundation.Host compiles no type of its own beside its entry point; the test references the project, so it loads by name.
-        : Assembly.Load("Elsa.Foundation.Host");
+    // A host compiles no type of its own the test could name beside its entry point; the test references each host project, so
+    // each loads by its assembly name, which is its directory name under apps/.
+    private static Assembly EntryAssembly(string host) => Assembly.Load(host);
 
     /// <summary>A content root of the host's own settings and a shell file of its own, so the shell that is activated enables no feature.</summary>
     private sealed class ContentRoot : IDisposable
