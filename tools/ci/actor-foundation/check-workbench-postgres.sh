@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+set -euo pipefail
+read -r -a versions <<< "${PG_VERSIONS:-16 17}"
+if (( ${#versions[@]} == 0 )); then
+  echo "Select at least one PostgreSQL version." >&2
+  exit 2
+fi
+repo=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
+revision=$(git -C "$repo" -c core.fsmonitor=false rev-parse --verify --end-of-options "${1:-HEAD}^{commit}")
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/elsa-workbench-preview.XXXXXXXX")
+container=
+cleanup() {
+  if [[ -n "$container" ]]; then docker stop --time 3 "$container" >/dev/null || true; fi
+  rm -rf -- "$scratch"
+}
+trap cleanup EXIT
+mkdir "$scratch/source"
+git -C "$repo" -c core.fsmonitor=false archive "$revision" | tar -xf - -C "$scratch/source"
+cd "$scratch/source"
+echo "Workbench preview source $revision"
+python3 - <<'PY'
+import json
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+app = Path('apps/Elsa.Workbench')
+locked = json.loads((app / 'packages.lock.json').read_text())['dependencies']['net10.0']
+provider = Path('prototypes/kernel-model/ef/Kernel.EntityFramework/Kernel.EntityFramework.csproj')
+provider_locked = json.loads(provider.with_name('packages.lock.json').read_text())['dependencies']['net10.0']
+workbench_versions = {package: info['resolved'] for package, info in locked.items() if 'resolved' in info}
+xml = ET.parse(provider)
+references = {entry.attrib['Include']: entry for entry in xml.findall('.//PackageReference')}
+if references.keys() - workbench_versions.keys():
+    raise SystemExit("Workbench does not lock every direct provider dependency.")
+pins = references.keys() | (provider_locked.keys() & workbench_versions.keys())
+transitive = ET.SubElement(xml.getroot(), 'ItemGroup')
+for package in sorted(pins):
+    reference = references.get(package)
+    if reference is None:
+        reference = ET.SubElement(transitive, 'PackageReference', Include=package)
+    reference.set('Version', workbench_versions[package])
+    print(f'Compile kernel provider with Workbench {package} {workbench_versions[package]}')
+xml.write(provider, encoding='unicode')
+Path('expected-workbench-providers.json').write_text(
+    json.dumps({package: workbench_versions[package] for package in pins}))
+project=app/'Elsa.Workbench.csproj'
+text=project.read_text()
+if text.count('</Project>') != 1:
+    raise SystemExit('Cannot find the Workbench project insertion point.')
+project.write_text(text.replace('</Project>', '''
+  <ItemGroup>
+    <ProjectReference Include="../../essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj" />
+    <ProjectReference Include="../../prototypes/kernel-model/runtime/Kernel.Foundation.Postgres/Kernel.Foundation.Postgres.csproj" />
+    <ProjectReference Include="../../prototypes/kernel-model/models/Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../../prototypes/kernel-model/src/Kernel.WorkflowActor/Kernel.WorkflowActor.csproj" />
+    <Compile Include="../../tools/ci/actor-foundation/WorkbenchPostgresPreview.cs" Link="Qualification/WorkbenchPostgresPreview.cs" />
+    <Compile Include="../../prototypes/kernel-model/models/Native.Run/DirectApprovalWorkflow.cs" Link="Qualification/DirectApprovalWorkflow.cs" />
+    <Compile Include="../../prototypes/kernel-model/ef/Kernel.Ef.Run/Wire.cs" Link="Qualification/Wire.cs" />
+    <Compile Include="../../prototypes/kernel-model/models/Native.Run/PostgresFixtureDatabase.cs" Link="Qualification/PostgresFixtureDatabase.cs" />
+  </ItemGroup>
+</Project>'''))
+program=app/'Program.cs'
+text=program.read_text()
+entry='var bootStopwatch = Stopwatch.StartNew();'
+if text.count(entry) != 1:
+    raise SystemExit('Cannot find the Workbench entry point.')
+program.write_text(text.replace(entry, '''
+if (args is ["--qualify-workbench-postgres", .. var previewArguments])
+{
+    await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunAsync(previewArguments);
+    return;
+}
+
+''' + entry))
+PY
+dotnet restore apps/Elsa.Workbench /p:RestoreLockedMode=false
+dotnet build -c Release --no-restore apps/Elsa.Workbench
+workbench=apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll
+
+python3 - <<'PYDEPS'
+import json
+from pathlib import Path
+
+expected = json.loads(Path('expected-workbench-providers.json').read_text())
+manifest = Path('apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.deps.json')
+compile_assets = Path('prototypes/kernel-model/ef/Kernel.EntityFramework/obj/project.assets.json')
+actual = dict(key.rsplit('/', 1) for key in json.loads(manifest.read_text())['libraries'])
+compile_entries = json.loads(compile_assets.read_text())['targets']['net10.0']
+compiled = dict(key.rsplit('/', 1) for key in compile_entries)
+runtime_required = {'Microsoft.EntityFrameworkCore', 'Microsoft.EntityFrameworkCore.Relational',
+                    'Npgsql.EntityFrameworkCore.PostgreSQL', 'Npgsql'}
+if runtime_required - expected.keys():
+    raise SystemExit('Workbench and the provider must lock the PostgreSQL runtime dependencies.')
+for package in sorted(expected):
+    version = expected[package]
+    compile_version = compiled.get(package)
+    # Shared-framework assemblies and metapackages can be absent from the app manifest.
+    requires_runtime = package in runtime_required or package in actual
+    if compile_version != version or (requires_runtime and actual.get(package) != version):
+        raise SystemExit(f'Provider version mismatch for {package}: Workbench locked {version}, '
+                         f'compile {compile_version}, host runtime {actual.get(package)}')
+    print(f'ok matching provider dependency {package} {version} (runtime {actual.get(package, "none")})')
+PYDEPS
+
+for major in "${versions[@]}"; do
+  export POSTGRES_PASSWORD
+  POSTGRES_PASSWORD=$(openssl rand -hex 24)
+  container=$(docker run -d --rm -e POSTGRES_PASSWORD -p 127.0.0.1::5432 "postgres:$major")
+  for ((attempt=0; attempt<60; attempt++)); do
+    if docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null; then break; fi
+    sleep 0.25
+  done
+  docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null
+  port=$(docker port "$container" 5432/tcp)
+  port=${port##*:}
+  [[ -n "$port" && "$port" != 5095 ]]
+  docker exec "$container" createdb -U postgres workbench_preview
+  export KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=$port;Username=postgres;Password=$POSTGRES_PASSWORD;Database=workbench_preview;SSL Mode=Disable;GSS Encryption Mode=Disable"
+  echo "PostgreSQL $major"
+  receipt="$scratch/pg$major-receipt.json"
+  dotnet "$workbench" --qualify-workbench-postgres birth "$receipt"
+  state_counts() {
+    docker exec "$container" psql -XAtq -U postgres -d workbench_preview \
+      -c 'SELECT (SELECT count(*) FROM "Nodes"), (SELECT count(*) FROM "Messages")'
+  }
+  expect_rejected_receipt() {
+    local field=$1 diagnostic=$2 invalid="$scratch/pg$major-invalid-receipt.json" before
+    python3 - "$receipt" "$invalid" "$field" <<'PYRECEIPT'
+import json, sys
+from pathlib import Path
+
+receipt = json.loads(Path(sys.argv[1]).read_text())
+receipt[sys.argv[3]] = "changed"
+Path(sys.argv[2]).write_text(json.dumps(receipt))
+PYRECEIPT
+    before=$(state_counts)
+    if dotnet "$workbench" --qualify-workbench-postgres restart "$invalid" > "$scratch/refusal.log" 2>&1; then
+      echo "Restart accepted a receipt with an invalid $field." >&2
+      exit 1
+    fi
+    grep -Fq "$diagnostic" "$scratch/refusal.log"
+    [[ "$(state_counts)" == "$before" ]]
+    echo "ok invalid $field refused without registering an owner or writing new input"
+  }
+  expect_rejected_receipt StateHash 'the receipt matches the stopped waiting actor before owner startup'
+  expect_rejected_receipt Frame 'the receipt matches the frame and journal before owner startup'
+  expect_rejected_receipt JournalHash 'the receipt matches the frame and journal before owner startup'
+  expect_rejected_receipt Bookmark 'The continuation does not match this actor journal'
+  dotnet "$workbench" --qualify-workbench-postgres restart "$receipt"
+  docker stop --time 3 "$container" >/dev/null
+  container=
+done

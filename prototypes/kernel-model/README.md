@@ -525,6 +525,22 @@ continuations commit together. A stale sibling's fence rolls back a mixed consum
 only the home that writes a journal entry. With `ef` the fixture checks that the store declines grouped
 ownership before changing any lease or inbox row.
 
+### Workbench PostgreSQL provider rehearsal
+
+Run `bash tools/ci/actor-foundation/check-workbench-postgres.sh` from the repository root. The script
+builds a disposable archive of the selected revision. It compiles the preview provider using
+Workbench's locked EF provider versions, adds a qualification command to the archived Workbench,
+and verifies both the provider's compile assets and Workbench's emitted dependency manifest. Each test uses a fresh loopback PostgreSQL database.
+
+The archived executable runs a dedicated Generic Host before normal Workbench composition. Two
+Workbench processes run the real Native approval with the hosted PostgreSQL launcher.
+The first stops after Ada's approval. The next takes a higher epoch, checks that replay preserves
+the checkpoint bytes and journal, then records Grace's approval once and completes the workflow. Both processes verify that stopping
+the host releases the partition before disposal.
+The meter reports each process's provider traffic, including connection setup, owner polling and
+shutdown. Schema setup and direct diagnostic reads are outside that meter. The separate warm
+public preview budget has its own command.
+
 ### PostgreSQL public-start round-trip budget
 
 The public PostgreSQL writer can finish a Balanced Native root in its first fenced checkpoint. The creator,
