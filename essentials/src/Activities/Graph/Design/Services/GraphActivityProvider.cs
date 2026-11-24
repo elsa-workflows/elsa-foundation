@@ -1644,7 +1644,7 @@ public sealed class GraphActivityProvider(
             }).ToArray(),
             variables = graph.Variables.Select(variable => variable.InitialValue is null &&
                 !contractCapabilities.AllowsNull(variable.Type) && TryGraphVariableDefault(variable.Type, out var initial)
-                ? variable with { InitialValue = new ActivityInputDefault("Literal", JsonSerializer.SerializeToElement(initial, initial!.GetType())) }
+                ? variable with { InitialValue = new ActivityInputDefault("Literal", JsonSerializer.SerializeToElement(initial, initial!.GetType(), Elsa.Serialization.Core.JsonBaseline.Options)) }
                 : variable).ToArray(),
             outputMappings = graph.OutputMappings,
             inputs = contract.Inputs

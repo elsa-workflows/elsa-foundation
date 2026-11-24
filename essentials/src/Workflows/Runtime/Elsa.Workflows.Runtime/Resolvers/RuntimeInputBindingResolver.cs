@@ -94,7 +94,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
                     envelope = ValueEnvelope.Null(envelope.Type, envelope.Policy);
                 else if (envelope.Type.CollectionKind == CollectionKind.Single &&
                          NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, _types, out var typeDefault))
-                    envelope = ValueEnvelope.Inline(envelope.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType()), envelope.Policy);
+                    envelope = ValueEnvelope.Inline(envelope.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType(), Elsa.Serialization.Core.JsonBaseline.Options), envelope.Policy);
             }
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
