@@ -607,9 +607,14 @@ waiting descendant and emits three sets of 500 detached creators. The stopped-ow
 fixture restores the old `CustomHandles` representation from those issued IDs while
 preserving the authored checkpoint. The successor runs all growth and termination through
 the built-in Worker and fenced in-memory store. Growth above the terminal budget parks.
-The exact-fit and protected ThenDelete cases keep the ended row, close its inboxes and
-land one parent-bound descendant terminate and one parent notice. The qualified Park
-resolution also cascades while preserving the faulted checkpoint.
+TG-1(c1) uses the current public header reserve to derive the no-handle bound. The
+historical 16,416,460-byte state predates that reserve. Adjacent controls reject one
+byte above the admitted limit, including the protected invocation shape. The exact-fit
+and protected ThenDelete cases keep all inbox identities, close them and commit one
+bound descendant terminate with the final parent notice. The protected case returns
+`terminated and kept` and preserves the invocation receipt. TG-1(c1) sends a provisional
+notice when it parks. The later parent-bound terminate cascades while preserving the
+faulted checkpoint.
 The cases exercise the in-memory encoding. The physical-provider and state-version
 upgrade cases have separate acceptance requirements.
 
