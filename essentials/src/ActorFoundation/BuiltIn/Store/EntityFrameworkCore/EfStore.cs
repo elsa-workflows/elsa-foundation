@@ -161,11 +161,14 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
-    // Workflow history removes no row of a retired root, and outside a pinned namespace it does not bind its reads to a
-    // qualified list. Until the composed install provides both, a qualified list carries history only in a pinned namespace
-    // without retirement, so the shipped formats 13 to 17 refuse it as before.
+    // A qualified list carries workflow history only in a pinned namespace. Retirement deletes a retired root's history
+    // row in its own commit and the history reader binds to the qualified list (S4), so any other closed set with a
+    // qualified list in a pinned namespace carries history, a later shipped one included. The shipped formats 13 to 17
+    // keep refusing it as they shipped, named by format.
+    private static readonly HashSet<StoreFormat> HistoryRefusingFormats = [StoreFormat.RootTerminalSelection, StoreFormat.RootRetirement,
+        StoreFormat.RootTerminateThenDelete, StoreFormat.RootRetention, StoreFormat.RootOperatorReplies];
     internal bool SupportsRootWorkflowHistory => !(UsesRootTerminalSelection || UsesRootRetirement) ||
-        RequiresPinnedRootNamespace && !UsesRootRetirement;
+        RequiresPinnedRootNamespace && !HistoryRefusingFormats.Contains(RequiredFormat);
     internal static KernelDb ForPostgresRootParkOpening(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkOpening);
     internal bool UsesRootReplyProtocol => Has(RootCapabilities.ReplyProtocol);
     internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootReplies);

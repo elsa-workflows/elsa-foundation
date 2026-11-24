@@ -2303,24 +2303,27 @@ jobs:
           done
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
 
-      - name: Root composition, all lanes
+      # S4 adds the composed install guard beside the S2 composition guard.
+      - name: Root composition and composed install, all lanes
         if: ${{ !cancelled() }}
         env:
           PG_PORT: ${{ job.services.postgres.ports[5432] }}
           PG_ID: ${{ job.services.postgres.id }}
         run: |
           failed=()
-          for writer in owned ef; do
-            for fence in checked in-batch; do
-              db="composition_${writer}_${fence//-/_}"
-              echo "::group::$writer $fence"
-              docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
-              export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
-              if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-composition "$writer" "$fence"; then
-                echo "::error::Root composition failed: $writer $fence"
-                failed+=("$writer $fence")
-              fi
-              echo "::endgroup::"
+          for check in composition composed-install; do
+            for writer in owned ef; do
+              for fence in checked in-batch; do
+                db="${check//-/_}_${writer}_${fence//-/_}"
+                echo "::group::$check $writer $fence"
+                docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
+                export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
+                if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "pg-root-$check" "$writer" "$fence"; then
+                  echo "::error::Root $check failed: $writer $fence"
+                  failed+=("$check $writer $fence")
+                fi
+                echo "::endgroup::"
+              done
             done
           done
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
