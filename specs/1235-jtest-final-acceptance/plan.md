@@ -33,7 +33,7 @@ composition tests green.
 **Constraints**: No CI tier, no xunit wrapper, no secrets committed, no converter workaround (FR-017), suite
 expectations never weakened.
 
-**Scale/Scope**: 36 definitions, 42 suites; 13 templates the suites call plus one internal helper, and any templates
+**Scale/Scope**: 36 definitions and 42 suites copied, of which 34 and 41 are in the acceptance set (spec Q13); 13 templates the suites call plus one internal helper, and any templates
 the engine-neutral refactor adds.
 
 ## Constitution Check

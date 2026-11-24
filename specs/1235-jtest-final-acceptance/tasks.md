@@ -33,9 +33,9 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
 - [ ] T002 Check `JTest/` for secrets: credentials and base URLs are `${VARIABLE}` references; other literals in the
   environment files (dispatch channels, wait times, engine-specific expected values) are not secrets (FR-004).
 - [ ] T003 [P] Create the ledger files with their table headers from data-model.md: `JTest/ledger/suites.md` (one row
-  per suite, all `not run`), `JTest/ledger/baseline-failures.md`, `JTest/ledger/refactor-scope.md`,
+  per suite, all `not run` except the excluded one, spec Q13), `JTest/ledger/baseline-failures.md`, `JTest/ledger/refactor-scope.md`,
   `JTest/ledger/suite-changes.md`,
-  `JTest/ledger/dispositions.md` (one row per definition, bucket `unclassified`), `JTest/ledger/runs.md`.
+  `JTest/ledger/dispositions.md` (one row per definition, bucket `unclassified`, or `excluded` for the two of spec Q13), `JTest/ledger/runs.md`.
 
 ---
 
@@ -74,7 +74,8 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   `jtest validate "tests/**/*"` from `JTest/`; record the version and any invalid file in `JTest/ledger/runs.md`.
 - [ ] T010 [US1] Start a fresh baseline container, run `import-and-publish-workflows.json`, and record its result per
   dataset in `JTest/ledger/runs.md`; a definition that fails to import on 3.6.3 is itself a baseline failure.
-- [ ] T011 [US1] Run all 42 suites on the same container; record the run in `JTest/ledger/runs.md` and the Elsa 3
+- [ ] T011 [US1] Run the 41 suites of the acceptance set (`performance/baseline-dispatch-tests.json` is excluded,
+  spec Q13) on the same container; record the run in `JTest/ledger/runs.md` and the Elsa 3
   result per suite in `JTest/ledger/suites.md`.
 - [ ] T012 [US1] Rerun every failing suite on a fresh container to separate intermittent failures from stable ones;
   keep both runs in `JTest/ledger/runs.md`.
@@ -88,8 +89,7 @@ unit test is required (framework §2.23). No test cadence beyond that applies.
   corpus definitions use that no suite covers in the *Notes* section of `JTest/ledger/baseline-failures.md`.
 - [ ] T016 [US1] **Approval gate**: post the classified list on the PR and get the coordinator's approval of the whole
   list; record the approval link in `JTest/ledger/baseline-failures.md`.
-- [ ] T017 [US1] Apply the approved fixes to `JTest/tests/`, `JTest/templates/` and `JTest/import-and-publish-workflows.json`
-  (which omits the two `performance-baseline-dispatch*` definitions its suite needs),
+- [ ] T017 [US1] Apply the approved fixes to `JTest/tests/` and `JTest/templates/`,
   one commit, with the ledger row named per change; mark 3.6.3-defect suites `blocked: 3.6.3 defect <defect>` in
   `JTest/ledger/suites.md` (FR-008).
 - [ ] T018 [US1] Rerun all suites on a fresh container and confirm every unblocked suite passes (SC-001); record the
@@ -159,9 +159,10 @@ cannot produce with the same meaning fails the template with the output named (F
   and any raised `wait` in a suite or a template of either set, is added to `JTest/ledger/suite-changes.md` with its reason, approved by the coordinator, and, when it
   touches a suite file or the Elsa 3 set, verified on 3.6.3 before it lands (FR-012).
 - [ ] T030 [US3] Run `tests/single-outcome/single-outcome-tests.json` the same way; record the run.
-- [ ] T031 [US3] Start a fresh Workbench with all 36 definitions; copy the reconciliation receipt into
+- [ ] T031 [US3] Start a fresh Workbench with the 34 definitions of the acceptance set (a `Files` list leaving out the
+  two excluded ones, spec Q13); copy the reconciliation receipt into
   `JTest/ledger/runs.md` and fill the Reconciliation column of `JTest/ledger/dispositions.md`.
-- [ ] T032 [US3] Run all 42 suites on that host; record the Elsa 4 result per suite in `JTest/ledger/suites.md`.
+- [ ] T032 [US3] Run the 41 suites of the acceptance set on that host; record the Elsa 4 result per suite in `JTest/ledger/suites.md`.
 - [ ] T033 [US3] For each failing suite, find the cause (template, converter, engine, prerequisite) and record it in
   `JTest/ledger/suites.md`; a template cause is fixed in `templates-elsa4/` and rerun; a missing prerequisite marks
   the suite `blocked: <prerequisite>` (FR-016); a value that comes back truncated or unavailable under the capture

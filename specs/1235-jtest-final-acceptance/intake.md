@@ -44,8 +44,8 @@ suite is blocked only when the join is what stops it on Elsa 4.
 
 - Some JavaScript suites use classic Elsa host functions (`date-methods`, `elsa-functions`, `script-handler-functions`);
   the expression-capability work decides which have Elsa 4 equivalents, and the rest are candidate incompatibilities.
-- The setup suite misses two definitions (above), so `performance/baseline-dispatch-tests.json` cannot pass on the
-  baseline until the setup suite is fixed.
+- The setup suite misses two definitions (above). That case is excluded from acceptance (spec Q13): the two
+  definitions and `performance/baseline-dispatch-tests.json` are copied but neither run nor bucketed.
 - `storage-drivers-variables-root-workflow.json` is version 2 (all others are 1). The Elsa 3 import numbers it 1 and
   `storage-drivers/variables` expects 1; Elsa 4 keeps 2, so the expected version is engine-specific.
 - `performance/big-data-tests.json` asserts on counts inside a 6 MB value; Elsa 4 captures it only as a bounded
