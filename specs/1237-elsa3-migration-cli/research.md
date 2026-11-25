@@ -61,8 +61,8 @@ The run's collaborators (`Elsa3ImportSelection`, `ImportedWorkflowPublisher`, `E
 `Elsa3StartupPublishingAuthorization` decoration) are registered only by `Elsa3JsonReconciliationFeature`
 (`Reconciliation/Elsa3JsonReconciliationFeature.cs`). That feature throws without `SourceId` and a path, and it
 registers `Elsa3FolderImportTask`. The extraction therefore also moves their registration into one internal helper,
-`Elsa3ImportRunRegistration.Add(IServiceCollection)`. The feature calls it, and the tooling composition calls it
-without enabling the feature.
+`Elsa3ImportRunRegistration.Add(IServiceCollection)`. The feature calls it, and the tooling's shell feature `Elsa3MigrationImportRun` calls it
+inside the shell (R-5), without enabling the folder import feature.
 
 Two behaviours of the startup sequence matter for the report:
 

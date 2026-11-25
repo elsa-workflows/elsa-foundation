@@ -102,9 +102,13 @@
   `AddHostConfiguration(IConfigurationBuilder, string hostFolder, string environment, Assembly hostAssembly,
   string[] args, bool includeLocalSources)`, so the CLI can build into its own builder under the key filter, and
   `AddHostServices(IHostApplicationBuilder)`, so both the host's `WebApplicationBuilder` and the CLI's
-  `HostApplicationBuilder` can call it. The host clears `WebApplication.CreateBuilder`'s default configuration sources
-  before calling `AddHostConfiguration`, so that method alone produces the 1236 R-3 order (`appsettings*.json`
-  included); 1236's host tests confirm the host behaves the same.
+  `HostApplicationBuilder` can call it. The host does not clear `WebApplication.CreateBuilder`'s default configuration
+  sources: it calls `AddHostConfiguration` on top of them, so the re-added layers override the defaults and the
+  effective order is still 1236 R-3's, while the `ASPNETCORE_`/`DOTNET_` host keys survive (for example
+  `ASPNETCORE_URLS`, which reaches Kestrel only as `urls` through the prefixed source and carries 1236's fixed URL).
+  Only the CLI starts from an empty builder, where `AddHostConfiguration` alone produces the order
+  (`appsettings*.json` included). Add a host test that `ASPNETCORE_URLS` still reaches `IConfiguration` as `urls`;
+  1236's other host tests stay green unchanged.
   `AddHostServices` registers the root services, CShells with `WithHostAssemblies()` included, without the web
   pipeline, and creates no folders; the host creates `data/` at startup, outside it.
 - [ ] T004b Make the converter carry component names as data (FR-016a). Add a `ComponentName` metadata key to every
@@ -136,7 +140,8 @@
   `essentials/src/Activities/Design/Reconciliation/Json/`, with a round-trip test against `JsonActivityCatalogReader`.
   Update the project's README and `EXTENSION_POINTS.md` (R-8).
 - [ ] T008 Add `Tooling/Elsa3MigrationRun.cs`, the pipeline the CLI calls in-process. It takes the command, the export
-  path, the output path, `--all-versions` and the tool version, and returns the exit code, the output path and, on
+  path, the output path, `--all-versions`, the tool version, and from the CLI the host assembly, the host project folder
+  and the CLI project folder (the internal test seam overrides the last three), and returns the exit code, the output path and, on
   exit 2, the refusal reason and sentence of [contracts/cli.md](contracts/cli.md). Test the request validation.
 - [ ] T009a Add a startup-only member to `ITaskManager` (`essentials/src/Tasks/Core/ITaskManager.cs`), implemented in
   `essentials/src/Tasks/Elsa.Tasks/Services/TaskManager.cs`. It runs the registered
@@ -231,7 +236,9 @@
   golden file assert. It keeps every input that shares
   a selected version id, or a selected definition id and version, so that duplicates still reach the duplicate-input
   refusal. Test each fixture case, the duplicate case included.
-- [ ] T018 [US1] Wire `Elsa3MigrationRun`: read, select, run `Elsa3ImportRun`, and collect every diagnostic with its stage.
+- [ ] T018 [US1] Wire `Elsa3MigrationRun`: read and validate the export first, before composition (`ExportInputReader`
+  needs no shell, so `input-missing`, `input-unreadable` and `input-empty` refuse before `--out` exists; test that an
+  `input-empty` refusal leaves a missing `--out` missing), then compose (T009), select, run `Elsa3ImportRun`, and collect every diagnostic with its stage.
   Publish stops at the first error and marks `publishStoppedHere` (FR-013, FR-014). `Elsa3ImportRun` returns a refusal
   it cannot pin on one definition instead of throwing (the startup task still throws on it), and the report lists it
   in `runFindings`. Mark older selected workflow versions and the wrappers of older reusable versions
