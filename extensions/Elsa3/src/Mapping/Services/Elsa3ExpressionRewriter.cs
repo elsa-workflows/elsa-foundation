@@ -1583,15 +1583,6 @@ public sealed class Elsa3ExpressionRewriter(
 
                 if (setterResolution is { Succeeded: true })
                 {
-                    if (!ConvertsVariableWrites)
-                    {
-                        Issues.Add(new Elsa3ExpressionRewriteIssue(
-                            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                            $"JavaScript calls generated setter '{callee.Name}', which mutates workflow state.",
-                            Mode == Elsa3JavaScriptMode.Script ? ReusableVariableWriteGuidance : VariableWriteGuidance));
-                        return;
-                    }
-
                     if (call.Arguments.Count != 1 || call.Arguments[0] is SpreadElement)
                     {
                         Issues.Add(new Elsa3ExpressionRewriteIssue(

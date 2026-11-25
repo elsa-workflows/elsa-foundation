@@ -124,9 +124,17 @@ public sealed class Elsa3VariableWriteConversionTests
     [Fact]
     public async Task SetOutcome_next_to_an_input_named_outcome_is_not_a_read_only_input()
     {
-        var result = await ConvertWithInputAsync("setOutcome('Done');\nreturn 1;", "Outcome");
+        var definition = ConversionServices.Definition(Sequence("root",
+            Activity("before", "Elsa.WriteLine", ("text", Literal("a"))),
+            Activity("node", "Elsa.RunJavaScript", ("script", Literal("setOutcome('Done')")))));
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Outcome", Type = "String" }];
 
-        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Message.Contains("read-only", StringComparison.Ordinal));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var converted = Text(Input(Node(result.Value!.State, "node"), "script"));
+        Assert.Contains("complete(", converted, StringComparison.Ordinal);
+        Assert.DoesNotContain("setOutcome(", converted, StringComparison.Ordinal);
     }
 
     [Fact]
