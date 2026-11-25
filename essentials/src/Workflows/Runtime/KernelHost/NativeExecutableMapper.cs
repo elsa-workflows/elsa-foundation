@@ -563,7 +563,9 @@ public static class NativeExecutableMapper
             if (_types.TryGetValue(declaringScope, out var loop) && IterationVariables.TryGetValue(loop, out var iteration) &&
                 iteration.Contains(key, StringComparer.Ordinal))
             {
-                var nearest = scope.Loops.FirstOrDefault(enclosing => IterationVariables[enclosing.Type].Contains(key, StringComparer.Ordinal));
+                // While and Do declare no iteration variables, so a read looks through them.
+                var nearest = scope.Loops.FirstOrDefault(enclosing =>
+                    IterationVariables.TryGetValue(enclosing.Type, out var names) && names.Contains(key, StringComparer.Ordinal));
                 if (nearest.Node == declaringScope) return key;
                 if (!scope.Loops.Any(enclosing => enclosing.Node == declaringScope))
                     throw NativeMappingRefusedException.Binding(node, input,

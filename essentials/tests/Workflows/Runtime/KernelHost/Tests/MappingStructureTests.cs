@@ -311,6 +311,20 @@ public sealed class MappingStructureTests
         Assert.Equal(new Native.VariableBinding("currentItem"), workflow.Nodes["inner-item"].Inputs["Text"]);
     }
 
+    [Theory]
+    [InlineData(Types.While, "While", "elsa.while.structure")]
+    [InlineData(Types.Do, "Do", "elsa.do.structure")]
+    public void A_loop_without_iteration_variables_between_a_body_and_its_for_each_is_looked_through(string type, string name, string kind)
+    {
+        var root = Node("outer", Types.ForEach, [Literal("Collection", new[] { 1, 2 })], Structure("elsa.foreach.structure", new { body = "middle" }),
+            [Slot("ForEach.Body", Node("middle", type, structure: Structure(kind, new { body = "read" }),
+                slots: [Slot($"{name}.Body", WriteLine("read", VariableRead("text", "currentItem", scope: "outer")))]))]);
+
+        var workflow = NativeExecutableMapper.Map(Executable(root));
+
+        Assert.Equal(new Native.VariableBinding("currentItem"), workflow.Nodes["read"].Inputs["Text"]);
+    }
+
     [Fact]
     public void Send_http_request_content_goes_as_text_by_default()
     {
