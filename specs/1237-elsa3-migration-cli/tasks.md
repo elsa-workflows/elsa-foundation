@@ -97,7 +97,7 @@
   and, for codes the converter does not own, a fixed text, with `patch-definition` and a default text for unlisted
   Elsa 4 codes. Give it an entry for every code the converter, the import and reconciliation emit, including the codes
   of the converter diagnostic units (among them `ELS3-REPLACED-FUNCTION-REFERENCE`, remedy `patch-definition`, no component kind: it is
-  emitted only once a host function provides the name, so nothing is left to build) and the tooling's own `ELS3-MIGRATION-*` codes. Every Elsa 3 entry has a remedy. Mark `ELS3-NULL-POLICIES` routine. Promote the codes that are emitted as inline
+  emitted only once a host function provides the name, so nothing is left to build) and the tooling's own `ELS3-MIGRATION-*` codes (`ELS3-MIGRATION-IMPORT-REFUSED` among them). Every Elsa 3 entry has a remedy. Mark `ELS3-NULL-POLICIES` routine. Promote the codes that are emitted as inline
   literals (`ELS3-INPUT-DEFAULT-REQUIRED`, `ELS3-NULL-POLICIES` and any others in `Elsa3ActivityNormalizer` and its
   peers) to constants. Add the completeness test in `MTests/Tests/`. It reflects over every code constant class in
   Models, Mapping, Import (`ReusableActivityImportDiagnosticCodes`) and Reconciliation, and fails on any code without
@@ -150,8 +150,8 @@
   `essentials/src/Activities/Design/Reconciliation/Json/`, with a round-trip test against `JsonActivityCatalogReader`.
   Update the project's README and `EXTENSION_POINTS.md` (R-8).
 - [ ] T008 Add `Tooling/Elsa3MigrationRun.cs`, the pipeline the CLI calls in-process. It takes the command, the export
-  path, the output path, `--all-versions`, the tool version, and from the CLI the host assembly, the host project folder
-  and the CLI project folder (the internal test seam overrides the last three), and returns the exit code, the output path and, on
+  path, the output path, `--all-versions`, the tool version, and from the CLI
+  a `HostWiring` record (the host assembly, the host project folder, the CLI project folder, and the two T004a methods as delegates: `AddConfiguration(IConfigurationBuilder, string hostFolder, string environment, bool includeLocalSources)`, which supplies the host assembly and an empty `args`, and `AddServices(IHostApplicationBuilder)`) (the internal test seam supplies its own), and returns the exit code, the output path and, on
   exit 2, the refusal reason and sentence of [contracts/cli.md](contracts/cli.md). Test the request validation.
 - [ ] T009a Add a startup-only member to `ITaskManager` (`essentials/src/Tasks/Core/ITaskManager.cs`), implemented in
   `essentials/src/Tasks/Elsa.Tasks/Services/TaskManager.cs`. It runs the registered
@@ -163,8 +163,8 @@
   (RS0016/RS0017 are errors). Test the order, the default, and that with the setting no
   `IBackgroundTask` or recurring task starts (R-5).
 - [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It depends on T013 (the addition list and the
-  `Elsa3MigrationImportRun` feature), so do T013 first even though it is listed under US3. It takes the host assembly, the host project folder and
-  the CLI project folder from the CLI, builds an empty generic host (`Host.CreateEmptyApplicationBuilder`) that is
+  `Elsa3MigrationImportRun` feature), so do T013 first even though it is listed under US3. It takes the CLI's `HostWiring` (T008) and calls the
+  host's methods only through its delegates, because the tooling does not reference the host; builds an empty generic host (`Host.CreateEmptyApplicationBuilder`) that is
   never started, with `ContentRootPath` set to the host folder and `EnvironmentName` set to Development, and uses the
   T004a methods; it copies none of the host's wiring. After building, it activates the shell itself with
   `IShellRegistry.GetOrActivateAsync` and the host composition's shell name (the host's activation hosted service never
@@ -178,7 +178,7 @@
      environment variables), with no command-line arguments;
   2. `elsa3-migration.features.json` from the CLI project folder;
   3. the run-override layer: every persistence connection string set to SQLite on
-     `file:elsa3-migration-<guid>;Mode=Memory;Cache=Shared`, which means `ConnectionStrings:<name>` for the
+     `Data Source=file:elsa3-migration-<guid>;Mode=Memory;Cache=Shared`, which means `ConnectionStrings:<name>` for the
      `DefaultConnectionName` of every EF module `EfModuleCatalog` finds over the composed assemblies (the Elsa 3 import
      ledger's is `ElsaElsa3Import`, which the host's configuration never names) as well as each per-feature connection
      setting the configuration holds; for every EF feature the composed configuration lists, and for the host-level EF
@@ -266,7 +266,9 @@
   it cannot pin on one definition instead of throwing (the startup task still throws on it), and the report lists it
   in `runFindings`. Mark older selected workflow versions and the wrappers of older reusable versions
   `ELS3-MIGRATION-SUPERSEDED-VERSION`; older reusable versions' activities stay published. On a run-level refusal, give
-  every affected definition `ELS3-MIGRATION-RUN-REFUSED`. Test a plan error that names no
+  every affected definition `ELS3-MIGRATION-RUN-REFUSED`. A refusal that carries no code (such as
+  `CredentialLiteralRefusedException`, `ReusableActivityImportCollisionException` or
+  `ReusableActivityImportPersistenceException`) is reported as `ELS3-MIGRATION-IMPORT-REFUSED` with its fixed text. Test a plan error that names no
   item, a credential-literal refusal at apply (exit 1, a report, no message text, no definition bucketed
   `convert-as-is`), and `--all-versions` with three
   versions (only the newest published and exported).

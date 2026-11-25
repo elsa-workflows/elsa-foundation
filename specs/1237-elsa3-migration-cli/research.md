@@ -258,8 +258,9 @@ The run sets it in its override layer. Nothing removes or skips an internal type
 `AddHostServices` creates no folders; the host creates `data/` at startup, outside it. So the run creates nothing under
 `apps/Elsa.Migration.Host`.
 
-The tooling does not reference the host. The CLI does, and passes into the tooling the host assembly, the host project
-folder and the CLI project folder; the two folders are written by the CLI's project file into
+The tooling does not reference the host. The CLI does, and passes into the tooling a `HostWiring` record: the host
+assembly, the host project folder, the CLI project folder, and the two host methods as delegates, which the tooling
+calls without referencing the host; the two folders are written by the CLI's project file into
 `AssemblyMetadataAttribute`s at build time. The addition list is read from the CLI project folder only, and is not
 copied to the output. There is no option to point elsewhere. Tests pass a test-only host folder and addition list
 through an internal seam of the tooling (`InternalsVisibleTo` for the migration test project).

@@ -304,7 +304,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   version, is imported for its findings only and is marked with the Info code `ELS3-MIGRATION-SUPERSEDED-VERSION`.
 
   A refusal that the shared sequence cannot pin on one definition (a plan error that names no item, a refusal that
-  covers the whole selection at apply) is not thrown. It becomes a run-level Must fix finding with its code; the text
+  covers the whole selection at apply) is not thrown. It becomes a run-level Must fix finding with its code (`ELS3-MIGRATION-IMPORT-REFUSED` when the refusal carries
+  none); the text
   is the code table's fixed text for that code, or for a converter-owned code its redacted message. Every selected
   definition that the refusal kept from being applied gets an Error finding `ELS3-MIGRATION-RUN-REFUSED` (remedy
   `patch-definition`), so none of them buckets as `convert-as-is` or goes smoothly. The run exits 1 with a report.

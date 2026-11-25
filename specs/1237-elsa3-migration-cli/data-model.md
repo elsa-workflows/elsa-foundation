@@ -93,7 +93,8 @@ converter's, the import's and reconciliation's codes, and the tooling's own `ELS
 `ELS3-MIGRATION-UNSUPPORTED-INPUT` (an existing code, for valid JSON that holds no Elsa 3 definition) and
 `ELS3-MIGRATION-NO-PUBLISHED-VERSION` (Info) and `ELS3-MIGRATION-SUPERSEDED-VERSION` (Info: an older selected workflow version, or an older reusable version's
 wrapper, imported for its findings but neither published nor exported, as in startup reconciliation; an older
-reusable version's activity is published and exported) and `ELS3-MIGRATION-RUN-REFUSED` (Error, remedy
+reusable version's activity is published and exported) and `ELS3-MIGRATION-IMPORT-REFUSED` (Error, remedy `patch-definition`, fixed text: a
+run-level import refusal that carries no code of its own) and `ELS3-MIGRATION-RUN-REFUSED` (Error, remedy
 `patch-definition`: a selected definition that a run-level refusal kept from being applied). The table lists `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` as a `storage-driver` component code
 (a Reconsider warning; its remedy, `build-component`, applies only if it is ever emitted at Error). The new JavaScript
 component code of FR-016a (T004b) has kind `javascript-function` and remedy `build-component`.
