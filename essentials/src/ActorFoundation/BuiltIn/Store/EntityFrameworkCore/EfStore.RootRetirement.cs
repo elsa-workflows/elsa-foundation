@@ -101,7 +101,7 @@ public sealed partial class EfStore
                 {
                     var message = PostgresRootAdmission.DecodeOperator(db, row, Root.Reference);
                     if (message.ReplyTo is { } route)
-                        (db.RetiredOperatorReplies ??= []).Add(new(row.Id, new(route, Root.Tenant)));
+                        (db.RetiredReplies ??= []).Add(new(row.Id, new(route, Root.Tenant)));
                 }
             }
             if (db.UsesRootReplyProtocol)
@@ -119,7 +119,7 @@ public sealed partial class EfStore
                 {
                     var message = PostgresRootAdmission.DecodeDirect(row, Root.Reference, replies: true);
                     if (message.ReplyTo is { } route)
-                        (db.RetiredOperatorReplies ??= []).Add(new(row.Id, new(route, Root.Tenant)));
+                        (db.RetiredReplies ??= []).Add(new(row.Id, new(route, Root.Tenant)));
                 }
             }
 

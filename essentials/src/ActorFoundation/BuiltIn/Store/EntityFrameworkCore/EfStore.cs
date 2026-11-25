@@ -206,7 +206,7 @@ public class KernelDb : DbContext
     internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTimers);
     internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootSelf);
 
-    internal List<RetiredOperatorReply>? RetiredOperatorReplies { get; set; }
+    internal List<RetiredReply>? RetiredReplies { get; set; }
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> InsertAliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> GuardedAliases {get;}=new(StringComparer.Ordinal);
@@ -755,7 +755,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
-        return new Committed(true, now, sent.Select(m => m.Seq).ToList()) { RetiredOperatorReplies = db.RetiredOperatorReplies ?? [] };
+        return new Committed(true, now, sent.Select(m => m.Seq).ToList()) { RetiredReplies = db.RetiredReplies ?? [] };
     }
 
     // The careful path's statements on PostgreSQL and SQLite ({0} key, {1} instance, {2} wait, {3} partition). Only the
