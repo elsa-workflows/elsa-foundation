@@ -131,6 +131,39 @@ public sealed class ExpressionToolingProviderContractTests
     }
 
     [Fact]
+    public async Task Typed_collection_items_complete_after_an_index_and_never_produce_member_diagnostics()
+    {
+        const string note = "From the declared type `shop.address`; the stored value may differ.";
+        var provider = new JavaScriptExpressionToolingProvider();
+        var address = new ExpressionValueShape("shop.address", ExpressionValueKind.Object,
+            Members: [new("city", new("String", ExpressionValueKind.Scalar, false), note),
+                new("home", new("shop.street", ExpressionValueKind.Object, Members: [new("street", new("String", ExpressionValueKind.Scalar, false), note)]), note)]);
+        var scope = CreateScope("JavaScript", [
+            new("orders", "orders", ExpressionSymbolKind.Variable, new("shop.address", ExpressionValueKind.Array, Item: address)),
+            new("lookup", "lookup", ExpressionSymbolKind.Variable, new("shop.address", ExpressionValueKind.Map, Key: new("String"), Value: address))
+        ]);
+        async Task<string[]> Labels(string source) =>
+            (await provider.GetCompletionsAsync(new(scope, source, new(0, source.Length)), CancellationToken.None)).Payload!.Items.Select(x => x.Label).Order().ToArray();
+
+        Assert.Equal(["city", "home"], await Labels("variables.orders[0]."));
+        Assert.Equal(["city"], await Labels("variables.orders[i + 1].ci"));
+        Assert.Equal(["street"], await Labels("variables.orders[0].home."));
+        Assert.Equal(["city", "home"], await Labels("variables.lookup[\"north.east\"]."));
+        Assert.Equal(["city", "home"], await Labels("variables[\"orders\"][0]."));
+        Assert.Equal(["city", "home"], await Labels("total(variables.orders[0]."));
+        Assert.Empty(await Labels("variables.orders."));
+        Assert.Empty(await Labels("variables.orders[0]"));
+
+        var item = (await provider.GetCompletionsAsync(new(scope, "variables.orders[0].ci", new(0, 22)), CancellationToken.None)).Payload!.Items.Single();
+        Assert.Equal("String", item.Detail);
+        Assert.Equal(note, item.Documentation);
+        var hover = await provider.GetHoverAsync(new(scope, "variables.orders[0].city", new(0, 24)), CancellationToken.None);
+        Assert.Contains("the stored value may differ", hover.Payload!.Contents, StringComparison.Ordinal);
+        var validation = await provider.ValidateAsync(new(scope, "variables.orders[0].cty + variables.lookup[\"k\"].home.stret"), CancellationToken.None);
+        Assert.Empty(validation.Payload!.Diagnostics);
+    }
+
+    [Fact]
     public async Task Providers_resolve_dotted_activity_results_as_nested_namespaces()
     {
         var symbol = new ExpressionSymbol(

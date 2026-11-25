@@ -10,23 +10,22 @@ public static class ExpressionToolingSymbolResolver
         string source,
         ExpressionToolingPosition position)
     {
-        var path = PathAt(source, position, includeRight: false);
-        var segments = path.Split('.', StringSplitOptions.None);
+        var steps = Steps(PathAt(source, position, includeRight: false));
+        if (steps is null || steps[^1].IsIndex)
+            return [];
         var roots = NormalizeRootSymbols(context.RootSymbols);
-        if (segments.Length == 1)
+        if (steps.Count == 1)
             return roots
-                .Where(symbol => symbol.Name.StartsWith(segments[0], StringComparison.OrdinalIgnoreCase))
+                .Where(symbol => symbol.Name.StartsWith(steps[0].Text, StringComparison.OrdinalIgnoreCase))
                 .Select(ToItem)
                 .ToArray();
 
-        var shape = roots
-            .FirstOrDefault(symbol => string.Equals(symbol.Name, segments[0], StringComparison.Ordinal))
+        var shape = steps[0].IsIndex ? null : roots
+            .FirstOrDefault(symbol => string.Equals(symbol.Name, steps[0].Text, StringComparison.Ordinal))
             ?.ValueShape;
-        for (var index = 1; shape is not null && index < segments.Length - 1; index++)
-            shape = shape.Members?
-                .FirstOrDefault(member => string.Equals(member.Name, segments[index], StringComparison.Ordinal))
-                ?.Shape;
-        var prefix = segments[^1];
+        for (var index = 1; shape is not null && index < steps.Count - 1; index++)
+            shape = Next(shape, steps[index], out _);
+        var prefix = steps[^1].Text;
         return shape?.Members?
             .Where(member => member.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             .Select(member => new ExpressionToolingItem(
@@ -43,29 +42,88 @@ public static class ExpressionToolingSymbolResolver
         string source,
         ExpressionToolingPosition position)
     {
-        var segments = PathAt(source, position, includeRight: true)
-            .Split('.', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0)
+        var steps = Steps(PathAt(source, position, includeRight: true))?
+            .Where(step => step.IsIndex || step.Text.Length > 0)
+            .ToArray();
+        if (steps is null || steps.Length == 0 || steps[0].IsIndex)
             return null;
         var root = NormalizeRootSymbols(context.RootSymbols).FirstOrDefault(symbol =>
-            string.Equals(symbol.Name, segments[0], StringComparison.Ordinal));
+            string.Equals(symbol.Name, steps[0].Text, StringComparison.Ordinal));
         if (root is null)
             return null;
-        if (segments.Length == 1)
+        if (steps.Length == 1)
             return ToItem(root);
 
         ExpressionValueMember? member = null;
         var shape = root.ValueShape;
-        for (var index = 1; shape is not null && index < segments.Length; index++)
-        {
-            member = shape.Members?.FirstOrDefault(candidate =>
-                string.Equals(candidate.Name, segments[index], StringComparison.Ordinal));
-            shape = member?.Shape;
-        }
-        return member is null
+        for (var index = 1; shape is not null && index < steps.Length; index++)
+            shape = Next(shape, steps[index], out member);
+        return member is null || shape is null
             ? null
             : new(member.Name, member.Shape.DisplayName, member.Documentation, member.Name, ExpressionSymbolKind.Member);
     }
+
+    /// <summary>
+    /// One step down a value shape. A name reads a member. An index reads an array item or a map value; on an
+    /// object, a quoted key reads the member of that name.
+    /// </summary>
+    private static ExpressionValueShape? Next(ExpressionValueShape shape, PathStep step, out ExpressionValueMember? member)
+    {
+        member = null;
+        if (step.IsIndex && (shape.Item ?? shape.Value) is { } item)
+            return item;
+        var name = step.IsIndex ? QuotedKey(step.Text) : step.Text;
+        if (name is null)
+            return null;
+        member = shape.Members?.FirstOrDefault(candidate => string.Equals(candidate.Name, name, StringComparison.Ordinal));
+        return member?.Shape;
+    }
+
+    private static string? QuotedKey(string text)
+    {
+        var key = text.Trim();
+        return key.Length >= 2 && key[0] is '"' or '\'' && key[^1] == key[0] && key.IndexOf(key[0], 1) == key.Length - 1
+            ? key[1..^1]
+            : null;
+    }
+
+    /// <summary>Splits a path into names and bracketed indexes: <c>a.b[0].c</c> is a, b, [0], c. Null when malformed.</summary>
+    private static List<PathStep>? Steps(string path)
+    {
+        var steps = new List<PathStep>();
+        var start = 0;
+        var expectName = true;
+        for (var index = 0; index < path.Length; index++)
+        {
+            var character = path[index];
+            if (character == '.')
+            {
+                if (expectName)
+                    steps.Add(new(path[start..index], false));
+                start = index + 1;
+                expectName = true;
+            }
+            else if (character == '[')
+            {
+                if (expectName && (index > start || steps.Count == 0))
+                    steps.Add(new(path[start..index], false));
+                var close = path.IndexOf(']', index + 1);
+                if (close < 0)
+                    return null;
+                steps.Add(new(path[(index + 1)..close], true));
+                index = close;
+                start = close + 1;
+                expectName = false;
+            }
+            else if (!expectName)
+                return null;
+        }
+        if (expectName)
+            steps.Add(new(path[start..], false));
+        return steps;
+    }
+
+    private readonly record struct PathStep(string Text, bool IsIndex);
 
     private static IReadOnlyList<ExpressionSymbol> NormalizeRootSymbols(
         IEnumerable<ExpressionSymbol> symbols) =>
@@ -164,9 +222,27 @@ public static class ExpressionToolingSymbolResolver
         var offset = ToOffset(source, position);
         var start = offset;
         var end = offset;
-        while (start > 0 && IsPathCharacter(source[start - 1])) start--;
+        while (start > 0)
+        {
+            if (IsPathCharacter(source[start - 1]))
+                start--;
+            else if (source[start - 1] == ']' && source.LastIndexOf('[', start - 1) is var open and >= 0 &&
+                     source.AsSpan(open + 1, start - 1 - open - 1).IndexOfAny('\n', ']') < 0)
+                start = open;
+            else
+                break;
+        }
         if (includeRight)
-            while (end < source.Length && IsPathCharacter(source[end])) end++;
+            while (end < source.Length)
+            {
+                if (IsPathCharacter(source[end]))
+                    end++;
+                else if (source[end] == '[' && source.IndexOf(']', end + 1) is var close and >= 0 &&
+                         source.AsSpan(end + 1, close - end - 1).IndexOfAny('\n', '[') < 0)
+                    end = close + 1;
+                else
+                    break;
+            }
         return source[start..end];
     }
 
