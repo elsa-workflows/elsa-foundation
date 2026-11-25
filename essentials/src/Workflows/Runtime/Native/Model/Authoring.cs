@@ -161,7 +161,16 @@ public sealed class Workflow
     // Private M0 experiment; this request is not a product incident-strategy setting.
     internal bool InterventionRequested { get; set; }
 
+    /// <summary>The workflow's id: on a publishing host, the published artifact's id, which an instance runs.</summary>
     public string Id { get; }
+
+    /// <summary>
+    /// The definition this workflow is a version of, which instance reads and schedules key on: the workflow itself unless
+    /// set. Two artifacts of one definition share it.
+    /// </summary>
+    public string DefinitionId { get => _definitionId ?? Id; init => _definitionId = string.IsNullOrWhiteSpace(value) ? throw new ArgumentException("A definition id cannot be blank.", nameof(value)) : value; }
+    private readonly string? _definitionId;
+
     public Node Root { get; }
     public IReadOnlyDictionary<string, JsonNode?> Variables { get; }
     public Dictionary<string, Node> Nodes { get; } = new(StringComparer.Ordinal);

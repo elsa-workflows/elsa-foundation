@@ -57,6 +57,14 @@ internal static class ScheduleChecks
               Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("cron", Cron("c", "* * *"))), CronError)) &&
               Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("no-calendar", Cron("c", EveryHalfMinute))))),
             "an interval under a second, one that does not read or overflows, a computed one, and a cron expression the host does not read are refused");
+        // K10: a schedule is keyed by the definition, so a republished version keeps its schedule actor; its run starts the
+        // version under the definition. Two versions of one definition with one schedule would fire it twice.
+        static Workflow Orders(string version) => VersionOf("orders", Workflow(version, Sequence("root", Timer("t", "PT1M"), Set("o", "output", version))));
+        var versioned = new NativeSchedules(new WorkflowRegistry().Add(Orders("orders@2")));
+        check(versioned.All is [{ Key: "schedule:orders:t", StartKey: "schedule-start:orders:t", Workflow: "orders@2" } ordersSchedule] &&
+              ordersSchedule.Start() is { Definition: "orders@2", DefinitionId: "orders" } &&
+              Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Orders("orders@1")).Add(Orders("orders@2")))),
+            $"a schedule is keyed by its definition and starts the version it was built from, and two versions of one definition with one schedule are refused ({string.Join(", ", versioned.All.Select(s => s.Key))})");
         check(Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule(RecurringSchedule.Interval, "soon"), "s")) &&
               Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule(RecurringSchedule.Interval, "PT0.0001S"), "s")) &&
               Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule("weekly", "x"), "s")) &&

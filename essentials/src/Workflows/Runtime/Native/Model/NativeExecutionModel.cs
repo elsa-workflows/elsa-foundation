@@ -18,10 +18,16 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     public Type StateType => typeof(NativeState);
     public int StateVersion => 14;
 
+    /// <param name="definition">The workflow to run (<see cref="Workflow.Id"/>).</param>
+    /// <param name="definitionId">Its <see cref="Workflow.DefinitionId"/>, when it is not the workflow itself.</param>
     public static Models.WorkflowStart Start(string definition, string mode = Modes.Balanced, JsonObject? input = null,
-        string? triggerNode = null, JsonNode? trigger = null) =>
+        string? triggerNode = null, JsonNode? trigger = null, string? definitionId = null) =>
         new(ModelKey, definition, JsonSerializer.Serialize(new NativeStart(mode, input, triggerNode, trigger)),
-            Ephemeral: mode == Modes.Ephemeral);
+            Ephemeral: mode == Modes.Ephemeral, DefinitionId: definitionId == definition ? null : definitionId);
+
+    /// <summary>A start of a registered workflow, under its definition id.</summary>
+    public Models.WorkflowStart Start(Workflow workflow, string mode = Modes.Balanced, JsonObject? input = null) =>
+        Start(workflow.Id, mode, input, definitionId: workflow.DefinitionId);
 
     public object CreateState(Models.WorkflowStart start) => NewState(start.Input);
 
@@ -55,7 +61,9 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     }
 
     public ValueTask TurnAsync(Models.ITurn turn, CancellationToken cancellationToken) =>
-        new Burst(registry, _options, new ContractTurn(turn, outbound), cancellationToken).RunAsync();
+        new Burst(registry, _options, new ContractTurn(turn, outbound, definitionOf: DefinitionOf), cancellationToken).RunAsync();
+
+    private string? DefinitionOf(string workflow) => registry.TryGet(workflow, out var found) ? found.DefinitionId : null;
 
     public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
         ExecuteBackground(registry, job.Actor, job.Arguments, cancellationToken, _options.Http);

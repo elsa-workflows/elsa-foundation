@@ -6,7 +6,8 @@ using Models = Kernel.Model.Contracts;
 
 namespace Kernel.Native;
 
-internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? outbound, long? endedAt = null) : INativeTurn
+internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? outbound, long? endedAt = null,
+    Func<string, string?>? definitionOf = null) : INativeTurn
 {
     private HashSet<string>? _timerHandles;
 
@@ -43,10 +44,10 @@ internal sealed class ContractTurn(Models.ITurn turn, Action<NativeOutbound>? ou
         turn.Send(Actor, kind, payload, dueAt);
 
     public WaitEntry StartChild(string frame, string workflow, string mode, JsonObject? input) =>
-        new(frame, "child", turn.Start(NativeExecutionModel.Start(workflow, mode, input)).Id);
+        new(frame, "child", turn.Start(NativeExecutionModel.Start(workflow, mode, input, definitionId: definitionOf?.Invoke(workflow))).Id);
 
     public Contract.ActorRef StartDetached(string workflow, string mode, JsonObject? input) =>
-        turn.Start(NativeExecutionModel.Start(workflow, mode, input), detached: true);
+        turn.Start(NativeExecutionModel.Start(workflow, mode, input, definitionId: definitionOf?.Invoke(workflow)), detached: true);
 
     public void CancelChild(WaitEntry child) => turn.Send(new Contract.ActorRef(child.Key), NativeKinds.Cancel);
     public void StartJob(string key, BackgroundArgs arguments, TimeSpan? timeout) => turn.StartJob(key, arguments, timeout);

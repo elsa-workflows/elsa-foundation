@@ -31,7 +31,8 @@ internal static class MigrationPlanRunnerChecks
         var runtime = new PublicRuntime(edge, reads);
         var registry = new WorkflowRegistry().Add(Definition(source, "old")).Add(Definition(target, "new"))
             .Add(Definition("absent", "empty")).Add(Definition("selected-for-delete", "gone"))
-            .Add(Definition("large-source", "old")).Add(Definition("large-target", "new", "different-event"));
+            .Add(Definition("large-source", "old")).Add(Definition("large-target", "new", "different-event"))
+            .Add(Wf.VersionOf("orders", Definition("orders@1", "old"))).Add(Wf.VersionOf("orders", Definition("orders@2", "new")));
         var model = new MigrationPlanModel(authority, (executionModel, from, to) =>
             executionModel is NativeExecutionModel.ModelKey or OtherExecutionModel.ModelKey &&
             registry.TryGet(from, out _) && registry.TryGet(to, out _));
@@ -102,6 +103,28 @@ internal static class MigrationPlanRunnerChecks
         await Pump(successor);
         check(FinishedUnderTarget(first) && FinishedUnderTarget(second),
             "both original Native waits resume under the target definition after automatic migration");
+
+        // K10: two published versions of one definition. Instances carry the definition as their label and the version in
+        // their type data; a plan selects by the label, then by the version, and a migration rebinds the version only.
+        var versioned = (await runtime.StartAsync(scope, "versioned", NativeExecutionModel.Start("orders@1", Modes.Balanced, definitionId: "orders"))).Actor!.Value;
+        var newer = (await runtime.StartAsync(scope, "already-newer", NativeExecutionModel.Start("orders@2", Modes.Balanced, definitionId: "orders"))).Actor!.Value;
+        await Pump(successor);
+        var byDefinition = (await service.StartAsync(scope, "by-definition", new("orders@1", "orders@2", expires, NativeExecutionModel.ModelKey, "orders"))).Actor!.Value;
+        var definitionDriver = service.Open(scope, byDefinition);
+        await Pump(successor);
+        for (var step = 0; step < 24 && (await reads.GetAsync(scope, byDefinition))?.Header.Status == Contract.ActorStatus.Running; step++)
+        {
+            await definitionDriver.AdvanceAsync();
+            await Pump(successor);
+        }
+        var definitionResults = await definitionDriver.ReadOutcomesAsync();
+        var versionedHeader = (await reads.GetAsync(scope, versioned))!.Header;
+        var newerHeader = (await reads.GetAsync(scope, newer))!.Header;
+        check(definitionResults is { Closed: true } && definitionResults.Results.Count == 1 &&
+              definitionResults.Results.GetValueOrDefault(versioned) == MigrationPlanOutcome.Migrated &&
+              versionedHeader.Labels.GetValueOrDefault("definition") == "orders" && versionedHeader.TypeData.Contains("\"Definition\":\"orders@2\"", StringComparison.Ordinal) &&
+              newerHeader.Labels.GetValueOrDefault("definition") == "orders",
+            $"a plan selects one definition's instances on its source version, and the migration keeps the definition label and rebinds the version ({definitionResults?.Results.Count} selected; {versionedHeader.Labels.GetValueOrDefault("definition")}; {versionedHeader.TypeData})");
 
         var customPlan = (await service.StartAsync(scope, "custom-model", new(source, target, expires, OtherExecutionModel.ModelKey))).Actor!.Value;
         var customDriver = service.Open(scope, customPlan);

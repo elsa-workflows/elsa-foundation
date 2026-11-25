@@ -29,7 +29,10 @@ internal static class LabelChecks
             // A host expression reads the correlation id the model set (K10's instance parameter).
             .Add(Workflow("host-read", Sequence("root", SetCorrelationId("c", "order-9"),
                 SetInstanceName("n", Binding.Host("JavaScript", "echo", ("c", Binding.Instance(InstanceField.CorrelationId)), ("i", Binding.Instance(InstanceField.Id)))),
-                Event("wait", "never"))));
+                Event("wait", "never"))))
+            // K10: a published version carries its definition as the definition label, also when a parent starts it.
+            .Add(VersionOf("invoices", Workflow("invoices@3", Event("wait", "never"))))
+            .Add(Workflow("invoicing", Sequence("root", Dispatch("child", "invoices@3", wait: false), Event("wait", "never"))));
         var model = new NativeExecutionModel(registry, new NativeExecutionOptions { Expressions = new EchoExpressions() });
         await using var driver = new ContractWorkload.InMemoryDriver(4, Flaw.None, new PublicWorkflow([model]), authorizeOperator: (_, _) => true);
         var scope = ContractScopes.Bind("labels");
@@ -98,6 +101,14 @@ internal static class LabelChecks
         var hostHeader = await Header(hostRead);
         check(hostHeader.Labels.GetValueOrDefault(NativeLabels.InstanceName) == "order-9 True",
             $"a host expression's instance parameters read the correlation id the model set and the instance's id ({hostHeader.Labels.GetValueOrDefault(NativeLabels.InstanceName)})");
+
+        var invoicing = await Start("invoicing");
+        await driver.PassAll(6);
+        var invoices = await driver.Reads.ListAsync(scope, new Contract.ActorQuery(Type: PublicWorkflow.ActorType,
+            Labels: new Dictionary<string, string> { ["definition"] = "invoices" }));
+        check(invoices.Items is [var invoice] && invoice.Header.TypeData.Contains("\"Definition\":\"invoices@3\"", StringComparison.Ordinal) &&
+              (await Header(invoicing)).Labels.GetValueOrDefault("definition") == "invoicing",
+            $"a child started on a published version carries its definition as the definition label and the version in its type data ({invoices.Items.Count})");
 
         var refused = await Header(tooLong);
         check(refused.Status == Contract.ActorStatus.Faulted && refused.TypeData.Contains("workflow.label.refused", StringComparison.Ordinal),

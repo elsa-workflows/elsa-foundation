@@ -6,8 +6,10 @@ using Kernel.Model.Contracts;
 
 namespace Kernel.WorkflowActor;
 
+/// <param name="DefinitionId">The definition label the source's instances carry, when it is not <paramref name="From"/>.</param>
 internal sealed record MigrationPlanStart(string From, string To, long Deadline,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Model = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Model = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DefinitionId = null);
 
 /// <summary>A bounded durable plan hosted as a separate model of the workflow actor.</summary>
 internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<string?, string, string, bool> canPlan)
@@ -34,6 +36,7 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
         if (plan is not { From.Length: > 0, To.Length: > 0, Deadline: > 0 } ||
             Encoding.UTF8.GetByteCount(plan.From) > WorkflowActor.DefinitionLimit ||
             Encoding.UTF8.GetByteCount(plan.To) > WorkflowActor.DefinitionLimit ||
+            plan.DefinitionId is { } definition && (definition.Length == 0 || Encoding.UTF8.GetByteCount(definition) > WorkflowActor.DefinitionLimit) ||
             plan.Model is { } model && (model.Length == 0 || model == ModelKey || Encoding.UTF8.GetByteCount(model) > WorkflowActor.DefinitionLimit) ||
             plan.From == plan.To || !canPlan(plan.Model, plan.From, plan.To))
             throw new ArgumentException("Choose two compatible definitions and a deadline.", nameof(plan));
@@ -48,7 +51,7 @@ internal sealed class MigrationPlanModel(MigrationPlanAuthority authority, Func<
             cancellationToken.ThrowIfCancellationRequested();
             if (message.Kind == Kinds.Start)
             {
-                turn.Record(new MigrationPlanJournal.Created(state.Request.From, state.Request.To, state.Request.Deadline, state.Request.Model));
+                turn.Record(new MigrationPlanJournal.Created(state.Request.From, state.Request.To, state.Request.Deadline, state.Request.Model, state.Request.DefinitionId));
                 if (turn.Now < state.Request.Deadline)
                     state.DeadlineTimer = turn.Send(turn.Instance.Ref, MigrationPlanControl.Deadline, dueAt: state.Request.Deadline);
             }

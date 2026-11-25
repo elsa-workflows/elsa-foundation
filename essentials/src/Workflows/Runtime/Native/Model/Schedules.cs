@@ -4,21 +4,29 @@ using Models = Kernel.Model.Contracts;
 
 namespace Kernel.Native;
 
-/// <summary>A recurring start trigger of a registered definition: its Timer's interval or its Cron's expression.</summary>
+/// <summary>
+/// A recurring start trigger of a registered definition: its Timer's interval or its Cron's expression. It is keyed by the
+/// definition and node, not by the workflow (the artifact), so a republished definition keeps its schedule actor and points
+/// its run at the new workflow.
+/// </summary>
 public sealed record NativeSchedule(string Workflow, string Node, string Kind, string Value)
 {
     public const string Interval = "interval";
     public const string Cron = "cron";
 
-    /// <summary>The caller key of the schedule's actor: one per trigger.</summary>
-    public string Key => $"schedule:{Workflow}:{Node}";
+    /// <summary>The definition the workflow is a version of (<see cref="Native.Workflow.DefinitionId"/>); the workflow itself unless set.</summary>
+    public string Definition { get => _definition ?? Workflow; init => _definition = value; }
+    private readonly string? _definition;
+
+    /// <summary>The caller key of the schedule's actor: one per definition and trigger.</summary>
+    public string Key => $"schedule:{Definition}:{Node}";
 
     /// <summary>The start key each occurrence publishes to; the host registers <see cref="Start"/> on it.</summary>
-    public string StartKey => $"schedule-start:{Workflow}:{Node}";
+    public string StartKey => $"schedule-start:{Definition}:{Node}";
 
-    /// <summary>The run each occurrence starts: the workflow, begun at its trigger.</summary>
+    /// <summary>The run each occurrence starts: the workflow, begun at its trigger, under its definition.</summary>
     public Models.WorkflowStart Start(string mode = Modes.Balanced) =>
-        NativeExecutionModel.Start(Workflow, mode, triggerNode: Node, trigger: JsonValue.Create(Key));
+        NativeExecutionModel.Start(Workflow, mode, triggerNode: Node, trigger: JsonValue.Create(Key), definitionId: Definition);
 }
 
 /// <summary>A recurring start trigger the model does not accept.</summary>
@@ -51,20 +59,29 @@ public sealed class NativeSchedules
                     var interval = Literal(workflow, node, "Interval");
                     if (!ScheduleIntervals.TryParse(interval, out _))
                         throw new NativeScheduleException($"Workflow '{workflow.Id}', Timer '{node.Id}': '{interval}' is no ISO 8601 duration or time span of at least {ScheduleIntervals.MinInterval.TotalSeconds:0} second.");
-                    _schedules.Add(new(workflow.Id, node.Id, NativeSchedule.Interval, interval.Trim()));
+                    _schedules.Add(new(workflow.Id, node.Id, NativeSchedule.Interval, interval.Trim()) { Definition = workflow.DefinitionId });
                 }
                 else if (node.Type == typeof(Cron))
                 {
                     var expression = Literal(workflow, node, "Expression");
                     if ((cronError is null ? "the host reads no cron expressions" : cronError(expression)) is { } error)
                         throw new NativeScheduleException($"Workflow '{workflow.Id}', Cron '{node.Id}': '{expression}' is refused: {error}.");
-                    _schedules.Add(new(workflow.Id, node.Id, NativeSchedule.Cron, expression.Trim()));
+                    _schedules.Add(new(workflow.Id, node.Id, NativeSchedule.Cron, expression.Trim()) { Definition = workflow.DefinitionId });
                 }
             }
         }
+        Claim();
     }
 
     public IReadOnlyList<NativeSchedule> All => _schedules;
+
+    private void Claim()
+    {
+        // Schedules are built over the workflows that serve, one per definition: two versions of one definition would
+        // fire one schedule twice.
+        foreach (var clash in _schedules.GroupBy(s => s.Key, StringComparer.Ordinal).Where(g => g.Count() > 1))
+            throw new NativeScheduleException($"Workflows {string.Join(" and ", clash.Select(s => $"'{s.Workflow}'"))} are versions of definition '{clash.First().Definition}' with a schedule on '{clash.First().Node}'; schedule one of them.");
+    }
 
     // Where a run can begin, as the graph engine begins it: the node itself; through a Sequence, its first child; through a
     // Flowchart, a direct child no connection leads to (the run begins at its trigger), and deeper only through the start

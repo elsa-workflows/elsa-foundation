@@ -17,7 +17,8 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
     public static StartSpec Start(WorkflowStart start) =>
         new(ActorType, JsonSerializer.Serialize(new WorkflowHeader(start.Model, start.Definition, null,
-            Ephemeral: start.Ephemeral, History: start.History)), start.Input, start.Ephemeral, start.History);
+            Ephemeral: start.Ephemeral, History: start.History, DefinitionId: start.DefinitionId == start.Definition ? null : start.DefinitionId)),
+            start.Input, start.Ephemeral, start.History);
 
     public bool Withholds(ActorHeader header)
     {
@@ -160,7 +161,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         {
             var start = inbox.FirstOrDefault(message => message.Kind == Kinds.Start) ??
                 throw new InvalidOperationException("A workflow without state needs its start message.");
-            return model.CreateState(new WorkflowStart(workflow.Model, workflow.Definition, start.Payload, workflow.Ephemeral, workflow.History));
+            return model.CreateState(new WorkflowStart(workflow.Model, workflow.Definition, start.Payload, workflow.Ephemeral, workflow.History, workflow.DefinitionId));
         }
         if (workflow.Version is not { } version || version > model.StateVersion)
             throw new InvalidOperationException("This model cannot read the stored state version.");
@@ -169,7 +170,8 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     }
 
     /// <summary>
-    /// The header labels the actor writes itself: the definition, which reads select instances by, and the migration plan an
+    /// The header labels the actor writes itself: the definition id, which reads select instances by (the workflow the model
+    /// runs, an artifact on a publishing host, is in the type data), and the migration plan an
     /// instance answered, which must outlive a full type data. Any other label is a model's (<see cref="ITurn.SetLabel"/>).
     /// The state version is in the type data only.
     /// </summary>
@@ -182,7 +184,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         IReadOnlyDictionary<string, string>? modelLabels = null)
     {
         if (previous == next && answeredPlan is null && modelLabels is null) return;
-        var labels = new Dictionary<string, string>(StringComparer.Ordinal) { ["definition"] = next.Definition };
+        var labels = new Dictionary<string, string>(StringComparer.Ordinal) { ["definition"] = next.DefinitionId ?? next.Definition };
         answeredPlan ??= turn.Header.Labels.GetValueOrDefault(AnsweredPlanLabel);
         if (answeredPlan is not null) labels.Add(AnsweredPlanLabel, answeredPlan);
         // A model's labels are kept across the actor's own header writes.
@@ -197,8 +199,11 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
     private static string JobArguments(string model, string? arguments) => JsonSerializer.Serialize(new WorkflowJobArguments(model, arguments));
 
+    /// <param name="Definition">The workflow the model runs; a migration rebinds it.</param>
+    /// <param name="DefinitionId">The definition it is a version of, when not itself: the <c>definition</c> label.</param>
     private sealed record WorkflowHeader(string Model, string Definition, int? Version, bool Suspended = false,
-        string? SubStatus = null, bool Ephemeral = false, History History = History.Full);
+        string? SubStatus = null, bool Ephemeral = false, History History = History.Full,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? DefinitionId = null);
 
     private sealed record WorkflowJobArguments(string Model, string? Arguments);
 
