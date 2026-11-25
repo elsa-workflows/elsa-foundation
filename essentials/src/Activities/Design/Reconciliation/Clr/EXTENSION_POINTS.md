@@ -50,9 +50,10 @@ activated `IVariableTypeDescriptorCatalog` and the host's resolved `IActivityCon
 an authored alias never opens arbitrary CLR types or the runtime alias registry.
 
 Type admission alone does not establish the actual serialized profile of a Workflow input, variable or
-current item. For a single (non-collection) admitted type whose members the metadata reader can read,
-the CLR contribution returns `Declared` with `activity.shape.declared-type`: the type's members under the
-activity-value profile, as advisory names for authoring help. Validation and the Activity Data picker
+current item. For an admitted type whose members the metadata reader can read, and for a List, Array, HashSet
+or Dictionary of one, the CLR contribution returns `Declared` with `activity.shape.declared-type`: the type's
+members under the activity-value profile (on the collection's `Element` or the map's `MapValue`), as advisory
+names for authoring help. A member path below a collection keeps the unbound answer. Validation and the Activity Data picker
 treat `Declared` as Unknown. Every other case returns Unknown with
 `activity.shape.serialization-profile-unbound`: an admitted whole type can be retained, but a nonempty
 literal path has no asserted selected type. Request seeding preserves caller JSON or default
