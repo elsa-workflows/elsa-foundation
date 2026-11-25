@@ -10,11 +10,9 @@
 and the check's `--self-test`. The skill text itself is verified by the walkthrough (T029–T031). No test framework
 beyond xunit.
 
-**Dependencies outside this spec**: T013 and case 14 follow the converter's global-matching rule as merged at the
-time (a change to it is pending). T018's case 17 and T029–T031 with a storage driver in the sample export need the
-pending converter change that converts storage drivers with Reconsider findings and adds the storage-driver
-migration guide; before it, the walkthrough checks the interview on the refusal. T021 takes the tool's command line from spec 1237 and the migration host's settings from spec 1236. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
-need spec 1237's `report.json` schema agreed. Everything else can start once this spec is approved.
+**Dependencies outside this spec**: T013 and case 14 follow the converter's global-matching rule (same member name
+after the prefix). T018's case 17 follows the storage-driver migration guide in `docs/migration/`. T021 takes the tool's command line from spec 1237 and the migration host's settings from spec 1236. T020, T021 and T029–T031 need spec 1237 implemented (its `inventory` and `assess` commands and
+`report.json`). Everything else can start once this spec is approved.
 
 ## Format: `[ID] [P?] [Story] Description`
 

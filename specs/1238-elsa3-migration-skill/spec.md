@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-24
 
-**Status**: Draft — provisional: it reads the migration report that spec 1237 defines, and that schema is not agreed yet.
+**Status**: Draft
 
 **Input**: A guide that takes an Elsa 3 user through a test migration of their workflows to Elsa 4, ending in a
 complete report of what to patch, what to reconsider, what to take into account and what goes smoothly. The guide is a
@@ -349,13 +349,12 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   Elsa 3 migration app profile exists; this spec builds nothing for that profile.
 - The converter, on the initiative branch, diagnoses unregistered variable types, maps declared JavaScript functions
   to prefixed host functions and refuses a declared global used other than as a direct call; the skill relies on the
-  guidance those diagnostics carry. How a global is matched to its host function may still change; case 14 states
-  the rule that holds when the catalog is written.
+  guidance those diagnostics carry. A global matches the registered host function with the same member name after
+  its prefix; case 14 states that rule and what makes a match refused.
 - The user is an engineer with a clone of this repository and the .NET SDK it needs. The only network calls are
   the clone and NuGet restore.
-- A pending converter change converts every Elsa 3 storage driver to the default storage: Elsa 3's default drivers
-  silently, the memory driver and custom drivers with a Reconsider finding per variable, input or output that names
-  the driver type as a storage-driver component (spec 1237 lists both as components). Until it lands, the converter
-  refuses those drivers (Must fix), and case 17's interview runs on the refusal. The skill reads the kind and name,
-  not the codes.
+- The converter converts every Elsa 3 storage driver to the default storage: Elsa 3's default drivers silently,
+  the memory driver and custom drivers with a Reconsider finding per variable, input or output that names the driver
+  type as a storage-driver component (spec 1237 lists both as components). The repository's Elsa 3 storage-driver
+  migration guide holds the interview. The skill reads the kind and name, not the codes.
 - The sample is never packed or published.
