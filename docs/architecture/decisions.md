@@ -380,6 +380,10 @@ The four palette intrinsics besides Set Variable run on the kernel: Set Output, 
 
 A kernel host replaces `IWorkflowActivationCoordinator` with a kernel coordinator that maps the compiled executable to a Native workflow and serves it. Designer expressions, JavaScript and Liquid, run as one host-evaluated binding kind through the portable expression evaluator. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7153650829); [Designer definitions on the kernel](definitions-on-the-kernel.md)
 
+## Owner decisions on GA scope (25 November)
+
+Elsa 3 to Elsa 4 conversion (#3052) ships in 4.0 in full, ported onto the kernel; every converter defect is release 1 scope (#4919, #5664, #5681, #5686, #5697). Complete value capture (#5647) ships behind a host setting, up to the checkpoint cap, the size limit of one checkpointed state. Custom storage drivers (#5698) are refused at publish, and values by reference stays cut. K7's G1 to G5 are the 4.0 join behaviour, with no per-arrival mode, and the join initiative (#4193) continues after the release. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7153943674); [plan, added scope](../program-goals/clean-slate-kernel.md#added-scope-owner-25-november-2026); [GA scope triage](../reports/ga-scope-triage-2026-11-25/joey-issues.md)
+
 ## Process
 
 | Date | Rule | Source |
