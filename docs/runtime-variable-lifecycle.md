@@ -322,8 +322,8 @@ lost updates. Values appear only through their states and the payload read.
   step-session writes to the root and container frames (on completion and on suspension) and for intrinsic writes to the root and container frames. Captures and session writes into
   closed-scope rows, captures made while a composite completes and accepted overrides have their write record, but no
   value snapshot yet. (Loop iteration frames are read-only to intrinsics.)
-- A closed-scope variable row carries no protection policy of its own, so its write record takes the protection of the
-  written value, combined with the stored row's.
+- A closed-scope variable row keeps no declared protection policy, only the protection minimum it was seeded or written
+  with; a write record takes the written value's protection combined with that minimum.
 - A record of a closed-scope row write has no frame revision; its `CommitOrder` is the version the write produced.
 - The committer remembers, per lease, the stamps of activities still in flight; an entry goes when the activity's
   terminal commit is persisted or the lease ends.
