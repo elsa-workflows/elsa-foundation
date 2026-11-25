@@ -140,8 +140,9 @@ internal static class PostgresPreviewLifetimeChecks
                 name + "-start", Contract.Kinds.Start, cancellationToken: token);
             Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, $"the {name} probe admits an independent root");
             var held = new WaitingActor();
+            var log = new RecordingLogger();
             var service = new PostgresPreviewHostedService(Open, name, held, Environment.FailFast,
-                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25), DisposeDeadline = TimeSpan.FromSeconds(30) });
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25), DisposeDeadline = TimeSpan.FromSeconds(30) }, log);
             Exception? reported = null, again = null;
             try
             {
@@ -158,8 +159,11 @@ internal static class PostgresPreviewLifetimeChecks
             }
             finally { held.Release.TrySetResult(); }
             var recorded = service.LastError;
-            Require(reported is null && again is null && recorded is Kernel.Runtime.ScopeOwnershipLostException,
-                $"a dispose stays quiet about the lost fence, which the service records ({reported?.GetType().Name ?? "quiet"}, then {again?.GetType().Name ?? "quiet"}, recorded {recorded?.GetType().Name ?? "nothing"})");
+            await Task.Delay(200, token);
+            var errors = log.Errors;
+            Require(reported is null && again is null && recorded is Kernel.Runtime.ScopeOwnershipLostException &&
+                errors.Count == 1 && errors[0] is Kernel.Runtime.ScopeOwnershipLostException,
+                $"a dispose stays quiet about the lost fence, which the service records and logs once at Error ({reported?.GetType().Name ?? "quiet"}, then {again?.GetType().Name ?? "quiet"}, recorded {recorded?.GetType().Name ?? "nothing"}, {errors.Count} Error entr{(errors.Count == 1 ? "y" : "ies")})");
         }
 
         // A dispose that joins a stop already under way kills it at the dispose deadline: no escalation, fence left for expiry.
@@ -341,6 +345,19 @@ internal static class PostgresPreviewLifetimeChecks
         Task<PartitionEntity> ReadFenceAsync() => observer.Partitions.AsNoTracking().SingleAsync(token);
         ValueTask<Contract.Admission> SendCompleteAsync() =>
             ingress.SendAsync(scope, new Contract.Target.Ref(reference), "complete", "complete", cancellationToken: token);
+    }
+
+    /// <summary>A logger that keeps the exceptions of its Error entries.</summary>
+    private sealed class RecordingLogger : ILogger<PostgresPreviewHostedService>
+    {
+        private readonly List<Exception?> _errors = [];
+        internal IReadOnlyList<Exception?> Errors { get { lock (_errors) return [.. _errors]; } }
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Error) lock (_errors) _errors.Add(exception);
+        }
     }
 
     private static void Require(bool condition, string message)
