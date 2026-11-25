@@ -14,6 +14,13 @@ internal static class NativeRecoveryMaterial
         ["nodes"] = new JsonArray(workflow.Nodes.Values.OrderBy(n => n.Id, StringComparer.Ordinal).Select(DescribeNode).ToArray())
     };
 
+    /// <summary>A Switch's cases in order: each label and its condition's binding.</summary>
+    internal static JsonArray DescribeCases(Node n) => new(n.Cases.Select(c => (JsonNode?)new JsonObject
+    {
+        ["Label"] = c.Label,
+        ["Condition"] = c.Condition is { } b ? new JsonObject { ["Kind"] = b.GetType().FullName, ["Value"] = JsonSerializer.SerializeToNode(b, b.GetType()) } : null,
+    }).ToArray());
+
     private static JsonObject DescribeNode(Node n)
     {
         var material = JsonSerializer.SerializeToNode(new
@@ -25,6 +32,8 @@ internal static class NativeRecoveryMaterial
                 { p.Key, Kind = p.Value.GetType().FullName, Value = JsonSerializer.SerializeToNode(p.Value, p.Value.GetType()) }).ToArray()
         })!.AsObject();
         if (n.JobTimeout is { } timeout) material["JobTimeoutTicks"] = timeout.Ticks;
+        // A Switch's cases are part of what it is; a node without any describes as before.
+        if (n.Cases.Count != 0) material["Cases"] = DescribeCases(n);
         return material;
     }
 }

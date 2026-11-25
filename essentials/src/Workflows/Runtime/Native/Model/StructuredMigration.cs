@@ -137,7 +137,8 @@ internal static class StructuredMigration
         SameEntries(before.Inputs, after.Inputs, SameBinding) &&
         SameEntries(before.Captures, after.Captures, StringComparer.Ordinal.Equals) &&
         before.Connections.SequenceEqual(after.Connections) &&
-        SameEntries(before.Gateways, after.Gateways, (left, right) => left == right);
+        SameEntries(before.Gateways, after.Gateways, (left, right) => left == right) &&
+        JsonNode.DeepEquals(NativeRecoveryMaterial.DescribeCases(before), NativeRecoveryMaterial.DescribeCases(after));
 
     private static bool SameBinding(Binding before, Binding after) =>
         (before, after) switch
