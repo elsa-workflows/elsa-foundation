@@ -4,6 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [GA scope triage: Joey's open issues](ga-scope-triage-2026-11-25/joey-issues.md) - 25 November 2026 assessment of all 58 open issues by `j03y-nxxbz` against the trimmed release 1 scope: 6 in scope for GA, 9 waiting on three owner questions (Elsa 3 conversion in GA, complete value capture against the values-by-reference cut, join behaviour), 13 done or obsolete, 30 out of scope. Nothing on GitHub was changed. Program #4229.
 - [GA test drive: Core Preview map](ga-test-drive-2026-11-24/core-preview-map.md) - 24 November 2026 source reading: which steps of a seven-workflow HTTP test drive can run on the Core Preview, the milestone each waits on, and three gaps that had no acceptance case (designed workflows on the kernel, the release 1 activity list, the Native HTTP surface). Program #4229.
 - [Clean-slate execution kernel: design record](clean-slate-kernel/README.md) - design sketch draft 5 (12 November 2026) of the proposed actor kernel, with every owner decision taken so far, and the interactive walkthrough. Proposed, not approved; program #4229.
 - [Execution-core SC-005: HTTP-level BPMN authorization on the Owned Workbench](exec-core-sc005-authz.md) - test-only hosted non-admin refusal on every registered BPMN HTTP endpoint (SQLite / one host). Tenant half and Studio half explicitly deferred. Does not complete #3650 or Program #2892.
