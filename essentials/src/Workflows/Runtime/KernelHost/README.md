@@ -7,6 +7,18 @@ the Native model's definitions.
 - `NativeExecutableMapper` maps a `WorkflowExecutable` to a `Kernel.Native.Workflow`, or refuses it with a
   `NativeMappingRefusedException` (`activity-unsupported` or `binding-unsupported`) that names the node and, where it
   matters, the input.
+- `KernelActivationCoordinator` is a kernel host's `IWorkflowActivationCoordinator`. It maps first, checks the routes
+  and schedules over the serving set, moves the slot through `IWorkflowActivationSwitch` with empty projections, and
+  then serves. `ServeActiveSlotsAsync` serves every active slot when a host starts.
+- `KernelServing` is the host singleton that holds what serves:
+  - the Native `WorkflowRegistry`;
+  - the serving set (slot to workflow);
+  - the `HttpRoutes` and `NativeSchedules` built over the serving set;
+  - `ServedWorkflow`, which a host passes as `NativeExecutionOptions.ServedWorkflow` so that a Dispatch reaches the
+    version its definition serves.
+- `IKernelScheduleHost` is how the coordinator reaches the schedule actors. `ScheduleActorHost` implements it on the
+  host's ingress.
+- `KernelTriggerBindingExtractor` reports no old-core triggers, so the publication preflight checks only the slot.
 
 The mapping rules are in [definitions on the kernel](../../../../../docs/architecture/definitions-on-the-kernel.md#mapping-rules).
 
@@ -32,3 +44,14 @@ Each is refused with the node and input named, and the refusal says what to chan
 - A Dispatch Workflow names a definition; the Native model asks the host's `NativeExecutionOptions.ServedWorkflow` for
   the artifact that serves it when the child starts. It is read inside the turn, so a turn that runs again after a lost
   commit may start a version published in between.
+
+## Serving
+
+- Activations, deactivations and serving checks run one at a time on a host, so each one checks its routes and
+  schedules against the serving set it changes.
+- A Dispatch reaches the workflow its definition's `default` slot serves. When no `default` slot serves the definition,
+  it reaches the one slot that does. When several other slots do, it reaches none, and the child starts the id itself.
+- When a host starts, `ServeActiveSlotsAsync` finds the definitions with activations from the live activation source
+  references, and their slots from the slot authority. It serves each active slot as `EnsureServingAsync` does.
+- A deactivation stands even when a schedule cannot be stopped. The failure is in its diagnostic and its log, and an
+  operator stops the schedule actor.
