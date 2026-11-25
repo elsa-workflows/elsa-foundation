@@ -6,19 +6,27 @@ acceptance set and templates from the merged S-15, or from the head current at t
 
 ## R-1 Host shape and location
 
-- **Decision.** One ASP.NET Core project, `Elsa3.Migration.Host`, at
-  `extensions/Elsa3/src/Migration/Host/Elsa3.Migration.Host.csproj`. It references the projects of the composed
-  features directly. It is not packed, has no Dockerfile, and is not built by an image workflow (spec Q1, Q3, Q11).
-- **Why this path.** `ArchitectureGuardTests` registers `Elsa3.` as an extension bucket, so `Elsa3.Migration.Host`
-  gets the name-derived path `extensions/Elsa3/src/Migration/Host/`. Its tests get
-  `extensions/Elsa3/tests/Migration/Host/Tests/`, the same way `Elsa3.Mapping` and `Elsa3.Mapping.Tests` get theirs.
-  The guard needs no new entry, and the constitution's host groupings (§E2.1) need no amendment.
-- **Elsa 3 boundary.** The project sits in the Elsa 3 bucket but references no `Elsa3.*` project and no Elsa 3
-  package (FR-003). A test checks its dependency closure (R-5).
+- **Decision.** One ASP.NET Core project, `Elsa.Migration.Host`, at `apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj`,
+  with its tests at `essentials/tests/Migration/Host/Tests/Elsa.Migration.Host.Tests.csproj`. It references the projects
+  of the composed features directly. It is not packed, has no Dockerfile, and is not built by an image workflow (spec
+  Q1, Q3, Q11). Its README calls it the Elsa 3 migration host.
+- **Why `apps/`.** `extensions/README.md` puts optional modules in `extensions/` and deployable hosts in `apps/`, and
+  `ExtensionBoundaryTests` treats `apps` as the host root. A host under `extensions/Elsa3/src` would be scanned as an
+  extension module, so any reference outside `essentials/` would fail `Extension_to_extension_references_are_declared`.
+  That would block an engineer adding an extension feature (FR-005). It would also conflict with §E2.7, which allows
+  only import adapters and shared support in the `Elsa3` domain.
+- **Guard entries.** On main, `ArchitectureGuardTests.ExpectedProjectPath` and `ExpectedSolutionFolder` name each
+  `apps/` host explicitly (`Elsa.Workbench.Host`, `Elsa.Foundation.Host`, `Elsa.Essentials.Host`). T002 adds
+  `Elsa.Migration.Host` the same way. The test project's path is name-derived under `essentials/tests/`, like the
+  Workbench's tests under `essentials/tests/Workbench/`. Constitution §E2.1 lists the host and test groupings that are
+  not domains (`Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples`, `Elsa.Testing`), so the implementing PR adds
+  `Elsa.Migration` there (R-11).
+- **Elsa 3 boundary.** The host references no `Elsa3.*` project and no Elsa 3 package (FR-003). A test checks its
+  dependency closure (R-5), in addition to `Elsa3MigrationBoundaryTests`.
 - **Alternatives.**
   - A Workbench profile: rejected with Q1.
-  - A host in `apps/`: that is where the product and demo hosts live (`Elsa.Essentials.Host` and the Workbench on
-    main). It would need a guard entry, and would sit next to the GA story that #5800 owns.
+  - The `Elsa3` extension bucket (the first draft of this design): refused by the extension boundary and §E2.7, as
+    above.
   - Published images and a base image (the earlier design): replaced by Q11.
 
 ## R-2 Host wiring
@@ -29,12 +37,15 @@ acceptance set and templates from the merged S-15, or from the head current at t
   call `Build` (R-5), because the test server must be set before the app is built. The wiring starts from main's
   `apps/Elsa.Essentials.Host/Program.cs` after the sync (the closest host to what this one composes); each piece it
   drops is named with its reason in the implementing PR. It contains at least:
-  - CShells shell hosting with the default shell activated eagerly at startup, and readiness at `/health/ready` (the
-    Workbench's `DefaultShellWarmup` and `MapShellReadiness`);
-  - the root health endpoint;
+  - main's shell hosting model: `AddFoundationNuplane` with no feeds and no shared assemblies (R-6), then
+    `AddFoundationShellHosting(shells => shells.WithHostAssemblies()...)`, which discovers the project-referenced
+    features through the `DependencyContext` and fails activation with `FeatureNotFoundException` for an unknown one;
+  - `MapFoundationHealth`, which maps `/health/live` and `/health/ready`; readiness returns 200 once the default shell
+    is active, which is what *Refusing to start* in the spec relies on;
   - `AddEfPersistenceResources`, with a migration-host `IEfToolingShellDefaults` type and its
     `[assembly: EfToolingShellDefaults(...)]` attribute, as `WorkbenchEfToolingShellDefaults` is for the Workbench;
-  - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` and `AddShellStartupValidation`;
+  - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` and `AddShellStartupValidation`, with the
+    host added to `HostOwnedServicesAreSharedWithShellsTests`, which names its hosts explicitly;
   - `AddAuthentication`/`AddAuthorization`, and the OpenIddict token store from main's
     `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore` (`AddOpenIddictEntityFrameworkCoreStore`, R-7);
   - a CORS policy for the repository's Studio host (R-8);
@@ -48,9 +59,7 @@ acceptance set and templates from the merged S-15, or from the head current at t
   `DevelopmentOrDemoGuard` refuses to start a host whose identity features run in development mode outside the
   Development environment, and the Workbench gets Development the same way. The tests set the builder's environment to
   Development. The fixed URL is what the Studio CORS policy, the return URLs and the JTest environment file use.
-- **After the main sync.** If the sync brings in main's shared hosting helpers (main's `apps/Elsa.Essentials.Host`
-  uses `AddFoundationShellHosting` and `MapFoundationHealth`), the host uses them instead of copying the Workbench's.
-  The behaviour above stays the same.
+- **Main sync.** All of the above is main's code; T001 waits for it.
 
 ## R-3 Host composition
 
@@ -119,11 +128,13 @@ of these for their own workflows adds it as in FR-005.
 
 ## R-5 Tests
 
-A PR-tier test project, `extensions/Elsa3/tests/Migration/Host/Tests/Elsa3.Migration.Host.Tests.csproj` (xunit). It
+A PR-tier test project, `essentials/tests/Migration/Host/Tests/Elsa.Migration.Host.Tests.csproj` (xunit). It
 builds the host through `MigrationHost.CreateBuilder`, `UseTestServer` and `MigrationHost.Build` (R-2), with
 `Microsoft.AspNetCore.TestHost`, which is already pinned in the root `Directory.Packages.props`.
 `Microsoft.AspNetCore.Mvc.Testing` is pinned only for Studio, and a top-level `Program` can't be booted by TestHost
-alone, hence the two methods. The builder's environment is Development (R-2). Each test uses a temporary data
+alone, hence the two methods. launchSettings doesn't apply to tests, so they pass `--environment=Development` and
+`--contentRoot=<host project folder>` to `CreateBuilder`. The re-added user secrets use
+`AddUserSecrets(typeof(MigrationHost).Assembly)`, because under a test the entry assembly is the test host. Each test uses a temporary data
 folder and a temporary migrated folder. Its tests:
 
 - **Composition.** The shell activates with the committed `shells.json`. A listed feature that doesn't resolve fails,
@@ -148,16 +159,19 @@ and the folder settings. `FeatureCompositionTests` already proves each feature c
 
 ## R-6 Settings and data
 
-- **No runtime packages.** The host loads no Nuplane packages: its audience adds their own features as project
-  references in their clone (FR-005). This keeps it out of `HostProvidedPackagesGuardTests`. On main every host in
-  `SharingHosts` must declare each shared assembly or exempt it, and an exemption needs a computed production
-  configuration that only image builds ship. A source-only host can satisfy neither without changing the guard. If the
-  hosting helpers the host uses (R-2) make it share assemblies after all, T005 raises it on the PR before going on.
+- **No runtime packages.** The host loads no packages at runtime: its audience adds their own features as project
+  references in their clone (FR-005). It still calls `AddFoundationNuplane`, because `AddFoundationShellHosting`
+  always adds Nuplane feature discovery (`FoundationShellHostingExtensions`), but with no feed and no
+  `Nuplane:Loading:SharedAssemblies`, so nothing loads and nothing is shared. `HostProvidedPackagesGuardTests` and the
+  other Nuplane host guards scan the `apps/` hosts that share assemblies (`NuplaneHostSettings.HostsThatShareAssemblies`);
+  this host shares none, so they skip it, and they would cover it if it ever started sharing.
 - **Working directory.** `JsonWorkflowReconciliationSource.ScanFolder` calls `Directory.Exists` on the raw path, so
   relative paths resolve against the process's working directory, and `dotnet run --project` from the repository root
   makes that the repository root. The project sets `<RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>`,
   so `dotnet run` uses the project folder wherever it is started from, and the host logs the absolute folder paths it
-  uses at startup. An engineer who starts the built assembly another way passes absolute paths.
+  uses at startup. An engineer who starts the built assembly another way passes absolute paths and sets
+  `ASPNETCORE_ENVIRONMENT=Development`; without it the host runs as Production and `DevelopmentOrDemoGuard` refuses
+  to start it (R-2). The README says so.
 - **Data.** The persistence resource `Elsa` points at `Data Source=data/elsa.db`. Nothing in the persistence code
   creates the folder, so the host creates `data/` at startup when it is missing. `data/` is git-ignored.
   `Migrate:Policy` is `AutoMigrate`. In development mode the OpenIddict store is in memory (main,
@@ -174,8 +188,9 @@ and the folder settings. `FeatureCompositionTests` already proves each feature c
     `SourceId`. It runs before workflow reconciliation (order 1 against 2), which its feature documentation requires.
   - The two settings are the ones the README documents (FR-011). An engineer overrides them with absolute paths to
     their own `migrated/` folder.
-- **Sample.** `extensions/Elsa3/src/Migration/Host/migrated/workflows/hello.json` holds an HTTP trigger and a
-  `WriteHttpResponse`. `migrated/activities/activities.json` holds `[]`.
+- **Sample.** `apps/Elsa.Migration.Host/migrated/workflows/hello.json` holds an HTTP trigger and a
+  `WriteHttpResponse`, with a fixed `definitionId`, so a restart reconciles the same definition instead of creating a
+  new one. `migrated/activities/activities.json` holds `[]`.
 
 ## R-7 OpenIddict token store (spec Q10)
 
@@ -224,9 +239,6 @@ The host references no EF vendor package directly, so `OpenIddictPersistenceArch
 
 ## R-11 Constitution
 
-§E2.7 names the `Elsa3` projects as `Elsa3.<Domain>.Import` adapters plus shared support (`Elsa3.Models`,
-`Elsa3.Mapping`). The domain tree (`docs/reference/elsa-domain-tree.md`) gives `Elsa3` the purpose "Imports Elsa 3
-definitions". A host is neither an adapter nor shared support. The implementing PR therefore amends both in the same
-unit: §E2.7 names `Elsa3.Migration.Host` as the local migration host, which references no Elsa 3 project, and the
-domain-tree purpose adds "and hosts the local migration target". §E2.1 is unchanged, because the host is a project of
-the `Elsa3` domain, not a new grouping.
+The host lives in `apps/` with the other hosts, so §E2.7 (the `Elsa3` domain holds import adapters and shared
+support) and the domain tree are unchanged. Constitution §E2.1 lists the host and test groupings that are not domains;
+the implementing PR adds `Elsa.Migration` to that list, next to `Elsa.Workbench`, in the same unit (T016).

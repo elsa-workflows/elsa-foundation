@@ -5,7 +5,7 @@ For engineers migrating from Elsa 3 who have cloned this repository. The host is
 ## Run the sample
 
 ```bash
-dotnet run --project extensions/Elsa3/src/Migration/Host
+dotnet run --project apps/Elsa.Migration.Host
 ```
 
 1. Wait for `GET /health/ready` to return 200.
@@ -18,7 +18,7 @@ dotnet run --project extensions/Elsa3/src/Migration/Host
 2. Point the host at your folder:
 
    ```bash
-   dotnet run --project extensions/Elsa3/src/Migration/Host -- \
+   dotnet run --project apps/Elsa.Migration.Host -- \
      --CShells:Shells:default:Features:JsonWorkflowReconciliation:Options:FolderPath=/abs/path/migrated/workflows \
      --CShells:Shells:default:Features:JsonActivityReconciliation:Options:FilePath=/abs/path/migrated/activities/activities.json
    ```

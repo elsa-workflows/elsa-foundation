@@ -19,20 +19,18 @@ short worktree path (MSB3030).
   If it hasn't, stop and ask the coordinator. Don't copy or move store code. After the sync, use the guard lists and
   Workbench paths as they are then (`apps/Elsa.Workbench.Host` on main).
 - [ ] T002 Create the project and its test project:
-  - `extensions/Elsa3/src/Migration/Host/Elsa3.Migration.Host.csproj`: `Microsoft.NET.Sdk.Web`, `IsPackable` false, a
+  - `apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj`: `Microsoft.NET.Sdk.Web`, `IsPackable` false, a
     `UserSecretsId`, `<RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>`, and a
     `Properties/launchSettings.json` with `ASPNETCORE_ENVIRONMENT=Development` and one fixed local URL not used by
     another host in the repository (R-2, R-3, R-6);
-  - `extensions/Elsa3/tests/Migration/Host/Tests/Elsa3.Migration.Host.Tests.csproj`: xunit,
+  - `essentials/tests/Migration/Host/Tests/Elsa.Migration.Host.Tests.csproj`: xunit,
     `Microsoft.AspNetCore.TestHost`.
 
   Then:
   - add both to `Elsa.Server.slnx`, and regenerate the solution filters and the dependency map;
   - register the test project as PR tier in `tools/ci/test-tiers.json`;
-  - run `ArchitectureGuardTests`.
-
-  The path guard derives both paths from the `Elsa3.` bucket, so it should need no entry (R-1). If it does, raise that
-  on the PR.
+  - add `Elsa.Migration.Host` to `ArchitectureGuardTests.ExpectedProjectPath` and `ExpectedSolutionFolder` the way
+    `Elsa.Essentials.Host` is listed, and run `ArchitectureGuardTests` (R-1).
 
 ## Phase 2: Foundational (the host)
 
@@ -40,7 +38,7 @@ short worktree path (MSB3030).
   - For each candidate, record the suite, template, Studio need or `required by <feature>` that justifies it. Read the
     S-15 acceptance definitions and Elsa 4 templates in `extensions/Elsa3/tests/JTest/`, and each feature's `DependsOn`.
   - Settle R-4's "to confirm" items, and drop every candidate without a reason.
-  - Write the result to `extensions/Elsa3/src/Migration/Host/shells.json`, and the reasons to
+  - Write the result to `apps/Elsa.Migration.Host/shells.json`, and the reasons to
     `composition-reasons.json` next to it (feature name → reason).
   - Add a project reference for every composed feature's project, and nothing else beyond hosting (FR-003).
 - [ ] T004 Admit the host in `EfCoreDependencyGuardTests` once T003's references are final: its name in
@@ -50,18 +48,18 @@ short worktree path (MSB3030).
   a `Program.cs` that calls both (R-2). Start from main's `apps/Elsa.Essentials.Host/Program.cs`, and name in the PR
   each piece dropped and why. Include:
   - the configuration order of R-3 (`shells.Local.json` and user secrets re-added above the shells files);
-  - eager default-shell activation and `/health/ready`;
-  - the root health endpoint;
+  - `AddFoundationShellHosting` with `WithHostAssemblies()` and `MapFoundationHealth` (`/health/live`,
+    `/health/ready`);
   - `AddEfPersistenceResources`, with `MigrationHostEfToolingShellDefaults` and its
     `[assembly: EfToolingShellDefaults(...)]` attribute;
   - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` and `AddShellStartupValidation`;
   - authentication, authorization and `AddOpenIddictEntityFrameworkCoreStore`;
   - the Studio CORS policy;
-  - the host services the composed features resolve (R-2), each kept or dropped by need;
+  - the host services the composed features resolve (R-2), each kept or dropped by need, and the host added to
+    `HostOwnedServicesAreSharedWithShellsTests`;
   - creating `data/` when missing, and logging the absolute workflows folder, activities file and data paths.
 
-  No Nuplane package loading (R-6). If a hosting helper makes the host share assemblies anyway, raise it on the PR
-  before going on.
+  `AddFoundationNuplane` with no feed and no shared assemblies, so no package loads (R-6).
 - [ ] T006 Write `appsettings.json` and the settings in `shells.json` (R-6):
   - the `Elsa` resource at `data/elsa.db`, with `Migrate:Policy` `AutoMigrate`;
   - development identity with the seeded administrator (the OpenIddict store is in memory in development mode);
@@ -70,16 +68,16 @@ short worktree path (MSB3030).
     folder paths.
 
   Add `.gitignore` entries for `data/` and `shells.Local.json`. Add the sample
-  `migrated/workflows/hello.json` (an HTTP trigger and `WriteHttpResponse`) and `migrated/activities/activities.json`
+  `migrated/workflows/hello.json` (an HTTP trigger and `WriteHttpResponse`, with a fixed `definitionId`) and `migrated/activities/activities.json`
   (`[]`) (FR-011).
 
-**Checkpoint**: `dotnet run --project extensions/Elsa3/src/Migration/Host`, started from the repository root and from
+**Checkpoint**: `dotnet run --project apps/Elsa.Migration.Host`, started from the repository root and from
 another folder, starts; `/health/ready` returns 200; and the sample trigger answers.
 
 ## Phase 3: User Story 1 - Run my migrated workflows (P1)
 
-- [ ] T007 [US1] Host tests through `MigrationHost.CreateBuilder`, `UseTestServer` and `MigrationHost.Build`, in the
-  Development environment, each on a temporary data folder and migrated folder (R-5):
+- [ ] T007 [US1] Host tests through `MigrationHost.CreateBuilder`, `UseTestServer` and `MigrationHost.Build`, with
+  `--environment=Development` and `--contentRoot` set, each on a temporary data folder and migrated folder (R-5):
   - scenario 1: the sample is published and answers;
   - scenario 2: an activities file holds a composite with an activity dependency, a workflow uses it, both load, and
     running the workflow runs the composite (PR #5685 is merged);
@@ -127,7 +125,8 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 ## Phase 7: Polish
 
 - [ ] T014 [P] Finish the host's README:
-  - "local migration tool, don't deploy" (FR-006);
+  - "local migration tool, don't deploy" (FR-006), and that running the built assembly outside `dotnet run` needs
+    `ASPNETCORE_ENVIRONMENT=Development`;
   - the two folder settings and where to set them (FR-011, R-3);
   - adding your own features by project reference (FR-005);
   - the development sign-in;
@@ -138,9 +137,7 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   Link the README from the migration docs that spec 1238 owns, if they exist by then.
 - [ ] T015 [P] Confirm FR-017 (no file under the Workbench host or its settings changed, and the S-15 Workbench run is
   unchanged) and FR-016 (no JTest project or step in `tools/ci/test-tiers.json` or the CI workflows).
-- [ ] T016 Amend constitution §E2.7 to name `Elsa3.Migration.Host` as the local migration host, which references no
-  Elsa 3 project, and add "and hosts the local migration target" to the `Elsa3` purpose in
-  `docs/reference/elsa-domain-tree.md` (R-11).
+- [ ] T016 Add `Elsa.Migration` to the host and test groupings in constitution §E2.1, next to `Elsa.Workbench` (R-11).
 - [ ] T017 Set this spec's status to `Implemented` in the finishing PR.
 
 ## Dependencies

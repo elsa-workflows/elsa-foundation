@@ -7,11 +7,11 @@ quickstart) may rely on.
 
 | Item | Path (repository-relative) | Stable? |
 |---|---|---|
-| Host project | `extensions/Elsa3/src/Migration/Host/Elsa3.Migration.Host.csproj` | Yes |
-| Composition | `extensions/Elsa3/src/Migration/Host/shells.json`, under `CShells:Shells:default:Features` | Yes |
-| Reasons | `extensions/Elsa3/src/Migration/Host/composition-reasons.json` (feature name → reason), shown by the README | Yes |
-| Sample migrated folder | `extensions/Elsa3/src/Migration/Host/migrated/` | Yes |
-| Data | `extensions/Elsa3/src/Migration/Host/data/` (git-ignored) | Local only |
+| Host project | `apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj` | Yes |
+| Composition | `apps/Elsa.Migration.Host/shells.json`, under `CShells:Shells:default:Features` | Yes |
+| Reasons | `apps/Elsa.Migration.Host/composition-reasons.json` (feature name → reason), shown by the README | Yes |
+| Sample migrated folder | `apps/Elsa.Migration.Host/migrated/` | Yes |
+| Data | `apps/Elsa.Migration.Host/data/` (git-ignored) | Local only |
 
 A tool reads the composition and the reasons with any JSON reader. The host loads no packages at runtime; an
 engineer's own features come in as project references. It needs no reference to the host project.

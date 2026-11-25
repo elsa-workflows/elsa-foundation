@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add one ASP.NET Core project, `Elsa3.Migration.Host`, in the Elsa 3 extension bucket. It composes, by project
+Add one ASP.NET Core project, `Elsa.Migration.Host`, in `apps/` with the other hosts. It composes, by project
 reference, the Elsa 4 features the JTest acceptance set and the Studio designer need, plus JSON workflow and activity
 reconciliation of a `migrated/` folder. A reasons file records why each feature is there, and a test project guards the
 composition. Then the S-15 JTest acceptance set runs against the host, with the migration CLI's `migrated/` output as
@@ -45,11 +45,11 @@ activity reconciliation, main's OpenIddict store library (R-7), and `jtest` for 
 
 | Gate | Status | Notes |
 |---|---|---|
-| §E2.7 Elsa 3 behind the import boundary | PASS with an in-unit amendment | The host references no `Elsa3.*` project or package; a closure test checks it (R-5). §E2.7 lists only import adapters and shared support, so the implementing PR names the migration host there and in the domain-tree purpose (R-11, T016). |
+| §E2.7 Elsa 3 behind the import boundary | PASS | The host references no `Elsa3.*` project or package; a closure test checks it (R-5). It lives in `apps/`, not in the `Elsa3` domain (R-1). |
 | §E2.2 Runtime takes no Design reference | PASS | No runtime project changes; the host composes existing features. |
 | §E5 packaging, reserved `Elsa.Server` name | PASS | The host isn't packed or published, and doesn't take the reserved name. |
 | §E7 CI test tiers | PASS | The new test project goes into `tools/ci/test-tiers.json` as PR tier, with no child host of 2 minutes or more. |
-| §2.2 project paths follow the domain tree; §E2.1 groupings | PASS | `Elsa3.` is a registered extension bucket, so `ArchitectureGuardTests` derives `extensions/Elsa3/src/Migration/Host/` and `extensions/Elsa3/tests/Migration/Host/Tests/` with no new entry (R-1). No grouping is added. |
+| §2.2 project paths follow the domain tree; §E2.1 groupings | PASS with an in-unit amendment | `ArchitectureGuardTests.ExpectedProjectPath` and `ExpectedSolutionFolder` name each `apps/` host; T002 adds `Elsa.Migration.Host`. The test project's path is name-derived. The implementing PR adds `Elsa.Migration` to the §E2.1 host and test groupings (R-1, R-11, T016). |
 | §2.5, §2.23.1 every feature composes | PASS | No feature is added. |
 | Framework gate §2.20 "Only admitted projects resolve EF Core packages"; ADR 0073 | PASS | The host resolves EF through the composed features, so it is admitted in `EfCoreDependencyGuardTests`: its name in `AllowedEfConsumers`, a reviewed package array, and an arm in `ReviewedEfPackages` (R-9, T004). |
 | §2.23 risk-based tests | PASS | Tests cover composition drift, reasons, Elsa 3 leakage and the folder settings (R-5). |
@@ -63,8 +63,8 @@ activity reconciliation, main's OpenIddict store library (R-7), and `jtest` for 
 
 | # | Decision | Detail |
 |---|---|---|
-| P-1 | Host | R-1: `Elsa3.Migration.Host` at `extensions/Elsa3/src/Migration/Host/`. |
-| P-2 | Wiring | R-2: the Workbench's host wiring that the composed features need, or main's shared helpers after the sync. |
+| P-1 | Host | R-1: `Elsa.Migration.Host` at `apps/Elsa.Migration.Host/`, with explicit guard entries. |
+| P-2 | Wiring | R-2: main's hosting model (`AddFoundationShellHosting`, `MapFoundationHealth`), starting from main's essentials host. |
 | P-3 | Composition | R-3: `shells.json`, with every composed feature listed; reasons in `composition-reasons.json`, shown by the README. |
 | P-4 | Feature list | R-4: candidates, each confirmed with a reason or dropped. |
 | P-5 | Tests | R-5. |
@@ -94,8 +94,8 @@ specs/1236-elsa3-migration-host/
 ### Source Code (repository root)
 
 ```text
-extensions/Elsa3/src/Migration/Host/
-├── Elsa3.Migration.Host.csproj     # project references of every composed feature; not packed
+apps/Elsa.Migration.Host/
+├── Elsa.Migration.Host.csproj     # project references of every composed feature; not packed
 ├── Program.cs                      # host wiring (R-2)
 ├── MigrationHostEfToolingShellDefaults.cs
 ├── appsettings.json                # persistence, logging
@@ -110,19 +110,21 @@ extensions/Elsa3/src/Migration/Host/
 ├── .gitignore                      # data/, shells.Local.json
 └── packages.lock.json
 
-extensions/Elsa3/tests/Migration/Host/Tests/
-└── Elsa3.Migration.Host.Tests.csproj   # R-5
+essentials/tests/Migration/Host/Tests/
+└── Elsa.Migration.Host.Tests.csproj   # R-5
 
 essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs   # host admission (R-9)
-.specify/memory/constitution.md, docs/reference/elsa-domain-tree.md # §E2.7 and Elsa3 purpose (R-11)
+essentials/tests/Architecture/Tests/ArchitectureGuardTests.cs      # host path entries (R-1)
+essentials/tests/Modularity/Tests/HostOwnedServicesAreSharedWithShellsTests.cs # + the host (R-2)
+.specify/memory/constitution.md                                     # §E2.1 grouping (R-11)
 tools/ci/test-tiers.json                                            # + the test project
 Elsa.Server.slnx, solution filters, dependency map                  # + the two projects (regenerated)
 extensions/Elsa3/tests/JTest/ledger/runs.md                         # migration-host run rows (after S-15 merges)
 ```
 
-**Structure Decision**: one thin host over existing features, in the Elsa 3 bucket because it exists for the
-migration. Nothing in `essentials/src` changes. Outside the two new projects, only the EF guard named above, the two
-constitution and domain-tree lines (R-11), and the generated solution and map files change.
+**Structure Decision**: one thin host over existing features, in `apps/` with the other hosts. Nothing in
+`essentials/src` changes. Outside the two new projects, only the guard tests named above, the §E2.1 line (R-11), and
+the generated solution and map files change.
 
 ## Complexity Tracking
 
