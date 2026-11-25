@@ -153,7 +153,8 @@ internal sealed class EfClusterMembershipStore(IServiceScopeFactory scopes)
 
             apply(row);
             var entry = context.Entry(row);
-            var reportChanged = entry.Property(candidate => candidate.ReportJson).IsModified;
+            // Republishing bumps the report revision; an equal report text moved to the current format is still a new report.
+            var reportChanged = entry.Property(candidate => candidate.ReportRevision).IsModified;
             // A write that changes nothing is not made: it would move the revision with nothing to show for it.
             if (entry.Properties.Any(property => property.IsModified))
             {
