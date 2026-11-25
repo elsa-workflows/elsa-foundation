@@ -556,6 +556,28 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
     }
 
+    /// <summary>
+    /// Elsa 3 generated <c>get{Name}</c> for a workflow input too (verbatim name; in a reusable run the input is declared as a
+    /// variable). Converted, the accessor reads the input, so a host function of that member name is ambiguous either way.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_matched_global_that_is_also_an_input_accessor_is_ambiguous(bool isReusable)
+    {
+        var getCustomInput = new JavaScriptHostFunctionDeclaration("acme.getCustomInput", _ => default);
+        var definition = ConversionServices.Definition(
+            Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("return getCustomInput();")))));
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "CustomInput", Type = "Object" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: isReusable,
+            configure: services => services.AddSingleton(getCustomInput));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference &&
+            diagnostic.Message.Contains("'getCustomInput'", StringComparison.Ordinal));
+    }
+
     /// <summary>Two variables whose generated accessor is the same name: Elsa 3 generated it, so the clash stands.</summary>
     [Fact]
     public async Task A_matched_global_that_is_also_an_ambiguous_generated_accessor_is_ambiguous()
