@@ -216,10 +216,11 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
 - **Why `apps/` and not the Identity domain**: ADR 0073 keeps OpenIddict "a vendor-owned EF Core boundary", and
   `OpenIddictPersistenceArchitectureTests` forbids an `EntityFrameworkCore` folder inside or beside
   `essentials/src/Foundation/Identity/OpenIddict/` ("No EF wrapper"). A library among the hosts keeps the store
-  host-owned: it is no Elsa domain package and no Elsa contract. `Workbench_owns_the_vendor_package` changes from "the
-  Workbench references `OpenIddict.EntityFrameworkCore`" to "only projects under `apps/` (the hosts and this host-side library) reference it, plus
-  the Identity test project pinned today"; the Workbench
-  keeps its direct reference. No ADR text changes; if the coordinator reads ADR 0073 as host-*project*-owned rather than
+  host-owned: it is no Elsa domain package and no Elsa contract. `Workbench_owns_the_vendor_package` changes from pinning
+  the Workbench's EF vendor packages to pinning those of the store library and both hosts; the Identity test project's
+  pinned list stays as it is. The test keeps its current shape: it pins named projects' package lists and does not scan
+  the whole repository (tools, probes and the architecture tests also reference the vendor package today); the folder
+  rule above still keeps it out of the Identity domain. The Workbench keeps its direct reference. No ADR text changes; if the coordinator reads ADR 0073 as host-*project*-owned rather than
   host-side, this needs an ADR 0073 note instead.
 - **Behaviour preserved**: the OpenIddict files depend only on `Elsa.Foundation.Identity.OpenIddict`,
   `Elsa.Persistence.EntityFramework` (with tooling and resource resolution) and CShells, nothing else in the Workbench.
@@ -230,7 +231,8 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
   `OpenIddictEngineDatabases.cs` (today through a project reference to `Elsa.Workbench.csproj`) repoint to the library;
   `OpenIddictPersistenceArchitectureTests` is updated as above.
 - **Admission**: `EfCoreDependencyGuardTests` reads each project's full restore graph. The library, the composition
-  library and the essentials engine host each get a reviewed EF closure in `AllowedEfConsumers`; the Workbench's
+  library and the essentials engine host each are admitted: a name in `AllowedEfConsumers`, a reviewed
+  package array and an arm in `ReviewedEfPackages`; the Workbench's
   `AllowedWorkbenchEfPackages` stays unchanged, because it still resolves the same packages through the library.
 - **Alternatives**: copying the store into the essentials host (two copies of migrations that drift); a library in the
   Identity domain (refused by the guard and ADR 0073).

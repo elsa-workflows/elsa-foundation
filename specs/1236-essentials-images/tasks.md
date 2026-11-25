@@ -59,8 +59,9 @@ worktree path on Windows (MSB3030).
   and platform providers, the migration policy and pruning, with neutral registration names. Make
   `apps/Elsa.Workbench/Program.cs` call the library and keep its direct `OpenIddict.EntityFrameworkCore` reference;
   repoint `essentials/tests/Modularity/ProviderTests/WorkbenchOpenIddictEngineTests.cs` and `OpenIddictEngineDatabases.cs`;
-  change `OpenIddictPersistenceArchitectureTests.Workbench_owns_the_vendor_package` to "only projects under `apps/` (the hosts and the
-  host-side store library) reference the vendor package, plus the Identity test project pinned today"; admit the library in `EfCoreDependencyGuardTests` (its name in `AllowedEfConsumers`, its reviewed
+  change `OpenIddictPersistenceArchitectureTests.Workbench_owns_the_vendor_package` so it pins the EF vendor package lists of the store library
+  and both hosts instead of the Workbench's alone, keeping the Identity test project's pinned list and its named-project
+  shape (no repository-wide scan; R-13); admit the library in `EfCoreDependencyGuardTests` (its name in `AllowedEfConsumers`, its reviewed
   package array and an arm in `ReviewedEfPackages`) and leave the Workbench's unchanged; add it to the guard's `ExpectedProjectPath`/`ExpectedSolutionFolder`. Confirm the Workbench's
   tests and an existing Workbench SQLite token store still migrate and issue tokens unchanged (FR-017).
 
