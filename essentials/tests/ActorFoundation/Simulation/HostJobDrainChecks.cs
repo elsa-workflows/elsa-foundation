@@ -1569,6 +1569,7 @@ internal static class HostJobDrainChecks
             await node.StartAsync(fixture.Host(node, type, fixture.Store, ownedSet: true));
             await fixture.StartActorAsync(node);
             await type.Entered.Task.WaitAsync(Timeout);
+            var errors = node.Errors;     // before the stop: its drain's fault is recorded as soon as the drain throws it
             Task first, second;
             if (disposeFirst)
             {
@@ -1584,7 +1585,6 @@ internal static class HostJobDrainChecks
             }
             await type.Canceled.Task.WaitAsync(Timeout);
             await Task.Delay(100);
-            var errors = node.Errors;
             type.Finish.TrySetResult();
             var stopOutcome = await OutcomeAsync(disposeFirst ? second : first);
             var disposeOutcome = await OutcomeAsync(disposeFirst ? first : second);
@@ -1765,7 +1765,8 @@ internal static class HostJobDrainChecks
             $"a fault that lands after the stop deadline is still recorded on the node and logged once ({landed?.Message ?? "nothing recorded"}, logged {Volatile.Read(ref logged)})");
     }
 
-    // The dispose bound expires while a beside loop holds the stop; the stop's fault, when it lands, is recorded.
+    // The dispose bound expires while a beside loop holds the stop. The stop's drain fault is recorded when the drain
+    // throws it, before the bound; the bound's expiry is recorded too. Each is logged once.
     private static async Task BoundExpiryFaultAsync()
     {
         var fixture = new Fixture();
@@ -1783,11 +1784,11 @@ internal static class HostJobDrainChecks
         var atBound = node.LastError;
         beside.TrySetResult();
         var clock = Stopwatch.StartNew();
-        while (!ReferenceEquals(node.LastError, fault) && clock.Elapsed < Timeout) await Task.Delay(20);
+        while (!logged.Any(entry => ReferenceEquals(entry, fault)) && clock.Elapsed < Timeout) await Task.Delay(20);
         await Task.Delay(100);
-        Check(disposed is null && atBound is TimeoutException && ReferenceEquals(node.LastError, fault) &&
-            logged.Count == 2 && logged.First() is TimeoutException && ReferenceEquals(logged.Last(), fault),
-            $"a dispose returns at its bound, and the stop's fault that lands later is recorded; each is logged once ({atBound?.GetType().Name ?? "nothing"} then {node.LastError?.Message ?? "nothing"}, logged {logged.Count})");
+        Check(disposed is null && atBound is TimeoutException && logged.Count == 2 &&
+            logged.Count(entry => entry is TimeoutException) == 1 && logged.Count(entry => ReferenceEquals(entry, fault)) == 1,
+            $"a dispose returns at its bound, and the stop's drain fault and the bound's expiry are each recorded and logged once ({atBound?.GetType().Name ?? "nothing"} at the bound, logged [{string.Join(", ", logged.Select(entry => entry.GetType().Name))}])");
     }
 
     // A fence lost in the turn drain and again in the job drain is reported as one loss, not an aggregate.
