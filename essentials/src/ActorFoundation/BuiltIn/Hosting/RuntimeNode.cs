@@ -21,7 +21,8 @@ public sealed record LoopOptions
     /// <summary>Every held scope reads its inbox at least this often: the guarantee behind a lost wake hint.</summary>
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
 
-    /// <summary>How long <see cref="RuntimeNode.DisposeAsync"/> lets the graceful stop drain before it becomes a kill.</summary>
+    /// <summary>How long <see cref="RuntimeNode.DisposeAsync"/> lets the graceful stop drain before it becomes a kill, also
+    /// when the stop was started by another caller.</summary>
     public TimeSpan DisposeDeadline { get; init; } = TimeSpan.FromSeconds(30);
 }
 
@@ -198,20 +199,16 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             if (first) deadline = cancellationToken.Register(_kill.Cancel);
             halted = _halted ??= HaltOnceAsync();
         }
-        using (deadline) await ObserveAsync(halted, first ? CancellationToken.None : cancellationToken);
+        using (deadline) await ObserveAsync(halted, first ? CancellationToken.None : cancellationToken, quietIfReported: false);
     }
 
-    // A stop's outcome is reported to the callers that wait for it. A dispose after one of them saw a failure does not
-    // report the same failure again.
-    private async Task ObserveAsync(Task halted, CancellationToken wait)
+    // A stop's outcome is reported to every stop or kill that waits for it. A dispose reports a failure only when no
+    // stop, kill or other dispose has received it before or alongside it.
+    private async Task ObserveAsync(Task halted, CancellationToken wait, bool quietIfReported)
     {
         try { await halted.WaitAsync(wait); }
         catch (OperationCanceledException) when (wait.IsCancellationRequested) { }
-        catch (Exception)
-        {
-            Volatile.Write(ref _outcomeSeen, 1);
-            throw;
-        }
+        catch (Exception) when ((Interlocked.Exchange(ref _outcomeSeen, 1) == 1) & quietIfReported) { }
     }
 
     private int _outcomeSeen;
@@ -225,16 +222,18 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     public async ValueTask KillAsync()
     {
         _kill.Cancel();
-        await HaltAsync();
+        await ObserveAsync(HaltAsync(), CancellationToken.None, quietIfReported: false);
     }
 
-    /// <summary>A stop bounded by <see cref="LoopOptions.DisposeDeadline"/>. It does not rethrow a failure a stop already reported.</summary>
+    /// <summary>
+    /// A stop bounded by <see cref="LoopOptions.DisposeDeadline"/>: at the deadline it becomes a kill, whoever started the
+    /// stop, and what is still owned runs out by its lease. It does not rethrow a failure a stop, kill or dispose received.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
-        var reported = Volatile.Read(ref _outcomeSeen) == 1;
         using var deadline = new CancellationTokenSource(_options.DisposeDeadline);
-        try { await StopAsync(deadline.Token); }
-        catch (Exception) when (reported) { }
+        using (deadline.Token.Register(_kill.Cancel))
+            await ObserveAsync(HaltAsync(), CancellationToken.None, quietIfReported: true);
     }
 
     /// <summary>The first stop or kill leaves the loop and, unless killed, gives every scope up; every caller waits for it.</summary>
@@ -267,8 +266,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 catch (Exception error) { drainError = error; }
             }
 
-            // A kill during shutdown leaves remaining ownership to expire instead of returning it as clean.
-            if (!_kill.IsCancellationRequested)
+            // A kill during shutdown leaves remaining ownership to expire instead of returning it as clean. So does a
+            // turn drain that faulted with anything but a lost fence: entered work may still be inside, as for the job drain.
+            if (!_kill.IsCancellationRequested && drainError is null or ScopeOwnershipLostException)
             {
                 try { await OnNode(() => _runtime.StopAsync(_kill.Token, StopHeartbeatsAsync).AsTask()).WaitAsync(_kill.Token); }
                 catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }

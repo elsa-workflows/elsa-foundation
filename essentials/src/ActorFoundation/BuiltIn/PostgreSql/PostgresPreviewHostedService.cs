@@ -47,10 +47,25 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         try { await shutdown.WaitAsync(cancellationToken).ConfigureAwait(false); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            if (!shutdown.IsCompleted)
-                Escalate("The PostgreSQL preview node did not stop within the application shutdown deadline.");
+            await EscalateUnlessStoppedAsync(shutdown, "The PostgreSQL preview node did not stop within the application shutdown deadline.");
             throw;
         }
+        catch (Exception)
+        {
+            Volatile.Write(ref _reported, 1);     // a later dispose does not report the same failure again
+            throw;
+        }
+    }
+
+    /// <summary>The grace the deadline's kill gets to end the stop before the process policy runs.</summary>
+    public static readonly TimeSpan KillGrace = TimeSpan.FromSeconds(2);
+
+    private int _reported;
+
+    private async Task EscalateUnlessStoppedAsync(Task shutdown, string reason)
+    {
+        await Task.WhenAny(shutdown, Task.Delay(KillGrace)).ConfigureAwait(false);
+        if (!shutdown.IsCompleted) Escalate(reason);
     }
 
     /// <summary>
@@ -65,8 +80,9 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         try { await shutdown.WaitAsync(deadline.Token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
-            if (!shutdown.IsCompleted) Escalate("The PostgreSQL preview node did not stop within its dispose deadline.");
+            await EscalateUnlessStoppedAsync(shutdown, "The PostgreSQL preview node did not stop within its dispose deadline.");
         }
+        catch (Exception) when (Volatile.Read(ref _reported) == 1) { }
     }
 
     private Task RequestStop(CancellationToken deadline)
