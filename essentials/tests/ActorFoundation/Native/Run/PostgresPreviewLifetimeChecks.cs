@@ -107,7 +107,7 @@ internal static class PostgresPreviewLifetimeChecks
             Require((await ReadFenceAsync()).Owner is null, "the replacement also releases ownership through application shutdown");
         }
         // KERNEL_LIFETIME_PROBES=name[,name]: run only these deadline probes after the main flow (for fail-before witnesses).
-        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault", "joined-stop-warning"];
+        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault", "joined-stop-warning", "aggregate-once"];
         var only = Environment.GetEnvironmentVariable("KERNEL_LIFETIME_PROBES")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (only is { Length: 0 } || only?.FirstOrDefault(name => !probes.Contains(name, StringComparer.Ordinal)) is { } unknown)
             throw new InvalidOperationException($"KERNEL_LIFETIME_PROBES names no known probe ({string.Join(", ", probes)}).");
@@ -122,7 +122,26 @@ internal static class PostgresPreviewLifetimeChecks
         if (Probe("negative-deadline")) CheckNegativeDisposeDeadline();
         if (Probe("shutdown-fault")) await CheckShutdownFaultAsync();
         if (Probe("joined-stop-warning")) await CheckJoinedStopWarningAsync();
+        if (Probe("aggregate-once")) await CheckAggregateOnceAsync();
         return 0;
+
+        // An aggregate shutdown fault is logged as its inner faults, one Error each, never as the aggregate as well.
+        async Task CheckAggregateOnceAsync()
+        {
+            var first = new InvalidOperationException("injected first shutdown fault");
+            var second = new InvalidOperationException("injected second shutdown fault");
+            var log = new RecordingLogger();
+            var service = new PostgresPreviewHostedService(Open, "aggregate-once", new WaitingActor(false), Environment.FailFast,
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25) }, log) { AfterNodeStop = () => throw new AggregateException(first, second) };
+            await service.StartAsync(token);
+            try { await service.StopAsync(token); }
+            catch (Exception) when (!token.IsCancellationRequested) { }
+            await service.DisposeAsync();
+            await Task.Delay(200, token);
+            var errors = log.Errors;
+            Require(errors.Count == 2 && errors.Count(error => ReferenceEquals(error, first)) == 1 && errors.Count(error => ReferenceEquals(error, second)) == 1,
+                $"an aggregate shutdown fault logs one Error per distinct inner fault and none for the aggregate ({string.Join(", ", errors.Select(error => error?.Message ?? "?"))})");
+        }
 
         // A StopAsync that joins another caller's stop kills nothing when its own deadline fires: no Warning. A later
         // dispose deadline that does kill the drain logs the one Warning.
