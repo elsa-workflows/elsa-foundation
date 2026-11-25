@@ -34,6 +34,12 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// any of that refuses is not written; its diagnostics are returned for the reconciler to record. Content whose provider key
 /// no compiler owns (such as <c>elsa.clr-activity</c>) keeps the source-owned root compiled by <see cref="ExecutableNodeCompiler"/>.
 /// </para>
+/// <para>
+/// Content that uses other activity versions commits one dependency edge per occurrence with its publication, as a Studio
+/// publication does. Each edge's id derives from the owner version and the occurrence, so every node publishing the same
+/// source content writes the same edges. A dependency that is not published, active and visible refuses the content
+/// through the template compiler's own diagnostics.
+/// </para>
 /// </summary>
 public sealed class SourceOwnedActivityVersionPublisher(
     ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference> commitCommand,
@@ -84,6 +90,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
 
         ExecutableActivityTemplate template;
         ActivityDefinitionVersionPublication publication;
+        IReadOnlyList<ActivityDependencyEdge> dependencyEdges = [];
         if (IsProviderBacked(version))
         {
             var compiled = await CompileProviderBackedAsync(persistedDefinition, version, contract, cancellationToken);
@@ -100,6 +107,7 @@ public sealed class SourceOwnedActivityVersionPublisher(
                 sourceReferenceId,
                 compiled.Compilation.Measurements,
                 now);
+            dependencyEdges = ToDependencyEdges(catalogVersion.TenantId, version.Id, template.TemplateHash, compiled.Compilation.DirectDependencies, now);
         }
         else
         {
@@ -177,7 +185,10 @@ public sealed class SourceOwnedActivityVersionPublisher(
                 publication,
                 layout,
                 template,
-                sourceReference), cancellationToken);
+                sourceReference)
+            {
+                DirectDependencies = dependencyEdges
+            }, cancellationToken);
         }
         catch (ActivityVersionAlreadyPublishedException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -198,9 +209,8 @@ public sealed class SourceOwnedActivityVersionPublisher(
 
     /// <summary>
     /// Validates and compiles provider-backed content through the same verdict as a Studio draft. Content no schema of its
-    /// provider owns is refused by the compiler, never sent down the CLR path. A source-owned publication commits no
-    /// dependency edges, so content that names a dependency is refused. A validator or compiler that throws refuses this
-    /// version only; the reconciliation pass goes on.
+    /// provider owns is refused by the compiler, never sent down the CLR path. A validator or compiler that throws refuses
+    /// this version only; the reconciliation pass goes on.
     /// </summary>
     private async Task<EvaluatedPublicationCandidate> CompileProviderBackedAsync(
         ActivityDefinition definition,
@@ -243,18 +253,6 @@ public sealed class SourceOwnedActivityVersionPublisher(
                 "Check the node log for the failure, correct the source content and reconcile again.");
         }
 
-        if (evaluated.IsPublishable && evaluated.Compilation.DirectDependencies.Count > 0)
-            return evaluated with
-            {
-                IsPublishable = false,
-                Diagnostics = ActivityDiagnosticOrderer.Order(evaluated.Diagnostics.Append(new(
-                    "activity.source.dependencies-unsupported",
-                    ActivityDiagnosticSeverity.Error,
-                    "Source-owned activity content cannot depend on other activity versions.",
-                    subject,
-                    Remediation: "Author content with activity dependencies in Studio, or remove the dependencies from the source.",
-                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal))))
-            };
         // A replaced validator may refuse without saying why; the refusal still names itself, so it is logged and recorded.
         if (!evaluated.IsPublishable && evaluated.Diagnostics.All(x => x.Severity != ActivityDiagnosticSeverity.Error))
             return evaluated with
@@ -269,6 +267,36 @@ public sealed class SourceOwnedActivityVersionPublisher(
             };
         return evaluated;
     }
+
+    /// <summary>
+    /// The dependency edges of a source-owned publication, with the facts a Studio publication records. The id derives
+    /// from the owner version and the occurrence, which identify the edge, so nodes publishing the same content converge.
+    /// </summary>
+    private static ActivityDependencyEdge[] ToDependencyEdges(
+        string? tenantId,
+        string ownerVersionId,
+        string ownerTemplateHash,
+        IReadOnlyList<ActivityResolvedDependency> dependencies,
+        DateTimeOffset now) => dependencies
+        .OrderBy(dependency => dependency.OccurrenceId, StringComparer.Ordinal)
+        .Select(dependency => new ActivityDependencyEdge
+        {
+            Id = StableId("activity-edge", ownerVersionId + "\u001f" + dependency.OccurrenceId),
+            TenantId = tenantId,
+            OwnerVersionId = ownerVersionId,
+            OwnerTemplateHash = ownerTemplateHash,
+            DependencyVersionId = dependency.VersionId,
+            DependencyTemplateHash = dependency.TemplateHash,
+            OccurrenceId = dependency.OccurrenceId,
+            ParentOccurrenceId = dependency.ParentOccurrenceId,
+            ChildSlotName = dependency.ChildSlotName,
+            ChildIndex = dependency.ChildIndex,
+            NodeOrigin = dependency.NodeOrigin.ToArray(),
+            MemberUsage = dependency.MemberUsage.ToArray(),
+            CreatedAt = now,
+            LastModifiedAt = now
+        })
+        .ToArray();
 
     private static EvaluatedPublicationCandidate Refusal(ActivityDiagnosticSubject subject, string code, string message, string remediation) => new(
         new(null, new(0, 0, 0, 0, 0, 0, 0), [], []),

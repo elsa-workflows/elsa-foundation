@@ -384,16 +384,45 @@ public sealed class SourceOwnedActivityVersionPublisherTests
     }
 
     [Fact]
-    public async Task Provider_backed_content_with_activity_dependencies_is_refused()
+    public async Task Provider_backed_content_with_activity_dependencies_publishes_with_its_dependency_edges()
     {
         var command = new RecordingCommand();
         var compiler = new FakeTemplateCompiler { WithDependency = true };
 
         var result = await CreatePublisher(command, templateCompiler: compiler).PublishAsync(Definition(), ProviderVersion("version-1"));
 
-        Assert.False(result.IsPublished);
-        Assert.Equal("activity.source.dependencies-unsupported", Assert.Single(result.Diagnostics).Code);
-        Assert.Empty(command.Commits);
+        Assert.True(result.IsPublished);
+        var commit = Assert.Single(command.Commits);
+        var edge = Assert.Single(commit.DirectDependencies);
+        Assert.Equal("version-1", edge.OwnerVersionId);
+        Assert.Equal(compiler.Template.TemplateHash, edge.OwnerTemplateHash);
+        Assert.Equal("version-2", edge.DependencyVersionId);
+        Assert.Equal("sha256:2", edge.DependencyTemplateHash);
+        Assert.Equal("occurrence-1", edge.OccurrenceId);
+        Assert.Equal(commit.Publication.TenantId, edge.TenantId);
+    }
+
+    [Fact]
+    public async Task Two_publishers_of_the_same_source_content_write_the_same_dependency_edges()
+    {
+        var first = new RecordingCommand();
+        var second = new RecordingCommand();
+
+        await CreatePublisher(first, templateCompiler: new FakeTemplateCompiler { WithDependency = true }).PublishAsync(Definition(), ProviderVersion("version-1"));
+        await CreatePublisher(second, templateCompiler: new FakeTemplateCompiler { WithDependency = true }).PublishAsync(Definition(), ProviderVersion("version-1"));
+
+        Assert.Equal(Assert.Single(Assert.Single(first.Commits).DirectDependencies).Id, Assert.Single(Assert.Single(second.Commits).DirectDependencies).Id);
+    }
+
+    [Fact]
+    public async Task Clr_content_commits_no_dependency_edges()
+    {
+        var command = new RecordingCommand();
+
+        var result = await CreatePublisher(command).PublishAsync(Definition(), Version("version-1", "1.0.0"));
+
+        Assert.True(result.IsPublished);
+        Assert.Empty(Assert.Single(command.Commits).DirectDependencies);
     }
 
     [Fact]
