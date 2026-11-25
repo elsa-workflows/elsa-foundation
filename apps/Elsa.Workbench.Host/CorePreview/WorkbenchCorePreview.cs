@@ -77,9 +77,11 @@ internal static class WorkbenchCorePreview
         if (publications && (nativeJobs || timedJobs))
             throw new InvalidOperationException(
                 "With Elsa:CorePreview:Publications on, the Core Preview runs on the shipped format, which carries Native jobs: leave NativeJobs and TimedNativeJobs off.");
-        // Format 24 runs no schedule actor, timers, self-sends or child workflows yet: serving refuses a Timer, Cron, Delay and
-        // Dispatch Workflow where it maps them, and a burst runs on to its next wait.
-        var capabilities = new KernelHostCapabilities(Schedules: false, Timers: false, Children: false, SelfSends: false);
+        // Format 24 runs no schedule actor, timers or child workflows yet: serving refuses a Timer, Cron, Delay and Dispatch
+        // Workflow where it maps them. Whether the node takes self-sends is the store format's to say; without them a burst
+        // runs on to its next wait.
+        var capabilities = new KernelHostCapabilities(Schedules: false, Timers: false, Children: false,
+            SelfSends: PostgresPreviewHosting.TakesSelfSends(Open));
         var serving = publications ? new KernelServing(CronosCalendar.Error, capabilities) : null;
         if (serving is not null)
         {
@@ -132,8 +134,8 @@ internal static class WorkbenchCorePreview
                 Expressions = expressions,
                 // A Dispatch names a definition; the child starts the version the definition serves.
                 ServedWorkflow = serving is null ? null : serving.ServedWorkflow,
-                // Without self-sends a turn cannot continue in the next: it runs on to its next wait.
-                SplitsBursts = serving is null || serving.Capabilities.SelfSends,
+                // Without self-sends a turn cannot continue in the next: it runs on to its next wait, within its bounds.
+                SelfSends = capabilities.SelfSends,
                 // An instance started on a version no slot serves since the restart runs it from the default shell's artifacts.
                 ResolveWorkflow = serving is null ? null : (workflow, token) => ResolveWorkflowAsync(shells, shellName, workflow, token),
             });

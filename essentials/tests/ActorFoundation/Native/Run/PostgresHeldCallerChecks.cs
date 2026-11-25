@@ -66,11 +66,27 @@ internal static class PostgresHeldCallerChecks
             // More activities than one turn's cap, on a host that does not split a burst.
             .Add(Wf.Workflow("many", Wf.Sequence("main",
                 Wf.ForEach("each", Binding.Literal(new JsonArray([.. Enumerable.Range(0, 1_200).Select(i => (JsonNode?)i)])),
-                    Wf.Set("step", "last", Binding.Literal(1))))));
+                    Wf.Set("step", "last", Binding.Literal(1))))))
+            // A Parallel that one branch completes, cancelling the other branch's running timed job: the root finishes in the
+            // cancelling turn, or in a later one before the job answers.
+            .Add(Wf.Workflow("cancel-finish", Wf.Sequence("main",
+                Wf.Parallel("par", 1, Wf.Sequence("a", Wf.Node<PostgresHeldDirectChecks.ApprovalSignal>("approve")),
+                    Wf.Http("send", "https://partner.example/stuck", timeout: TimeSpan.FromSeconds(60))),
+                Wf.WriteLine("after", "after"))))
+            .Add(Wf.Workflow("cancel-later", Wf.Sequence("main",
+                Wf.Parallel("par", 1, Wf.Sequence("a", Wf.Node<PostgresHeldDirectChecks.ApprovalSignal>("approve")),
+                    Wf.Http("send", "https://partner.example/stuck", timeout: TimeSpan.FromSeconds(60))),
+                Wf.Node<PostgresHeldDirectChecks.ApprovalSignal>("approve-again"),
+                Wf.WriteLine("after", "after"))))
+            // A loop that never waits, on a host without self-sends.
+            .Add(Wf.Workflow("spins", Wf.Sequence("main", Wf.While("forever", Binding.Literal(true), Wf.Set("step", "x", Binding.Literal(1)))), ("x", 0)));
         var routes = new HttpRoutes(registry);
         var partner = new Partner();
+        // The store format says whether the node takes self-sends; format 24 takes none.
+        var selfSends = PostgresPreviewHosting.TakesSelfSends(Open);
+        Require(!selfSends, "the shipped format takes no self-sends, so the model runs a burst in one turn");
         var actor = new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry,
-            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = new HttpClient(partner) }, SplitsBursts = false })]);
+            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = new HttpClient(partner) }, SelfSends = selfSends })]);
         var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, WorkflowActor.WorkflowActor.ActorType,
             PostgresPreviewHosting.CreateRequests(Open, Node, WorkflowActor.WorkflowActor.ActorType), cancellationToken: stop);
         var clock = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
@@ -181,6 +197,40 @@ internal static class PostgresHeldCallerChecks
             Require(await SettledAsync(many) is { Status: InstanceStatus.Finished },
                 "a ForEach over 1,200 items finishes in one burst on a host without self-sends");
 
+            // (i) A Parallel completed by its signal cancels the running timed job and finishes in the same turn: the job is
+            // settled in the Finished commit, and its late input settles nothing.
+            var stoppedBefore = partner.Stopped;
+            var cancelFinish = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("cancel-finish")), "cancel-finish-1",
+                Contract.Kinds.Start, cancellationToken: stop)).Actor!.Value;
+            await SignalAsync(cancelFinish, "approve", "cancel-finish-approve");
+            var finishedImage = await SettledAsync(cancelFinish);
+            await StoppedAsync(stoppedBefore);
+            Require(finishedImage is { Status: InstanceStatus.Finished, Jobs: null } && await PendingAsync(finishedImage!.Actor.Id) == 0,
+                $"a Finished end in the turn that cancels a running timed job settles it, with nothing pending ({finishedImage?.Status}, {await PendingAsync(finishedImage!.Actor.Id)} pending)");
+
+            // (j) The same cancel, then a later turn finishes before the job would answer.
+            stoppedBefore = partner.Stopped;
+            var cancelLater = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("cancel-later")), "cancel-later-1",
+                Contract.Kinds.Start, cancellationToken: stop)).Actor!.Value;
+            await SignalAsync(cancelLater, "approve", "cancel-later-approve");
+            await SignalAsync(cancelLater, "approve-again", "cancel-later-again");
+            var laterImage = await SettledAsync(cancelLater);
+            await StoppedAsync(stoppedBefore);
+            Require(laterImage is { Status: InstanceStatus.Finished, Jobs: null } && await PendingAsync(laterImage!.Actor.Id) == 0,
+                $"a Finished end in a later turn settles the job an earlier turn cancelled, with nothing pending ({laterImage?.Status}, {await PendingAsync(laterImage!.Actor.Id)} pending)");
+
+            // (k) A loop that never waits faults at the burst bound, and the node goes on.
+            var spins = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("spins")), "spins-1", Contract.Kinds.Start,
+                cancellationToken: stop)).Actor!.Value;
+            var spun = await SettledAsync(spins);
+            using (var header = System.Text.Json.JsonDocument.Parse(spun?.TypeData ?? "{}"))
+                Require(spun is { Status: InstanceStatus.Faulted } &&
+                        header.RootElement.TryGetProperty("SubStatus", out var subStatus) && subStatus.GetString() == "native.burst.limit",
+                    $"a loop that never waits faults with native.burst.limit ({spun?.Status}, {spun?.TypeData})");
+            var afterSpin = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("quick")), "quick-2", Contract.Kinds.Start,
+                cancellationToken: stop)).Actor!.Value;
+            Require(await SettledAsync(afterSpin) is { Status: InstanceStatus.Finished }, "the node goes on to finish a later root after the burst fault");
+
             Require(!escalated.Task.IsCompleted && service.LastError is null, "the node ran every case without a fault of its own");
         }
         finally
@@ -220,6 +270,32 @@ internal static class PostgresHeldCallerChecks
                 await Task.Delay(20, stop);
             }
             return await store.ReadFirstRootAsync(scope.Tenant, root.Id, stop);
+        }
+
+        async Task SignalAsync(Contract.ActorRef root, string node, string id)
+        {
+            for (var attempt = 0; ; attempt++)
+            {
+                if (await store.ReadFirstRootAsync(scope.Tenant, root.Id, stop) is { Status: InstanceStatus.Running, State: { } state } &&
+                    Json.Read<NativeState>(state).Frames.Values.FirstOrDefault(f => f.Node == node) is { } frame)
+                {
+                    var sent = await foundation.SendAsync(scope, new Contract.Target.Ref(root), id, CompositeSignal.Kind,
+                        Json.Write(new CompositeSignal(frame.Id, "approve", "Ada")), cancellationToken: stop);
+                    if (sent.Outcome != Contract.AdmissionOutcome.Accepted) throw new InvalidOperationException($"The signal to '{node}' was {sent.Outcome}.");
+                    return;
+                }
+                if (attempt == 250) throw new InvalidOperationException($"'{node}' never waited.");
+                await Task.Delay(20, stop);
+            }
+        }
+
+        async Task StoppedAsync(int before)
+        {
+            for (var attempt = 0; partner.Stopped == before; attempt++)
+            {
+                if (attempt == 250) throw new InvalidOperationException("The cancelled job was not stopped.");
+                await Task.Delay(20, stop);
+            }
         }
 
         async Task<EfStore.RootImage> RunningAsync(Contract.ActorRef root)

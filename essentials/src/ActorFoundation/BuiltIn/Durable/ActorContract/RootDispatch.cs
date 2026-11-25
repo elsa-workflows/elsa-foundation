@@ -264,9 +264,10 @@ internal sealed partial class ActorAdapter
             if (outcome.Sent.Count != 0 && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, ended.Id, ended.Model)) outcome.Sent.Clear();
             if (outcome.Sent.Count == 0) outcome.Row = ended with { Jobs = null, NextJobGeneration = previous?.NextJobGeneration ?? 0 };
         }
-        // A Terminate, or a Faulted end, settles the root's outstanding timed jobs in its terminal commit: its cascade names
-        // only jobs and ends in one page, and the store removes the jobs' ticket and deadline rows there.
-        var settlesJobs = (terminated || faulted) && rootTimedJobSettlement && previous is { Jobs: not null } &&
+        // A Terminate, or any end of the model's own, settles the root's outstanding timed jobs in its terminal commit: its
+        // cascade names only jobs and ends in one page, and the store removes the jobs' ticket and deadline rows there.
+        var finished = !outcome.OpensPark && outcome.Row is { Status: Durable.InstanceStatus.Finished };
+        var settlesJobs = (terminated || faulted || finished) && rootTimedJobSettlement && previous is { Jobs: not null } &&
             outcome.Row is { Jobs: null, Cascade: null, Children: null } &&
             outcome.FoundationCascade is { Entries.Children.IsEmpty: true, Entries.Jobs.IsEmpty: false, Input: null } && outcome.Sent.Count == 0;
         if (outcome.Row is not { } next ||

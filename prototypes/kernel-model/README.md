@@ -364,11 +364,12 @@ each with its own slice coming:
 - **No schedule actor, timers, child workflows or self-sends on format 24 yet.** The Workbench says so in its
   `KernelHostCapabilities`, so a publish with a Timer or Cron, a Delay or a Dispatch Workflow is refused where it is
   mapped (`definition_unsupported`), naming the node and what to change. Without self-sends the Native model does not
-  split a burst at the activity cap: it runs on to the next wait, bounded by the state and history size limits
-  (`pg-held-callers` finishes a ForEach over 1,200 items on format 24).
-- **A Faulted end commits on format 24** (profiles 9, 18 and 24): its held callers get the Faulted end, a job issued in
-  the same turn is dropped, and a timed job still outstanding is settled in the Faulted commit. On profiles 2, 6, 10 and
-  17 a Faulted end still stalls the node, as before.
+  split a burst at the activity cap: it runs on to the next wait, bounded by the state and history size limits and by
+  10,000 activities or 5 s, past which the workflow faults with `native.burst.limit` (`pg-held-callers` finishes a ForEach
+  over 1,200 items and faults a `While(true)` on format 24).
+- **A Faulted end commits on format 24** (profiles 9, 18 and 24): its held callers get the Faulted end, and a job issued
+  in the same turn is dropped. A timed job still registered at any end, a cancelled one included, is settled in the
+  terminal commit. On profiles 2, 6, 10 and 17 a Faulted end still stalls the node, as before.
 
 Run `PG_PREVIEW_PROFILE=publications bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release` to check
 that a Workbench with publications on serves its default shell on the kernel.

@@ -9,8 +9,9 @@ namespace Elsa.Workflows.Runtime.KernelHost;
 /// <param name="Timers">Timers, self-sends with a due time, which a Delay waits on.</param>
 /// <param name="Children">Child workflows, which a Dispatch Workflow starts, waited or not.</param>
 /// <param name="SelfSends">
-/// Self-sends, with which a turn that reaches the activity cap continues in the next. Without them a host runs a burst on
-/// to its next wait (<c>NativeExecutionOptions.SplitsBursts</c>), bounded by the state and history size limits.
+/// Self-sends, with which a turn that reaches the activity cap continues in the next. The host sets
+/// <c>NativeExecutionOptions.SelfSends</c> from it: without them the Native model runs a burst on to its next wait, within its
+/// bounds, past which the workflow faults (<c>native.burst.limit</c>).
 /// </param>
 public sealed record KernelHostCapabilities(bool Schedules = true, bool Timers = true, bool Children = true, bool SelfSends = true)
 {
