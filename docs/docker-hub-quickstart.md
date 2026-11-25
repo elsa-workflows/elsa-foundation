@@ -25,6 +25,13 @@ the unpinned `:latest` commands here are not that recorded run.
 > Studio NuGet/npm releases remain manual. There are no `4` / `4.0` / `4.0.0` release tags
 > yet; to pin a version, use a preview or commit tag.
 
+> **Studio flavors.** `elsaworkflows/elsa-studio` publishes the Studio Essentials app, the pair of `elsaworkflows/elsa-essentials-host`
+> ([#5768](https://github.com/elsa-workflows/elsa-foundation/issues/5768)). Against Workbench it shows the screens of the modules
+> it compiles in. The Studio app with every module compiled in publishes as `elsaworkflows/elsa-studio-workbench`, and the bare
+> shell as `elsaworkflows/elsa-studio-foundation`; see [Studio Docker](../Studio/docs/docker.md).
+> The three Studio images take their preview numbers from one shared counter, so one commit usually carries the same
+> preview number in all three.
+
 > **Development posture.** The `docker run` examples below set `ASPNETCORE_ENVIRONMENT=Development`
 > so they can rely on the image's baked-in `shells.json` demo defaults. The canonical published-image
 > stack ([`docker-compose.images.yml`](../docker/compose/docker-compose.images.yml)) runs

@@ -204,8 +204,18 @@ Preview builds (`4.0.0-preview.<n>`) publish to the elsa-4 feedz.io npm feed on 
 
 ## Docker
 
-`Elsa.Studio.Workbench.Host` can be built and run as a container image. Build from the repository root
-(the build context must be the repo root):
+Each Studio app has a Dockerfile, and `.github/workflows/studio-docker.yml` publishes three images to Docker Hub:
+
+| Image | Studio app | Pairs with |
+| --- | --- | --- |
+| `elsaworkflows/elsa-studio` | `Elsa.Studio.Essentials.Host` | `elsaworkflows/elsa-essentials-host` |
+| `elsaworkflows/elsa-studio-workbench` | `Elsa.Studio.Workbench.Host` | `elsaworkflows/elsa-workbench` |
+| `elsaworkflows/elsa-studio-foundation` | `Elsa.Studio.Foundation.Host` | The bare `Elsa.Foundation.Host` |
+
+In the images, an add-on's browser files answer 503 until
+[valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands, so screens of modules installed from
+the feed do not load there yet. Build an image from the repository root (the build context must be the repo root); the
+Essentials and Foundation Dockerfiles sit beside their projects in the same way:
 
 ```bash
 pnpm --dir Studio install --frozen-lockfile
