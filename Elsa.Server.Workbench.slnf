@@ -56,6 +56,7 @@
       "essentials/src/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj",
       "essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj",
       "essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj",
+      "essentials/src/Diagnostics/OpenTelemetry/Workflows/Elsa.Diagnostics.OpenTelemetry.Workflows.csproj",
       "essentials/src/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj",
       "essentials/src/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj",
       "essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj",

@@ -58,10 +58,10 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         new Burst(registry, _options, new ContractTurn(turn, outbound), cancellationToken).RunAsync();
 
     public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
-        ExecuteBackground(registry, job.Actor, job.Arguments, cancellationToken);
+        ExecuteBackground(registry, job.Actor, job.Arguments, cancellationToken, _options.Http);
 
     internal static async ValueTask<object?> ExecuteBackground(WorkflowRegistry registry, Contract.ActorRef actor,
-        string? arguments, CancellationToken cancellationToken)
+        string? arguments, CancellationToken cancellationToken, NativeHttpOptions? http = null)
     {
         var args = JsonSerializer.Deserialize<BackgroundArgs>(arguments!)!;
         var node = registry.Get(args.Workflow).Nodes[args.Node];
@@ -69,7 +69,7 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
         var path = args.IterationPath ?? throw new InvalidOperationException("A background job needs an iteration path.");
         var key = args.EffectKey ?? throw new InvalidOperationException("A background job needs an effect key.");
         var result = await activity.ExecuteAsync(new ActivityContext(actor, args.Frame, node.Id, 0,
-            cancellationToken, path, key));
+            cancellationToken, path, key) { Http = http });
         return new BackgroundResult(result.Kind, result.Result, result.Outcome, result.Fault);
     }
 

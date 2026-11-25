@@ -87,6 +87,32 @@ internal static class ProfileCapabilityChecks
             ["root-park-arrivals"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-recovery"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootOperatorProtocol", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening", "UsesRootParkRecovery"],
         };
+        // S3: each profile's root state family, the prefix bytes written before S3 and the statuses besides Finished that end it.
+        const string family = "!kernel-state/";
+        var families = new Dictionary<string, (string Prefix, bool Cancelled, bool Faulted)>(StringComparer.Ordinal)
+        {
+            ["ordinary"] = (family + "4:public-root:", false, false),
+            ["root-self"] = (family + "4:public-root:", false, false),
+            ["root-timers"] = (family + "4:public-root:", false, false),
+            ["root-operators"] = (family + "4:public-root:", false, false),
+            ["root-jobs"] = (family + "4:public-root:", false, false),
+            ["root-timed-job-issuance"] = (family + "4:public-root:", false, false),
+            ["root-values"] = (family + "5:public-root-values:", false, false),
+            ["root-timed-job-settlement"] = (family + "6:public-root-timed-jobs:", false, true),
+            ["root-replies"] = (family + "7:public-root-replies:", false, false),
+            ["root-terminations"] = (family + "11:public-root-termination:", true, false),
+            ["root-stable-body"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-terminal-selection"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-retirement"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-terminate-then-delete"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-retention"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-operator-replies"] = (family + "12:public-root-stable-body:", true, false),
+            ["root-timed-job-preview"] = (family + "6:public-root-timed-jobs:", false, true),
+            ["root-park-opening"] = (family + "4:public-root:", false, false),
+            ["root-park-inspection"] = (family + "4:public-root:", false, false),
+            ["root-park-arrivals"] = (family + "4:public-root:", false, false),
+            ["root-park-recovery"] = (family + "4:public-root:", false, false),
+        };
         var flags = typeof(KernelDb).GetProperties(BindingFlags.Instance | BindingFlags.NonPublic)
             .Where(p => p.PropertyType == typeof(bool) && (p.Name.StartsWith("Uses", StringComparison.Ordinal) ||
                 p.Name.StartsWith("Supports", StringComparison.Ordinal) || p.Name.StartsWith("Requires", StringComparison.Ordinal)))
@@ -113,6 +139,9 @@ internal static class ProfileCapabilityChecks
             Check(Equals(marker, format.MessageProtocol), $"{name} model seeds marker protocol {format.MessageProtocol}");
             Check(db.UsesRootTimers == (format == StoreFormat.RootTimers), $"{name} timer selection matches its format");
             Check(set.SequenceEqual(accessors[name]), $"{name} turns on exactly [{string.Join(",", accessors[name])}]");
+            var (prefix, cancelled, faulted) = families[name];
+            Check(db.RootStateFamily == new RootStateFamily(prefix, cancelled, faulted),
+                $"{name} keeps state family {prefix} (Cancelled ends={cancelled}, Faulted ends={faulted})");
             var factory = db.GetService<IModelCacheKeyFactory>();
             Check(factory is KernelModelCacheKeyFactory, $"{name} resolves the kernel model cache key factory");
             var key = factory.Create(db, designTime: false);
@@ -122,9 +151,68 @@ internal static class ProfileCapabilityChecks
         }
         Check(RootProfiles.Formats.Count == profiles.Length, $"the mapping has {profiles.Length} formats, one per factory");
         Check(accessors.Count == profiles.Length, $"every profile has its expected accessors");
+        Check(families.Count == profiles.Length, "every profile has its expected state family");
         var mapped = RootProfiles.Formats.Values.Aggregate(RootCapabilities.None, (all, next) => all | next);
         foreach (var capability in Enum.GetValues<RootCapabilities>().Where(c => c != RootCapabilities.None))
             Check(mapped.HasFlag(capability), $"capability {capability} is carried by at least one format");
+        // S3 r2: every shipped set is closed under the prerequisite map, and each prerequisite is one that every shipped
+        // carrier of its capability holds.
+        foreach (var (name, _, format, _) in profiles)
+            Check(RootProfiles.MissingPrerequisites(RootProfiles.Formats[format]) == RootCapabilities.None,
+                $"{name} is closed under the prerequisite map");
+        foreach (var (capability, needs) in RootProfiles.Prerequisites)
+            Check(needs != RootCapabilities.None && (needs & capability) == 0 &&
+                RootProfiles.Formats.Values.Where(set => set.HasFlag(capability)).All(set => set.HasFlag(needs)),
+                $"{capability} needs {needs}, which every shipped set with {capability} carries");
+        // The edge set itself is pinned, so dropping or widening one prerequisite fails here even when every shipped set stays closed.
+        var expectedEdges = new Dictionary<RootCapabilities, RootCapabilities>
+        {
+            [RootCapabilities.Timers] = RootCapabilities.SelfProtocol,
+            [RootCapabilities.Termination] = RootCapabilities.OperatorProtocol,
+            [RootCapabilities.StableBody] = RootCapabilities.Termination,
+            [RootCapabilities.TerminalSelection] = RootCapabilities.StableBody,
+            [RootCapabilities.Retirement] = RootCapabilities.TerminalSelection,
+            [RootCapabilities.TerminateThenDelete] = RootCapabilities.Retirement,
+            [RootCapabilities.Retention] = RootCapabilities.TerminateThenDelete,
+            [RootCapabilities.OperatorReplies] = RootCapabilities.TerminalSelection,
+            [RootCapabilities.JobPreview] = RootCapabilities.JobProtocol,
+            [RootCapabilities.TimedJobIssuance] = RootCapabilities.JobProtocol,
+            [RootCapabilities.TimedJobSettlement] = RootCapabilities.JobProtocol,
+            [RootCapabilities.TimedJobPreview] = RootCapabilities.TimedJobSettlement,
+            [RootCapabilities.ParkInspection] = RootCapabilities.ParkOpening,
+            [RootCapabilities.ParkArrivals] = RootCapabilities.ParkInspection,
+            [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol
+        };
+        Check(RootProfiles.Prerequisites.Count == expectedEdges.Count &&
+            expectedEdges.All(edge => RootProfiles.Prerequisites.TryGetValue(edge.Key, out var needs) && needs == edge.Value),
+            $"the prerequisite map is exactly the {expectedEdges.Count} pinned edges");
+        // An unshipped composition must be closed: stable body without termination would write a shipped prefix over the wire layout.
+        var unshipped = StoreFormat.Current with { MessageProtocol = 96 };
+        foreach (var (composition, missing) in new (RootCapabilities Set, RootCapabilities Missing)[]
+                 {
+                     (RootCapabilities.StableBody, RootCapabilities.Termination),
+                     (RootCapabilities.StableBody | RootCapabilities.Termination, RootCapabilities.OperatorProtocol),
+                     (RootCapabilities.ParkInspection, RootCapabilities.ParkOpening),
+                     (RootCapabilities.TimedJobPreview | RootCapabilities.JobProtocol, RootCapabilities.TimedJobSettlement),
+                     (RootProfiles.Formats[StoreFormat.RootStableBody] | RootCapabilities.OperatorReplies, RootCapabilities.TerminalSelection)
+                 })
+        {
+            try
+            {
+                KernelDb.ForUnshippedComposition(options, unshipped, composition).Dispose();
+                Check(false, $"an unclosed composition {composition} was refused");
+            }
+            catch (ArgumentException error) when (error is not ArgumentOutOfRangeException)
+            {
+                Check(RootProfiles.MissingPrerequisites(composition) == missing && error.Message.Contains(missing.ToString(), StringComparison.Ordinal),
+                    $"an unclosed composition {composition} is refused for lacking {missing}");
+            }
+        }
+        using (var closed = KernelDb.ForUnshippedComposition(options, unshipped,
+                   RootProfiles.Formats[StoreFormat.RootTerminalSelection] | RootProfiles.Formats[StoreFormat.RootTimedJobPreview] |
+                   RootCapabilities.ReplyProtocol | RootCapabilities.OperatorReplies))
+            Check(closed.RootStateFamily.Prefix == "!kernel-state/13:public-root-composed:timed-jobs+stable-body+replies:",
+                "a closed composition with held operator replies and no retention is accepted");
         for (var i = 0; i < keys.Count; i++)
             for (var j = i + 1; j < keys.Count; j++)
                 if (Equals(keys[i].Key, keys[j].Key)) Check(false, $"{keys[i].Name} and {keys[j].Name} share a model cache key");

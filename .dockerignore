@@ -51,6 +51,7 @@ tools/
 # Nuplane reconciliation state and directory-feed contents
 **/.nuplane/
 apps/Elsa.Workbench.Host/packages/
+apps/Elsa.Essentials.Host/packages/
 # Extension Builder runtime workspace (lowercase; source lives in extensions/ExtensionBuilder/)
 apps/Elsa.Workbench.Host/extension-builder/
 # GitHubCopilotAgent working directory (config.json is regenerated / supplied via mount)

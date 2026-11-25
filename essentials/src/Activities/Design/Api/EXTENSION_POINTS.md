@@ -107,13 +107,17 @@ Provider-owned, bounded outgoing serialized metadata for admitted source contrac
 and `DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity, ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken)`
 both return `ValueTask<ActivitySerializedShape?>`. Resource/catalog/disclosure authorization remains with
 the caller. Null declines ownership; a matching opaque/missing contract returns Unknown/Unavailable;
-multiple matching owners are refused. Providers must not instantiate business values, getters,
+multiple matching owners are refused. `DescribeDeclaredTypeAsync` may return `Declared`: advisory members of
+the declared type that the stored value does not prove. Consumers treat `Declared` as Unknown unless they offer
+authoring help; the Activity Data analyzer returns it only to a query with `IncludeDeclaredMembers`. Providers must not instantiate business values, getters,
 attributes/converters or install Runtime aliases to discover fields.
 
 `ClrActivitySerializedShapeSource`, registered scoped by CLR reconciliation with `TryAddEnumerable`, is
-the shipped implementation *(cross-domain — CLR reconciliation)*. It binds exact metadata assets and
+the shipped implementation *(cross-domain — CLR reconciliation)*. It binds exact metadata assets (declared-type
+shapes, which are advisory, identify assemblies by module version id instead of file hashes) and
 the unchanged activity-value profile independently of old catalog hashes, includes typed `$result`
-without named Output rows, and reports profile-unbound declared input/variable types honestly. Shared
+without named Output rows, describes a single declared input/variable type's members as advisory
+`Declared` shapes, and reports every other declared type as profile-unbound. Shared
 Workflows Design analysis consumes these facts in API and endpoint-free hosts.
 
 ### Mandatory shared draft analysis

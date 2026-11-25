@@ -47,7 +47,7 @@ internal static class ContractNativeChecks
                 Wf.Call("lookup", "pricing"),
                 Wf.Dispatch("child", "nested", wait: true),
                 Wf.Event("signal", "approval"),
-                Wf.Http("send", "https://partner.invalid/notify"))));
+                TestWf.Post("send", "https://partner.invalid/notify"))));
         var sent = new List<NativeOutbound>();
         var model = new NativeExecutionModel(registry, outbound: sent.Add);
         var reference = (await runtime.StartAsync(scope, "start-native", NativeExecutionModel.Start("main", mode))).Actor!.Value;

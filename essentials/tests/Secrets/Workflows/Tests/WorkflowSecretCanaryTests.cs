@@ -6,7 +6,7 @@ using Elsa.Secrets.Workflows.Tests.Support;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.ExecutionEvidence.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
-using Elsa.Workflows.Runtime.Diagnostics;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

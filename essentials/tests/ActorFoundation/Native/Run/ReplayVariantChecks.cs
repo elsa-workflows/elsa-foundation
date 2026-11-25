@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using static Kernel.Native.Binding;
 using static Kernel.Native.Wf;
+using static Kernel.Native.TestWf;
 
 namespace Kernel.Native.Run;
 
@@ -19,7 +20,7 @@ public static class ReplayVariantChecks
                     Parallel("par", null,
                         Sequence("b1", Event("e1", "v-1"),
                             ForEach("each", Expr("[1, 2]"), Sequence("fb", Set("z", "j", 0),
-                                While("loop", Expr("j < 2"), Sequence("body", Set("inc", "j", Expr("j + 1")), Http("h", "https://partner.example/n", Expr("'i=' + CurrentIndex + ',j=' + j"))))))),
+                                While("loop", Expr("j < 2"), Sequence("body", Set("inc", "j", Expr("j + 1")), Post("h", "https://partner.example/n", Expr("'i=' + CurrentIndex + ',j=' + j"))))))),
                         Sequence("b2", Event("e2", "v-2"), Set("t1", "tag", 1), Set("t2", "tag", 2), Set("t3", "tag", 3))),
                     Set("out", "output", "done")),
                 ("j", 0), ("tag", 0), ("output", null)), ["v-1"], ["v-2"], ["v-1", "v-2"], expectA: 4, expectB: 4);
@@ -27,7 +28,7 @@ public static class ReplayVariantChecks
             // V2 ForEach over a collection a sibling changes (owner: same logical activation, same key, first content wins).
             await Shape(mode, "V2 ForEach over a changing collection", Workflow("v", Sequence("root",
                     Parallel("par", null,
-                        Sequence("b1", Event("e1", "v-1"), ForEach("each", Expr("items"), Http("h", "https://partner.example/n", Expr("'v=' + CurrentItem")))),
+                        Sequence("b1", Event("e1", "v-1"), ForEach("each", Expr("items"), Post("h", "https://partner.example/n", Expr("'v=' + CurrentItem")))),
                         Sequence("b2", Event("e2", "v-2"), Set("grow", "items", Expr("[9, 8, 7]")))),
                     Set("out", "output", "done")),
                 ("items", new JsonArray(1, 2)), ("output", null)), ["v-1"], ["v-2"], ["v-2", "v-1"], expectA: 2, expectB: 3, contentMayDiffer: true);
@@ -35,7 +36,7 @@ public static class ReplayVariantChecks
             // V3 While whose condition reads data a sibling event sets.
             await Shape(mode, "V3 While reading event data", Workflow("v", Sequence("root",
                     Parallel("par", null,
-                        Sequence("b1", Event("e1", "v-1"), While("loop", Expr("i < n"), Sequence("body", Set("inc", "i", Expr("i + 1")), Http("h", "https://partner.example/n", Expr("'i=' + i"))))),
+                        Sequence("b1", Event("e1", "v-1"), While("loop", Expr("i < n"), Sequence("body", Set("inc", "i", Expr("i + 1")), Post("h", "https://partner.example/n", Expr("'i=' + i"))))),
                         Sequence("b2", Event("e2", "v-2"), Set("n3", "n", 3))),
                     Set("out", "output", "done")),
                 ("i", 0), ("n", 1), ("output", null)), ["v-1"], ["v-2"], ["v-2", "v-1"], expectA: 1, expectB: 3);
@@ -44,7 +45,7 @@ public static class ReplayVariantChecks
             await Shape(mode, "V4 merge inside a loop", Workflow("v", Sequence("root",
                     Parallel("par", null,
                         Sequence("b1", Event("e1", "v-1"), Flowchart("flow",
-                            [Set("head", "round", Expr("round + 1")), Set("pa", "src", "a"), Set("pb", "src", "b"), WriteLine("m", "merged"), Http("h", "https://partner.example/m", Expr("'r=' + round")), If("decide", Expr("round < 2")), Set("end", "done", "yes")],
+                            [Set("head", "round", Expr("round + 1")), Set("pa", "src", "a"), Set("pb", "src", "b"), WriteLine("m", "merged"), Post("h", "https://partner.example/m", Expr("'r=' + round")), If("decide", Expr("round < 2")), Set("end", "done", "yes")],
                             [new("head", "pa"), new("head", "pb"), new("pa", "m"), new("pb", "m"), new("m", "h"), new("h", "decide"), new("decide", "head", "True"), new("decide", "end", "False")],
                             ("m", Gateway.Merge))),
                         Sequence("b2", Event("e2", "v-2"), Set("t1", "tag", 1), Set("t2", "tag", 2))),
@@ -54,7 +55,7 @@ public static class ReplayVariantChecks
             // V5 a join after a merge, both inbounds forward of the merge: does the join fire per token, and with what key behind it?
             await Shape(mode, "V5 join after a merge (both inbounds from the merge)", Workflow("v", Sequence("root",
                     Flowchart("flow",
-                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), Set("px", "src", "x"), Set("pz", "src", "z"), WriteLine("j", "joined"), Http("h", "https://partner.example/j", "token")],
+                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), Set("px", "src", "x"), Set("pz", "src", "z"), WriteLine("j", "joined"), Post("h", "https://partner.example/j", "token")],
                         [new("s0", "ea"), new("s0", "eb"), new("ea", "m"), new("eb", "m"), new("m", "px"), new("m", "pz"), new("px", "j"), new("pz", "j"), new("j", "h")],
                         ("m", Gateway.Merge), ("j", Gateway.ParallelJoin)),
                     Set("out", "output", "done")),
@@ -63,7 +64,7 @@ public static class ReplayVariantChecks
             // V6 a join after a merge with one inbound from the merge and one from outside it.
             await Shape(mode, "V6 join after a merge (one inbound from the merge, one from outside)", Workflow("v", Sequence("root",
                     Flowchart("flow",
-                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), Set("px", "src", "x"), Set("y", "src", "y"), WriteLine("j", "joined"), Http("h", "https://partner.example/j", "token")],
+                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), Set("px", "src", "x"), Set("y", "src", "y"), WriteLine("j", "joined"), Post("h", "https://partner.example/j", "token")],
                         [new("s0", "ea"), new("s0", "eb"), new("s0", "y"), new("ea", "m"), new("eb", "m"), new("m", "px"), new("px", "j"), new("y", "j"), new("j", "h")],
                         ("m", Gateway.Merge), ("j", Gateway.ParallelJoin)),
                     Set("out", "output", "done")),
@@ -72,8 +73,8 @@ public static class ReplayVariantChecks
             // V7 a loop in a branch released by a timer beside a loop released by an event (Ephemeral short waits included).
             await Shape(mode, "V7 timer loop beside event loop", Workflow("v", Sequence("root",
                     Parallel("par", null,
-                        Sequence("b1", Event("e1", "v-1"), While("l1", Expr("i < 2"), Sequence("body1", Set("inc1", "i", Expr("i + 1")), Http("h1", "https://partner.example/a", Expr("'i=' + i"))))),
-                        Sequence("b2", Delay("d", 30), While("l2", Expr("k < 2"), Sequence("body2", Set("inc2", "k", Expr("k + 1")), Http("h2", "https://partner.example/b", Expr("'k=' + k")))))),
+                        Sequence("b1", Event("e1", "v-1"), While("l1", Expr("i < 2"), Sequence("body1", Set("inc1", "i", Expr("i + 1")), Post("h1", "https://partner.example/a", Expr("'i=' + i"))))),
+                        Sequence("b2", Delay("d", 30), While("l2", Expr("k < 2"), Sequence("body2", Set("inc2", "k", Expr("k + 1")), Post("h2", "https://partner.example/b", Expr("'k=' + k")))))),
                     Set("out", "output", "done")),
                 ("i", 0), ("k", 0), ("output", null)), ["v-1"], [], ["v-1"], expectA: 4, expectB: 4);
         }

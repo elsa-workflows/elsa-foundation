@@ -113,7 +113,7 @@ internal static class MigrationPlanRunnerChecks
         }
         check((await customDriver.ReadOutcomesAsync()) is { Closed: true, Results.Count: 1 } custom &&
             custom.Results.GetValueOrDefault(collidingModel) == MigrationPlanOutcome.Migrated &&
-            (await reads.GetAsync(scope, collidingModel))?.Header.Labels.GetValueOrDefault("version") == "0",
+            StateVersion((await reads.GetAsync(scope, collidingModel))?.Header) == 0,
             "automatic selection includes a registered model with stored state version zero");
 
         var closing = await StartPlan(service, "close-after-birth", "absent");
@@ -242,7 +242,7 @@ internal static class MigrationPlanRunnerChecks
         await Pump(successor);
         var after = foundation.ReadCheckpoint(scope.Tenant, actor.Id)!.State;
         var ended = (await reads.GetAsync(scope, actor))!.Header;
-        check(header.Labels.GetValueOrDefault("version") == "1" && ended.Labels.GetValueOrDefault("version") == "2" &&
+        check(StateVersion(header) == 1 && StateVersion(ended) == 2 &&
             ended.Status == Contract.ActorStatus.Cancelled && Json.Read<V1PendingPlan>(before).Pending == 1 &&
             !after.Contains("\"Model\"", StringComparison.Ordinal) &&
             Encoding.UTF8.GetByteCount(after) - Encoding.UTF8.GetByteCount(before) == reserved && reserved == 2,
@@ -335,4 +335,8 @@ internal static class MigrationPlanRunnerChecks
         public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
             CancellationToken cancellationToken = default) => inner.SetStartAsync(scope, key, wait, spec, cancellationToken);
     }
+
+    // The workflow actor keeps an instance's state version in its type data.
+    private static int? StateVersion(Contract.ActorHeader? header) =>
+        header is null ? null : System.Text.Json.Nodes.JsonNode.Parse(header.TypeData)?["Version"]?.GetValue<int?>();
 }

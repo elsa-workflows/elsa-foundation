@@ -27,6 +27,7 @@ using Elsa.Weaver.Workflows;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Attention.Api;
+using Elsa.Attention.Core;
 using Elsa.Caching.Memory;
 using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
@@ -87,6 +88,7 @@ using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Tracing;
+using Microsoft.Extensions.Configuration.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using MinimalEndpoints;
@@ -105,6 +107,13 @@ var bootStopwatch = Stopwatch.StartNew();
 ConsoleLogStreamingSetup.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
+// Eager shell activation is off on this host unless configuration turns it on: the post-listen default-shell warmup under
+// Elsa:Readiness prepares the default shell instead. Elsa.Foundation.Hosting defaults it on, so the default sits here, below
+// every other source, so a deployment that replaces appsettings.json keeps it off.
+builder.Configuration.Sources.Insert(0, new MemoryConfigurationSource
+{
+    InitialData = [new KeyValuePair<string, string?>("Elsa:Boot:EagerShellActivation:Enabled", "false")]
+});
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
 // Environment overlay (e.g. shells.Production.json), layered on top of the dev/demo defaults in shells.json.
 // This keeps `git clone && dotnet run` (Development) working out of the box on ephemeral identity keys, committed
@@ -118,23 +127,7 @@ builder.Configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}
 builder.Configuration
     .AddEnvironmentVariables()
     .AddCommandLine(args);
-// Experimental retained-artifact proof (#2072). The opt-in lane opens and verifies the declared
-// source bytes before any explicit Elsa root registration. The normal Workbench lane stays live.
-WorkbenchStartupArtifactContext? startupArtifact = null;
-if (Environment.GetEnvironmentVariable("ELSA_WORKBENCH_STARTUP_ARTIFACT_PROBE") == "1")
-{
-    if (!WorkbenchStartupArtifactContext.TryCapture(builder.Environment.ContentRootPath, builder.Environment.EnvironmentName,
-            args, out startupArtifact, out var refusalCode))
-    {
-        Console.Error.WriteLine(refusalCode);
-        Environment.ExitCode = 1;
-        return;
-    }
-
-    builder.Services.AddSingleton(startupArtifact!);
-}
-
-var configuration = startupArtifact?.Configuration ?? builder.Configuration;
+var configuration = builder.Configuration;
 builder.Services.AddWorkbenchCorePreview(configuration);
 
 // OpenIddict's protocol behavior is composed by the shell feature, but its vendor EF token store is host-owned: one store on the
@@ -221,14 +214,15 @@ var extensionBuilderEnabled = ExtensionBuilderServiceCollectionExtensions.IsEnab
 if (extensionBuilderEnabled)
     builder.Services.AddElsaExtensionBuilder(configuration);
 
+// Nuplane's feeds and assembly loading come from Elsa.Foundation.Hosting. The reload profile stays this host's own: a
+// reconcile refreshes the feature catalog, and shells switch at the next explicit reload unless
+// Elsa:Shells:ReloadOnPackageChange is on.
 builder.AddNuplaneHostIntegration(configuration);
 builder.Services.ConfigureOptions<NuplaneIntegrationOptionsSetup>();
-// Nuplane registers its trigger ingress, reconcile coordinator and admin operations by type or by factory, so every shell
-// container CShells builds from copies of these registrations would hold second instances of them, and a reconcile enqueued
-// on a shell's copy of the queue is read by no dispatcher (#2159). Shells, among them the shell-scoped package catalog
-// contributor, resolve the host's own instead.
+// Nuplane registers its reconcile coordinator and admin operations by type or by factory, so every shell container CShells
+// builds from copies of these registrations would hold second instances of them (#2159). Shells resolve the host's own
+// instead. AddFoundationShellHosting below shares the trigger ingress with CShells' ShareSingletonWithShells for the same reason.
 builder.Services
-    .ShareWithShells<IReconciliationTriggerIngress>()
     .ShareWithShells<ManualReconcileCoordinator>()
     .ShareWithShells<INuplaneAdminOperations>();
 // This host explicitly enrolls the shared EF resource preparers. Without a selected resource,
@@ -256,14 +250,16 @@ builder.Services.AddDynamicEndpointApiExplorerRefresh();
 // activation: the generic host runs them for the host container alone, and CShells runs none (#2331).
 builder.Services.AddShellStartupValidation();
 
-builder.Services.AddCShellsAspNetCore(shells =>
+// Elsa.Foundation.Hosting composes CShells with Nuplane feature discovery, this host's configuration as the blueprint source,
+// the shared activation runner and the optional eager activation (Elsa:Boot:EagerShellActivation:Enabled, off in this host's
+// appsettings.json). The tracker records the eager run's failed attempts for the Attention item below.
+var shellActivation = builder.AddFoundationShellHosting(shells =>
 {
     shells
         .WithHostAssemblies()
         .WithAssemblies(
             typeof(ActivitiesHttpFeature).Assembly,
             typeof(WorkflowsRuntimeHttpFeature).Assembly)
-        .WithNuplaneFeatureDiscovery()
 
         // Delegates authentication-scheme and authorization-policy resolution to the shell scope at
         // request time, so each shell's Identity composition (schemes, permission policies) is honored
@@ -441,9 +437,10 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(OpenTelemetryFeature).Assembly,
 
             // Engine self-instrumentation: puts the WorkflowsRuntimeTracing feature in the catalog so it can be
-            // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The host-local
-            // OpenTelemetryEngineTracingBridge feature (below, in WithHostAssemblies) subscribes that source and forwards
-            // the spans into the OpenTelemetry ingestion store so Studio's timing view is populated.
+            // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The
+            // DiagnosticsOpenTelemetryEngineBridge feature (Elsa.Diagnostics.OpenTelemetry.Workflows, a project reference
+            // WithHostAssemblies() discovers) subscribes that source and forwards the spans into the OpenTelemetry
+            // ingestion store so Studio's timing view is populated.
             typeof(WorkflowsRuntimeTracingFeature).Assembly,
 
             // Test-host execution evidence: puts the WorkflowsExecutionEvidence feature in the catalog so an automated
@@ -451,7 +448,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(WorkflowsExecutionEvidenceFeature).Assembly
         )
 
-        .WithConfigurationProvider(configuration)
         .WithWebRouting(options =>
         {
             options.EnablePathRouting = true;
@@ -464,18 +460,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
         .ConfigureAllShells(shell => new WorkbenchEfToolingShellDefaults().Configure(shell, configuration));
 });
 
-// Shared root-only execution for the independent eager and post-listen warmup profiles.
-builder.Services.AddShellActivationRunner();
-
-// Opt-in eager shell activation. Default OFF. When
-// Elsa:Boot:EagerShellActivation:Enabled is set, a host-level IHostedService activates the configured shell(s)
-// at boot through the same IShellRegistry.GetOrActivateAsync path the first request would (byte-identical shell
-// state, just earlier), so the activation cliff — and the mid-activation contention tail — is paid before the
-// first user request instead of during it. The trigger lives at the host level because CShells does not run
-// shell-scoped hosted services and the eager trigger must sit outside any shell (it activates the shells).
-// Registered only when the switch is on, so an unset host constructs nothing and pays nothing.
-if (EagerShellActivationOptions.IsEnabled(configuration))
-    builder.Services.AddHostedService<EagerShellActivationHostedService>();
+// Each shell's Attention endpoint lists the shells the eager activation could not activate.
+builder.Services.AddSingleton<IAttentionContributor>(new ShellActivationAttentionContributor(shellActivation));
 
 // Root authentication/authorization services. Registered after AddCShellsAspNetCore so the shell
 // delegating scheme/policy providers (WithAuthenticationAndAuthorization) stay in place — both

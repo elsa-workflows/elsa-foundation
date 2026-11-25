@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using Elsa.Primitives.Models;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Schema;
@@ -172,6 +174,36 @@ public sealed class ActivityDataSelectionContextTests
         var json = JsonSerializer.Serialize(result, ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityDataSelectionContextResponse))!);
         Assert.Contains("\"referenceKey\":\"declared\"", json);
         Assert.DoesNotContain("producerNodeId", json);
+    }
+
+    [Fact]
+    public async Task The_picker_receives_a_declared_input_shape_as_unknown_without_members()
+    {
+        using var fixture = new Fixture(configure: services => services.AddSingleton<IActivitySerializedShapeSource>(new DeclaredShape()));
+        var state = fixture.Store.Draft.State;
+        fixture.Store.Draft.State = state with { Contract = state.Contract with
+        { Inputs = [new("declared", "Declared", new("shop.address"), false, true, null, "elsa.json")] } };
+        var result = await fixture.Service.ResolveAsync(fixture.Request(), default);
+        var shape = Assert.Single(result.Analysis!.Sources).Shape;
+        Assert.Equal(ActivitySerializedShapeState.Unknown, shape.State);
+        Assert.Equal("activity.shape.serialization-profile-unbound", shape.ReasonCode);
+        Assert.Equal(new TypeReference("shop.address"), shape.Type);
+        Assert.Empty(shape.Members);
+    }
+
+    private sealed class DeclaredShape : IActivitySerializedShapeSource
+    {
+        public ValueTask<ActivitySerializedShape?> DescribeResultAsync(IActivityDefinitionVersion admittedVersion, string projectionKey,
+            ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivitySerializedShape?>(null);
+        public ValueTask<ActivitySerializedShape?> DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity,
+            ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivitySerializedShape?>(new(ActivitySerializedShapeState.Declared, ActivitySerializedValueKind.Object,
+                declaredType, ownerContractIdentity, "profile", "metadata")
+            {
+                ReasonCode = "activity.shape.declared-type",
+                Members = [new("city", "City", new(ActivitySerializedShapeState.Known, ActivitySerializedValueKind.Scalar, new("String"), ownerContractIdentity, "profile", "metadata"))]
+            });
     }
 
     /// <summary>

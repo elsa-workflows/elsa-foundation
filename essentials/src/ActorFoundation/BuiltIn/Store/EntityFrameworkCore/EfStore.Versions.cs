@@ -128,6 +128,81 @@ internal static class RootProfiles
 
     internal static RootCapabilities CapabilitiesOf(StoreFormat format) =>
         Formats.TryGetValue(format, out var capabilities) ? capabilities : throw new ArgumentOutOfRangeException(nameof(format), format, "No kernel store profile has this format.");
+
+    // What each capability needs, as the shipped chains carry it. Every shipped set is closed under this map
+    // (profile-capabilities checks it), and an unshipped composition must be closed too.
+    internal static IReadOnlyDictionary<RootCapabilities, RootCapabilities> Prerequisites { get; } = new Dictionary<RootCapabilities, RootCapabilities>
+    {
+        [RootCapabilities.Timers] = RootCapabilities.SelfProtocol,
+        [RootCapabilities.Termination] = RootCapabilities.OperatorProtocol,
+        [RootCapabilities.StableBody] = RootCapabilities.Termination,
+        [RootCapabilities.TerminalSelection] = RootCapabilities.StableBody,
+        [RootCapabilities.Retirement] = RootCapabilities.TerminalSelection,
+        [RootCapabilities.TerminateThenDelete] = RootCapabilities.Retirement,
+        [RootCapabilities.Retention] = RootCapabilities.TerminateThenDelete,
+        // A held reply needs a selected command. Admission also refuses a held Delete without retirement and a held
+        // retention delete, so the shipped Retention chain beneath format 17 is not a prerequisite.
+        [RootCapabilities.OperatorReplies] = RootCapabilities.TerminalSelection,
+        [RootCapabilities.JobPreview] = RootCapabilities.JobProtocol,
+        [RootCapabilities.TimedJobIssuance] = RootCapabilities.JobProtocol,
+        [RootCapabilities.TimedJobSettlement] = RootCapabilities.JobProtocol,
+        [RootCapabilities.TimedJobPreview] = RootCapabilities.TimedJobSettlement,
+        [RootCapabilities.ParkInspection] = RootCapabilities.ParkOpening,
+        [RootCapabilities.ParkArrivals] = RootCapabilities.ParkInspection,
+        [RootCapabilities.ParkRecovery] = RootCapabilities.ParkArrivals | RootCapabilities.OperatorProtocol
+    };
+
+    // The prerequisites of the set's members that the set lacks. None means the set is closed.
+    internal static RootCapabilities MissingPrerequisites(RootCapabilities capabilities) => Prerequisites
+        .Where(entry => (capabilities & entry.Key) != 0)
+        .Aggregate(RootCapabilities.None, (missing, entry) => missing | (entry.Value & ~capabilities));
+}
+
+// The state family of a capability set: the prefix its qualified root writers put before each checkpoint state, which
+// its reads require, and the statuses besides Finished that end a root of the family. Termination ends Cancelled
+// roots and timed-job settlement ends Faulted ones. A set with at most one family capability keeps that family's
+// shipped prefix bytes. A set with several writes one composed prefix that names each, so it carries all their
+// terminal statuses and no shipped reader accepts it.
+internal sealed record RootStateFamily(string Prefix, bool EndsCancelled, bool EndsFaulted)
+{
+    internal const string Public = StoredState.Family + "4:public-root:";
+    internal const string Values = StoredState.Family + "5:public-root-values:";
+    internal const string TimedJobs = StoredState.Family + "6:public-root-timed-jobs:";
+    internal const string Replies = StoredState.Family + "7:public-root-replies:";
+    internal const string Termination = StoredState.Family + "11:public-root-termination:";
+    internal const string StableBody = StoredState.Family + "12:public-root-stable-body:";
+    internal const string Composed = StoredState.Family + "13:public-root-composed:";
+
+    internal static RootStateFamily Of(RootCapabilities capabilities)
+    {
+        bool Has(RootCapabilities capability) => (capabilities & capability) != 0;
+        var stableBody = Has(RootCapabilities.StableBody);
+        // The order is the shipped selection order: the first present family won when a set could carry only one.
+        (RootCapabilities Capability, string Prefix, string Name)[] families =
+        [
+            (RootCapabilities.ValueProtocol, Values, "values"),
+            (RootCapabilities.TimedJobSettlement, TimedJobs, "timed-jobs"),
+            (RootCapabilities.Termination, stableBody ? StableBody : Termination, stableBody ? "stable-body" : "termination"),
+            (RootCapabilities.ReplyProtocol, Replies, "replies")
+        ];
+        var present = families.Where(family => Has(family.Capability)).ToArray();
+        var prefix = present switch
+        {
+            [] => Public,
+            [var only] => only.Prefix,
+            _ => Composed + string.Join("+", present.Select(family => family.Name)) + ":"
+        };
+        return new(prefix, Has(RootCapabilities.Termination), Has(RootCapabilities.TimedJobSettlement));
+    }
+
+    // Whether a non-running status ends a root of this family. A Cancelled or Faulted row also needs the family's prefix.
+    internal bool Ends(InstanceStatus status) => status switch
+    {
+        InstanceStatus.Finished => true,
+        InstanceStatus.Cancelled => EndsCancelled,
+        InstanceStatus.Faulted => EndsFaulted,
+        _ => false
+    };
 }
 
 // EF caches one model per key. Profiles seed different markers, so the key carries the format and the capabilities.

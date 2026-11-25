@@ -35,6 +35,8 @@ internal interface INativeTurn
     void Emit(string channel, object? item);
     void Record(string entry);
     void SetStatus(Contract.ActorStatus status, string? subStatus, JsonNode? output);
+    /// <summary>One of the instance's own labels (Set Correlation Id, Set Instance Name); null removes it.</summary>
+    void SetLabel(string name, string? value);
     string EffectKey(string node, string iteration, int attempt);
     void ExternalAttempt(string frame, string node, int attempt, bool mayHaveRun);
     void SendOutbound(string frame, string node, string iteration, int attempt, string key, OutboundEffect effect);
