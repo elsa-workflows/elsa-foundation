@@ -97,8 +97,8 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
    generated setters and member changes convert (specs 1231 and 1241); see the Elsa 3 mapping README. A script that
    sets one of the reusable workflow's inputs, which Elsa 3 held as a local variable, is refused (`VF-IMP-005`): declare
    a variable, initialize it from the input, and set that variable. Where a variable and an input share a name (Elsa 3
-   declared the input as a variable too), a script that sets any variable is refused (`VF-IMP-002`): rename one of the
-   two. No input expression or Liquid assigns a value, and
+   declared the input as a variable too), a script that uses that name, or calls `setVariable`, is refused
+   (`VF-IMP-002`): rename one of the two. No input expression or Liquid assigns a value, and
    no script sets the running workflow's state (`setOutput`, `setInput`, `setResult`, `setCorrelationId`,
    `setWorkflowInstanceName`, Liquid `assign`): that is refused in a reusable workflow (`VF-IMP-005`), and the Set,
    Correlate or Set Name activity its guidance points to is not available in a reusable body yet.

@@ -562,6 +562,9 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("Amount", "function pay(x) { x.Status = 'Paid'; } pay(getVariable('amount')); return 1;")]
     [InlineData("amount", "const k = 'am' + 'ount'; setVariable(k, 5); return 1;")]
     [InlineData("Amount", "setVariable('Total', 1); return 1;")]
+    [InlineData("AMOUNT", "const o = getAMOUNT(); o.x = 1; return 1;")]
+    [InlineData("AMOUNT", "function pay(x) { x.Status = 'Paid'; } pay(getAMOUNT()); return 1;")]
+    [InlineData("Amount", "return getVariable('amount');")]
     public async Task A_reusable_variable_named_like_an_input_in_another_letter_case_is_ambiguous(string input, string source)
     {
         // Names compare as the converter resolves variables and inputs, without regard to letter case, whichever write form
@@ -576,12 +579,14 @@ public sealed class Elsa3VariableWriteConversionTests
         Assert.Equal(Elsa3ImportDiagnosticCodes.AmbiguousReference, Assert.Single(result.Diagnostics, item => item.IsError).Code);
     }
 
-    [Fact]
-    public async Task A_reusable_script_that_only_reads_a_shared_name_still_converts()
+    [Theory]
+    [InlineData("return getTotal() + 1;")]
+    [InlineData("setTotal(5); return 1;")]
+    public async Task A_reusable_script_that_does_not_use_a_shared_name_converts_in_a_workflow_that_has_one(string source)
     {
-        // The refusal is for scripts that may write variables; a read keeps the converter's existing resolution.
-        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("return getVariable('amount');"))));
-        var definition = ConversionServices.Definition(root, variables: [new Elsa3Variable { Id = "amount-id", Name = "amount", TypeName = "Object" }]);
+        // FR-010a refuses what could reach the shared name; a read or a generated setter of another variable cannot.
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        var definition = ConversionServices.Definition(root, variables: [Total, new Elsa3Variable { Id = "amount-id", Name = "amount", TypeName = "Object" }]);
         definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" }];
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);

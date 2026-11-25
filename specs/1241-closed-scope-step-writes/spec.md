@@ -191,10 +191,11 @@ A team migrating from Elsa 3 imports reusable workflows whose scripts set their 
 - **FR-010**: The Elsa 3 converter MUST convert script writes to a reusable workflow's declared variables as it does in
   a non-reusable workflow.
 - **FR-010a**: Where a variable and an input of a reusable workflow share a name (compared without regard to letter
-  case), the converter MUST refuse every script of that workflow that may write variables, as ambiguous (`VF-IMP-002`):
-  Elsa 3 declared the input as a variable too, so a write could reach either. A script that only reads converts.
-  *(Added 2026-11-25 during review: a literal, computed, aliased or helper write to the shared name would otherwise
-  convert to one of the two silently.)*
+  case), the converter MUST refuse, as ambiguous (`VF-IMP-002`), a script of that workflow that uses the name in any form
+  or that may write variables in a way the converter does not tie to one name (`setVariable`, a computed name, dynamic
+  code): Elsa 3 declared the input as a variable too, so the script could reach either. A script that uses only other
+  names converts. *(Added 2026-11-25 during review: a literal, computed, aliased or helper write to the shared name would
+  otherwise convert to one of the two silently.)*
 - **FR-011**: The Elsa 3 converter MUST refuse a script write to a reusable workflow's input, with guidance to declare a
   variable initialized from the input and write that variable. A write whose name is computed resolves when the script
   runs, so a computed name that only an input has faults the step, as an undeclared name does.
