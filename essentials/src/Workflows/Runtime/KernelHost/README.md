@@ -65,10 +65,17 @@ Each is refused with the node and input named, and the refusal says what to chan
 - Activations, deactivations and serving checks run one at a time on a host, so each one checks its routes and
   schedules against the serving set it changes.
 - A Dispatch reaches the workflow its definition's `default` slot serves. When no `default` slot serves the definition,
-  it reaches the one slot that does. When several other slots do, it reaches none: the child starts the id itself when
-  the registry holds that workflow, and otherwise the Dispatch faults with `dispatch.unpublished` ("Definition '…' is
-  not published on this host") before a child is minted. A Dispatch never loads a stored artifact through
-  `ResolveWorkflow`, which serves turns and jobs of instances that exist.
+  it reaches the one slot that does. The host's answer is read once per child start, and that answer both checks and
+  starts the child. A Dispatch faults before a child is minted when:
+  - several other slots serve the definition and none is `default` (`dispatch.ambiguous`, "Definition '…' is published
+    in several channels and none is 'default'. Publish it to the default channel.");
+  - no slot serves it and the registry holds no workflow of that id (`dispatch.unpublished`, "Dispatch Workflow names
+    definition '…', which is not published on this host. Publish it, then run the workflow again.").
+
+  A Dispatch never loads a stored artifact through `ResolveWorkflow`, which serves turns and jobs of instances that
+  exist.
+- The old core refuses to publish a workflow whose Dispatch names a definition that is not published. A kernel host
+  publishes it, and the Dispatch faults when it runs (the owner's choice).
 - When a host starts, `ServeActiveSlotsAsync` finds the definitions with activations from the live activation source
   references, and their slots from the slot authority. It serves each active slot as `EnsureServingAsync` does. A host
   runs it before its node runs a turn, so a due turn of an instance in flight finds its workflow served.

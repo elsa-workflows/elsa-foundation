@@ -195,7 +195,7 @@ public sealed class KernelCoordinatorTests
         Assert.True(host.Serving.Registry.Contains("ticks@1"));
         Assert.Equal("orders", host.Serving.Registry.Get("orders@1").Definition);
         Assert.True(host.Serving.Routes.TryStart("POST", "orders", out var route) && route == ("orders@1", "in"));
-        Assert.Equal("orders@1", host.Serving.ServedWorkflow("orders"));
+        Assert.Equal("orders@1", host.Serving.ServedWorkflow("orders").Workflow);
         Assert.Equal(
             ["register schedule-start:ticks:tick ticks@1", $"set schedule:ticks:tick {timer.Slot.Revision} interval:PT1M"],
             host.Schedules.Calls);
@@ -315,7 +315,7 @@ public sealed class KernelCoordinatorTests
         Assert.Equal(WorkflowActivationOutcome.Deactivated, orders.Outcome);
         Assert.False(host.Serving.Routes.TryStart("POST", "orders", out _));
         Assert.Empty(host.Serving.Slots);
-        Assert.Null(host.Serving.ServedWorkflow("orders"));
+        Assert.Null(host.Serving.ServedWorkflow("orders").Workflow);
         Assert.True(host.Serving.Registry.Contains("ticks@1"));
     }
 
@@ -333,7 +333,7 @@ public sealed class KernelCoordinatorTests
         Assert.Contains("unavailable", failed.Diagnostic, StringComparison.Ordinal);
         // The slot names the activation it served before, and so does this host.
         Assert.Equal("ticks-1", failed.Slot.ActiveActivationId);
-        Assert.Equal("ticks@1", host.Serving.ServedWorkflow("ticks"));
+        Assert.Equal("ticks@1", host.Serving.ServedWorkflow("ticks").Workflow);
         Assert.Equal("ticks@1", host.Schedules.Runs["schedule-start:ticks:tick"]!.Workflow);
         Assert.Equal(WorkflowActivationProjectionState.Active, await host.RecurringSchedules.FindActivationStateAsync("ticks-1"));
         Assert.NotEqual(WorkflowActivationProjectionState.Active, await host.RecurringSchedules.FindActivationStateAsync("ticks-2"));
@@ -390,10 +390,23 @@ public sealed class KernelCoordinatorTests
         await host.ActivateAsync(Orders("orders@2"), "orders-2");
         await host.ActivateAsync(ExecutableOf("orders-preview@1", "orders", HttpWorkflow("orders-preview", "preview")), "orders-preview", slot: "preview");
 
-        Assert.Equal("orders@2", host.Serving.ServedWorkflow("orders"));
-        Assert.Null(host.Serving.ServedWorkflow("unknown"));
+        Assert.Equal("orders@2", host.Serving.ServedWorkflow("orders").Workflow);
+        Assert.Null(host.Serving.ServedWorkflow("unknown").Workflow);
         var options = new Native.NativeExecutionOptions { ServedWorkflow = host.Serving.ServedWorkflow };
-        Assert.Equal("orders@2", options.ServedWorkflow!("orders"));
+        Assert.Equal("orders@2", options.ServedWorkflow!("orders").Workflow);
+    }
+
+    [Fact]
+    public async Task A_definition_served_in_several_channels_without_a_default_serves_several()
+    {
+        var host = new Host();
+        await host.ActivateAsync(ExecutableOf("reports-a@1", "reports", HttpWorkflow("reports-a", "a")), "reports-a", slot: "a");
+        Assert.Equal("reports-a@1", host.Serving.ServedWorkflow("reports").Workflow);
+
+        await host.ActivateAsync(ExecutableOf("reports-b@1", "reports", HttpWorkflow("reports-b", "b")), "reports-b", slot: "b");
+
+        Assert.Equal(Native.ServedDefinition.SeveralServe, host.Serving.ServedWorkflow("reports"));
+        Assert.Equal(Native.ServedDefinition.None, host.Serving.ServedWorkflow("unknown"));
     }
 
     [Fact]
@@ -495,7 +508,7 @@ public sealed class KernelCoordinatorTests
         Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.TriggerObserverNotification), (failed.Outcome, failed.FailedStep));
         Assert.Equal("orders-1", failed.Slot.ActiveActivationId);
         Assert.True(host.Serving.Routes.TryStart("POST", "orders", out var route) && route == ("orders@1", "in"));
-        Assert.Equal("orders@1", host.Serving.ServedWorkflow("orders"));
+        Assert.Equal("orders@1", host.Serving.ServedWorkflow("orders").Workflow);
     }
 
     [Fact]
@@ -509,7 +522,7 @@ public sealed class KernelCoordinatorTests
 
         Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.TriggerObserverNotification), (failed.Outcome, failed.FailedStep));
         Assert.Equal("ticks-1", failed.Slot.ActiveActivationId);
-        Assert.Equal("ticks@1", host.Serving.ServedWorkflow("ticks"));
+        Assert.Equal("ticks@1", host.Serving.ServedWorkflow("ticks").Workflow);
         Assert.Equal("ticks@1", host.Schedules.Runs["schedule-start:ticks:tick"]!.Workflow);
     }
 
@@ -541,7 +554,7 @@ public sealed class KernelCoordinatorTests
         Assert.Equal(reason, timer.Diagnostic);
         Assert.Null(timer.Slot.ActiveActivationId);
         Assert.Null(await host.ReferenceAsync("ticks-1"));
-        Assert.Null(host.Serving.ServedWorkflow("ticks"));
+        Assert.Null(host.Serving.ServedWorkflow("ticks").Workflow);
         Assert.Equal(WorkflowActivationOutcome.Activated, http.Outcome);
         // Unpublishing what serves stops no schedule and unregisters no run, which the stand-in takes without failing.
         Assert.True((await host.DeactivateAsync(Orders("orders@1"))).Succeeded);
@@ -596,7 +609,7 @@ public sealed class KernelCoordinatorTests
         Assert.Equal("second", servedNext.Output?["Result"]?.GetValue<string>());
         // The older version joined the registry, and serves nothing: its definition's route and Dispatch reach the served one.
         Assert.True(host.Serving.Registry.Contains("waits@1"));
-        Assert.Equal("waits@2", host.Serving.ServedWorkflow("waits"));
+        Assert.Equal("waits@2", host.Serving.ServedWorkflow("waits").Workflow);
     }
 
     [Fact]

@@ -71,14 +71,20 @@ public class NativeExecutionOptions
     public INativeExpressions? Expressions { get; init; }
 
     /// <summary>
-    /// The workflow a Dispatch Workflow starts, by the id it names. A designer's Dispatch names a definition, and a publishing
-    /// host serves each definition as one artifact at a time, so the host resolves the definition to the workflow id it serves
-    /// now; null when the id names no served definition. Consulted when the child starts. When it returns null, the child
-    /// starts the workflow the id names if the registry holds it, and otherwise the Dispatch faults
-    /// (<c>dispatch.unpublished</c>); without it, the child starts the workflow the id names. It is read inside the turn, so
-    /// a turn that runs again after a lost commit may start a version published in between.
+    /// What a publishing host serves for the id a Dispatch Workflow names. A designer's Dispatch names a definition, and a
+    /// publishing host serves each definition as one artifact at a time, so it answers with the workflow id it serves now,
+    /// with none, or with several (<see cref="ServedDefinition"/>). It is read once per child start, and that one answer
+    /// decides the start:
+    /// <list type="bullet">
+    /// <item>one workflow: the child starts it;</item>
+    /// <item>several, none of them the default: the Dispatch faults with <c>dispatch.ambiguous</c>;</item>
+    /// <item>none: the child starts the workflow the id names if the registry holds it, and otherwise the Dispatch faults
+    /// with <c>dispatch.unpublished</c>. A child start never goes through <see cref="ResolveWorkflow"/>.</item>
+    /// </list>
+    /// Without it, the child starts the workflow the id names. It is read inside the turn, so a turn that runs again after a
+    /// lost commit may start a version published in between.
     /// </summary>
-    public Func<string, string?>? ServedWorkflow { get; init; }
+    public Func<string, ServedDefinition>? ServedWorkflow { get; init; }
 
     /// <summary>
     /// The workflow for an id the registry does not hold, which the host loads (null when it has none). A publishing host's
@@ -88,6 +94,22 @@ public class NativeExecutionOptions
     /// through it (<see cref="ServedWorkflow"/>).
     /// </summary>
     public Func<string, CancellationToken, ValueTask<Workflow?>>? ResolveWorkflow { get; init; }
+}
+
+/// <summary>What a publishing host serves for a definition (<see cref="NativeExecutionOptions.ServedWorkflow"/>): one workflow, none, or several.</summary>
+public readonly record struct ServedDefinition
+{
+    private ServedDefinition(string? workflow, bool several) => (Workflow, Several) = (workflow, several);
+
+    /// <summary>The workflow that serves the definition, when one does.</summary>
+    public string? Workflow { get; }
+
+    /// <summary>Whether several serve it and none is the one a Dispatch reaches first.</summary>
+    public bool Several { get; }
+
+    public static ServedDefinition None => default;
+    public static ServedDefinition SeveralServe => new(null, true);
+    public static ServedDefinition By(string workflow) => new(workflow ?? throw new ArgumentNullException(nameof(workflow)), false);
 }
 
 // ---- the state: live frames, scheduled work, waits, variables, results ---------------------------------------------
@@ -492,18 +514,20 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
 
     private void Apply(Frame frame, Transition t)
     {
-        if (Unpublished(t) is { } missing)
+        // Each child the transition starts, read off the host once: that answer both checks the start and makes it.
+        var children = ChildTargets(t, out var refused);
+        if (refused is not null)
         {
-            Fail(frame, new ActivityFault(UnpublishedFaultCode, $"Definition '{missing}' is not published on this host."));
+            Fail(frame, refused);
             return;
         }
         if (t.Kind == TransitionKind.Complete && t.Effects?.OfType<ExitEffect>().FirstOrDefault() is { } exit)
         {
-            foreach (var effect in t.Effects) if (effect is not ExitEffect) Do(frame, effect);
+            foreach (var effect in t.Effects) if (effect is not ExitEffect) Do(frame, effect, children);
             Exit(frame, exit);
             return;
         }
-        foreach (var effect in t.Effects ?? []) Do(frame, effect);
+        foreach (var effect in t.Effects ?? []) Do(frame, effect, children);
         switch (t.Kind)
         {
             case TransitionKind.Complete: Complete(frame, t.Outcome, t.Result); break;
@@ -512,13 +536,13 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case TransitionKind.Suspend:
                 frame.State = t.State;
                 _s.Frames[frame.Id] = frame;
-                foreach (var trigger in t.Triggers ?? []) Register(frame, trigger);
+                foreach (var trigger in t.Triggers ?? []) Register(frame, trigger, children);
                 break;
         }
     }
 
     // Every leak of the activity map ends here: each trigger and effect is one kernel call, made by the model.
-    private void Register(Frame frame, Trigger trigger)
+    private void Register(Frame frame, Trigger trigger, IReadOnlyDictionary<string, string>? children)
     {
         var id = NewId("w");
         switch (trigger)
@@ -547,30 +571,54 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                     { Due = turn.SavesWaitRecipes ? dueAt : null };
                 break;
             case ChildTrigger c:
-                var child = turn.StartChild(frame.Id, Served(c.Workflow), c.Mode, c.Input as JsonObject);
+                var child = turn.StartChild(frame.Id, children![c.Workflow], c.Mode, c.Input as JsonObject);
                 _s.Waits[id] = child;
                 turn.Record($"s:{frame.Id}:{child.Key}");
                 break;
         }
     }
 
-    // A Dispatch names a definition or a workflow; the host says which workflow serves a definition (NativeExecutionOptions.ServedWorkflow).
-    private string Served(string workflow) => options.ServedWorkflow?.Invoke(workflow) ?? workflow;
-
     internal const string UnpublishedFaultCode = "dispatch.unpublished";
+    internal const string AmbiguousFaultCode = "dispatch.ambiguous";
 
     /// <summary>
-    /// On a publishing host (one with <see cref="NativeExecutionOptions.ServedWorkflow"/>), the first Dispatch of
-    /// <paramref name="t"/> that names neither a definition the host serves nor a workflow its registry holds. That Dispatch
-    /// faults before a child is minted, so a child starts only on what the host serves or holds, and
-    /// <see cref="NativeExecutionOptions.ResolveWorkflow"/> never loads another of the host's stored artifacts for it.
+    /// The workflow each child start of <paramref name="t"/> starts, by the id its Dispatch names. A Dispatch names a
+    /// definition or a workflow, and the host says which workflow serves a definition (<see cref="NativeExecutionOptions.ServedWorkflow"/>),
+    /// read once per id here. On a publishing host, a Dispatch the host serves nothing for, and whose id the registry does not
+    /// hold, is refused with the fault returned, as is one several serve; nothing starts then.
     /// </summary>
-    private string? Unpublished(Transition t)
+    private Dictionary<string, string>? ChildTargets(Transition t, out ActivityFault? refused)
     {
-        if (options.ServedWorkflow is not { } served) return null;
-        return (t.Triggers ?? []).OfType<ChildTrigger>().Select(child => child.Workflow)
-            .Concat((t.Effects ?? []).OfType<DispatchEffect>().Select(dispatch => dispatch.Workflow))
-            .FirstOrDefault(workflow => served(workflow) is null && !registry.Contains(workflow));
+        refused = null;
+        Dictionary<string, string>? targets = null;
+        var named = (t.Triggers ?? []).OfType<ChildTrigger>().Select(child => child.Workflow)
+            .Concat((t.Effects ?? []).OfType<DispatchEffect>().Select(dispatch => dispatch.Workflow));
+        foreach (var id in named)
+        {
+            targets ??= new(StringComparer.Ordinal);
+            if (targets.ContainsKey(id)) continue;
+            if (options.ServedWorkflow is not { } served)
+            {
+                targets[id] = id;
+                continue;
+            }
+            var answer = served(id);
+            if (answer.Workflow is { } workflow) targets[id] = workflow;
+            else if (answer.Several)
+            {
+                refused = new ActivityFault(AmbiguousFaultCode,
+                    $"Definition '{id}' is published in several channels and none is 'default'. Publish it to the default channel.");
+                return null;
+            }
+            else if (registry.Contains(id)) targets[id] = id;
+            else
+            {
+                refused = new ActivityFault(UnpublishedFaultCode,
+                    $"Dispatch Workflow names definition '{id}', which is not published on this host. Publish it, then run the workflow again.");
+                return null;
+            }
+        }
+        return targets;
     }
 
     private void Unregister(string id, WaitEntry wait, bool cancel)
@@ -586,7 +634,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         }
     }
 
-    private void Do(Frame frame, Effect effect)
+    private void Do(Frame frame, Effect effect, IReadOnlyDictionary<string, string>? children)
     {
         switch (effect)
         {
@@ -596,7 +644,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case DispatchEffect d:
             {
                 // A detached start (friction F-N5, fixed in the merge): no parent, and minted here, so no read.
-                var child = turn.StartDetached(Served(d.Workflow), d.Mode, d.Input as JsonObject);
+                var child = turn.StartDetached(children![d.Workflow], d.Mode, d.Input as JsonObject);
                 turn.Record($"d:{frame.Id}:{child.Id}");
                 break;
             }

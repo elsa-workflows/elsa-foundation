@@ -55,13 +55,16 @@ public sealed class KernelServing
     public KernelServedSlot? Find(string slotId) => _state.Slots.GetValueOrDefault(slotId);
 
     /// <summary>
-    /// The workflow that serves a definition now, for a Dispatch that names it (<see cref="NativeExecutionOptions.ServedWorkflow"/>):
-    /// its default slot's, else the one slot's that serves it; null when no slot, or several others, serve it.
+    /// What serves a definition now, for a Dispatch that names it (<see cref="NativeExecutionOptions.ServedWorkflow"/>): its
+    /// default slot's workflow, else the one slot's that serves it; none when no slot serves it; several when other slots do
+    /// and none is the default.
     /// </summary>
-    public string? ServedWorkflow(string definition)
+    public ServedDefinition ServedWorkflow(string definition)
     {
         var serving = _state.Slots.Values.Where(slot => slot.DefinitionId == definition).ToArray();
-        return (serving.FirstOrDefault(slot => slot.SlotName == DefaultSlotName) ?? (serving.Length == 1 ? serving[0] : null))?.Workflow.Id;
+        if (serving.Length == 0) return ServedDefinition.None;
+        var reached = serving.FirstOrDefault(slot => slot.SlotName == DefaultSlotName) ?? (serving.Length == 1 ? serving[0] : null);
+        return reached is null ? ServedDefinition.SeveralServe : ServedDefinition.By(reached.Workflow.Id);
     }
 
     /// <summary>Runs one coordinator's change to what serves: its check, its slot move and its serving, while no other runs.</summary>
