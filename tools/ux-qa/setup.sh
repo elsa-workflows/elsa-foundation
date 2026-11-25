@@ -36,7 +36,7 @@ record() { printf '%s=%s\n' "$1" "$2" >> "$state/env"; }
 find_studio() {
   local candidate
   for candidate in "${STUDIO_DIR:-}" "$root/Studio"; do
-    if [ -n "$candidate" ] && [ -f "$candidate/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" ]; then
+    if [ -n "$candidate" ] && [ -f "$candidate/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj" ]; then
       (cd "$candidate" && pwd)
       return 0
     fi
@@ -121,7 +121,7 @@ step studio-build
   || { tail -40 "$logs/studio-build.log" >&2; false; }
 
 step studio-host-build
-dotnet build "$studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" -v:q -nologo > "$logs/studio-host-build.log" 2>&1 \
+dotnet build "$studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj" -v:q -nologo > "$logs/studio-host-build.log" 2>&1 \
   || { tail -40 "$logs/studio-host-build.log" >&2; false; }
 
 step browser-install
@@ -139,7 +139,7 @@ record WORKBENCH_PID "$workbench_pid"
 wait_for "Workbench" workbench_ready "$workbench_pid"
 
 step studio-start
-Studio__BackendBaseUrl="$workbench_url" dotnet run --no-build --project "$studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" \
+Studio__BackendBaseUrl="$workbench_url" dotnet run --no-build --project "$studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj" \
   --launch-profile http > "$logs/studio.log" 2>&1 &
 studio_pid=$!
 record STUDIO_PID "$studio_pid"

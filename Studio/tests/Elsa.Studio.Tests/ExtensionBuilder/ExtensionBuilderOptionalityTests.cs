@@ -12,7 +12,7 @@ using Elsa.Studio.Api.Models;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.Core.Models;
 using Elsa.Studio.ExtensionBuilder;
-using Elsa.Studio.Web;
+using Elsa.Studio.Workbench;
 using Elsa.Studio.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -166,7 +166,7 @@ public sealed class ExtensionBuilderOptionalityTests : IAsyncLifetime
 
     private static string[] ReadDefaultShellFeatures()
     {
-        // Elsa.Studio.Web copies its shells.json to the output directory, so the test reads the shipped composition.
+        // Elsa.Studio.Workbench.Host copies its shells.json to the output directory, so the test reads the shipped composition.
         using var document = JsonDocument.Parse(File.ReadAllText(Path.Join(AppContext.BaseDirectory, "shells.json")));
         return document.RootElement
             .GetProperty("CShells").GetProperty("Shells").GetProperty("Default").GetProperty("Features")

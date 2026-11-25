@@ -43,7 +43,7 @@
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Backends\Elsa.Studio.Backends.csproj" />
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Dashboard\Elsa.Studio.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\extensions\Samples.WeatherForecast\studio\Elsa.Studio.Samples.WeatherForecast\Elsa.Studio.Samples.WeatherForecast.csproj" />
-    <ProjectReference Include="..\..\src\apps\Elsa.Studio.Web\Elsa.Studio.Web.csproj" />
+    <ProjectReference Include="..\..\src\apps\Elsa.Studio.Workbench.Host\Elsa.Studio.Workbench.Host.csproj" />
     <ProjectReference Include="../../../tools/studio/HostingReuse.Probe/Fixtures/First/First.csproj" />
     <ProjectReference Include="../../../tools/studio/HostingReuse.Probe/Fixtures/Second/Second.csproj" />
   </ItemGroup>
@@ -58,9 +58,9 @@
 
   <ItemGroup>
     <!-- The Web host's real shell configuration, read by WebHostShellFeatureDiscoveryTests. -->
-    <None Include="..\..\src\apps\Elsa.Studio.Web\shells.json" Link="WebHost\shells.json" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../../src/apps/Elsa.Studio.Web/appsettings.json" Link="WebHost/appsettings.json" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../../src/apps/Elsa.Studio.Web/nuplane-management.json" Link="WebHost/nuplane-management.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\apps\Elsa.Studio.Workbench.Host\shells.json" Link="WebHost\shells.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/apps/Elsa.Studio.Workbench.Host/appsettings.json" Link="WebHost/appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/apps/Elsa.Studio.Workbench.Host/nuplane-management.json" Link="WebHost/nuplane-management.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/essentials/Elsa.Studio.Api/obj/$(Configuration)/net10.0/elsa-package.json" Link="WebHost/api-elsa-package.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

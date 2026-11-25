@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 
 # =============================================================================
-# Elsa.Studio.Web production image
+# Elsa.Studio.Workbench.Host production image
 #
 # Build context MUST be the Elsa Foundation repository root so the Studio host can
 # consume its co-located optional modules. Example:
 #
-#   docker build -f Studio/src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+#   docker build -f Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local .
 #
 # The frontend (React/Vite) assets are generated before this Docker build (by CI or
 # by running `pnpm build` locally) under each project's wwwroot. No MSBuild target
@@ -69,11 +69,11 @@ RUN test -f Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/index.html
 # tolerating a restore-only warning that appears in a clean environment: a transitive
 # preview dependency (ConsoleLogStreaming.AspNetCore preview.13) is no longer on the
 # feed and NuGet resolves the newer stable version instead.
-RUN dotnet restore Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
+RUN dotnet restore Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj \
         --configfile Studio/NuGet.config \
         -p:WarningsNotAsErrors=NU1603 \
         -p:Version=$STUDIO_VERSION
-RUN dotnet publish Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
+RUN dotnet publish Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj \
         -c Release \
         --no-restore \
         -p:WarningsNotAsErrors=NU1603 \
@@ -99,4 +99,4 @@ RUN mkdir -p /app/packages && chown -R $APP_UID:$APP_UID /app
 # Run as the non-root user provided by the base image.
 USER $APP_UID
 
-ENTRYPOINT ["dotnet", "Elsa.Studio.Web.dll"]
+ENTRYPOINT ["dotnet", "Elsa.Studio.Workbench.Host.dll"]

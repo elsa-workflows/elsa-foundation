@@ -2,7 +2,7 @@ using Elsa.Studio.Api.Authorization;
 using Elsa.Studio.Backends;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.ConsoleStream.Extensions;
-using Elsa.Studio.Web;
+using Elsa.Studio.Workbench;
 using Elsa.Studio.Hosting;
 using Elsa.Studio.Hosting.Themes;
 using Elsa.Studio.Hosting.Nuplane;

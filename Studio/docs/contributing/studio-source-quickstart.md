@@ -69,7 +69,7 @@ Use these separate browser and backend addresses:
 | Address | Role and source configuration |
 |---|---|
 | `http://localhost:5089` | Open this Studio page in the browser. It is the Studio Web `http` launch profile. The Workbench Development host's default CORS origins include this Studio origin. |
-| `http://localhost:5095` | Foundation Workbench HTTP profile and browser-facing backend API. Set Studio's `Studio:BackendBaseUrl` to this address; Studio's default in `Studio/src/apps/Elsa.Studio.Web/appsettings.json` is `https://localhost:7243`. |
+| `http://localhost:5095` | Foundation Workbench HTTP profile and browser-facing backend API. Set Studio's `Studio:BackendBaseUrl` to this address; Studio's default in `Studio/src/apps/Elsa.Studio.Workbench.Host/appsettings.json` is `https://localhost:7243`. |
 
 Studio exposes `Studio:BackendBaseUrl` to its browser app. Server-side Studio management calls can instead use `Studio:BackendServerBaseUrl` when it is set; otherwise they fall back to `Studio:BackendBaseUrl`. This local pair uses the one browser-facing URL and does not configure the separate server-side override. If you change the Studio origin, the Workbench CORS allowed-origin list must include that exact origin.
 
@@ -80,8 +80,8 @@ cd Studio
 pnpm install --frozen-lockfile
 pnpm build
 cd ..
-dotnet build Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj
-Studio__BackendBaseUrl=http://localhost:5095 dotnet run --no-build --project Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj --launch-profile http
+dotnet build Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj
+Studio__BackendBaseUrl=http://localhost:5095 dotnet run --no-build --project Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj --launch-profile http
 ```
 
 When Studio is listening, `/studio-runtime.js` should include `"backendBaseUrl":"http://localhost:5095"`:
@@ -101,7 +101,7 @@ On Foundation `6adeeaa0aa731b8b62893f23d1d9d8e9519cd2fa` (Linux 6.12.113+ x86_64
 - Workbench locked-mode build completed with 0 errors.
 - `pnpm install --frozen-lockfile` in `Studio/` completed with pnpm `11.9.0` (745 packages added).
 - `pnpm build` in `Studio/` completed.
-- `dotnet build Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj` completed with 0 warnings and 0 errors.
+- `dotnet build Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj` completed with 0 warnings and 0 errors.
 - `GET http://localhost:5095/health/ready` returned `"status":"ready"`.
 - `GET http://localhost:5089/studio-runtime.js` returned `backendBaseUrl` `http://localhost:5095`.
 - CORS preflight and POST from Origin `http://localhost:5089` to Workbench login were allowed (`Access-Control-Allow-Origin: http://localhost:5089`).
@@ -133,7 +133,7 @@ Now change the visible heading in `src/essentials/Elsa.Studio.Dashboard/Client/s
 
 ```bash
 pnpm --filter @elsa-workflows/studio-dashboard build
-dotnet build src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj
+dotnet build src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj
 ```
 
 The Dashboard Vite build writes its module assets under `src/essentials/Elsa.Studio.Dashboard/wwwroot/studio/modules/dashboard`. Rebuilding and restarting is the recorded source-edit path; do not assume hot reload for this asset.

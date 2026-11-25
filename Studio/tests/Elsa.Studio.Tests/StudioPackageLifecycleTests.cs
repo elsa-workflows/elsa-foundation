@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
-using Elsa.Studio.Web;
+using Elsa.Studio.Workbench;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

@@ -254,7 +254,7 @@ public class QualificationFeature : CShells.Features.IShellFeature { public virt
             graph = json.loads((path / "obj/project.assets.json").read_text())
             check({entry["type"] for entry in graph["libraries"].values()} == {"package"}, "Consumer reaches source/project libraries")
             check(len(graph["packageFolders"]) == 1 and Path(next(iter(graph["packageFolders"]))).resolve() == cache.resolve(), "Consumer uses another cache")
-            check(not any(key.startswith(("Nuplane", "Elsa.Studio.Web/")) for key in graph["libraries"]), "Unexpected Web/Nuplane dependency")
+            check(not any(key.startswith(("Nuplane", "Elsa.Studio.Workbench.Host/")) for key in graph["libraries"]), "Unexpected Web/Nuplane dependency")
             check(not any(key.startswith(("Elsa.Studio.Backends/", "Elsa.Studio.Preferences.Core/")) for key in graph["libraries"]), "Base Hosting unexpectedly requires backend management or Preferences")
             for package_id in IDS:
                 library = graph["libraries"].get(package_id + "/" + version)

@@ -23,12 +23,12 @@ flowchart LR
 
 ## Host and shell
 
-[`Elsa.Studio.Web`](../src/apps/Elsa.Studio.Web/Program.cs) is the distribution composition root. It selects
+[`Elsa.Studio.Workbench.Host`](../src/apps/Elsa.Studio.Workbench.Host/Program.cs) is the distribution composition root. It selects
 modules and optional capabilities using the public APIs in [`Elsa.Studio.Hosting`](../src/essentials/Elsa.Studio.Hosting).
 Reusable Hosting code:
 
 - builds the ASP.NET Core host;
-- loads the selected shell from application-owned configuration, such as Web's [`shells.json`](../src/apps/Elsa.Studio.Web/shells.json);
+- loads the selected shell from application-owned configuration, such as the Workbench host's [`shells.json`](../src/apps/Elsa.Studio.Workbench.Host/shells.json);
 - registers CShells and discovers selected feature assemblies;
 - exposes browser runtime configuration at `/studio-runtime.js`;
 - maps core Studio APIs, active-shell APIs, CShell endpoints and static assets; and
@@ -113,6 +113,6 @@ See [ADR 0004](adr/0004-keep-dashboard-and-diagnostics-as-separate-slots.md) for
 ## Where to go next
 
 - To build or extend a module, start with the [SDK contract](../src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts) and a representative module close to the required shape.
-- To change shell composition or package loading, start with [`Program.cs`](../src/apps/Elsa.Studio.Web/Program.cs), [`shells.json`](../src/apps/Elsa.Studio.Web/shells.json), and [`loader.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/loader.ts).
+- To change shell composition or package loading, start with [`Program.cs`](../src/apps/Elsa.Studio.Workbench.Host/Program.cs), [`shells.json`](../src/apps/Elsa.Studio.Workbench.Host/shells.json), and [`loader.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/loader.ts).
 - To change navigation or routes, start with [`registry.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry.ts) and [`App.tsx`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/App.tsx).
 - To change API transport or authentication, start with [`runtime.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/runtime.ts), [`studioAuth.tsx`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/auth/studioAuth.tsx), and [`StudioBridgeAuth.cs`](../src/essentials/Elsa.Studio.Hosting/StudioBridgeAuth.cs).

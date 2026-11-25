@@ -20,7 +20,7 @@ import {
  * every registry is a real registry, `dialogs` is a real dialog controller, and `backend` is
  * a real endpoint context.
  *
- * This mirrors what Elsa.Studio.Web's own host does in `Client/src/app/registry.ts`
+ * This mirrors what Elsa.Studio.Workbench.Host's own host does in `Client/src/app/registry.ts`
  * (`createStudioRegistry`). That host factory is intentionally NOT part of the published SDK
  * surface — assembling the API is the HOST's job — so an external host builds it like this.
  *

@@ -148,9 +148,9 @@ function stubHttp(baseUrl: string, getJson: (url: string) => Promise<unknown>) {
 
 function studioRegistry() {
   return {
-    host: { id: "studio", displayName: "Studio", runtime: "Elsa.Studio.Web", contentRootPath: "/studio" },
+    host: { id: "studio", displayName: "Studio", runtime: "Elsa.Studio.Workbench.Host", contentRootPath: "/studio" },
     generatedAt: new Date().toISOString(),
-    modules: [{ id: "Elsa.Studio.FeatureManagement", displayName: "Feature management", surface: "Studio", runtime: "Elsa.Studio.Web", sourceKind: "static-web-asset", scope: "full-stack", version: "1.0.1", status: "loaded", compatibility: "compatible", packageId: null, packageVersion: null, contributions: [], diagnostics: [], manifest: null }],
+    modules: [{ id: "Elsa.Studio.FeatureManagement", displayName: "Feature management", surface: "Studio", runtime: "Elsa.Studio.Workbench.Host", sourceKind: "static-web-asset", scope: "full-stack", version: "1.0.1", status: "loaded", compatibility: "compatible", packageId: null, packageVersion: null, contributions: [], diagnostics: [], manifest: null }],
     packages: [], dropFolderPackages: [],
     feeds: [{ name: "studio-local-packages", directoryPath: "packages", serviceIndex: null, includeAll: true, includePatterns: ["*"], directory: { watch: true, debounceWindow: "00:00:01" } }],
     retentionPolicy: { retainLastNVersions: 3, retainYoungerThanDays: 30, mode: "Automatic", protectLastKnownGood: true },
