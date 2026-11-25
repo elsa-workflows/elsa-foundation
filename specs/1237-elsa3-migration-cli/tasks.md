@@ -121,8 +121,9 @@
 - [ ] T004b Make the converter carry component names as data (FR-016a). Add a `ComponentName` metadata key to every
   component diagnostic: unmapped activity types, undeclared-function references, unregistered variable
   types and custom storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. Where
-  `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` already carries `ComponentName`, leave it; test that the inventory
-  lists both the custom driver and the memory driver as storage-driver components. Give every call, and every read of an undeclared global used as a value, that the
+  `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` already carries `ComponentName`, leave it; test that both storage-driver
+  diagnostics carry `ComponentName` (the inventory test that lists both drivers as storage-driver components belongs
+  to T019). Give every call, and every read of an undeclared global used as a value, that the
   converter reports as matchable (`CanBeMatched`: an undeclared custom global or a refused built-in a host function may
   take over) a `javascript-function` component code of its own (a new constant, for example
   `ELS3-JS-HOST-FUNCTION-MISSING`, with its code-table entry: kind `javascript-function`, remedy `build-component`, not
