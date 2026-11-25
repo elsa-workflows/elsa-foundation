@@ -282,9 +282,16 @@
   entry uses it, so its unit test builds that rule directly) and the `exception.Message` pass-throughs (`Elsa3ActivityNormalizer`, `Elsa3DefinitionConverter`), the JavaScript and Liquid safe-lowering parse
   messages (`Elsa3ExpressionRewriter`), the variable starting-value messages and the guidance that builds a
   suggestion from the value's items (`Elsa3VariableMapper`), and the `LiteralDateInterpreted` note, which quotes the
-  literal, its interpreted value and the source time-zone setting (`Elsa3LiteralConversion`; its test sets the
-  date-interpretation setting and puts the sentinel in a date literal and in the zone). Give each changed site a unit test whose input carries
-  `SENTINEL-1237` and assert the sentinel is absent from message and guidance; the fixture sentinel test (T029) only
+  literal, its interpreted value and the source time-zone setting (`Elsa3LiteralConversion`), the script text quoted through
+  `Quote(...)` in `Elsa3ExpressionRewriter` (the `toJson` arity refusal and rewrite warning, the zone-dependent date
+  messages and their `{ timeZone: ... }` guidance, and the locale refusal), every other note that names the source
+  time-zone setting (the date-interpretation notes in `Elsa3ValueFlowLowerer` and the starting-values date note in
+  `Elsa3ActivityNormalizer`), and the raw literal text in the Fork branches message (`Elsa3FlowchartGraphBuilder`) and
+  the unreadable outcomes message (`Elsa3TerminalPlacementRewrite`). Give each changed site a unit test whose input carries
+  `SENTINEL-1237` and assert the sentinel is absent from message and guidance. Where the input must be valid to reach
+  the site (a date literal must parse, a time zone must be a known IANA id), use a unique valid value instead, such as
+  `2031-07-13T04:05:06` in `Pacific/Chatham`, and assert that the literal, the interpreted value and the zone id are
+  all absent; the fixture sentinel test (T029) only
   covers the paths the fixture triggers. For codes the
   converter does not own, the report builder uses the code table's fixed text (T004), never the Elsa 4 message. Unit-test
   that path directly: a publish-stage diagnostic with an Elsa 4 code and a sentinel in its message reaches the report

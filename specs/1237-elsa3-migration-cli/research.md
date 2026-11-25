@@ -90,7 +90,11 @@ instead of returning a result, and it is registered only by `Elsa3JsonReconcilia
   (`Elsa3ParallelBranchNamesRewrite.cs`), the HTTP status message of the `EnumNameToInt` value contract quotes the literal
   (`Elsa3ActivityNormalizer.cs`; no built-in map entry uses that contract today), the variable starting-value messages echo the value and one guidance builds a
   suggestion from its items (`Elsa3VariableMapper.cs`), the date-interpretation note quotes the literal, its interpreted value and the
-  source time-zone setting (`Elsa3LiteralConversion.cs`, `LiteralDateInterpreted`), and several sites pass
+  source time-zone setting (`Elsa3LiteralConversion.cs`, `LiteralDateInterpreted`), as do the other date-interpretation
+  notes and guidance (`Elsa3ValueFlowLowerer.cs`, `Elsa3ActivityNormalizer.cs`, `Elsa3ExpressionRewriter.cs`),
+  `Elsa3ExpressionRewriter.cs` quotes up to 160 characters of script through `Quote(...)` in its `toJson`,
+  zone-dependent date and locale messages, the Fork branches and unreadable-outcomes messages quote raw literals
+  (`Elsa3FlowchartGraphBuilder.cs`, `Elsa3TerminalPlacementRewrite.cs`), and several sites pass
   `exception.Message` through
   (`Elsa3ActivityNormalizer.cs`, `Elsa3DefinitionConverter.cs`).
 - Publish refusals come from Elsa 4 (`ExpressionPublicationValidationException`, `WorkflowExecutableCompilationException`,
