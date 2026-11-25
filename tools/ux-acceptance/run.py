@@ -64,6 +64,7 @@ CAPTURES = {
     'repair scoped JavaScript references': ['reference', 'sum-binding-mode', 'sum-fix', 'sum-picker', 'write-line-fix', 'calculator-direct-repair', 'write-line-picker', 'write-line-result-warning', 'write-line-result-fixed', 'calculator-completed'],
     'insert JavaScript activity data': ['reference', 'expression-sources', 'expression-cancelled', 'expression-history', 'expression-expanded', 'expression-escaped-member', 'expression-transformed', 'expression-reopened', 'expression-completed', 'expression-320'],
     'insert Liquid activity data': ['reference', 'expression-sources', 'expression-cancelled', 'expression-history', 'expression-expanded', 'expression-escaped-member', 'expression-transformed', 'expression-reopened', 'expression-completed', 'expression-320'],
+    'complete typed variable members in JavaScript': ['reference', 'typed-compact-completion', 'typed-member-applied', 'typed-member-hover', 'untyped-no-members', 'typed-expanded-completion', 'chooser-typed-variable', 'chooser-typed-variable-whole'],
     'preserve expression data without optional modules': ['reference', 'missing-javascript', 'missing-javascript-reopened', 'missing-liquid', 'missing-liquid-reopened', 'missing-native-control', 'missing-320'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
     # Supplementary journeys (Studio/tests/acceptance/supplements.spec.ts) run once per their own project.
@@ -160,6 +161,7 @@ ADDITIONAL_ARTIFACTS = {
     'production history occurrence and approval qualification': {'history-production-oracle.json'},
     'Double activity output binds to text': {'numeric-binding-proof.json'},
     'set output assigns reusable activity output': {'set-output-proof.json'},
+    'complete typed variable members in JavaScript': {'activity-data-proof.json', 'typed-completion-proof.json'},
     **{journey: {'activity-data-proof.json', 'activity-data-copy-proof.json'} for journey in COPY_JOURNEYS},
     **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS - COPY_JOURNEYS},
     **{journey: {'activity-data-proof.json', 'expression-data-proof.json'} for journey in EXPRESSION_JOURNEYS},

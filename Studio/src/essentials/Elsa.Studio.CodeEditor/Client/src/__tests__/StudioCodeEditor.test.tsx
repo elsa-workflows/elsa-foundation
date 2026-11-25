@@ -1,3 +1,5 @@
+import { acceptCompletion, completionStatus, startCompletion } from "@codemirror/autocomplete";
+import { EditorView } from "@codemirror/view";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -5,6 +7,7 @@ import { StudioCodeEditor } from "../StudioCodeEditor";
 import { CodeMirrorStudioCodeEditor } from "../engines/CodeMirrorStudioCodeEditor";
 import { FallbackCodeEditor } from "../engines/FallbackCodeEditor";
 import { javaScriptLanguageAdapter } from "../languages/javascript";
+import { createStudioCodeToolingProjection } from "../toolingProjection";
 import type { StudioCodeDocument, StudioCodeEditorController, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "../types";
 
 beforeEach(() => {
@@ -441,6 +444,41 @@ describe("StudioCodeEditor", () => {
 
     expect(requestSignal?.aborted).toBe(true);
     expect(container.querySelector(".cm-editor")).toBeNull();
+    unmount();
+  }, 20000);
+
+  it("applies a typed variable's nested member mid-path and replaces only the typed prefix", async () => {
+    const note = "From the declared type `shop.customer`; the stored value may differ.";
+    const getCompletions = vi.fn().mockResolvedValue({
+      state: "ready",
+      data: { items: [{ label: "street", detail: "String", kind: "property", insertText: "street", documentation: note }] }
+    });
+    const source = "variables.customer.home.st + 1";
+    const projection = createStudioCodeToolingProjection({
+      document: { source, sourceVersion: 1 },
+      authoringContext: { rootSymbols: [] },
+      tooling: { getCompletions }
+    });
+    const onChange = vi.fn();
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: source }),
+      languageAdapter: javaScriptLanguageAdapter,
+      completionProvider: projection.completionProvider,
+      onChange
+    });
+
+    await waitFor(() => !!container.querySelector<HTMLElement>(".cm-editor"));
+    const view = EditorView.findFromDOM(container.querySelector<HTMLElement>(".cm-editor")!)!;
+    const cursor = "variables.customer.home.st".length;
+    view.dispatch({ selection: { anchor: cursor } });
+    startCompletion(view);
+    await waitFor(() => completionStatus(view.state) === "active");
+    await new Promise(resolve => setTimeout(resolve, 100)); // CodeMirror ignores an accept within its 75 ms interaction delay.
+    expect(acceptCompletion(view)).toBe(true);
+
+    expect(view.state.doc.toString()).toBe("variables.customer.home.street + 1");
+    expect(onChange.mock.lastCall?.[0]).toMatchObject({ value: "variables.customer.home.street + 1" });
+    expect(getCompletions).toHaveBeenCalledWith(expect.anything(), expect.anything(), { line: 0, column: cursor }, expect.anything());
     unmount();
   }, 20000);
 

@@ -1,6 +1,6 @@
 import { autocompletion, closeCompletion, completionStatus, type CompletionSource } from "@codemirror/autocomplete";
 import { StateEffect, StateField, type Extension } from "@codemirror/state";
-import { EditorView, hoverTooltip, panels, showPanel, ViewPlugin, type ViewUpdate } from "@codemirror/view";
+import { Direction, EditorView, hoverTooltip, panels, showPanel, ViewPlugin, type Rect, type ViewUpdate } from "@codemirror/view";
 import { sanitizeStudioCodeMarkdown } from "../StudioCodeDocumentation";
 import type {
   StudioCodeCompletion,
@@ -27,7 +27,11 @@ export function createCodeMirrorCodeIntelligenceExtensions(options: StudioCodeIn
   const completionRequests = new Set<AbortController>();
   const completionSource = createCompletionSource(options, completionRequests);
   const extensions: Extension[] = [
-    autocompletion({ override: [completionSource] }),
+    autocompletion({
+      override: [completionSource],
+      positionInfo: (view, list, option, info, space) => positionCompletionInfo(view.textDirection === Direction.RTL, list, option, info,
+        space, view.dom.querySelector<HTMLElement>(".cm-tooltip-autocomplete"))
+    }),
     ViewPlugin.fromClass(class {
       constructor(private readonly view: EditorView) {
         completionRequestSets.set(view, completionRequests);
@@ -70,6 +74,33 @@ export function createCodeMirrorCodeIntelligenceExtensions(options: StudioCodeIn
   }
 
   return extensions;
+}
+
+const infoWidth = 400, infoMargin = 30;
+
+/**
+ * CodeMirror's placement, except at narrow widths: there it would open the note under the selected option, over the
+ * options that follow. Declared members all carry a note, so the note goes below (or above) the whole list instead.
+ */
+export function positionCompletionInfo(rtl: boolean, list: Rect, option: Rect, info: Rect, space: Rect, tooltip: HTMLElement | null) {
+  let left = rtl;
+  const spaceLeft = list.left - space.left, spaceRight = space.right - list.right;
+  const width = info.right - info.left, height = info.bottom - info.top;
+  if (left && spaceLeft < Math.min(width, spaceRight)) left = false;
+  else if (!left && spaceRight < Math.min(width, spaceLeft)) left = true;
+  // A transformed editor scales the measured rectangles; the popup's layout size undoes it.
+  const scaleY = tooltip?.offsetHeight ? (list.bottom - list.top) / tooltip.offsetHeight : 1;
+  const scaleX = tooltip?.offsetWidth ? (list.right - list.left) / tooltip.offsetWidth : 1;
+  if (width <= (left ? spaceLeft : spaceRight)) {
+    const top = Math.max(space.top, Math.min(option.top, space.bottom - height)) - list.top;
+    return { style: `top: ${top / scaleY}px; max-width: ${Math.min(infoWidth, left ? spaceLeft : spaceRight) / scaleX}px`,
+      class: `cm-completionInfo-${left ? "left" : "right"}` };
+  }
+  const maxWidth = Math.min(infoWidth, (rtl ? list.right : space.right - list.left) - infoMargin);
+  const below = space.bottom - list.bottom >= height || space.bottom - list.bottom > list.top - space.top;
+  const side = below ? "top" : "bottom";
+  return { style: `${side}: ${(list.bottom - list.top) / scaleY}px; max-width: ${maxWidth / scaleX}px`,
+    class: `cm-completionInfo-${rtl ? "left" : "right"}-narrow` };
 }
 
 const setKeyboardHover = StateEffect.define<StudioCodeHover | null>();
