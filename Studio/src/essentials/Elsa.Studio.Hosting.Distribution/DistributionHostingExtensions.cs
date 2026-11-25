@@ -19,8 +19,8 @@ public static class DistributionHostingExtensions
     /// <paramref name="startupAssemblies"/> as the app's in-box feature assemblies. Call once before Build.
     /// </summary>
     /// <remarks>
-    /// The Studio API, Backends and Theme Store feature assemblies are always declared, so a bare app passes only the modules
-    /// it adds. Every other module arrives from the Nuplane feed. <paramref name="configure"/> runs after
+    /// The Studio API and Backends feature assemblies are always startup assemblies, and the Theme Store assemblies are always
+    /// registered for discovery, so a bare app passes only the modules it adds. Every other module arrives from the Nuplane feed. <paramref name="configure"/> runs after
     /// <c>Studio:Hosting</c> is bound, as in <see cref="StudioHostingExtensions.AddElsaStudio"/>.
     /// </remarks>
     /// <exception cref="StudioHostingException">The shell or management configuration cannot be loaded.</exception>
