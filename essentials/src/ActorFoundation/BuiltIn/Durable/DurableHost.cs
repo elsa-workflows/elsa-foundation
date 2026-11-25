@@ -289,7 +289,9 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
                 List<Task> wakes = [all];
                 for (var i = 0; i < workers.Count; i++)
                 {
-                    if (drainsKeepThemselves && !drains[i].IsCompleted || drains[i].IsFaulted) continue;
+                    // A Worker whose own drain ended, also with a lost fence, still gets the pass while its guard is usable
+                    // or it holds nothing: one that lapsed would close the gate for every other Worker of the host.
+                    if (drainsKeepThemselves && !drains[i].IsCompleted) continue;
                     wakes.Add(workers[i].ArmDrainBeat());
                     if (!await workers[i].KeepDrainLiveAsync(generations[i], ownedAtStart[i], cancellationToken)) lost[i] = true;
                 }

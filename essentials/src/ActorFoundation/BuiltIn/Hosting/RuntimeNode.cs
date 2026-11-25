@@ -185,8 +185,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// <summary>
     /// Finish the pass under way, end admitted off-turn work, then give every scope up: whoever takes them next finds no death.
     /// The call that starts the stop sets its deadline: when <paramref name="cancellationToken"/> cancels, the stop becomes
-    /// a kill, also during the release, and what is still owned runs out by its lease. A call that joins a stop under way
-    /// waits for it; its token ends only its own wait and never shortens the deadline the first caller set.
+    /// a kill, also during the release, and what is still owned runs out by its lease. A stop that joins a stop under way
+    /// waits for it; its token ends only its own wait and never shortens the deadline the first caller set. Only
+    /// <see cref="KillAsync"/> and <see cref="DisposeAsync"/> (at <see cref="LoopOptions.DisposeDeadline"/>) end it sooner.
     /// </summary>
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
@@ -232,9 +233,14 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         using var deadline = new CancellationTokenSource(_options.DisposeDeadline);
+        // The wait is bounded too: a pass stuck past the kill (a call that ignores cancellation) cannot hold the dispose.
+        using var bound = new CancellationTokenSource(_options.DisposeDeadline + DisposeGrace);
         using (deadline.Token.Register(_kill.Cancel))
-            await ObserveAsync(HaltAsync(), CancellationToken.None, quietIfReported: true);
+            await ObserveAsync(HaltAsync(), bound.Token, quietIfReported: true);
     }
+
+    /// <summary>How long a dispose waits past its deadline for the killed stop to end before it returns.</summary>
+    public static readonly TimeSpan DisposeGrace = TimeSpan.FromSeconds(2);
 
     /// <summary>The first stop or kill leaves the loop and, unless killed, gives every scope up; every caller waits for it.</summary>
     private Task HaltAsync()
@@ -267,11 +273,21 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             }
 
             // A kill during shutdown leaves remaining ownership to expire instead of returning it as clean. So does a
-            // turn drain that faulted with anything but a lost fence: entered work may still be inside, as for the job drain.
-            if (!_kill.IsCancellationRequested && drainError is null or ScopeOwnershipLostException)
+            // turn drain that faulted with anything but a lost fence: entered work may still be inside. The runtime's stop
+            // still ends the entered jobs, as on the job drain's fault path, then abandons the run before any release.
+            if (!_kill.IsCancellationRequested)
             {
-                try { await OnNode(() => _runtime.StopAsync(_kill.Token, StopHeartbeatsAsync).AsTask()).WaitAsync(_kill.Token); }
+                var abandon = drainError is not null and not ScopeOwnershipLostException;
+                Func<Task> beforeRelease = abandon
+                    ? async () =>
+                    {
+                        await StopHeartbeatsAsync();
+                        ExceptionDispatchInfo.Throw(drainError!);
+                    }
+                    : StopHeartbeatsAsync;
+                try { await OnNode(() => _runtime.StopAsync(_kill.Token, beforeRelease).AsTask()).WaitAsync(_kill.Token); }
                 catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
+                catch (Exception abandoned) when (abandon && ReferenceEquals(abandoned, drainError)) { }
                 catch (Exception releaseError) when (drainError is not null) { throw new AggregateException(drainError, releaseError); }
             }
         }
