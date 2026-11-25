@@ -131,7 +131,8 @@ public sealed class HttpRoutes
     // rule has it. A child a connection leads to is not one, even when the engine falls back to it as the start node: a
     // loop that comes back to it would wait there on the start route's own key, and no request could reach that wait.
     // A graph the engine refuses has no entry; its run faults on its own.
-    private static IEnumerable<Node> StartsOf(Node root)
+    /// <summary>Where a run begins: the root, the first child of a root Sequence, or an entry of a root Flowchart (<see cref="Flowchart.IsEntry"/>).</summary>
+    internal static IEnumerable<Node> StartsOf(Node root)
     {
         if (root.Children.Count == 0) return [root];
         if (root.Type == typeof(Sequence)) return [root.Children[0]];

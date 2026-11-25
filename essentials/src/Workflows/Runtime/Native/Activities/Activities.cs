@@ -205,6 +205,54 @@ public sealed class CallService : Activity<string>
     }
 }
 
+/// <summary>How a Timer's interval reads: an ISO 8601 duration (<c>PT5M</c>) or a time span (<c>00:05:00</c>), positive.</summary>
+public static class ScheduleIntervals
+{
+    public static bool TryParse(string? text, out TimeSpan interval)
+    {
+        interval = default;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        text = text.Trim();
+        if (text.Contains(':')) { if (!TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out interval)) return false; }
+        else
+        {
+            try { interval = System.Xml.XmlConvert.ToTimeSpan(text); }
+            catch (FormatException) { return false; }
+        }
+        return interval > TimeSpan.Zero;
+    }
+}
+
+public sealed record TimerResult(string Interval);
+
+/// <summary>
+/// The old core's Timer: a recurring start trigger that starts a new run every <see cref="Interval"/>, counted from each
+/// occurrence. The host's schedule actor fires it; the run completes it at once with its interval. Met in the middle of a
+/// workflow, it completes at once, as on the old core.
+/// </summary>
+public sealed class Timer : StatefulActivity<TimerResult, Unit, JsonNode?>
+{
+    [Input] public string Interval { get; set; } = "";
+
+    protected override ValueTask<Transition> ExecuteAsync(StartContext<JsonNode?> context) => new(Complete(new TimerResult(Interval)));
+    protected override ValueTask<Transition> ResumeAsync(ResumeContext<Unit, JsonNode?> context) => new(Complete(new TimerResult(Interval)));
+}
+
+public sealed record CronResult(string Expression);
+
+/// <summary>
+/// The old core's Cron: a recurring start trigger that starts a new run at each occurrence of its <see cref="Expression"/>,
+/// in UTC. The host's schedule actor fires it; the run completes it at once with its expression. Met in the middle of a
+/// workflow, it completes at once, as on the old core.
+/// </summary>
+public sealed class Cron : StatefulActivity<CronResult, Unit, JsonNode?>
+{
+    [Input] public string Expression { get; set; } = "";
+
+    protected override ValueTask<Transition> ExecuteAsync(StartContext<JsonNode?> context) => new(Complete(new CronResult(Expression)));
+    protected override ValueTask<Transition> ResumeAsync(ResumeContext<Unit, JsonNode?> context) => new(Complete(new CronResult(Expression)));
+}
+
 public sealed record DelayState(long Milliseconds);
 
 /// <summary>Elsa 4 wrote a durable timer through a scheduler. Here the trigger becomes a message to self with a due time.</summary>

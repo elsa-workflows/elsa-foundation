@@ -285,6 +285,7 @@ internal static class ContractWorkload
         private readonly IKernelStore _wire;
         private readonly WorkerOptions _options;
         private readonly bool _mixedTypes;
+        private readonly IReadOnlyList<Contract.IActorType> _alsoTypes;
         private sealed record Owner(DurableHost Host, List<IScopeActivation> Scopes);
 
         private readonly List<Owner> _owners = [];
@@ -296,8 +297,9 @@ internal static class ContractWorkload
         internal InMemoryDriver(int partitions, Flaw flaws, Contract.IActorType type,
             int maxAttempts = 10, Func<Contract.BoundScope, string, bool>? authorizeOperator = null,
             Func<InstanceRow, bool>? refuses = null, Action<CommitBatch, bool>? observeCommit = null, int trialGroup = 1,
-            bool mixedTypes = false)
+            bool mixedTypes = false, IReadOnlyList<Contract.IActorType>? alsoTypes = null)
         {
+            _alsoTypes = alsoTypes ?? [];
             ArgumentOutOfRangeException.ThrowIfLessThan(partitions, 2);
             _type = type;
             _mixedTypes = mixedTypes;
@@ -327,6 +329,13 @@ internal static class ContractWorkload
         public long Now { get; private set; } = Initial;
 
         public void Advance(long milliseconds) => Now += milliseconds;
+
+        /// <summary>Owns every virtual partition, for work whose placement the foundation chooses (a detached start).</summary>
+        internal async Task TakeAll()
+        {
+            for (var partition = 0; partition < _options.Partitions; partition++)
+                if (_placementOwners.TryAdd(partition, 0)) await Take(partition, 0);
+        }
 
         public async Task Start(IReadOnlyList<(Contract.BoundScope Scope, Contract.ActorRef Ref)> actors)
         {
@@ -435,6 +444,20 @@ internal static class ContractWorkload
             }
         }
 
+        /// <summary>A pass over every owned scope, where <see cref="Pass"/> drives each owner's first: for work the foundation spreads.</summary>
+        internal async Task PassAll(int count)
+        {
+            await StartPendingEventWork();
+            foreach (var owner in _owners)
+                await owner.Host.HeartbeatAsync(TimeSpan.FromMilliseconds(2 * Lease));
+            for (var pass = 0; pass < count; pass++)
+            foreach (var scope in _owners.SelectMany(owner => owner.Scopes))
+            {
+                await scope.WokenAsync(null);
+                await scope.RunAsync();
+            }
+        }
+
         public async ValueTask DisposeAsync()
         {
             foreach (var owner in _owners.SelectMany(owner => owner.Scopes)) await owner.DisposeAsync();
@@ -446,6 +469,8 @@ internal static class ContractWorkload
             {
                 IActorType adapter = new ActorAdapter(_store, _type);
                 if (_mixedTypes) adapter = new ActorTypeRouter(new WorkflowInstance([]), new Dictionary<string, IActorType> { [_type.Type] = adapter });
+                else if (_alsoTypes.Count != 0)
+                    adapter = new ActorTypeRouter(adapter, _alsoTypes.ToDictionary(type => type.Type, type => (IActorType)new ActorAdapter(_store, type)));
                 var host = DurableHost.ForNode($"contract-node-{++_node}", _wire, adapter, _options.Partitions, _options);
                 _owners.Add(new(host, []));
             }
