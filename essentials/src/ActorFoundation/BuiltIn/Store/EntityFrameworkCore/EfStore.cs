@@ -131,7 +131,7 @@ public class KernelDb : DbContext
         new(options, format, RootProfiles.CapabilitiesOf(format));
 
     // A capability set under a format number no profile ships, for database-backed composition guards only: a qualification
-    // set, or the shipped format 24's set under a guard's own number. Its format must be unshipped, so that its marker is
+    // set, or the shipped format 25's set under a guard's own number. Its format must be unshipped, so that its marker is
     // refused by every shipped profile, and the set must hold every prerequisite of its members.
     internal static KernelDb ForUnshippedComposition(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) =>
         RootProfiles.Formats.ContainsKey(format)
@@ -159,7 +159,8 @@ public class KernelDb : DbContext
     internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
     internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
     // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
-    // inputs and is refused there with a journalled reason. No shipped format carries both capabilities.
+    // inputs and is refused there with a journalled reason. Of the shipped formats only RootShipped (format 25) carries both;
+    // the qualification profiles 5, 11-17 and 19-22 carry one at most and keep their paths.
     internal bool UsesRootParkedOperators => UsesRootParkOpening && UsesRootTermination;
     // S5b: a Park records its opening revision with Park arrivals and in every parked-operator set, so its Park selection
     // names the revision and time. The actor list projects that revision where Park selections are sealed.

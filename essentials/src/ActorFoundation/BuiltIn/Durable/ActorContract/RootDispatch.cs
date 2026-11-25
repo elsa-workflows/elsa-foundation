@@ -171,8 +171,8 @@ internal sealed partial class ActorAdapter
     // leaves nothing kept retires the root still Faulted. A single page checked protection at its Open; the last page of a
     // clearing runs ProtectsDeletion once more, as the in-memory Complete does. Protection that appeared during the clearing
     // resolves the Park as a discard would (DT-4, the end state only): Faulted under a new terminal mark, journalled as
-    // protected. An answer that cannot be read neither deletes nor discards: the control's refusal fails closed in the store,
-    // so the owner stands down, the clearing stays open and the next owner runs the control again.
+    // protected. An answer that cannot be read neither deletes nor discards: the control is refused as "unavailable", the
+    // clearing stays open, and the store inserts the next control, due after a capped backoff.
     private Durable.TurnOutcome DeleteParkedRoot(Durable.TurnInput input, Durable.InstanceRow row, Durable.Delivery command, long cleared,
         bool completes)
     {

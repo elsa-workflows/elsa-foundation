@@ -439,7 +439,7 @@ internal sealed partial class PostgresRootAdmission
                 held || thenDelete || retentionDelete
             : kind is (Kinds.Terminate or Kinds.Delete) && parkedTerminate && header.Park is not null
                 ? header.Park is not { Revision: > 0, At: > 0 } || header.Window is not >= 0 || thenDelete && !terminateThenDelete || retentionDelete ||
-                    header.Clear is false || header.Clear == true && (held || header.ExplicitZeroDue || due != 0)
+                    header.Clear is false || header.Clear == true && (held || header.ExplicitZeroDue)
             : header.Park is not null || header.Window is not null) ||
             header.Clear is not null && (kind is not (Kinds.Terminate or Kinds.Delete) || header.Park is null || !parkedTerminate) ||
             thenDelete && (!terminateThenDelete || kind != Kinds.Terminate) ||

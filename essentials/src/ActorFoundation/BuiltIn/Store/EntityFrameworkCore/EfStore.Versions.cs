@@ -55,8 +55,10 @@ internal readonly record struct StoreFormat(int StoreSchema, int MessageProtocol
     internal static StoreFormat RootParkRecovery => Current with { MessageProtocol = 22 };
 
     // S7: the shipped format, composed of every capability qualified together (RootProfiles.Shipped). The formats above are
-    // qualification profiles, kept for their checks until K14.
-    internal static StoreFormat RootShipped => Current with { MessageProtocol = 24 };
+    // qualification profiles, kept for their checks until K14. A change to the shipped format's functions, triggers or
+    // stored framing takes the next number, so a database installed under the old one is refused and recreated: S5b-3b
+    // (a Delete of a parked root) moved it from 24 to 25; #5692 holds 23. Refer to it as RootShipped, not by number.
+    internal static StoreFormat RootShipped => Current with { MessageProtocol = 25 };
 
     public override string ToString() =>
         $"schema={StoreSchema}, message protocol={MessageProtocol}, journal codec={JournalCodec}";

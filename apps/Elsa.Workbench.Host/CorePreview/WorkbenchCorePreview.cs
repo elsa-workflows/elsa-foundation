@@ -76,7 +76,7 @@ internal static class WorkbenchCorePreview
         // With publications on, the kernel's serving state is shared by this host's node and the default shell, which publishes:
         // the node runs the registry it serves into. Registered by instance, so each shell resolves this one.
         var publications = configuration.GetValue<bool>(PublicationsKey);
-        // The release profile: publications run on the shipped format 24, which carries Native jobs with timed settlement,
+        // The release profile: publications run on the shipped format 25, which carries Native jobs with timed settlement,
         // held replies, selected operators and workflow history. A database on an earlier preview format is recreated.
         if (publications && (nativeJobs || timedJobs))
             throw new InvalidOperationException(
