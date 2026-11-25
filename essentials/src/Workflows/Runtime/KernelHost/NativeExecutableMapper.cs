@@ -34,7 +34,8 @@ public static class NativeExecutableMapper
             {
                 // The Native definition's own rules (unique Switch labels, a GraphActivity's single body and declarations, a
                 // Complete inside a boundary, a Set Output it declares), which name the node that breaks one.
-                throw NativeMappingRefusedException.Activity(invalid.Node, $"{invalid.Message} Change the node so that it follows this rule.");
+                var message = invalid.Message.Replace($" in '{executable.Identity.ArtifactId}'", "", StringComparison.Ordinal);
+                throw NativeMappingRefusedException.Activity(invalid.Node, $"{message} Change the node so that it follows this rule.");
             }
         }
         catch (NativeMappingRefusedException refused) when (refused.DisplayName is null &&
@@ -47,10 +48,15 @@ public static class NativeExecutableMapper
     /// <summary>The node metadata a display name is carried under, where the compiled node has one.</summary>
     private const string DisplayNameMetadataKey = "displayName";
 
-    /// <summary>Where a node is mapped: in the workflow, or inside a GraphActivity's body, which sees only its boundary.</summary>
-    private sealed record Scope(GraphScope? Graph)
+    /// <summary>
+    /// Where a node is mapped: in the workflow, or inside a GraphActivity's body, which sees only its boundary; and inside
+    /// which loops, innermost first, whose iteration variables it sees.
+    /// </summary>
+    private sealed record Scope(GraphScope? Graph, IReadOnlyList<(string Node, Type Type)> Loops)
     {
-        public static readonly Scope Workflow = new((GraphScope?)null);
+        public static readonly Scope Workflow = new(null, []);
+
+        public Scope InLoop(string node, Type type) => this with { Loops = [(node, type), .. Loops] };
     }
 
     /// <summary>
@@ -116,6 +122,16 @@ public static class NativeExecutableMapper
 
         // ---- activity types --------------------------------------------------------------------------------------
 
+        /// <summary>An intrinsic kind by its name in the designer's palette.</summary>
+        private static string PaletteName(WorkflowIntrinsicKind kind) => kind switch
+        {
+            WorkflowIntrinsicKind.Set => "Set Variable",
+            WorkflowIntrinsicKind.SetOutput => "Set Output",
+            WorkflowIntrinsicKind.SetCorrelationId => "Set Correlation Id",
+            WorkflowIntrinsicKind.SetInstanceName => "Set Instance Name",
+            _ => kind.ToString(),
+        };
+
         private static Type TypeOf(ExecutableNode node)
         {
             var id = node.ExecutableNodeId;
@@ -127,7 +143,7 @@ public static class NativeExecutableMapper
                     WorkflowIntrinsicKind.SetCorrelationId => typeof(Native.SetCorrelationId),
                     WorkflowIntrinsicKind.SetInstanceName => typeof(Native.SetInstanceName),
                     WorkflowIntrinsicKind.Finish => typeof(Native.Finish),
-                    _ => throw NativeMappingRefusedException.Activity(id, $"The {kind} intrinsic does not run on this host in release 1. Remove the node."),
+                    _ => throw NativeMappingRefusedException.Activity(id, $"{PaletteName(kind)} does not run on this host in release 1. Remove the node."),
                 };
             if (StringComparer.Ordinal.Equals(node.DescriptorType, WellKnownRuntimeActivityConsumers.GraphActivity))
                 return typeof(Native.GraphActivity);
@@ -211,7 +227,7 @@ public static class NativeExecutableMapper
             {
                 var name = type.Name;
                 var structure = Read<LoopStructure>(source, name, $"elsa.{name.ToLowerInvariant()}.structure", "1.0.0");
-                if (structure.Body is { } body) node.Children.Add(MapNode(children.Take(body), scope));
+                if (structure.Body is { } body) node.Children.Add(MapNode(children.Take(body), scope.InLoop(id, type)));
             }
             else if (type == typeof(Native.Parallel))
             {
@@ -325,7 +341,8 @@ public static class NativeExecutableMapper
                 if (MapBinding(binding, id, key, scope) is { } mapped) node.Inputs[key] = mapped;
             }
 
-            var body = new Scope(new GraphScope(id, inputKeys, variableNames));
+            // The body sees nothing outside its boundary, the loops around the GraphActivity included.
+            var body = new Scope(new GraphScope(id, inputKeys, variableNames), []);
             node.Children.Add(MapNode(children.Take(entry), body));
         }
 
@@ -359,7 +376,7 @@ public static class NativeExecutableMapper
                 _ => [WorkflowIntrinsicInputKeys.Outcome],
             };
             if (source.InputBindings.Keys.FirstOrDefault(key => !expected.Contains(key, StringComparer.Ordinal)) is { } unknown)
-                throw NativeMappingRefusedException.Binding(id, unknown, $"The {kind} intrinsic has no such input. Clear the input.");
+                throw NativeMappingRefusedException.Binding(id, unknown, $"{PaletteName(kind)} has no such input. Clear the input.");
 
             Native.Binding Input(string key) =>
                 source.InputBindings.TryGetValue(key, out var binding) ? MapBinding(binding, id, key, scope) ?? Native.Binding.Literal(null) : Native.Binding.Literal(null);
@@ -367,7 +384,7 @@ public static class NativeExecutableMapper
             Native.Binding LiteralText(string key) =>
                 Input(key) is Native.LiteralBinding { Value: JsonValue value } literal && value.TryGetValue<string>(out var text) && !string.IsNullOrWhiteSpace(text)
                     ? literal
-                    : throw NativeMappingRefusedException.Binding(id, key, $"The {kind} intrinsic needs a literal, non-blank '{key}'. Type the value in.");
+                    : throw NativeMappingRefusedException.Binding(id, key, $"{PaletteName(kind)} needs a literal, non-blank '{key}'. Type the value in.");
 
             switch (kind)
             {
@@ -438,7 +455,13 @@ public static class NativeExecutableMapper
                          executable.WorkflowVariables.Any(declaration => declaration.Name == capture.ValueId[WorkflowVariableValueIdPrefix.Length..]))
                     variable = capture.ValueId[WorkflowVariableValueIdPrefix.Length..];
                 else
-                    throw NativeMappingRefusedException.Binding(id, capture.OutputName, $"The output is captured into '{capture.ValueId}', which is not a workflow variable, or a variable of the reusable activity this node is in. Capture it into a workflow variable.");
+                {
+                    var target = capture.ValueId.StartsWith(GraphVariableValueIdPrefix, StringComparison.Ordinal) ? capture.ValueId[GraphVariableValueIdPrefix.Length..]
+                        : capture.ValueId.StartsWith(WorkflowVariableValueIdPrefix, StringComparison.Ordinal) ? capture.ValueId[WorkflowVariableValueIdPrefix.Length..]
+                        : capture.ValueId;
+                    throw NativeMappingRefusedException.Binding(id, capture.OutputName,
+                        $"The output is captured into variable '{target}', which is neither a workflow variable nor a variable of the reusable activity this node is in. Capture it into a workflow variable.");
+                }
                 node.Captures[variable] = ResultPath(id, capture.OutputName, null, id, capture.OutputName);
             }
         }
@@ -534,11 +557,20 @@ public static class NativeExecutableMapper
         /// <summary>A variable's Native name. Only workflow variables, and inside a GraphActivity's body its own, are mapped.</summary>
         private string VariableName(string key, string declaringScope, string node, string input, Scope scope)
         {
-            // A loop body reads its loop's item or index as a variable the loop declares; Native's loops declare them under
-            // the same names.
+            // A loop body reads its loop's item or index as a variable the loop declares, and Native's loops declare them under
+            // the same names. Native resolves a name innermost first, so the read maps only when its loop is the nearest
+            // enclosing one that declares the name.
             if (_types.TryGetValue(declaringScope, out var loop) && IterationVariables.TryGetValue(loop, out var iteration) &&
                 iteration.Contains(key, StringComparer.Ordinal))
-                return key;
+            {
+                var nearest = scope.Loops.FirstOrDefault(enclosing => IterationVariables[enclosing.Type].Contains(key, StringComparer.Ordinal));
+                if (nearest.Node == declaringScope) return key;
+                if (!scope.Loops.Any(enclosing => enclosing.Node == declaringScope))
+                    throw NativeMappingRefusedException.Binding(node, input,
+                        $"Variable '{key}' of loop '{declaringScope}' is read outside that loop's body. Read it inside the loop.");
+                throw NativeMappingRefusedException.Binding(node, input,
+                    $"Variable '{key}' of loop '{declaringScope}' is read inside loop '{nearest.Node}', which declares '{key}' too, and this host reads the inner one. Copy the outer {key} into a variable before the inner loop, and read that variable.");
+            }
             if (scope.Graph is { } graph)
             {
                 if ((declaringScope == WorkflowScopeId || declaringScope == LegacyGraphScopeId) && graph.Variables.TryGetValue(key, out var local)) return local;

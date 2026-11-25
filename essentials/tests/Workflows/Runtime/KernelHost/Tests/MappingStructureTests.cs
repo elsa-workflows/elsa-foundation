@@ -278,6 +278,40 @@ public sealed class MappingStructureTests
     }
 
     [Fact]
+    public void Unbound_start_new_workflows_follows_the_old_defaults()
+    {
+        var root = Sequence("root",
+            Node("http", Types.HttpEndpoint, [Literal("Path", "orders", "String")]),
+            Node("wait", Types.Event, [Literal("EventName", "paid", "String")]),
+            Node("nulled", Types.HttpEndpoint, [Literal("Path", "nulled", "String"), Literal("CanStartWorkflow", null, "Boolean")]));
+
+        var workflow = NativeExecutableMapper.Map(Executable(root));
+
+        // The old HttpEndpoint declares no default, so unbound it only waits; the old Event's default is true, Native's too.
+        Assert.False(Native.NativeStartTriggers.CanStart(workflow.Nodes["http"]));
+        Assert.False(Native.NativeStartTriggers.CanStart(workflow.Nodes["nulled"]));
+        Assert.True(Native.NativeStartTriggers.CanStart(workflow.Nodes["wait"]));
+        Assert.False(workflow.Nodes["wait"].Inputs.ContainsKey(Native.NativeStartTriggers.Input));
+        Assert.DoesNotContain(new Native.HttpRoutes(new Native.WorkflowRegistry().Add(workflow)).Routes, route => route.Start);
+    }
+
+    [Fact]
+    public void A_loop_body_reads_an_outer_loops_variable_no_inner_loop_declares()
+    {
+        // The inner ForEach declares currentItem and currentIndex, not index, so the outer For's index stays visible.
+        var root = Node("outer", Types.For, [Literal("Start", 0, "Int32"), Literal("End", 2, "Int32")], Structure("elsa.for.structure", new { body = "inner" }),
+            [Slot("For.Body", Node("inner", Types.ForEach, [Literal("Collection", new[] { 1 })], Structure("elsa.foreach.structure", new { body = "read" }),
+                [Slot("ForEach.Body", Sequence("read",
+                    WriteLine("outer-index", VariableRead("text", "index", scope: "outer")),
+                    WriteLine("inner-item", VariableRead("text", "currentItem", scope: "inner"))))]))]);
+
+        var workflow = NativeExecutableMapper.Map(Executable(root));
+
+        Assert.Equal(new Native.VariableBinding("index"), workflow.Nodes["outer-index"].Inputs["Text"]);
+        Assert.Equal(new Native.VariableBinding("currentItem"), workflow.Nodes["inner-item"].Inputs["Text"]);
+    }
+
+    [Fact]
     public void Send_http_request_content_goes_as_text_by_default()
     {
         var root = Sequence("root",

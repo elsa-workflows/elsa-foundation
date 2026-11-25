@@ -54,7 +54,7 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
 
     [Input] public string Url { get; set; } = "";
     [Input] public string Method { get; set; } = "POST";
-    /// <summary>The body: a string is sent as its text (text/plain unless <see cref="ContentType"/> says otherwise), any other JSON value as JSON (application/json unless it says otherwise).</summary>
+    /// <summary>The body: a string is sent as its text (text/plain unless <see cref="ContentType"/> says otherwise), any other JSON value as JSON (application/json unless it says otherwise). An empty string sends no content.</summary>
     [Input] public JsonNode? Body { get; set; }
     /// <summary>The body's media type, parameters allowed (<c>text/plain; charset=utf-8</c>).</summary>
     [Input] public string? ContentType { get; set; }
@@ -162,7 +162,8 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
             request.Dispose();
             return null;
         }
-        if (Body is not null)
+        // An empty string sends no content, as the old core's empty Content does.
+        if (Body is not null && !(Body is JsonValue empty && empty.TryGetValue<string>(out var none) && none.Length == 0))
         {
             // A string is sent as its text, whatever the media type says; any other value as JSON. Without a content type a
             // string goes as text/plain and anything else as application/json.

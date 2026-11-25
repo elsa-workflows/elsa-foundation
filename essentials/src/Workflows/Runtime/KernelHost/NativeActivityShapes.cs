@@ -48,7 +48,11 @@ internal sealed record ResultProjection(string? Path, IReadOnlyDictionary<string
 /// <c>1.00:00:00</c>). Publishing reads an authored bare number such as <c>5</c> as days, as System.Text.Json does, and
 /// writes <c>5.00:00:00</c>, so both cores wait five days. A value in any other form is refused.</item>
 /// <item>HttpEndpoint takes one HTTP method; Native's endpoint listens on one.</item>
-/// <item>HttpEndpoint and Event pass <c>CanStartWorkflow</c> through: false makes them waits, even where a run begins.</item>
+/// <item>HttpEndpoint and Event take <c>CanStartWorkflow</c> as a literal, as the old core fixes it at publish: false makes them
+/// waits, even where a run begins. Unbound, an HttpEndpoint only waits and an Event may start a run, as on the old core.</item>
+/// <item>A loop body reads its own loop's item or index, or an outer loop's when no loop between declares the same name;
+/// an outer loop's item behind an inner ForEach is refused.</item>
+/// <item>SendHttpRequest sends no content for an empty Content, as the old core does.</item>
 /// <item>SendHttpRequest sends its Content as text, text/plain unless its ContentType says otherwise, as the old core does.</item>
 /// <item>Result reads whose shapes differ on this host are refused until the shapes match: an HttpEndpoint request's
 /// path, headers, query and body, its RouteData (Native lower-cases route value names and joins repeated values),
@@ -110,6 +114,8 @@ internal sealed class NativeActivityShape
         Add(typeof(Native.RunJavaScript)).Results["result"] = new("Value");
 
         var @event = Add(typeof(Native.Event));
+        // Start new workflows is fixed at publish on the old core: a literal boolean. Event's old default, true, is Native's.
+        @event.Rules[Native.NativeStartTriggers.Input] = StartsWorkflows(true);
         @event.Rules["CorrelationId"] = new InputRule.Unmodelled(IsNull, "this host matches events by name only", "Clear the correlation id.");
         @event.Rules["ExpiresAt"] = new InputRule.Unmodelled(IsNull, "this host has no match deadline for an event wait", "Clear the match deadline.");
         @event.Results["Result"] = new("EventName");
@@ -137,6 +143,10 @@ internal sealed class NativeActivityShape
             "On this host a Dispatch Workflow's result is the child's output and its status, named otherwise, so the old result reads differently. Remove this read until the shapes match.");
 
         var endpoint = Add(typeof(Native.HttpEndpoint));
+        // The old HttpEndpoint declares no default for Start new workflows, so unbound it is false: it only waits. Native's
+        // default is true, so the old one is bound when the node leaves it out.
+        endpoint.Rules[Native.NativeStartTriggers.Input] = StartsWorkflows(false);
+        endpoint.AbsentDefaults.Add(new(Native.NativeStartTriggers.Input, bound => !bound(Native.NativeStartTriggers.Input), JsonValue.Create(false)));
         endpoint.Rules["SupportedMethods"] = new InputRule.Literal("Method", OneMethod, "one HTTP method", "Select a single method.");
         endpoint.AbsentDefaults.Add(new("Method", bound => !bound("SupportedMethods"), JsonValue.Create("GET")));
         endpoint.Rules["Authorize"] = new InputRule.Unmodelled(value => IsNull(value) || IsFalse(value), "this host's HTTP edge does not authorize routes", "Turn off Authorize.");
@@ -168,6 +178,15 @@ internal sealed class NativeActivityShape
         Add(typeof(Native.GraphActivity)).Results["$result"] = new("");
         return shapes;
     }
+
+    // A literal boolean; a literal null is the old default.
+    private static InputRule StartsWorkflows(bool fallback) => new InputRule.Literal(Native.NativeStartTriggers.Input,
+        value => value switch
+        {
+            null => JsonValue.Create(fallback),
+            JsonValue v when v.GetValueKind() is JsonValueKind.True or JsonValueKind.False => JsonValue.Create(v.GetValueKind() == JsonValueKind.True),
+            _ => null,
+        }, "a literal on or off", "Set Start new workflows on or off.");
 
     private static bool IsNull(JsonNode? value) => value is null;
     private static bool IsTrue(JsonNode? value) => value is JsonValue v && v.GetValueKind() == JsonValueKind.True;

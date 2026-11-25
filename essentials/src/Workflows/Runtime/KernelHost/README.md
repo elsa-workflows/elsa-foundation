@@ -17,7 +17,10 @@ Each is refused with the node and input named, and the refusal says what to chan
 - Delay takes a literal duration only, in the form publishing writes a time span (`00:00:05`). Publishing reads an
   authored bare number such as `5` as days and writes `5.00:00:00`, so both cores wait five days.
 - HttpEndpoint takes one HTTP method.
-- HttpEndpoint and Event pass `CanStartWorkflow` through: false makes them waits, also where a run begins.
+- HttpEndpoint and Event take `CanStartWorkflow` (Start new workflows) as a literal: false makes them waits, also where
+  a run begins. Unbound, an HttpEndpoint only waits and an Event may start a run, as on the old core.
+- A loop body reads its own loop's item or index, or an outer loop's when no loop between declares the same name. A read
+  of an outer loop's item from inside an inner ForEach is refused.
 - A Flowchart's start node is placed first among its children, which is where Native starts. A start node that a
   connection leads to, while another child has none, is refused, since Native would start at that other child.
 - Result reads whose shapes differ on this host are refused until they match: an HttpEndpoint request's path, headers,

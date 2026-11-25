@@ -35,8 +35,8 @@ internal static class HttpRouteChecks
         check(!routes.TryStart("POST", "waits", out _) && routes.Routes.Single(r => r.Workflow == "endpoint-waits") is { Start: false, Node: "in" } &&
               routes.TryStart("POST", "starts", out var starts) && starts == ("endpoint-starts", "in"),
             "a start-position HttpEndpoint with CanStartWorkflow false is a wait route, not a start route; true still starts");
-        check(!NativeStartTriggers.Events(registry.Get("event-waits")).Any() &&
-              NativeStartTriggers.Events(registry.Get("event-starts")).Select(n => n.Id).SequenceEqual(["in"]),
+        check(!NativeStartTriggers.StartEvents(registry.Get("event-waits")).Any() &&
+              NativeStartTriggers.StartEvents(registry.Get("event-starts")).Select(n => n.Id).SequenceEqual(["in"]),
             "a start-position Event with CanStartWorkflow false is no event start; unbound, it is one");
 
         var owner = new Owner("starts", 0, new InMemoryStore(1, () => Environment.TickCount64), registry, new Network());

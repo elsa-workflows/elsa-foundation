@@ -56,7 +56,7 @@ public sealed class MappingRefusalTests
         var refused = Refused(Sequence("root", node), Variable("v-x", "x"));
 
         AssertActivity(refused, "intrinsic");
-        Assert.Contains(kind.ToString(), refused.Message, StringComparison.Ordinal);
+        Assert.Contains($"{kind} does not run on this host", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -150,9 +150,15 @@ public sealed class MappingRefusalTests
             WriteLine("reader", Result("text", "dispatch", "ChildWorkflowExecutionId")))), "reader", "text");
 
     [Fact]
-    public void A_capture_into_a_variable_the_node_cannot_see_is_refused() =>
-        AssertBinding(Refused(Sequence("root",
-            Node("script", Types.RunJavaScript, [Literal("script", "1", "String")], captures: [Capture("result", "nowhere")]))), "script", "result");
+    public void A_capture_into_a_variable_the_node_cannot_see_is_refused()
+    {
+        var refused = Refused(Sequence("root",
+            Node("script", Types.RunJavaScript, [Literal("script", "1", "String")], captures: [Capture("result", "nowhere")])));
+
+        AssertBinding(refused, "script", "result");
+        Assert.Contains("variable 'nowhere'", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("variable:", refused.Message, StringComparison.Ordinal);
+    }
 
     [Theory]
     [InlineData("input")]
@@ -263,6 +269,55 @@ public sealed class MappingRefusalTests
         var refused = Refused(Sequence("root", WriteLine("w", Literal("text", "hi")), Node("done", Types.Complete, [Literal("outcome", "Done", "String")])));
 
         AssertActivity(refused, "done");
+        Assert.DoesNotContain(ArtifactId, refused.Message, StringComparison.Ordinal);
+    }
+
+    private static ExecutableNode NestedForEach(RuntimeInputBinding read) =>
+        Node("outer", Types.ForEach, [Literal("Collection", new[] { 1, 2 })], Structure("elsa.foreach.structure", new { body = "inner" }),
+            [Slot("ForEach.Body", Node("inner", Types.ForEach, [Literal("Collection", new[] { 3 })], Structure("elsa.foreach.structure", new { body = "reader" }),
+                [Slot("ForEach.Body", WriteLine("reader", read))]))]);
+
+    [Fact]
+    public void A_read_of_an_outer_loops_item_inside_an_inner_loop_is_refused()
+    {
+        var parameters = new Dictionary<string, ExpressionParameterBinding> { ["item"] = new VariableExpressionParameterBinding("outer", "currentItem") };
+        foreach (var read in new[]
+                 {
+                     VariableRead("text", "currentItem", scope: "outer"),
+                     new RuntimeInputBinding("text", new Elsa.Primitives.Models.ValueTypeDescriptor("Object"), Durable, RuntimeInputBindingSource.VariableMember,
+                         new RuntimeReadSelection(RuntimeReadSelection.CurrentSchemaVersion, ["name"], RuntimeReadSelectionMode.DeferredFit),
+                         variable: new RuntimeVariableReference("currentIndex", "outer")),
+                     Expression("text", "JavaScript", "item", "String", parameters),
+                 })
+        {
+            var refused = Refused(NestedForEach(read));
+
+            AssertBinding(refused, "reader", "text");
+            Assert.Contains("loop 'inner'", refused.Message, StringComparison.Ordinal);
+            Assert.EndsWith("into a variable before the inner loop, and read that variable.", refused.Message, StringComparison.Ordinal);
+        }
+
+        // The inner loop's own item maps.
+        var workflow = NativeExecutableMapper.Map(Executable(NestedForEach(VariableRead("text", "currentItem", scope: "inner"))));
+        Assert.Equal(new Kernel.Native.VariableBinding("currentItem"), workflow.Nodes["reader"].Inputs["Text"]);
+    }
+
+    [Fact]
+    public void A_read_of_a_loops_item_outside_its_body_is_refused() =>
+        AssertBinding(Refused(Sequence("root",
+            Node("each", Types.ForEach, [Literal("Collection", new[] { 1 })], Structure("elsa.foreach.structure", new { })),
+            WriteLine("after", VariableRead("text", "currentItem", scope: "each")))), "after", "text");
+
+    [Theory]
+    [InlineData(Types.HttpEndpoint)]
+    [InlineData(Types.Event)]
+    public void Start_new_workflows_must_be_a_literal(string type)
+    {
+        var refused = Refused(Sequence("root", Node("trigger", type,
+            [Literal(type == Types.Event ? "EventName" : "Path", "x", "String"), VariableRead("CanStartWorkflow", "v-start")])), Variable("v-start", "start", true, "Boolean"));
+
+        AssertBinding(refused, "trigger", "CanStartWorkflow");
+        Assert.EndsWith("Set Start new workflows on or off.", refused.Message, StringComparison.Ordinal);
     }
 }
 
