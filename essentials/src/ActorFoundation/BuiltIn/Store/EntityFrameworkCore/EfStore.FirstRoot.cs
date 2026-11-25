@@ -127,7 +127,7 @@ public sealed partial class EfStore
                     AND NEW."Revision" = NEW."FoundationWriteRevision"
                     AND NEW."FoundationReference" = OLD."FoundationReference" AND NEW."FoundationTenant" = OLD."FoundationTenant"
                     AND NEW."Id" = OLD."Id" AND NEW."Partition" = OLD."Partition" AND NOT OLD."Retired" /*root-park-generation*/
-                    AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR /*root-park-continues*/ OR /*root-park-recover*/ OR
+                    AND ((OLD."Status" = 0 AND NOT NEW."Retired") OR /*root-park-continues*/ OR /*root-park-recover*/ OR /*root-parked-terminate*/ OR
                         (/*root-retirement*/ AND NEW."Retired" AND NEW."State" = 'null' AND NEW."FoundationHeader" IS NULL /*root-retirement-wire*/
                             AND ((OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
                                 AND NEW."FoundationTerminalRevision" = OLD."FoundationTerminalRevision"
@@ -178,7 +178,7 @@ public sealed partial class EfStore
                     AND (NEW."Entries" = '["parked"]' /*root-park-recover-journal*/))
                 """ : db.UsesRootParkedOperators ? """
                 (i."Status" = 2 AND NOT i."Retired" AND NEW."Partition" = i."Partition" AND NEW."Revision" = i."Revision" + 1
-                    AND i."FoundationParkAt" IS NOT NULL AND NEW."Entries" LIKE '{{"Outcome":"refused",%')
+                    AND i."FoundationParkAt" IS NOT NULL AND (NEW."Entries" LIKE '{{"Outcome":"refused",%' /*root-parked-terminated-journal*/))
                 """ : "false", StringComparison.Ordinal)
             // Only a recover leaves Faulted for Running. It clears the Park mark and moves the release generation by one.
             // A recover outcome at the new revision binds the write: "recovered" only with that transition, "refused"
@@ -225,7 +225,10 @@ public sealed partial class EfStore
             .Replace("/*root-park-recover-journal*/", db.UsesRootParkRecovery
                 // The raw command is formatted, so the literal brace is doubled.
                 ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'"""
-                : db.UsesRootParkedOperators ? """OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" : "", StringComparison.Ordinal)
+                : db.UsesRootParkedOperators ? """OR NEW."Entries" LIKE '{{"Outcome":"refused",%' /*root-parked-terminated-journal*/""" : "", StringComparison.Ordinal)
+            // S5b: a Terminate that names the Park ends a parked root in one commit, journalled "terminated" at its revision.
+            .Replace("/*root-parked-terminated-journal*/", db.UsesRootParkedOperators ? ParkedTerminatedJournal : "", StringComparison.Ordinal)
+            .Replace("/*root-parked-terminate*/", db.UsesRootParkedOperators ? ParkedTerminateCheckpoint(db) : "false", StringComparison.Ordinal)
             .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)

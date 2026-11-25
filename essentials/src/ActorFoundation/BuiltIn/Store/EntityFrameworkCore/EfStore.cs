@@ -160,6 +160,10 @@ public class KernelDb : DbContext
     // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
     // inputs and is refused there with a journalled reason. No shipped format carries both capabilities.
     internal bool UsesRootParkedOperators => UsesRootParkOpening && UsesRootTermination;
+    // S5b: a Park records its opening revision with Park arrivals and in every parked-operator set, so its Park selection
+    // names the revision and time. The actor list projects that revision where Park selections are sealed.
+    internal bool RecordsRootParkRevision => UsesRootParkArrivals || UsesRootParkedOperators;
+    internal bool ProjectsRootParkRevision => UsesRootParkInspection && (UsesRootParkRecovery || UsesRootParkedOperators);
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);

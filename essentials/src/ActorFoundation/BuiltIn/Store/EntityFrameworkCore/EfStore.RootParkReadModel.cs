@@ -40,13 +40,13 @@ public sealed partial class EfStore
                     (i."FoundationParkAt", CASE WHEN i."FoundationParkAt" IS NULL THEN NULL ELSE i."Fault" END /*park-revision-new*/);
             """.Replace("/*inspectable*/", InspectableIndex, StringComparison.Ordinal)
             .Replace("/*kept-reasons*/", KeptReasons(db), StringComparison.Ordinal)
-            // Recover selections name the opening revision, so its profile projects that revision with the Park time.
-            .Replace("/*park-revision-column*/", db.UsesRootParkRecovery ? """, ADD COLUMN IF NOT EXISTS "ParkRevision" bigint""" : "", StringComparison.Ordinal)
-            .Replace("/*park-revision-set*/", db.UsesRootParkRecovery ? """, "ParkRevision" = $5""" : "", StringComparison.Ordinal)
-            .Replace("/*park-revision-value*/", db.UsesRootParkRecovery ? """, NEW."FoundationParkRevision" """ : "", StringComparison.Ordinal)
-            .Replace("/*park-revision-backfill*/", db.UsesRootParkRecovery ? """, "ParkRevision" = i."FoundationParkRevision" """ : "", StringComparison.Ordinal)
-            .Replace("/*park-revision-old*/", db.UsesRootParkRecovery ? """, p."ParkRevision" """ : "", StringComparison.Ordinal)
-            .Replace("/*park-revision-new*/", db.UsesRootParkRecovery ? """, i."FoundationParkRevision" """ : "", StringComparison.Ordinal), token);
+            // Park selections name the opening revision, so a set that seals them projects that revision with the Park time.
+            .Replace("/*park-revision-column*/", db.ProjectsRootParkRevision ? """, ADD COLUMN IF NOT EXISTS "ParkRevision" bigint""" : "", StringComparison.Ordinal)
+            .Replace("/*park-revision-set*/", db.ProjectsRootParkRevision ? """, "ParkRevision" = $5""" : "", StringComparison.Ordinal)
+            .Replace("/*park-revision-value*/", db.ProjectsRootParkRevision ? """, NEW."FoundationParkRevision" """ : "", StringComparison.Ordinal)
+            .Replace("/*park-revision-backfill*/", db.ProjectsRootParkRevision ? """, "ParkRevision" = i."FoundationParkRevision" """ : "", StringComparison.Ordinal)
+            .Replace("/*park-revision-old*/", db.ProjectsRootParkRevision ? """, p."ParkRevision" """ : "", StringComparison.Ordinal)
+            .Replace("/*park-revision-new*/", db.ProjectsRootParkRevision ? """, i."FoundationParkRevision" """ : "", StringComparison.Ordinal), token);
 
     internal static Task InstallRootParkArrivalReasonAsync(KernelDb db, CancellationToken token) =>
         db.Database.ExecuteSqlRawAsync("""
