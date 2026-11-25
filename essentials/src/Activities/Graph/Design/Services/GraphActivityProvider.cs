@@ -424,13 +424,15 @@ public sealed class GraphActivityProvider(
 
         if (node is null)
             return [];
+        // Exact reads leave a wrongly cased or missing argument list unbound; MalformedArguments refuses the wrongly
+        // cased one. Structure projections and the usage below read it as empty.
+        node = node with { Inputs = node.Inputs ?? [], Outputs = node.Outputs ?? [] };
 
         var projection = activityStructureService.ProjectInputs(node);
         var consumedUnused = projection.ConsumedInputKeys.Except(projection.Inputs.Where(input => input.Definition is null).Select(input => input.ReferenceKey), StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
-        // Exact reads leave a wrongly cased argument list unbound; MalformedArguments refuses any such list.
-        return (node.Inputs ?? []).Where(input => !consumedUnused.Contains(input.ReferenceKey))
+        return node.Inputs.Where(input => !consumedUnused.Contains(input.ReferenceKey))
             .Select(x => new ActivityContractMemberUsage("Input", x.ReferenceKey, "Bound"))
-            .Concat((node.Outputs ?? []).Select(x => new ActivityContractMemberUsage("Output", x.ReferenceKey, "Bound")))
+            .Concat(node.Outputs.Select(x => new ActivityContractMemberUsage("Output", x.ReferenceKey, "Bound")))
             .Where(x => !string.IsNullOrWhiteSpace(x.ReferenceKey))
             .Distinct()
             .OrderBy(x => x.MemberKind, StringComparer.Ordinal)
