@@ -2325,6 +2325,7 @@ jobs:
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
 
       # The S2 and S3 composition guards (#4229): each lane on its own new database; a failed lane fails the step at the end.
+      # S7: each lane also runs against the shipped format 24's capability set ("shipped").
       - name: Root state family, all lanes
         if: ${{ !cancelled() }}
         env:
@@ -2332,17 +2333,20 @@ jobs:
           PG_ID: ${{ job.services.postgres.id }}
         run: |
           failed=()
-          for writer in owned ef; do
-            for fence in checked in-batch; do
-              db="state_family_${writer}_${fence//-/_}"
-              echo "::group::$writer $fence"
-              docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
-              export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
-              if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-state-family "$writer" "$fence"; then
-                echo "::error::Root state family failed: $writer $fence"
-                failed+=("$writer $fence")
-              fi
-              echo "::endgroup::"
+          for set in composed shipped; do
+            for writer in owned ef; do
+              for fence in checked in-batch; do
+                db="state_family_${set}_${writer}_${fence//-/_}"
+                echo "::group::$set $writer $fence"
+                docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
+                export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
+                extra=(); [ "$set" = shipped ] && extra=(shipped)
+                if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-state-family "$writer" "$fence" "${extra[@]}"; then
+                  echo "::error::Root state family failed: $set $writer $fence"
+                  failed+=("$set $writer $fence")
+                fi
+                echo "::endgroup::"
+              done
             done
           done
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
@@ -2355,20 +2359,45 @@ jobs:
           PG_ID: ${{ job.services.postgres.id }}
         run: |
           failed=()
-          for check in composition composed-install; do
-            for writer in owned ef; do
-              for fence in checked in-batch; do
-                db="${check//-/_}_${writer}_${fence//-/_}"
-                echo "::group::$check $writer $fence"
-                docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
-                export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
-                if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "pg-root-$check" "$writer" "$fence"; then
-                  echo "::error::Root $check failed: $writer $fence"
-                  failed+=("$check $writer $fence")
-                fi
-                echo "::endgroup::"
+          for set in composed shipped; do
+            for check in composition composed-install; do
+              for writer in owned ef; do
+                for fence in checked in-batch; do
+                  db="${check//-/_}_${set}_${writer}_${fence//-/_}"
+                  echo "::group::$check $set $writer $fence"
+                  docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
+                  export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
+                  extra=(); [ "$set" = shipped ] && extra=(shipped)
+                  if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "pg-root-$check" "$writer" "$fence" "${extra[@]}"; then
+                    echo "::error::Root $check failed: $set $writer $fence"
+                    failed+=("$check $set $writer $fence")
+                  fi
+                  echo "::endgroup::"
+                done
               done
             done
+          done
+          if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
+
+      # S7: the shipped format 24 hosted as a host runs it, and the S5a parked-operator guard on its capability set.
+      - name: Shipped format 24
+        if: ${{ !cancelled() }}
+        env:
+          PG_PORT: ${{ job.services.postgres.ports[5432] }}
+          PG_ID: ${{ job.services.postgres.id }}
+        run: |
+          failed=()
+          for run in "pg-shipped-format" "pg-root-parked-operators owned in-batch shipped" "pg-root-parked-operators ef checked shipped"; do
+            db="shipped_$(tr -c 'a-z0-9' '_' <<<"$run")"
+            echo "::group::$run"
+            docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE ${db:0:60}"
+            export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=${db:0:60};SSL Mode=Disable;GSS Encryption Mode=Disable"
+            read -ra arguments <<<"$run"
+            if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "${arguments[@]}"; then
+              echo "::error::Shipped format run failed: $run"
+              failed+=("$run")
+            fi
+            echo "::endgroup::"
           done
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
 

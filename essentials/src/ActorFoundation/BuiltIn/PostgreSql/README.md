@@ -16,3 +16,10 @@ Opt-in PostgreSQL node composition and Generic Host lifetime for the Built-in Ac
   of an operation reaches what the first one admitted and attaches its caller to nothing: it ends at its own deadline
   with a timeout and the root's status. The node answers through `PostgresPreviewFoundation.Requests`, in the order it
   sends, so a turn's response reaches its caller before the turn's end.
+
+- `PostgresPreviewHosting.CreateShippedContext` selects the shipped format 24: the format 17 operator chain, Native jobs
+  with timed settlement, direct held replies, Park opening and inspection, and workflow history (which
+  `InstallPreviewRootSchemaAsync` installs with it). It holds replies, so a node on it takes `requests`:
+  `PostgresPreviewHosting.CreateRequests` makes them before the store is opened, and the host hands the same requests to
+  `OpenFoundationAsync` for its edge. The earlier preview formats (2, 6, 18) stay for their qualification checks, and a
+  database on one of them is recreated for format 24, not migrated.

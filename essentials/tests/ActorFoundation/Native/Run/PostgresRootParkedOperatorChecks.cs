@@ -51,12 +51,13 @@ internal static class PostgresRootParkedOperatorChecks
 
     private sealed record InputRow(long Seq, string Id, string Kind, bool Done, short? KeptBy, bool Content);
 
-    internal static async Task<int> RunAsync(bool owned, bool inBatch)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool shippedSet = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        var capabilities = RootProfiles.Formats[StoreFormat.RootOperatorReplies] | RootProfiles.Formats[StoreFormat.RootParkInspection];
+        var capabilities = shippedSet ? RootProfiles.Shipped
+            : RootProfiles.Formats[StoreFormat.RootOperatorReplies] | RootProfiles.Formats[StoreFormat.RootParkInspection];
         KernelDb Open() => KernelDb.ForUnshippedComposition(options, Composed, capabilities);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(240));
         var stop = timeout.Token;
@@ -299,8 +300,11 @@ internal static class PostgresRootParkedOperatorChecks
 
         void ShippedFormatsUnchanged()
         {
-            Check(RootProfiles.Formats.Values.All(set => (set & RootCapabilities.ParkOpening) == 0 || (set & RootCapabilities.Termination) == 0),
-                "no shipped format carries Park with termination, so formats 19-22 and 5, 11-17 keep their paths");
+            // S7: of the shipped formats only format 24 carries Park with termination, and it takes the parked-operator paths.
+            Check(RootProfiles.Formats.Where(entry => entry.Key != StoreFormat.RootShipped)
+                    .All(entry => (entry.Value & RootCapabilities.ParkOpening) == 0 || (entry.Value & RootCapabilities.Termination) == 0) &&
+                KernelDb.ForPostgresRootShipped(options).UsesRootParkedOperators,
+                "only format 24 carries Park with termination, on the parked-operator paths, so formats 19-22 and 5, 11-17 keep theirs");
             foreach (var shipped in new Func<DbContextOptions<KernelDb>, KernelDb>[] { KernelDb.ForPostgresRootParkOpening,
                 KernelDb.ForPostgresRootParkInspection, KernelDb.ForPostgresRootParkArrivals, KernelDb.ForPostgresRootParkRecovery,
                 KernelDb.ForPostgresRootOperators, KernelDb.ForPostgresRootTerminations, KernelDb.ForPostgresRootOperatorReplies })
@@ -1023,7 +1027,7 @@ internal static class PostgresRootParkedOperatorChecks
         internal async Task<IScopeActivation> OwnAsync()
         {
             var store = Store();
-            var scope = (await store.BindWorkerPartitionAsync(0, stop)).Scope;
+            var scope = (await ShippedComposition.BindWorkerPartitionAsync(store, open, 0, stop)).Scope;
             var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), Probe);
             IKernelStore kernel = store;
             if (Write is { } write)

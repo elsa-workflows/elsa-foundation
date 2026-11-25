@@ -76,6 +76,11 @@ internal static class WorkbenchCorePreview
         // With publications on, the kernel's serving state is shared by this host's node and the default shell, which publishes:
         // the node runs the registry it serves into. Registered by instance, so each shell resolves this one.
         var publications = configuration.GetValue<bool>(PublicationsKey);
+        // The release profile: publications run on the shipped format 24, which carries Native jobs with timed settlement,
+        // held replies, selected operators and workflow history. A database on an earlier preview format is recreated.
+        if (publications && (nativeJobs || timedJobs))
+            throw new InvalidOperationException(
+                "With Elsa:CorePreview:Publications on, the Core Preview runs on the shipped format, which carries Native jobs: leave NativeJobs and TimedNativeJobs off.");
         // Its foundation hosts no schedule actor yet, so serving refuses a Timer or Cron before anything is minted.
         var serving = publications ? new KernelServing(CronosCalendar.Error, SchedulesUnavailable) : null;
         if (serving is not null)
@@ -105,6 +110,9 @@ internal static class WorkbenchCorePreview
         configuration.GetSection("Elsa:CorePreview:JavaScript").Bind(javaScript);
         var scripts = new JintNativeScripts(Elsa.Expressions.JavaScript.Jint.Services.JintScriptEvaluators.Create(javaScript));
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
+        // On the shipped format the node answers held callers: the held requests of this host's edge.
+        var requests = publications ? PostgresPreviewHosting.CreateRequests(Open, node, WorkflowActor.ActorType) : null;
+        if (requests is not null) services.AddSingleton(requests);
         services.AddHostedService(provider =>
         {
             // Host expressions (JavaScript, Liquid) run on the default shell's portable evaluator, in a scope of that shell.
@@ -132,7 +140,7 @@ internal static class WorkbenchCorePreview
             // The node starts once the default shell is active, so its first turns find the evaluator.
             var logger = provider.GetRequiredService<ILogger<PostgresPreviewHostedService>>();
             return new ShellGatedHostedService(new PostgresPreviewHostedService(Open, node, new WorkflowActor([model]), Environment.FailFast,
-                    logger: logger),
+                    logger: logger, requests: requests),
                 token => shells.GetOrActivateAsync(shellName, token), Environment.FailFast,
                 // Before the node runs a turn, the default shell serves every slot its publications left active, so a due turn
                 // of an instance in flight finds its workflow served.
@@ -141,7 +149,8 @@ internal static class WorkbenchCorePreview
         if (configuration["Elsa:CorePreview:ReadsTenant"] is { } readsTenant)
             services.AddSingleton(new WorkbenchCorePreviewReads(Open, EmbeddedTenant.Bind(readsTenant)));
 
-        KernelDb Open() => timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(options) :
+        KernelDb Open() => publications ? PostgresPreviewHosting.CreateShippedContext(options) :
+            timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(options) :
             nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);
     }
 

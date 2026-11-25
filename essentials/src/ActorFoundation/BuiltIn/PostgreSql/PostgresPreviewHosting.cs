@@ -17,13 +17,30 @@ public static class PostgresPreviewHosting
     public static KernelDb CreateTimedNativeJobContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootTimedJobPreview(options);
 
     /// <summary>
+    /// Selects the shipped PostgreSQL format for a dedicated database: operators (terminate, delete, retention, held operator
+    /// replies), Native jobs with timed settlement, direct held replies, Park opening and inspection, and workflow history.
+    /// A node on it answers held callers (<see cref="StartAsync"/>, its <c>requests</c>).
+    /// </summary>
+    public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootShipped(options);
+
+    /// <summary>
     /// Opens the Foundation's ingress and reads on an installed PostgreSQL Core Preview store, for the configured actor type.
     /// With <paramref name="replyNode"/>, on a store with held replies (<c>ReplyProtocol</c>), its requests start a root or
     /// send to one and hold the caller (<see cref="PostgresPreviewFoundation.Requests"/>); the node that owns the roots
     /// answers its callers when it is given them as its <c>requests</c>.
     /// </summary>
+    public static Task<PostgresPreviewFoundation> OpenFoundationAsync(Func<KernelDb> create, string actorType,
+        string? replyNode = null, TimeSpan? deduplicationWindow = null, int pageSize = 64, CancellationToken cancellationToken = default) =>
+        OpenFoundationAsync(create, actorType, replyNode is null ? null : CreateRequests(create, replyNode, actorType, deduplicationWindow),
+            deduplicationWindow, pageSize, cancellationToken);
+
+    /// <summary>
+    /// Opens the Foundation's ingress and reads, as <see cref="OpenFoundationAsync(Func{KernelDb}, string, string?, TimeSpan?, int, CancellationToken)"/>
+    /// does, with held requests the host created beforehand (<see cref="CreateRequests"/>): the node that owns the roots
+    /// answers those callers when it is given the same requests.
+    /// </summary>
     public static async Task<PostgresPreviewFoundation> OpenFoundationAsync(Func<KernelDb> create, string actorType,
-        string? replyNode = null, TimeSpan? deduplicationWindow = null, int pageSize = 64, CancellationToken cancellationToken = default)
+        PostgresDirectRequests? requests, TimeSpan? deduplicationWindow = null, int pageSize = 64, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(create);
         PostgresRootAdmission.RequireActorType(actorType);
@@ -33,16 +50,30 @@ public static class PostgresPreviewHosting
         {
             if (!db.Database.IsNpgsql() || !(db.SupportsCorePreview || db.UsesRootReplyProtocol))
                 throw new NotSupportedException("The Foundation requires a PostgreSQL Core Preview format.");
-            if (replyNode is not null && !db.UsesRootReplyProtocol)
+            if (requests is not null && !db.UsesRootReplyProtocol)
                 throw new NotSupportedException("Held requests require a PostgreSQL store with held replies.");
             await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
             await PostgresRootAdmission.RequireIngressIssuerAsync(db, cancellationToken);
         }
         var admission = new PostgresRootAdmission(create, window, lockOrdinaryWrites: true);
         var store = new EfStore(create, postgres: true);
-        var requests = replyNode is null ? null : new PostgresDirectRequests(admission, store, replyNode, actorType);
         return new PostgresPreviewFoundation(admission, new(store, await admission.OpenJournalCursorAsync(cancellationToken), pageSize),
             actorType, directRequests: requests);
+    }
+
+    /// <summary>
+    /// The held callers of a node on a store with held replies, created before the store is opened: the host gives them to
+    /// the node (<see cref="StartAsync"/>, its <c>requests</c>) and to the Foundation its edge requests through
+    /// (<see cref="OpenFoundationAsync(Func{KernelDb}, string, PostgresDirectRequests?, TimeSpan?, int, CancellationToken)"/>).
+    /// </summary>
+    public static PostgresDirectRequests CreateRequests(Func<KernelDb> create, string node, string actorType, TimeSpan? deduplicationWindow = null)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        PostgresRootAdmission.RequireActorType(actorType);
+        var window = deduplicationWindow ?? TimeSpan.FromHours(1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
+        return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true), new EfStore(create, postgres: true),
+            node, actorType);
     }
 
     /// <summary>
