@@ -41,11 +41,14 @@
   persistence, publishing and reconciliation projects, and the JSON workflow and activity reconciliation projects.
   Create `Cli/Elsa3.Migration.Cli.csproj`, a console project (`IsPackable` `false`, no `RunWorkingDirectory`) that
   references the tooling and `apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj`, and writes the host's project folder
-  into an `AssemblyMetadataAttribute` at build time (R-5). Create `MTests/Tests/Elsa3.Migration.Tests.csproj` (xunit).
+  and its own project folder into `AssemblyMetadataAttribute`s at build time (R-5). The tooling does not reference the
+  host. Create `MTests/Tests/Elsa3.Migration.Tests.csproj` (xunit); it references the CLI project, so the host's
+  features come into its `deps.json` for `WithHostAssemblies()`, and the T003 fixture feature project.
   Add all three to the solution, regenerate the solution filters and `dependency-map.json`, and check the CI tier
   placement (§E7). Add the guard entries of R-7: the CLI in `EfCoreDependencyGuardTests.AllowedEfConsumers` with a
-  reviewed package array and an arm in `ReviewedEfPackages`, and reviewed closures for the tooling and the test project
-  next to `Adr0073Elsa3ImportEf`; and the CLI as a build-only reference in `Elsa.Architecture.Tests.csproj`. Confirm that `ArchitectureGuardTests`, `ExtensionBoundaryTests`,
+  reviewed package array and an arm in `ReviewedEfPackages`, a reviewed closure for the tooling next to
+  `Adr0073Elsa3ImportEf`, and one for the test project (the host's closure plus SQLite); and the CLI as a build-only
+  reference in `Elsa.Architecture.Tests.csproj`. Confirm that `ArchitectureGuardTests`, `ExtensionBoundaryTests`,
   `Elsa3MigrationBoundaryTests` and 1236's host closure test stay green without other entries.
 - [ ] T002 [P] Build the fixture export in `MTests/Fixtures/export/`, with:
   - clean definitions;
@@ -78,7 +81,7 @@
 - [ ] T003 [P] Build the fixture feature project in `MTests/Fixtures/AcmeFeature/`. It registers the custom
   activity under its Elsa 3 type name, `acme.`-prefixed JavaScript host functions for the undeclared function and for `getConfig`, and a variable type
   alias. The test project references it, and a test-only host folder (the host's committed files plus a
-  `shells.Local.json` that lists the feature and its settings) is passed through the CLI's internal seam (R-5).
+  `shells.Local.json` that lists the feature and its settings) is passed through the tooling's internal seam (R-5).
 
 ## Phase 2: Foundational (blocks every story)
 
@@ -127,17 +130,22 @@
   `essentials/src/Tasks/Elsa.Tasks/Services/TaskManager.cs`. It runs the registered
   startup tasks in their dependency order (`TopologicalTaskSorter`) and starts no background or recurring task. Test
   the order, and test that no `IBackgroundTask` or recurring task starts (R-5).
-- [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It builds a generic host that is never started, in the
-  Development environment, with one shell composed by CShells with `WithHostAssemblies()` over the CLI's build. Its
-  configuration comes from the host project folder, never from the CLI's output folder:
-  - `inventory`: the host's `appsettings*.json`, `shells.json` and `shells.Development.json`;
-  - `assess`: the same, then `shells.Local.json`, the host's user secrets (`AddUserSecrets` on the host assembly) and
-    environment variables, in the host's order;
-  - then, for both, `Cli/elsa3-migration.features.json`.
+- [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It takes the host assembly, the host project folder and
+  the CLI project folder from the CLI, builds a generic host that is never started, in the Development environment,
+  and calls the migration host's `MigrationHost.AddHostConfiguration` and `MigrationHost.AddHostServices` (spec
+  *Dependencies and boundaries*); it copies none of the host's wiring. Configuration comes from the host project
+  folder, never from the CLI's output folder:
+  - `inventory`: local sources left out (the host's `appsettings*.json`, `shells.json` and `shells.Development.json`);
+  - `assess`: local sources included (`shells.Local.json`, the host's user secrets and environment variables), with no
+    command-line arguments;
+  - then, for both, `elsa3-migration.features.json` from the CLI project folder.
 
-  It points the host's JSON workflow and activity reconciliation path settings at an empty `workflows/` folder and a
-  `[]` activities file inside the staging folder. It points the OpenIddict store at the run's database and gives Data
-  Protection an ephemeral key ring. It runs every shell initializer except `RunShellTasksInitializer`, runs the startup
+  Then it applies its run overrides only. It points the host's JSON workflow reconciliation at an empty `workflows/`
+  folder (`FolderPath`) and JSON activity reconciliation at an activities file holding `[]` (`FilePath`), both in a
+  run-scoped temporary folder outside `--out` that it deletes on every path, and removes the sibling path keys
+  (`FilePath` and `Files` for workflows, `Files` for activities). It replaces the Data Protection key store with an
+  ephemeral key ring. It creates `--out` and its staging folder only after the shell has been composed. It runs every
+  shell initializer except `RunShellTasksInitializer`, runs the startup
   tasks through the T009a member, starts no background hosted service, and registers the import run through
   `Elsa3ImportRunRegistration.Add` without the reconciliation feature. It sets every enabled EF feature to SQLite on
   `file:elsa3-migration-<guid>;Mode=Memory;Cache=Shared`, sets the migrate policy to apply, keeps one connection open,
@@ -146,7 +154,8 @@
   - after composition, the schema exists and the activity catalog holds the host's activities;
   - no background hosted service, `IBackgroundTask` or recurring task starts;
   - `inventory` ignores a `shells.Local.json`, a user secret and an environment variable that `assess` applies;
-  - a key set in each layer wins over the layers below it, in the host's order;
+  - a local source that sets `Files` on either reconciliation feature does not make the run refuse;
+  - a `composition-failed` refusal leaves a missing `--out` missing and an existing one untouched;
   - an addition-list feature and a T003 feature both resolve;
   - the host's sample workflow does not load into the run;
   - the tests use a temporary host folder through the internal seam;
@@ -166,8 +175,11 @@
 
 - [ ] T013 [US3] Add `Cli/elsa3-migration.features.json`, the Elsa 3 addition list in the CShells feature shape of
   the host's `shells.json`: `Elsa3Mapping`, the collection import for reusables, the import's EF ledger and the
-  publishing bridge. Copy it to the CLI's output. It only adds feature entries.
-- [ ] T015 [US3] Add the composition parity test: `inventory`'s enabled features equal the host's committed
+  publishing bridge. It is read from the CLI project folder only, never copied to the output. It only adds feature
+  entries.
+- [ ] T015 [US3] Add the composition parity test: the CLI's root service descriptors include every descriptor
+  `MigrationHost.AddHostServices` adds, minus the documented overrides (persistence connection, Data Protection key
+  store, the skipped `RunShellTasksInitializer`); `inventory`'s enabled features equal the host's committed
   composition plus the addition list and their dependencies; `assess` adds a feature listed in a local source; a
   listed feature that no project provides refuses with `composition-failed` and names it; and the migration host's
   closure contains no assembly whose name contains `Elsa3`.
@@ -247,7 +259,8 @@
 
 ## Phase 6: User Story 2 - Assess with my own features (P1)
 
-- [ ] T025 [US2] Layer the host's local sources for `assess` as R-5 says. Record setting keys only, and set
+- [ ] T025 [US2] Layer the host's local sources for `assess` as R-5 says. Record setting keys only, those under
+  `CShells:Shells:default` and `ConnectionStrings`, never machine environment variables outside them, and set
   `persistenceOverridden` when a persistence connection setting was replaced (FR-009, FR-018 item 4). Test that no
   setting value reaches the report.
 - [ ] T026 [US2] Map composition failures to the `composition-failed` refusal, with no partial run: a listed feature

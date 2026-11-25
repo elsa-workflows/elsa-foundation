@@ -22,7 +22,8 @@ addition list. It is a thin entry over a new tooling library, `Elsa3.Migration.T
 
 **Language/Version**: C# / .NET 10.
 
-**Primary Dependencies**: System.CommandLine; CShells (`WithHostAssemblies()`, as the migration host uses it); the
+**Primary Dependencies**: System.CommandLine; the migration host's two public wiring methods (configuration layers
+and root services, including CShells with `WithHostAssemblies()`), added by 1236's implementation; the
 Elsa 3 converter, import and reconciliation projects; JSON workflow and activity reconciliation; EF Core SQLite; the
 migration host project (specification 1236).
 
@@ -32,7 +33,7 @@ migration host project (specification 1236).
 
 - Unit tests: the report builder, the code table and the bucket rule.
 - Integration tests: run the tooling in-process over fixture exports, on the host's composition plus the addition list,
-  or on a test-only host composition set through the internal seam.
+  or on a test-only host composition set through the tooling's internal seam.
 - CLI tests: argument rules, refusal reasons and exit codes.
 - Smoke test: `dotnet run --project extensions/Elsa3/src/Migration/Cli` from a clean build on the fixture export.
 
@@ -80,7 +81,7 @@ migration host project (specification 1236).
 | P-3 | Shared pipeline | R-2: `Elsa3ImportRun`, extracted from `Elsa3FolderImportTask`. |
 | P-4 | Code table | R-3: `Elsa3MigrationCodeTable` in the tooling project, which references every project that holds code constants, with a completeness test in the migration tests. It also holds the fixed texts for codes the converter does not own. |
 | P-5 | Database | R-4: one named in-memory shared-cache database, held open for the run. |
-| P-6 | Composition | R-5: a generic host that is never started, in the Development environment, with one shell discovered by `WithHostAssemblies()` over the CLI's build. `inventory` reads the host's committed configuration, `assess` the host's full stack in the host's order; the addition list comes last. The host folder is fixed at build time. Shell initializers run except the task initializer; startup tasks run alone through a new startup-only `ITaskManager` member; no background or recurring task or hosted service starts. |
+| P-6 | Composition | R-5: a generic host that is never started, in the Development environment, calling the migration host's `MigrationHost.AddHostConfiguration` and `MigrationHost.AddHostServices` (a dependency on 1236's implementation), so the CLI copies none of the host's wiring. `inventory` leaves out the host's local sources, `assess` includes them; the addition list comes last, from the CLI project folder. Both folders are fixed at build time and passed in by the CLI; the tooling does not reference the host. Then only the run overrides: in-memory SQLite, empty reconciliation inputs in a temporary folder outside `--out`, Data Protection off disk, and no task initializer; startup tasks run alone through a new startup-only `ITaskManager` member; no background or recurring task or hosted service starts. Rejected: replicating the host wiring, and building a `WebApplication` through `MigrationHost.CreateBuilder`. |
 | P-7 | The engineer's features | R-6: project references on the migration host; nothing is loaded at run time. |
 | P-8 | Architecture guards | R-7: EF admissions for the CLI, the tooling and the test project, and the CLI as a build-only reference of the architecture tests; no path, extension-boundary or Elsa 3 boundary entry. |
 | P-9 | Migrated export | R-8: writers next to the readers, reading back from the design stores. |

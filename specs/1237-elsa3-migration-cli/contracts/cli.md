@@ -26,7 +26,7 @@ project references on the migration host, and their settings through the host's 
 |---|---|
 | 0 | The report was written and has no `mustFix` or `reconsider` finding. |
 | 1 | The report was written and has at least one `mustFix` or `reconsider` finding. |
-| 2 | Refused to run. No report is written, and the previous output is untouched. |
+| 2 | Refused to run. No report is written, and `--out` is untouched: the run creates it, and its staging folder, only after the shell has been composed. |
 
 ## Standard output
 

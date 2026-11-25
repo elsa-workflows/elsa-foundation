@@ -97,7 +97,7 @@ no way to prove the fixes.
 
 **Independent Test**: Build a fixture feature project that registers a custom activity under its Elsa 3 type name, a
 prefixed JavaScript host function and a variable type alias. Run `assess` over a test-only host composition, set
-through the CLI's internal test seam, that references the fixture project and lists its feature. Check that the
+through the tooling's internal test seam, that references the fixture project and lists its feature. Check that the
 findings it resolves are gone and that the settings-and-composition section names the feature and the setting keys.
 
 **Acceptance Scenarios**:
@@ -240,31 +240,38 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 
 **Composition and persistence**
 
-- **FR-008**: Features MUST be discovered as the migration host discovers them, with CShells `WithHostAssemblies()` over
-  the CLI's own build, and composed into one shell:
+- **FR-008**: The CLI MUST compose through the migration host's own wiring, not a copy of it. It calls the host's two
+  public methods (see *Dependencies and boundaries*): one adds the host's configuration layers, the other the host's
+  root services, including CShells with `WithHostAssemblies()`, so features are discovered over the CLI's own build as
+  the host discovers them. It calls both on a generic host that starts no web server, and composes one shell:
   - `inventory` composes the host's committed composition only: `appsettings*.json`, `shells.json` and
     `shells.Development.json` from the host project folder, plus the Elsa 3 addition list. It ignores the engineer's
     local sources;
   - `assess` composes with the host's full configuration stack, in the host's order (lowest first):
     `appsettings*.json`, `shells.json`, `shells.Development.json`, `shells.Local.json`, the host's user secrets (from
-    its `UserSecretsId`), environment variables, plus the Elsa 3 addition list. It therefore runs exactly what the
+    its `UserSecretsId`), environment variables, plus the Elsa 3 addition list. The CLI passes the host no
+    command-line arguments. It therefore runs exactly what the
     engineer's host runs, plus the Elsa 3 additions.
 
   The CLI runs in the Development environment, the only one specification 1236 supports, so the host's committed
-  development keys apply. The host project folder is fixed when the CLI is built; there is no option to point
-  elsewhere, and tests use an internal seam. The shell's initializers and its startup tasks run, so the EF schema and
+  development keys apply. The host project folder and the addition list's folder (the CLI project folder) are fixed
+  when the CLI is built; there is no option to point elsewhere, and tests use an internal seam. After the host's
+  wiring, the CLI applies only its run overrides: the in-memory database (FR-009), the reconciliation inputs below,
+  Data Protection kept off disk, and the skipped task initializer. The shell's initializers and its startup tasks run, so the EF schema and
   the activity catalog exist. No web host, HTTP endpoint, background hosted service, background task or recurring task
   starts, so there is no trigger runtime, scheduler or workflow execution. The Elsa 3 folder import is not composed.
-  The host's JSON workflow and activity reconciliation stay composed, but the run points their two path settings at
-  an empty folder inside its staging folder, so neither the host's sample nor a `migrated/` folder the engineer
-  configured loads into the run.
+  The host's JSON workflow and activity reconciliation stay composed, but the run points them at an empty workflows
+  folder and an activities file holding `[]`, in a run-scoped temporary folder outside `--out`, and removes their
+  sibling path keys (`FilePath`, `Files`, `FolderPath`), because each feature refuses more than one. So neither the
+  host's sample nor a `migrated/` folder the engineer configured loads into the run, and no local source can make the
+  run refuse through them. `--out` and its staging folder are created only after the shell has been composed.
 - **FR-009**: Every EF module MUST use the same in-memory SQLite database, named uniquely per run. The run holds that
   database open for its whole duration and disposes it at the end, so every module sees the same data and the
   shared-transaction single-target rule holds. The host's persistence connection setting MUST be replaced for the run,
   and the report says that it was.
 - **FR-010**: Nothing the run writes may outlive it, except the output folder. There is no install root and no package
-  extraction: the run writes only the in-memory database, which it disposes, and the output folder's staging folder,
-  which it removes, including after a failure.
+  extraction: the run writes only the in-memory database, which it disposes, the temporary folder that holds the empty
+  reconciliation inputs, and the output folder's staging folder, both of which it removes, including after a failure.
 
 **Selection and pipeline**
 
@@ -342,8 +349,10 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   1. Summary counts per category and bucket.
   2. The custom-component inventory, with usage counts.
   3. Definitions by bucket, each with its findings' code, severity, category, remedy, JSON path, message and guidance.
-  4. The settings and composition the run used: the tool version, the enabled features, the setting keys (never
-     their values) and the persistence override. Whether local sources were applied follows from `command`.
+  4. The settings and composition the run used: the tool version, the enabled features, the setting keys under the
+     host's shell section (`CShells:Shells:default`) and `ConnectionStrings` (never their values, and never machine
+     environment variables outside those sections) and the persistence override. Whether local sources were applied
+     follows from `command`.
   5. Dispatched-workflow targets missing from the export, as Take into account.
 
   It also lists the versions not converted.
@@ -439,6 +448,19 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 
 - **Elsa 3 migration host** (specification 1236): its project, `shells.json` and configuration order; the CLI
   references it. The host composes JSON workflow and JSON activity reconciliation, so `migrated/` loads there.
+- **Two public wiring methods on the migration host** (an addition to specification 1236's implementation, in its
+  `Program.cs` wiring). The host's `Program.cs` and the CLI both call them:
+  - `MigrationHost.AddHostConfiguration`: adds the host's configuration layers in 1236 R-3's order for a given host
+    folder and environment, taking the host assembly for `AddUserSecrets`, with a switch that leaves out the engineer's
+    local sources (`shells.Local.json`, user secrets, environment variables, command line);
+  - `MigrationHost.AddHostServices`: the host's root service registration (1236 R-2), including the CShells
+    `WithHostAssemblies()` setup, without the web pipeline.
+
+  The names are the CLI's proposal; the 1236 implementer may choose others. Until they exist, the CLI cannot compose
+  (research R-5).
+- **The migration host is temporary** (1236 Q12). #5800's app profiles replace it, and its cleanup removes
+  `apps/Elsa.Migration.Host`. The CLI's closure and configuration follow the host, so that cleanup must move the CLI's
+  reference and the two wiring calls to whatever replaces the host. The CLI is temporary in the same way.
 - **Converter diagnostics this specification relies on.** The converter maps a direct call of an Elsa 3 global to the
   registered prefixed host function that carries the same member name (direct calls only), and diagnoses unregistered
   variable types. Its storage-driver change converts Elsa 3 storage drivers to the default storage with a Reconsider

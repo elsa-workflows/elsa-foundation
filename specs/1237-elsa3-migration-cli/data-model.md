@@ -78,7 +78,9 @@ only from findings whose code has a component kind (spec FR-018 item 2), so an u
 
 ## Run section
 
-`features [name]` (the composed features, sorted), `settingKeys [key]` (sorted, values never written),
+`features [name]` (the composed features, sorted), `settingKeys [key]` (the keys under the host's shell section,
+`CShells:Shells:default`, and under `ConnectionStrings`, sorted, values never written; machine environment variables
+outside those sections are never listed),
 `persistenceOverridden` (boolean, FR-009). Whether local configuration sources were applied follows from `command`:
 `assess` applies them, `inventory` does not (FR-008).
 

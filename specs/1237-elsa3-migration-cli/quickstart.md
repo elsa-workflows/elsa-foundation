@@ -56,6 +56,6 @@ You can set the same two settings in `shells.Local.json` instead. The host impor
    the published set equals startup reconciliation's.
 5. The migration host, with JSON reconciliation, loads every workflow and reusable in `migrated/`.
 6. A fixture feature that throws during composition refuses the run with `composition-failed`. No database file or
-   temporary folder remains, and the previous `--out` is intact.
+   temporary folder remains, and `--out` is untouched (not created when it was missing).
 7. `dotnet run --project extensions/Elsa3/src/Migration/Cli` from a clean build gives the same output as the
    in-process run.

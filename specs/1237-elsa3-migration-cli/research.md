@@ -145,9 +145,10 @@ enabled EF feature. The host-wide migrate policy is set to apply migrations, and
 composition until disposal (FR-009). The guid never reaches the report (FR-022).
 
 The host's committed settings put its SQLite file under `data/`, and in development mode its OpenIddict store is in
-memory (1236 R-6). The run replaces `ConnectionStrings:Elsa` and every per-feature persistence connection setting with
-the in-memory database. The host's EF key store for Data Protection is host wiring the CLI does not run, so the run
-gives Data Protection an ephemeral key ring. Nothing reaches a disk (FR-010).
+memory (1236 R-6), so the run leaves the store as the host wires it. The run replaces `ConnectionStrings:Elsa` and
+every per-feature persistence connection setting with the in-memory database. The host's root services include its
+Data Protection key store (`AddConfiguredDataProtection`, 1236 R-2); after the host's wiring the run replaces it with
+an ephemeral key ring. Nothing reaches a disk (FR-010).
 
 ## R-5 Composition without a web host
 
@@ -164,6 +165,14 @@ gives Data Protection an ephemeral key ring. Nothing reaches a disk (FR-010).
   signing keys, without which shell activation fails (1236 R-6).
 - A project reference to the host can copy the host's content files, such as `appsettings.json` and `shells.json`,
   into the CLI's output folder.
+- The host's root wiring (1236 R-2) registers services that features resolve when they activate, and CShells copies
+  root registrations into every shell (`apps/Elsa.Foundation.Host/Program.cs`, the cluster membership block):
+  `AddEfSchemaReadability`, `AddConfiguredClusterMembership`, `AddConfiguredDataProtection`,
+  `AddShellStartupValidation`, authentication and authorization, the OpenIddict token store and the
+  `ShellActivationTracker`. A shell composed without them can fail where the host's shell activates.
+- `JsonWorkflowReconciliationFeature` refuses unless exactly one of `FilePath`, `Files` and `FolderPath` is set, and
+  `JsonActivityReconciliationFeature` refuses unless exactly one of `FilePath` and `Files` is set. A `FilePath` names a
+  file that must exist.
 
 Facts that shape the run:
 
@@ -177,23 +186,37 @@ Facts that shape the run:
   `ITaskManager.StartExecutingRegisteredTasks`, runs the startup tasks, then the background tasks, then the recurring
   tasks (`TaskManager.cs`).
 
-**Decision**: the tooling builds a generic host that is never started, in the Development environment, with one shell
-composed by CShells' non-web registration with `WithHostAssemblies()` over the CLI's own build, as the host discovers
-its features. Its configuration is built from the host project folder, never from the CLI's output folder, and the CLI
-has no settings file of its own:
+**Decision**: the CLI composes through the host's own wiring. Specification 1236's implementation exposes two public
+static methods, which the host's `Program.cs` and the CLI both call (spec *Dependencies and boundaries*):
 
-- `inventory`: the host's `appsettings*.json`, `shells.json` and `shells.Development.json`. That is the host's committed
-  composition; the engineer's local sources are ignored.
-- `assess`: the same, then `shells.Local.json`, the host's user secrets (`AddUserSecrets` on the host assembly, which
-  carries its `UserSecretsId`) and environment variables, in the host's order. The CLI's own command line is not a
-  configuration source.
-- Then, for both, the Elsa 3 addition list, `elsa3-migration.features.json` next to the CLI project, read after the host
-  composition. It only adds feature entries, so a local source cannot remove an Elsa 3 addition.
+- `MigrationHost.AddHostConfiguration`: the host's configuration layers in 1236 R-3's order, for a given host folder
+  and environment, taking the host assembly for `AddUserSecrets`, with a switch that leaves out the local sources
+  (`shells.Local.json`, user secrets, environment variables, command line);
+- `MigrationHost.AddHostServices`: the host's root service registration, including CShells with
+  `WithHostAssemblies()`, without the web pipeline.
 
-The host project folder is fixed when the CLI is built: the CLI's project file writes it into an
-`AssemblyMetadataAttribute`, and the addition list is copied to the output. There is no option to point elsewhere.
-Tests pass a test-only host folder and addition list through an internal seam (`InternalsVisibleTo` for the
-migration test project).
+The tooling builds a generic host that is never started, in the Development environment, and calls both:
+
+- `inventory`: local sources left out, so the configuration is the host's `appsettings*.json`, `shells.json` and
+  `shells.Development.json`, the host's committed composition.
+- `assess`: local sources included (`shells.Local.json`, the host's user secrets and environment variables), in the
+  host's order. The CLI passes no command-line arguments, so its own command line is not a configuration source.
+- Then, for both, the Elsa 3 addition list, `elsa3-migration.features.json`, read after the host composition. It only
+  adds feature entries, so a local source cannot remove an Elsa 3 addition.
+
+Configuration is read from the host project folder, never from the CLI's output folder, and the CLI has no settings
+file of its own. After the host's wiring the tooling applies only its run overrides: the in-memory SQLite connection
+(R-4), the reconciliation inputs (below), Data Protection kept off disk (R-4) and the skipped
+`RunShellTasksInitializer`. Then it activates the shell. No web server starts.
+
+The tooling does not reference the host. The CLI does, and passes into the tooling the host assembly, the host project
+folder and the CLI project folder; the two folders are written by the CLI's project file into
+`AssemblyMetadataAttribute`s at build time. The addition list is read from the CLI project folder only, and is not
+copied to the output. There is no option to point elsewhere. Tests pass a test-only host folder and addition list
+through an internal seam of the tooling (`InternalsVisibleTo` for the migration test project).
+
+**Rejected**: replicating the host's root wiring in the tooling. It drifts from the host as the host changes, and a
+missing root service fails only when a feature that needs it activates.
 
 A listed feature that the build does not provide (`FeatureNotFoundException`) refuses the run as `composition-failed`
 and names the feature, as the host does at startup (1236 FR-005). A feature that throws while the shell is composed
@@ -204,18 +227,23 @@ It runs every shell initializer except `RunShellTasksInitializer`, and runs the 
 dependency order, through a new startup-only member on `ITaskManager`. That is a small essentials change. It resolves
 services from the shell's provider. Background hosted services, background tasks and recurring tasks never start, so
 there is no trigger runtime, scheduler or recurring work. The Elsa 3 folder import feature is not composed. The host's
-JSON workflow and activity reconciliation features are composed, as the host composes them, but the run points their
-two path settings at an empty `workflows/` folder and a `[]` activities file inside its staging folder. Their relative
-defaults would otherwise resolve against the engineer's current directory, where the host refuses a missing folder, and
-an engineer who pointed them at a previous `migrated/` folder would load it into the run next to the import.
+JSON workflow and activity reconciliation features are composed, as the host composes them, but the run points them
+at an empty `workflows/` folder (`FolderPath`) and an activities file holding `[]` (`FilePath`), in a run-scoped
+temporary folder outside `--out` that it deletes at the end, and removes the sibling path keys (`FilePath` and `Files`
+for workflows, `Files` for activities), because each feature refuses more than one. Their relative defaults would
+otherwise resolve against the engineer's current directory, where the host refuses a missing folder; an engineer who
+pointed them at a previous `migrated/` folder would load it into the run next to the import; and a local source that
+sets `Files` would make the run refuse. `--out` and its staging folder are created only after the shell has been
+composed, so a `composition-failed` refusal leaves `--out` untouched (FR-005).
 
 The host's committed development keys apply, so the run needs no generated settings. **Rejected**: generating run-only
 values for required secret settings. That answered the essentials engine image, which committed none; the migration
 host commits development keys, so the problem does not exist.
 
-**Rejected**: calling the host's `MigrationHost.CreateBuilder`. It builds a web application and reads the process's
-command line, and the CLI must start no web host. A test instead checks that a key set in each layer wins over the
-layers below it, in the host's order.
+**Rejected**: calling the host's `MigrationHost.CreateBuilder` and building a `WebApplication`. It brings in the web
+pipeline and reads the process's command line, and the CLI must start no web server. T015 instead checks that the
+CLI's root service descriptors include every descriptor `MigrationHost.AddHostServices` adds, minus the documented
+overrides.
 
 ## R-6 The engineer's own features
 
@@ -244,10 +272,10 @@ loads no packages, so the test migration would have run on another closure than 
   never from the host to Elsa 3.
 - `EfCoreDependencyGuardTests.Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages` fails for any
   project outside its admitted lists that resolves an EF Core package. The CLI resolves the host's EF closure, the
-  tooling and the migration test project resolve EF through the import's EF ledger. So the CLI is added to
-  `AllowedEfConsumers` as a composition root, with a reviewed package array (the host's, from 1236 R-9) and an arm in
-  `ReviewedEfPackages`; the tooling and the migration test project get reviewed closures next to
-  `Adr0073Elsa3ImportEf`.
+  tooling resolves EF through the import's EF ledger, and the migration test project, which references the CLI and
+  the T003 fixture feature, resolves the host's closure plus SQLite. So the CLI is added to `AllowedEfConsumers` as a
+  composition root, with a reviewed package array (the host's, from 1236 R-9) and an arm in `ReviewedEfPackages`; the
+  tooling gets a reviewed closure next to `Adr0073Elsa3ImportEf`, and the test project one of its own.
 - The Nuplane host guards (`NuplaneHostSettings.HostsThatShareAssemblies`) scan only `apps/` hosts that share
   assemblies, so a project under `extensions/` is out of their scope.
 - `ArchitectureGuardTests.Every_production_project_is_built_before_the_architecture_tests` fails for a production
