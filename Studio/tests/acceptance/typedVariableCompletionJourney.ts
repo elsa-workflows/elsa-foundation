@@ -214,7 +214,11 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   await expect(large).toHaveText(`${beforeInsert}args.${await inserted()}`);
   // The editor scrolls to the inserted reference, so its end is on screen at narrow widths too.
-  await expect.poll(() => expanded.locator(".cm-scroller").evaluate(scroller =>
-    scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 2), { message: "The inserted reference is scrolled into view" }).toBe(true);
+  await expect.poll(() => expanded.locator(".cm-scroller").evaluate(scroller => {
+    const lines = scroller.querySelectorAll(".cm-line"), line = lines[lines.length - 1];
+    const range = document.createRange(); range.selectNodeContents(line);
+    const end = range.getBoundingClientRect().right, visible = scroller.getBoundingClientRect();
+    return end > visible.left && end <= visible.right + 1;
+  }), { message: "The end of the inserted reference is inside the editor's visible area" }).toBe(true);
   await capture(page, info, "chooser-typed-variable-whole");
 }
