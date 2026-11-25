@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "840e731625cb88b2c125ebee7deb4c862f5bb45b",
+  "last_publish_commit": "bd25e0d1847b283d77e7716c33f7765c4c627a0d",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -1199,13 +1199,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Activities",
-      "version": "4.0.2-preview",
-      "commit": "840e731625cb88b2c125ebee7deb4c862f5bb45b"
+      "version": "4.0.3-preview",
+      "commit": "bd25e0d1847b283d77e7716c33f7765c4c627a0d"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Model",
-      "version": "4.0.3-preview",
-      "commit": "840e731625cb88b2c125ebee7deb4c862f5bb45b"
+      "version": "4.0.4-preview",
+      "commit": "bd25e0d1847b283d77e7716c33f7765c4c627a0d"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
