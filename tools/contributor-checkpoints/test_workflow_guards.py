@@ -156,7 +156,7 @@ class WorkflowGuardTests(unittest.TestCase):
         contract = lambda text: (
             "needs: admission" in text
             and "if: needs.admission.outputs.allowed == 'true'" in text
-            and len(re.findall(r"(?m)^    needs: versions$", text)) == 2
+            and len(re.findall(r"(?m)^    needs: versions$", text)) == 3
         )
         self.assertTrue(contract(docker))
         self.assertFalse(contract(docker.replace("if: needs.admission.outputs.allowed == 'true'", "if: true", 1)))
