@@ -65,7 +65,8 @@ public sealed partial class EfStore
 
     private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding, bool Residue, string? Clearing, long? Cleared);
 
-    // A pending row other than a direct input: the retirement lock, the parked retirement branch and the Park facts share it.
+    // A pending row other than a direct input: the parked retirement branch and the Park facts share it, and the C# retirement
+    // lock (EfStore.RootRetirement.cs) states the same condition with the direct scope as a parameter.
     private const string PendingResidue = """NOT m."Done" AND (m."InboxScope" <> -4 OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL)""";
 
     // A page clears or restores at most 170 rows and 4 MiB of stored rows, and always has room for its first row.

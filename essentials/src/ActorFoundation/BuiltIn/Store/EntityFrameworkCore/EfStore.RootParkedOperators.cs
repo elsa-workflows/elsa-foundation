@@ -294,6 +294,7 @@ public sealed partial class EfStore
             var kept = await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token, Clearing is null ? int.MaxValue : InMemoryStore.ParkPageLimit + 1);
             var page = kept.Take(PageLength(kept)).ToArray();
             // While a clearing is open the root receives only operator rows, so the settled prefix is its operator rows.
+            // The page count already refuses a row kept since the facts (M8); the digest also binds each row's content, as defence.
             if (KeptSetDigest(kept) != KeptDigest || page.Length != Count || Ends != (page.Length == kept.Count) ||
                 !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
                     suspended: !db.UsesRootParkArrivals || prior.Clearing, token)) return false;
