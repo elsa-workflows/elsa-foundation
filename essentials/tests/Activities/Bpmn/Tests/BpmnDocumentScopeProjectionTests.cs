@@ -39,6 +39,8 @@ public sealed class BpmnDocumentScopeProjectionTests : IDisposable
         new ActivitiesSequenceFeature().ConfigureServices(services);
         new EventsFeature().ConfigureServices(services);
         services.AddEventHandler<DraftValidating, ExecuteValidations>();
+        // ExecuteValidations walks the tree for malformed argument lists before any validator runs.
+        services.AddScoped<Elsa.Workflows.Design.Core.Contracts.IActivityStructureService, Elsa.Workflows.Design.Core.Services.DefaultActivityStructureService>();
         _provider = services.BuildServiceProvider();
         _structures = new(_provider.GetServices<IActivityStructureHandler>());
     }
