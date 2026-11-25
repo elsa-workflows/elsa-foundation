@@ -276,6 +276,8 @@ public sealed class Elsa3NodeRewriteTests
     [InlineData("""[ "true" ]""", "does not recognise")]
     [InlineData("\"1 > 0\"", "does not recognise")]
     [InlineData("2", "does not recognise")]
+    [InlineData("""{ "type": "Literal", "value": "yes" }""", "neither true nor false")]
+    [InlineData("""{ "expression": { "type": "Literal", "value": 1 } }""", "neither true nor false")]
     public async Task An_unreadable_case_condition_is_refused_at_its_case(string condition, string reason)
     {
         var @switch = Activity("switch", "Elsa.Switch");
