@@ -9,12 +9,12 @@ quickstart) may rely on.
 |---|---|---|
 | Host project | `extensions/Elsa3/src/Migration/Host/Elsa3.Migration.Host.csproj` | Yes |
 | Composition | `extensions/Elsa3/src/Migration/Host/shells.json`, under `CShells:Shells:default:Features` | Yes |
-| Reasons | The composition table in `extensions/Elsa3/src/Migration/Host/README.md` | Yes |
+| Reasons | `extensions/Elsa3/src/Migration/Host/composition-reasons.json` (feature name → reason), shown by the README | Yes |
 | Sample migrated folder | `extensions/Elsa3/src/Migration/Host/migrated/` | Yes |
-| Package folder | `extensions/Elsa3/src/Migration/Host/packages/` (Nuplane directory feed `local-packages`) | Yes |
 | Data | `extensions/Elsa3/src/Migration/Host/data/` (git-ignored) | Local only |
 
-A tool reads the composition with any JSON reader. It needs no reference to the host project.
+A tool reads the composition and the reasons with any JSON reader. The host loads no packages at runtime; an
+engineer's own features come in as project references. It needs no reference to the host project.
 
 ## Migrated folder layout
 

@@ -50,13 +50,13 @@ folder holds one Elsa 4 workflow with an HTTP trigger. Call the trigger and see 
 2. **Given** a `migrated/` folder whose activities file holds a reusable composite and whose workflows folder holds a
    workflow that uses it, **When** the host starts, **Then** both load, the workflow is published, and running it runs
    the composite.
-3. **Given** a feature of the engineer's own (custom activities), provided as a project reference in their clone or as
-   a package in the host's package folder, and listed in the host's settings, **When** the host starts, **Then** that
+3. **Given** a feature of the engineer's own (custom activities), provided as a project reference in their clone and
+   listed in the host's settings, **When** the host starts, **Then** that
    feature is active and its activities are available to the imported workflows.
 4. **Given** a settings change in a local, uncommitted settings source (user secrets, environment variables or a local
    settings file), **When** the host starts, **Then** the changed value applies and every other setting keeps its
    default.
-5. **Given** the settings name a feature that no project reference or package provides, **When** the host starts,
+5. **Given** the settings name a feature that no project reference provides, **When** the host starts,
    **Then** it refuses to start (see *Refusing to start*) and the log names the missing feature.
 6. **Given** the settings point at a workflows folder that doesn't exist, **When** the host starts, **Then** it refuses
    to start and the log names the folder.
@@ -91,7 +91,7 @@ reason it is there. That tells me what my host must compose.
 **Why this priority**: The engineer goes live on their own host, not on this one. The composition and its reasons are
 what they carry over.
 
-**Independent Test**: Open the host's composition and its README. Every feature has a reason: a JTest suite or
+**Independent Test**: Open the host's composition and its reasons file (the README shows it). Every feature has a reason: a JTest suite or
 template, the designer, the `migrated/` folder, or another listed feature that requires it.
 
 **Acceptance Scenarios**:
@@ -131,8 +131,6 @@ in, open a converted definition in the designer, change it and publish it.
   loads through the engine fix for source-owned composites with dependencies (FR-010).
 - **The workflows folder holds subfolders.** Only the top level is read, as JSON workflow reconciliation does today.
   The CLI writes a flat folder.
-- **The engineer's package needs a newer Elsa share than the host carries.** Nuplane refuses it, as it does for the
-  Workbench.
 
 ## Requirements *(mandatory)*
 
@@ -154,17 +152,17 @@ returns 200, and the log names the setting, feature or file and the reason. The 
   BPMN, Copilot and agents, decisions, connections, dashboards, the extension builder and the other Workbench extras
   MUST NOT be composed.
 - **FR-003**: The host MUST reference, by project reference, only the projects the composed features live in, plus
-  what hosting and package loading need. It MUST carry no Elsa 3 assembly, so a pass proves the converted workflows run
+  what hosting needs. It MUST carry no Elsa 3 assembly, so a pass proves the converted workflows run
   on Elsa 4 alone.
 - **FR-004**: The composition MUST be one file in the host project. It MUST be readable by path, without referencing
   the host, so other tools in this repository (the migration CLI, the skill) can read it. Each composed feature's
-  reason MUST be recorded in the host's README, and a test MUST fail, naming the feature, when a composed feature has
+  reason MUST be recorded in a machine-readable reasons file next to it, which the README shows, and a test MUST fail, naming the feature, when a composed feature has
   no reason or a reason names a feature that isn't composed.
 - **FR-005**: An engineer MUST be able to change any setting and add features through the standard ASP.NET Core
   configuration sources (a local settings file, user secrets, environment variables, the command line), without
-  editing committed files. A feature the engineer adds MUST come from a project reference in their clone or from a
-  package in the host's package folder, which Nuplane loads as it does for the Workbench. When such a feature can't be
-  found, the host MUST refuse to start and name it.
+  editing committed files. A feature the engineer adds MUST come from a project reference in their clone; the host loads no
+  packages at runtime, because its audience builds from source. When such a feature can't be found, the host MUST
+  refuse to start and name it.
 - **FR-006**: The host MUST run locally with the identity features in development mode and seeded development
   credentials, as the Workbench does in its committed settings. It MUST hold no production secret. Its README MUST say
   it is a local migration tool and must not be deployed.
@@ -242,7 +240,7 @@ folder) and converted reusables in `activities/activities.json` (the activities 
 ### Measurable Outcomes
 
 - **SC-001**: On one initiative head, every suite of the S-15 acceptance set that passes on the Workbench also passes on
-  the migration host. Zero suites pass on one and fail on the other.
+  the migration host: zero suites pass on the Workbench and fail on the migration host.
 - **SC-002**: An engineer starts the host from a fresh clone and runs a workflow from their `migrated/` folder by
   changing only the two folder settings, with zero edits to committed files.
 - **SC-003**: Every feature in the host's composition has a recorded reason, and none of the Workbench extras FR-002

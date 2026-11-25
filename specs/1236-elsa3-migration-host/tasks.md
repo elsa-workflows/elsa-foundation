@@ -20,15 +20,15 @@ short worktree path (MSB3030).
   Workbench paths as they are then (`apps/Elsa.Workbench.Host` on main).
 - [ ] T002 Create the project and its test project:
   - `extensions/Elsa3/src/Migration/Host/Elsa3.Migration.Host.csproj`: `Microsoft.NET.Sdk.Web`, `IsPackable` false, a
-    `UserSecretsId`, and `<RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>` (R-3, R-6);
+    `UserSecretsId`, `<RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>`, and a
+    `Properties/launchSettings.json` with `ASPNETCORE_ENVIRONMENT=Development` and one fixed local URL not used by
+    another host in the repository (R-2, R-3, R-6);
   - `extensions/Elsa3/tests/Migration/Host/Tests/Elsa3.Migration.Host.Tests.csproj`: xunit,
     `Microsoft.AspNetCore.TestHost`.
 
   Then:
   - add both to `Elsa.Server.slnx`, and regenerate the solution filters and the dependency map;
   - register the test project as PR tier in `tools/ci/test-tiers.json`;
-  - add the host to `HostProvidedPackagesGuardTests.SharingHosts`, and teach `NuplaneHostSettings.HostDirectory` and
-    `HostsThatShareAssemblies` the host's path outside `apps/` (R-6);
   - run `ArchitectureGuardTests`.
 
   The path guard derives both paths from the `Elsa3.` bucket, so it should need no entry (R-1). If it does, raise that
@@ -40,14 +40,15 @@ short worktree path (MSB3030).
   - For each candidate, record the suite, template, Studio need or `required by <feature>` that justifies it. Read the
     S-15 acceptance definitions and Elsa 4 templates in `extensions/Elsa3/tests/JTest/`, and each feature's `DependsOn`.
   - Settle R-4's "to confirm" items, and drop every candidate without a reason.
-  - Write the result to `extensions/Elsa3/src/Migration/Host/shells.json`, and the reasons table to the host's
-    `README.md`.
-  - Add a project reference for every composed feature's project, and nothing else beyond hosting and package loading
-    (FR-003).
+  - Write the result to `extensions/Elsa3/src/Migration/Host/shells.json`, and the reasons to
+    `composition-reasons.json` next to it (feature name → reason).
+  - Add a project reference for every composed feature's project, and nothing else beyond hosting (FR-003).
 - [ ] T004 Admit the host in `EfCoreDependencyGuardTests` once T003's references are final: its name in
   `AllowedEfConsumers`, its reviewed package array (computed from the host's restore graph), and an arm in
   `ReviewedEfPackages` (R-9). Run the guard.
-- [ ] T005 Write `MigrationHost.Build(string[] args)` and a `Program.cs` that calls it (R-2), with:
+- [ ] T005 Write `MigrationHost.CreateBuilder(string[] args)`, `MigrationHost.Build(WebApplicationBuilder builder)` and
+  a `Program.cs` that calls both (R-2). Start from main's `apps/Elsa.Essentials.Host/Program.cs`, and name in the PR
+  each piece dropped and why. Include:
   - the configuration order of R-3 (`shells.Local.json` and user secrets re-added above the shells files);
   - eager default-shell activation and `/health/ready`;
   - the root health endpoint;
@@ -55,21 +56,20 @@ short worktree path (MSB3030).
     `[assembly: EfToolingShellDefaults(...)]` attribute;
   - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` and `AddShellStartupValidation`;
   - authentication, authorization and `AddOpenIddictEntityFrameworkCoreStore`;
-  - Nuplane;
   - the Studio CORS policy;
+  - the host services the composed features resolve (R-2), each kept or dropped by need;
   - creating `data/` when missing, and logging the absolute workflows folder, activities file and data paths.
 
-  Use main's shared hosting helpers where the sync brought them. Copy nothing else that is specific to the Workbench.
+  No Nuplane package loading (R-6). If a hosting helper makes the host share assemblies anyway, raise it on the PR
+  before going on.
 - [ ] T006 Write `appsettings.json` and the settings in `shells.json` (R-6):
   - the `Elsa` resource at `data/elsa.db`, with `Migrate:Policy` `AutoMigrate`;
-  - the `local-packages` directory feed on `packages/`, with the Nuplane loading settings narrowed to the host's
-    closure;
   - development identity with the seeded administrator (the OpenIddict store is in memory in development mode);
-  - `AllowedReturnUrlOrigins` and CORS for the Studio host's local address;
+  - `AllowedReturnUrlOrigins` and CORS for the Studio host's local address (the Studio host's own fixed URL);
   - the two reconciliation features with `SourceId` `elsa3-migration`, `PublishOnReconcile` `true`, and the sample
     folder paths.
 
-  Add `.gitignore` entries for `data/`, `shells.Local.json` and `packages/*` (keeping `.gitkeep`). Add the sample
+  Add `.gitignore` entries for `data/` and `shells.Local.json`. Add the sample
   `migrated/workflows/hello.json` (an HTTP trigger and `WriteHttpResponse`) and `migrated/activities/activities.json`
   (`[]`) (FR-011).
 
@@ -78,8 +78,8 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 
 ## Phase 3: User Story 1 - Run my migrated workflows (P1)
 
-- [ ] T007 [US1] Host tests through `MigrationHost.Build` with `UseTestServer`, each on a temporary data folder and
-  migrated folder (R-5):
+- [ ] T007 [US1] Host tests through `MigrationHost.CreateBuilder`, `UseTestServer` and `MigrationHost.Build`, in the
+  Development environment, each on a temporary data folder and migrated folder (R-5):
   - scenario 1: the sample is published and answers;
   - scenario 2: an activities file holds a composite with an activity dependency, a workflow uses it, both load, and
     running the workflow runs the composite (PR #5685 is merged);
@@ -88,15 +88,15 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   - scenario 6: a missing workflows folder means the host refuses to start, naming it; so does a missing activities
     file.
 - [ ] T008 [US1] Check by hand with the quickstart, and record the steps and results in the PR:
-  - scenario 3, once for each route: a feature from a project reference, and a feature from a package in `packages/`;
+  - scenario 3: a feature from a project reference to the engineer's own project;
   - SC-002: from a fresh clone, run a workflow from another `migrated/` folder by setting only the two folder settings
     (in `shells.Local.json` and in user secrets), with `git status` clean afterwards.
 
 ## Phase 4: User Story 3 - See which features my workflows need (P2)
 
 - [ ] T009 [P] [US3] Host tests (R-5):
-  - every feature in `shells.json` has a README row, and every README row names a composed feature; either failure
-    names the feature;
+  - every feature in `shells.json` has an entry in `composition-reasons.json`, and every entry names a composed
+    feature; either failure names the feature (no test reads the README, framework §2.23.2);
   - every listed feature resolves, and a test fails naming any that doesn't;
   - no `Elsa3.*` assembly or Elsa 3 package is in the host's dependency closure;
   - none of the feature families FR-002 names is composed.
@@ -117,8 +117,8 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   Then convert the S-15 acceptance definitions with `inventory`, with the approved adjusted copies in place of their
   originals (FR-013).
 - [ ] T012 [US2] Start the host from that head with an empty `data/` folder and the `inventory` output as its migrated
-  folder. Run `jtest run` with the S-15 Elsa 4 templates and an environment that differs only in base URL and
-  credentials. Record the run in `extensions/Elsa3/tests/JTest/ledger/runs.md` in the ledger's existing columns
+  folder. Run `jtest run` with the S-15 Elsa 4 templates and an environment file, committed next to the S-15 Elsa 4
+  one, that differs only in base URL (the host's fixed URL) and credentials. Record the run in `extensions/Elsa3/tests/JTest/ledger/runs.md` in the ledger's existing columns
   (data-model.md, FR-015).
 - [ ] T013 [US2] For each suite that passes on the Workbench and fails on the host, find the cause and route it as
   FR-014 says. Add a missing feature or setting to the composition with its reason, then rerun from T012. Keep every
@@ -129,9 +129,9 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 - [ ] T014 [P] Finish the host's README:
   - "local migration tool, don't deploy" (FR-006);
   - the two folder settings and where to set them (FR-011, R-3);
-  - the package folder and the project-reference route (FR-005);
+  - adding your own features by project reference (FR-005);
   - the development sign-in;
-  - the reasons table;
+  - the reasons, shown from `composition-reasons.json`;
   - the Studio host to use;
   - a pointer to #5800 for the GA composition.
 

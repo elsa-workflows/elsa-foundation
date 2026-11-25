@@ -31,7 +31,7 @@
 
 ## Notes
 
-- The spec names ASP.NET Core, SQLite, Nuplane and JTest. Its audience builds the host from source, and the
+- The spec names ASP.NET Core, SQLite and JTest. Its audience builds the host from source, and the
   acceptance corpus already exists, so these are the product surface, not implementation choices.
 - 2026-11-25 rescope (Joey): a migration-specific host built from source, with no images. The GA composition story
   moved to #5800.

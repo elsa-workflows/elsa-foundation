@@ -23,8 +23,12 @@ acceptance set and templates from the merged S-15, or from the head current at t
 
 ## R-2 Host wiring
 
-- **Decision.** `Program.cs` builds the app in one public method, `MigrationHost.Build(string[] args)`, that the
-  top-level statements call and the tests call with `UseTestServer` (R-5). It takes the Workbench's host wiring that the composed features need, and nothing else:
+- **Decision.** Two public methods hold the host: `MigrationHost.CreateBuilder(string[] args)` returns the configured
+  `WebApplicationBuilder`, and `MigrationHost.Build(WebApplicationBuilder builder)` builds and maps the app. The
+  top-level statements call both. The tests call `CreateBuilder`, add `UseTestServer` to the builder's web host, then
+  call `Build` (R-5), because the test server must be set before the app is built. The wiring starts from main's
+  `apps/Elsa.Essentials.Host/Program.cs` after the sync (the closest host to what this one composes); each piece it
+  drops is named with its reason in the implementing PR. It contains at least:
   - CShells shell hosting with the default shell activated eagerly at startup, and readiness at `/health/ready` (the
     Workbench's `DefaultShellWarmup` and `MapShellReadiness`);
   - the root health endpoint;
@@ -33,10 +37,17 @@ acceptance set and templates from the merged S-15, or from the head current at t
   - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` and `AddShellStartupValidation`;
   - `AddAuthentication`/`AddAuthorization`, and the OpenIddict token store from main's
     `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore` (`AddOpenIddictEntityFrameworkCoreStore`, R-7);
-  - Nuplane loading from a directory feed (R-6);
-  - a CORS policy for the repository's Studio host (R-8).
+  - a CORS policy for the repository's Studio host (R-8);
+  - the services the composed features resolve from the host, as main's essentials host registers them
+    (`AddEfSchemaReadability`, `AddConfiguredClusterMembership`, `AddWorkflowRuntimeRunnabilityReport` and the CShells
+    ASP.NET Core endpoints), kept or dropped by what the composed features need.
 
-  It leaves out the boot timeline, the composition observation endpoints, Weaver and the OpenTelemetry bridge.
+  It leaves out the boot timeline, the composition observation endpoints, Weaver, the OpenTelemetry bridge, Nuplane
+  package loading (R-6) and the module-management API.
+- **Environment.** `Properties/launchSettings.json` sets `ASPNETCORE_ENVIRONMENT=Development` and one fixed local URL.
+  `DevelopmentOrDemoGuard` refuses to start a host whose identity features run in development mode outside the
+  Development environment, and the Workbench gets Development the same way. The tests set the builder's environment to
+  Development. The fixed URL is what the Studio CORS policy, the return URLs and the JTest environment file use.
 - **After the main sync.** If the sync brings in main's shared hosting helpers (main's `apps/Elsa.Essentials.Host`
   uses `AddFoundationShellHosting` and `MapFoundationHealth`), the host uses them instead of copying the Workbench's.
   The behaviour above stays the same.
@@ -45,10 +56,11 @@ acceptance set and templates from the merged S-15, or from the head current at t
 
 - **Decision.** The composition is the host's `shells.json`, in the CShells shape the Workbench uses
   (`CShells:Shells:default:Features`). It is one file that tools read by path (FR-004).
-- **Reasons.** The host's README has a table with one row per composed feature and its reason. CShells' feature
-  section has no room for comments: the Workbench's `shells.json` has none, and a `// key` inside `Features` would be
-  read as a feature name. A host test compares the table with `shells.json` and fails, naming the feature, on any
-  difference (FR-004, SC-003).
+- **Reasons.** A machine-readable `composition-reasons.json` next to `shells.json` maps each composed feature name to
+  its reason. CShells' feature section has no room for comments: the Workbench's `shells.json` has none, and a
+  `// key` inside `Features` would be read as a feature name. A host test compares the two JSON files and fails,
+  naming the feature, on any difference (FR-004, SC-003). Framework §2.23.2 forbids tests that assert on markdown, so
+  the README shows the reasons (rendered from the file, or linking to it) and is not what the test reads.
 - **Every composed feature is listed**, including the ones another feature's `DependsOn` brings in. Their reason is
   "required by X". The test can then compare the composed set with the list exactly.
 - **Configuration layers.** On the Workbench, `CreateBuilder` adds `appsettings*.json`, user secrets (in
@@ -108,14 +120,15 @@ of these for their own workflows adds it as in FR-005.
 ## R-5 Tests
 
 A PR-tier test project, `extensions/Elsa3/tests/Migration/Host/Tests/Elsa3.Migration.Host.Tests.csproj` (xunit). It
-builds the host through `MigrationHost.Build` (R-2) with `UseTestServer` from `Microsoft.AspNetCore.TestHost`, which
-is already pinned in the root `Directory.Packages.props`. `Microsoft.AspNetCore.Mvc.Testing` is pinned only for Studio,
-and a top-level `Program` can't be booted by TestHost alone, hence the build method. Each test uses a temporary data
+builds the host through `MigrationHost.CreateBuilder`, `UseTestServer` and `MigrationHost.Build` (R-2), with
+`Microsoft.AspNetCore.TestHost`, which is already pinned in the root `Directory.Packages.props`.
+`Microsoft.AspNetCore.Mvc.Testing` is pinned only for Studio, and a top-level `Program` can't be booted by TestHost
+alone, hence the two methods. The builder's environment is Development (R-2). Each test uses a temporary data
 folder and a temporary migrated folder. Its tests:
 
 - **Composition.** The shell activates with the committed `shells.json`. A listed feature that doesn't resolve fails,
   naming it (SC-005).
-- **Reasons.** The README table and `shells.json` list the same features, in both directions: a composed feature
+- **Reasons.** `composition-reasons.json` and `shells.json` list the same features, in both directions: a composed feature
   without a row, and a row for a feature that isn't composed, each fail naming the feature (FR-004).
 - **No Elsa 3.** No assembly in the host's dependency closure is an `Elsa3.*` assembly or an Elsa 3 package (SC-004).
   This is in addition to `Elsa3MigrationBoundaryTests`.
@@ -127,21 +140,19 @@ folder and a temporary migrated folder. Its tests:
   - 6: a missing workflows folder means the host refuses to start; so does a missing activities file.
   - 2: a composite with an activity dependency loads and runs (PR #5685 is merged).
 
-US1 scenario 3 (the engineer's own package) and US4 (Studio) are checked by hand with the quickstart. The evidence
+US1 scenario 3 (the engineer's own feature project) and US4 (Studio) are checked by hand with the quickstart. The evidence
 goes in the PR.
 
 Constitution §2.23 risk-based tests: the risks are drift between the composition and its reasons, Elsa 3 leaking in,
 and the folder settings. `FeatureCompositionTests` already proves each feature composes on its own.
 
-## R-6 Settings, packages and data
+## R-6 Settings and data
 
-- **Packages.** A Nuplane directory feed named `local-packages`, reading the host's `packages/` folder, as the
-  Workbench's `appsettings.json` configures it. The folder is git-ignored except for a `.gitkeep`. The Nuplane loading
-  settings the Workbench bakes (`Nuplane:Loading:SharedAssemblies`, `Nuplane:HostProvidedPackages`) are narrowed to the
-  host's closure. `HostProvidedPackagesGuardTests` (`essentials/tests/Architecture/Tests/`) checks only the hosts in
-  `SharingHosts`, and `NuplaneHostSettings.HostDirectory` and `HostsThatShareAssemblies` look only under `apps/`. The
-  host shares assemblies, so T002 adds it to `SharingHosts` and teaches the helper the host's path under
-  `extensions/Elsa3/src/Migration/Host/`.
+- **No runtime packages.** The host loads no Nuplane packages: its audience adds their own features as project
+  references in their clone (FR-005). This keeps it out of `HostProvidedPackagesGuardTests`. On main every host in
+  `SharingHosts` must declare each shared assembly or exempt it, and an exemption needs a computed production
+  configuration that only image builds ship. A source-only host can satisfy neither without changing the guard. If the
+  hosting helpers the host uses (R-2) make it share assemblies after all, T005 raises it on the PR before going on.
 - **Working directory.** `JsonWorkflowReconciliationSource.ScanFolder` calls `Directory.Exists` on the raw path, so
   relative paths resolve against the process's working directory, and `dotnet run --project` from the repository root
   makes that the repository root. The project sets `<RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>`,
@@ -202,7 +213,8 @@ The host references no EF vendor package directly, so `OpenIddictPersistenceArch
 ## R-10 Acceptance run
 
 - **Decision.** Use the S-15 Elsa 4 templates and environment unchanged, except base URL and credentials (the
-  development administrator from R-6). The run record is a row in the S-15 ledger,
+  development administrator from R-6), in an environment file committed next to the S-15 Elsa 4 one, with the host's
+  fixed URL (R-2). The run record is a row in the S-15 ledger,
   `extensions/Elsa3/tests/JTest/ledger/runs.md`, in its existing columns: Engine `Elsa 4`; Source names the migration
   host, the CLI version that wrote `migrated/`, and whether spec 1207 is implemented; Notes names the Workbench run it is
   compared with. Both runs on one head then sit side by side, and spec 1235's ledger format doesn't change. Capture is set through the diagnostics settings API after start, as in S-15.

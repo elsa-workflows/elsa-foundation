@@ -7,9 +7,10 @@ files and records this feature defines.
 
 - **Where**: `extensions/Elsa3/src/Migration/Host/shells.json`, under `CShells:Shells:default:Features`.
 - **Fields per feature**: the CShells feature name (the key) and its settings (the value, often `{}`).
-- **Reason**: one row per feature in the README's composition table, with columns feature and reason. The reason is one
+- **Reason**: one entry per feature in `composition-reasons.json` next to `shells.json` (feature name → reason), shown
+  by the README. The reason is one
   of the following: a JTest suite or template; "Studio designer"; "migrated folder"; or "required by <feature>".
-- **Rule**: the set of features in `shells.json` equals the set of rows in the table (FR-004, R-5).
+- **Rule**: the set of features in `shells.json` equals the set of keys in `composition-reasons.json` (FR-004, R-5).
 
 ## Migrated folder
 
@@ -29,10 +30,12 @@ data-model.md):
 
 | Column | Value for a migration-host run |
 |---|---|
+| Run | The next run number in the ledger |
 | Engine | `Elsa 4` |
 | Commit | The initiative head the host was built from |
 | Source | `Elsa3.Migration.Host`, the migration CLI version that wrote `migrated/`, and whether spec 1207 is implemented on the commit |
-| Environment file, jtest, Scope, Result, Receipt | As spec 1235 defines them |
+| Environment file | The migration host's environment file, committed next to the S-15 Elsa 4 one (R-10) |
+| jtest, Scope, Result, Receipt | As spec 1235 defines them |
 | Notes | The Workbench run on the same commit it is compared with |
 
 No secret values. A failed run stays recorded.

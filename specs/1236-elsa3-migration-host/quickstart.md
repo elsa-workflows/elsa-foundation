@@ -23,14 +23,13 @@ dotnet run --project extensions/Elsa3/src/Migration/Host
      --CShells:Shells:default:Features:JsonActivityReconciliation:Options:FilePath=/abs/path/migrated/activities/activities.json
    ```
 
-3. **Your own activities.** Add a project reference to your feature project in your clone, or put its package in the
-   host's `packages/` folder. Then add the feature to the composition in a local settings source: a git-ignored
+3. **Your own activities.** Add a project reference to your feature project in your clone. Then add the feature to the composition in a local settings source: a git-ignored
    `shells.Local.json` next to `shells.json`, `dotnet user-secrets`, or an environment variable.
 4. Delete `data/` to start from an empty store; the host creates it again at startup.
 
 ## See what your host needs
 
-The host's README lists every composed feature and why it is there. Use it as the starting point for your own Elsa 4
+The host's `composition-reasons.json`, shown in its README, gives every composed feature and why it is there. Use it as the starting point for your own Elsa 4
 host.
 
 ## Studio
