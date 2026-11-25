@@ -24,8 +24,12 @@ internal sealed partial class Burst
         if (!_s.Frames.TryGetValue(frameId, out var frame) || frame.Intervention is not null) return null;
         var node = _wf.Nodes[frame.Node];
         if (!typeof(ISignalledComposite).IsAssignableFrom(node.Type)) return null;
-        var receiver = (ISignalledComposite)RestoreActivity(frame, node);
-        return (receiver, new CompositeContext(this, frame, node));
+        try { return ((ISignalledComposite)RestoreActivity(frame, node), new CompositeContext(this, frame, node)); }
+        catch (NativeExpressionException failed)
+        {
+            Fail(frame, ExpressionFault(frame, failed));
+            return null;
+        }
     }
 
     private void AcceptSignal(Contract.Message message)
