@@ -6,6 +6,7 @@ and is the base for custom Studio builds: a deployable Studio where every module
 | Studio app | Pairs with | Compiled in |
 | --- | --- | --- |
 | `Elsa.Studio.Foundation.Host` (this app) | `Elsa.Foundation.Host` | The bare shell |
+| [`Elsa.Studio.Essentials.Host`](../Elsa.Studio.Essentials.Host) | `Elsa.Essentials.Host` | The bare shell plus the modules the Essentials server serves |
 | [`Elsa.Studio.Workbench.Host`](../Elsa.Studio.Workbench.Host) | `Elsa.Workbench.Host` | Every Studio module |
 
 An app decides which modules ship compiled in. It never decides which server Studio talks to: capability discovery decides which
