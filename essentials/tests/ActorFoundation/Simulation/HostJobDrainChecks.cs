@@ -56,9 +56,15 @@ internal static class HostJobDrainChecks
             ("unknown-answer-error", () => TransientAnswerErrorAsync(Failure.Unknown)),
             ("abandon-waits-turn-drains", AbandonWaitsTurnDrainsAsync),
             ("faulted-drain-pass", FaultedDrainPassAsync),
+            ("negative-dispose-deadline", NegativeDisposeDeadlineAsync),
+            ("abandon-fault-after-kill", AbandonFaultAfterKillAsync),
+            ("bound-expiry-fault", BoundExpiryFaultAsync),
+            ("loss-in-both-drains", LossInBothDrainsAsync),
         ];
         // HOST_JOB_DRAIN_ONLY=name[,name]: run only these cases (fail-before witnesses run them one at a time).
-        var only = Environment.GetEnvironmentVariable("HOST_JOB_DRAIN_ONLY")?.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        var only = Environment.GetEnvironmentVariable("HOST_JOB_DRAIN_ONLY")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (only is { Length: 0 } || only?.FirstOrDefault(name => !cases.Any(known => known.Name == name)) is { } unknown)
+            throw new InvalidOperationException($"HOST_JOB_DRAIN_ONLY names no known case: {Environment.GetEnvironmentVariable("HOST_JOB_DRAIN_ONLY")}");
         foreach (var (name, run) in cases)
             if (only is null || only.Contains(name, StringComparer.Ordinal))
                 await run().WaitAsync(TimeSpan.FromMinutes(2));     // a hung case fails instead of holding the run
@@ -1558,11 +1564,14 @@ internal static class HostJobDrainChecks
             }
             await type.Canceled.Task.WaitAsync(Timeout);
             await Task.Delay(100);
+            var errors = node.Errors;
             type.Finish.TrySetResult();
-            var outcomes = new[] { await OutcomeAsync(first), await OutcomeAsync(second) };
-            var reports = outcomes.Count(outcome => ReferenceEquals(outcome, fault));
-            Check(reports == 1 && outcomes.All(outcome => outcome is null || ReferenceEquals(outcome, fault)),
-                $"a stop and a dispose waiting together report the failure once ({(disposeFirst ? "dispose" : "stop")} first, {reports} report(s))");
+            var stopOutcome = await OutcomeAsync(disposeFirst ? second : first);
+            var disposeOutcome = await OutcomeAsync(disposeFirst ? first : second);
+            await WaitFor(() => node.Errors > errors);
+            await Task.Delay(100);
+            Check(ReferenceEquals(stopOutcome, fault) && disposeOutcome is null && node.Errors - errors == 1 && ReferenceEquals(node.LastError, fault),
+                $"a stop and a dispose waiting together: the stop throws the fault, the dispose stays quiet, and the fault is recorded once ({(disposeFirst ? "dispose" : "stop")} first, recorded {node.Errors - errors})");
         }
     }
 
@@ -1676,6 +1685,117 @@ internal static class HostJobDrainChecks
             await JobFinish.Task;
             return "completed";
         }
+    }
+
+    // A negative dispose deadline is refused when the node is made, not when it is disposed.
+    private static Task NegativeDisposeDeadlineAsync()
+    {
+        var fixture = new Fixture();
+        Exception? refused = null;
+        try { _ = new RuntimeNode("negative-deadline", fixture.Store, 1, new LoopOptions { DisposeDeadline = TimeSpan.FromSeconds(-5) }); }
+        catch (Exception error) { refused = error; }
+        Check(refused is ArgumentOutOfRangeException, $"a negative dispose deadline is refused when the node is made ({refused?.GetType().Name ?? "accepted"})");
+        return Task.CompletedTask;
+    }
+
+    // The abandon path's wait outlives the stop deadline: Worker 0's turn stays entered past the kill while Worker 1's
+    // drain round faults. The stop returns at the kill; the fault that lands afterwards is still recorded on the node.
+    private static async Task AbandonFaultAfterKillAsync()
+    {
+        const int partitions = 2;
+        var fixture = new Fixture(partitions);
+        MixedProbe[] types = [new(), new()];
+        types[0].JobFinish.TrySetResult();
+        types[1].TurnRelease.TrySetResult();
+        types[1].JobFinish.TrySetResult();
+        var fault = new InvalidOperationException("injected drain round fault after the kill");
+        var faulting = 0;
+        var options = fixture.Options with { BeforeDrainRound = () => { if (Volatile.Read(ref faulting) == 1) throw fault; } };
+        var workers = Enumerable.Range(0, partitions).Select(partition => new Worker("fault-after-kill", partition, fixture.Store,
+            new ActorAdapter(fixture.Store, types[partition]), partition == 1 ? options : fixture.Options)).ToArray();
+        var host = new DurableHost(workers);
+        var node = new RuntimeNode("fault-after-kill", fixture.Store, partitions, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, beforeRelease: host.DrainEnteredTurnsAsync);
+        await node.StartAsync(host);
+        await WaitFor(() => fixture.Store.Partitions.All(row => row.Owner == node.Node));
+        for (var key = 0; key < 32 && !types[0].TurnEntered.Task.IsCompleted; key++)
+        {
+            await fixture.StartActorAsync(node.Node, "turn-" + key, MixedProbe.TypeKey);
+            await Task.Delay(50);
+        }
+        await types[0].TurnEntered.Task.WaitAsync(Timeout);
+        Volatile.Write(ref faulting, 1);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        var stopped = await OutcomeAsync(node.StopAsync(deadline.Token).AsTask());
+        var beforeRelease = node.LastError;
+        types[0].TurnRelease.TrySetResult();     // the turn ends after the kill: the abandon wait ends and the fault lands
+        var clock = Stopwatch.StartNew();
+        while (!ReferenceEquals(node.LastError, fault) && clock.Elapsed < Timeout) await Task.Delay(20);
+        await DisposeQuietlyAsync(node);
+        Check(stopped is null && !ReferenceEquals(beforeRelease, fault) && ReferenceEquals(node.LastError, fault),
+            $"a fault that lands after the stop deadline is still recorded on the node ({node.LastError?.Message ?? "nothing recorded"})");
+    }
+
+    // The dispose bound expires while a beside loop holds the stop; the stop's fault, when it lands, is recorded.
+    private static async Task BoundExpiryFaultAsync()
+    {
+        var fixture = new Fixture();
+        var fault = new InvalidOperationException("injected turn drain fault behind a stuck beside loop");
+        var beside = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var node = new RuntimeNode("bound-expiry-fault", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100),
+            PollInterval = TimeSpan.FromMilliseconds(20), DisposeDeadline = TimeSpan.FromMilliseconds(200)
+        }, beside: _ => beside.Task, beforeRelease: _ => Task.FromException(fault));
+        await node.StartAsync(fixture.Host(node, new JobProbe(), fixture.Store, ownedSet: true));
+        await WaitFor(() => fixture.Fence.Owner == node.Node);
+        var disposed = await OutcomeAsync(node.DisposeAsync().AsTask());
+        var atBound = node.LastError;
+        beside.TrySetResult();
+        var clock = Stopwatch.StartNew();
+        while (!ReferenceEquals(node.LastError, fault) && clock.Elapsed < Timeout) await Task.Delay(20);
+        Check(disposed is null && atBound is TimeoutException && ReferenceEquals(node.LastError, fault),
+            $"a dispose returns at its bound, and the stop's fault that lands later is recorded ({atBound?.GetType().Name ?? "nothing"} then {node.LastError?.Message ?? "nothing"})");
+    }
+
+    // A fence lost in the turn drain and again in the job drain is reported as one loss, not an aggregate.
+    private static async Task LossInBothDrainsAsync()
+    {
+        const int partitions = 2;
+        var fixture = new Fixture(partitions);
+        var type = new JobProbe();
+        var jobPartition = -1;
+        var store = new CountingStore(fixture.Store, static () => { }, observeCommit: (batch, landed) =>
+        {
+            if (!landed) return;
+            foreach (var turn in batch.Turns)
+                if (turn.Sent.Any(message => message.Kind == Kinds.Job)) Volatile.Write(ref jobPartition, batch.PartitionOf(turn));
+        });
+        var turnLoss = new ScopeOwnershipLostException("injected turn drain loss");
+        var node = new RuntimeNode("loss-in-both", store, partitions, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, beforeRelease: _ => Task.FromException(turnLoss));
+        await node.StartAsync(fixture.Host(node, type, store, ownedSet: true));
+        await WaitFor(() => fixture.Store.Partitions.All(row => row.Owner == node.Node));
+        await fixture.StartActorAsync(node);
+        await type.Entered.Task.WaitAsync(Timeout);
+        var stop = node.StopAsync().AsTask();
+        try
+        {
+            await type.Canceled.Task.WaitAsync(Timeout);
+            var row = fixture.Store.Partitions[Volatile.Read(ref jobPartition)];
+            (row.Owner, row.Epoch) = ("sibling", row.Epoch + 1);     // the job drain loses this fence too
+            await RenewedAsync(node, node.Heartbeats.Renewed);
+            await Task.Delay(300);
+        }
+        finally { type.Finish.TrySetResult(); }
+        var reported = await OutcomeAsync(stop);
+        await DisposeQuietlyAsync(node);
+        Check(reported is ScopeOwnershipLostException,
+            $"a fence lost in both drains is reported as one ScopeOwnershipLostException ({reported?.GetType().Name ?? "nothing"})");
     }
 
     private static async Task<Exception?> OutcomeAsync(Task task)

@@ -107,7 +107,7 @@ internal static class PostgresPreviewLifetimeChecks
             Require((await ReadFenceAsync()).Owner is null, "the replacement also releases ownership through application shutdown");
         }
         // KERNEL_LIFETIME_PROBES=name[,name]: run only these deadline probes after the main flow (for fail-before witnesses).
-        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins"];
+        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline"];
         var only = Environment.GetEnvironmentVariable("KERNEL_LIFETIME_PROBES")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (only is { Length: 0 } || only?.FirstOrDefault(name => !probes.Contains(name, StringComparer.Ordinal)) is { } unknown)
             throw new InvalidOperationException($"KERNEL_LIFETIME_PROBES names no known probe ({string.Join(", ", probes)}).");
@@ -119,9 +119,20 @@ internal static class PostgresPreviewLifetimeChecks
         if (Probe("dispose-stuck")) await CheckDisposeDeadlineAsync(stuck: true);
         if (Probe("dispose-report")) await CheckDisposeReportsOnceAsync();
         if (Probe("dispose-joins")) await CheckJoinedDisposeKillsAsync();
+        if (Probe("negative-deadline")) CheckNegativeDisposeDeadline();
         return 0;
 
-        // The first dispose to receive the stop's failure reports it; a second dispose does not throw it again.
+        // A negative dispose deadline is refused when the hosted service is made.
+        void CheckNegativeDisposeDeadline()
+        {
+            Exception? refused = null;
+            try { _ = new PostgresPreviewHostedService(Open, "negative-deadline", new WaitingActor(false), Environment.FailFast,
+                new LoopOptions { DisposeDeadline = TimeSpan.FromSeconds(-5) }); }
+            catch (Exception error) { refused = error; }
+            Require(refused is ArgumentOutOfRangeException, $"a negative dispose deadline is refused when the hosted service is made ({refused?.GetType().Name ?? "accepted"})");
+        }
+
+        // A dispose never throws the stop's failure: the node records it, whoever waits, and a second dispose is quiet too.
         async Task CheckDisposeReportsOnceAsync()
         {
             const string name = "dispose-report";
@@ -146,8 +157,9 @@ internal static class PostgresPreviewLifetimeChecks
                 catch (Exception error) when (!token.IsCancellationRequested) { again = error; }
             }
             finally { held.Release.TrySetResult(); }
-            Require(reported is Kernel.Runtime.ScopeOwnershipLostException && again is null,
-                $"the first dispose reports the lost fence and a second dispose does not rethrow it ({reported?.GetType().Name ?? "nothing"}, then {again?.GetType().Name ?? "nothing"})");
+            var recorded = service.LastError;
+            Require(reported is null && again is null && recorded is Kernel.Runtime.ScopeOwnershipLostException,
+                $"a dispose stays quiet about the lost fence, which the service records ({reported?.GetType().Name ?? "quiet"}, then {again?.GetType().Name ?? "quiet"}, recorded {recorded?.GetType().Name ?? "nothing"})");
         }
 
         // A dispose that joins a stop already under way kills it at the dispose deadline: no escalation, fence left for expiry.
