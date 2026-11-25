@@ -49,6 +49,9 @@ export root, use `/` separators, and are ordinal-sorted. A zip entry path is use
 | `publishStoppedHere` | `true` on the publish finding at which publish stopped (FR-014). |
 | `routine` | `true` for a code the code table marks routine, such as the null-policy Info added to every definition. |
 
+Optional members (`remedy`, `componentKind`, `componentName`, `nodeId`, `publishStoppedHere`, `routine`) are left out
+when they do not apply, never written as `null`.
+
 Findings within a definition are ordered by stage, then path, then code, all ordinal.
 
 ## Definition result

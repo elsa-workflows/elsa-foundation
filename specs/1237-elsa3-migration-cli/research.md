@@ -256,8 +256,19 @@ in dependency order. The export rewrites each reusable version id, and every ref
 (`ActivityCatalogStableIds.VersionId`), wherever an `activityVersionId` member appears, also inside a node's opaque
 `Structure` payload. On load, the engine compiles a version's `DescriptorPayload` as its provider manifest
 (`SourceOwnedActivityVersionPublisher`), so the export takes a reusable's descriptor from the publication's `Provider`
-(the graph manifest), not from the catalog version, which holds the compiled runtime descriptor. Inputs, outputs and
-the outcomes facet come from the publication's `Contract`, unchanged. T024 proves that the engine
+(the graph manifest), not from the catalog version, which holds the compiled runtime descriptor. Each field of `ActivityVersionReconciliationModel` has one source:
+
+| Field | Source |
+|---|---|
+| `Id` | `null`, so the engine computes the definition id from the type key |
+| `Version`, `ActivityTypeKey` | the publication |
+| `DisplayName`, `Category`, `Description` | the activity definition |
+| `ProviderKey`, `ProviderSchemaVersion`, `Descriptor` | the publication's `Provider` (the graph manifest, ids rewritten) |
+| `ConsumerKey`, `ConsumerSchemaVersion`, `Inputs`, `Outputs`, `DesignFacets`, `ExecutionType` | the catalog version, which holds `ActivityCatalogProjection`'s projection of the publication's `Contract` |
+
+Reloading is not perfectly lossless: the engine's source publisher sets the storage driver to `elsa.json` and the
+default durability, and keeps only emitted outcomes. The import already uses those values, so nothing changes in
+practice. Workflow envelopes carry `SourceCreatedAt` and `ContentHash` as null. T024 proves that the engine
 loads the result. **Rejected**: changing the import's id formula or adding a version id to the JSON activity model;
 both change other owners for a problem the exporter can solve alone.
 
@@ -265,7 +276,9 @@ both change other owners for a problem the exporter can solve alone.
 
 **Decision**: `report.html` is one static template, embedded in the tooling assembly, with inline CSS and script. The
 report JSON is embedded as a `<script type="application/json">` block, and the script renders it. Script content is raw text. `report.json` is serialized from the JSON baseline
-(ADR 0091, `JsonBaseline.Options`), whose relaxed encoder leaves `<`, `>` and `&` alone, so the HTML step itself
+(ADR 0091, `JsonBaseline.Options`), whose relaxed encoder leaves `<`, `>` and `&` alone and which writes nulls; the report model's optional
+members carry `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`, so an absent member stays absent, as
+the schema requires. The baseline's encoder keeps those characters, so the HTML step itself
 rewrites them as `\u003c`-style JSON escapes when it inlines the JSON, never as HTML entities. No
 other data is written into the page (FR-021).
 

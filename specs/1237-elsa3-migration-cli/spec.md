@@ -190,7 +190,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   (specification 1239), so `migrated/activities/activities.json` loads in any order. The engine gives each loaded
   activity version the catalog id of its type key and version, not the id the import stored, so the export rewrites
   every reusable version id, and every reference to one in a reusable or a workflow, to that catalog id. Each exported
-  reusable keeps its outcomes facet and contract as stored, including any outcome it declared in Elsa 3.
+  reusable keeps its contract and outcomes, including any outcome it declared in Elsa 3.
 
 ## Requirements *(mandatory)*
 
@@ -301,8 +301,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   value, that the converter reports as matchable (a registered prefixed host function may take the name over: an undeclared custom global, or a refused
   Elsa 3 built-in such as `getConfig`) gets a `javascript-function` component code of its own, with `ComponentName`.
   That includes a `get{Name}()` or `set{Name}()` call that matches no variable or input, which can be an Elsa 3 custom
-  global such as `getCustomerData()`. A `set{Name}()` write to a read-only input is not a component: it is fixed in the
-  definition (`patch-definition`).
+  global such as `getCustomerData()`. A `set{Name}()` call on a workflow input is one too: Elsa 3 generated no setter
+  for inputs, so a call that ran in Elsa 3 was a custom global.
   Calls the converter reports as unmatchable, and forbidden capabilities, keep the forbidden-capability code and are not
   components.
 - **FR-016**: Every Must fix finding MUST carry one of three remedies:
@@ -384,7 +384,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 | ID | Question | Decision |
 |---|---|---|
 | Q1 | Where does the migrated content come from? | It is exported from the run's own Elsa 4 store after publish, not written from the converter's output. The folder is `migrated/`. Workflows use the workflow format, and reusables use the activity format. |
-| Q2 | Converted reusables depend on other activity versions. Can the engine load them from `migrated/`? | Yes: specification 1239 lets the engine's JSON activity reconciliation publish source-owned composites with their dependencies. The engine assigns each loaded version its catalog id (type key and version), so the export rewrites reusable version ids and every reference to them to that id, and keeps each reusable's outcomes as stored. Nothing in the report needs to flag reusables. |
+| Q2 | Converted reusables depend on other activity versions. Can the engine load them from `migrated/`? | Yes: specification 1239 lets the engine's JSON activity reconciliation publish source-owned composites with their dependencies. The engine assigns each loaded version its catalog id (type key and version), so the export rewrites reusable version ids and every reference to them to that id, and keeps each reusable's contract and outcomes. Nothing in the report needs to flag reusables. |
 | Q3 | Where does the CLI's Elsa 4 closure come from? | The Elsa 3 migration image, built `FROM` the essentials engine at the same version, with the Elsa 3 additions baked in. The CLI ships no closure, and Docker is a prerequisite. |
 | Q4 | Does using the ADR 0076 worker for this group need an ADR change? | Yes. A small ADR 0076 amendment does two things. It lets the worker reach further named frozen entry points, one per command group (D14). It also lets such a group, by default, reconcile local directory feeds into a private, run-scoped install root that it deletes at the end, never a host's shared store and never the network (D1, D10). This specification is provisional on it. |
 | Q5 | How is the run kept to one database when the shared transaction refuses a supplied connection? | Every module gets the same connection string, for a uniquely named in-memory shared-cache database that is kept alive for the run. |

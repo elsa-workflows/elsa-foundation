@@ -41,7 +41,7 @@ Start the essentials engine image with your `appsettings.json`, your packages, a
    byte-identical.
 2. Sentinel fixture: no sentinel appears in `report.json` or `report.html`.
 3. Fixture feature package → `assess` clears exactly its findings; a value-only read of
-   its function becomes `ELS3-REPLACED-FUNCTION-REFERENCE` (SC-007).
+   its function becomes `ELS3-REPLACED-FUNCTION-REFERENCE`, and the function leaves `components` (SC-007).
 4. Specification 1235 acceptance set → `inventory --all-versions` in the image: every definition gets a bucket, and the published set equals
    startup reconciliation's.
 5. The essentials engine, with JSON reconciliation, loads every workflow in `migrated/workflows/` that uses no reusable.

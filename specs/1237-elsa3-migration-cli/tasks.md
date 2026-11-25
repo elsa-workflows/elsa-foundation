@@ -74,15 +74,15 @@
 - [ ] T004 Add `Tooling/Elsa3MigrationCodeTable.cs`. It maps each code to a remedy, a component kind, a routine mark
   and, for codes the converter does not own, a fixed text, with `patch-definition` and a default text for unlisted
   Elsa 4 codes. Give it an entry for every code the converter, the import and reconciliation emit, including the codes
-  of the converter diagnostic units (among them `ELS3-REPLACED-FUNCTION-REFERENCE`, remedy `patch-definition`, kind
-  `javascript-function`) and the tooling's own `ELS3-MIGRATION-*` codes. Every Elsa 3 entry has a remedy. Mark `ELS3-NULL-POLICIES` routine. Promote the codes that are emitted as inline
+  of the converter diagnostic units (among them `ELS3-REPLACED-FUNCTION-REFERENCE`, remedy `patch-definition`, no component kind: it is
+  emitted only once a host function provides the name, so nothing is left to build) and the tooling's own `ELS3-MIGRATION-*` codes. Every Elsa 3 entry has a remedy. Mark `ELS3-NULL-POLICIES` routine. Promote the codes that are emitted as inline
   literals (`ELS3-INPUT-DEFAULT-REQUIRED`, `ELS3-NULL-POLICIES` and any others in `Elsa3ActivityNormalizer` and its
   peers) to constants. Add the completeness test in `MTests/Tests/`. It reflects over every code constant class in
   Models, Mapping, Import (`ReusableActivityImportDiagnosticCodes`) and Reconciliation, and fails on any code without
   an entry or without a remedy, whatever its severity. It reflects over the tooling's own code class too. It also greps the Elsa 3 sources for `"ELS3-`, `"VF-IMP-` and `"ELS3-REUSABLE-`
   string literals outside the constant classes, and fails on any (FR-016, FR-019).
 - [ ] T004b Make the converter carry component names as data (FR-016a). Add a `ComponentName` metadata key to every
-  component diagnostic: unmapped activity types, undeclared and replaced-function references, unregistered variable
+  component diagnostic: unmapped activity types, undeclared-function references, unregistered variable
   types and custom storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. Where
   `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` already carries `ComponentName`, leave it; test that the inventory
   lists both the custom driver and the memory driver as storage-driver components. Give every call, and every read of an undeclared global used as a value, that the
@@ -90,8 +90,9 @@
   take over) a `javascript-function` component code of its own, separate from the forbidden-capability code, which
   unmatchable calls and forbidden capabilities keep. Cover every emission site, not only the `CanBeMatched` one in
   `Elsa3ExpressionRewriter`: the `get{Name}()` and `set{Name}()` calls with no matching variable or input in
-  `Elsa3ValueFlowLowerer` (the `UndeclaredFunctionGuidance` sites) get the component code too, while a `set{Name}()`
-  write to a read-only input stays a `patch-definition` finding and is not a component. Add a `get`-prefixed custom
+  `Elsa3ValueFlowLowerer` (the `UndeclaredFunctionGuidance` sites) get the component code too, and so does the
+  read-only workflow-input branch of `set{Name}()` in `Elsa3ExpressionRewriter` (Elsa 3 generated no setter for
+  inputs, so a call that ran there was a custom global); its guidance keeps both routes. Add a `get`-prefixed custom
   global (`getCustomerData()`) to the T002 fixture. Update the mapping README and the affected converter tests, and
   test the fixture calls and the value-only reference. The report builder reads `componentName` only from that metadata.
 - [ ] T005 Extract `Elsa3ImportRun` from `Elsa3FolderImportTask` in
@@ -214,7 +215,7 @@
   the fixture.
 - [ ] T021 [US1] Add a golden-file integration test in `MTests/Tests/`. The fixture export runs through `inventory`
   in-process: `report.json` must equal the committed golden file after `tool.version` and `run.imageVersion` are
-  normalized, and the exit code must be 1. A second run must be
+  normalized, it must validate against `contracts/report.schema.json`, and the exit code must be 1. A second run must be
   byte-identical, `migrated/` included (FR-022, SC-006).
 
 ## Phase 5: User Story 4 - Migrated content (P1)
@@ -230,9 +231,12 @@
   or a reusable's graph manifest, including those inside a node's opaque `Structure` payload (children of a Flowchart
   or Sequence). A reusable's exported descriptor is its graph manifest, taken from the publication's `Provider`
   (key, schema version, manifest), not the catalog version's compiled runtime descriptor, which the engine would
-  refuse as a manifest. Its inputs, outputs and `elsa.outcomes` facet come from the publication's `Contract`, as
-  stored. Add fixture reusables with a custom Elsa 3 outcome next to `done`, and with a reusable nested in a container,
-  used from both a workflow and another reusable. It sets
+  refuse as a manifest. Its consumer key, inputs, outputs, design facets (including `elsa.outcomes`) and
+  execution type come from the catalog version, the engine's projection of the publication's `Contract`. Add fixture reusables with a custom Elsa 3 outcome next to `done`, and with a reusable nested in a container,
+  used from both a workflow and another reusable. Map every field as research R-8's table says. Write
+  `SourceCreatedAt` and `ContentHash` of each workflow envelope as null, so the engine computes the hash and no store
+  timestamp reaches `migrated/`. Order envelopes in a workflow file by SemVer sort key, and `activities.json`
+  topologically with an ordinal tie-break on (`ActivityTypeKey`, SemVer sort key). It sets
   `exportedTo`. It leaves out refused and blocked
   definitions. It always creates `migrated/workflows/` and always writes `migrated/activities/activities.json`, as
   `[]` when no reusable is exported. Test the layout, the absence, and a run that exports no workflow and no reusable.
@@ -256,8 +260,8 @@
   throws during configuration.
 - [ ] T027 [US2] Add the assess integration test (SC-007). Run the fixture export with the T003 package and its
   settings. Every finding that names the custom activity, the function or the variable type disappears, except that the
-  value-only read `items.map(lookupCustomer)` becomes `ELS3-REPLACED-FUNCTION-REFERENCE` (`patch-definition`). No other
-  finding is added. The other definitions it unblocks publish clean.
+  value-only read `items.map(lookupCustomer)` becomes `ELS3-REPLACED-FUNCTION-REFERENCE` (`patch-definition`), and the function is no longer
+  listed under `components`. No other finding is added. The other definitions it unblocks publish clean.
 
 ## Phase 7: User Story 5 - Redacted, versioned report (P2)
 
