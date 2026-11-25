@@ -527,6 +527,27 @@ internal static class WorkbenchPostgresPreview
         using (var testRun = await client.PostAsync($"{address}/workflows/test-runs/qualification/http/orders", new StringContent(""), token))
             Require(testRun.StatusCode == System.Net.HttpStatusCode.Unauthorized,
                 "an anonymous /workflows/test-runs request still reaches the old core's test-run handler (401)");
+
+        // The edge's own bounds and body reading.
+        var oversized = new string('x', 1024 * 1024 + 1);
+        using (var large = await client.PostAsync($"{address}/workflows/http/core-preview/echo",
+                   new StringContent(oversized, System.Text.Encoding.UTF8, "text/plain"), token))
+            Require(large.StatusCode == System.Net.HttpStatusCode.RequestEntityTooLarge,
+                "a body over the edge's 1 MiB bound is refused with 413");
+        using (var text = await client.PostAsync($"{address}/workflows/http/core-preview/echo",
+                   new StringContent("Hello, Ada", System.Text.Encoding.UTF8, "text/plain"), token))
+            Require(text.StatusCode == System.Net.HttpStatusCode.OK && await text.Content.ReadAsStringAsync(token) == "Hello, Ada",
+                $"a text body reaches the workflow as its string ({(int)text.StatusCode} {await text.Content.ReadAsStringAsync(token)})");
+        using (var xml = await client.PostAsync($"{address}/workflows/http/core-preview/echo",
+                   new StringContent("<a/>", System.Text.Encoding.UTF8, "application/xml"), token))
+            Require(xml.StatusCode == System.Net.HttpStatusCode.UnsupportedMediaType, "a body that is neither JSON nor text is refused with 415");
+        using (var unrouted = await client.PostAsync($"{address}/workflows/http/no-such-route",
+                   new StringContent(oversized, System.Text.Encoding.UTF8, "text/plain"), token))
+            Require(unrouted.StatusCode == System.Net.HttpStatusCode.NotFound, "an unrouted request is not found whatever its body");
+        Require(workbench.WaitProbeRefusal is { } refusal &&
+                refusal.Contains("An HTTP Endpoint that waits mid-workflow doesn't run on this host yet. Move it to the start of the workflow", StringComparison.Ordinal) &&
+                refusal.Contains("node 'decision'", StringComparison.Ordinal),
+            "the edge's host refuses a workflow with an HTTP Endpoint that waits mid-workflow, with the reason and what to change");
     }
 
     private static async Task CheckEntryBeforeListeningAsync()
@@ -545,6 +566,7 @@ internal static class WorkbenchPostgresPreview
         internal readonly TaskCompletionSource<string> Listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource<string> KernelServing = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal volatile string? KernelComposed;
+        internal volatile string? WaitProbeRefusal;
 
         internal async Task ReadAsync(TextReader reader)
         {
@@ -555,6 +577,8 @@ internal static class WorkbenchPostgresPreview
                     Entry.TrySetResult(new(actor, key));
                 if (line.Contains("composed the WorkflowsRuntimeKernel feature into shell", StringComparison.Ordinal))
                     KernelComposed = line;
+                if (line.Contains("refuses its HTTP wait probe", StringComparison.Ordinal))
+                    WaitProbeRefusal = line;
                 // The serving outcome: served, or one of the two ways it fails, which the check names instead of timing out.
                 if (line.Contains("serves the publications of shell", StringComparison.Ordinal) ||
                     line.Contains("could not serve the publications of shell", StringComparison.Ordinal) ||
@@ -577,6 +601,7 @@ internal static class WorkbenchPostgresPreview
         internal Task<JobEntry> WaitForJobEntryAsync(CancellationToken token) =>
             WaitForOutputAsync(output.Entry.Task, "entering the timed job", token);
         internal string? KernelComposed => output.KernelComposed;
+        internal string? WaitProbeRefusal => output.WaitProbeRefusal;
         internal Task<string> WaitForKernelServingAsync(CancellationToken token) =>
             WaitForOutputAsync(output.KernelServing.Task, "serving its publications on the kernel", token);
 
@@ -613,9 +638,11 @@ internal static class WorkbenchPostgresPreview
             if (profile == "jobs")
                 start.Environment["Elsa__CorePreview__NativeJobs"] = "true";
             if (profile == "publications")
+            {
                 start.Environment["Elsa__CorePreview__Publications"] = "true";
                 start.Environment["Elsa__CorePreview__HttpProbe"] = "true";
                 start.Environment["Elsa__CorePreview__Tenant"] = "workbench-preview";
+            }
             if (profile is "timed" or "timeout" or "takeover" or "takeover-complete")
                 start.Environment["Elsa__CorePreview__TimedNativeJobs"] = "true";
             if (releaseFile is not null)

@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Api.AspNetCore;
@@ -14,18 +16,22 @@ namespace Elsa.Workbench.CorePreview;
 
 /// <summary>
 /// The Core Preview's HTTP route host: with publications on, a request under <c>Elsa:CorePreview:HttpBasePath</c> (default
-/// <c>/workflows/http</c>, the address Studio shows for an HttpEndpoint) starts the workflow its route serves on the
-/// kernel and holds the caller for its response, up to <c>Elsa:CorePreview:HttpTimeout</c> (default 30 s). It is mapped on
-/// the root host, apart from the shells; on the kernel shell the old core's HTTP endpoint middleware passes these paths on
-/// (<see cref="WorkflowsRuntimeKernelFeature"/>). Only start routes are served: a wait route, or no route, is not found.
+/// <c>/workflows/http</c>, the address Studio shows for an HttpEndpoint, which must be the default shell's HTTP base path)
+/// starts the workflow its route serves on the kernel and holds the caller for its response, up to
+/// <c>Elsa:CorePreview:HttpTimeout</c> (default 30 s). It is mapped on the root host, apart from the shells; on the kernel
+/// shell the old core's HTTP endpoint middleware passes these paths on (<see cref="WorkflowsRuntimeKernelFeature"/>). Only
+/// start routes are served: a wait route, or no route, is not found. The route is matched before the body is read; a body
+/// over <c>Elsa:CorePreview:HttpMaxRequestBodyBytes</c> (default 1 MiB, as on the old core) is refused with 413.
 /// </summary>
 internal sealed class KernelHttpEdgeHost(KernelServing serving, Func<KernelDb> open, PostgresDirectRequests requests,
-    Contract.BoundScope tenant, string basePath, TimeSpan timeout)
+    Contract.BoundScope tenant, string basePath, TimeSpan timeout, long maxRequestBodyBytes)
 {
     internal const string BasePathKey = "Elsa:CorePreview:HttpBasePath";
     internal const string TimeoutKey = "Elsa:CorePreview:HttpTimeout";
+    internal const string MaxRequestBodyBytesKey = "Elsa:CorePreview:HttpMaxRequestBodyBytes";
     internal const string DefaultBasePath = "/workflows/http";
     internal static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+    internal const long DefaultMaxRequestBodyBytes = 1024 * 1024;
 
     private readonly SemaphoreSlim _opening = new(1, 1);
     private PostgresPreviewFoundation? _foundation;
@@ -56,34 +62,45 @@ internal sealed class KernelHttpEdgeHost(KernelServing serving, Func<KernelDb> o
     private async Task<KernelHttpAnswer> AnswerAsync(HttpContext context, CancellationToken token)
     {
         var request = context.Request;
+        // The route is matched on the path as the client sent it, relative to the base path, so the matcher decodes it once.
+        // It is matched first: a path no route serves reads no body.
+        var sent = SentPath(context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? request.Path.ToUriComponent());
+        if (!sent.StartsWith(BasePath, StringComparison.OrdinalIgnoreCase)) return KernelHttpEdge.NotFound;
+        if (KernelHttpEdge.Route(serving, request.Method, sent[BasePath.Length..]) is not { } route) return KernelHttpEdge.NotFound;
+
+        IReadOnlyDictionary<string, string> query, headers;
+        try { query = HttpFields.Query(QueryPairs(request.QueryString.Value)); }
+        catch (HttpFieldsException refused) { return Plain(refused.OverBound ? 414 : 400, refused.Message); }
+        try { headers = HttpFields.RequestHeaders(request.Headers.SelectMany(field => field.Value.Select(value => KeyValuePair.Create(field.Key, value ?? "")))); }
+        catch (HttpFieldsException refused) { return Plain(refused.OverBound ? 431 : 400, refused.Message); }
+
         JsonNode? body = null;
         if (context.Features.Get<IHttpRequestBodyDetectionFeature>()?.CanHaveBody == true)
         {
-            using var buffer = new MemoryStream();
-            await request.Body.CopyToAsync(buffer, token);
-            if (buffer.Length > 0)
+            if (request.ContentLength > maxRequestBodyBytes) return TooLarge();
+            var read = await ReadBodyAsync(request.Body, token);
+            if (read is null) return TooLarge();
+            if (read.Length > 0)
             {
-                buffer.Position = 0;
-                try { body = await JsonNode.ParseAsync(buffer, cancellationToken: token); }
-                catch (JsonException) { return Plain(400, "the request body is not JSON"); }
+                // A text body is the string it holds, as the HttpEndpoint's ParsedContent reads one; a JSON body, or one with no
+                // content type, is parsed; any other body is not one this edge reads.
+                var type = MediaTypeHeaderValue.TryParse(request.ContentType, out var media) ? media : null;
+                if (type?.MediaType is { } mediaType && mediaType.StartsWith("text/", StringComparison.OrdinalIgnoreCase))
+                {
+                    try { body = JsonValue.Create((EncodingOf(type) ?? StrictUtf8).GetString(read)); }
+                    catch (DecoderFallbackException) { return Plain(400, "the request body is not text in its charset"); }
+                }
+                else if (type?.MediaType is null || IsJson(type.MediaType))
+                {
+                    try { body = JsonNode.Parse(read); }
+                    catch (JsonException) { return Plain(400, "the request body is not JSON"); }
+                }
+                else return Plain(415, $"this endpoint reads JSON and text bodies, not {type.MediaType}");
             }
         }
 
-        NativeHttpRequest message;
-        try
-        {
-            message = new NativeHttpRequest(request.Method, request.Path, body)
-            {
-                Query = HttpFields.Query(QueryPairs(request.QueryString.Value)),
-                Headers = HttpFields.RequestHeaders(request.Headers.SelectMany(field => field.Value.Select(value => KeyValuePair.Create(field.Key, value ?? ""))))
-            };
-        }
-        catch (HttpFieldsException refused) { return Plain(refused.OverBound ? 431 : 400, refused.Message); }
-
-        // The route is matched on the path as the client sent it, relative to the base path, so the matcher decodes it once.
-        var sent = SentPath(context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? request.Path.ToUriComponent());
-        if (!sent.StartsWith(BasePath, StringComparison.OrdinalIgnoreCase)) return KernelHttpEdge.NotFound;
-        if (KernelHttpEdge.Match(serving, message, sent[BasePath.Length..]) is not { } start) return KernelHttpEdge.NotFound;
+        var message = new NativeHttpRequest(request.Method, request.Path, body) { Query = query, Headers = headers };
+        if (KernelHttpEdge.Start(serving, route, message) is not { } start) return KernelHttpEdge.NotFound;
 
         var foundation = await FoundationAsync(token);
         var deadline = await requests.ReadClockAsync(token) + (long)timeout.TotalMilliseconds;
@@ -106,6 +123,33 @@ internal sealed class KernelHttpEdgeHost(KernelServing serving, Func<KernelDb> o
 
     private static KernelHttpAnswer Plain(int status, string text) =>
         new(status, "text/plain; charset=utf-8", text, new Dictionary<string, string>());
+
+    private KernelHttpAnswer TooLarge() => Plain(413, $"the request body is over {maxRequestBodyBytes:N0} bytes");
+
+    // The body, or null when it is over the bound: no more than one byte past it is read.
+    private async Task<byte[]?> ReadBodyAsync(Stream source, CancellationToken token)
+    {
+        using var buffer = new MemoryStream();
+        var chunk = new byte[16 * 1024];
+        while (await source.ReadAsync(chunk.AsMemory(0, (int)Math.Min(chunk.Length, maxRequestBodyBytes - buffer.Length + 1)), token) is var count and > 0)
+        {
+            buffer.Write(chunk, 0, count);
+            if (buffer.Length > maxRequestBodyBytes) return null;
+        }
+        return buffer.ToArray();
+    }
+
+    private static readonly Encoding StrictUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    private static bool IsJson(string mediaType) =>
+        mediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase) || mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase);
+
+    private static Encoding? EncodingOf(MediaTypeHeaderValue type)
+    {
+        if (type.CharSet is not { Length: > 0 } charset) return null;
+        try { return Encoding.GetEncoding(charset.Trim('"'), EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback); }
+        catch (ArgumentException) { return null; }
+    }
 
     // The path of the request target as the client sent it: without the scheme and authority of an absolute-form target
     // and without the query, and with the literal '.' and '..' segments removed as Kestrel removes them.

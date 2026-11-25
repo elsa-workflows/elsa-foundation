@@ -360,10 +360,16 @@ toolbox in the default shell hides the activities the kernel does not run (`kern
 the limits that stand, each with its own slice coming:
 
 - **HTTP edge.** A published workflow's HTTP endpoint is served on the kernel at `Elsa:CorePreview:HttpBasePath`
-  (default `/workflows/http`, the address Studio shows), within `Elsa:CorePreview:HttpTimeout` (default 30 s; past it the
-  caller gets 504 and the workflow runs on), in the tenant `Elsa:CorePreview:Tenant` (default `default`; the reads default
-  to it). Only start routes are served there. Studio's HTTP test run (`/workflows/test-runs`) still runs on the old core
-  (slice 8). `Elsa:CorePreview:HttpProbe` serves a probe at `{base}/core-preview/probe` for the Workbench check.
+  (default `/workflows/http`, the address Studio shows; the Workbench does not start when it differs from the default
+  shell's HTTP base path), within `Elsa:CorePreview:HttpTimeout` (default 30 s; past it the caller gets 504 and the
+  workflow runs on), in the tenant `Elsa:CorePreview:Tenant` (default `default`; set, the reads list from it unless
+  `Elsa:CorePreview:ReadsTenant` names another). The route is matched before the body is read; a body over
+  `Elsa:CorePreview:HttpMaxRequestBodyBytes` (default 1 MiB) gets 413, a text body reaches the workflow as its string, a
+  body that is neither JSON nor text gets 415, an over-long query 414 and over-long headers 431. Only start routes are
+  served there, so a publish with an HTTP Endpoint that waits mid-workflow is refused (`definition_unsupported`). The old
+  core's standalone HTTP triggers still serve under the same base path, ahead of the edge. Studio's HTTP test run
+  (`/workflows/test-runs`) still runs on the old core (slice 8). `Elsa:CorePreview:HttpProbe` serves probes at
+  `{base}/core-preview/probe` and `{base}/core-preview/echo` for the Workbench check.
 - **No schedule actor, timers, child workflows or self-sends on format 24 yet.** The Workbench says so in its
   `KernelHostCapabilities`, so a publish with a Timer or Cron, a Delay or a Dispatch Workflow is refused where it is
   mapped (`definition_unsupported`), naming the node and what to change. Without self-sends the Native model does not

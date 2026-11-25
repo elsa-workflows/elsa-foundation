@@ -703,15 +703,38 @@ public sealed class KernelCoordinatorTests
         Assert.False(host.Serving.Registry.Contains("pauses@1"));
     }
 
+    // A start route only, as an edge that serves no wait routes takes it.
     private static WorkflowExecutable Approvals(string artifact) => ExecutableOf(artifact, "approvals", Sequence("root",
         Node("in", Types.HttpEndpoint, [Literal("Path", "approvals/{id}", "String"), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", true, "Boolean")]),
-        Node("wait", Types.HttpEndpoint, [Literal("Path", "decisions", "String"), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", false, "Boolean")]),
+        Node("out", Types.WriteHttpResponse, [Literal("Body", "approved", "String")])));
+
+    // A start route and a wait route after it.
+    private static WorkflowExecutable Decisions(string artifact) => ExecutableOf(artifact, "decisions", Sequence("root",
+        Node("in", Types.HttpEndpoint, [Literal("Path", "approvals/{id}", "String"), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", true, "Boolean")]),
+        Node("wait", Types.HttpEndpoint, [Literal("Path", "decisions", "String"), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", false, "Boolean")],
+            displayName: "Wait for the decision"),
         Node("out", Types.WriteHttpResponse, [Literal("Body", "decided", "String")])));
+
+    private static readonly KernelHostCapabilities StartRoutesOnly = new(HttpWaits: false);
+
+    [Fact]
+    public async Task A_host_whose_edge_serves_no_wait_routes_refuses_a_waiting_http_endpoint_where_it_maps_it()
+    {
+        var host = new Host(capabilities: StartRoutesOnly);
+
+        var refused = await host.ActivateAsync(Decisions("decisions@1"), "decisions-1");
+
+        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.Mapping), (refused.Outcome, refused.FailedStep));
+        Assert.Equal($"{NativeMappingRefusedException.ActivityUnsupported}: Node 'Wait for the decision' (wait): {KernelHostCapabilities.HttpWaitUnavailable}",
+            refused.Diagnostic);
+        Assert.Null(refused.Slot.ActiveActivationId);
+        Assert.True((await host.ActivateAsync(Approvals("approvals@1"), "approvals-1")).Succeeded);
+    }
 
     [Fact]
     public async Task The_edge_starts_the_workflow_a_start_route_serves_with_the_request_as_its_trigger()
     {
-        var host = new Host();
+        var host = new Host(capabilities: StartRoutesOnly);
         var activated = await host.ActivateAsync(Approvals("approvals@1"), "approvals-1");
         Assert.True(activated.Succeeded, activated.Diagnostic);
         var request = new Native.HttpRequest("POST", "/workflows/http/approvals/A-7", new System.Text.Json.Nodes.JsonObject { ["by"] = "Ada" });
@@ -730,13 +753,43 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task The_edge_serves_no_wait_route_no_other_method_and_no_unknown_path()
     {
+        // A host whose edge would serve waits still maps them; this edge matches start routes only.
         var host = new Host();
-        await host.ActivateAsync(Approvals("approvals@1"), "approvals-1");
+        await host.ActivateAsync(Decisions("decisions@1"), "decisions-1");
 
+        Assert.Null(KernelHttpEdge.Route(host.Serving, "POST", "/decisions"));
+        Assert.NotNull(KernelHttpEdge.Route(host.Serving, "POST", "/approvals/A-7"));
         Assert.Null(KernelHttpEdge.Match(host.Serving, new Native.HttpRequest("POST", "/x"), "/decisions"));
         Assert.Null(KernelHttpEdge.Match(host.Serving, new Native.HttpRequest("GET", "/x"), "/approvals/A-7"));
         Assert.Null(KernelHttpEdge.Match(host.Serving, new Native.HttpRequest("POST", "/x"), "/unknown"));
         Assert.Equal(404, KernelHttpEdge.NotFound.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_matched_route_whose_workflow_stops_serving_before_the_start_starts_nothing()
+    {
+        var host = new Host(capabilities: StartRoutesOnly);
+        await host.ActivateAsync(Approvals("approvals@1"), "approvals-1");
+        var route = KernelHttpEdge.Route(host.Serving, "POST", "/approvals/A-7");
+        Assert.NotNull(route);
+
+        Assert.True((await host.DeactivateAsync(Approvals("approvals@1"))).Succeeded);
+
+        Assert.Null(KernelHttpEdge.Start(host.Serving, route, new Native.HttpRequest("POST", "/workflows/http/approvals/A-7")));
+    }
+
+    [Fact]
+    public async Task A_host_workflow_that_waits_at_an_http_endpoint_is_refused_on_an_edge_without_wait_routes()
+    {
+        var host = new Host(capabilities: StartRoutesOnly);
+        var waits = Native.Wf.Workflow("waits", Native.Wf.Sequence("main", Native.Wf.HttpEndpoint("start", "waits"),
+            Native.Wf.HttpEndpoint("decision", "waits/decision"), Native.Wf.Respond("out", "ok")));
+
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => host.Serving.ServeHostWorkflowAsync(waits).AsTask());
+
+        Assert.Contains(KernelHostCapabilities.HttpWaitUnavailable, refused.Message, StringComparison.Ordinal);
+        Assert.Contains("node 'decision'", refused.Message, StringComparison.Ordinal);
+        Assert.False(host.Serving.Routes.TryStart("POST", "waits", out _));
     }
 
     [Fact]

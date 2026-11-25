@@ -21,7 +21,10 @@ internal static class WorkbenchCorePreview
     /// </summary>
     internal const string PublicationsKey = "Elsa:CorePreview:Publications";
 
-    /// <summary>The tenant the Core Preview's HTTP edge starts workflows in; the reads default to it.</summary>
+    /// <summary>
+    /// The tenant the Core Preview's HTTP edge starts workflows in (<see cref="DefaultTenant"/> when unset). Set, the reads list
+    /// from it too, unless <c>Elsa:CorePreview:ReadsTenant</c> names another.
+    /// </summary>
     internal const string TenantKey = "Elsa:CorePreview:Tenant";
 
     internal const string DefaultTenant = "default";
@@ -34,6 +37,19 @@ internal static class WorkbenchCorePreview
     internal static Workflow HttpProbeWorkflow() => Wf.Workflow("core-preview-http-probe", Wf.Sequence("main",
         Wf.HttpEndpoint("start", HttpProbePath),
         Wf.Respond("answer", Binding.Result("start", "Body.name"), 200)));
+
+    internal const string HttpEchoPath = "core-preview/echo";
+
+    /// <summary>The echo probe: a POST to its route answers 200 with the posted body as the edge read it.</summary>
+    internal static Workflow HttpEchoWorkflow() => Wf.Workflow("core-preview-http-echo", Wf.Sequence("main",
+        Wf.HttpEndpoint("start", HttpEchoPath),
+        Wf.Respond("answer", Binding.Result("start", "Body"), 200)));
+
+    /// <summary>The wait probe, which this host refuses: an HTTP Endpoint that waits after the start.</summary>
+    internal static Workflow HttpWaitWorkflow() => Wf.Workflow("core-preview-http-wait", Wf.Sequence("main",
+        Wf.HttpEndpoint("start", "core-preview/wait"),
+        Wf.HttpEndpoint("decision", "core-preview/decision"),
+        Wf.Respond("answer", "decided")));
 
     internal static bool ServesPublications(IConfiguration configuration) =>
         configuration.GetValue<bool>("Elsa:CorePreview:Enabled") && configuration.GetValue<bool>(PublicationsKey);
@@ -91,18 +107,25 @@ internal static class WorkbenchCorePreview
         if (publications && (nativeJobs || timedJobs))
             throw new InvalidOperationException(
                 "With Elsa:CorePreview:Publications on, the Core Preview runs on the shipped format, which carries Native jobs: leave NativeJobs and TimedNativeJobs off.");
-        // Format 24 runs no schedule actor, timers or child workflows yet: serving refuses a Timer, Cron, Delay and Dispatch
-        // Workflow where it maps them. Whether the node takes self-sends is the store format's to say; without them a burst
-        // runs on to its next wait.
+        // Format 24 runs no schedule actor, timers or child workflows yet, and the edge serves no wait routes: serving refuses
+        // a Timer, Cron, Delay, Dispatch Workflow and an HTTP Endpoint that waits where it maps them. Whether the node takes
+        // self-sends is the store format's to say; without them a burst runs on to its next wait.
         var capabilities = new KernelHostCapabilities(Schedules: false, Timers: false, Children: false,
-            SelfSends: PostgresPreviewHosting.TakesSelfSends(Open));
+            SelfSends: PostgresPreviewHosting.TakesSelfSends(Open), HttpWaits: false);
+        string? waitProbeRefusal = null;
         var serving = publications ? new KernelServing(CronosCalendar.Error, capabilities) : null;
         if (serving is not null)
         {
             // An opt-in probe for the Workbench check: a host-served HTTP workflow at {base}/core-preview/probe that answers with
             // the posted name, so a running Workbench proves its edge without a publication.
+            // The echo probe answers with the body the edge read, and the wait probe is refused, as a publication with one is.
             if (configuration.GetValue<bool>(HttpProbeKey))
+            {
                 serving.ServeHostWorkflowAsync(HttpProbeWorkflow()).AsTask().GetAwaiter().GetResult();
+                serving.ServeHostWorkflowAsync(HttpEchoWorkflow()).AsTask().GetAwaiter().GetResult();
+                try { serving.ServeHostWorkflowAsync(HttpWaitWorkflow()).AsTask().GetAwaiter().GetResult(); }
+                catch (InvalidOperationException refused) { waitProbeRefusal = refused.Message; }
+            }
             services.AddSingleton(serving);
             services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
             KernelToolbox.Register(services);
@@ -130,14 +153,21 @@ internal static class WorkbenchCorePreview
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
         // On the shipped format the node answers held callers: the held requests of this host's edge.
         var requests = publications ? PostgresPreviewHosting.CreateRequests(Open, node, WorkflowActor.ActorType) : null;
-        // The tenant the edge starts workflows in and the reads list them from (Elsa:CorePreview:ReadsTenant defaults to it).
+        // The tenant the edge starts workflows in ("default" when unset); set, the reads list from it unless ReadsTenant names another.
         var tenant = configuration[TenantKey];
+        KernelHttpEdgeHost? edge = null;
         if (requests is not null)
         {
+            var timeout = configuration.GetValue<TimeSpan?>(KernelHttpEdgeHost.TimeoutKey) ?? KernelHttpEdgeHost.DefaultTimeout;
+            if (timeout <= TimeSpan.Zero)
+                throw new InvalidOperationException($"{KernelHttpEdgeHost.TimeoutKey} must be longer than zero; it is {timeout}.");
+            var maxBody = configuration.GetValue<long?>(KernelHttpEdgeHost.MaxRequestBodyBytesKey) ?? KernelHttpEdgeHost.DefaultMaxRequestBodyBytes;
+            if (maxBody <= 0)
+                throw new InvalidOperationException($"{KernelHttpEdgeHost.MaxRequestBodyBytesKey} must be a positive number of bytes; it is {maxBody}.");
             services.AddSingleton(requests);
-            services.AddSingleton(new KernelHttpEdgeHost(serving!, Open, requests, EmbeddedTenant.Bind(tenant ?? DefaultTenant),
-                KernelHttpEdgeHost.NormalizeBasePath(configuration[KernelHttpEdgeHost.BasePathKey]),
-                configuration.GetValue<TimeSpan?>(KernelHttpEdgeHost.TimeoutKey) ?? KernelHttpEdgeHost.DefaultTimeout));
+            edge = new KernelHttpEdgeHost(serving!, Open, requests, EmbeddedTenant.Bind(tenant ?? DefaultTenant),
+                KernelHttpEdgeHost.NormalizeBasePath(configuration[KernelHttpEdgeHost.BasePathKey]), timeout, maxBody);
+            services.AddSingleton(edge);
         }
         services.AddHostedService(provider =>
         {
@@ -167,9 +197,16 @@ internal static class WorkbenchCorePreview
             });
             // The node starts once the default shell is active, so its first turns find the evaluator.
             var logger = provider.GetRequiredService<ILogger<PostgresPreviewHostedService>>();
+            if (waitProbeRefusal is not null) logger.LogInformation("The Core Preview refuses its HTTP wait probe: {Reason}", waitProbeRefusal);
             return new ShellGatedHostedService(new PostgresPreviewHostedService(Open, node, new WorkflowActor([model]), Environment.FailFast,
                     logger: logger, requests: requests),
-                token => shells.GetOrActivateAsync(shellName, token), Environment.FailFast,
+                // Once the default shell is active, its HTTP base path must be the edge's, or Studio would show addresses the
+                // edge does not serve: the node does not start, and the process ends.
+                async token =>
+                {
+                    await shells.GetOrActivateAsync(shellName, token);
+                    if (edge is not null) await RequireEdgeBasePathAsync(shells, shellName, edge);
+                }, Environment.FailFast,
                 // Before the node runs a turn, the default shell serves every slot its publications left active, so a due turn
                 // of an instance in flight finds its workflow served.
                 starting: serving is null ? null : token => ServeActiveSlotsAsync(shells, shellName, logger, token));
@@ -180,6 +217,20 @@ internal static class WorkbenchCorePreview
         KernelDb Open() => publications ? PostgresPreviewHosting.CreateShippedContext(options) :
             timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(options) :
             nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);
+    }
+
+    /// <summary>Refuses an edge whose base path is not the default shell's HTTP base path (its HttpEndpointOptions).</summary>
+    private static async Task RequireEdgeBasePathAsync(IShellRegistry shells, string shellName, KernelHttpEdgeHost edge)
+    {
+        var shell = shells.GetActive(shellName) ?? throw new InvalidOperationException($"The shell '{shellName}' is not active.");
+        await using var scope = shell.BeginScope();
+        if (scope.ServiceProvider.GetService<IOptions<Elsa.Activities.Http.Options.HttpEndpointOptions>>()?.Value.BasePath is not { } configured)
+            return;     // the shell composes no HTTP activities, so Studio shows no endpoint address
+        var shellBase = "/" + configured.Trim().Trim('/');
+        if (!string.Equals(shellBase, edge.BasePath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"The Core Preview's HTTP edge serves {edge.BasePath} ({KernelHttpEdgeHost.BasePathKey}), and shell '{shellName}' gives its HTTP endpoints " +
+                $"the base path {shellBase}, which Studio shows. Set both to the same path.");
     }
 
     /// <summary>The workflow an instance runs, from the default shell's executable store, for one the registry does not hold.</summary>

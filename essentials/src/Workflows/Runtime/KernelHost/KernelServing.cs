@@ -78,9 +78,8 @@ public sealed class KernelServing
     public async ValueTask ServeHostWorkflowAsync(Workflow workflow, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workflow);
-        foreach (var node in workflow.Nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal))
-            if (Capabilities.Refusal(node.Type) is { } reason)
-                throw new InvalidOperationException($"Host workflow '{workflow.Id}', node '{node.Id}': {reason}");
+        if (Capabilities.Refusal(workflow) is { } refused)
+            throw new InvalidOperationException($"Host workflow '{workflow.Id}', node '{refused.Node}': {refused.Reason}");
         var slotId = "host:" + workflow.Id;
         await RunAsync(() =>
         {

@@ -56,7 +56,7 @@ cannot do this itself, since runtime projects take no design reference.
   `NativeExecutionOptions.ServedWorkflow`, and `NativeExecutableMapper.MapStoredAsync` over its executable store as
   `NativeExecutionOptions.ResolveWorkflow`, so an instance started on a version no slot serves after a restart still runs.
 - `KernelHostCapabilities` is a value the host gives its `KernelServing`, not a contract: what its foundation runs
-  (schedules, timers, child workflows, self-sends). The coordinator maps with it, so a node that needs more is refused
+  (schedules, timers, child workflows, self-sends, and whether its HTTP edge serves wait routes). The coordinator maps with it, so a node that needs more is refused
   as `definition_unsupported`.
 - The coordinator notifies the shell's `IWorkflowTriggerIndexObserver` set (Studio's workflow library among them) when
   what a definition serves changes.

@@ -59,8 +59,7 @@ public static class NativeExecutableMapper
                 var message = invalid.Message.Replace($" in '{executable.Identity.ArtifactId}'", "", StringComparison.Ordinal);
                 throw NativeMappingRefusedException.Activity(invalid.Node, $"{message} Change the node so that it follows this rule.");
             }
-            foreach (var node in workflow.Nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal))
-                if (capabilities.Refusal(node.Type) is { } reason) throw NativeMappingRefusedException.Activity(node.Id, reason);
+            if (capabilities.Refusal(workflow) is { } refused) throw NativeMappingRefusedException.Activity(refused.Node, refused.Reason);
             return workflow;
         }
         catch (NativeMappingRefusedException refused) when (refused.DisplayName is null &&

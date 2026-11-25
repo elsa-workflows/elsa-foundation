@@ -119,8 +119,9 @@ public class WorkflowsRuntimeKernelFeature : IShellFeature, IPostConfigureShellS
     }
 
     /// <summary>
-    /// Re-registers the old core's HTTP endpoint middleware with its own copy of its options, whose base path is empty, so
-    /// that it passes every request on and the kernel edge serves <c>/workflows/http</c>. A shell that registers the HTTP
+    /// Re-registers the old core's HTTP endpoint middleware with options of its own: a new instance at its defaults whose
+    /// base path is empty, so that it passes every request on and the kernel edge serves <c>/workflows/http</c>. The
+    /// shell's other HTTP endpoint settings don't reach it, and a middleware that serves no request has no use for them. A shell that registers the HTTP
     /// activities' test-run middleware without an endpoint middleware of that name is refused: its type was renamed.
     /// </summary>
     private static void UnmountHttpEndpointMiddleware(IServiceCollection services)

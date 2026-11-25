@@ -21,19 +21,41 @@ public static class KernelHttpEdge
     // Before NotFound: static fields initialize in order.
     private static readonly IReadOnlyDictionary<string, string> NoHeaders = new Dictionary<string, string>();
 
-    /// <summary>The start a request makes, or null when no start route of what serves matches its method and path.</summary>
-    /// <param name="request">The request, built by the edge from the wire; its route values are filled in from the match.</param>
+    /// <summary>The start route of what serves now that a request's method and path match, or null when none does.</summary>
     /// <param name="path">The request path as the client sent it, relative to the edge's base path.</param>
-    public static KernelHttpStart? Match(KernelServing serving, HttpRequest request, string path)
+    /// <remarks>An edge matches the route before it reads the request's body, so a path no route serves reads none.</remarks>
+    public static NativeHttpRouteMatch? Route(KernelServing serving, string method, string path)
     {
         ArgumentNullException.ThrowIfNull(serving);
+        var match = HttpRouteMatcher.Match(serving.Routes, method, path);
+        return match.Route is { Start: true } route && serving.Registry.Contains(route.Workflow) ? match : null;
+    }
+
+    /// <summary>
+    /// The start a request on a matched route makes, or null when the route's workflow no longer serves (a republish between
+    /// the match and the start).
+    /// </summary>
+    /// <param name="request">The request, built by the edge from the wire; its route values are filled in from the match.</param>
+    public static KernelHttpStart? Start(KernelServing serving, NativeHttpRouteMatch match, HttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(serving);
+        ArgumentNullException.ThrowIfNull(match);
         ArgumentNullException.ThrowIfNull(request);
-        var match = HttpRouteMatcher.Match(serving.Routes, request.Method, path);
-        if (match.Route is not { Start: true } route || !serving.Registry.Contains(route.Workflow)) return null;
+        // What serves now: the route the match found, still served by the same workflow's node.
+        if (match.Route is not { Start: true } route || !serving.Routes.TryStart(route.Method, route.Template.Text, out var served) ||
+            served != (route.Workflow, route.Node) || !serving.Registry.Contains(route.Workflow)) return null;
         var workflow = serving.Registry.Get(route.Workflow);
         var trigger = Values.From(request with { RouteValues = match.Values });
         var start = NativeExecutionModel.Start(workflow.Id, Modes.Balanced, null, route.Node, trigger, workflow.Definition);
         return new(Kernel.WorkflowActor.WorkflowActor.Start(start), workflow.Id, route.RespondBeforeCommit);
+    }
+
+    /// <summary>The start a request makes, or null when no start route of what serves matches its method and path.</summary>
+    /// <param name="path">The request path as the client sent it, relative to the edge's base path.</param>
+    public static KernelHttpStart? Match(KernelServing serving, HttpRequest request, string path)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return Route(serving, request.Method, path) is { } match ? Start(serving, match, request) : null;
     }
 
     /// <summary>The HTTP answer to a held start's reply.</summary>
