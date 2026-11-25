@@ -379,11 +379,14 @@ public sealed partial class EfStore
     {
         if (turn.FoundationRootOperator is { Kind: Kinds.Recover }) return await PrepareRootParkRecoverAsync(root, turn, cancellationToken);
         // A delete, or a retired marker, of an ended Faulted root goes on to retirement below.
-        if (turn is { FoundationRootOperator: not null, Row: { Status: InstanceStatus.Faulted, Retired: false }, OpensPark: false,
-                FoundationKept: null, Delete: false })
+        if (turn is { FoundationRootOperator: not null, Row: { Status: InstanceStatus.Faulted or InstanceStatus.Cancelled, Retired: false },
+                OpensPark: false, FoundationKept: null, Delete: false } &&
+            (turn.Row.Status == InstanceStatus.Faulted || turn.FoundationRootOperator.Operator?.RootParkMark is not null))
         {
             await using var profile = create();
-            if (profile.UsesRootParkedOperators) return await PrepareRootParkedRefusalAsync(root, turn, cancellationToken);
+            if (profile.UsesRootParkedOperators)
+                return turn.Row.Status == InstanceStatus.Cancelled ? await PrepareRootParkedTerminateAsync(root, turn, cancellationToken)
+                    : await PrepareRootParkedRefusalAsync(root, turn, cancellationToken);
         }
         if (turn.OpensPark || turn.FoundationKept is { Count: > 0 })
         {
@@ -403,7 +406,7 @@ public sealed partial class EfStore
             if (turn != ended || turn.Done.Count + turn.Consumed.Count == 0 || turn.Sent.Count != 0 ||
                 turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
                 !InputsMatch(root, turn)) throw RootShape();
-            return new(null, new TerminalRootInputs(root, [.. turn.Done, .. turn.Consumed], RootSelfIssuer, held));
+            return new(null, new TerminalRootInputs(root, [.. turn.Done, .. turn.Consumed], RootSelfIssuer, WithoutParkFacts(held)));
         }
         var row = turn.Row;
         var recalls = turn.FoundationSelfRecalls;
