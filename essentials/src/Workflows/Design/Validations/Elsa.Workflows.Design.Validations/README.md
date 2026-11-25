@@ -94,7 +94,7 @@ persisted.
 | `RequiredInputOutputValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `InputOutput/MissingRequired` |
 | `VariableExpressionResolverValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `Expressions/UnresolvedVariable` |
 | `ValueFlowValidator` | Workflow-scope graph | `$workflow/variables/{Name}` etc. · `ValueFlow/*` (UnavailableProducer, ScopeBoundary, CyclicBackEdge, UnstableCollectionIdentity, VariableReference (spec 1231: a variable-reference input not bound to a declared variable); ConcurrentWrite, DuplicateCaptureTarget (spec 266) and StepWriteOverlapsCapture (spec 1231) are warnings). Step-write checks need the activity catalog (`IActivityDefinitionLookup`); without it they are skipped |
-| `CredentialLiteralValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `Inputs/CredentialLiteral` (reporting only here; see below) |
+| `CredentialLiteralValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `Inputs/CredentialLiteral` (reporting only here; see below); for a state with a missing argument list, only `{NodeId}/inputs\|outputs` · `Graph/MalformedArgumentList` (whole tree) |
 | `ScriptOutcomeValidator` | Catalog-backed root + nested (recurses); nodes whose `elsa.outcomes` facet names a `scriptInput` with a literal script | `{NodeId}/inputs/{scriptInput}` · `Scripts/UnknownOutcome` (`VF-AUTH-010`, error), `Scripts/ReturnedOutcomeName` (`VF-AUTH-012`, warning), `Scripts/ReservedName` (error) (see below) |
 
 Catalog-consulting validators resolve `ActivityVersionId`s through the scoped, memoizing
@@ -147,6 +147,9 @@ item.
 Publication applies the predicate itself, because it already holds each input's declaration. Draft save blocking on this rule is the one deliberate exception to "draft save records validation
 errors without blocking": the exception is the Design API's admission, and `DraftValidating` stays non-blocking for
 every validator, this one included.
+
+A state with a node whose `inputs` or `outputs` list is missing or null is not judged: the validator returns only one
+`Graph/MalformedArgumentList` finding per such list, at any depth, so every admitting writer refuses the state.
 
 The validator judges only a node whose activity version the catalog holds, down to `MaxRecursionDepth`, as the other
 tree-walking validators do, and reaches only the children a registered structure handler projects. A child under a

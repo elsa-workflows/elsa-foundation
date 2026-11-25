@@ -8,6 +8,8 @@ namespace Elsa.Workflows.Design.Validations.Core.Contracts;
 /// reads HTTP authority nor persists, evaluates expressions, executes producers or creates drafts.
 /// A null target validates the complete candidate without building a browser response. Missing or
 /// duplicate analyzer authority is a composition error, never permission to skip admission.
+/// A node whose <c>inputs</c> or <c>outputs</c> list is missing or null is refused with a
+/// <c>Graph/MalformedArgumentList</c> finding at <c>{NodeId}/inputs</c> or <c>{NodeId}/outputs</c>.
 /// </remarks>
 public interface IActivityDataSelectionAnalyzer
 {

@@ -28,7 +28,9 @@ namespace Elsa.Workflows.Design.Validations.Core.Models;
 /// <c>Expressions/UnresolvedVariable</c>, <c>Graph/UnknownActivityVersion</c>. The reserved
 /// <c>Validation/Faulted</c> category is never emitted by a validator — it is synthesized by the
 /// shielded read gate (<c>DraftValidationGate.TryDeriveValidationErrorsAsync</c>) when a validator
-/// throws, so a faulting validator surfaces as an error instead of a 500. External validators
+/// throws, so a faulting validator surfaces as an error instead of a 500. <c>Graph/MalformedArgumentList</c>
+/// (a missing or null <c>inputs</c>/<c>outputs</c> list) is likewise reported by the validation gate itself, before
+/// any validator runs, and by credential admission and data selection. External validators
 /// extend by prefixing with their domain (e.g. <c>Http/AuthPolicyUnknown</c>).
 /// </para>
 /// </remarks>
