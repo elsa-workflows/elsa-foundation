@@ -200,16 +200,23 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             if (first) deadline = cancellationToken.Register(_kill.Cancel);
             halted = _halted ??= HaltOnceAsync();
         }
-        using (deadline) await ObserveAsync(halted, first ? CancellationToken.None : cancellationToken, quietIfReported: false);
+        Interlocked.Increment(ref _stopWaiters);
+        try
+        {
+            using (deadline) await ObserveAsync(halted, first ? CancellationToken.None : cancellationToken, quietIfReported: false);
+        }
+        finally { Interlocked.Decrement(ref _stopWaiters); }
     }
 
+    private int _stopWaiters;     // stops and kills waiting for the outcome: a dispose beside them leaves the report to them
+
     // A stop's outcome is reported to every stop or kill that waits for it. A dispose reports a failure only when no
-    // stop, kill or other dispose has received it before or alongside it.
+    // stop, kill or other dispose has received it before it, and no stop or kill is waiting for it beside it.
     private async Task ObserveAsync(Task halted, CancellationToken wait, bool quietIfReported)
     {
         try { await halted.WaitAsync(wait); }
         catch (OperationCanceledException) when (wait.IsCancellationRequested) { }
-        catch (Exception) when ((Interlocked.Exchange(ref _outcomeSeen, 1) == 1) & quietIfReported) { }
+        catch (Exception) when (((Interlocked.Exchange(ref _outcomeSeen, 1) == 1) | Volatile.Read(ref _stopWaiters) > 0) & quietIfReported) { }
     }
 
     private int _outcomeSeen;
@@ -223,7 +230,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     public async ValueTask KillAsync()
     {
         _kill.Cancel();
-        await ObserveAsync(HaltAsync(), CancellationToken.None, quietIfReported: false);
+        Interlocked.Increment(ref _stopWaiters);
+        try { await ObserveAsync(HaltAsync(), CancellationToken.None, quietIfReported: false); }
+        finally { Interlocked.Decrement(ref _stopWaiters); }
     }
 
     /// <summary>
@@ -234,10 +243,23 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     {
         using var deadline = new CancellationTokenSource(_options.DisposeDeadline);
         // The wait is bounded too: a pass stuck past the kill (a call that ignores cancellation) cannot hold the dispose.
-        using var bound = new CancellationTokenSource(_options.DisposeDeadline + DisposeGrace);
+        // An infinite dispose deadline is an infinite bound.
+        using var bound = new CancellationTokenSource(WithGrace(_options.DisposeDeadline, DisposeGrace));
+        var halted = HaltAsync();
         using (deadline.Token.Register(_kill.Cancel))
-            await ObserveAsync(HaltAsync(), bound.Token, quietIfReported: true);
+            await ObserveAsync(halted, bound.Token, quietIfReported: true);
+        if (halted.IsCompleted) return;
+        // The dispose returns with the stop still running: say so, and record the stop's fault if it ends with one.
+        RecordError(new TimeoutException($"The dispose returned {DisposeGrace.TotalSeconds:0.#} s after its deadline while the killed stop had not ended."));
+        _ = halted.ContinueWith(static (stopped, node) => ((RuntimeNode)node!).RecordError(stopped.Exception!.InnerException ?? stopped.Exception),
+            this, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
+
+    /// <summary>A deadline plus a grace; an infinite deadline stays infinite.</summary>
+    internal static TimeSpan WithGrace(TimeSpan deadline, TimeSpan grace) =>
+        deadline == Timeout.InfiniteTimeSpan ? Timeout.InfiniteTimeSpan
+        : deadline < TimeSpan.Zero ? throw new ArgumentOutOfRangeException(nameof(deadline), "A deadline is positive or infinite.")
+        : deadline + grace;
 
     /// <summary>How long a dispose waits past its deadline for the killed stop to end before it returns.</summary>
     public static readonly TimeSpan DisposeGrace = TimeSpan.FromSeconds(2);
@@ -288,6 +310,8 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 try { await OnNode(() => _runtime.StopAsync(_kill.Token, beforeRelease).AsTask()).WaitAsync(_kill.Token); }
                 catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
                 catch (Exception abandoned) when (abandon && ReferenceEquals(abandoned, drainError)) { }
+                // A fence lost in both drains is one loss.
+                catch (ScopeOwnershipLostException) when (drainError is ScopeOwnershipLostException) { ExceptionDispatchInfo.Throw(drainError); }
                 catch (Exception releaseError) when (drainError is not null) { throw new AggregateException(drainError, releaseError); }
             }
         }
