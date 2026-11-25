@@ -78,9 +78,14 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             message.Sender == row.Parent && message.SenderCreation == row.ParentCreation;
     }
 
+    // A qualified root's Park holds while it is Faulted without a terminal mark. S5b-3b: a protected Delete ends a parked root
+    // Faulted under its terminal mark; that root has ended, so it neither withholds nor keeps an input.
+    private static bool IsRootParked(Durable.InstanceRow row) =>
+        row.Status == Durable.InstanceStatus.Faulted && row.FoundationDispatchHeader?.Terminal is null;
+
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
-        if (roots is not null) return roots.KeepsParkInputs && row.Status == Durable.InstanceStatus.Faulted || actor.Withholds(RootHeader(row));
+        if (roots is not null) return roots.KeepsParkInputs && IsRootParked(row) || actor.Withholds(RootHeader(row));
         if (row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate) return true;
         var checkpoint = store.FoundationTurnHeader(row);
         if (row.ParkRecovery is not null)
@@ -101,8 +106,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             { EndedDuringParkRecovery: true, Status: not Durable.InstanceStatus.Running, ParkRecovery: null, ParkDiscarded: false };
 
     private bool CanKeepRootParkArrival(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        // S5b-3b: a root a protected Delete ended stays Faulted under its terminal mark and keeps nothing more.
-        roots?.KeepsParkArrivals == true && row is { Status: Durable.InstanceStatus.Faulted, FoundationDispatchHeader.Terminal: null } && delivery.Durable &&
+        roots?.KeepsParkArrivals == true && IsRootParked(row) && delivery.Durable &&
         delivery.Message.Target.Id == row.Id && CapturesParkArrival(delivery) && delivery.Message is
         { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, TargetCreation: 1, EventMatch: null, ActorAuthored: false,
             Sender: null, Operator: null, StorageId: not null, ReplyTo: null };

@@ -7,12 +7,14 @@ public sealed partial class EfStore
     // S5a (#4229): a composed Park set refuses an operator command on a parked root with a journalled reason. The command
     // settles at the next revision and nothing else of the root, its Park or its inbox changes. S5b: a Terminate that names
     // the Park is refused only for a stale Park ("selection") or one larger than a page ("page"); otherwise it ends the root.
+    // S5b-3b: a Delete that names the Park is refused for the same reasons.
     private async Task<PreparedRoot?> PrepareRootParkedRefusalAsync(WorkerRoot root, TurnCommit turn, CancellationToken token)
     {
         var command = turn.FoundationRootOperator!;
         // A clearing's own control is never refused: consuming it would strand the clearing, so its refusal fails closed.
         string[] reasons = command.Operator?.RootParkMark is null ? ["parked"]
-            : command is { Kind: Kinds.Terminate, Operator: { RootParkFacts: not null, RootParkClear: false } } ? ["selection", "outstanding", "clearing"] : [];
+            : command is { Kind: Kinds.Terminate or Kinds.Delete, Operator: { RootParkFacts: not null, RootParkClear: false } }
+                ? ["selection", "outstanding", "clearing"] : [];
         // The refusal keeps the Suspended flag: a Park on a suspended root keeps it, as the in-memory reference does.
         if (turn.Row is not { Status: InstanceStatus.Faulted, Retired: false, FoundationDispatchHeader: { Terminal: null } header } row ||
             turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
