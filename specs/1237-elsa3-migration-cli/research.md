@@ -253,16 +253,20 @@ Elsa 4 closure that can drift from the engine the user goes live on.
 round-trip test checks read(write(x)) = x. The tooling entry point reads the published versions back from the
 design stores and writes them. Workflows go one file per definition, named by definition id. Activities go in one file,
 in dependency order. The export rewrites each reusable version id, and every reference to one, to the engine's catalog id
-(`ActivityCatalogStableIds.VersionId`), and keeps each reusable's outcomes facet unchanged. T024 proves that the engine
+(`ActivityCatalogStableIds.VersionId`), wherever an `activityVersionId` member appears, also inside a node's opaque
+`Structure` payload. On load, the engine compiles a version's `DescriptorPayload` as its provider manifest
+(`SourceOwnedActivityVersionPublisher`), so the export takes a reusable's descriptor from the publication's `Provider`
+(the graph manifest), not from the catalog version, which holds the compiled runtime descriptor. Inputs, outputs and
+the outcomes facet come from the publication's `Contract`, unchanged. T024 proves that the engine
 loads the result. **Rejected**: changing the import's id formula or adding a version id to the JSON activity model;
 both change other owners for a problem the exporter can solve alone.
 
 ## R-9 Report rendering
 
 **Decision**: `report.html` is one static template, embedded in the tooling assembly, with inline CSS and script. The
-report JSON is embedded as a `<script type="application/json">` block, and the script renders it. Script content is raw text, so the JSON is
-written with `<`, `>` and `&` as `\u003c`-style JSON escapes (the System.Text.Json default encoder), never as HTML
-entities. No
+report JSON is embedded as a `<script type="application/json">` block, and the script renders it. Script content is raw text. `report.json` is serialized from the JSON baseline
+(ADR 0091, `JsonBaseline.Options`), whose relaxed encoder leaves `<`, `>` and `&` alone, so the HTML step itself
+rewrites them as `\u003c`-style JSON escapes when it inlines the JSON, never as HTML entities. No
 other data is written into the page (FR-021).
 
 ## R-10 Sanctioned patterns (framework §2.24.2)

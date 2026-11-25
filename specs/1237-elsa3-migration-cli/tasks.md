@@ -226,9 +226,13 @@
   published reusable version goes into `activities.json`, older pinned ones included. Add a fixture case of a workflow
   that pins an older reusable version, and assert that the older version is in `activities.json`. The engine gives each loaded activity version
   `ActivityCatalogStableIds.VersionId(typeKey, version)`, not the stored import id, so the exporter rewrites every
-  reusable version id, and every reference to one (graph dependencies and workflow `activityVersionId` values), to that
-  id. Each exported reusable keeps its `elsa.outcomes` facet and contract as stored; add a fixture reusable with a
-  custom Elsa 3 outcome next to `done`. It sets
+  reusable version id, and every reference to one, to that id: every `activityVersionId` member anywhere in a workflow
+  or a reusable's graph manifest, including those inside a node's opaque `Structure` payload (children of a Flowchart
+  or Sequence). A reusable's exported descriptor is its graph manifest, taken from the publication's `Provider`
+  (key, schema version, manifest), not the catalog version's compiled runtime descriptor, which the engine would
+  refuse as a manifest. Its inputs, outputs and `elsa.outcomes` facet come from the publication's `Contract`, as
+  stored. Add fixture reusables with a custom Elsa 3 outcome next to `done`, and with a reusable nested in a container,
+  used from both a workflow and another reusable. It sets
   `exportedTo`. It leaves out refused and blocked
   definitions. It always creates `migrated/workflows/` and always writes `migrated/activities/activities.json`, as
   `[]` when no reusable is exported. Test the layout, the absence, and a run that exports no workflow and no reusable.
@@ -238,8 +242,9 @@
 - [ ] T024 [US4] Add the loadability test (SC-004). Compose the essentials feature list with JSON workflow and activity
   reconciliation over the fixture run's `migrated/`, and assert that every exported reusable and workflow loads,
   including the workflow that pins an older reusable version (T022), and that a run that exported nothing loads too
-  (both entries empty). No version may be refused with `activity.dependency.version-not-found` or
-  `activity.graph.outcome-done-required`.
+  (both entries empty). Each reusable goes through `SourceOwnedActivityVersionPublisher`, not only a parse; no version
+  may be refused with `activity.dependency.version-not-found` or `activity.graph.outcome-done-required`, including the
+  nested-reusable fixture (T022).
 
 ## Phase 6: User Story 2 - Assess with my own features (P1)
 
@@ -268,8 +273,8 @@
 - [ ] T030 [US5] Add the schema test: every report the tests produce validates against
   [contracts/report.schema.json](contracts/report.schema.json). Copy the schema into `Tooling/` as an embedded resource,
   and add a test that keeps it identical to the contract file (FR-020).
-- [ ] T031 [US5] Add `Tooling/ReportHtml.cs` and the embedded `report.html` template. The page inlines the JSON with `<`, `>` and `&` written as JSON `\u` escapes,
-  never as HTML entities,
+- [ ] T031 [US5] Add `Tooling/ReportHtml.cs` and the embedded `report.html` template. The page inlines `report.json`, serialized from the JSON baseline (ADR 0091), and `ReportHtml` itself rewrites
+  `<`, `>` and `&` in it as JSON `\u` escapes, never as HTML entities, independent of the serializer's encoder,
   renders every section grouped by bucket and category, and works offline (FR-021). Test that the page's parsed JSON equals
   `report.json`, that the page contains no external URL, and that a `</script>` inside a name cannot break it.
 
