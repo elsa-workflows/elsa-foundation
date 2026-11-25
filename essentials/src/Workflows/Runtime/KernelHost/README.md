@@ -41,6 +41,17 @@ the Native model's definitions.
   - without self-sends, nothing is refused: a turn that reaches the activity cap cannot continue in a self-send, so the
     host sets `NativeExecutionOptions.SplitsBursts` to false and the Native model runs a burst on to its next wait. The
     state and history size limits still bound the turn, and the 1,000-item ForEach cap stands.
+- `KernelHttpEdge` is the framework-free half of a host's HTTP edge. `Match` matches a request's path, relative to the
+  edge's base path, against the start routes of what serves now and returns the start of the route's workflow, with the
+  request (and its route values) as the trigger; a wait route or no route is not served. `Answer` maps a held start's
+  reply to the HTTP answer: the designed response, 204, 404, 500, 503 or 504.
+- `KernelServing.ServeHostWorkflowAsync` serves a workflow the host defines itself beside the publications, its routes
+  checked against the serving set (the Workbench's opt-in HTTP probe is one).
+- On a kernel shell the feature also unmounts the old core's HTTP endpoint middleware (`HttpEndpointMiddleware`): it is
+  re-registered with a copy of its options whose base path is empty, so it passes every request on and the host's kernel
+  edge serves `/workflows/http`. The HTTP activities' test runs (`/workflows/test-runs`), standalone HTTP triggers and
+  options stay as they are; a shell with the test-run middleware and no endpoint middleware of the expected name is
+  refused. Studio's HTTP test run therefore still runs on the old core (slice 8).
 - `UnavailableScheduleActors` is for a host that runs no schedule actor. Such a host also says `Schedules: false`, so a
   Timer or Cron never reaches it. Setting a schedule throws the reason; stopping one and unregistering a run do nothing,
   so unpublishing never fails on them.

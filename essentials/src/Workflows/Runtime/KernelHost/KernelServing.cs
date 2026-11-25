@@ -69,6 +69,26 @@ public sealed class KernelServing
     /// <summary>What the host's foundation runs, which the coordinator maps executables against.</summary>
     public KernelHostCapabilities Capabilities { get; }
 
+    /// <summary>
+    /// Serves a workflow the host defines itself, beside the publications: its routes join the route table, checked against
+    /// the serving set as a publication's are. It is not a publication, so nothing deactivates it; the host serves it again
+    /// after a restart.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Its routes or schedules conflict with what serves, or the host refuses it.</exception>
+    public async ValueTask ServeHostWorkflowAsync(Workflow workflow, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflow);
+        foreach (var node in workflow.Nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal))
+            if (Capabilities.Refusal(node.Type) is { } reason)
+                throw new InvalidOperationException($"Host workflow '{workflow.Id}', node '{node.Id}': {reason}");
+        var slotId = "host:" + workflow.Id;
+        await RunAsync(() =>
+        {
+            Apply(Plan(slotId, new KernelServedSlot(slotId, workflow.Definition, "host", slotId, workflow, 0)));
+            return ValueTask.FromResult(true);
+        }, cancellationToken);
+    }
+
     /// <summary>Runs one coordinator's change to what serves: its check, its slot move and its serving, while no other runs.</summary>
     internal async ValueTask<T> RunAsync<T>(Func<ValueTask<T>> change, CancellationToken cancellationToken)
     {

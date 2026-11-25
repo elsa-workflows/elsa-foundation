@@ -356,11 +356,14 @@ preview node, which runs the registry it serves into, and the default shell. The
 kernel's and leaves out the old core's HTTP route table; the Workbench logs once at startup that it composed the feature.
 Before the node runs a turn, the default shell serves every slot its publications left active. An instance started on a
 version no slot serves any more loads that version from the default shell's executable store at its next turn. Studio's
-toolbox in the default shell hides the activities the kernel does not run (`kernel-unsupported`). These limits stand,
-each with its own slice coming:
+toolbox in the default shell hides the activities the kernel does not run (`kernel-unsupported`). The HTTP edge, and
+the limits that stand, each with its own slice coming:
 
-- **No HTTP edge yet.** A served start route is in `KernelServing.Routes`, and nothing in the Workbench routes requests to
-  it.
+- **HTTP edge.** A published workflow's HTTP endpoint is served on the kernel at `Elsa:CorePreview:HttpBasePath`
+  (default `/workflows/http`, the address Studio shows), within `Elsa:CorePreview:HttpTimeout` (default 30 s; past it the
+  caller gets 504 and the workflow runs on), in the tenant `Elsa:CorePreview:Tenant` (default `default`; the reads default
+  to it). Only start routes are served there. Studio's HTTP test run (`/workflows/test-runs`) still runs on the old core
+  (slice 8). `Elsa:CorePreview:HttpProbe` serves a probe at `{base}/core-preview/probe` for the Workbench check.
 - **No schedule actor, timers, child workflows or self-sends on format 24 yet.** The Workbench says so in its
   `KernelHostCapabilities`, so a publish with a Timer or Cron, a Delay or a Dispatch Workflow is refused where it is
   mapped (`definition_unsupported`), naming the node and what to change. Without self-sends the Native model does not

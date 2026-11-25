@@ -76,4 +76,16 @@ public sealed class WorkbenchCorePreviewKernelShellTests
         Assert.Null(WorkbenchCorePreview.ComposeKernelShell(configuration));
         Assert.False(configuration.GetSection("CShells:Shells").Exists());
     }
+
+    [Theory]
+    [InlineData(null, "/workflows/http")]
+    [InlineData("", "/workflows/http")]
+    [InlineData("/kernel/", "/kernel")]
+    [InlineData("hooks/in", "/hooks/in")]
+    public void The_http_edge_base_path_defaults_to_the_address_studio_shows(string? configured, string expected) =>
+        Assert.Equal(expected, KernelHttpEdgeHost.NormalizeBasePath(configured));
+
+    [Fact]
+    public void The_http_edge_base_path_is_never_the_root() =>
+        Assert.Throws<InvalidOperationException>(() => KernelHttpEdgeHost.NormalizeBasePath("/"));
 }

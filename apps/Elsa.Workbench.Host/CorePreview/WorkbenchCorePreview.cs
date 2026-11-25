@@ -21,6 +21,20 @@ internal static class WorkbenchCorePreview
     /// </summary>
     internal const string PublicationsKey = "Elsa:CorePreview:Publications";
 
+    /// <summary>The tenant the Core Preview's HTTP edge starts workflows in; the reads default to it.</summary>
+    internal const string TenantKey = "Elsa:CorePreview:Tenant";
+
+    internal const string DefaultTenant = "default";
+
+    /// <summary>Serves the HTTP probe workflow (<see cref="HttpProbeWorkflow"/>), for the Workbench Core Preview check.</summary>
+    internal const string HttpProbeKey = "Elsa:CorePreview:HttpProbe";
+    internal const string HttpProbePath = "core-preview/probe";
+
+    /// <summary>The probe: a POST to its route answers 200 with the posted body's name.</summary>
+    internal static Workflow HttpProbeWorkflow() => Wf.Workflow("core-preview-http-probe", Wf.Sequence("main",
+        Wf.HttpEndpoint("start", HttpProbePath),
+        Wf.Respond("answer", Binding.Result("start", "Body.name"), 200)));
+
     internal static bool ServesPublications(IConfiguration configuration) =>
         configuration.GetValue<bool>("Elsa:CorePreview:Enabled") && configuration.GetValue<bool>(PublicationsKey);
 
@@ -83,6 +97,10 @@ internal static class WorkbenchCorePreview
         var serving = publications ? new KernelServing(CronosCalendar.Error, capabilities) : null;
         if (serving is not null)
         {
+            // An opt-in probe for the Workbench check: a host-served HTTP workflow at {base}/core-preview/probe that answers with
+            // the posted name, so a running Workbench proves its edge without a publication.
+            if (configuration.GetValue<bool>(HttpProbeKey))
+                serving.ServeHostWorkflowAsync(HttpProbeWorkflow()).AsTask().GetAwaiter().GetResult();
             services.AddSingleton(serving);
             services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
             KernelToolbox.Register(services);
@@ -110,7 +128,15 @@ internal static class WorkbenchCorePreview
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
         // On the shipped format the node answers held callers: the held requests of this host's edge.
         var requests = publications ? PostgresPreviewHosting.CreateRequests(Open, node, WorkflowActor.ActorType) : null;
-        if (requests is not null) services.AddSingleton(requests);
+        // The tenant the edge starts workflows in and the reads list them from (Elsa:CorePreview:ReadsTenant defaults to it).
+        var tenant = configuration[TenantKey];
+        if (requests is not null)
+        {
+            services.AddSingleton(requests);
+            services.AddSingleton(new KernelHttpEdgeHost(serving!, Open, requests, EmbeddedTenant.Bind(tenant ?? DefaultTenant),
+                KernelHttpEdgeHost.NormalizeBasePath(configuration[KernelHttpEdgeHost.BasePathKey]),
+                configuration.GetValue<TimeSpan?>(KernelHttpEdgeHost.TimeoutKey) ?? KernelHttpEdgeHost.DefaultTimeout));
+        }
         services.AddHostedService(provider =>
         {
             // Host expressions (JavaScript, Liquid) run on the default shell's portable evaluator, in a scope of that shell.
@@ -146,7 +172,7 @@ internal static class WorkbenchCorePreview
                 // of an instance in flight finds its workflow served.
                 starting: serving is null ? null : token => ServeActiveSlotsAsync(shells, shellName, logger, token));
         });
-        if (configuration["Elsa:CorePreview:ReadsTenant"] is { } readsTenant)
+        if ((configuration["Elsa:CorePreview:ReadsTenant"] ?? tenant) is { } readsTenant)
             services.AddSingleton(new WorkbenchCorePreviewReads(Open, EmbeddedTenant.Bind(readsTenant)));
 
         KernelDb Open() => publications ? PostgresPreviewHosting.CreateShippedContext(options) :
