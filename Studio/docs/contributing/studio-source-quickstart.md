@@ -68,7 +68,7 @@ Use these separate browser and backend addresses:
 
 | Address | Role and source configuration |
 |---|---|
-| `http://localhost:5089` | Open this Studio page in the browser. It is the Studio Web `http` launch profile. The Workbench Development host's default CORS origins include this Studio origin. |
+| `http://localhost:5089` | Open this Studio page in the browser. It is the `http` launch profile of Elsa.Studio.Workbench.Host. The Workbench Development host's default CORS origins include this Studio origin. |
 | `http://localhost:5095` | Foundation Workbench HTTP profile and browser-facing backend API. Set Studio's `Studio:BackendBaseUrl` to this address; Studio's default in `Studio/src/apps/Elsa.Studio.Workbench.Host/appsettings.json` is `https://localhost:7243`. |
 
 Studio exposes `Studio:BackendBaseUrl` to its browser app. Server-side Studio management calls can instead use `Studio:BackendServerBaseUrl` when it is set; otherwise they fall back to `Studio:BackendBaseUrl`. This local pair uses the one browser-facing URL and does not configure the separate server-side override. If you change the Studio origin, the Workbench CORS allowed-origin list must include that exact origin.
