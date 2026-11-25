@@ -25,8 +25,12 @@ internal static class LabelChecks
             // A migration plan answered (here, refused at its source) beside both labels, in either order.
             .Add(Workflow("labelled-target", Sequence("root", SetCorrelationId("c", "order-42"), SetInstanceName("n", "Order"), Event("wait", "never"))))
             .Add(Workflow("late-labels", Sequence("root", Event("go", "go-now"), SetCorrelationId("c", "late"), SetInstanceName("n", "Late"), Event("wait", "never"))))
-            .Add(Workflow("plan", Event("wait", "never")));
-        var model = new NativeExecutionModel(registry);
+            .Add(Workflow("plan", Event("wait", "never")))
+            // A host expression reads the correlation id the model set (K10's instance parameter).
+            .Add(Workflow("host-read", Sequence("root", SetCorrelationId("c", "order-9"),
+                SetInstanceName("n", Binding.Host("JavaScript", "echo", ("c", Binding.Instance(InstanceBinding.CorrelationId)), ("i", Binding.Instance(InstanceBinding.Id)))),
+                Event("wait", "never"))));
+        var model = new NativeExecutionModel(registry, new NativeExecutionOptions { Expressions = new EchoExpressions() });
         await using var driver = new ContractWorkload.InMemoryDriver(4, Flaw.None, new PublicWorkflow([model]), authorizeOperator: (_, _) => true);
         var scope = ContractScopes.Bind("labels");
         var runtime = new PublicRuntime(driver.Ingress, driver.Reads);
@@ -89,8 +93,24 @@ internal static class LabelChecks
               lateHeader.Labels.ContainsKey("migration-plan") && afterMigration.Labels.ContainsKey("migration-plan"),
             $"an instance with both labels takes a migration plan, and one that answered a plan sets both labels ({afterMigration.Status}, {lateHeader.Status}, {string.Join(", ", lateHeader.Labels.Keys)})");
 
+        var hostRead = await Start("host-read");
+        await driver.PassAll(4);
+        var hostHeader = await Header(hostRead);
+        check(hostHeader.Labels.GetValueOrDefault(NativeLabels.InstanceName) == "order-9 True",
+            $"a host expression's instance parameters read the correlation id the model set and the instance's id ({hostHeader.Labels.GetValueOrDefault(NativeLabels.InstanceName)})");
+
         var refused = await Header(tooLong);
         check(refused.Status == Contract.ActorStatus.Faulted && refused.TypeData.Contains("workflow.label.refused", StringComparison.Ordinal),
             $"a label value over 1,024 bytes faults the run ({refused.Status})");
+    }
+
+    private sealed class EchoExpressions : INativeExpressions, INativeExpressionSession
+    {
+        public INativeExpressionSession Open(CancellationToken cancellationToken) => this;
+
+        public JsonNode? Evaluate(HostExpression expression, IReadOnlyDictionary<string, JsonNode?> parameters, IReadOnlyDictionary<string, JsonNode?> variables, string instanceId) =>
+            JsonValue.Create($"{parameters["c"]?.GetValue<string>()} {parameters["i"]?.GetValue<string>() == instanceId}");
+
+        public void Dispose() { }
     }
 }

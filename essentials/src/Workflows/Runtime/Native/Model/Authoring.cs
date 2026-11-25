@@ -16,7 +16,12 @@ namespace Kernel.Native;
 public abstract record Binding
 {
     public static Binding Literal(object? value) => new LiteralBinding(value as JsonNode ?? JsonSerializer.SerializeToNode(value));
-    public static Binding Var(string name) => new VariableBinding(name);
+    public static Binding Var(string name, string? path = null) => new VariableBinding(name, path);
+    /// <summary>An expression the host evaluates (<see cref="HostExpressionBinding"/>).</summary>
+    public static Binding Host(string language, string text, params (string Name, Binding Value)[] parameters) =>
+        new HostExpressionBinding(language, text, [.. parameters.Select(p => new HostParameter(p.Name, p.Value))]);
+    /// <summary>The instance's id or correlation id (<see cref="InstanceBinding"/>).</summary>
+    public static Binding Instance(string field) => new InstanceBinding(field);
     public static Binding Result(string node, string? path = null) => new ResultBinding(node, path);
     public static Binding Expr(string text) => new ExpressionBinding(text);
     public static implicit operator Binding(string literal) => Literal(literal);
@@ -26,7 +31,24 @@ public abstract record Binding
 }
 
 public sealed record LiteralBinding(JsonNode? Value) : Binding;
-public sealed record VariableBinding(string Name) : Binding;
+/// <summary>A variable, or a member of it by a dotted path (a workflow input's member is the variable <c>input</c>'s).</summary>
+public sealed record VariableBinding(string Name, string? Path = null) : Binding;
+
+/// <summary>A fact of the running instance: <see cref="Id"/> or <see cref="CorrelationId"/>.</summary>
+public sealed record InstanceBinding(string Field) : Binding
+{
+    public const string Id = "instanceId";
+    public const string CorrelationId = "correlationId";
+}
+
+/// <summary>
+/// An expression the host evaluates (owner decision of 25 November: JavaScript and Liquid, through the host's portable
+/// evaluator): its language, text, result type and options, and its parameters, each a binding resolved where the node
+/// runs. The host sees the parameters and the variables visible there by name.
+/// </summary>
+public sealed record HostExpressionBinding(string Language, string Text, IReadOnlyList<HostParameter> Parameters, string? ResultType = null, JsonObject? Options = null) : Binding;
+
+public sealed record HostParameter(string Name, Binding Value);
 public sealed record ResultBinding(string Node, string? Path) : Binding;
 public sealed record ExpressionBinding(string Text) : Binding;
 
@@ -186,7 +208,12 @@ internal static class Hydrator
         var activity = (ActivityBase)Activator.CreateInstance(node.Type)!;
         foreach (var property in Of(node.Type))
             if (node.Inputs.TryGetValue(property.Name, out var binding))
-                property.SetValue(activity, Values.To(evaluate(binding), property.PropertyType));
+            {
+                JsonNode? value;
+                try { value = evaluate(binding); }
+                catch (NativeExpressionException failed) when (failed.Input is null) { throw failed.For(property.Name); }
+                property.SetValue(activity, Values.To(value, property.PropertyType));
+            }
         return activity;
     }
 

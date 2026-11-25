@@ -66,12 +66,14 @@ internal sealed partial class Burst
             return;
         }
         // A blank value clears the label, as the old core reads a blank correlation id or name as none.
-        try { turn.SetLabel(label, string.IsNullOrWhiteSpace(text) ? null : text); }
+        var normalized = string.IsNullOrWhiteSpace(text) ? null : text;
+        try { turn.SetLabel(label, normalized); }
         catch (Exception refused) when (refused is ArgumentException or NotSupportedException)
         {
             Fail(frame, new ActivityFault("workflow.label.refused", refused.Message));
             return;
         }
+        if (label == NativeLabels.CorrelationId) _s.CorrelationId = normalized;
         Complete(frame, "Done", null);
     }
 

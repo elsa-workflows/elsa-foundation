@@ -67,6 +67,8 @@ public class NativeExecutionOptions
     public NativeHttpOptions? Http { get; init; }
     /// <summary>The host's script engine for RunJavaScript; without it a script faults.</summary>
     public INativeScripts? Scripts { get; init; }
+    /// <summary>The host's evaluator for host expressions (JavaScript, Liquid); without it such a binding faults its activation.</summary>
+    public INativeExpressions? Expressions { get; init; }
 }
 
 // ---- the state: live frames, scheduled work, waits, variables, results ---------------------------------------------
@@ -80,6 +82,9 @@ public sealed partial class NativeState
     public List<Work> Agenda { get; set; } = [];
     public Dictionary<string, WaitEntry> Waits { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, JsonNode?> Variables { get; set; } = new(StringComparer.Ordinal);
+    /// <summary>The correlation id Set Correlation Id set, which an expression's instance parameter reads; the label holds it too.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? CorrelationId { get; set; }
     public Dictionary<string, JsonNode?> Results { get; set; } = new(StringComparer.Ordinal);
     public string? TriggerNode { get; set; }
     public JsonNode? Trigger { get; set; }
@@ -145,6 +150,12 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     private string NewId(string prefix) => prefix + ++_s.Next;
 
     public async ValueTask RunAsync()
+    {
+        try { await RunTurnAsync(); }
+        finally { CloseExpressions(); }
+    }
+
+    private async ValueTask RunTurnAsync()
     {
         LexicalScopes.Validate(_s);
         NativeInterventions.Validate(_s);
@@ -262,10 +273,24 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             if (Has(NativeFlaw.InFlightInMemory) && Durable) work.Gone = true;     // MUTATION: dequeued in memory only; the commit still carries it
             else _s.Agenda.Remove(work);
             _executed++;
-            if (work.Resume) await ResumeAsync(work);
-            else await ExecuteAsync(work);
+            try
+            {
+                if (work.Resume) await ResumeAsync(work);
+                else await ExecuteAsync(work);
+            }
+            catch (NativeExpressionException failed) when (FrameOf(work) is { } frame)
+            {
+                Fail(frame, ExpressionFault(frame, failed));
+            }
         }
     }
+
+    // The frame a work item runs, for a host expression's fault: a resume's waiting frame, or the frame it starts.
+    private Frame? FrameOf(Work work) => work.Resume
+        ? _s.Waits.TryGetValue(work.Wait!, out var wait) ? _s.Frames.GetValueOrDefault(wait.Frame) : null
+        : _s.Frames.GetValueOrDefault(work.Frame) ?? (work.Parent is null || _s.Frames.ContainsKey(work.Parent)
+            ? new Frame { Id = work.Frame, Node = work.Node!, Parent = work.Parent, Tag = work.Tag, Scope = work.Scope, Attempt = work.Attempt, LiveScope = work.LiveScope, LexicalScope = work.LexicalScope }
+            : null);
 
     private async ValueTask ExecuteAsync(Work work)
     {
@@ -553,7 +578,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         _s.Frames.Remove(frame.Id);
         turn.Record($"c:{frame.Id}:{frame.Node}");
         var node = _wf.Nodes[boundary.Node];
-        ((IExitBoundary)RestoreActivity(boundary, node)).OnExit(new CompositeContext(this, boundary, node), exit.Outcome);
+        Guard(boundary, () => ((IExitBoundary)RestoreActivity(boundary, node)).OnExit(new CompositeContext(this, boundary, node), exit.Outcome));
     }
 
     internal void Complete(Frame frame, string outcome, JsonNode? result)
@@ -577,8 +602,12 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         }
         if (!_s.Frames.TryGetValue(frame.Parent, out var parent)) return;
         var node = _wf.Nodes[parent.Node];
-        var composite = (CompositeActivity)RestoreActivity(parent, node);
-        composite.OnChildCompleted(new CompositeContext(this, parent, node), new ChildCompleted(frame.Id, frame.Node, outcome, result, frame.Tag));
+        // A composite's inputs are read again for every callback, so a host expression among them can fail here too.
+        Guard(parent, () =>
+        {
+            var composite = (CompositeActivity)RestoreActivity(parent, node);
+            composite.OnChildCompleted(new CompositeContext(this, parent, node), new ChildCompleted(frame.Id, frame.Node, outcome, result, frame.Tag));
+        });
     }
 
     /// <summary>A threshold join fired: record it once, complete the composite, cancel what still runs under it.</summary>
@@ -622,8 +651,11 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             return;
         }
         var node = _wf.Nodes[parent.Node];
-        var composite = (CompositeActivity)RestoreActivity(parent, node);
-        composite.OnChildFaulted(new CompositeContext(this, parent, node), new ChildFaulted(frame.Id, frame.Node, fault, frame.Tag));
+        Guard(parent, () =>
+        {
+            var composite = (CompositeActivity)RestoreActivity(parent, node);
+            composite.OnChildFaulted(new CompositeContext(this, parent, node), new ChildFaulted(frame.Id, frame.Node, fault, frame.Tag));
+        });
     }
 
     internal string Schedule(Frame parent, Node child, string? tag, IReadOnlyDictionary<string, JsonNode?>? scope, string? lexicalScope = null)
@@ -693,7 +725,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     internal JsonNode? Evaluate(Binding binding, IScope scope) => binding switch
     {
         LiteralBinding l => l.Value?.DeepClone(),
-        VariableBinding v => scope.Variable(v.Name)?.DeepClone(),
+        VariableBinding v => Values.Path(scope.Variable(v.Name), v.Path)?.DeepClone(),
+        InstanceBinding { Field: InstanceBinding.Id } => JsonValue.Create(turn.Actor.Id),
+        InstanceBinding { Field: InstanceBinding.CorrelationId } => _s.CorrelationId is { } correlation ? JsonValue.Create(correlation) : null,
+        HostExpressionBinding h => EvaluateHost(h, scope),
         ResultBinding r => Values.Path(_s.Results.GetValueOrDefault(r.Node), r.Path)?.DeepClone(),
         ExpressionBinding e => Expression.Evaluate(e.Text, scope),
         _ => throw new InvalidOperationException(binding.ToString()),
@@ -723,8 +758,9 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     }
 }
 
-internal sealed class FrameScope(Burst burst, Frame frame) : IScope
+internal sealed class FrameScope(Burst burst, Frame frame) : IScope, IVisibleScope
 {
+    public IReadOnlyDictionary<string, JsonNode?> Visible() => burst.VisibleVariables(frame);
     public JsonNode? Variable(string name) => burst.Read(frame, name);
     public JsonNode? Result(string node) => burst.Result(node);
 }

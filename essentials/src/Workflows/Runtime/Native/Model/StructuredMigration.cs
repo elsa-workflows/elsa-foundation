@@ -148,6 +148,9 @@ internal static class StructuredMigration
             (VariableBinding left, VariableBinding right) => left == right,
             (ResultBinding left, ResultBinding right) => left == right,
             (ExpressionBinding left, ExpressionBinding right) => left == right,
+            (InstanceBinding left, InstanceBinding right) => left == right,
+            (HostExpressionBinding left, HostExpressionBinding right) => JsonNode.DeepEquals(
+                NativeRecoveryMaterial.DescribeBinding(left), NativeRecoveryMaterial.DescribeBinding(right)),
             _ => false,
         };
 

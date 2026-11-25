@@ -171,15 +171,17 @@ internal sealed partial class Burst
 }
 
 /// <summary>What a composite reads in one of its lexical scopes; closed, nothing outside that scope's chain.</summary>
-internal sealed class CompositeReadScope(Burst burst, Frame owner, string lexicalScope, bool closed = false) : IScope
+internal sealed class CompositeReadScope(Burst burst, Frame owner, string lexicalScope, bool closed = false) : IScope, IVisibleScope
 {
+    public IReadOnlyDictionary<string, JsonNode?> Visible() => burst.VisibleInScope(owner, lexicalScope, closed);
     public JsonNode? Variable(string name) => burst.ReadInScope(owner, lexicalScope, name, closed);
     public JsonNode? Result(string node) => burst.Result(node);
 }
 
 /// <summary>What a binding reads from a set of values alone: a GraphActivity input's default sees the inputs given so far.</summary>
-internal sealed class ValuesScope(Burst burst, IReadOnlyDictionary<string, JsonNode?> values) : IScope
+internal sealed class ValuesScope(Burst burst, IReadOnlyDictionary<string, JsonNode?> values) : IScope, IVisibleScope
 {
+    public IReadOnlyDictionary<string, JsonNode?> Visible() => values;
     public JsonNode? Variable(string name) => values.GetValueOrDefault(name);
     public JsonNode? Result(string node) => burst.Result(node);
 }

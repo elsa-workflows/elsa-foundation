@@ -31,8 +31,18 @@ internal static class NativeRecoveryMaterial
         ["CompleteOutcomes"] = new JsonObject(g.CompleteOutcomes.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => KeyValuePair.Create(p.Key, (JsonNode?)p.Value))),
     };
 
-    private static JsonObject? DescribeBinding(Binding? b) =>
-        b is null ? null : new JsonObject { ["Kind"] = b.GetType().FullName, ["Value"] = JsonSerializer.SerializeToNode(b, b.GetType()) };
+    /// <summary>A binding as data: its kind and its fields, a host expression's parameters described in turn.</summary>
+    internal static JsonObject? DescribeBinding(Binding? b) => b switch
+    {
+        null => null,
+        HostExpressionBinding h => new JsonObject
+        {
+            ["Kind"] = h.GetType().FullName,
+            ["Language"] = h.Language, ["Text"] = h.Text, ["ResultType"] = h.ResultType, ["Options"] = h.Options?.DeepClone(),
+            ["Parameters"] = new JsonArray(h.Parameters.Select(p => (JsonNode?)new JsonObject { ["Name"] = p.Name, ["Value"] = DescribeBinding(p.Value) }).ToArray()),
+        },
+        _ => new JsonObject { ["Kind"] = b.GetType().FullName, ["Value"] = JsonSerializer.SerializeToNode(b, b.GetType()) },
+    };
 
     private static JsonObject DescribeNode(Node n)
     {
@@ -42,7 +52,7 @@ internal static class NativeRecoveryMaterial
             Children = n.Children.Select(c => c.Id).ToArray(), n.Connections,
             Gateways = n.Gateways.OrderBy(p => p.Key, StringComparer.Ordinal).ToArray(), Captures = n.Captures.OrderBy(p => p.Key, StringComparer.Ordinal).ToArray(),
             Inputs = n.Inputs.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new
-                { p.Key, Kind = p.Value.GetType().FullName, Value = JsonSerializer.SerializeToNode(p.Value, p.Value.GetType()) }).ToArray()
+                { p.Key, Kind = p.Value.GetType().FullName, Value = p.Value is HostExpressionBinding ? DescribeBinding(p.Value) : JsonSerializer.SerializeToNode(p.Value, p.Value.GetType()) }).ToArray()
         })!.AsObject();
         if (n.JobTimeout is { } timeout) material["JobTimeoutTicks"] = timeout.Ticks;
         // A Switch's cases are part of what it is; a node without any describes as before.
