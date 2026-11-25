@@ -63,7 +63,7 @@ public sealed partial class EfStore
 
     private sealed record KeptRow(string Id, short KeptBy, string Digest, string Envelope, long Bytes);
 
-    private sealed record ParkMarkRow(long? At, long? Revision);
+    private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding);
 
     private static Task<List<KeptRow>> ReadKeptAsync(KernelDb db, string actor, int partition, bool lockRows, CancellationToken token) =>
         db.Database.SqlQueryRaw<KeptRow>($"""
@@ -104,7 +104,8 @@ public sealed partial class EfStore
                 continue;
             }
             var park = await db.Database.SqlQuery<ParkMarkRow>($"""
-                SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision" FROM "Instances"
+                SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision",
+                    "Jobs" IS NOT NULL OR "Children" IS NOT NULL OR "CustomHandles" IS NOT NULL AS "Outstanding" FROM "Instances"
                 WHERE "Id" = {message.Target.Id} AND "Partition" = {message.Target.Partition} AND NOT "Retired"
                 """).SingleOrDefaultAsync(token);
             var kept = await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token);
@@ -116,7 +117,7 @@ public sealed partial class EfStore
                 (charged.Length <= 1 || charged.Sum(row => row.Bytes) <= ParkRecoveryCredit.LimitBytes);
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived), kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
-                fits, KeptSetDigest(kept));
+                fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }
         return polled with { Messages = messages };

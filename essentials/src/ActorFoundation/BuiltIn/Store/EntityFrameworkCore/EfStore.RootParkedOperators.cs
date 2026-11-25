@@ -11,7 +11,7 @@ public sealed partial class EfStore
     {
         var command = turn.FoundationRootOperator!;
         string[] reasons = command.Operator?.RootParkMark is null ? ["parked"]
-            : command is { Kind: Kinds.Terminate, Operator.RootParkFacts: not null } ? ["selection", "page"] : [];
+            : command is { Kind: Kinds.Terminate, Operator.RootParkFacts: not null } ? ["selection", "plan", "page"] : [];
         // The refusal keeps the Suspended flag: a Park on a suspended root keeps it, as the in-memory reference does.
         if (turn.Row is not { Status: InstanceStatus.Faulted, Retired: false, FoundationDispatchHeader: { Terminal: null } header } row ||
             turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
@@ -47,7 +47,7 @@ public sealed partial class EfStore
             turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
             !PostgresRootAdmission.IsOperatorOccurrence(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
             command is not { Kind: Kinds.Terminate, Operator: { RootParkMark: { } mark, RootParkWindow: >= 0, RootParkFacts: { } facts, RootThenDelete: false } } ||
-            (command.ReplyTo is not null) != command.Operator.RootHeldReply || facts.Mark != mark || !facts.FitsPage ||
+            (command.ReplyTo is not null) != command.Operator.RootHeldReply || facts.Mark != mark || facts.Outstanding || !facts.FitsPage ||
             turn.Journal != Json.Write(new { Outcome = "terminated", Operation = command.Id, Cleared = facts.Arrived + facts.Consumed }) ||
             turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
                 turn.Journal, Unsubscribe: true, Held: turn.Held) { FoundationRootOperator = command } ||
@@ -67,8 +67,8 @@ public sealed partial class EfStore
     }
 
     // The checkpoint writer's branch for that commit: a parked root becomes Cancelled and unsuspended with its Park mark
-    // cleared and its terminal mark written, every kept row already cleared, and the rest of the row unchanged, beside a
-    // "terminated" entry at its revision. The raw command is formatted, so the literal brace is doubled.
+    // cleared and its terminal mark written, every kept row already cleared, no jobs, children or custom handles, and the
+    // rest of the row unchanged, beside a "terminated" entry at its revision. The raw command is formatted, so the literal brace is doubled.
     private static string ParkedTerminateCheckpoint(KernelDb db)
     {
         const string columns = """
@@ -82,6 +82,7 @@ public sealed partial class EfStore
                 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 AND OLD."FoundationTerminalRevision" IS NULL
                 AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
                 AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
+                AND NEW."Jobs" IS NULL AND NEW."Children" IS NULL AND NEW."CustomHandles" IS NULL
                 AND {{{Row("NEW")}}} IS NOT DISTINCT FROM {{{Row("OLD")}}}
                 AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
                     AND k."InboxScope" = -4 AND k."FoundationKeptBy" IS NOT NULL)
@@ -125,7 +126,7 @@ public sealed partial class EfStore
                     AND NOT (i."Partition" = NEW."Partition" AND i."Revision" = NEW."Revision"
                         AND (NEW."Entries" NOT LIKE '{{"Outcome":"terminated",%' OR (i."Status" = 3 AND NOT i."Retired"
                             AND i."FoundationParkAt" IS NULL AND i."FoundationTerminalRevision" = NEW."Revision"))))
-                THEN RAISE EXCEPTION 'An operator refusal entry requires the checkpoint write at its revision' USING ERRCODE = '23514'; END IF;
+                THEN RAISE EXCEPTION 'An operator outcome entry requires the checkpoint write at its revision' USING ERRCODE = '23514'; END IF;
                 RETURN NULL;
             END
             $fn$;
@@ -196,6 +197,7 @@ public sealed partial class EfStore
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired" AND i."Suspended" = {Suspended}
                     AND i."Status" = {(int)InstanceStatus.Faulted} AND i."Revision" = {Expected} AND i."FoundationParkAt" = {Mark.At}
                     AND i."FoundationParkRevision" = {Mark.Revision} AND i."Fault" IS NOT NULL AND i."FoundationTerminalRevision" IS NULL
+                    AND i."Jobs" IS NULL AND i."Children" IS NULL AND i."CustomHandles" IS NULL
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
                 """).ToListAsync(token);
@@ -230,7 +232,8 @@ public sealed partial class EfStore
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest})
                     AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({cleared}) AND "Target" = {Root.Actor}
                         AND "Partition" = {Root.Partition} AND "InboxScope" = -4 AND "Done" AND "FoundationKeptBy" IS NULL
-                        AND "Payload" IS NULL AND "Start" IS NULL AND "ReplyTo" IS NULL) = {cleared.Length}
+                        AND "Payload" IS NULL AND "Start" IS NULL AND "ReplyTo" IS NULL
+                        AND "KeepUntil" = floor(extract(epoch from transaction_timestamp()) * 1000)::bigint + {window}) = {cleared.Length}
                     AND (NOT {db.UsesRootParkInspection} OR EXISTS (SELECT 1 FROM "FoundationActorList"
                         WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference} AND "Status" = {(int)InstanceStatus.Cancelled}
                             AND "ParkAt" IS NULL AND "ParkFault" IS NULL AND "EndedAt" IS NOT NULL))

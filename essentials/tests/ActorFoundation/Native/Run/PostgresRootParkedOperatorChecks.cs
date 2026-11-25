@@ -1,7 +1,9 @@
+using System.Data.Common;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
@@ -35,7 +37,7 @@ internal static class PostgresRootParkedOperatorChecks
     [
         "Qualified actor checkpoint requires a qualified update",
         "Qualified actor journal requires the next running checkpoint revision",
-        "An operator refusal entry requires the checkpoint write at its revision"
+        "An operator outcome entry requires the checkpoint write at its revision"
     ];
 
     private sealed record InputRow(long Seq, string Id, string Kind, bool Done, short? KeptBy, bool Content);
@@ -74,6 +76,7 @@ internal static class PostgresRootParkedOperatorChecks
         var suspendedTerminate = await main.StartAsync("suspended-terminate");
         var suspendedResume = await main.StartAsync("suspended-resume");
         var running = await main.StartAsync("running");
+        var planned = await main.StartAsync("planned");
         probe.FailsOn.Add((lone.Id, Contract.Kinds.Terminate));
         probe.FailsOn.Add((suspendedTerminate.Id, Contract.Kinds.Terminate));
         probe.FailsOn.Add((suspendedResume.Id, Contract.Kinds.Resume));
@@ -116,6 +119,29 @@ internal static class PostgresRootParkedOperatorChecks
                 !probe.Saw(late, "ordinary") && !probe.Saw(late, Contract.Kinds.Terminate) &&
                 !await main.TerminateAsync(late, "terminate-ended", parkLate),
             "the Terminate cleared the kept input, never reached the actor, the ended root refused the withheld input, and the Park selection is spent");
+        // A Park-terminated root is deleted through the ordinary retirement, whose residue checks admit its cleared rows.
+        Check(await main.OperateAsync(late, "delete-late", Contract.Kinds.Delete, await main.SelectionAsync(late)),
+            "a Delete with the terminal selection is admitted for the Park-terminated root");
+        await main.RetiredAsync(late);
+
+        // A row with jobs, children or custom handles is refused as "plan": the end cannot cancel or cascade them yet, and
+        // retirement refuses them. No closed composed set reaches one through the owner, so a bypassed write plants children.
+        Check(await main.SendAsync(planned, "fail-planned", "fail"), "a failing input is admitted for the planned root");
+        var plannedPark = await main.DriveAsync(planned, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+        var parkPlanned = await main.ParkSelectionAsync(planned, 2);
+        await main.BypassAsync(plannedPark, """ "Children" = 'fixture' """);
+        try
+        {
+            Check(await main.OperateAsync(planned, "terminate-planned", Contract.Kinds.Terminate, parkPlanned, reply: true),
+                "a held Terminate with the Park selection is admitted for the root with children");
+            await main.DriveAsync(planned, image => image is { Revision: 3 });
+        }
+        finally { await main.BypassAsync(plannedPark, """ "Children" = NULL """); }
+        await main.SettledAsync(planned, "terminate-planned", reason: "plan");
+        main.Answered("terminate-planned", "ParkPlan");
+        Check(await main.TerminateAsync(planned, "terminate-unplanned", parkPlanned), "the root without children admits its Park selection again");
+        await main.DriveAsync(planned, image => image is { Revision: 4, Status: InstanceStatus.Cancelled });
+        await main.TerminatedAsync(planned, "terminate-unplanned", cleared: 1);
 
         // A Terminate whose own turn fails opens the Park without it; the owner polls it again and refuses it.
         Check(await main.TerminateAsync(lone, "terminate-lone"), "a Terminate is admitted for the root whose terminate turn fails");
@@ -319,6 +345,11 @@ internal static class PostgresRootParkedOperatorChecks
                     !await main.TriggerProbeAsync(suspendedPark, ProbeTerminated, End(suspendedPark, state: "\"State\" || ' '")) &&
                     !await main.TriggerProbeAsync(parked, ProbeTerminated, End(parked)),
                 "a terminated entry passes only with the parked root ended, its Park mark cleared, its state kept and no kept row left");
+            await main.BypassAsync(suspendedPark, """ "Children" = 'fixture' """);
+            bool withChildren;
+            try { withChildren = await main.TriggerProbeAsync(suspendedPark, ProbeTerminated, End(suspendedPark)); }
+            finally { await main.BypassAsync(suspendedPark, """ "Children" = NULL """); }
+            Check(!withChildren, "a terminated entry is refused for a parked root with children");
             Check(!await main.LoneEntryCommitsAsync(suspendedPark, ProbeTerminated) && !await main.LoneEntryCommitsAsync(live, ProbeTerminated),
                 "a lone terminated entry with no checkpoint write is refused at commit, on a parked and on a Running root");
         }
@@ -348,8 +379,9 @@ internal static class PostgresRootParkedOperatorChecks
         async Task ArrivalsSet()
         {
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + ArrivalsSchema, stop);
-            var arrivalOptions = new DbContextOptionsBuilder<KernelDb>()
-                .UseNpgsql(new NpgsqlConnectionStringBuilder(connection) { SearchPath = ArrivalsSchema }.ConnectionString).Options;
+            var arrivalConnection = new NpgsqlConnectionStringBuilder(connection) { SearchPath = ArrivalsSchema }.ConnectionString;
+            var race = new RaceHook(arrivalConnection);
+            var arrivalOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(arrivalConnection).AddInterceptors(race).Options;
             var arrivalCapabilities = RootProfiles.Formats[StoreFormat.RootParkArrivals] | RootProfiles.Formats[StoreFormat.RootTerminalSelection] |
                 RootCapabilities.OperatorReplies;
             KernelDb OpenArrivals() => KernelDb.ForUnshippedComposition(arrivalOptions, ComposedArrivals, arrivalCapabilities);
@@ -357,7 +389,7 @@ internal static class PostgresRootParkedOperatorChecks
                 Check(RootProfiles.MissingPrerequisites(arrivalCapabilities) == RootCapabilities.None && check.UsesRootParkedOperators &&
                         check.UsesRootParkArrivals && !check.UsesRootParkRecovery && check.UsesRootStableBody,
                     "the closed arrivals set carries Park arrivals with terminal selection, termination and held replies");
-            var set = new Set("parked-arrivals", OpenArrivals, owned, inBatch, tenant, stop);
+            await using var set = new Set("parked-arrivals", OpenArrivals, owned, inBatch, tenant, stop);
             await set.InstallAsync(createTables: true);
             await using var owner = await set.OwnAsync();
             var plain = await set.StartAsync("arrivals-plain");
@@ -365,6 +397,8 @@ internal static class PostgresRootParkedOperatorChecks
             var holding = await set.StartAsync("arrivals-held");
             var awake = await set.StartAsync("arrivals-running");
             var large = await set.StartAsync("arrivals-large");
+            var raceKeep = await set.StartAsync("arrivals-race-keep");
+            var raceMark = await set.StartAsync("arrivals-race-mark");
             set.Probe.FailsOn.Add((asleep.Id, Contract.Kinds.Resume));
 
             // A Terminate with the Park selection clears the kept fault input and the kept arrival behind it, and ends the root.
@@ -396,6 +430,42 @@ internal static class PostgresRootParkedOperatorChecks
                 "the arrivals set admits only the Park selection for the root parked while suspended");
             await set.DriveAsync(asleep, image => image is { Revision: 6, Status: InstanceStatus.Cancelled });
             await set.TerminatedAsync(asleep, "arrivals-terminate-asleep", cleared: 1, sleeping.State);
+
+            // An arrival kept between the owner's Park facts and its commit changes the kept set: the commit rolls back, the
+            // command is polled again with the new facts and clears both rows.
+            Check(await set.SendAsync(raceKeep, "race-fail", "fail") &&
+                    await set.SendAsync(raceKeep, "race-late", "ordinary", (await set.ImageAsync(raceKeep)).AsOf + 600_000),
+                "the arrivals set admits a failing input and a future one for the raced root");
+            var raced = await set.DriveAsync(raceKeep, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            var late = (await set.InputsAsync(raceKeep)).Single(row => row.Kind == "ordinary" && !row.Done).Id;
+            Check(await set.TerminateAsync(raceKeep, "race-keep-terminate", await set.ParkSelectionAsync(raceKeep, 2)),
+                "the arrivals set admits a Terminate with the Park selection for the raced root");
+            race.Arm(raced.Actor.Id, $"""UPDATE "Messages" SET "Done" = true, "FoundationKeptBy" = 1 WHERE "Id" = '{late}'""");
+            await set.PassUntilAsync(() => race.Fired == 1);
+            Check(await set.ImageAsync(raceKeep) is { Revision: 2, Status: InstanceStatus.Faulted },
+                "the commit that met a changed kept set rolled back, and its owner stood down");
+            await set.RetakeAsync();
+            await set.DriveAsync(raceKeep, image => image is { Status: InstanceStatus.Cancelled });
+            await set.TerminatedAsync(raceKeep, "race-keep-terminate", cleared: 2);
+            Check(race.Fired == 1 && await set.InputsAsync(raceKeep) is [{ Kind: "fail", KeptBy: null }, { Kind: "ordinary", Done: true, KeptBy: null }, _],
+                "the command, polled again by the next owner, cleared the raced row too");
+
+            // A Park mark moved between the owner's facts and its commit fails the lock: the commit rolls back, and the
+            // command, polled again, is refused as a stale selection.
+            Check(await set.SendAsync(raceMark, "race-mark-fail", "fail"), "the arrivals set admits a failing input for the second raced root");
+            var marked = await set.DriveAsync(raceMark, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.TerminateAsync(raceMark, "race-mark-terminate", await set.ParkSelectionAsync(raceMark, 2)),
+                "the arrivals set admits a Terminate with the Park selection for the second raced root");
+            race.Arm(marked.Actor.Id, $"""
+                UPDATE "Instances" SET "FoundationParkAt" = "FoundationParkAt" + 1 WHERE "Id" = '{marked.Actor.Id}';
+                UPDATE "FoundationActorList" SET "ParkAt" = "ParkAt" + 1 WHERE "Reference" = '{raceMark.Id}'
+                """);
+            await set.PassUntilAsync(() => race.Fired == 2);
+            Check(await set.ImageAsync(raceMark) is { Revision: 2, Status: InstanceStatus.Faulted },
+                "the commit that met a moved Park mark rolled back, and its owner stood down");
+            await set.RetakeAsync();
+            await set.DriveAsync(raceMark, image => image is { Revision: 3 });
+            await set.SettledAsync(raceMark, "race-mark-terminate", reason: "selection");
 
             // A Park larger than one page is refused with a recorded reason, and keeps every row.
             Check(await set.SendAsync(large, "arrivals-large-fail", "fail"), "the arrivals set admits a failing input for the large Park");
@@ -547,7 +617,9 @@ internal static class PostgresRootParkedOperatorChecks
     }
 
     private sealed class Set(string name, Func<KernelDb> open, bool owned, bool inBatch, Contract.BoundScope tenant, CancellationToken stop)
+        : IAsyncDisposable
     {
+        private IScopeActivation? _retaken;
         private Contract.IIngress _ingress = null!;
         private readonly ReplyLog _replies = new();
         private readonly Dictionary<string, string> _names = new(StringComparer.Ordinal);
@@ -585,6 +657,31 @@ internal static class PostgresRootParkedOperatorChecks
                 new WorkerOptions { Partitions = 1, Lease = FixtureLease, Transport = _replies })]);
             await host.HeartbeatAsync(FixtureLease, stop);
             return _owner = await host.ActivateAsync(0, stop) ?? throw new InvalidOperationException("The fixture owner could not take its partition.");
+        }
+
+        // The owner stood down after a commit that did not land. It releases the partition and a new owner takes it.
+        internal async Task RetakeAsync()
+        {
+            await _owner.DisposeAsync();
+            if (_retaken is not null) await _retaken.DisposeAsync();
+            _retaken = await OwnAsync();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_retaken is not null) await _retaken.DisposeAsync();
+        }
+
+        internal async Task PassUntilAsync(Func<bool> done)
+        {
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while (!done())
+            {
+                if (deadline.Elapsed > TimeSpan.FromSeconds(30)) throw new InvalidOperationException($"{name}: the armed race did not fire.");
+                await _owner.WokenAsync(null, stop);
+                await _owner.RunAsync(stop);
+                await Task.Delay(10, stop);
+            }
         }
 
         internal async Task<Contract.ActorRef> StartAsync(string id)
@@ -647,9 +744,27 @@ internal static class PostgresRootParkedOperatorChecks
                     entry == Json.Write(new { Outcome = "terminated", Operation = operation, Cleared = cleared }) &&
                     image is { Status: InstanceStatus.Cancelled, Suspended: false } && image.TerminalRevision == image.Revision &&
                     image.State == (state ?? _running[root].State) && await ParkAtAsync(image) is null &&
-                    listed is { Status: InstanceStatus.Cancelled, ParkAt: null, ParkFault: null } &&
-                    PostgresRootSelection.OpenTerminal(_cursor, selection, tenant.Tenant, root.Id)?.Revision == image.Revision,
+                    image.TerminalAt is > 0 && listed is { Status: InstanceStatus.Cancelled, ParkAt: null, ParkFault: null } &&
+                    listed.EndedAt == image.TerminalAt && listed.TerminalRevision == image.Revision &&
+                    PostgresRootSelection.OpenTerminal(_cursor, selection, tenant.Tenant, root.Id) == new FoundationTerminalStamp(image.Revision, image.TerminalAt.Value),
                 $"{operation} ends the parked root Cancelled with its terminal mark, clears {cleared} kept rows and its Park mark");
+        }
+
+        internal async Task<string> SelectionAsync(Contract.ActorRef root) => (await _reads.GetAsync(tenant, root, stop))!.Selection!;
+
+        // Drives the owner until the root is retired: no checkpoint, no list row.
+        internal async Task RetiredAsync(Contract.ActorRef root)
+        {
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while (await Cold.ReadFirstRootAsync(tenant.Tenant, root.Id, stop) is not null)
+            {
+                if (deadline.Elapsed > TimeSpan.FromSeconds(30)) throw new InvalidOperationException($"{name}: {_names[root.Id]} was not retired.");
+                await _owner.WokenAsync(null, stop);
+                await _owner.RunAsync(stop);
+                await Task.Delay(10, stop);
+            }
+            Check(await Cold.ReadRootActorAsync(tenant.Tenant, root.Id, stop) is null && await _reads.GetAsync(tenant, root, stop) is null,
+                $"the Delete retires {_names[root.Id]}: its checkpoint and list row are gone");
         }
 
         // Drives the owner until every input of the root has settled.
@@ -787,6 +902,33 @@ internal static class PostgresRootParkedOperatorChecks
         private static bool IsTriggerRefusal(Exception error) =>
             (error as PostgresException ?? error.InnerException as PostgresException) is { SqlState: "23514" } refused &&
             TriggerMessages.Contains(refused.MessageText);
+    }
+
+    // Runs one raw write, with triggers off (so it also keeps the projection the triggers would), just before the next commit lock of the armed actor's checkpoint: after the
+    // owner read its Park facts and before its commit binds them.
+    private sealed class RaceHook(string connection) : DbCommandInterceptor
+    {
+        private (string Actor, string Sql)? _armed;
+        private int _fired;
+        internal int Fired => Volatile.Read(ref _fired);
+        internal void Arm(string actor, string sql) => _armed = (actor, sql);
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (_armed is { } armed && command.CommandText.Contains("FOR UPDATE OF i", StringComparison.Ordinal) &&
+                command.CommandText.Contains("""AS "StateDigest" """.TrimEnd(), StringComparison.Ordinal) &&
+                command.Parameters.Cast<DbParameter>().Any(parameter => Equals(parameter.Value, armed.Actor)))
+            {
+                _armed = null;
+                Interlocked.Increment(ref _fired);
+                await using var raw = new NpgsqlConnection(connection);
+                await raw.OpenAsync(cancellationToken);
+                await using var write = new NpgsqlCommand("SET session_replication_role = replica; " + armed.Sql, raw);
+                if (await write.ExecuteNonQueryAsync(cancellationToken) < 1) throw new InvalidOperationException("The race write changed no row.");
+            }
+            return result;
+        }
     }
 
     private sealed class Probe : Contract.IActorType

@@ -84,7 +84,9 @@ internal sealed partial class ActorAdapter
     // Cancelled and no longer suspended, journalled "terminated" with the rows it cleared, and a held caller answered once.
     // Any other command is consumed and refused with a journalled reason at the next revision, and the Park and checkpoint
     // stay as they are: "parked" for one that names no Park (admitted before the Park opened), "selection" for a stale
-    // Park, "page" for a Park larger than one page. A held caller of a refused command is answered with the refusal.
+    // Park, "plan" for a row with jobs, children or custom handles (the end cannot cancel or cascade them yet, and
+    // retirement refuses them), "page" for a Park larger than one page. A held caller of a refused command is answered
+    // with the refusal.
     private Durable.TurnOutcome? RefuseOnParkedRoot(Durable.TurnInput input)
     {
         if (roots is not { RefusesParkedOperators: true } || input.Row is not
@@ -94,7 +96,7 @@ internal sealed partial class ActorAdapter
         var revision = checked(row.Revision + 1);
         var (mark, facts) = (control.Operator!.RootParkMark, control.Operator.RootParkFacts);
         var reason = control.Kind != Durable.Kinds.Terminate || mark is null || facts is null ? "parked"
-            : facts.Mark != mark ? "selection" : !facts.FitsPage ? "page" : null;
+            : facts.Mark != mark ? "selection" : facts.Outstanding ? "plan" : !facts.FitsPage ? "page" : null;
         if (reason is null)
         {
             var ended = row with
@@ -118,7 +120,7 @@ internal sealed partial class ActorAdapter
         if (control.ReplyTo is not null)
             outcome.ReplyTo(refused, new Durable.CreationResult(input.Actor, reason switch
             {
-                "selection" => "StaleSelection", "page" => "ParkPageLimit", _ => "Parked"
+                "selection" => "StaleSelection", "plan" => "ParkPlan", "page" => "ParkPageLimit", _ => "Parked"
             }, control.TargetCreation, row.Creation), creationRefusal: true);
         return outcome;
     }
