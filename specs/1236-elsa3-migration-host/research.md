@@ -45,8 +45,8 @@ acceptance set and templates from the merged S-15, or from the head current at t
     features through the `DependencyContext` and fails activation with `FeatureNotFoundException` for an unknown one;
   - `MapFoundationHealth`, which maps `/health/live` and `/health/ready`; readiness returns 200 once the default shell
     is active, which is what *Refusing to start* in the spec relies on;
-  - no `AddEfPersistenceResources`: main's essentials host doesn't call it (only the Workbench does, without
-    `AddFoundationShellHosting`), and its EF features read `ConnectionStrings:Elsa`, so this host does the same;
+  - no `AddEfPersistenceResources`: main's essentials host doesn't call it (the Workbench does, with its own EF tooling
+    defaults), and its EF features read `ConnectionStrings:Elsa`, so this host does the same;
   - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` (EF key store) and
     `AddShellStartupValidation`;
   - the initiative's JSON baseline (S-9, ADR 0091) at host level, as the Workbench and `Elsa.Foundation.Host`

@@ -63,7 +63,9 @@ short worktree path (MSB3030).
     `appsettings.Development.json` beside `appsettings.json`;
   - creating `data/` when missing, and logging the absolute workflows folder, activities file and data paths.
 
-  `AddFoundationNuplane` with no feed and no shared assemblies, so no package loads (R-6).
+  `AddFoundationNuplane` with no feed and no shared assemblies, so no package loads (R-6). Every host on main has at
+  least one feed, so confirm on the first run that Nuplane starts without one; if it doesn't, configure one empty
+  directory feed under the git-ignored `data/` folder, still with no shared assemblies, and say so in the PR.
 - [ ] T006 Write `appsettings.json` and the settings in `shells.json` (R-6):
   - `ConnectionStrings:Elsa` set to `Data Source=data/elsa.db`, with `Migrate:Policy` `AutoMigrate`;
   - development identity with the seeded administrator (the OpenIddict store is in memory in development mode);
