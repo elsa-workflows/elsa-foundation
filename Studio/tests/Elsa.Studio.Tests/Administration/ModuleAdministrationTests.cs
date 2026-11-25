@@ -91,6 +91,7 @@ public sealed class ModuleAdministrationTests
         var registry = await Registry(host);
         Assert.Equal(host.Root, (string?)registry["host"]?["contentRootPath"]);
         Assert.NotEqual("Elsa.Studio.Workbench.Host", (string?)registry["host"]?["runtime"]);
+        Assert.NotEqual("Elsa.Studio.Web", (string?)registry["host"]?["runtime"]);
         Assert.Equal("Supported", (string?)registry["retentionPolicy"]?["status"]);
         Assert.Null(registry["retentionPolicy"]?["keepNewestInactiveVersionsPerPackage"]);
         Assert.True((bool)registry["capabilities"]!["canManageFeeds"]!);
