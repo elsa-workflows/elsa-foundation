@@ -86,7 +86,7 @@ internal static class NativeVersionTerminateChecks
             await DriveUntil(first, () => State(Row(root)!).Frames[padding].State?.GetValue<string>().Length == padSize);
             saved = Row(root)!;
             savedHeader = (await reads.GetAsync(bound, reference))!.Header;
-            Console.WriteLine($"{title} v{savedHeader.Labels.GetValueOrDefault("version")} revision {saved.Revision}, " +
+            Console.WriteLine($"{title} v{System.Text.Json.Nodes.JsonNode.Parse(savedHeader.TypeData)?["Version"]} revision {saved.Revision}, " +
                 $"status {saved.Status}, state {Encoding.UTF8.GetByteCount(saved.State)}, terminal growth {originalGrowth}");
             Verify(saved.Status == InstanceStatus.Running && HasNativeHeader(savedHeader, 13) &&
                 State(saved).Inboxes?[frame].Receipts[receiptId] is { Status: "Queued", Retention: 3_600_000 } &&
@@ -222,7 +222,7 @@ internal static class NativeVersionTerminateChecks
         var value = document.RootElement;
         return value.GetProperty("Model").GetString() == "native" && value.GetProperty("Definition").GetString() == "root" &&
             value.GetProperty("Version").GetInt32() == version && value.GetProperty("Suspended").GetBoolean() == suspended &&
-            header.Labels.GetValueOrDefault("version") == version.ToString(CultureInfo.InvariantCulture);
+            !header.Labels.ContainsKey("version");
     }
 
     private static int HeaderBytes(Contract.ActorHeader header) => Encoding.UTF8.GetByteCount(header.TypeData) +

@@ -24,6 +24,9 @@ if (args is ["pg-workbench-core-preview", .. var workbenchPreview])
     await Elsa.Workbench.Qualification.WorkbenchPostgresPreview.RunAsync(workbenchPreview, workbenchExecutable);
     return 0;
 }
+if (args is ["pg-workbench-preview-reads-seed", var originalRoot, var seedFile, .. var readsProfile] && readsProfile is ([] or ["timed"]))
+    return await PostgresCorePreviewReadSeed.RunAsync(originalRoot, seedFile, timed: readsProfile.Length != 0);
+if (args is ["profile-capabilities"]) return ProfileCapabilityChecks.Run();
 if (args is ["pg-root-operators", "admit"])
     return await PostgresRootOperatorChecks.RunAsync(null);
 if (args is ["pg-root-operators", var defaultOperatorPhase and ("read" or "resume"), var operatorA, var operatorB, var operatorC])
@@ -91,6 +94,9 @@ if (args is ["pg-root-value-volume", var volumeStorage and ("inline" or "referen
     return await PostgresValueVolume.RunAsync(volumeStorage == "reference", volumePattern == "changing", padBytes, measuredTurns);
 if (args is ["pg-timed-job-worker", var jobFence and ("checked" or "in-batch")])
     return await PostgresTimedJobChecks.RunAsync(jobFence == "in-batch");
+if (args is ["pg-timed-job-worker", var jobWriter and ("owned" or "ef"), var physicalJobFence and ("checked" or "in-batch"), .. var physicalJobOptions] &&
+    (physicalJobOptions is [] or ["without-trial-withdrawal"]))
+    return await PostgresTimedJobChecks.RunAsync(physicalJobFence == "in-batch", jobWriter == "owned", physicalJobOptions.Length == 0);
 if (args is ["pg-root-timed-job-issuance", var timedFence and ("checked" or "in-batch"), .. var timedPhase])
     return await PostgresRootTimedJobIssuance.RunAsync(timedFence, timedPhase);
 if (args is ["pg-root-timed-job-settlement", var settleFence and ("checked" or "in-batch"), var winner and ("complete" or "timeout" or "late-clock" or "unhandled-timeout")])
@@ -142,6 +148,42 @@ if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal" or 
 if (args is ["pg-flowchart-preview", "birth"]) return await PostgresPublicPreview.RunAsync("birth", flowchart: true);
 if (args is ["pg-flowchart-preview", "restart", var flowchartActor, var flowchartBookmark])
     return await PostgresPublicPreview.RunAsync("restart", flowchartActor, flowchartBookmark, flowchart: true);
+if (args is ["pg-root-inbox", var inboxWriter and ("owned" or "ef"), var inboxFence and ("in-batch" or "checked"),
+    var inboxProfile and ("ordinary" or "operators")])
+    return await PostgresRootInboxChecks.RunAsync(inboxWriter == "owned", inboxFence == "in-batch", inboxProfile == "operators");
+if (args is ["pg-held-operator", var heldOperatorWriter and ("owned" or "ef"), var heldOperatorFence and ("in-batch" or "checked")])
+    return await PostgresHeldOperatorChecks.RunAsync(heldOperatorWriter == "owned", heldOperatorFence == "in-batch");
+if (args is ["pg-root-park-arrivals", var arrivalWriter and ("owned" or "ef"), var arrivalFence and ("checked" or "in-batch")])
+    return await PostgresRootParkOpeningChecks.RunAsync(arrivalWriter == "owned", arrivalFence == "in-batch", inspection: true, arrivals: true);
+if (args is ["pg-root-park-recovery", var recoverWriter and ("owned" or "ef"), var recoverFence and ("checked" or "in-batch")])
+    return await PostgresRootParkOpeningChecks.RunAsync(recoverWriter == "owned", recoverFence == "in-batch", recovery: true);
+if (args is ["pg-root-park-opening", var parkWriter and ("owned" or "ef"), var parkFence and ("checked" or "in-batch")])
+    return await PostgresRootParkOpeningChecks.RunAsync(parkWriter == "owned", parkFence == "in-batch");
+if (args is ["pg-root-park-inspection", var parkReadWriter and ("owned" or "ef"), var parkReadFence and ("checked" or "in-batch")])
+    return await PostgresRootParkOpeningChecks.RunAsync(parkReadWriter == "owned", parkReadFence == "in-batch", inspection: true);
+if (args is ["pg-root-composition", var compositionWriter and ("owned" or "ef"), var compositionFence and ("checked" or "in-batch")])
+    return await PostgresRootCompositionChecks.RunAsync(compositionWriter == "owned", compositionFence == "in-batch");
+if (args is ["pg-root-composed-install", var installWriter and ("owned" or "ef"), var installFence and ("checked" or "in-batch")])
+    return await PostgresRootComposedInstallChecks.RunAsync(installWriter == "owned", installFence == "in-batch");
+if (args is ["pg-root-parked-operators", var parkedWriter and ("owned" or "ef"), var parkedFence and ("checked" or "in-batch")])
+    return await PostgresRootParkedOperatorChecks.RunAsync(parkedWriter == "owned", parkedFence == "in-batch");
+if (args is ["pg-root-state-family", var familyWriter and ("owned" or "ef"), var familyFence and ("checked" or "in-batch")])
+    return await PostgresRootStateFamilyChecks.RunAsync(familyWriter == "owned", familyFence == "in-batch");
+if (args is ["pg-root-retention", var policyWriter and ("owned" or "ef"), var policyFence and ("in-batch" or "checked")])
+    return await PostgresRootRetentionChecks.RunAsync(policyWriter == "owned", policyFence == "in-batch");
+if (args is ["pg-root-plan-selection", var planWriter and ("owned" or "ef"), var planFence and ("in-batch" or "checked")])
+    return await PostgresRootPlanSelectionChecks.RunAsync(planWriter == "owned", planFence == "in-batch");
+if (args is ["pg-root-then-delete", var thenWriter and ("owned" or "ef"), var thenFence and ("in-batch" or "checked")])
+    return await PostgresRootThenDeleteChecks.RunAsync(thenWriter == "owned", thenFence == "in-batch");
+if (args is ["pg-root-retirement", var retirementWriter and ("owned" or "ef"), var retirementFence and ("in-batch" or "checked")])
+    return await PostgresRootRetirementChecks.RunAsync(retirementWriter == "owned", retirementFence == "in-batch");
+if (args is ["pg-root-terminate", var terminateWriter and ("owned" or "ef"), var fenceMode and ("in-batch" or "checked")])
+    return await PostgresRootTerminateChecks.RunAsync(terminateWriter == "owned", fenceMode == "in-batch");
+if (args is ["pg-root-terminate", var recoveryWriter and ("owned" or "ef"), var recoveryFence and ("in-batch" or "checked"),
+    var terminationProfile and ("fallback" or "stable-body" or "stable-body-fallback" or "terminal-selection" or "terminal-selection-fallback")])
+    return await PostgresRootTerminateChecks.RunAsync(recoveryWriter == "owned", recoveryFence == "in-batch",
+        fallback: terminationProfile is "fallback" or "stable-body-fallback" or "terminal-selection-fallback",
+        stableBody: terminationProfile != "fallback", terminalSelection: terminationProfile.StartsWith("terminal-", StringComparison.Ordinal));
 if (args is ["pg-root-worker", "budget-birth", var budgetMode] && budgetMode is Modes.Balanced or Modes.Durable)
     return await PostgresRootWorkerChecks.RunAsync("budget-birth", null, budgetMode);
 if (args is ["pg-root-worker", "budget-restart", var budgetReference])

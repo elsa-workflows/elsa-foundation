@@ -129,6 +129,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly List<Delivery> _meets = [];
     private readonly HashSet<Delivery> _exhaustedCatchUps = [];
     private readonly HashSet<InboxKey> _cancelling = [];        // tickets of jobs cancelled by a commit in flight
+    private readonly HashSet<string> _retiredRootsDuringPoll = new(StringComparer.Ordinal);   // also roots a recover reset; the in-flight poll's rows for them are dropped
     private readonly HashSet<InboxKey> _consumed = [];          // while a poll is in flight
     private readonly Dictionary<InboxKey, int> _behind = [];    // own rows written while catching up, not yet polled, with their partition
     private readonly List<TurnOutcome> _queue = [];
@@ -1365,8 +1366,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void LoseCallers(IEnumerable<Slot> slots, IEnumerable<Delivery> items)
     {
-        var pending = items.Where(item => !item.Message.SuppliedCreator ||
-                _slots.TryGetValue(Canonical(item.Message.Target.Id), out var slot) && slot.CurrentRow is not null)
+        // A held operator's unresolved durable row keeps the same address for the next owner.
+        var pending = items.Where(item => (!item.Durable || item.Message.Operator?.RootHeldReply != true) &&
+                (!item.Message.SuppliedCreator ||
+                 _slots.TryGetValue(Canonical(item.Message.Target.Id), out var slot) && slot.CurrentRow is not null))
             .Select(item => item.ReplyRoute).OfType<LiveReplyRoute>();
         foreach (var route in slots.SelectMany(slot => slot.Replies).Concat(pending).Distinct().ToList())
             Send(route, "lost", null, null, error: "lost");
@@ -1385,7 +1388,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _held.Clear();
             _polling = _loading = _flushing = _meeting = _releasing = _aliasesChangedDuringLoad = _retryAliases = false;
             foreach (var item in _items.Values.ToList()) CancelJobDriver(item);
-            // Every caller this memory knows of is told at once; a new owner answers only what is still in the rows.
+            // End volatile waits. A durable held operator can still be answered by the next owner.
             LoseCallers(_slots.Values, _items.Values);
             _slots.Clear();
             _passTurns.Clear();
@@ -1396,6 +1399,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _exhaustedCatchUps.Clear();
             _queue.Clear();
             _consumed.Clear();
+            _retiredRootsDuringPoll.Clear();
             _behind.Clear();
             _cancelling.Clear();
             _caughtUp = false;
@@ -1416,6 +1420,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var generation = _generation;
         _polling = true;
         _consumed.Clear();
+        _retiredRootsDuringPoll.Clear();
         Polled polled;
         var fences = Fences;
         try
@@ -1439,6 +1444,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var read = 0;
         foreach (var row in polled.Messages)
         {
+            if (_retiredRootsDuringPoll.Contains(row.Message.Target.Id)) continue;
             if (!_items.ContainsKey(row.Message.InboxKey) && !_consumed.Contains(row.Message.InboxKey))
             {
                 read++;
@@ -3170,6 +3176,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 Apply(unit, seqs, handOver, cancellationToken, ReplyRelease.AfterCommit, fenced);
                 if (!LeaseUsable()) return Outcome.Lost;
             }
+            foreach (var retired in result.RetiredOperatorReplies)
+                Send(retired.Route, retired.Occurrence + "#retired", null, null, error: "missing");
             if (result.ParkExpiries.Count > 0)
             {
                 lock (_turnSync)
@@ -3231,8 +3239,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             unit.Held.Where(i => i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey).ToList(), unit.Delete)
         {
             FoundationHeader = unit.FoundationHeader,
-            FoundationRootOperator = unit.Row?.FoundationDispatchHeader is not null && unit.Consumed is [var qualified] &&
-                qualified.Message.Operator is not null ? qualified.Message : null,
+            FoundationRootOperator = unit.Consumed is [var qualified] && qualified.Message.Operator is { } command &&
+                (command.RootHeldReply || unit.Row?.FoundationDispatchHeader is not null ||
+                    unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true })
+                    ? qualified.Message : null,
             FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
                 unit.Consumed is [{ IsWorkerJobCompletion: true, Original: { } original } completed] &&
                 (completed.JobDeadline is null || _type.RootTimedJobPublicationClock is not null)
@@ -3244,6 +3254,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationReleasedHolds = releases,
             OpensPark = unit.OpensPark,
             FoundationKept = kept,
+            FoundationRootParkInputs = unit.Row?.FoundationDispatchHeader is not null && kept is { Count: > 0 }
+                ? unit.Consumed.Where(item => kept.ContainsKey(item.Message.InboxKey)).Select(item => item.Message).ToArray()
+                : null,
             FoundationParkClear = unit.FoundationParkClear,
             FoundationRecoveryPage = unit.FoundationRecoveryPage,
             FoundationRetry = unit.FoundationRetry,
@@ -3436,6 +3449,23 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 empty.Row is null && empty.Loaded && !empty.Busy && empty.Inbox.Count == 0 && empty.Replies.Count == 0)
                 RemoveSlot(Canonical(item.Message.Target.Id));
         }
+        if (unit.Delete && unit.Slot is { } retired && unit.Consumed is
+            [{ Message.Operator: { QualifiedTerminal: not null } or { RootThenDelete: true } }])
+        {
+            // The root retirement write settles every occurrence, including ones read ahead of this command.
+            foreach (var item in retired.Inbox.ToArray()) Forget(item);
+            if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
+        }
+        if (unit.Slot is { CurrentRow.Status: InstanceStatus.Faulted } restored && unit.Row is { Status: InstanceStatus.Running } &&
+            unit.Consumed is [{ Message.Operator.RootParkMark: not null }])
+        {
+            // A qualified root's recover puts its released rows ahead of every input read before it. The next poll reads
+            // the inputs held here again, in that order, so no ordinary turn runs ahead of the cohort.
+            foreach (var item in restored.Inbox.Where(item => item.Durable && !item.Taken).ToArray()) Forget(item);
+            if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
+            _caughtUp = false;
+            _woken = true;
+        }
         foreach (var item in unit.Held)     // back in its place; its turn ran, so it is no suspect and no longer on trial
         {
             (item.Taken, item.Held, item.Suspect, item.Marked, item.HeldHere) = (false, true, false, true, true);
@@ -3522,7 +3552,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     if (item.Held && EarlierParkRelease(item, clearing))
                         (item.Held, item.HeldHere) = (false, false);
             if (unit.Row is not null)
+            {
                 (committed.Row, committed.AbsentAt) = (unit.InMemory ? unit.Row : unit.Row.WithoutInlineBirth(), 0);
+                if (unit.Row.FoundationDispatchHeader is { RefreshTerminal: true }) committed.Loaded = false;
+            }
             if (unit.Delete && unit.Row is not { Retired: true } || committed.Unwritten && !unit.InMemory && unit.Row is null)
                 (committed.Row, committed.AbsentAt) = (null, _store.HasActorAliases ? _aliasBirths : 0);
             // An unpersisted minted start may leave more inputs in the slot after its own

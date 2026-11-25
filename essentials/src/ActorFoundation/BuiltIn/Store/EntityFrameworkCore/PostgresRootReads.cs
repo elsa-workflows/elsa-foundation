@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using Kernel.Foundation.Contracts;
 using Microsoft.EntityFrameworkCore;
@@ -43,9 +44,22 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
         return new(items, next, page.AsOf);
     }
 
-    private static ActorView View(BoundScope scope, EfStore.RootListItem row, long asOf) =>
-        new(new(new(row.Reference), row.Type, scope.Tenant, (ActorStatus)row.Status, null, null, row.EndedAt, row.TypeData,
-            row.Labels), null, null, asOf);
+    private ActorView View(BoundScope scope, EfStore.RootListItem row, long asOf)
+    {
+        var header = new ActorHeader(new(row.Reference), row.Type, scope.Tenant, (ActorStatus)row.Status, row.ParkFault, null,
+            row.EndedAt, row.TypeData, row.Labels);
+        var selection = row switch
+        {
+            { SupportsSelection: true, Status: InstanceStatus.Running } =>
+                PostgresRootSelection.SealRunning(cursor, scope.Tenant, row.Reference),
+            { TerminalRevision: > 0 and var revision, EndedAt: { } at } =>
+                PostgresRootSelection.SealTerminal(cursor, scope.Tenant, row.Reference, revision, at),
+            { ParkAt: { } parkedAt, ParkRevision: { } parkRevision } =>
+                PostgresRootSelection.SealPark(cursor, scope.Tenant, row.Reference, parkRevision, parkedAt),
+            _ => null
+        };
+        return new(header, selection, row.ParkAt is { } parkAt ? new(parkAt, null) : null, asOf);
+    }
 
     public async ValueTask<Page<JournalEntry>> TailAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
         CancellationToken cancellationToken = default)
@@ -74,9 +88,41 @@ internal sealed class PostgresRootReads(EfStore store, FoundationReadCursor curs
         return new(entries.Select(entry => new JournalEntry(entry.Revision, entry.Entry)).ToArray(), next, snapshot.AsOf);
     }
 
-    public ValueTask<Page<DeliveryView>> InboxAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
-        CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("Inbox inspection is outside the generated-root preview.");
+    public async ValueTask<Page<DeliveryView>> InboxAsync(BoundScope scope, ActorRef actor, PageToken? from = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        cancellationToken.ThrowIfCancellationRequested();
+        var context = Encoding.UTF8.GetBytes(DurableKeyJson.Write(new { Read = "postgres-root-inbox/1", scope.Tenant, Actor = actor.Id }));
+        // The longest form is operator/ plus the reference, operation digest and occurrence GUID.
+        const int occurrenceBytes = 9 + 64 + 1 + 64 + 1 + 32;
+        var bookmark = new byte[sizeof(long) + occurrenceBytes];
+        if (from is { } token && !cursor.TryOpen(context, token.Value, bookmark))
+            throw new ArgumentException("The continuation does not match this actor inbox.", nameof(from));
+        var afterSeq = BinaryPrimitives.ReadInt64LittleEndian(bookmark);
+        var afterOccurrence = Encoding.ASCII.GetString(bookmark, sizeof(long), occurrenceBytes).TrimEnd('\0');
+        var reference = PostgresRootAdmission.IsIssuedReferenceShape(actor.Id) ? actor.Id : "";
+        var snapshot = await store.ReadRootInboxAsync(scope.Tenant, reference, afterSeq, afterOccurrence, _pageSize + 1, cancellationToken);
+        var page = snapshot.Rows.Take(_pageSize).Select(row => new DeliveryView(
+            cursor.InboxHandle(DurableKeyJson.Write(new { scope.Tenant, Reference = reference, row.Occurrence, row.Seq })),
+            row.Id, row.Kind, null, row.Due, row.KeptBy switch
+            {
+                ParkKeepReason.Consumed => DeliveryState.Consumed,
+                ParkKeepReason.Arrived => DeliveryState.Arrived,
+                null => DeliveryState.Pending,
+                _ => throw new StoreFormatException("The root inbox has an unsupported kept reason.")
+            }, row.Attempts, row.Size)).ToArray();
+        PageToken? next = null;
+        if (snapshot.Rows.Count > _pageSize)
+        {
+            var last = snapshot.Rows[_pageSize - 1];
+            Array.Clear(bookmark);
+            BinaryPrimitives.WriteInt64LittleEndian(bookmark, last.Seq);
+            Encoding.ASCII.GetBytes(last.Occurrence.AsSpan(), bookmark.AsSpan(sizeof(long)));
+            next = new(cursor.Seal(context, bookmark));
+        }
+        return new(page, next, snapshot.AsOf);
+    }
 }
 
 public sealed partial class EfStore
@@ -84,7 +130,7 @@ public sealed partial class EfStore
     /// <summary>
     /// Opens the public point, list and journal reads for a PostgreSQL generated-root preview.
     /// The ordinary preview uses the public KernelDb context on an already installed database.
-    /// The trusted host supplies each BoundScope. Inbox and operator reads belong to the full provider.
+    /// The trusted host supplies each BoundScope. The direct-input root profiles also expose their pending inbox metadata.
     /// </summary>
     public async ValueTask<IActorReads> OpenPreviewRootReadsAsync(int pageSize = 100, CancellationToken cancellationToken = default)
     {

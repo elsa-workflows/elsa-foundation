@@ -170,6 +170,7 @@ public sealed record TurnCommit(
     // The qualified writer compares the exact envelope the owner dispatched with the locked occurrence.
     internal Message? FoundationRootOperator { get; init; }
     internal RootJobCompletion? FoundationRootJobCompletion { get; init; }
+    internal IReadOnlyList<Message>? FoundationRootParkInputs { get; init; }
     internal IReadOnlySet<InboxKey>? FoundationSelfRecalls { get; init; }
     internal HashSet<InboxKey>? FoundationHeldPromotions { get; init; }
     internal IReadOnlyList<InboxKey>? FoundationReleasedHolds { get; init; }
@@ -190,7 +191,11 @@ public sealed record TurnCommit(
     internal IReadOnlyList<FoundationValue>? FoundationValues { get; init; }
 }
 
-internal sealed record FoundationDispatchHeader(string Tenant, string Reference, FoundationHeaderChange Header);
+internal sealed record FoundationDispatchHeader(string Tenant, string Reference, FoundationHeaderChange Header, long TerminalGrowth = 0)
+{
+    internal FoundationTerminalStamp? Terminal { get; init; }
+    internal bool RefreshTerminal { get; init; }
+}
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);
 
@@ -250,6 +255,7 @@ public sealed record Committed(bool Landed, long Now, IReadOnlyList<long> Seqs)
 {
     // Timers minted by the commit clock rather than supplied in TurnCommit.Sent.
     internal IReadOnlyList<Stored> ParkExpiries { get; init; } = [];
+    internal IReadOnlyList<RetiredOperatorReply> RetiredOperatorReplies { get; init; } = [];
     internal IReadOnlyDictionary<string, IReadOnlyList<InboxKey>>? CascadeRemovals { get; init; }
 }
 

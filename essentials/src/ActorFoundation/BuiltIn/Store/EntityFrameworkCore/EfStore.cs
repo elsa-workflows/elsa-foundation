@@ -113,46 +113,93 @@ public sealed class JournalEntity
     public string Entries { get; set; } = "";
 }
 
-public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
+public class KernelDb : DbContext
 {
-    // EF keys its model cache by context type. Fresh opt-in databases seed their marker in the
+    // One context type for every profile: a store format and the root capabilities it carries (RootProfiles). EF keys
+    // its model cache by both (KernelModelCacheKeyFactory). Fresh opt-in databases seed their marker in the
     // same creation transaction as the schema. An existing database keeps its original marker.
-    private sealed class RootSelfDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootTimerDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootOperatorDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootJobDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootTimedJobIssuanceDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootValueDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootReplyDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    private sealed class RootTimedJobSettlementDb(DbContextOptions<KernelDb> options) : KernelDb(options);
-    internal StoreFormat RequiredFormat => this switch
-    {
-        RootTimedJobSettlementDb => StoreFormat.RootTimedJobSettlement,
-        RootReplyDb => StoreFormat.RootReplies,
-        RootValueDb => StoreFormat.RootValues,
-        RootTimedJobIssuanceDb => StoreFormat.RootTimedJobIssuance,
-        RootJobDb => StoreFormat.RootJobs,
-        RootOperatorDb => StoreFormat.RootOperators,
-        RootTimerDb => StoreFormat.RootTimers,
-        RootSelfDb => StoreFormat.RootSelf,
-        _ => StoreFormat.Current
-    };
-    internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
-    internal bool UsesRootJobProtocol => this is RootJobDb or RootTimedJobIssuanceDb or RootTimedJobSettlementDb;
-    internal bool UsesRootTimedJobIssuance => this is RootTimedJobIssuanceDb;
-    internal bool UsesRootTimedJobSettlement => this is RootTimedJobSettlementDb;
-    internal bool UsesRootReplyProtocol => this is RootReplyDb;
-    internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => new RootReplyDb(options);
-    internal bool UsesRootValueProtocol => this is RootValueDb;
-    internal static KernelDb ForPostgresRootValues(DbContextOptions<KernelDb> options) => new RootValueDb(options);
-    internal static KernelDb ForPostgresRootJobs(DbContextOptions<KernelDb> options) => new RootJobDb(options);
-    internal static KernelDb ForPostgresRootTimedJobIssuance(DbContextOptions<KernelDb> options) => new RootTimedJobIssuanceDb(options);
-    internal static KernelDb ForPostgresRootTimedJobSettlement(DbContextOptions<KernelDb> options) => new RootTimedJobSettlementDb(options);
-    internal bool UsesRootOperatorProtocol => this is RootOperatorDb;
-    internal static KernelDb ForPostgresRootOperators(DbContextOptions<KernelDb> options) => new RootOperatorDb(options);
-    internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => new RootTimerDb(options);
-    internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => new RootSelfDb(options);
+    public KernelDb(DbContextOptions<KernelDb> options) : this(options, StoreFormat.Current, RootCapabilities.None) { }
 
+    private KernelDb(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) : base(options)
+    {
+        RequiredFormat = format;
+        Capabilities = capabilities;
+        RootStateFamily = RootStateFamily.Of(capabilities);
+    }
+
+    private static KernelDb Profile(DbContextOptions<KernelDb> options, StoreFormat format) =>
+        new(options, format, RootProfiles.CapabilitiesOf(format));
+
+    // A capability set that no shipped format carries, for database-backed composition guards only. Its format must be unshipped,
+    // so that its marker is refused by every shipped profile, and the set must hold every prerequisite of its members.
+    internal static KernelDb ForUnshippedComposition(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) =>
+        RootProfiles.Formats.ContainsKey(format)
+            ? throw new ArgumentOutOfRangeException(nameof(format), format, "A shipped format carries its own capabilities.")
+            : RootProfiles.MissingPrerequisites(capabilities) is not RootCapabilities.None and var missing
+                ? throw new ArgumentException($"The capability set lacks the prerequisites {missing}.", nameof(capabilities))
+                : new(options, format, capabilities);
+
+    internal StoreFormat RequiredFormat { get; }
+    internal RootCapabilities Capabilities { get; }
+    // The one state family this set writes and reads, with its terminal statuses.
+    internal RootStateFamily RootStateFamily { get; }
+    private bool Has(RootCapabilities capability) => (Capabilities & capability) != 0;
+    internal bool UsesRootSelfProtocol => Has(RootCapabilities.SelfProtocol);
+    internal bool UsesRootTimers => Has(RootCapabilities.Timers);
+    internal bool UsesRootJobProtocol => Has(RootCapabilities.JobProtocol);
+    internal bool UsesRootJobPreview => Has(RootCapabilities.JobPreview);
+    internal bool UsesRootTimedJobIssuance => Has(RootCapabilities.TimedJobIssuance);
+    internal bool UsesRootTimedJobPreview => Has(RootCapabilities.TimedJobPreview);
+    internal bool UsesRootTimedJobSettlement => Has(RootCapabilities.TimedJobSettlement);
+    internal bool SupportsCorePreview => RequiredFormat == StoreFormat.Current || UsesRootJobPreview || UsesRootTimedJobPreview;
+    internal static KernelDb ForPostgresRootTimedJobPreview(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTimedJobPreview);
+    internal bool UsesRootParkOpening => Has(RootCapabilities.ParkOpening);
+    internal bool UsesRootParkInspection => Has(RootCapabilities.ParkInspection);
+    internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
+    internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
+    // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
+    // inputs and is refused there with a journalled reason. No shipped format carries both capabilities.
+    internal bool UsesRootParkedOperators => UsesRootParkOpening && UsesRootTermination;
+    internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
+    internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
+    internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
+    internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
+    // A qualified list carries workflow history only in a pinned namespace. Retirement deletes a retired root's history
+    // row in its own commit and the history reader binds to the qualified list (S4), so any other closed set with a
+    // qualified list in a pinned namespace carries history, a later shipped one included. The shipped formats 13 to 17
+    // keep refusing it as they shipped, named by format.
+    private static readonly HashSet<StoreFormat> HistoryRefusingFormats = [StoreFormat.RootTerminalSelection, StoreFormat.RootRetirement,
+        StoreFormat.RootTerminateThenDelete, StoreFormat.RootRetention, StoreFormat.RootOperatorReplies];
+    internal bool SupportsRootWorkflowHistory => !(UsesRootTerminalSelection || UsesRootRetirement) ||
+        RequiresPinnedRootNamespace && !HistoryRefusingFormats.Contains(RequiredFormat);
+    internal static KernelDb ForPostgresRootParkOpening(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkOpening);
+    internal bool UsesRootReplyProtocol => Has(RootCapabilities.ReplyProtocol);
+    internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootReplies);
+    internal bool UsesRootValueProtocol => Has(RootCapabilities.ValueProtocol);
+    internal static KernelDb ForPostgresRootValues(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootValues);
+    internal static KernelDb ForPostgresRootJobs(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootJobs);
+    internal static KernelDb ForPostgresRootTimedJobIssuance(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTimedJobIssuance);
+    internal static KernelDb ForPostgresRootTimedJobSettlement(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTimedJobSettlement);
+    internal bool UsesRootOperatorProtocol => Has(RootCapabilities.OperatorProtocol);
+    internal bool UsesRootTermination => Has(RootCapabilities.Termination);
+    internal bool UsesRootStableBody => Has(RootCapabilities.StableBody);
+    internal bool UsesRootTerminalSelection => Has(RootCapabilities.TerminalSelection);
+    internal bool UsesRootRetirement => Has(RootCapabilities.Retirement);
+    internal bool UsesRootTerminateThenDelete => Has(RootCapabilities.TerminateThenDelete);
+    internal bool UsesRootRetention => Has(RootCapabilities.Retention);
+    internal bool UsesRootOperatorReplies => Has(RootCapabilities.OperatorReplies);
+    internal static KernelDb ForPostgresRootOperatorReplies(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootOperatorReplies);
+    internal static KernelDb ForPostgresRootRetention(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootRetention);
+    internal static KernelDb ForPostgresRootTerminateThenDelete(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTerminateThenDelete);
+    internal static KernelDb ForPostgresRootRetirement(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootRetirement);
+    internal static KernelDb ForPostgresRootTerminalSelection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTerminalSelection);
+    internal static KernelDb ForPostgresRootStableBody(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootStableBody);
+    internal static KernelDb ForPostgresRootTerminations(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTerminations);
+    internal static KernelDb ForPostgresRootOperators(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootOperators);
+    internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootTimers);
+    internal static KernelDb ForPostgresRootSelf(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootSelf);
+
+    internal List<RetiredOperatorReply>? RetiredOperatorReplies { get; set; }
     internal Dictionary<string,string> AliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> InsertAliasGuards {get;}=new(StringComparer.Ordinal);
     internal HashSet<string> GuardedAliases {get;}=new(StringComparer.Ordinal);
@@ -170,6 +217,7 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         optionsBuilder.ReplaceService<IComparer<IReadOnlyModificationCommand>, SendOrderComparer>();
+        optionsBuilder.ReplaceService<IModelCacheKeyFactory, KernelModelCacheKeyFactory>();
         // D5 (K1), ENGINES.md E7: SQL Server's and MySQL's providers put at most 42 statements in one command unless told,
         // so a flush of 100 instances was several round trips. The store tells them 1,000, as the cost runs do; a context
         // that sets its own MaxBatchSize keeps it.
@@ -190,6 +238,8 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
             throw new NotSupportedException("The generated-root held reply profile requires PostgreSQL.");
         if (UsesRootValueProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The generated-root value qualification requires PostgreSQL.");
+        if (UsesRootParkOpening && !Database.IsNpgsql())
+            throw new NotSupportedException("The Park opening qualification requires PostgreSQL.");
         if (UsesRootOperatorProtocol && !Database.IsNpgsql())
             throw new NotSupportedException("The operator command profile requires PostgreSQL.");
         model.Entity<StoreVersionEntity>(entity =>
@@ -372,7 +422,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        await RequireStoreVersionsAsync(db, cancellationToken);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
+        if (pinned is null) await RequireStoreVersionsAsync(db, cancellationToken);
         return await db.Partitions.CountAsync(cancellationToken);
     }
 
@@ -436,10 +487,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         var now = Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken) : (await db.Database.SqlQueryRaw<long>(
             $"""INSERT INTO "Nodes" ("Id", "SeenAt", {NodeAdvertisement.Columns}) VALUES ({"{0}"}, {Now}, {NodeAdvertisement.Parameters}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt", {NodeAdvertisement.Update} RETURNING "SeenAt" AS "Value" """,
             NodeAdvertisement.Arguments(node, messageProtocol: db.RequiredFormat.MessageProtocol)).ToListAsync(cancellationToken))[0];
-        return await MembershipAsync(db, now, window, cancellationToken);
+        var membership = await MembershipAsync(db, now, window, cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
+        return membership;
     }
 
     // The membership reads: the nodes heard within the window, and the free partitions. Under the node lease a partition
@@ -454,7 +508,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Partitions" SET "Owner" = NULL WHERE "Id" = {0} AND "Epoch" = {1}"""), [partition, epoch], cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
     }
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
@@ -474,6 +530,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
         if (root is null && batch.Turns.Any(turn => turn.FoundationRootJobCompletion is not null))
             throw new StoreException(Failure.Definite, "Generated-root job completions require the qualified writer.");
+        // The ordinary Done mark remains eligible for sweeping. It cannot preserve a Park's kept inputs.
+        if (batch.Turns.Any(turn => turn.FoundationKept is not null || turn.FoundationRootParkInputs is not null))
+            throw new StoreException(Failure.Definite, "This store does not support retaining Park inputs.");
         StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable,
             supportsJobTrialClear:SupportsJobTrialClear);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is
@@ -495,6 +554,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         while (true)
         {
             try { return await CommitOnceAsync(batch, waits, careful, sentAt, root, cancellationToken); }
+            catch (RootPreflightFailure error)
+            {
+                if (!await HoldsAfterFailureAsync(batch, cancellationToken)) return new Committed(false, 0, []);
+                throw error.StoreFailure;
+            }
             catch (PostgresException error) when (error.SqlState == PgCommitWindow.Expired)
             {
                 throw new StoreException(Failure.WindowExpired, "Database commit window expired.", error);
@@ -559,6 +623,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         if (OwnedCommit) return await CommitOwnedAsync(batch, waits, sentAt, root, cancellationToken);      // EfStore.Owned.cs
         await using var db = create();
+        if (root is not null) await CheckRootBeforeWriteAsync(root, db, cancellationToken);
         foreach(var turn in batch.Turns.Where(t=>t.Row is {} r && t.Instance!=r.Id))
         {
             db.AliasGuards.Add(turn.Row!.Id,turn.Instance);
@@ -566,6 +631,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         }
         db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        if (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
+            await PinRootNamespaceForCommitAsync(db, cancellationToken);
         var now = 0L;
         if (FenceInBatch)
         {
@@ -638,7 +705,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 db.Add(entity);
             }
             if (turn.Journal is not null)
-                db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = turn.Instance, Revision = turn.Delete ? -1 : root?.RevisionFor(turn.Instance) ?? turn.Row?.Revision ?? 0, Entries = turn.Journal });
+            {
+                position++;
+                if (root?.WritesJournal(turn.Instance) != true)
+                    db.Add(new JournalEntity { Partition = batch.Partition, Position = position, Instance = turn.Instance, Revision = turn.Delete ? -1 : root?.RevisionFor(turn.Instance) ?? turn.Row?.Revision ?? 0, Entries = turn.Journal });
+            }
         }
         if (!careful)
             foreach (var ((key, instance, wait), there) in waits)
@@ -677,13 +748,39 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
-        return new Committed(true, now, sent.Select(m => m.Seq).ToList());
+        return new Committed(true, now, sent.Select(m => m.Seq).ToList()) { RetiredOperatorReplies = db.RetiredOperatorReplies ?? [] };
     }
 
     // The careful path's statements on PostgreSQL and SQLite ({0} key, {1} instance, {2} wait, {3} partition). Only the
     // partition's owner writes its instances' waits, under the fence, so nothing else writes these rows meanwhile.
     private const string SubscribeIfAbsent = """INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT DO NOTHING""";
     private const string Unsubscribing = """DELETE FROM "Subscriptions" WHERE "Key" = {0} AND "Instance" = {1} AND "Wait" = {2} AND "Partition" = {3}""";
+
+    private sealed class RootPreflightFailure(StoreException failure) : Exception(failure.Message, failure)
+    {
+        internal StoreException StoreFailure { get; } = failure;
+    }
+
+    private async ValueTask CheckRootBeforeWriteAsync(QualifiedRootCheckpoint root, KernelDb db, CancellationToken cancellationToken)
+    {
+        try { await root.CheckBeforeWriteAsync(db, cancellationToken); }
+        catch (Exception error) when (error is not OperationCanceledException &&
+            Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
+        {
+            // Preflight runs before either writer can test the fence.
+            throw new RootPreflightFailure(failure);
+        }
+    }
+
+    private async Task PinRootNamespaceForCommitAsync(KernelDb db, CancellationToken cancellationToken)
+    {
+        try { await PostgresRootAdmission.PinRootNamespaceAsync(db, cancellationToken); }
+        catch (Exception error) when (error is not OperationCanceledException &&
+            Classify(error) is { Failure: Failure.Definite or Failure.Transient } failure)
+        {
+            throw new RootPreflightFailure(failure);
+        }
+    }
 
     private async Task<bool> HoldsAfterFailureAsync(CommitBatch batch, CancellationToken cancellationToken)
     {
@@ -695,6 +792,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private async Task<bool> HoldsAsync(CommitBatch batch, CancellationToken cancellationToken)
     {
         await using var db = create();
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         var fenced = batch.Fenced;
         var ids = fenced.Select(f => f.Partition).ToList();
         var rows = await db.Partitions.AsNoTracking().Where(p => ids.Contains(p.Id)).Select(p => new PartitionFence(p.Id, p.Epoch, p.Position)).ToListAsync(cancellationToken);
@@ -704,17 +802,18 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         // A plain read. The left join returns database time even when no message does.
-        var sql = PollSql(db.UsesRootOperatorProtocol);
+        var sql = PollSql(db);
         if (_ordinaryRoots is { } root)
         {
             if (!root.Includes(partition)) throw new InvalidOperationException("The root belongs to another partition.");
             if (root.Discover)
             {
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
-                return ToGeneratedPoll(page, root, db.UsesRootOperatorProtocol, db.UsesRootReplyProtocol);
+                return await WithRootParkFactsAsync(db, ToGeneratedPoll(page, root, db), cancellationToken);
             }
-            return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db.UsesRootOperatorProtocol, db.UsesRootReplyProtocol);
+            return await WithRootParkFactsAsync(db, ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit, root.Actors).ToListAsync(cancellationToken), root, db), cancellationToken);
         }
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
     }
@@ -722,15 +821,19 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
     private string RootInputScopes => $"{InboxKey.FoundationOccurrenceScope}, {RootSelfScope}" +
         (RootTimedJobSettlementEnabled ? $", {RootTimedJobScope}" : RootJobsEnabled ? $", {RootJobScope}" : "");
-    private string RootPollFilter(bool operators) => _ordinaryRoots is null ? "" :
+    private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
-             {(operators ? RootOperatorPollFilter : "")}
+             {(db.UsesRootOperatorProtocol ? db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
+                 : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : RootOperatorPollFilter : "")}
              AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({RootInputScopes}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
-                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired")))
+                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"
+                   {(WithholdsParkInputs(db) ? """AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%')"""
+                       : db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL""" : "")}
+                   {(db.UsesRootParkRecovery ? RootReleasedCohortFilter : "")})))
             """;
     // Commands are exposed only when database time makes them due. On a suspended root the
     // first due command can pass withheld ordinary inputs. Running roots first clear their ready FIFO prefix.
@@ -744,14 +847,23 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                        WHERE prior."Partition" = m."Partition" AND prior."Target" = m."Target" AND prior."Seq" < m."Seq"
                          AND prior."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND prior."EventMatch" IS NULL
                          AND NOT prior."Done" AND prior."Due" <= t.now
-                         AND (NOT target."Suspended" OR prior."Id" LIKE 'operator/%'))
-                   ELSE NOT target."Suspended" AND NOT EXISTS (
+                         AND (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%')
+                         /*withheld-prior*/)
+                   ELSE (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running}) AND (/*released-cohort*/ NOT EXISTS (
                        SELECT 1 FROM "Messages" op
                        WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
                          AND op."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND op."Id" LIKE 'operator/%'
-                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now)
+                         AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now))
                    END)))
         """;
+    // A parked root without Park arrivals withholds its ordinary inputs, so only an earlier operator row holds a command back.
+    // A held command admitted before the Park opened passes too: the owner refuses it there and answers its caller.
+    private static bool WithholdsParkInputs(KernelDb db) => db.UsesRootParkedOperators && !db.UsesRootParkArrivals;
+    private static readonly string RootParkedOperatorPollFilter = RootOperatorPollFilter.Replace("/*withheld-prior*/",
+        """AND (target."FoundationParkAt" IS NULL OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);
+    // A released row of the root's current generation goes before every control: an earlier operator row waits for the cohort.
+    private static readonly string RootRecoveryOperatorPollFilter = RootOperatorPollFilter.Replace("/*released-cohort*/",
+        """m."FoundationReleasedBy" = target."FoundationParkGeneration" OR """, StringComparison.Ordinal);
     private string PollBirthColumns => _ordinaryRoots is { Discover: true }
         ? """, b."Partition" AS "BirthPartition", b."Tenant" AS "BirthTenant", b."Reference" AS "BirthReference", b."Fingerprint" AS "BirthFingerprint" """ : "";
     private string PollMessages => _ordinaryRoots is { Discover: true }
@@ -767,22 +879,22 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string PollSplitEventPayload => postgres && _ordinaryRoots is null
         ? $"""CASE WHEN m."InboxScope" = {RootSelfScope} AND m."EventMatch" IS NOT NULL THEN to_jsonb(m)->>'FoundationSelfContent' IS NOT NULL ELSE FALSE END"""
         : False;
-    private string PollSql(bool operators) => Engine?.Poll ??
+    private string PollSql(KernelDb db) => Engine?.Poll ??
         $"""
          SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo", m."JobGeneration", {PollSplitEventPayload} AS "SplitEventPayload"{PollBirthColumns}
-         FROM (SELECT {(operators || RootTimedJobSettlementEnabled || RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
-         LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter(operators)}
+         FROM (SELECT {(db.UsesRootOperatorProtocol || RootTimedJobSettlementEnabled || RootSelfIssuer is { SupportsTimers: true } ? RootClockMilliseconds : Now)} AS now) t
+         LEFT JOIN {PollMessages} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"} {RootPollFilter(db)}
          ORDER BY m."Seq" LIMIT {"{3}"}
          """;
 
-    private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope, bool operators, bool replies)
+    private Polled ToGeneratedPoll(IReadOnlyList<GeneratedPollRow> page, WorkerRoots scope, KernelDb db)
     {
         var found = page.Where(r => r.Target is not null).Select(r =>
             new WorkerRoot(r.BirthTenant!, r.BirthReference!, r.Target!, r.BirthPartition!.Value, r.BirthFingerprint!)).Distinct().ToArray();
-        return ToPolled(page, new(scope.FixedPartition, found), operators, replies);
+        return ToPolled(page, new(scope.FixedPartition, found), db);
     }
 
-    private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null, bool operators = false, bool replies = false)
+    private Polled ToPolled(IReadOnlyList<PollRow> rows, WorkerRoots? bindings = null, KernelDb? db = null)
     {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
@@ -790,7 +902,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
             if (Engine is null) key = IssuedMailKey.FromTextKey(key);
             else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
-            if (PostgresRootAdmission.IsOperatorOccurrence(key) && (!operators || bindings is null))
+            if (PostgresRootAdmission.IsOperatorOccurrence(key) && (db?.UsesRootOperatorProtocol != true || bindings is null))
                 throw new StoreException(Failure.Definite, "PostgreSQL operator inputs require the qualified operator owner.");
             if (bindings is not null)
             {
@@ -800,11 +912,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     JobGeneration = r.JobGeneration!.Value, Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
-                    : DecodeRootInput(entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled, replies);
+                    : DecodeRootInput(db!, entity, root.Reference, RootSelfIssuer, RootJobsEnabled, RootTimedJobSettlementEnabled);
                 if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)
                 {
-                    ReplyTenant = replies && message.Start is null && message.ReplyTo is not null ? root.Tenant : null
+                    ReplyTenant = message.Start is null && message.ReplyTo is not null ? root.Tenant : null
                 };
             }
             if (key.Match is null &&
@@ -1065,8 +1177,12 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     public async ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        await RequireStoreVersionsAsync(db, cancellationToken);
-        return await db.Database.ExecuteSqlRawAsync(Q($"""DELETE FROM "Messages" WHERE "Done" <> {False} AND "KeepUntil" < {Now}; DELETE FROM "Events" WHERE "KeepUntil" < {Now}"""), cancellationToken);
+        await using var pinned = db.UsesRootParkOpening ? await BeginPinnedRootOperationAsync(db, cancellationToken) : null;
+        if (pinned is null) await RequireStoreVersionsAsync(db, cancellationToken);
+        var keep = db.UsesRootParkOpening ? """ AND "FoundationKeptBy" IS NULL""" : "";
+        var removed = await db.Database.ExecuteSqlRawAsync(Q($"""DELETE FROM "Messages" WHERE "Done" <> {False} AND "KeepUntil" < {Now}{keep}; DELETE FROM "Events" WHERE "KeepUntil" < {Now}"""), cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
+        return removed;
     }
 
     private MessageEntity MailKey(InboxKey key, long seen = 0, long trial = 0)

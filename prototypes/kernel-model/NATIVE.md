@@ -638,6 +638,288 @@ The bound child is cancelled and protected ThenDelete keeps the checkpoint. This
 existing unavailable-model path. Shipped deployment controls and physical-provider
 envelopes have separate qualification.
 
+The PostgreSQL format-11 fixture checks both a readable upgrade and the explicit
+unavailable-model fallback. It stages the deliberately expanded terminal state against
+the real writer and verifies atomic refusal. A later owner scoped to that one creation
+runs the original Terminate and preserves the previous physical state and header. The
+adjacent actor resumes under the normal owner after the fallback owner releases the partition.
+Set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicated database and run from the repository root.
+
+```bash
+dotnet run -c Release --project essentials/tests/ActorFoundation/Native/Run -- pg-root-terminate owned checked fallback
+```
+
+New live format-11 checkpoints reserve space for the fully encoded terminal header.
+An older checkpoint above the projected cap may settle without increasing its projection.
+It can use as much of the header as the physical cap allows. The provider fixture proves the boundary with an escaped state, 16 KiB of `TypeData`
+and four labels whose keys and values each use their full limit. Run the EF store
+conformance command `postgres <connection> root-checkpoint-limit --terminal-header`
+on a disposable PostgreSQL server.
+
+The opt-in PostgreSQL format 12 stores opaque root state in the existing lossless
+binary encoding. It preserves null, empty, NUL, supplementary Unicode and unpaired
+UTF-16 units. The encoded body has the same byte count as the Foundation's UTF-8
+budget. Live writes reserve the declared terminal body growth and maximum encoded
+terminal header. Terminal writes check their actual encoded size. The body, header
+and state transition share the fenced commit. Format-11 owners and readers refuse
+format 12. A format-12 reader verifies the store marker before selecting the body
+column. The Core Preview continues to use its current format.
+
+Use `--stable-body` with the store conformance command above. For the live Native
+termination replay, use `pg-root-terminate owned checked stable-body`. Use
+`stable-body-fallback` to verify that an unavailable-model termination keeps the
+saved binary body and header byte for byte.
+
+Format 13 retains the binary body. Its point and list reads issue a terminal selection bound to the tenant,
+exact generated reference, terminal revision and terminal time. The terminal mark
+and the public header are projected together in the same transaction as the
+checkpoint. Disabling the projector refuses reads and rolls back checkpoint
+writes. An exclusive setup pass can rebuild the complete projection
+from committed checkpoints. Its first-checkpoint and takeover fixture runs with
+`pg-root-terminate owned checked terminal-selection`. Retention and delete command admission
+still need their own qualification. The ordinary Core Preview keeps its existing
+read layout.
+
+Format 13 also issues a running selection for the committed generated creation.
+A host can open the selected ingress with permission for the exact actor. The
+public workflow runtime submits that selection with Terminate. The trusted host
+authorizes the target. PostgreSQL checks the selection, format and current
+checkpoint before writing the operator occurrence and receipt together. A duplicate to the same actor
+returns its original receipt. Using that operation ID with another actor under
+the same tenant is refused. The fixture submits through the public contract, then
+delivers under a later epoch. The command path supports a one-way Terminate.
+Reason text, ThenDelete, held replies and cascades keep their own qualification.
+
+The opt-in format-14 retirement fixture sends a qualified Delete to an ended
+generated root through the host and real Worker. The model's deletion protection
+receives the committed terminal time. A successful fenced retirement keeps the
+identity marker and deduplication window, removes the public projection and
+physical state, clears pending payloads, and replaces that actor's history with
+one deletion marker. Ownership, checkpoint reads and retirement use the schema
+of the same format marker. The commit verifies that the projection and payloads
+are gone and that the deletion marker was inserted. The fixture also exercises
+same-owner deletion, original receipt replay and complete rollback when a store
+write is suppressed. The runnable fixture is
+`pg-root-retirement owned checked` against an empty PostgreSQL database.
+
+The opt-in format-15 fixture adds a selected Terminate, then delete command.
+The host authorizes termination and deletion for the same generated reference.
+The worker applies the command in one fenced commit. An eligible running
+root retires with one new terminal revision and one deletion marker. Native
+receipt protection can keep the cancelled checkpoint and its terminal journal.
+A command admitted while the root was running can also retire it after an
+earlier Terminate, preserving that terminal mark. Build Native.Run in
+Release with a locked restore and run `pg-root-then-delete owned checked`
+against an empty PostgreSQL database. The test seeds a receipt in Native
+state and uses the real Native cancellation and protection logic.
+
+The opt-in format-16 retention fixture runs the existing WorkflowActor retention
+pass over the public PostgreSQL actor projection, one page at a time. The public
+workflow list and retention selection read the persisted definition label and terminal
+time after the owner state wire, header, terminal and journal lookups are disabled.
+The fixture verifies those owner lookups fail and that both public read paths seal the
+actual terminal revision and end time. The owner schema is restored before the fenced
+retirement pass. A running workflow also exposes the source definition, model, installed
+state version and mode used by migration selection. The migration runner and production
+list routing retain their own K9 acceptance. The trusted host admission derives a
+reserved operation id from the exact tenant, generated
+creation and terminal mark. An interrupted scan can replay its admission
+receipts with newly sealed selections. The worker uses the policy in force at
+delivery and checks model protection against the committed checkpoint before
+it retires an eligible root. Build Native.Run in Release with a locked restore
+and run `pg-root-retention owned checked` against an empty PostgreSQL database.
+
+The `pg-root-plan-selection owned checked` fixture uses the separate PostgreSQL
+generated-root timer profile. The real migration operator selects from projected
+workflow headers while the owner body and header are unavailable, and admits a
+signed control. The plan actor validates the control and the PostgreSQL worker
+commits the selected references and cursor to its Full journal. A second plan
+records an empty page and an opaque continuation. A fresh operator and public
+PostgreSQL reader recover the cursor and report the exact eligible reference as
+pending. The timer profile refuses ephemeral starts and excludes roots awaiting
+their first turn. Separate header guard controls cover missing versions, ephemeral
+workflows and other actor types. The fixture covers selection for FC-C4. Production
+host composition, PostgreSQL `Migrate` dispatch and target application retain
+their own K9 and K11 acceptance.
+
+The opt-in format-17 fixture holds a selected operator request through
+`IIngress.RequestAsync`. Admission stores the tenant-bound reply address with
+the exact command. A fenced commit binds the response or refusal to that
+envelope. If retirement settles another queued held operator, the transaction
+locks that envelope and returns its registration to the Worker for a live
+`missing` result. The preview admits at most 64 pending held operators per
+root. Duplicates can still replay their receipts, and one-way operator
+admission uses its existing rules. The
+fixture observes plain Terminate, standalone Delete, Terminate then delete,
+protected Delete, competing operators and rollback followed by takeover.
+
+The host starts the request deadline on a monotonic clock anchored to a
+bounded PostgreSQL startup sample. Admission I/O uses the same deadline.
+A stalled admission acknowledgement cannot delay a timely reply or a timeout.
+After a known admission, a bounded read can attach the exact creation's
+committed status observed when resolving the timeout. The fixture does not
+establish historical status at the deadline for a transaction crossing it.
+An expired reply is dropped even when the operator later commits. Replies
+use the live fixture transport and can be lost on process death or an
+unknown commit outcome. Build Native.Run in Release with a locked restore
+and run `pg-held-operator owned checked` against an empty PostgreSQL database.
+
+### PostgreSQL pending inbox inspection
+
+`IActorReads.InboxAsync` returns pending direct inputs and admitted operator
+commands on direct-input root profiles. The page binds to the tenant and
+generated actor reference. The issuer and inbox sources must share the marker's
+schema. Each page reads its own committed metadata and database time together
+with that format marker. The index orders each root's occurrences by
+delivery sequence and physical occurrence. Continuations and handles are
+opaque. Handles remain stable across reader and owner changes.
+
+The page reports the original public id, kind, due time, attempts and the
+stored byte count of the identifier, kind, framing and payload. The message
+body and reply address stay in the database. Consumed deduplication rows and
+retired roots are absent. The fixture includes a future input, tied positions,
+cursor scope, a held operator and retirement. Run `pg-root-inbox owned checked ordinary`
+or `pg-root-inbox owned checked operators` from the locked Release build of
+Native.Run against an empty PostgreSQL database, and `pg-held-operator owned checked`
+for the held operator. Use another database for each writer and fence combination.
+Park, recovery handles, job inboxes and self-send inboxes retain their own cases.
+
+These profiles qualify generated roots with no attached work. Descendant and
+job cascades, parked work, retention scheduling and production reply transport
+have separate acceptance cases.
+
+### PostgreSQL first Park opening
+
+The opt-in protocol 19 qualification runs a public actor that throws while
+handling a direct input. One fenced transaction keeps its prior checkpoint
+body and public header, updates the status and fault, records the Park time
+and revision, keeps the failed occurrence with its full envelope, removes
+the actor's subscriptions and writes the Park journal entry. An ordinary
+receipt retry still returns its original admission. The sweep preserves the
+kept occurrence after its receipt expires, and a later owner leaves queued
+input pending.
+
+Run `pg-root-park-opening owned checked` from a locked Release build of
+Native.Run against an empty PostgreSQL database. Repeat with each writer
+and fence mode in its own database. The fixture uses a generated root and
+direct input. Public inspection and fresh arrivals while parked are covered
+by the [Park inspection](#postgresql-park-inspection) and
+[Park arrivals](#postgresql-park-arrivals) sections below, and one-page
+recovery by the [Park recovery](#postgresql-park-recovery) section. Multi-page
+recovery and composition with the Workbench preview are later increments.
+
+### PostgreSQL Park inspection
+
+Protocol 20 adds Park time and fault to the projected actor header in the
+same transaction as an opening. The public point and list reads show Park
+while the authoritative owner body and header are unavailable. The list
+can filter parked and unparked actors. Inbox pages distinguish a kept
+occurrence from pending input and retain the ordinary tenant-bound cursor.
+They expose the delivery metadata and size while the full payload stays in
+the provider.
+
+Run `pg-root-park-inspection owned checked` from Native.Run against a fresh
+PostgreSQL database. The fixture drives a real opening first, refuses an
+opening with its projection trigger disabled, and reads the result after
+a new owner takes over. Recovery controls and authentication of Park
+selections have their own increments.
+
+### PostgreSQL Park arrivals
+
+Protocol 21 lets a parked generated root accept ordinary direct input
+through the public ingress. The owner keeps each new occurrence in a fenced
+continuation without calling the actor. The kept reason is Arrived, and the
+Park time, opening revision, fault and checkpoint stay as the opening wrote
+them. The continuation adds no journal entry. An input already buffered
+when the Park opened is kept as Arrived by the same owner. An expired
+operation id is accepted on a parked root here as a new occurrence with its
+own handle, while protocols 19 and 20 refuse it. An occurrence that reaches its
+attempt limit re-parks the same Park: its taken inputs are kept as Consumed
+and one Park journal entry is added. When a taken batch mixes an exhausted
+occurrence with a fresh arrival, the whole batch re-parks and both are kept
+as Consumed, matching the in-memory poison path.
+
+Run `pg-root-park-arrivals owned checked` from the locked Release build of
+Native.Run against an empty dedicated PostgreSQL database. Repeat with each
+writer and fence mode in its own database. The fixture refuses stale,
+changed and rewritten keep and re-park batches, shows that an admission
+waits while the root row is locked for update, and checks that protocol 20
+and protocol 21 refuse each other's stores. Recovery, discard, operator
+selection, and timers, jobs and children while parked remain open.
+
+### PostgreSQL Park recovery
+
+Protocol 22 adds Recover in Resume mode for a parked generated root. Its
+format carries the Park opening, inspection and arrival capabilities, the
+new Park recovery capability, and operator occurrence admission. It admits
+no other operator command. A parked root's public view returns a Park
+selection that seals the tenant, reference, opening revision and Park time.
+The ingress refuses Retry, RetryAll, handles, a reason, ThenDelete and a due
+time, since Recover is immediate. Under a
+share lock on the root it accepts a selection only while the root is
+Faulted with that exact Park mark, and it writes an operator receipt with
+the occurrence, so a repeated operation id is a duplicate.
+
+The owner reads the Park mark and kept set when it polls the command and
+decides there. When the mark still matches, the actor's restore plan is
+empty and the kept set fits one page, one fenced commit makes the root
+Running, clears the fault, the Park mark and its projection, and increments
+the root's release generation. A page restores at most 170 rows and 4 MiB.
+Both bounds count only the rows the page restores, the Arrived rows, as the
+design charges a page for its restored rows; the Consumed fault input is
+cleared, never restored, and is not charged. Each row's stored size is
+counted as the inbox inspection does (id, kind, header and payload), and the
+first restored row always fits, so a single arrival over 4 MiB is restored
+alone. The commit puts each Arrived row back in the
+inbox with that generation and clears the Consumed fault input, which stays
+settled. Both take the ordinary admission window from the commit as their
+KeepUntil; the recover carries that window from its admission. The journal
+gets the in-memory recovery entry. A stale mark, a restore plan or a larger
+kept set consumes the command and journals a refusal at the next revision,
+and the Park stays as it was. A mismatched instance or creation is refused
+as "target". A recover that reaches a root that has ended, for example one
+that a released arrival finished, settles like any other operator command on
+an ended root: it is consumed with no checkpoint write. The checkpoint
+trigger accepts a "recovered" entry only with the Faulted to Running write
+that moves the release generation by exactly one, and a "refused" entry
+only with the row unchanged apart from its revision. A deferred constraint
+trigger on the journal checks each outcome entry at commit: the root's row
+must be at the entry's revision, and for "recovered" it must be Running with
+its Park mark cleared. So an outcome entry inserted without its checkpoint
+write never commits and cannot block later writes at that revision.
+While released rows of the current generation are pending, the poll and the
+settled prefix offer only them, in Seq order, so they reach the model before
+any later input. An earlier operator row does not hold them back; it is
+offered once the cohort has drained. When a recover commits, the owner drops
+the inputs it had already read for that root, so the next poll reads them
+again behind the cohort.
+
+Run `pg-root-park-recovery owned checked` from the locked Release build of
+Native.Run against an empty dedicated PostgreSQL database. Repeat with each
+writer and fence mode in its own database. The fixture recovers through the
+public ingress with the selection from the public view, moves a fresh
+post-recover input ahead of the released rows by raw SQL, and shows a second
+recover refused once the root runs. It rolls back recover commits for a
+stale epoch, a kept payload changed after the poll, a vetoed restore, a
+rewritten state, a disabled projection trigger and a Park mark moved before
+the bind, probes the trigger branches with raw writes, and refuses an
+oversized kept set built from filler rows. It refuses a delayed recover and
+an old selection after the root parks again, recovers that second Park at
+generation 2 with the second recover moved ahead of the released row by raw
+SQL, and shows that second recover settle on the Finished root. The trigger
+probes include a refused entry beside a recovered entry on the recover
+write, which only the refused-row rule refuses, and a lone recovered or
+refused entry committed with no checkpoint write, which the deferred trigger
+refuses while the root stays writable. A neighbor root then shows the byte
+bound: parked on a fault input over 4 MiB, with one small arrival and a raw
+arrival over 4 MiB, it is refused as "page"; without the raw arrival the
+fault input is not charged and it recovers with the small arrival. The
+released-cohort filter has no suspended conjunct and no Due bound, since
+format 22 has neither a suspended parked root nor a released row that is not
+yet due; composition with Suspend or delayed inputs must revisit both. The multi-page drain under a cursor, with
+only released inputs eligible during it, remains open, as do Retry and
+RetryAll, timers, jobs and subscriptions in the restore plan, Park expiry,
+discard, and terminate or delete of a parked root.
 
 ## 10. Private durable lexical-resource probe
 

@@ -5,15 +5,20 @@ case "$configuration" in
   Debug|Release) ;;
   *) echo "Choose Debug or Release." >&2; exit 2 ;;
 esac
+case "${PG_PREVIEW_PROFILE:-}" in
+  "") profiles=(ordinary jobs timed timeout takeover takeover-complete) ;;
+  ordinary|jobs|timed|timeout|takeover|takeover-complete) profiles=("$PG_PREVIEW_PROFILE") ;;
+  *) echo "Choose ordinary, jobs, timed, timeout, takeover or takeover-complete." >&2; exit 2 ;;
+esac
 root=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
 cd "$root"
-app=apps/Elsa.Workbench
+app=apps/Elsa.Workbench.Host
 runner=essentials/tests/ActorFoundation/Native/Run
 dotnet restore --locked-mode "$app"
 dotnet restore --locked-mode "$runner"
 dotnet build -c "$configuration" --no-restore "$app"
 dotnet build -c "$configuration" --no-restore "$runner"
-KERNEL_PREVIEW_WORKBENCH="$root/$app/bin/$configuration/net10.0/Elsa.Workbench"
+KERNEL_PREVIEW_WORKBENCH="$root/$app/bin/$configuration/net10.0/Elsa.Workbench.Host"
 export KERNEL_PREVIEW_WORKBENCH
 client="$runner/bin/$configuration/net10.0/Kernel.Native.Run"
 
@@ -36,16 +41,24 @@ docker exec "$container" pg_isready -h 127.0.0.1 -U postgres >/dev/null
 port=$(docker port "$container" 5432/tcp)
 port=${port##*:}
 [[ -n "$port" && "$port" != 5095 ]]
-docker exec "$container" createdb -U postgres workbench_core_preview
-export KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=$port;Username=postgres;Password=$POSTGRES_PASSWORD;Database=workbench_core_preview;SSL Mode=Disable;GSS Encryption Mode=Disable"
 sentinel="$scratch/caller-identity.sqlite"
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__IsDevelopmentOrDemo=false
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__ConnectionString="Data Source=$sentinel"
-for phase in disabled birth restart; do
-  "$client" pg-workbench-core-preview "$phase" "$scratch/waiting.json"
-  if [[ -e "$sentinel" ]]; then
-    echo "Workbench inherited the caller's identity database configuration." >&2
-    exit 1
-  fi
+for profile in "${profiles[@]}"; do
+  database="workbench_core_preview_${profile//-/_}"
+  docker exec "$container" createdb -U postgres "$database"
+  export KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=$port;Username=postgres;Password=$POSTGRES_PASSWORD;Database=$database;SSL Mode=Disable;GSS Encryption Mode=Disable"
+  receipt="$scratch/waiting-$profile.json"
+  for phase in disabled birth restart; do
+    if [[ "$profile" == ordinary ]]; then
+      "$client" pg-workbench-core-preview "$phase" "$receipt"
+    else
+      "$client" pg-workbench-core-preview "$phase" "$receipt" "$profile"
+    fi
+    if [[ -e "$sentinel" ]]; then
+      echo "Workbench inherited the caller's identity database configuration." >&2
+      exit 1
+    fi
+  done
 done
 echo "ok caller identity database configuration stayed isolated"

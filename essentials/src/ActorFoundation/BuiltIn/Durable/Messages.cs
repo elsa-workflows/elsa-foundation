@@ -57,9 +57,23 @@ internal sealed record FoundationOperatorCommand(string? Selection)
 {
     internal string? DeleteTarget { get; init; }
     internal bool RetentionDelete { get; init; }
+    internal FoundationTerminalStamp? QualifiedTerminal { get; init; }
+    internal bool RootThenDelete { get; init; }
+    internal bool RootHeldReply { get; init; }
     internal ParkRecoveryMode? RecoverMode { get; init; }
     internal IReadOnlyList<string>? RecoverHandles { get; init; }
+    // A qualified root recover: the Park mark its selection sealed, the admission's ordinary window in milliseconds
+    // for the rows it restores or clears, and the store's Park facts read when it was polled.
+    internal FoundationParkMark? RootParkMark { get; init; }
+    internal long? RootParkWindow { get; init; }
+    internal FoundationRootParkFacts? RootParkFacts { get; init; }
 }
+
+internal sealed record FoundationTerminalStamp(long Revision, long At);
+
+internal sealed record FoundationParkMark(long Revision, long At);
+
+internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arrived, int Consumed, bool FitsPage, string KeptDigest);
 
 /// <summary>A message. Times are database time in milliseconds.</summary>
 public sealed record Message(
@@ -137,6 +151,7 @@ public static class Kinds
     public const string Resume = "kernel.resume";
     public const string Terminate = "kernel.terminate";   // end it, its jobs and its waits, and every instance it started
     public const string Delete = "kernel.delete";         // remove an ended instance: its row, its waits, its journal rows
+    internal const string Recover = "kernel.recover";     // resolve a Park; not a control, so a parked actor's turn order applies
 
     public static void RequireApplicationSend(string kind)
     {

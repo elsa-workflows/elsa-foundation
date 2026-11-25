@@ -2,7 +2,7 @@
   "solution": {
     "path": "Elsa.Server.slnx",
     "projects": [
-      "apps/Elsa.Workbench/Elsa.Workbench.csproj",
+      "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj",
       "essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj",
       "essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj",
       "essentials/src/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj",
@@ -33,6 +33,7 @@
       "essentials/src/ActorFoundation/BuiltIn/Runtime/Elsa.ActorFoundation.BuiltIn.Runtime.csproj",
       "essentials/src/ActorFoundation/BuiltIn/Store/EntityFrameworkCore/Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore.csproj",
       "essentials/src/ActorFoundation/Contracts/Elsa.ActorFoundation.Contracts.csproj",
+      "essentials/src/ActorFoundation/Hosting/Elsa.ActorFoundation.Hosting.csproj",
       "essentials/src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj",
       "essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
       "essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj",
@@ -55,6 +56,7 @@
       "essentials/src/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj",
       "essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj",
       "essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj",
+      "essentials/src/Diagnostics/OpenTelemetry/Workflows/Elsa.Diagnostics.OpenTelemetry.Workflows.csproj",
       "essentials/src/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj",
       "essentials/src/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj",
       "essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj",
@@ -86,6 +88,7 @@
       "essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj",
       "essentials/src/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj",
       "essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj",
+      "essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj",
       "essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj",
       "essentials/src/Git/Elsa.Git.csproj",
       "essentials/src/Http/Core/Elsa.Http.Core.csproj",

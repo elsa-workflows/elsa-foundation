@@ -89,6 +89,10 @@ internal static class PostgresHeldDirectChecks
             Check(pending is { Id: Operation } && pending.ReplyTo == request.ReplyAddress(Receiver) && pending.Payload == signal &&
                 !answer.IsCompleted && (await api.TailAsync(scope, actor, bookmark, stop)).Items.Count == 0,
                 "The route must be durable with the admitted input while the receiver still waits.");
+            Check((await api.InboxAsync(scope, actor, cancellationToken: stop)).Items is
+                [{ Id: Operation, Kind: CompositeSignal.Kind, State: Contract.DeliveryState.Pending, Sender: null }]
+                && !answer.IsCompleted, "Inspecting the pending input must leave its held reply registration untouched.");
+            await PostgresRootInboxChecks.RejectRouteAsync(Open, api, scope, actor, pending, "broken", stop);
             var oldAdmission = new PostgresRootAdmission(() => new KernelDb(options), TimeSpan.FromHours(1));
             try
             {

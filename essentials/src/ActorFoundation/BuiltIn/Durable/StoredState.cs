@@ -11,9 +11,16 @@ public static class StoredState
     public const string Data="!kernel-state/1:data:";
     public static string Encode(InstanceRow row)
     {
+        var (prefix, value) = EncodingParts(row);
+        return prefix + value;
+    }
+
+    internal static (string Prefix, string Value) EncodingParts(InstanceRow row)
+    {
         StoreBatchRules.ValidateIdentity(row);
-        if (row.FoundationNullState) return Absent;
-        return row.IdentityOnly?(row.IdentityMetadataRequired?MetadataIdentity:Identity):row.State.StartsWith(Family,StringComparison.Ordinal)?Data+row.State:row.State;
+        if (row.FoundationNullState) return ("", Absent);
+        if (row.IdentityOnly) return ("", row.IdentityMetadataRequired ? MetadataIdentity : Identity);
+        return (row.State.StartsWith(Family, StringComparison.Ordinal) ? Data : "", row.State);
     }
     public static InstanceRow Restore(InstanceRow physical)
     {

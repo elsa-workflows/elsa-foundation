@@ -14,8 +14,8 @@ namespace Elsa.Architecture.Tests;
 /// The guard reads each module's model snapshots, the per-provider record of the schema its migrations create,
 /// because that is what a database gets. Which snapshots it must read comes independently from the
 /// compiled <see cref="EfModuleAttribute"/> declarations of the runtime libraries, so a provider context whose snapshot the scan cannot
-/// find fails rather than passing unexamined. Contexts that are no EF module, such as the Workbench app's OpenIddict
-/// context, which maps OpenIddict's own entity types, are outside the rule.
+/// find fails rather than passing unexamined. Contexts that are no EF module, such as the OpenIddict token store's
+/// context (Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore), which maps OpenIddict's own entity types, are outside the rule.
 /// </para>
 /// <para>
 /// An owner decision on #2119: every stamp also carries a non-unique index of its own, so the rows still at a given

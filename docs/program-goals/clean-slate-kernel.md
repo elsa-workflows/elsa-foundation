@@ -20,6 +20,72 @@ Replace Elsa 4's runtime core with the kernel that the prototype (`prototypes/ke
 scope of [ADR 0099 section 10](../adr/0099-clean-slate-execution-kernel.md#10-release-1-scope). Out of scope for this
 plan: the ADR's non-goals for release 1, and anything not named there.
 
+### Trimmed scope (owner, 24 November 2026)
+
+Sipke trimmed the program to the **Actor Foundation** and the **Elsa engine**. He set the goal as end-to-end delivery
+through gate 4, the default switch, and gate 5, old-core removal, with his decision at each gate
+([owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7142657677)). This section
+replaces the release 1 scope of ADR 0099 section 10 where the two differ,
+until the ADR is amended to match. Milestone acceptance, including K13's "K1 to
+K12 accepted on main", is measured against the rows as trimmed here.
+
+His decisions:
+
+- **Actor Foundation:** the foundation contract and the Built-in Actor Foundation. This covers the durable layer,
+  store, runtime, hosting, placement, node lease and K5 graceful stop of entered jobs.
+- **Elsa engine:** the workflow instance actor, the Native model and activities, and Graph/Flowchart.
+- **Providers:** PostgreSQL and SQLite, with one composed shipped format on both. It carries the operator, job and Park
+  capabilities, self-sends and timers, direct held replies and workflow history. Values by reference is cut by
+  the K11 answer below. That answer supersedes the earlier composition decision to ship it
+  ([composition decisions](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7135533849)).
+- **Kept:** K8 synchronous HTTP; K9 read models and the API read path; K10 Studio on the projector; the rest of K11
+  (admission and its ingress threshold, retention and delete, basic trace context and metrics, parked-work inspection);
+  and K12 qualification for the trimmed scope.
+- **Cut, moved after the release:**
+  - the StateMachine engine with invariants S1 to S4;
+  - Park operations beyond the one-page recover: the multi-page drain, discard (including expiry as an automatic
+    discard) and retry selection. The drain prototype is kept as a deferred draft,
+    [#5692](https://github.com/elsa-workflows/elsa-foundation/pull/5692);
+  - the K11 extras: traces and metrics beyond the basics, the migration-plan runner with its plan-outcome read model,
+    and values by reference.
+
+Claude's reading of these decisions, which the owner can correct:
+
+- Terminate and delete of a parked root stay in scope, because a parked root must be endable. The design defines both
+  as bounded drains. Until the multi-page drain ships, they are bounded to one page as recover is, and a Park larger
+  than one page is refused with a recorded reason. As a result, a Park that keeps more than one page cannot be
+  recovered, terminated, deleted or discarded before the release. Claude brings this to the owner as a decision
+  before the parked-root terminate slice, composition slice S5 of the
+  [composition decisions](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7135533849).
+- K10's StateMachine journeys go with the StateMachine engine.
+- Instance migration moves after the release with the plan runner. In this plan and in the built source, the runner
+  is the only sender of `Migrate`. The one-instance migration through the runtime API that
+  [migrating running instances](../architecture/migrating-running-instances.md) describes moves with it. This reading
+  also moves ADR 0099 section 10's "simple instance migration".
+- Work for SQL Server and MySQL moves after the release. That includes:
+  - condition RP;
+  - the SQL Server and MySQL legs of NL-C1;
+  - MySQL TLS cancellation;
+  - the `max_allowed_packet` start refusal;
+  - SQL Server's UTF-16 state sizing;
+  - the Entra qualification that the resume handoff ties to the SQL Server integration;
+  - the SQL Server and MySQL legs of the deadlock acceptance cases.
+
+  MongoDB stays on its existing owner hold.
+
+Rows that mix kept and cut work keep only their kept part until the release:
+
+- K4 runs on PostgreSQL and SQLite.
+- K7 is Flowchart G1 to G5.
+- K9 drops the plan-outcome read model.
+- K10 drops the StateMachine journeys.
+- K11's "parked-work inspect, retry and discard" keeps inspection and the one-page recover. The Kept list's
+  "parked-work inspection" means the same.
+- FC-C4 is judged on the instance list and the retention worker.
+- The `pad=` values-by-reference run in "Release 1 qualification" moves after the release.
+- So do the StateMachine demo increment and the #3815 carry-over row.
+- Any other row, case or condition below that names only cut work also applies after the release.
+
 ## How the work lands
 
 - One concern per PR, about 500 changed lines or fewer, stacked where they depend on each other. Mechanical moves and
@@ -90,11 +156,11 @@ gate 5.
 | K3 | **Store changes the answer pages flag** (focused PRs under the owner-approved K3 delivery mode) | See "Store and kernel changes" below. Each lands as an executable contract on the prototype or the in-memory store: its conformance cases, and a simulation invariant or mutation that fails without it. Physical-provider acceptance of the same cases closes with K4. **Accepted on main, 23 November 2026**, at `89bc2a1c1481fdf3a5558a5fbf4cba671ce67b73` ([K3 qualification checkpoints](#k3-qualification-checkpoints)) |
 | K4 | **Providers** | EF Core schema and migrations with the owned commit SQL on all four engines; store conformance in both fence modes and killed-connection stress on each relational engine. The K3 cases pass on every relational engine. [MongoDB-specific K4 qualification is on hold](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7108927599). Every process that reads or writes the kernel's schema and protocol families checks their versions and refuses before processing a version it cannot read (see "Kernel schema and protocol compatibility"). **Tuned** (PostgreSQL, SQL Server, SQLite) means: the owned commit is the default, and deterministic round-trip budgets per reference workflow hold at or below the prototype's owned figures in [COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md#round-trips-the-cost-runs-ef--owned) (ten no-ops, Balanced, on the owner: PostgreSQL 2, SQL Server 3, SQLite 3 engine calls), with PostgreSQL's operations note published. **Supported** (MySQL) means conformance and stress in CI, with its budgets recorded and not tuned. The built-in runtime gains and gives up partitions in sets, one set take and one set release per balancing round (owner, 19 November; [register](../architecture/decisions.md#owner-decisions-after-k1-19-november)) |
 | K5 | **Durable layer, built-in runtime, profiles** | Embedded and Cluster; 1,024 virtual partitions; the wake signal; the runtime conformance suite; graceful stop ends owned work before persistence is disposed (#3939's row) |
-| K6 | **Workflow instance actor and native model** | Structured containers on an adapted activity context; the parked-child registry and notice change (large fan-out decision 5); the effect key wired into the built-in HTTP and email activities; M1–M3 controls of #2531's hand-off kept or ported. The in-process job contract picks one durable outcome for the right ticket generation in each race: a `StartJob` timeout against the job's completion, in both orders and across a takeover; and Park then recover against a late result from the old ticket generation |
+| K6 | **Workflow instance actor and native model** | Structured containers on an adapted activity context; the parked-child registry and notice change (large fan-out decision 5); the effect key wired into the built-in HTTP and email activities; M1–M3 controls of #2531's hand-off kept or ported. The in-process job contract picks one durable outcome for the right ticket generation in each race: a `StartJob` timeout against the job's completion, in both orders and across a takeover; and Park then recover against a late result from the old ticket generation. Every designer activity on the release 1 activity list runs on the kernel, through the adapted activity context or as a Native port. The list is the owner's decision of 24 November: 26 activities run, including Timer and Cron on a schedule actor ([#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7145147047); [GA test-drive map](../reports/ga-test-drive-2026-11-24/core-preview-map.md#summary), gap 2; [design cards](../reports/ga-test-drive-2026-11-24/design-cards.md#3-the-release-1-activity-list), card 3, option B). The ten ports are Switch, For, Do, Break, WriteLines, Fault, GraphActivity with Complete, Inline and RunJavaScript; K12 item 3 qualifies the JavaScript semantics of the last two. Timer and Cron run on a layer 3 schedule actor, with one self-timer per schedule that publishes to the workflow's start key. It starts one instance per occurrence across a restart and a takeover, and a duplicated occurrence starts one instance. The eight hidden activities form the kernel host's `kernel-unsupported` availability set, and the kernel's registry refuses a definition that holds one, with the node named. `SendHttpRequest` runs as a Background job whose result completes the activity ([design cards](../reports/ga-test-drive-2026-11-24/design-cards.md#2-the-sendhttprequest-response), card 2, option A): W3 reads a downstream 500 on its status port, completes on `Timeout` when its timeout passes, and sends one `Idempotency-Key` across a job re-run after an owner loss. The Workbench host composes the HTTP client the job uses, so the request is sent ([GA test-drive map](../reports/ga-test-drive-2026-11-24/core-preview-map.md#summary), gap 3) |
 | K7 | **Graph engine and Flowchart; StateMachine** | The Flowchart conformance corpus and invariants G1–G5; StateMachine invariants S1–S4 and the saga-style example, defined from #3815's decisions OD1 to OD49 as the owner reviewed them on 19 November ([StateMachine on the kernel](../architecture/statemachine-on-the-kernel.md#invariants-s1-to-s4)); both in Embedded and Cluster |
-| K8 | **Synchronous HTTP** | Every case of the sketch's [synchronous HTTP](../reports/clean-slate-kernel/design-sketch-draft-5.md#synchronous-http-requests) section, including a resume owned by another node and an owner lost while a request waits, under the HTTP error and timeout contract below. Its tests are separate from the durable send obligations, because an HTTP response is never recorded |
+| K8 | **Synchronous HTTP** | Every case of the sketch's [synchronous HTTP](../reports/clean-slate-kernel/design-sketch-draft-5.md#synchronous-http-requests) section, including a resume owned by another node and an owner lost while a request waits, under the HTTP error and timeout contract below. Its tests are separate from the durable send obligations, because an HTTP response is never recorded. An HTTP workflow whose root is a Flowchart starts from its route; until K10 connects publications, the workflow may be built in code. Route templates match most specific first, as in the old core, and the request carries the query string, headers and the matched route values, and the response carries headers. When the route table is built from the registered workflows, it refuses a claim on a template and method that a different definition holds (the old core refuses such claims at publishing); a republished definition replaces its own route, and different methods on one template may belong to different definitions ([GA test-drive map](../reports/ga-test-drive-2026-11-24/core-preview-map.md#summary), gap 3). A start route subscribes on its template key and a mid-flow `HttpEndpoint` on its resolved path ([design cards](../reports/ga-test-drive-2026-11-24/design-cards.md#1-route-templates), card 1, option A): W3's `/orders/{id}/enrich` starts with `id` in the request's route values, W5's `/orders/{id}/cancel` resumes only the waiting W4 for that order, and the route table refuses a template shape and method that another definition holds under other parameter names (`orders/{key}` against `orders/{id}`) |
 | K9 | **Projector, read models and the API read path** | The instance list, parked-work and plan-outcome read models; the viewer's tail read and catch-up; the runtime API on read models only |
-| K10 | **Studio on the projector** | Run views on the projections, the tail read, catch-up on request and the live stream of committed entries; composed Studio journeys pass on both profiles. StateMachine journeys pass too (owner, 19 November; [StateMachine on the kernel](../architecture/statemachine-on-the-kernel.md#owner-decisions-19-november)): the chart designer with the transition inspector and the hierarchy outline, and the run view of the active configuration and pending phases with linked event and transition history. The remainder of #4126 (the BPMN timeout end-event label) is parked until after release 1 |
+| K10 | **Studio on the projector** | Run views on the projections, the tail read, catch-up on request and the live stream of committed entries; composed Studio journeys pass on both profiles. StateMachine journeys pass too (owner, 19 November; [StateMachine on the kernel](../architecture/statemachine-on-the-kernel.md#owner-decisions-19-november)): the chart designer with the transition inspector and the hierarchy outline, and the run view of the active configuration and pending phases with linked event and transition history. The remainder of #4126 (the BPMN timeout end-event label) is parked until after release 1. On both profiles, one composed journey designs an HTTP workflow in Studio, publishes it through the definitions API and calls its route on the kernel: the caller receives the designed response, and the run views show one completed instance ([GA test-drive map](../reports/ga-test-drive-2026-11-24/core-preview-map.md#summary), gap 1). On a kernel host the toolbox shows the 26 activities of the release 1 list and none of the eight hidden ones, and publishing a definition with `CompensationScope` is refused with the node named ([design cards](../reports/ga-test-drive-2026-11-24/design-cards.md#3-the-release-1-activity-list), card 3) |
 | K11 | **Operations** | Trace context and metrics as the observability page lists, including the `elsa.kernel.drain.held` gauge that case M3-13 reads; admission and the ingress threshold; retention and delete; simple migration with plans, whose runner sends each `Migrate` to the exact ref the plan selected (FC-15), with every outcome attributed in the plan-outcomes read model to the life that answered; parked-work inspect, retry and discard; values by reference |
 | K12 | **Qualification** | See "Release 1 qualification" below |
 | K13 | **Default switch** (gate 4) | **Release acceptance:** K1 to K12 accepted on main, each gate 3 row below with its evidence posted on #4229, and no open review finding at Minor or above on a merged release 1 PR. Then the switch PR makes the kernel the default (see "The switch"), the docs at the switch land, and the owner gives the go |
@@ -113,7 +179,7 @@ each condition.
 
 | Id | Condition | Milestones | Cases | Status | Evidence owed | Evidence |
 |---|---|---|---|---|---|---|
-| C1 | Complete terminal checkpoint | K3, K4, K6 | TG-1, TG-2, PC-5 | K3 verified, K4 and K6 open | Qualify the post-stamp row including model clocks, bounded fault and identity fields, protected multi-page ThenDelete, provider encodings, and an upgraded near-limit row terminated before its next ordinary turn, with a supported termination or version fallback where the upgraded shape exceeds the cap. A provider-encoding fixture may also distinguish PC-5's former registries-as-stored mutation at K4. | The [in-memory terminal reserve](https://github.com/elsa-workflows/elsa-foundation/pull/5317) covers the exact-fit state, bounded fault, maximum legal TypeData and four labels. The real [paged ThenDelete](https://github.com/elsa-workflows/elsa-foundation/pull/5408) and [mixed child-and-job cascade](https://github.com/elsa-workflows/elsa-foundation/pull/5412) qualify the K3 transitions. The [Native version receipt](../../prototypes/kernel-model/NATIVE.md#termination-before-the-first-upgraded-turn) qualifies the in-memory v13-to-v14 pre-turn terminate, the upgrade byte reservation and the explicit unavailable-model fallback for an expanding test model. Provider accounting and shipped deployment qualification remain open. |
+| C1 | Complete terminal checkpoint | K3, K4, K6 | TG-1, TG-2, PC-5 | K3 verified, K4 and K6 open | Qualify the post-stamp row including model clocks, bounded fault and identity fields, protected multi-page ThenDelete, provider encodings, and an upgraded near-limit row terminated before its next ordinary turn, with a supported termination or version fallback where the upgraded shape exceeds the cap. A provider-encoding fixture may also distinguish PC-5's former registries-as-stored mutation at K4. | The [in-memory terminal reserve](https://github.com/elsa-workflows/elsa-foundation/pull/5317) covers the exact-fit state, bounded fault, maximum legal TypeData and four labels. The real [paged ThenDelete](https://github.com/elsa-workflows/elsa-foundation/pull/5408) and [mixed child-and-job cascade](https://github.com/elsa-workflows/elsa-foundation/pull/5412) qualify the K3 transitions. The [Native version receipt](../../prototypes/kernel-model/NATIVE.md#termination-before-the-first-upgraded-turn) qualifies the in-memory v13-to-v14 pre-turn terminate, the upgrade byte reservation and the explicit unavailable-model fallback for an expanding test model. [PostgreSQL checkpoint enforcement](https://github.com/elsa-workflows/elsa-foundation/pull/5634) covers the physical content cap in the preview, and the [format-11 Native receipt](../../prototypes/kernel-model/NATIVE.md#termination-before-the-first-upgraded-turn) covers pre-turn termination and the explicit expanding-state fallback. [PostgreSQL format 12](../../prototypes/kernel-model/NATIVE.md#termination-before-the-first-upgraded-turn) qualifies the header and state-body projection on the opt-in store. Format 13 point and list reads select the committed terminal mark. Protected ThenDelete on PostgreSQL, the remaining providers and shipped deployment qualification stay open. |
 | C2 | Receipt and coverage transactions | K3, K4, K11 | EI-1 runs (c) and (g), CC-1, MX-1 run (e), SB-5 | K3 verified, K4 and K11 open | Race provider-equal requests and registrations, return an existing receipt even when a candidate partition is full, preserve `CatchUpId` across takeover, and return "gone" for an old incarnation (see RP). | K3 evidence for [incarnation and duplicate identity](https://github.com/elsa-workflows/elsa-foundation/pull/5330), [match commit order and event-id namespace](https://github.com/elsa-workflows/elsa-foundation/pull/5382), [keeping registration](https://github.com/elsa-workflows/elsa-foundation/pull/5392), and the [catch-up chain through takeover, sweep and lost answers](https://github.com/elsa-workflows/elsa-foundation/pull/5413). Real collation races, admission pressure and operator replay qualify at their assigned milestones. |
 | C3 | Work and provider budgets | K4, K12 | OA-1, BA-1, MW-1 | OA-1 and BA-1 open. MongoDB MW-1 deferred. | Measure Open's 9,728-byte keeping charge, the 4 MiB step budget, singleton progress, bytes read and written (so a byte-limited step never first reads 170 maximum-sized payloads), and tenant fairness. When MongoDB qualification resumes, verify sweep progress across 340 covered keys followed by eligible work (coverage removed, then the cursor wraps). | |
 | C4 | Worker and operator transitions | K3, K4, K6, K11 | CJ-1, CJ-2, TT-1, WJ-1, KP-1 | K3 verified, K4, K6 and K11 open | Exercise CJ-1/2, TT-1, WJ-1 and KP-1 through the actual Worker, stores and operator path. Observe durable discards, generations under Hold, physical job-entry withholding and eventual delivery of a publication suffix. | In-memory Worker evidence for [idempotent job cancel](https://github.com/elsa-workflows/elsa-foundation/pull/5354), [job generations under Hold](https://github.com/elsa-workflows/elsa-foundation/pull/5363), [cohort and ordinary poison ties](https://github.com/elsa-workflows/elsa-foundation/pull/5400), [job entry during Terminate](https://github.com/elsa-workflows/elsa-foundation/pull/5399), and [publication suffix recovery](https://github.com/elsa-workflows/elsa-foundation/pull/5414). |
@@ -583,8 +649,12 @@ The [timed settlement fixture](../../prototypes/kernel-model/README.md#timed-nat
 checks both completion and deadline across ownership changes and applies one recorded result through Native.
 Public production activation, Worker inline promotion and the remaining provider runs still need K4 qualification.
 The [current-owner trial schedule](../../essentials/tests/ActorFoundation/Simulation/ContractJobTrialChecks.cs)
-also needs physical evidence. A timed job settles as a timeout while its callback is still unwinding, and
-trial isolation keeps a competing command pending until the callback exits. MongoDB-specific checks are deferred.
+also covers timeout while the callback is still unwinding. The [relational Worker fixture](../../prototypes/kernel-model/README.md#run-the-same-schedule-on-the-relational-providers)
+checks that part on SQLite, PostgreSQL, SQL Server and MySQL with an unrelated actor's admitted start. The
+job's timeout lands while its callback is still active, with no model entry for the unrelated start. That
+start commits once after the current callback exits, even while the displaced callback is still active.
+The timeout checkpoint, inbox and journal stay unchanged after both Workers run again. The public
+qualified-command schedule remains open. MongoDB-specific checks are deferred.
 
 ### K11 foundation contract cases
 
@@ -607,6 +677,14 @@ ones on developers' machines. So there are no live runs to carry over, no data m
   create them again.
 - **Rollback** is a revert of the switch PR, followed by the same database reset. There is no data rollback, because
   no user data exists.
+
+### K9 PostgreSQL pending inbox
+
+The [pending-inbox fixture](../../prototypes/kernel-model/NATIVE.md#postgresql-pending-inbox-inspection)
+reads generated direct-input roots through `IActorReads.InboxAsync`, including selected operator commands.
+It pages without loading actor state or sending message bodies to the read client. It qualifies the live
+metadata slice. Parked work, recoverable handles, the plan-outcome projection, shipped runtime routing and
+FC-C4 retain their separate acceptance cases.
 
 ## Owner answers of 17 November
 

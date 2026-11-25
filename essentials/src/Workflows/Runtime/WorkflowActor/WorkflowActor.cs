@@ -83,7 +83,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
             await reader!.MetadataAsync(modelTurn, header.Status, header.EndedAt, cancellationToken);
 
         turn.State = JsonSerializer.Serialize(modelTurn.State, model.StateType);
-        WriteHeader(turn, workflow, modelTurn.Workflow with { Version = model.StateVersion });
+        WriteHeader(turn, workflow, modelTurn.Workflow with { Version = model.StateVersion }, modelLabels: modelTurn.LabelsChanged ? modelTurn.Labels : null);
         if (header.Status == ActorStatus.Running && modelTurn.Status != ActorStatus.Running)
             turn.End(modelTurn.Status, modelTurn.Output);
     }
@@ -168,13 +168,25 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
             JsonSerializer.Deserialize(state, model.StateType) ?? throw new InvalidOperationException("The workflow state is absent.");
     }
 
-    private static void WriteHeader(IActorTurn turn, WorkflowHeader previous, WorkflowHeader next, string? answeredPlan = null)
+    /// <summary>
+    /// The header labels the actor writes itself: the definition, which reads select instances by, and the migration plan an
+    /// instance answered, which must outlive a full type data. Any other label is a model's (<see cref="ITurn.SetLabel"/>).
+    /// The state version is in the type data only.
+    /// </summary>
+    private static bool ActorLabel(string name) => name is "definition" or AnsweredPlanLabel;
+
+    /// <summary>The most labels a model holds: the foundation's header holds four, and the actor's own are at most two.</summary>
+    internal const int MaxModelLabels = 2;
+
+    private static void WriteHeader(IActorTurn turn, WorkflowHeader previous, WorkflowHeader next, string? answeredPlan = null,
+        IReadOnlyDictionary<string, string>? modelLabels = null)
     {
-        if (previous == next && answeredPlan is null) return;
+        if (previous == next && answeredPlan is null && modelLabels is null) return;
         var labels = new Dictionary<string, string>(StringComparer.Ordinal) { ["definition"] = next.Definition };
-        if (next.Version is { } version) labels.Add("version", version.ToString(CultureInfo.InvariantCulture));
         answeredPlan ??= turn.Header.Labels.GetValueOrDefault(AnsweredPlanLabel);
         if (answeredPlan is not null) labels.Add(AnsweredPlanLabel, answeredPlan);
+        // A model's labels are kept across the actor's own header writes.
+        foreach (var (name, value) in modelLabels ?? turn.Header.Labels.Where(p => !ActorLabel(p.Key)).ToDictionary()) labels[name] = value;
         turn.SetHeader(previous == next ? turn.Header.TypeData : JsonSerializer.Serialize(next), labels);
     }
 
@@ -225,6 +237,24 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         public string Publish(string key, string? payload, TimeSpan keepFor) => turn.Publish(key, payload, keepFor);
         public void Record(object entry) => turn.Record(entry);
         public void Rebind(string definition) => Workflow = Workflow with { Definition = definition };
+
+        /// <summary>The model's labels, as the turn leaves them.</summary>
+        public Dictionary<string, string> Labels { get; } = turn.Header.Labels.Where(p => !ActorLabel(p.Key)).ToDictionary(StringComparer.Ordinal);
+        public bool LabelsChanged { get; private set; }
+
+        public void SetLabel(string name, string? value)
+        {
+            if (string.IsNullOrEmpty(name) || ActorLabel(name))
+                throw new ArgumentException($"'{name}' is no label a model may set.", nameof(name));
+            if (System.Text.Encoding.UTF8.GetByteCount(name) > 1_024 || value is not null && System.Text.Encoding.UTF8.GetByteCount(value) > 1_024)
+                throw new ArgumentException("A label's name and value are at most 1,024 UTF-8 bytes.", nameof(value));
+            if (value is null) { LabelsChanged |= Labels.Remove(name); return; }
+            if (!Labels.ContainsKey(name) && Labels.Count >= MaxModelLabels)
+                throw new ArgumentException($"A model holds at most {MaxModelLabels} labels.", nameof(name));
+            if (Labels.TryGetValue(name, out var current) && current == value) return;
+            Labels[name] = value;
+            LabelsChanged = true;
+        }
 
         public void SetStatus(ActorStatus status, string? subStatus, object? output)
         {

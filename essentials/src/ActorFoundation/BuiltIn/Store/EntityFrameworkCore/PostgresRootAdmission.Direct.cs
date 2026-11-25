@@ -55,7 +55,8 @@ internal sealed partial class PostgresRootAdmission
     internal async ValueTask<long> ReadReplyTimeAsync(CancellationToken cancellationToken)
     {
         await using var db = create();
-        if (!db.UsesRootReplyProtocol) throw new NotSupportedException("This profile does not hold direct requests.");
+        if (!db.UsesRootReplyProtocol && !db.UsesRootOperatorReplies)
+            throw new NotSupportedException("This profile does not hold requests.");
         return await db.Database.SqlQueryRaw<long>("""
             SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value"
             """).SingleAsync(cancellationToken);
@@ -74,6 +75,8 @@ internal sealed partial class PostgresRootAdmission
         var digest = FoundationRootCreator.OperationDigest(id);
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+        if (db.RequiresPinnedRootNamespace)
+            await PinRootNamespaceAsync(db, cancellationToken);
         if (reply is not null)
         {
             if (!db.UsesRootReplyProtocol) return await RefuseAsync(DirectResult.Refused);
@@ -84,21 +87,26 @@ internal sealed partial class PostgresRootAdmission
             : await RootAddressAsync(db, tenant, reference, cancellationToken);
         if (address is null) return await RefuseAsync(DirectResult.MissingTarget);
         var status = await AdmissionStatusAsync(db, address, tenant, reference, cancellationToken, requireCheckpoint: reply is not null);
-        if (status is null) return await RefuseAsync(DirectResult.MissingTarget);
-        if (status != InstanceStatus.Running)
+        if (status is null)
         {
+            if (db.UsesRootRetirement && await HasReceiptAsync()) return await DuplicateAsync();
+            return await RefuseAsync(DirectResult.MissingTarget);
+        }
+        var acceptsParkArrival = db.UsesRootParkArrivals && status == InstanceStatus.Faulted &&
+            await db.Database.SqlQuery<bool>($"""
+                SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
+                    AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
+                    AND "FoundationParkAt" IS NOT NULL) AS "Value"
+                """).SingleAsync(cancellationToken);
+        if (status != InstanceStatus.Running && !acceptsParkArrival)
+        {
+            // A Faulted or Cancelled checkpoint ends only in a family that ends that status, under the family's prefix.
             var terminal = status == InstanceStatus.Finished ||
-                status == InstanceStatus.Faulted && db.UsesRootTimedJobSettlement &&
-                await IsTimedFaultTerminalAsync(db, address, tenant, reference, cancellationToken);
-            if (terminal && await db.Database.SqlQuery<bool>($"""
-                SELECT EXISTS (SELECT 1 FROM "FoundationDirectReceipts"
-                    WHERE "Reference" = {reference} AND "Operation" = {digest}
-                        AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
-                """).SingleAsync(cancellationToken))
-            {
-                await transaction.CommitAsync(cancellationToken);
-                return DirectResult.Duplicate;
-            }
+                status == InstanceStatus.Faulted && db.UsesRootParkOpening ||
+                status is (InstanceStatus.Faulted or InstanceStatus.Cancelled) && db.RootStateFamily.Ends(status.Value) &&
+                await IsQualifiedTerminalAsync(db, address, tenant, reference, status.Value,
+                    db.RootStateFamily.Prefix, cancellationToken);
+            if (terminal && await HasReceiptAsync()) return await DuplicateAsync();
             return await RefuseAsync(DirectResult.Refused);
         }
 
@@ -141,6 +149,18 @@ internal sealed partial class PostgresRootAdmission
         await transaction.CommitAsync(cancellationToken);
         return DirectResult.Accepted;
 
+        Task<bool> HasReceiptAsync() => db.Database.SqlQuery<bool>($"""
+            SELECT EXISTS (SELECT 1 FROM "FoundationDirectReceipts"
+                WHERE "Reference" = {reference} AND "Operation" = {digest}
+                    AND "Until" >= floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
+            """).SingleAsync(cancellationToken);
+
+        async Task<DirectResult> DuplicateAsync()
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return DirectResult.Duplicate;
+        }
+
         async Task<DirectResult> RefuseAsync(DirectResult reason)
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -165,13 +185,13 @@ internal sealed partial class PostgresRootAdmission
     }
 
     // AdmissionStatusAsync already holds a share lock on this exact checkpoint until the receipt lookup ends.
-    private static Task<bool> IsTimedFaultTerminalAsync(KernelDb db, CreationAddress address, string tenant, string reference,
-        CancellationToken cancellationToken) =>
+    private static Task<bool> IsQualifiedTerminalAsync(KernelDb db, CreationAddress address, string tenant, string reference,
+        InstanceStatus status, string stateFamily, CancellationToken cancellationToken) =>
         db.Database.SqlQuery<bool>($"""
             SELECT EXISTS (SELECT 1 FROM "Instances"
                 WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
                     AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
-                    AND "Status" = {(int)InstanceStatus.Faulted} AND starts_with("State", {EfStore.TimedRootStateFamily})
+                    AND "Status" = {(int)status} AND starts_with("State", {stateFamily})
                     AND "FoundationTerminalAt" IS NOT NULL AND "FoundationTerminalRevision" = "Revision") AS "Value"
             """).SingleAsync(cancellationToken);
 
@@ -213,9 +233,14 @@ internal sealed partial class PostgresRootAdmission
         return rows.Select(row => DecodeDirect(row, reference, db.UsesRootReplyProtocol)).ToArray();
     }
 
-    internal static bool MatchesDirectOccurrence(string reference, string operation, string occurrence)
+    internal static bool MatchesDirectOccurrence(string reference, string operation, string occurrence, bool retentionDelete = false)
     {
-        if (!IsIssuedReferenceShape(reference) || operation is null || !FoundationMetadataLimits.IsOutsideMessageId(operation)) return false;
+        if (!IsIssuedReferenceShape(reference) || operation is null) return false;
+        if (retentionDelete
+            ? !operation.StartsWith(RetentionOperationPrefix, StringComparison.Ordinal) ||
+                !FoundationRootCreator.IsGeneratedReference(operation[RetentionOperationPrefix.Length..])
+            : !FoundationMetadataLimits.IsOutsideMessageId(operation))
+            return false;
         var prefix = $"{reference}/{FoundationRootCreator.OperationDigest(operation)}/";
         if (occurrence.Length != prefix.Length + 32 || !occurrence.StartsWith(prefix, StringComparison.Ordinal)) return false;
         var suffix = occurrence.AsSpan(prefix.Length);
@@ -229,22 +254,44 @@ internal sealed partial class PostgresRootAdmission
         if (held != (row.ReplyTo is not null) || held &&
             (!replies || ReplyTo.Parse(row.ReplyTo!) is not { Node.Length: > 0, Request.Length: > 0, Deadline: > 0 }))
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public reply route.");
-        if (row.JobGeneration != 0 || !IsStoredDirect(row.Start))
+        if (row.JobGeneration != 0)
             throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
-        var header = DurableKeyJson.Read<StoredDirect>(row.Start![(held ? HeldDirectPrefix.Length : DirectPrefix.Length)..]);
-        if (header.Creation != 1 || !MatchesDirectOccurrence(reference, header.Operation, row.Id))
-            throw new StoreException(Failure.Definite, "Public input occurrence differs from its admitted identity.");
+        var header = ReadDirectHeader(row.Start, reference, row.Id);
         var payload = header.EscapedPayload ? DurableKeyJson.Read<string>(row.Payload!) : row.Payload;
         return new Message(header.Operation, new(row.Target), header.EscapedKind ?? row.Kind, payload,
             Due: row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, KeepUntil: row.KeepUntil, ReplyTo: row.ReplyTo, TargetCreation: header.Creation)
             { StorageId = row.Id }.WithInboxScope(row.InboxScope);
     }
 
+    private static StoredDirect ReadDirectHeader(string? wire, string reference, string occurrence)
+    {
+        if (!IsStoredDirect(wire))
+            throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public input envelope.");
+        var prefix = IsHeldDirect(wire) ? HeldDirectPrefix : DirectPrefix;
+        var header = DurableKeyJson.Read<StoredDirect>(wire![prefix.Length..]);
+        if (header is not { Creation: 1 } || !MatchesDirectOccurrence(reference, header.Operation, occurrence))
+            throw new StoreException(Failure.Definite, "Public input occurrence differs from its admitted identity.");
+        return header;
+    }
+
+    internal static (string Id, string Kind, long? Due) InspectDirectHeader(KernelDb db, string? wire, string reference,
+        string occurrence, string kind, long due, bool hasReply)
+    {
+        var held = IsHeldDirect(wire);
+        if (held != hasReply || held && !db.UsesRootReplyProtocol)
+            throw new StoreException(Failure.Definite, "Unsupported PostgreSQL public reply route.");
+        var header = ReadDirectHeader(wire, reference, occurrence);
+        return (header.Operation, header.EscapedKind ?? kind, due != 0 || header.ExplicitZeroDue ? due : null);
+    }
+
     internal async Task<int> SweepDirectReceiptsAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        return await db.Database.ExecuteSqlRawAsync("""
+        await using var pinned = db.UsesRootParkOpening ? await EfStore.BeginPinnedRootOperationAsync(db, cancellationToken) : null;
+        var removed = await db.Database.ExecuteSqlRawAsync("""
             DELETE FROM "FoundationDirectReceipts" WHERE "Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
             """, cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
+        return removed;
     }
 }

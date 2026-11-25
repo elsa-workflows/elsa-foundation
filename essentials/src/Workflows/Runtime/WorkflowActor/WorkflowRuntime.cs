@@ -33,4 +33,15 @@ public sealed class WorkflowRuntime(IIngress ingress, IActorReads reads)
         return ingress.SendAsync(scope, new Target.Ref(selected.Header.Ref), operationId, Kinds.Terminate,
             JsonSerializer.Serialize(command), cancellationToken: cancellationToken);
     }
+
+    public ValueTask<Admission> TerminateThenDeleteAsync(BoundScope scope, string operationId, ActorView selected,
+        CancellationToken cancellationToken = default)
+    {
+        if (selected.Header.Type != WorkflowActor.ActorType || selected.Selection is not { } selection)
+            return new(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.StaleSelection));
+
+        var command = new OperatorCommand(selection, ThenDelete: true, ExpectedTarget: selected.Header.Ref);
+        return ingress.SendAsync(scope, new Target.Ref(selected.Header.Ref), operationId, Kinds.Terminate,
+            JsonSerializer.Serialize(command), cancellationToken: cancellationToken);
+    }
 }

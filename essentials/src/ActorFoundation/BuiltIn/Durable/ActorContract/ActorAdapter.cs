@@ -33,9 +33,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Durable.FoundationSelfIssuer? issueSelf = null,
         Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false,
-        Func<CancellationToken, ValueTask<long>>? rootTimedJobClock = null, bool rootHeldReplies = false) =>
-        (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance, this.rootTimedJobClock, this.rootHeldReplies) =
-            (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobClock, rootHeldReplies);
+        Func<CancellationToken, ValueTask<long>>? rootTimedJobClock = null, bool rootHeldReplies = false,
+        Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null) =>
+        (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance, this.rootTimedJobClock, this.rootHeldReplies,
+            this.retentionWindow) = (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance, rootTimedJobClock, rootHeldReplies, retentionWindow);
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, RootValueReader rootValueReader)
         : this(roots, actor) => this.rootValueReader = rootValueReader;
@@ -46,7 +47,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => roots is null && row?.Model == actor.Type;
     bool Durable.IActorType.AcceptsFoundationOperator(Durable.InstanceRow? row, Durable.Message message) =>
-        roots is null ? SupportsFoundationOperator(row) : row?.Model == actor.Type && IsRootSuspension(message);
+        roots is null ? SupportsFoundationOperator(row) : row?.Model == actor.Type && (IsRootControl(message) || IsRootRecover(message));
     bool Durable.IActorType.SupportsFoundationInlineStart(string type) => roots is null && type == actor.Type;
 
     bool Durable.IActorType.SupportsTrialWithdrawal => roots is null;
@@ -79,7 +80,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
-        if (roots is not null) return actor.Withholds(RootHeader(row));
+        if (roots is not null) return roots.KeepsParkInputs && row.Status == Durable.InstanceStatus.Faulted || actor.Withholds(RootHeader(row));
         if (row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate) return true;
         var checkpoint = store.FoundationTurnHeader(row);
         if (row.ParkRecovery is not null)
@@ -88,7 +89,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        roots is null && row.ParkDiscard?.Kind != Durable.ParkClearKind.Terminate &&
+        roots is not null ? CanKeepRootParkArrival(row, delivery) || delivery.Durable && IsRootRecover(delivery.Message) :
+        row.ParkDiscard?.Kind != Durable.ParkClearKind.Terminate &&
         (row.ParkRecovery is null && store.FoundationTurnHeader(row).Park is not null
             ? !delivery.Message.IsControl
             : SettlesEndedChildNotice(row, delivery.Message) ||
@@ -98,6 +100,12 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         message.Kind == Contract.Kinds.ChildFinished && row is
             { EndedDuringParkRecovery: true, Status: not Durable.InstanceStatus.Running, ParkRecovery: null, ParkDiscarded: false };
 
+    private bool CanKeepRootParkArrival(Durable.InstanceRow row, Durable.Delivery delivery) =>
+        roots?.KeepsParkArrivals == true && row.Status == Durable.InstanceStatus.Faulted && delivery.Durable &&
+        delivery.Message.Target.Id == row.Id && CapturesParkArrival(delivery) && delivery.Message is
+        { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, TargetCreation: 1, EventMatch: null, ActorAuthored: false,
+            Sender: null, Operator: null, StorageId: not null, ReplyTo: null };
+
     private static bool CapturesParkArrival(Durable.Delivery delivery) => !delivery.Message.IsControl && !delivery.IsWorkerJobCompletion;
 
     public bool SingleMessage(Durable.Message message) => message.Kind is Contract.Kinds.ChildFinished or Durable.Kinds.JobDeadline ||
@@ -105,6 +113,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
         SettlesEndedChildNotice(row, delivery.Message) ||
+        roots is not null && delivery.Message.Operator is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null } ||
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
             delivery.IsWorkerJobCompletion && (rootJobHandle is not null || delivery.JobDeadline is not null || IsParked(row)));
 
@@ -117,8 +126,24 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var message = delivery.Message;
         if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition, spec.Input))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
+        // A recover that reaches an ended or suspended root settles with the other operator kinds through the root refusal.
+        if (roots is not null && input.Row is { Status: Durable.InstanceStatus.Running or Durable.InstanceStatus.Faulted, Suspended: false } recoverTarget &&
+            input.Taken is [{ Durable: true } recover] && IsRootRecover(recover.Message))
+            return RecoverRootPark(input, recoverTarget, recover);
+        if (RefuseOnParkedRoot(input) is { } parkedRefusal) return parkedRefusal;
+        if (roots is not null && input.Row is { } qualifiedPark && input.Taken.All(item => CanKeepRootParkArrival(qualifiedPark, item)))
+        {
+            if (input.Taken.Any(item => item.Attempts >= input.MaxAttempts))
+                return Park(qualifiedPark, input.Actor, input.Taken, input.Spec, "Attempt limit reached.");
+            var revision = checked(qualifiedPark.Revision + 1);
+            return new(input.Actor)
+            {
+                Expected = qualifiedPark.Revision, Row = qualifiedPark with { Revision = revision }, Revision = revision, Status = qualifiedPark.Status,
+                Consumed = [.. input.Taken], FoundationKeep = Durable.ParkKeepReason.Arrived
+            };
+        }
         if (roots is not null)
-            return SettleRootTimedJob(input) ?? (RootRefusal(input) is { } reason
+            return SettleRootDeletion(input) ?? SettleRootTimedJob(input) ?? (RootRefusal(input) is { } reason
                 ? Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, reason) : null);
         if (message.Kind == Durable.Kinds.ParkExpiry)
             return ExpirePark(input);
@@ -266,11 +291,14 @@ internal sealed partial class ActorAdapter : Durable.IActorType
 
         var checkpoint = store.FoundationTurnHeader(row);
         if (checkpoint.Park is null && checkpoint.Terminal is { } mark &&
-            retentionWindow?.Invoke(Header(checkpoint)) is { Ticks: >= 0 } window &&
-            ((decimal)input.Services.Now - mark.At) * TimeSpan.TicksPerMillisecond >= window.Ticks)
+            RetentionElapsed(Header(checkpoint), mark.At, input.Services.Now))
             return null;
         return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "NotEligible");
     }
+
+    private bool RetentionElapsed(Contract.ActorHeader header, long endedAt, long now) =>
+        retentionWindow?.Invoke(header) is { Ticks: >= 0 } window &&
+        ((decimal)now - endedAt) * TimeSpan.TicksPerMillisecond >= window.Ticks;
 
     private Durable.TurnOutcome TimeoutJob(Durable.TurnInput input, Durable.Message message)
     {
@@ -348,7 +376,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var outcome = turn.Seal();
         if (outcome.Sent.Count + outcome.Held.Count(outcome.ConvertsHeldJobResult) > Durable.FoundationMetadataLimits.MaxTurnSends)
             throw new InvalidOperationException($"A turn may send at most {Durable.FoundationMetadataLimits.MaxTurnSends:N0} messages.");
-        if (roots is not null) RequireRootOutcome(outcome, input.Row);
+        if (roots is not null) RequireRootOutcome(outcome, input.Row, delivery.Message);
         if (outcome.Row is { } nextRow)
         {
             var nextHeader = header with
@@ -357,14 +385,18 @@ internal sealed partial class ActorAdapter : Durable.IActorType
                 TypeData = outcome.FoundationHeader?.TypeData ?? header.TypeData,
                 Labels = outcome.FoundationHeader?.Labels ?? header.Labels
             };
-            ValidateTerminalEnvelope(nextRow, nextHeader);
+            var growth = ValidateTerminalEnvelope(nextRow, nextHeader);
             if (roots is not null)
             {
                 // Withholds can run before this turn has landed. Carry its own metadata in the owner's row.
                 outcome.Row = nextRow with
                 {
-                    Suspended = IsRootSuspension(delivery.Message) ? delivery.Message.Kind == Durable.Kinds.Suspend : nextRow.Suspended,
-                    FoundationDispatchHeader = new(nextHeader.Tenant, nextHeader.Ref.Id, new(nextHeader.TypeData, nextHeader.Labels))
+                    Suspended = IsRootControl(delivery.Message) && delivery.Message.Kind != Durable.Kinds.Terminate
+                        ? delivery.Message.Kind == Durable.Kinds.Suspend : nextRow.Suspended,
+                    FoundationDispatchHeader = new(nextHeader.Tenant, nextHeader.Ref.Id, new(nextHeader.TypeData, nextHeader.Labels), growth)
+                    {
+                        RefreshTerminal = roots.RequiresCommittedTerminal && nextRow.Status != Durable.InstanceStatus.Running
+                    }
                 };
             }
             if (nextRow.ParkCohort is { } cohort && (nextRow.Status != Durable.InstanceStatus.Running ||
@@ -374,7 +406,10 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             if (nextRow.Status == Durable.InstanceStatus.Running && outcome.FoundationHeader is not null)
                 outcome.FoundationWithholds = actor.Withholds(nextHeader);
         }
-        return thenDelete && input.Row is { } prior ? FinishThenDelete(input, delivery, prior, header, outcome) : outcome;
+        if (thenDelete && input.Row is { } prior) return FinishThenDelete(input, delivery, prior, header, outcome);
+        if (roots is not null && delivery.Message.Kind == Durable.Kinds.Terminate)
+            outcome.ReplyTo(delivery, "terminated");
+        return outcome;
     }
 
     private Durable.TurnOutcome FinishThenDelete(Durable.TurnInput input, Durable.Delivery delivery, Durable.InstanceRow prior,
@@ -398,13 +433,14 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     {
         outcome.ReplyTo(delivery, "deleted");
         outcome.Row = Durable.CreationProtocol.Retire(outcome.Row! with { Revision = prior.Revision });
-        outcome.Journal = Durable.Json.Write(new { Outcome = "deleted", Operation = delivery.Message.Id });
+        outcome.Journal = delivery.Message.Operator?.RootThenDelete == true
+            ? """["delete"]""" : Durable.Json.Write(new { Outcome = "deleted", Operation = delivery.Message.Id });
         outcome.FoundationHeader = null;
         outcome.Delete = outcome.Unsubscribe = true;
         return outcome;
     }
 
-    private void ValidateTerminalEnvelope(Durable.InstanceRow row, Contract.ActorHeader header)
+    private long ValidateTerminalEnvelope(Durable.InstanceRow row, Contract.ActorHeader header)
     {
         var growth = row.Status == Durable.InstanceStatus.Running ? actor.TerminalGrowth(header, row.State) : 0;
         // This is the built-in in-memory encoding. Keep enough space for the terminal registry even when the live row is smaller.
@@ -419,6 +455,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             + Bytes(row.State) + Bytes(row.CustomHandles) + Bytes(row.CommitTimes) + Bytes(row.Model) + Bytes(row.Definition);
         if (growth < 0 || growth > TerminalEnvelopeLimit - bytes)
             throw new InvalidOperationException("The actor checkpoint and its terminal growth exceed the record envelope.");
+
+        return growth;
 
         static long Bytes(string? value) => value is null ? 0 : Encoding.UTF8.GetByteCount(value);
     }
@@ -474,7 +512,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         result.Status = next.Status;
         result.Revision = next.Revision;
         result.Unsubscribe = true;
-        if (running || roots is null && row is not null && store.FoundationTurnHeader(row).Park is not null)
+        if (running || roots?.KeepsParkArrivals == true && row?.Status == Durable.InstanceStatus.Faulted ||
+            roots is null && row is not null && store.FoundationTurnHeader(row).Park is not null)
             result.FoundationKeep = Durable.ParkKeepReason.Consumed;
         result.Journal = pending is List<object> entries
             ? Durable.Json.Write((object[])[.. entries, "parked"])

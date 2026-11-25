@@ -4,16 +4,32 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
+    private sealed record LockedRoot(string Header, long ContentBytes, int HeaderBytes);
+
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
-        string State, string Header, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
-        bool? OperatorSuspension, RootJobState? JobState, RootJobCompletion? JobCompletion, bool TimedJob,
+        string State, string Header, byte[]? Wire, long Growth, int StateVersion, Message[] Inputs, FoundationSelfIssuer? Issue, string[]? Recalls,
+        bool? OperatorSuspension, bool OperatorTermination, RootJobState? JobState, RootJobCompletion? JobCompletion, bool TimedJob,
         IReadOnlyList<FoundationValue>? Values) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
+            var family = RootStatePrefix(db);
+            var jobs = JobState is null ? Current.Jobs : JobState.Jobs;
+            var terminalHeader = db.UsesRootTermination && Status == InstanceStatus.Running
+                ? RootTerminalHeaderBytes(Current.Model, Current.Definition) : 0;
+            var reserve = Math.Max(0, terminalHeader - System.Text.Encoding.UTF8.GetByteCount(Header));
+            var projectedBytes = db.UsesRootStableBody ? StableContentBytes(family, State, Header, Wire, jobs, reserve, Status == InstanceStatus.Running ? Growth : 0)
+                : await MeasureRootContentAsync(db, family.Length + reserve, State, Header, jobs, cancellationToken,
+                    comparePriorSize: true);
+            var overBudget = projectedBytes > RootContentBytes;
+
             var home = new InstanceRef(Current.Actor.Id).Partition;
-            var headers = await db.Database.SqlQuery<string>($"""
-                SELECT i."FoundationHeader" AS "Value" FROM "Instances" i JOIN "FoundationRootBirths" b
+            var locked = await db.Database.SqlQuery<LockedRoot>($"""
+                SELECT i."FoundationHeader" AS "Header", CASE WHEN {overBudget}
+                    THEN octet_length(i."State")::bigint + octet_length(i."FoundationHeader") + coalesce(octet_length(i."Jobs"), 0)
+                    ELSE 0 END AS "ContentBytes",
+                    CASE WHEN {overBudget} THEN octet_length(i."FoundationHeader") ELSE 0 END AS "HeaderBytes"
+                FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Reference" = i."FoundationReference" AND b."Tenant" = i."FoundationTenant"
                     AND b."Actor" = i."Id" AND b."Partition" = i."Partition"
                 WHERE b."Reference" = {Reference} AND b."Tenant" = {Tenant} AND b."Creation" = {Current.Actor.Creation}
@@ -23,11 +39,20 @@ public sealed partial class EfStore
                     AND i."Jobs" IS NOT DISTINCT FROM {Current.Jobs} AND i."NextJobGeneration" IS NOT DISTINCT FROM {Current.NextJobGeneration}
                 FOR UPDATE OF i
                 """).ToListAsync(cancellationToken);
-            if (headers.Count != 1) return false;
-            var old = DurableKeyJson.Read<RootHeader>(headers[0]);
+            if (locked is not [var prior]) return false;
+            var old = DurableKeyJson.Read<RootHeader>(prior.Header);
             if (old.Model != Current.Model || old.Definition != Current.Definition) return false;
 
-            if (OperatorSuspension is not null && !db.UsesRootOperatorProtocol) return false;
+            // Compare an old over-budget row under the exact locked revision. The
+            // physical write and its projection may each stay put or shrink.
+            var contentBytes = projectedBytes - reserve;
+            var priorProjection = prior.ContentBytes + Math.Max(0, terminalHeader - prior.HeaderBytes);
+            if (overBudget && (db.UsesRootStableBody || contentBytes > Math.Max(RootContentBytes, prior.ContentBytes) ||
+                projectedBytes > Math.Max(RootContentBytes, priorProjection)))
+                throw new StoreException(Failure.Definite, RootContentFailure);
+
+            if (OperatorSuspension is not null && !db.UsesRootOperatorProtocol || OperatorTermination && !db.UsesRootTermination)
+                return false;
             if (TimedJob)
             {
                 if (!await ConsumeRootTimedInputsAsync(db, Current.Actor, Inputs, JobCompletion, cancellationToken)) return false;
@@ -48,14 +73,13 @@ public sealed partial class EfStore
                         AND "Kind" = {RootSelfWire} AND "EventMatch" IS NULL AND "KeepUntil" IS NULL AND NOT "Done"
                     """, cancellationToken);
             }
-            var ended = Status is InstanceStatus.Finished or InstanceStatus.Faulted;
-            var jobs = JobState is null ? Current.Jobs : JobState.Jobs;
+            var ended = Status is InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled;
             var nextJobGeneration = JobState is null ? Current.NextJobGeneration : JobState.NextGeneration;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
             // UnsubscribeAll here only when the exact root has no physical subscriptions.
-            var encoded = RootStateFamily(db) + State;
-            var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Instances" SET "State" = {encoded}, "FoundationHeader" = {Header}, "StateVersion" = {StateVersion},
+            var encoded = family + State;
+            var updated = await db.Database.ExecuteSqlInterpolatedAsync(AddRootWire(db, $"""
+                UPDATE "Instances" SET "State" = {encoded}, "FoundationHeader" = {Header}, "StateVersion" = {StateVersion}, /*root-wire*/
                     "Status" = {(int)Status}, "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision},
                     "Suspended" = {OperatorSuspension ?? Current.Suspended},
                     "Jobs" = {jobs}, "NextJobGeneration" = {nextJobGeneration},
@@ -65,7 +89,7 @@ public sealed partial class EfStore
                     AND "FoundationReference" = {Reference} AND "Revision" = {Current.Revision}
                     AND (NOT {ended} OR NOT EXISTS (SELECT 1 FROM "Subscriptions"
                         WHERE "Instance" = {Current.Actor.Id}))
-                """, cancellationToken);
+                """, Wire), cancellationToken);
             return updated == 1 && (Values is not { Count: > 0 } values ||
                 await WriteRootValuesAsync(db, Current.Actor, values, cancellationToken));
         }
@@ -78,15 +102,18 @@ public sealed partial class EfStore
         var home = new InstanceRef(actor.Id).Partition;
         var source = issue is null ? "\"Messages\"" : "\"FoundationRootMessages\"";
         var operatorOnly = suspended ? """AND "Id" LIKE 'operator/%'""" : "";
+        // The settled prefix follows the poll's order, which puts a pending released cohort first.
+        var cohort = db.UsesRootParkRecovery
+            ? $"""AND EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" {RootReleasedCohortFilter})""" : "";
         var rows = await db.Messages.FromSqlRaw($$"""
-            SELECT * FROM {{source}} WHERE "Target" = {0} AND "Partition" = {1}
+            SELECT * FROM {{source}} m WHERE "Target" = {0} AND "Partition" = {1}
                 AND "InboxScope" IN ({2}, {3}) AND "EventMatch" IS NULL
-                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}}
-            ORDER BY "Seq" LIMIT {4} FOR UPDATE
+                AND NOT "Done" AND "Due" <= {{RootClockMilliseconds}} {{operatorOnly}} {{cohort}}
+            ORDER BY "Seq" LIMIT {4} FOR UPDATE OF m
             """, actor.Id, home, InboxKey.FoundationOccurrenceScope, RootSelfScope, expected.Count).AsNoTracking().ToListAsync(cancellationToken);
         if (!db.UsesRootOperatorProtocol && rows.Any(row => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))))
             return false;
-        var messages = rows.Select(row => DecodeRootInput(row, reference, issue, replies: db.UsesRootReplyProtocol)).ToArray();
+        var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
 
@@ -105,14 +132,14 @@ public sealed partial class EfStore
         return settled == ids.Length;
     }
 
-    private static Message DecodeRootInput(MessageEntity row, string reference, FoundationSelfIssuer? issue, bool jobs = false, bool timed = false, bool replies = false) =>
+    private static Message DecodeRootInput(KernelDb db, MessageEntity row, string reference, FoundationSelfIssuer? issue, bool jobs = false, bool timed = false) =>
         row.InboxScope switch
         {
             RootJobScope => jobs ? DecodeRootJob(row) : throw RootShape(),
             RootTimedJobScope => timed ? DecodeRootTimedRow(row) : throw RootShape(),
             RootSelfScope => DecodeRootSelf(row, issue),
             _ => PostgresRootAdmission.IsOperatorOccurrence(new(row.Id, row.InboxScope))
-                ? PostgresRootAdmission.DecodeOperator(row, reference) : PostgresRootAdmission.DecodeDirect(row, reference, replies)
+                ? PostgresRootAdmission.DecodeOperator(db, row, reference) : PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol)
         };
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
@@ -123,12 +150,13 @@ public sealed partial class EfStore
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
         string typeData, IReadOnlyDictionary<string, string> labels, string? journal, string[]? recalls = null, bool? operatorSuspension = null,
-        RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, bool timedJob = false, IReadOnlyList<FoundationValue>? values = null)
+        RootJobState? jobState = null, RootJobCompletion? jobCompletion = null, bool timedJob = false,
+        IReadOnlyList<FoundationValue>? values = null, bool operatorTermination = false, long terminalGrowth = 0)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
             new InstanceRef(current.Actor.Id).Partition != fence.Partition ||
-            status is not (InstanceStatus.Running or InstanceStatus.Finished) && !(timedJob && status == InstanceStatus.Faulted))
+            status is not (InstanceStatus.Running or InstanceStatus.Finished) && !(timedJob && status == InstanceStatus.Faulted) && !(operatorTermination && status == InstanceStatus.Cancelled))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
         if (status != InstanceStatus.Running && journal is null)
             throw new ArgumentException("A terminal public root requires its journal entry.", nameof(journal));
@@ -136,13 +164,16 @@ public sealed partial class EfStore
         if (accepted.Length == 0 || accepted.Any(message => !QualifiedInput(message) ||
             message.InboxKey.Match is not null || message.Target.Id != current.Actor.Id || message.TargetCreation != current.Actor.Creation) ||
             accepted.Select(message => message.InboxKey).Distinct().Count() != accepted.Length ||
-            operatorSuspension is null && accepted.Any(message => message.Operator is not null))
+            operatorSuspension is null && !operatorTermination && accepted.Any(message => message.Operator is not null) ||
+            operatorTermination && accepted is not [{ Kind: Kinds.Terminate, Operator: not null }])
             throw new ArgumentException("The turn requires distinct qualified inputs for its exact actor creation.", nameof(inputs));
-        var (stored, header) = EncodeRootContent(current.Model, current.Definition, state, stateVersion, typeData, labels, journal);
+        var stable = RootStableBody;
+        var (stored, header) = EncodeRootContent(current.Model, current.Definition, stable && state is not null ? StableBodyMarker : state, stateVersion, typeData, labels, journal);
+        var wire = stable && state is not null ? RootSelfContent.Encode(state) : null;
         var image = new InstanceRow(current.Actor.Id, "", "", status, "null", checked(current.Revision + 1), null)
             .WithFoundationState(stored);
         var root = new RootTurnCheckpoint(tenant, reference, current, status, StoredState.Encode(image),
-            header, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, jobState, jobCompletion, timedJob, values);
+            header, wire, terminalGrowth, stateVersion, accepted, RootSelfIssuer, recalls, operatorSuspension, operatorTermination, jobState, jobCompletion, timedJob, values);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
         return new(turn, root);
 

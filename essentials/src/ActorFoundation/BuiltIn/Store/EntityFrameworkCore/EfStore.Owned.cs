@@ -40,8 +40,11 @@ public sealed partial class EfStore
     {
         var dialect = RequireDialect();
         await using var db = create();
+        if (root is not null) await CheckRootBeforeWriteAsync(root, db, cancellationToken);
         db.Database.AutoSavepointsEnabled = false;
         await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        if (db.UsesRootParkOpening || root is not null && db.UsesRootRetirement)
+            await PinRootNamespaceForCommitAsync(db, cancellationToken);
         var commands = new List<OwnedCommand>();
         var c = new OwnedCommand(dialect) { HasFence = true };
         var window = batch.Window;
@@ -138,8 +141,12 @@ public sealed partial class EfStore
             }
             if (turn.Journal is not null)
             {
-                Room(2);
-                rows.Row(RowGroups.Kind.JournalInsert, RowGroups.Journal, [Lit(home), Lit(++next[home]), c.P(journal.FindProperty("Instance")!, turn.Instance), Lit(turn.Delete ? -1 : root?.RevisionFor(turn.Instance) ?? turn.Row?.Revision ?? 0), c.P(journal.FindProperty("Entries")!, turn.Journal)]);
+                var position = ++next[home];
+                if (root?.WritesJournal(turn.Instance) != true)
+                {
+                    Room(2);
+                    rows.Row(RowGroups.Kind.JournalInsert, RowGroups.Journal, [Lit(home), Lit(position), c.P(journal.FindProperty("Instance")!, turn.Instance), Lit(turn.Delete ? -1 : root?.RevisionFor(turn.Instance) ?? turn.Row?.Revision ?? 0), c.P(journal.FindProperty("Entries")!, turn.Journal)]);
+                }
             }
             // Merge with round 3: the set-based deletes of a terminate and a delete, written last (E1, E9: nothing before the fence held).
             if (turn.Unsubscribe) { Room(1); rows.Free(RowGroups.Kind.UnsubscribeAll, $"""DELETE FROM "Subscriptions" WHERE "Instance" = {c.P(subscriptions.FindProperty("Instance")!, turn.Instance)}"""); }
@@ -179,7 +186,7 @@ public sealed partial class EfStore
         if (root is not null && !await root.BindCheckpointAsync(db, cancellationToken)) return new Committed(false, 0, []);
         if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
-        return new Committed(true, now, seqs);
+        return new Committed(true, now, seqs) { RetiredOperatorReplies = db.RetiredOperatorReplies ?? [] };
     }
 
     /// <summary>
@@ -373,9 +380,11 @@ public sealed partial class EfStore
         }
         var mine = string.Join(" OR ", owned.Select(f => FormattableString.Invariant($"""({Pid} = {f.Partition} AND "Epoch" = {f.Epoch})""")));
         await using var db = create();
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
         await db.Database.ExecuteSqlRawAsync(postgres && Engine is null
             ? $"""{Locked(ids)}UPDATE "Partitions" SET "Owner" = NULL FROM l WHERE {Pid} = l."Id" AND ({mine})"""
             : Q($"""UPDATE "Partitions" SET "Owner" = NULL WHERE "Id" IN ({ids}) AND ({mine})"""), cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
     }
 
     /// <summary>One query over an owned set: the one-partition poll with its predicate over the set, each row compared with its own partition's epoch.</summary>
@@ -390,11 +399,12 @@ public sealed partial class EfStore
         }
         var single = Q("""m."Partition" = {0} AND m."Seen" < {1}""");
         await using var db = create();
-        var poll = PollSql(db.UsesRootOperatorProtocol);
+        await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
+        var poll = PollSql(db);
         if (!poll.Contains(single, StringComparison.Ordinal)) throw new InvalidOperationException("The poll has no partition predicate where the set poll replaces it.");
         var set = Q($"""m."Partition" IN ({List(owned.Select(f => f.Partition).Order())}) AND m."Seen" < {EpochOf(owned, "m.\"Partition\"")}""");
         var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, poll.Replace(single, set, StringComparison.Ordinal), 0, 0, (long)horizon.TotalMilliseconds, limit);
-        if (_ordinaryRoots is { } root) return ToGeneratedPoll(await db.Database.SqlQueryRaw<GeneratedPollRow>(sql).ToListAsync(cancellationToken), root, db.UsesRootOperatorProtocol, db.UsesRootReplyProtocol);
+        if (_ordinaryRoots is { } root) return ToGeneratedPoll(await db.Database.SqlQueryRaw<GeneratedPollRow>(sql).ToListAsync(cancellationToken), root, db);
         return ToPolled(await db.Database.SqlQueryRaw<PollRow>(sql).ToListAsync(cancellationToken));
     }
 }

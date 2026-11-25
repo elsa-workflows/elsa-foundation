@@ -13,6 +13,7 @@ public sealed record Reply(string Request, string Key, string? Channel, object? 
 }
 
 internal readonly record struct LiveReplyRoute(string Address, string? Tenant);
+internal readonly record struct RetiredOperatorReply(string Occurrence, LiveReplyRoute Route);
 
 /// <summary>
 /// The runtime's transport between nodes for live output. Not durable: a reply may be dropped, delayed or delivered

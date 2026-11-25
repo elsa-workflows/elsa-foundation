@@ -42,13 +42,72 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         return await OpenJournalCursorAsync(db, cancellationToken);
     }
 
-    internal static async Task<FoundationReadCursor> OpenJournalCursorAsync(KernelDb db, CancellationToken cancellationToken)
+    internal static Task<FoundationReadCursor> OpenJournalCursorAsync(KernelDb db, CancellationToken cancellationToken) =>
+        OpenCursorAsync(db, RootReadIssuerSource, ReadIssuerMissing, cancellationToken);
+
+    // Ingress opens on the strict admission source. Only reads may open while the source is renamed.
+    internal static Task RequireIngressIssuerAsync(KernelDb db, CancellationToken cancellationToken) =>
+        OpenCursorAsync(db, RootIssuerSource, RootIssuerMissing, cancellationToken);
+
+    private static async Task<FoundationReadCursor> OpenCursorAsync(KernelDb db, string source, string missing,
+        CancellationToken cancellationToken)
     {
         await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
-        var issuerKey = await db.Database.SqlQueryRaw<byte[]>("""SELECT "Key" AS "Value" FROM "FoundationRootIssuer" """)
-            .SingleAsync(cancellationToken);
-        return new(HMACSHA256.HashData(issuerKey, "elsa-preview/journal-cursor/1"u8));
+        try
+        {
+            return await ReadCursorAsync(db, source, missing, cancellationToken);
+        }
+        catch (PostgresException error) when (IsUnavailableSelectedSchema(error))
+        {
+            throw new StoreFormatException("The root read issuer schema is unreadable.", error);
+        }
     }
+
+    private const string RootIssuerSource = """
+        FROM "FoundationRootIssuer" issuer
+        JOIN pg_catalog.pg_class i ON i.oid = issuer.tableoid AND i.relkind = 'r'
+        JOIN pg_catalog.pg_class source ON source.oid = pg_catalog.to_regclass('"Instances"')
+            AND source.relnamespace = i.relnamespace AND source.relkind = 'r'
+        JOIN pg_catalog.pg_class marker ON marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
+            AND marker.relnamespace = i.relnamespace AND marker.relkind = 'r'
+        """;
+
+    // Reads pin the issuer to the schema of the marker and the actor list, which every generated-root install
+    // creates. Journal and inbox tails do not read the list, so a store installed before it existed is refused here
+    // until the installer runs again. A checkpoint relation that resolves must share that schema, but a
+    // renamed source is allowed: projections such as workflow history keep serving without it. A schema earlier
+    // on the search path that holds all three relations is treated as the store; that is out of scope here.
+    private const string RootReadIssuerSource = """
+        FROM "FoundationRootIssuer" issuer
+        JOIN pg_catalog.pg_class i ON i.oid = issuer.tableoid AND i.relkind = 'r'
+        JOIN pg_catalog.pg_class marker ON marker.oid = pg_catalog.to_regclass('"KernelStoreVersions"')
+            AND marker.relnamespace = i.relnamespace AND marker.relkind = 'r'
+        JOIN pg_catalog.pg_class list ON list.oid = pg_catalog.to_regclass('"FoundationActorList"')
+            AND list.relnamespace = i.relnamespace AND list.relkind = 'r'
+        WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_class source
+            WHERE source.oid = pg_catalog.to_regclass('"Instances"')
+                AND (source.relnamespace <> i.relnamespace OR source.relkind <> 'r'))
+        """;
+
+    // Operator selections write, so they keep the strict admission source.
+    private static Task<FoundationReadCursor> ReadSelectionCursorAsync(KernelDb db, CancellationToken cancellationToken) =>
+        ReadCursorAsync(db, RootIssuerSource, RootIssuerMissing, cancellationToken);
+
+    private static async Task<FoundationReadCursor> ReadCursorAsync(KernelDb db, string source, string missing,
+        CancellationToken cancellationToken) =>
+        new(HMACSHA256.HashData(await ReadIssuerKeyAsync(db, source, missing, cancellationToken), "elsa-preview/journal-cursor/1"u8));
+
+    private const string RootIssuerMissing = "The root issuer is missing from the checkpoint's store schema.";
+    private const string ReadIssuerMissing = "The root read issuer must share one schema with the store marker and actor list, " +
+        "and an \"Instances\" relation that resolves must be a table in it.";
+
+    internal static Task<byte[]> ReadRootIssuerKeyAsync(KernelDb db, CancellationToken cancellationToken) =>
+        ReadIssuerKeyAsync(db, RootIssuerSource, RootIssuerMissing, cancellationToken);
+
+    private static async Task<byte[]> ReadIssuerKeyAsync(KernelDb db, string source, string missing, CancellationToken cancellationToken) =>
+        await db.Database.SqlQueryRaw<byte[]>("""SELECT issuer."Key" AS "Value" """ + source)
+            .SingleOrDefaultAsync(cancellationToken)
+        ?? throw new StoreFormatException(missing);
 
     internal async Task InstallAsync(CancellationToken cancellationToken = default)
     {
@@ -60,7 +119,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     {
         if (!db.Database.IsNpgsql()) throw new InvalidOperationException("Root admission requires PostgreSQL.");
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        await EfStore.LockCompatibleStoreFormatAsync(db, cancellationToken, exclusiveFormat);
+        await EfStore.LockCompatibleStoreFormatAsync(db, cancellationToken, exclusiveFormat || db.UsesRootTerminalSelection);
         await EfStore.RequirePreviewInstallSchemaAsync(db, cancellationToken);
         // A second Embedded process can open the same preview database while the first is installing.
         await db.Database.ExecuteSqlRawAsync("""
@@ -78,6 +137,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 "Reference" text COLLATE "C" NOT NULL REFERENCES "FoundationRootBirths" ("Reference") DEFERRABLE INITIALLY DEFERRED,
                 "Until" bigint NOT NULL, PRIMARY KEY ("Tenant", "Operation"));
             CREATE INDEX IF NOT EXISTS "IX_FoundationRootReceipts_Until" ON "FoundationRootReceipts" ("Until");
+            CREATE INDEX IF NOT EXISTS "IX_FoundationRootInbox_Pending"
+                ON "Messages" ("Partition", "Target" COLLATE "C", "Seq", "Id" COLLATE "C")
+                WHERE "InboxScope" = -4 AND "EventMatch" IS NULL AND NOT "Done";
             """, cancellationToken);
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
@@ -85,26 +147,50 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             ON CONFLICT DO NOTHING
             """, cancellationToken);
         await EfStore.InstallFirstRootCheckpointsAsync(db, cancellationToken);
+        if (db.UsesRootStableBody)
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationStateWire" bytea
+                """, cancellationToken);
+        if (db.UsesRootParkOpening)
+            await db.Database.ExecuteSqlRawAsync("""
+                ALTER TABLE "Instances" ADD COLUMN IF NOT EXISTS "FoundationParkAt" bigint;
+                ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "FoundationKeptBy" smallint /*kept-by-check*/
+                """.Replace("/*kept-by-check*/", EfStore.KeptByCheck, StringComparison.Ordinal)
+                .Replace("/*kept-reasons*/", EfStore.KeptReasons(db), StringComparison.Ordinal), cancellationToken);
+        if (db.UsesRootParkArrivals)
+            await EfStore.InstallRootParkArrivalReasonAsync(db, cancellationToken);
+        if (db.UsesRootParkRecovery)
+            await EfStore.InstallRootParkRecoveryAsync(db, cancellationToken);
+        else if (db.UsesRootParkedOperators)
+            await EfStore.InstallRootParkedOutcomeAsync(db, cancellationToken);
         if (db.UsesRootValueProtocol)
             await EfStore.InstallRootValuesAsync(db, cancellationToken);
+        // The actor list and its one projector follow the profile's capabilities, terminal marks included.
         await EfStore.InstallRootActorListAsync(db, cancellationToken);
+        if (db.UsesRootParkInspection)
+            await EfStore.InstallRootParkReadModelAsync(db, cancellationToken);
         if (db.UsesRootSelfProtocol)
             await EfStore.InstallRootSelfAsync(db, cancellationToken);
         await InstallDirectReceiptsAsync(db, cancellationToken);
         if (db.UsesRootOperatorProtocol)
             await InstallOperatorReceiptsAsync(db, cancellationToken);
+        await EfStore.RequireRootDefinitionsAsync(db, cancellationToken);
         await ReadInstalledPartitionCountAsync(db, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
 
     internal static async Task<int> ReadInstalledPartitionCountAsync(KernelDb db, CancellationToken cancellationToken)
     {
-        var count = await db.Database.SqlQueryRaw<int>("""
-            SELECT i."Partitions" AS "Value" FROM "FoundationRootIssuer" i CROSS JOIN "Partitions" p
-            GROUP BY i."Partitions"
-            HAVING i."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = i."Partitions" - 1
-            """).SingleOrDefaultAsync(cancellationToken);
-        if (count == 0) throw new InvalidOperationException("The installed root placement no longer matches the virtual partitions.");
+        var sql = $"""
+            SELECT issuer."Partitions" AS "Value" {RootIssuerSource}
+            JOIN pg_catalog.pg_class placement ON placement.oid = pg_catalog.to_regclass('"Partitions"')
+                AND placement.relnamespace = i.relnamespace AND placement.relkind = 'r'
+            CROSS JOIN "Partitions" p
+            GROUP BY issuer."Partitions"
+            HAVING issuer."Partitions" = count(p."Id") AND min(p."Id") = 0 AND max(p."Id") = issuer."Partitions" - 1
+            """;
+        var count = await db.Database.SqlQueryRaw<int>(sql).SingleOrDefaultAsync(cancellationToken);
+        if (count == 0) throw new StoreFormatException("The root issuer and installed virtual partitions must match the checkpoint schema.");
         return count;
     }
 
@@ -123,6 +209,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var name = tenant + "_" + Guid.NewGuid().ToString("N");
         await using var db = create();
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
+        if (db.RequiresPinnedRootNamespace)
+            await PinRootNamespaceAsync(db, cancellationToken);
         var issuer = await ReadIssuerAsync(db, cancellationToken);
         var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);
         var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
@@ -191,9 +279,9 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         if (!lockOrdinaryWrites)
             return await db.Database.SqlQueryRaw<Issuer>("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """).SingleAsync(token);
 
-        var issuer = await ReadGuardedAdmissionAsync(db, new("""SELECT "Key", "Partitions" FROM "FoundationRootIssuer" """),
+        var issuer = await ReadGuardedAdmissionAsync(db, new("""SELECT issuer."Key", issuer."Partitions" """ + RootIssuerSource),
             static reader => new Issuer(reader.GetFieldValue<byte[]>(0), reader.GetInt32(1)), token);
-        return issuer ?? throw new InvalidOperationException("The generated-root issuer is missing.");
+        return issuer ?? throw new StoreFormatException("The root issuer is missing from the checkpoint's store schema.");
     }
 
     private static async Task<TRow?> ReadGuardedAdmissionAsync<TRow>(KernelDb db, NpgsqlBatchCommand lookup,
@@ -247,9 +335,12 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal async Task<int> SweepReceiptsAsync(CancellationToken cancellationToken = default)
     {
         await using var db = create();
-        return await db.Database.ExecuteSqlRawAsync("""
+        await using var pinned = db.UsesRootParkOpening ? await EfStore.BeginPinnedRootOperationAsync(db, cancellationToken) : null;
+        var removed = await db.Database.ExecuteSqlRawAsync("""
             DELETE FROM "FoundationRootReceipts" WHERE "Until" < floor(extract(epoch from clock_timestamp()) * 1000)::bigint
             """, cancellationToken);
+        if (pinned is not null) await pinned.CommitAsync(cancellationToken);
+        return removed;
     }
 
     internal static bool IsStoredCreator(string? start) => start?.StartsWith(CreatorPrefix, StringComparison.Ordinal) == true;
@@ -257,6 +348,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     internal async Task<Message?> ReadPendingCreatorAsync(string tenant, string reference, CancellationToken cancellationToken = default)
     {
         await using var db = create();
+        await using var pinned = await EfStore.BeginPinnedRootOperationAsync(db, cancellationToken);
         var row = await db.Messages.FromSqlInterpolated($"""
             SELECT m.* FROM "Messages" m JOIN "FoundationRootBirths" b
             ON b."Creator" = m."Id" AND m."InboxScope" = 0 AND b."Actor" = m."Target"

@@ -257,10 +257,10 @@ From `prototypes/kernel-model`, set `KERNEL_PREVIEW_POSTGRES` to a fresh dedicat
 ```sh
 dotnet restore ../../essentials/tests/ActorFoundation/Native/Run --locked-mode
 dotnet build -c Release ../../essentials/tests/ActorFoundation/Native/Run --no-restore
-dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-timed-job-worker checked
+dotnet ../../essentials/tests/ActorFoundation/Native/Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-timed-job-worker owned checked
 ```
 
-Use `in-batch` on another fresh database for the other owned SQL fence mode. The Worker commits the issued
+Use `owned` or `ef` and `checked` or `in-batch`, with a fresh database per run. The Worker commits the issued
 job ticket, its absolute deadline, the waiting checkpoint and journal in the same PostgreSQL transaction.
 A callback publishes before the deadline. The worker resumes only once the database clock reaches the deadline,
 applies the job result and recalls the timer. The same actor starts another job. A new owner retries its
@@ -268,9 +268,40 @@ pending ticket before the deadline. After expiration, a third owner counts one a
 old fence is refused and delivers the deadline without entering the callback. The physical inbox is empty and
 the journal shows one outcome per job even after the displaced callbacks return.
 
+The same fixture takes a third pending ticket before its deadline. The current owner
+commits the job's timeout while its cancelled callback is still unwinding. Another
+actor's admitted start stays pending without entering its model or writing a
+checkpoint. It runs once after the current callback exits, while the displaced
+callback stays active. After both Workers run again, the timed-out actor's
+checkpoint, empty inbox and ordered journal are unchanged.
+Append `without-trial-withdrawal` on a fresh database to run a failing control. The
+fixture disables trial withdrawal support at the actor-type boundary and detects
+the unrelated actor running before callback exit.
+
 This covers the legacy relational actor protocol. In that path a Worker completion consumes the original issued
-ticket and commits the actor's result directly in its checkpoint and journal. The public generated-root path
-still needs a qualified writer for tracked job generations and private ticket, deadline and result envelopes.
+ticket and commits the actor's result directly in its checkpoint and journal. Generated-root job envelopes and
+public qualified-command ordering have separate cases.
+
+### Run the same schedule on the relational providers
+
+The store conformance runner uses the same Worker fixture. From `prototypes/kernel-model`:
+
+```sh
+project=../../essentials/tests/ActorFoundation/Store/EntityFramework
+dotnet restore "$project" --locked-mode
+dotnet build -c Release "$project" --no-restore
+runner=$project/bin/Release/net10.0/Kernel.Ef.Conformance.dll
+dotnet "$runner" sqlite timed-job-worker --owned-commit --checked-fence
+dotnet "$runner" sqlserver "$connection" timed-job-worker --owned-commit --checked-fence
+dotnet "$runner" mysql "$connection" timed-job-worker --owned-commit --checked-fence
+dotnet "$runner" postgres "$connection" timed-job-worker --owned-commit --checked-fence
+```
+
+Each invocation creates and removes a dedicated database. Set `connection` for the named server.
+Use `--ef-commit` for the EF writer and `--fence-in-batch` for the other fence. Append
+`--without-trial-withdrawal` for the failing control. SQL Server and MySQL checks match the
+issued binary keys and their inbox scopes. PostgreSQL also compares the transaction IDs of
+the ticket, timer, checkpoint and waiting journal row.
 
 ## PostgreSQL Core Preview
 
@@ -282,21 +313,72 @@ Run from the repository root with Docker available:
 bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release
 ```
 
-The receipt builds the ordinary Workbench executable, provisions a disposable PostgreSQL 17 database
-and starts Workbench on ephemeral loopback ports. The disabled run supplies the preview connection
-string with the opt-in absent and checks that no preview connection opens. The enabled runs first
-persist an approval wait and stop, then start a different process on the same database. They check
-the unchanged state and journal after the duplicate, and the one new journal revision after a
-different approval. The client prints PostgreSQL wire trips for each enabled phase, including host
-lifetime and its public ingress and journal reads. Schema setup and direct observations bypass the meter.
-Use `Debug` as the argument to qualify a Debug build.
+The receipt builds the normal Workbench executable and uses disposable PostgreSQL 17 databases and
+ephemeral loopback ports. It exercises the ordinary, untimed job, timed completion, deadline and
+both active-job takeover outcomes. Disabled Workbench opens no preview connection, and each enabled lane refuses to start
+an owner with a different format. The first process saves an approval wait and stops. A different
+process takes the same actor at a higher epoch. Replaying the first approval leaves checkpoint bytes
+and the journal unchanged. A new approval advances the workflow. In the timed profile the approval
+atomically issues the ticket and deadline, the owner records the chosen outcome, and a separate
+Native turn applies it. The completion workflow also starts a successor job in the first result's commit.
+The timeout workflow catches its job fault and finishes. The timed profile
+also runs an ordinary job-free workflow on the same node.
 
-For an existing dedicated PostgreSQL preview database with the ordinary preview schema installed,
-set `Elsa__CorePreview__Enabled=true` and supply `ConnectionStrings__KernelCorePreview` through trusted
-host configuration. Run a single Workbench process against that database for this preview. Workbench
-starts the Native approval actor and validates the installed store format. The app does not install the
-schema during startup. The approval client uses the public Actor Foundation contracts. This preview
-leaves existing workflow and Studio endpoints on their current runtime.
+The receipt checks the job insertion, result, journal and physical ticket removal. The client prints
+PostgreSQL wire trips for each enabled phase, including host lifetime and public client operations.
+Schema setup and direct observations bypass the meter. Set `PG_VERSION=16` to repeat with
+PostgreSQL 16, or pass `Debug` to qualify a Debug build.
+
+For an existing dedicated PostgreSQL preview database, set `Elsa__CorePreview__Enabled=true` and
+supply `ConnectionStrings__KernelCorePreview` in trusted host configuration. Choose the job setting
+that matches the format used to provision the database.
+
+| Workbench setting | Factory for the dedicated database | Workflow definitions |
+|---|---|---|
+| Ordinary | `new KernelDb(options)` | `direct-approval` |
+| `Elsa__CorePreview__NativeJobs=true` | `PostgresPreviewHosting.CreateNativeJobContext(options)` | `direct-approval`, `direct-approval-with-job` |
+| `Elsa__CorePreview__TimedNativeJobs=true` | `PostgresPreviewHosting.CreateTimedNativeJobContext(options)` | `direct-approval`, `direct-approval-with-timed-job`, `direct-approval-with-timeout`, `direct-approval-with-timed-takeover` |
+
+Use the same context for `EfStore.CreateAsync`, `InstallPreviewRootSchemaAsync`,
+`OpenPreviewRootIngressAsync` and `OpenPreviewRootReadsAsync`. Each job profile supports one outstanding
+job of its type per generated root. The timed host uses message protocol 18. The older fixed-root
+timed qualification keeps its own protocol 9. Provision a dedicated database for each format. Workbench
+checks the installed format before registering an owner. Run one Workbench process at a time against
+the preview database. Existing workflow and Studio endpoints still use their current runtime.
+
+Set `Elsa__CorePreview__ReadsTenant` to the preview's Embedded tenant id to expose
+`GET /runtime/core-preview/workflows/instances`. Workbench requires both workflow runtime read
+and activity structure inspection permissions. The authenticated tenant and ordinary persistence
+scope must match the configured preview tenant. Use a dedicated preview shell with the built-in
+inspection context and permission evaluator and without resource authorization handlers. The stock
+shell's Decisions workflow disclosure feature provides such a handler. The route accepts `definition`, `status` and an
+opaque `cursor`. It returns up to 25 workflow references with their status, definition, model state
+version and end time, alongside `next` and `asOf`. The route is available only with the Core Preview
+enabled and its read tenant configured.
+Run `bash tools/ci/actor-foundation/check-workbench-core-preview-reads.sh Release`
+to qualify the route against disposable PostgreSQL and Workbench Identity principals.
+Set `WORKBENCH_READS_PROFILE=timed` on the same command to qualify the timed-job preview.
+That lane restarts the waiting workflow, settles both timed jobs and verifies its terminal
+status and end time through the same authenticated list, pagination and authorization checks.
+
+The first restart in each lane stops while the approval wait is open. Run either active-job takeover lane on its own:
+
+```bash
+PG_PREVIEW_PROFILE=takeover bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release
+PG_PREVIEW_PROFILE=takeover-complete bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release
+```
+
+Both lanes exit the second Workbench process after its timed callback enters. A third process takes the
+partition at a higher epoch and consumes the original ticket and deadline. `takeover` records one timeout
+using the original deadline. `takeover-complete` waits until the replacement callback enters with the same
+effect key, then creates a release file. The replacement records one success before the original deadline.
+Replay of the job-starting approval leaves the final checkpoint, journal, inbox and receipts unchanged.
+
+The launcher creates a dedicated temporary location for the release file. To run that completion workflow
+manually in the timed preview, set `Elsa__CorePreview__TimedJobReleaseFile` to the same absolute path on
+both hosts, use `direct-approval-with-timed-takeover-completion` and create the file only after the replacement
+enters the callback. Use one job in this demo. Graceful shutdown with an active job and Park recovery retain
+their separate qualification.
 
 ### Standalone CLI
 
@@ -347,8 +429,10 @@ must refuse the changed schema without a lock cycle. The probe restores the mark
 A host can use `EfStore.OpenPreviewRootReadsAsync` to open `IActorReads` for an already-installed ordinary
 PostgreSQL generated-root store. Compose the store with the public `new KernelDb(options)` PostgreSQL context.
 The trusted hosting layer supplies the caller's `BoundScope`. The provider supplies point, list and journal reads
-with bookmarks that cross process restarts. Other preview profiles require their matching internal context.
-Inbox inspection and operator selections remain full-provider work.
+with bookmarks that cross process restarts. The Native job profile uses
+`PostgresPreviewHosting.CreateNativeJobContext(options)` and the timed preview uses
+`PostgresPreviewHosting.CreateTimedNativeJobContext(options)` for the same read API. The remaining
+qualification profiles use their corresponding internal contexts.
 
 The preview's public `IActorReads.GetAsync` and `ListAsync` use a persisted, tenant-indexed projection of generated roots. PostgreSQL
 updates the list within the fenced metadata commit, including suspension changes that leave no public journal entry.
@@ -376,7 +460,9 @@ The chronology route uses inclusive UTC bounds at the precision of the caller's 
 timestamp descending and exact reference ascending. It joins the timestamp and actor-list projections. Reads
 check both format markers and the trigger chain on the current owner relation in the same statement. A canonical
 replacement must have all the required triggers. A rename with no canonical replacement can still serve the
-existing projection from the same installation schema. Re-enable a trigger only if owner writes were quiesced throughout the disabled interval or
+existing projection from the same installation schema. The read cursor then takes its issuer only from the schema
+that holds the store marker and the actor list, and refuses an `"Instances"` that is not a table there. A store without the actor list is refused at read open
+until the installer runs again. Admission and ingress still require the source. Re-enable a trigger only if owner writes were quiesced throughout the disabled interval or
 after an explicit rebuild from authoritative data. Missed silent checkpoint timestamps cannot be reconstructed
 from a later checkpoint or from the public journal. The generic actor list still shows prior roots, which enter chronological history
 on their first checkpoint observed after installation. Physical workflow retirement, legacy timestamps and
@@ -386,7 +472,8 @@ On a fresh disposable PostgreSQL database, run `pg-root-workflow-history <owned|
 with the Native runner. Birth checks that a run finishing at revision 1 shares its terminal time and database
 transaction with the journal and both projections. Then it renames the checkpoint and journal tables so
 `restart <projection-bookmark>` and `tenant <projection-bookmark> <tenant-reference>` exercise both projections
-from separate processes. Use the bookmark and reference printed by birth.
+from separate processes. Use the bookmark and reference printed by birth. The nightly CI job
+`Kernel prototype nightly, PostgreSQL workflow history` runs this chain in all four writer and fence lanes.
 
 On a fresh PostgreSQL database, `pg-root-history <owned|ef> <checked|in-batch>` on the same runner
 exercises two ordinary turns with no journal entries. The Minimal workflow saves its first approval. The Full

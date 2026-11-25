@@ -33,6 +33,16 @@ switch (args)
         Console.WriteLine(await store.UpgradeJobGenerationFormatAsync() ? "advanced" : "already current");
         return 0;
     }
+    case ["sqlite", "timed-job-worker", .. var options]:
+        return await new EfProvider("sqlite", null, options).CheckTimedJobWorkerAsync();
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "timed-job-worker", .. var options]:
+        return await new EfProvider(engine, connection, options).CheckTimedJobWorkerAsync();
+    case ["sqlite", "park-write-boundary", .. var options]:
+        await new EfProvider("sqlite", null, options).CheckParkWriteBoundaryAsync();
+        return 0;
+    case [var engine and ("postgres" or "sqlserver" or "mysql"), var connection, "park-write-boundary", .. var options]:
+        await new EfProvider(engine, connection, options).CheckParkWriteBoundaryAsync();
+        return 0;
     case ["sqlite", "checkpoint-byte-count", .. var options]:
         await new EfProvider("sqlite", null, options).CheckCheckpointBytesAsync();
         return 0;
@@ -88,6 +98,9 @@ switch (args)
         return 0;
     case ["postgres", var connection, "root-turn", .. var options]:
         await new EfProvider("postgres", connection, options).CheckRootTurnAsync();
+        return 0;
+    case ["postgres", var connection, "root-checkpoint-limit", .. var options]:
+        await new EfProvider("postgres", connection, options).CheckRootCheckpointLimitAsync();
         return 0;
     case ["postgres", var connection, "root-checkpoint", .. var options]:
         await new EfProvider("postgres", connection, options).CheckFirstRootAsync();
@@ -156,6 +169,34 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
         Console.WriteLine($"ok SQLite released {count} scopes together and retained the newer epoch in a stale set");
     }
 
+    internal async Task<int> CheckTimedJobWorkerAsync()
+    {
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "--owned-commit", "--ef-commit", "--checked-fence", "--fence-in-batch", "--without-trial-withdrawal"
+        };
+        if (engine == "sqlserver") allowed.Add("--rcsi-off");
+        if (engine == "mysql") allowed.Add("--rc");
+        if (flags.Any(option => !allowed.Contains(option)) ||
+            flags.Contains("--owned-commit") && flags.Contains("--ef-commit") ||
+            flags.Contains("--checked-fence") && flags.Contains("--fence-in-batch"))
+        {
+            Console.Error.WriteLine($"Invalid timed-job-worker options for {engine}. Choose one writer, one fence and optional flags from: {string.Join(", ", allowed)}.");
+            return 2;
+        }
+
+        await using var fixture = (Provided)await CreateAsync(1, new());
+        return await RelationalTimedJobChecks.RunAsync((EfStore)fixture.Store, fixture.CreateContext, Name,
+            trialWithdrawal: !flags.Contains("--without-trial-withdrawal"));
+    }
+
+    internal async Task CheckParkWriteBoundaryAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(1, new());
+        Console.WriteLine(Name);
+        await ParkWriteBoundaryChecks.Run(fixture.CreateContext, fixture.Store, fixture.NewClient());
+    }
+
     internal async Task CheckCheckpointBytesAsync()
     {
         await using var fixture = (Provided)await CreateAsync(1, new());
@@ -199,6 +240,20 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
         await RootTurnChecks.Run(provided.CreateContext, (EfStore)provided.Store, (EfStore)provided.NewClient());
     }
 
+    internal async Task CheckRootCheckpointLimitAsync()
+    {
+        await using var fixture = (Provided)await CreateAsync(1, new());
+        Console.WriteLine(Name);
+        if (flags.Contains("--stable-body"))
+            await RootStableBodyChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        else if (flags.Contains("--terminal-header"))
+            await RootTerminalHeaderChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        else if (flags.Contains("--job-registry"))
+            await RootCheckpointLimitChecks.RunJobs(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient());
+        else
+            await RootCheckpointLimitChecks.Run(fixture.CreateContext, (EfStore)fixture.Store, (EfStore)fixture.NewClient(), flags.Contains("--mixed-text"), flags.Contains("--unrepresentable-text"));
+    }
+
     internal async Task CheckFirstRootAsync()
     {
         await using var provided = (Provided)await CreateAsync(2, new());
@@ -222,6 +277,12 @@ internal sealed class EfProvider(string engine, string? server, string[] flags) 
             _ => builder.UseSqlite(connection),
         };
         var options = builder.AddInterceptors(interceptors).Options;
+        if (engine == "postgres" && flags.Contains("--stable-body"))
+            return () => KernelDb.ForPostgresRootStableBody(options);
+        if (engine == "postgres" && flags.Contains("--terminal-header"))
+            return () => KernelDb.ForPostgresRootTerminations(options);
+        if (engine == "postgres" && flags.Contains("--job-registry"))
+            return () => KernelDb.ForPostgresRootJobs(options);
         return () => new KernelDb(options);
     }
 

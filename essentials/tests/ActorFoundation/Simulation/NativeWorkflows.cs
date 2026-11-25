@@ -1,6 +1,7 @@
 using Kernel.Native;
 using static Kernel.Native.Binding;
 using static Kernel.Native.Wf;
+using static Kernel.Native.TestWf;
 
 namespace Kernel.Sim.Native;
 
@@ -35,7 +36,7 @@ public static class NativeWorkflows
                 WriteLine("w1", "one"), Set("s1", "count", Expr("count + 1")), WriteLine("w2", Expr("'count ' + count")),
                 Notify("notify", Expr("'hello ' + input.key")), Set("s2", "count", Expr("count + 1")),
                 // Round 5 C: the two outbound activities that carry the effect key (N7 reads it from the host's transport).
-                Http("http", "https://partner.example/orders", Expr("input.key")), Email("mail", "ops@example.com", Expr("'order ' + input.key"), "sent"),
+                Post("http", "https://partner.example/orders", Expr("input.key")), Email("mail", "ops@example.com", Expr("'order ' + input.key"), "sent"),
                 If("if", Expr("count == 2"), Set("then", "branch", "then"), Set("else", "branch", "else")),
                 Set("out", "output", Expr("branch + ' ' + count"))),
             ("count", 0), ("branch", null), ("output", null)));
@@ -47,13 +48,13 @@ public static class NativeWorkflows
         registry.Add(Workflow("n-out", Sequence("root",
                 Parallel("par", null,
                     Sequence("b1", Event("e1", Expr("input.key + '-1'")),
-                        While("loop", Expr("i < 2"), Sequence("body", Set("inc", "i", Expr("i + 1")), Http("h1", "https://partner.example/orders", Expr("'i=' + i"))))),
+                        While("loop", Expr("i < 2"), Sequence("body", Set("inc", "i", Expr("i + 1")), Post("h1", "https://partner.example/orders", Expr("'i=' + i"))))),
                     Sequence("b2", Delay("d", 200), Set("t1", "tag", 1), Set("t2", "tag", 2), Set("t3", "tag", 3), Email("m1", "ops@example.com", "b2", "sent"))),
-                ForEach("each", Expr("[1, 2]"), Http("h2", "https://partner.example/items", Expr("'n=' + CurrentIndex"))),
+                ForEach("each", Expr("[1, 2]"), Post("h2", "https://partner.example/items", Expr("'n=' + CurrentIndex"))),
                 // Two event branches meet at a Merge and fork again to a join: the join fires once per token, in one turn or
                 // in two, and the Http behind it twice, so the join's committed firing ordinal is what keeps the two keys apart.
                 Flowchart("mj",
-                    [WriteLine("f0", "fork"), Event("p", Expr("input.key + '-2'")), Event("q", Expr("input.key + '-3'")), WriteLine("m", "merged"), WriteLine("u", "u"), WriteLine("v", "v"), Http("hj", "https://partner.example/joined", "joined")],
+                    [WriteLine("f0", "fork"), Event("p", Expr("input.key + '-2'")), Event("q", Expr("input.key + '-3'")), WriteLine("m", "merged"), WriteLine("u", "u"), WriteLine("v", "v"), Post("hj", "https://partner.example/joined", "joined")],
                     [new("f0", "p"), new("f0", "q"), new("p", "m"), new("q", "m"), new("m", "u"), new("m", "v"), new("u", "hj"), new("v", "hj")],
                     ("m", Gateway.Merge), ("hj", Gateway.ParallelJoin)),
                 Set("out", "output", Expr("'out ' + i + ' ' + tag"))),

@@ -20,7 +20,7 @@ internal sealed class PostgresPreviewFoundation(
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(kind);
-        if (kind is Contract.Kinds.Suspend or Contract.Kinds.Resume)
+        if (kind is Contract.Kinds.Suspend or Contract.Kinds.Resume or Contract.Kinds.Terminate)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (target is not Contract.Target.Ref exact || authorizeOperator?.Invoke(scope, kind) != true ||
