@@ -401,7 +401,6 @@
         "blockedBy",
         "published",
         "exportedTo",
-        "needsCompositeSourceSupport",
         "findings"
       ],
       "properties": {
@@ -444,9 +443,6 @@
             "string",
             "null"
           ]
-        },
-        "needsCompositeSourceSupport": {
-          "type": "boolean"
         },
         "findings": {
           "type": "array",

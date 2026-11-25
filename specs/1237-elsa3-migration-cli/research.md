@@ -238,16 +238,19 @@ Elsa 4 closure that can drift from the engine the user goes live on.
   `WorkflowVersionReconciliationModel` through `IPayloadSerializer`. `FolderPath` reads top-level files in ordinal
   order. `activityVersionId` values are deterministic catalog ids.
 - JSON activity reconciliation (`essentials/src/Activities/Design/Reconciliation/Json/`) reads
-  `ActivityVersionReconciliationModel` arrays, and `Files` are read in ascending `Order`. Its README documents that
-  source-owned composites with dependencies are refused (`activity.source.dependencies-unsupported`,
-  `essentials/src/Workflows/Publishing/Api/Services/SourceOwnedActivityVersionPublisher.cs`).
+  `ActivityVersionReconciliationModel` arrays, and `Files` are read in ascending `Order`. Specification 1239
+  lets it publish source-owned composites with their dependencies, retrying refused versions in rounds, so order does
+  not matter. A dependency must be named by its exact activity version id (otherwise
+  `activity.dependency.version-not-found`), and a schema-1 graph needs exactly one outcome with reference key `done`,
+  read from the version's `elsa.outcomes` design facet (otherwise `activity.graph.outcome-done-required`).
 - Only readers exist. No writer produces either format.
 
 **Decision**: add a writer next to each reader, in the same project, so the format has one owner:
 `JsonWorkflowCatalogWriter` and `JsonActivityCatalogWriter`. Each serializes models through `IPayloadSerializer`, and a
 round-trip test checks read(write(x)) = x. The tooling entry point reads the published versions back from the
 design stores and writes them. Workflows go one file per definition, named by definition id. Activities go in one file,
-in dependency order. Spec Q2 covers the engine refusal.
+in dependency order. The export copies each reusable's stored dependency version ids and its `elsa.outcomes` facet
+unchanged, and T024 proves that the engine loads the result.
 
 ## R-9 Report rendering
 

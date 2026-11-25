@@ -11,7 +11,6 @@
   (the two `ELS3-BEHAVIOUR-*-STORAGE-*` codes with `StorageDriverType` and `ComponentName`), are on the initiative
   branch;
 
-T032 also waits on the engine gap of spec Q2, for its composite case only.
 
 **Tests**: Risk-based (framework §2.23). Each test is written with the code it covers:
 
@@ -221,18 +220,19 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   per workflow definition, the wrapper workflow of each reusable among them, and one activities file in dependency
   order. A reusable's `exportedTo` is the activities file, and its `wrapperExportedTo` is the wrapper's file. Every
   published reusable version goes into `activities.json`, older pinned ones included. Add a fixture case of a workflow
-  that pins an older reusable version, and assert that the older version is in `activities.json`; that it loads is
-  T032's composite case. It sets `exportedTo`, and sets
-  `needsCompositeSourceSupport` on every reusable, its wrapper, and every workflow that uses one. It leaves out refused and blocked
+  that pins an older reusable version, and assert that the older version is in `activities.json`. Each exported reusable keeps its
+  dependency version ids as stored and its `elsa.outcomes` design facet (the single `done` outcome). It sets
+  `exportedTo`. It leaves out refused and blocked
   definitions. It always creates `migrated/workflows/` and always writes `migrated/activities/activities.json`, as
   `[]` when no reusable is exported. Test the layout, the absence, and a run that exports no workflow and no reusable.
 - [ ] T023 [US4] Add the output swap: write to a hidden `.staging-<guid>` folder inside `--out`, rename `report.json`,
   `report.html` and `migrated/` into place last, and touch no other file. A failed run removes the staging folder and
   leaves the previous output intact. Test both paths, and test with `--out` as a bind-mount root in T034.
 - [ ] T024 [US4] Add the loadability test (SC-004). Compose the essentials feature list with JSON workflow and activity
-  reconciliation over the fixture run's `migrated/`, and assert that every exported workflow that uses no reusable
-  loads, also for a run that exported nothing (both entries empty). Assert that reusables are skipped with `activity.source.dependencies-unsupported`, and that the workflows
-  using them do not load, until the spec Q2 gap is fixed; T032 then flips both.
+  reconciliation over the fixture run's `migrated/`, and assert that every exported reusable and workflow loads,
+  including the workflow that pins an older reusable version (T022), and that a run that exported nothing loads too
+  (both entries empty). No version may be refused with `activity.dependency.version-not-found` or
+  `activity.graph.outcome-done-required`.
 
 ## Phase 6: User Story 2 - Assess with my own features (P1)
 
@@ -267,8 +267,8 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 
 ## Phase 8: Polish and acceptance
 
-- [ ] T032 Once the spec Q2 engine gap is fixed on the initiative branch, flip T024's composite case to assert that it
-  loads, including the workflow that pins an older reusable version (T022) (SC-004).
+- [ ] T032 Run T024 against the essentials engine image itself, with the fixture run's `migrated/` mounted at
+  `/app/migrated`, and record that every exported version loads (SC-004).
 - [ ] T033 Run `inventory --all-versions` over the specification 1235 acceptance set (34 definitions) in the
   migration image. Check that every definition has one bucket, and that the published versions equal what startup
   reconciliation publishes from the same input on the same composition (SC-002). Record the result in the PR evidence, and check the two-minute goal.

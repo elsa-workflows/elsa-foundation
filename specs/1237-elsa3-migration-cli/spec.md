@@ -186,9 +186,10 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   registered yet, is reported with the same `javascript-function` component code as a matchable call, so the
   inventory lists it. The CLI scans no scripts itself.
 - A converted reusable activity always depends on other activity versions, because its body is made of catalog
-  activities. While the engine's source reconciliation refuses such content, the report marks every reusable, every
-  reusable's wrapper workflow and every workflow that uses one with `needsCompositeSourceSupport` (see *Dependencies and
-  boundaries*).
+  activities. The engine's JSON activity reconciliation publishes such source-owned composites with their dependencies
+  (specification 1239), so `migrated/activities/activities.json` loads in any order. Each exported reusable references
+  its dependencies by the exact activity version ids the engine produces, and carries its outcomes facet with the
+  single `done` outcome its graph needs.
 
 ## Requirements *(mandatory)*
 
@@ -325,8 +326,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
      enabled features, the setting keys (never their values) and the persistence override.
   5. Dispatched-workflow targets missing from the export, as Take into account.
 
-  It also lists the versions not converted, and the `migrated/` items that need the engine's source reconciliation of
-  composites with dependencies: every reusable, and every workflow that uses one.
+  It also lists the versions not converted.
 - **FR-019**: The report MUST NOT contain a literal value, an expression or script body, a variable default or a
   setting value from the input. Diagnostic messages and guidance the converter emits for the report MUST meet this
   rule. A converter message that embeds such text is changed at the converter. For a code the converter does not own
@@ -380,7 +380,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 | ID | Question | Decision |
 |---|---|---|
 | Q1 | Where does the migrated content come from? | It is exported from the run's own Elsa 4 store after publish, not written from the converter's output. The folder is `migrated/`. Workflows use the workflow format, and reusables use the activity format. |
-| Q2 | Converted reusables depend on other activity versions, and the engine's source reconciliation refuses such content. | The engine gap is fixed by specification 1239, outside this one. The CLI exports reusables anyway, and the report flags every reusable and every workflow that uses one. Only that part of SC-004 waits on the fix. |
+| Q2 | Converted reusables depend on other activity versions. Can the engine load them from `migrated/`? | Yes: specification 1239 lets the engine's JSON activity reconciliation publish source-owned composites with their dependencies. The export keeps the exact dependency version ids and each reusable's outcomes facet, so nothing in the report needs to flag reusables. |
 | Q3 | Where does the CLI's Elsa 4 closure come from? | The Elsa 3 migration image, built `FROM` the essentials engine at the same version, with the Elsa 3 additions baked in. The CLI ships no closure, and Docker is a prerequisite. |
 | Q4 | Does using the ADR 0076 worker for this group need an ADR change? | Yes. A small ADR 0076 amendment does two things. It lets the worker reach further named frozen entry points, one per command group (D14). It also lets such a group, by default, reconcile local directory feeds into a private, run-scoped install root that it deletes at the end, never a host's shared store and never the network (D1, D10). This specification is provisional on it. |
 | Q5 | How is the run kept to one database when the shared transaction refuses a supplied connection? | Every module gets the same connection string, for a uniquely named in-memory shared-cache database that is kept alive for the run. |
@@ -407,8 +407,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **SC-003 - Nothing persists**: After a run, including a run that fails part-way, nothing remains outside the output
   folder: the container is removed, and no database or install root survives.
 - **SC-004 - Loadable output**: The essentials engine image, with JSON workflow and activity reconciliation over a run's
-  `migrated/`, loads every workflow in it that uses no reusable, including when the run exported no reusable or no workflow. Reusables, and the workflows that use them, load once
-  the engine gap of Q2 is fixed.
+  `migrated/`, loads every reusable and every workflow in it, including a workflow that pins an older reusable version,
+  and also when the run exported no reusable or no workflow.
 - **SC-005 - Redaction**: The sentinel test finds no sentinel in `report.json` or `report.html`.
 - **SC-006 - Determinism**: Two runs over the same input produce byte-identical `report.json` and `migrated/`.
 - **SC-007 - Assess resolves**: With the fixture feature package, `assess` clears every finding that names one of the
@@ -441,8 +441,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **ADR 0076 amendment** (Q4): the worker may reach one further named frozen entry point per command group, each a
   compatibility surface. Such a group may, by default, reconcile local directory feeds into a private, run-scoped
   install root. Until the amendment is agreed, this specification stays provisional.
-- **Engine gap**: the engine's JSON activity reconciliation refuses source-owned activity content that depends on other
-  activity versions. Specification 1239 fixes that gap (Q2).
+- **Source-owned composites** (specification 1239): the engine's JSON activity reconciliation publishes composites with
+  their dependencies, which `migrated/activities/` relies on (Q2).
 - **Migration skill** (specification 1238): it starts the image with `docker run` and consumes `report.json` through
   the schema this specification publishes.
 - [Elsa constitution](../../.specify/memory/constitution.md) E2.7 keeps Elsa 3 behind the import boundary. The Elsa 3
