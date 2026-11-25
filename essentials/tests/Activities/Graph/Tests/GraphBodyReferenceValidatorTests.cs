@@ -178,6 +178,29 @@ public sealed partial class GraphActivityProviderTests
     }
 
     [Fact]
+    public async Task An_intrinsic_with_a_wrongly_cased_argument_list_is_refused_rather_than_failing()
+    {
+        var contract = BodyContract() with { Outputs = [new("sum-key", "Sum", new("Int32"), true, false, "elsa.json")] };
+        var authored = BodyManifest([BodyArgument("name", "Literal", "Sum"), BodyArgument("value", "Literal", 7)], []);
+        var payload = JsonNode.Parse(authored.Payload.GetRawText())!;
+        payload["variables"] = new JsonArray();
+        var setter = payload["rootActivity"]!.AsObject();
+        setter["activityVersionId"] = "elsa.intrinsic.set-output@1";
+        setter["intrinsic"] = JsonNode.Parse("""{"kind":"setOutput","valueType":{"alias":"Elsa.Any","collectionKind":"Single"}}""");
+        var inputs = setter["inputs"]!.DeepClone();
+        setter.Remove("inputs");
+        setter["Inputs"] = inputs;
+        var manifest = authored with { Payload = JsonSerializer.SerializeToElement(payload) };
+
+        var draft = await _provider.ValidateAsync(manifest, contract);
+        var compilation = await _provider.CompileAsync(CompilationRequest(manifest) with { Contract = contract });
+
+        foreach (var diagnostics in new[] { draft, compilation.Diagnostics })
+            Assert.Contains(diagnostics, x => x.Code == "activity.graph.argument-malformed" && x.Location?.JsonPointer == "/rootActivity/Inputs");
+        Assert.Null(compilation.ExecutableRoot);
+    }
+
+    [Fact]
     public async Task A_body_that_cannot_be_read_is_refused_rather_than_left_unchecked()
     {
         var manifest = WithRootProperty(BodyManifest([], []), "executionPlacement", JsonNode.Parse("""{"not":"a placement"}"""));

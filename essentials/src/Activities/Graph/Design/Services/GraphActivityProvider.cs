@@ -1301,6 +1301,10 @@ public sealed class GraphActivityProvider(
         {
             if (string.IsNullOrWhiteSpace(item.Node.NodeId) || string.IsNullOrWhiteSpace(item.Node.ActivityVersionId))
                 continue;
+            // The exact node reader leaves a missing or wrongly cased argument list null. MalformedArguments reports the
+            // wrongly cased one; every later read sees an empty list instead of failing.
+            if (item.Node.Inputs is null || item.Node.Outputs is null)
+                item.Node = item.Node with { Inputs = item.Node.Inputs ?? [], Outputs = item.Node.Outputs ?? [] };
             var pointer = pointers.GetValueOrDefault(item.Node.NodeId, "/rootActivity");
             var element = FindNodeElement(root, item.Node.NodeId) ?? root;
             var memberUsage = PublicMemberUsage(element)
