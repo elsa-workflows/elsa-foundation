@@ -165,7 +165,8 @@ public sealed partial class EfStore
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
             new InstanceRef(current.Actor.Id).Partition != fence.Partition ||
-            status is not (InstanceStatus.Running or InstanceStatus.Finished) && !(timedJob && status == InstanceStatus.Faulted) && !(operatorTermination && status == InstanceStatus.Cancelled))
+            status is not (InstanceStatus.Running or InstanceStatus.Finished) &&
+                !((timedJob || RootTimedJobSettlementEnabled) && status == InstanceStatus.Faulted) && !(operatorTermination && status == InstanceStatus.Cancelled))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
         if (status != InstanceStatus.Running && journal is null)
             throw new ArgumentException("A terminal public root requires its journal entry.", nameof(journal));

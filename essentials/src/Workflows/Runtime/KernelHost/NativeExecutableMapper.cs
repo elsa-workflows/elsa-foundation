@@ -31,17 +31,26 @@ public static class NativeExecutableMapper
 
     /// <summary>The Native workflow for <paramref name="executable"/>, or a refusal naming the node (and input) it cannot map.</summary>
     /// <exception cref="NativeMappingRefusedException">The executable holds an activity or a binding this host does not run.</exception>
-    public static Native.Workflow Map(WorkflowExecutable executable)
+    public static Native.Workflow Map(WorkflowExecutable executable) => Map(executable, KernelHostCapabilities.All);
+
+    /// <summary>
+    /// The Native workflow for <paramref name="executable"/> on a host whose foundation runs <paramref name="capabilities"/>:
+    /// a node that needs what the host lacks is refused as one this host does not run, named as every refusal is.
+    /// </summary>
+    /// <exception cref="NativeMappingRefusedException">The executable holds an activity or a binding this host does not run.</exception>
+    public static Native.Workflow Map(WorkflowExecutable executable, KernelHostCapabilities capabilities)
     {
         ArgumentNullException.ThrowIfNull(executable);
+        ArgumentNullException.ThrowIfNull(capabilities);
         try
         {
             var mapping = new Mapping(executable);
             var root = mapping.MapNode(executable.RootActivity, Scope.Workflow);
             var variables = mapping.WorkflowVariables();
+            Native.Workflow workflow;
             try
             {
-                return new Native.Workflow(executable.Identity.ArtifactId, root, variables, executable.Identity.DefinitionId);
+                workflow = new Native.Workflow(executable.Identity.ArtifactId, root, variables, executable.Identity.DefinitionId);
             }
             catch (Native.NativeDefinitionException invalid)
             {
@@ -50,6 +59,9 @@ public static class NativeExecutableMapper
                 var message = invalid.Message.Replace($" in '{executable.Identity.ArtifactId}'", "", StringComparison.Ordinal);
                 throw NativeMappingRefusedException.Activity(invalid.Node, $"{message} Change the node so that it follows this rule.");
             }
+            foreach (var node in workflow.Nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal))
+                if (capabilities.Refusal(node.Type) is { } reason) throw NativeMappingRefusedException.Activity(node.Id, reason);
+            return workflow;
         }
         catch (NativeMappingRefusedException refused) when (refused.DisplayName is null &&
             executable.NodesById.GetValueOrDefault(refused.Node)?.Metadata.GetValueOrDefault(DisplayNameMetadataKey) is { Length: > 0 } name)

@@ -4,8 +4,9 @@ using Models = Kernel.Model.Contracts;
 namespace Elsa.Workflows.Runtime.KernelHost;
 
 /// <summary>
-/// The schedule actors of a host that runs none. Such a host also gives its <see cref="KernelServing"/> the same reason, so a
-/// Timer or Cron publish is refused at the serving check and nothing reaches here; should one still, registering a run or
+/// The schedule actors of a host that runs none. Such a host also says <c>Schedules: false</c> in its
+/// <see cref="KernelHostCapabilities"/>, so a Timer or Cron publish is refused where it is mapped and nothing reaches here;
+/// should one still, registering a run or
 /// setting a schedule throws with <paramref name="reason"/>. Stopping a schedule and unregistering a run do nothing, since
 /// none runs, so unpublishing never fails on them. A host whose foundation hosts the schedule actor composes
 /// <see cref="IngressScheduleActors"/> in its place.

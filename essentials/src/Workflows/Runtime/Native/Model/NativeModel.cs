@@ -61,6 +61,27 @@ public class NativeExecutionOptions
 {
     public NativeFlaw Flaws { get; init; }
     public int MaxActivitiesPerTurn { get; init; } = 1000;
+
+    /// <summary>
+    /// Whether the host's foundation takes the model's self-sends. With them, a Balanced or Ephemeral burst that reaches
+    /// <see cref="MaxActivitiesPerTurn"/> continues in the next turn. Without them a burst runs on to its next wait or end in
+    /// one turn, bounded by the state and history size limits and by <see cref="MaxActivitiesPerBurst"/>, past which the
+    /// workflow faults (<c>native.burst.limit</c>).
+    /// </summary>
+    public bool SelfSends { get; init; } = true;
+
+    /// <summary>
+    /// The most activities one turn runs without waiting on a host without self-sends (<see cref="SelfSends"/>): the bound a
+    /// burst is held to, the same however loaded the host is.
+    /// </summary>
+    public int MaxActivitiesPerBurst { get; init; } = 10_000;
+
+    /// <summary>
+    /// A backstop on a host without self-sends (<see cref="SelfSends"/>): the longest one turn runs without waiting before
+    /// the workflow faults (<c>native.burst.limit</c>). It keeps a turn from holding its node; it is not a correctness bound,
+    /// and how much work fits in it depends on the host's load.
+    /// </summary>
+    public TimeSpan MaxBurstDuration { get; init; } = TimeSpan.FromSeconds(30);
     public AdmissionFlaw AdmissionFlaws { get; init; }
     public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
     /// <summary>The host's outbound HTTP for SendHttpRequest's job; without it the activity faults.</summary>
@@ -182,6 +203,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     private Workflow _wf => registry.Get(turn.Workflow); // metadata-only turns never resolve authored definitions
     private Contract.ActorStatus _status = Contract.ActorStatus.Running;
     private int _executed;
+    private long? _burstStart;
 
     internal static bool HandlesMetadata(string kind) => kind is InvocationInput.Kind or ReceiptQuery.Kind;
 
@@ -303,9 +325,14 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         while (!_checkpointRequested && _s.Agenda.Exists(w => !w.Gone) && _status == Contract.ActorStatus.Running)
         {
             // Durable: a boundary after every activity. Balanced and Ephemeral: one turn until all waits or ends (capped).
-            if ((Durable && _executed > 0) || _executed >= options.MaxActivitiesPerTurn)
+            if ((Durable && _executed > 0) || options.SelfSends && _executed >= options.MaxActivitiesPerTurn)
             {
                 turn.SendToSelf(NativeKinds.Continue);
+                return;
+            }
+            if (!options.SelfSends && BurstLimit() is { } limit)
+            {
+                End(Contract.ActorStatus.Faulted, BurstLimitFaultCode, Values.From(limit));
                 return;
             }
             var work = _s.Agenda.FirstOrDefault(w => !w.Gone && Runnable(w));
@@ -331,6 +358,23 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 Fail(frame, ExpressionFault(frame, failed));
             }
         }
+    }
+
+    internal const string BurstLimitFaultCode = "native.burst.limit";
+
+    // A host without self-sends runs a burst in one turn. Its bound is the activity count; the time backstop keeps a turn
+    // from holding its node. Past either the workflow faults with the reason, so the turn ends instead of the node stalling.
+    private ActivityFault? BurstLimit()
+    {
+        _burstStart ??= System.Diagnostics.Stopwatch.GetTimestamp();
+        if (_executed >= options.MaxActivitiesPerBurst)
+            return new ActivityFault(BurstLimitFaultCode,
+                $"This turn ran {_executed:N0} activities without waiting, the most this host runs in one turn. " +
+                "Make the workflow wait (for an event or an HTTP request) sooner, or do less work between its waits.");
+        var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(_burstStart.Value);
+        return elapsed < options.MaxBurstDuration ? null : new ActivityFault(BurstLimitFaultCode,
+            $"This turn ran {elapsed.TotalSeconds:0.#} seconds without waiting, the longest this host lets one turn hold its node " +
+            $"({options.MaxBurstDuration.TotalSeconds:0.#} seconds). Make the workflow wait sooner, or do less work between its waits.");
     }
 
     // The frame a work item runs, for a host expression's fault: a resume's waiting frame, or the frame it starts.
