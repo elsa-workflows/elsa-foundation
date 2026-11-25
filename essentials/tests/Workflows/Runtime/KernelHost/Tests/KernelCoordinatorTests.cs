@@ -125,18 +125,30 @@ public sealed class KernelCoordinatorTests
         private readonly string? _schedulesUnavailable;
 
         /// <param name="schedulesUnavailable">Set, the host runs no schedule actor, and its serving refuses a Timer or Cron with this reason.</param>
-        public Host(ActivationChannelOptions? channels = null, string? schedulesUnavailable = null)
+        private bool _timers;
+        private readonly bool _children;
+
+        public Host(ActivationChannelOptions? channels = null, string? schedulesUnavailable = null, bool timers = true, bool children = true)
         {
             _channels = channels;
             _schedulesUnavailable = schedulesUnavailable;
+            (_timers, _children) = (timers, children);
             References = new(Executables, Clock);
             Switch = new(Authority, References, Clock, Bindings, RecurringSchedules);
             Restart();
         }
 
+        /// <summary>A restart onto a host whose foundation runs timers, or none.</summary>
+        public void Restart(bool timers)
+        {
+            _timers = timers;
+            Restart();
+        }
+
         public void Restart()
         {
-            Serving = new KernelServing(expression => expression == "0 * * * * *" ? null : "not a cron expression this host reads", _schedulesUnavailable);
+            Serving = new KernelServing(expression => expression == "0 * * * * *" ? null : "not a cron expression this host reads", _schedulesUnavailable,
+                _timers, _children);
             Schedules = new RecordingSchedules();
             Observer = new RecordingObserver();
             Coordinator = NewCoordinator(Switch);
@@ -634,5 +646,64 @@ public sealed class KernelCoordinatorTests
 
         Assert.Empty(extractor.Extract(executable));
         Assert.Empty(extractor.Evaluate(executable).NodeOutcomes);
+    }
+
+    private static WorkflowExecutable Pauses(string artifact) => ExecutableOf(artifact, "pauses", Sequence("root",
+        Node("pause", Types.Delay, [Literal("Duration", "00:00:05", "TimeSpan")]),
+        WriteLine("after", Literal("text", "after"))));
+
+    private static WorkflowExecutable Dispatches(string artifact, bool wait) => ExecutableOf(artifact, "dispatches", Sequence("root",
+        Node("call", Types.Dispatch, [Literal("WorkflowDefinitionId", "invoicing", "String"), Literal("WaitForCompletion", wait, "Boolean")])));
+
+    [Fact]
+    public async Task A_host_without_timers_refuses_a_delay_where_it_maps_it()
+    {
+        var host = new Host(timers: false);
+
+        var refused = await host.ActivateAsync(Pauses("pauses@1"), "pauses-1");
+
+        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.Mapping), (refused.Outcome, refused.FailedStep));
+        Assert.Equal($"{NativeMappingRefusedException.ActivityUnsupported}: Node 'pause': {KernelServing.DelayUnavailable}", refused.Diagnostic);
+        Assert.Null(refused.Slot.ActiveActivationId);
+        Assert.Null(await host.ReferenceAsync("pauses-1"));
+        Assert.False(host.Serving.Registry.Contains("pauses@1"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_host_without_child_workflows_refuses_a_dispatch_waited_or_not(bool wait)
+    {
+        var host = new Host(children: false);
+
+        var refused = await host.ActivateAsync(Dispatches("dispatches@1", wait), "dispatches-1");
+
+        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.Mapping), (refused.Outcome, refused.FailedStep));
+        Assert.Equal($"{NativeMappingRefusedException.ActivityUnsupported}: Node 'call': {KernelServing.DispatchUnavailable}", refused.Diagnostic);
+        Assert.Null(refused.Slot.ActiveActivationId);
+    }
+
+    [Fact]
+    public async Task A_host_with_timers_and_child_workflows_serves_both()
+    {
+        var host = new Host();
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, (await host.ActivateAsync(Pauses("pauses@1"), "pauses-1")).Outcome);
+        Assert.Equal(WorkflowActivationOutcome.Activated, (await host.ActivateAsync(Dispatches("dispatches@1", true), "dispatches-1")).Outcome);
+    }
+
+    [Fact]
+    public async Task A_restart_on_a_host_without_timers_does_not_serve_a_delay_published_before()
+    {
+        var host = new Host();
+        await host.ActivateAsync(Pauses("pauses@1"), "pauses-1");
+
+        host.Restart(timers: false);
+        var served = Assert.Single(await host.Coordinator.ServeActiveSlotsAsync());
+
+        Assert.False(served.Succeeded);
+        Assert.Equal(WorkflowActivationStep.Mapping, served.FailedStep);
+        Assert.Contains(KernelServing.DelayUnavailable, served.Diagnostic, StringComparison.Ordinal);
+        Assert.False(host.Serving.Registry.Contains("pauses@1"));
     }
 }

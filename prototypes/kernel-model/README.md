@@ -363,6 +363,8 @@ each with its own slice coming:
   it.
 - **No schedule actor.** The PostgreSQL foundation hosts no schedule actor yet, so a Timer or Cron publish is refused at
   the serving check, before anything is minted, and the refusal says what to change.
+- **No timers or child workflows on format 24 yet.** A publish with a Delay or a Dispatch Workflow is refused where it is
+  mapped (`definition_unsupported`), naming the node and what to change.
 
 Run `PG_PREVIEW_PROFILE=publications bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release` to check
 that a Workbench with publications on serves its default shell on the kernel.

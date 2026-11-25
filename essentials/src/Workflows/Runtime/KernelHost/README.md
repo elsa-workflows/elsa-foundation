@@ -29,6 +29,12 @@ the Native model's definitions.
   and `IScheduleActors` by instance. `IsComposedIn` tells a host whether a shell composes it: the Workbench hides the
   activities the kernel does not run from that shell's toolbox, since the toolbox's options are a design contract that
   a runtime project does not reference.
+- A host whose foundation runs no timers or no child workflows says so to `KernelServing` (`timers: false`,
+  `children: false`). A workflow with a Delay, or with a Dispatch Workflow (waited or not), is then refused where it is
+  mapped, so publishing reports `definition_unsupported` naming the node: "Delay doesn't run on this host yet. Remove it,
+  or wait for an event or an HTTP request instead." and "Dispatch Workflow doesn't run on this host yet. Remove it, or
+  start the other workflow from an HTTP endpoint or an event." On the release 1 list these are the activities that need
+  timers or child workflows; Timer and Cron start triggers are refused by the schedule rule below.
 - `UnavailableScheduleActors` is for a host that runs no schedule actor. Such a host gives its `KernelServing` the same
   reason, so a Timer or Cron publish is refused at the serving check, before anything is minted. Setting a schedule
   throws the reason; stopping one and unregistering a run do nothing, so unpublishing never fails on them.

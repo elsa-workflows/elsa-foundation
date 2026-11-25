@@ -82,7 +82,9 @@ internal static class WorkbenchCorePreview
             throw new InvalidOperationException(
                 "With Elsa:CorePreview:Publications on, the Core Preview runs on the shipped format, which carries Native jobs: leave NativeJobs and TimedNativeJobs off.");
         // Its foundation hosts no schedule actor yet, so serving refuses a Timer or Cron before anything is minted.
-        var serving = publications ? new KernelServing(CronosCalendar.Error, SchedulesUnavailable) : null;
+        // Format 24 runs no self-sends and no child workflows yet, so serving refuses a Delay and a Dispatch Workflow where it
+        // maps them.
+        var serving = publications ? new KernelServing(CronosCalendar.Error, SchedulesUnavailable, timers: false, children: false) : null;
         if (serving is not null)
         {
             services.AddSingleton(serving);
