@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "a379f54e00f8ac4ac0858fae4c5df9550d5598f3",
+  "last_publish_commit": "5d2a8fd7eefdd675081363a3c47bd904b4d86b9d",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -144,8 +144,8 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Durable",
-      "version": "4.0.18-preview",
-      "commit": "a379f54e00f8ac4ac0858fae4c5df9550d5598f3"
+      "version": "4.0.19-preview",
+      "commit": "5d2a8fd7eefdd675081363a3c47bd904b4d86b9d"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Hosting",
@@ -154,8 +154,8 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
-      "version": "4.0.4-preview",
-      "commit": "a379f54e00f8ac4ac0858fae4c5df9550d5598f3"
+      "version": "4.0.5-preview",
+      "commit": "5d2a8fd7eefdd675081363a3c47bd904b4d86b9d"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Runtime",
@@ -164,8 +164,8 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Store.EntityFrameworkCore",
-      "version": "4.0.26-preview",
-      "commit": "a379f54e00f8ac4ac0858fae4c5df9550d5598f3"
+      "version": "4.0.27-preview",
+      "commit": "5d2a8fd7eefdd675081363a3c47bd904b4d86b9d"
     },
     {
       "package_id": "Elsa.ActorFoundation.Contracts",
@@ -1199,8 +1199,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.KernelHost",
-      "version": "4.0.2-preview",
-      "commit": "080e1976b2e9a2599ae6270d8692558961228ac1"
+      "version": "4.0.3-preview",
+      "commit": "5d2a8fd7eefdd675081363a3c47bd904b4d86b9d"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Activities",
@@ -1209,8 +1209,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Model",
-      "version": "4.0.12-preview",
-      "commit": "13477ecefed22f5a1ad2f948d1d54a303da6084f"
+      "version": "4.0.13-preview",
+      "commit": "5d2a8fd7eefdd675081363a3c47bd904b4d86b9d"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
