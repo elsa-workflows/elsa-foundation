@@ -453,9 +453,21 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                     KeepOwnCancellation(own);
                     throw;
                 }
+                // The job drain's or the release's fault is recorded now, as the turn drain's is: the halt still waits for
+                // its heartbeats and beside loop, and a kill in that wait must not make it an error after a kill.
+                catch (Exception releaseError) when (drainError is null)
+                {
+                    RecordFault(releaseError);
+                    throw;
+                }
                 // A fence lost in both drains is one loss.
                 catch (ScopeOwnershipLostException) when (drainError is ScopeOwnershipLostException) { ExceptionDispatchInfo.Throw(drainError); }
-                catch (Exception releaseError) when (drainError is not null) { throw new AggregateException(drainError, releaseError); }
+                catch (Exception releaseError) when (drainError is not null)
+                {
+                    var both = new AggregateException(drainError, releaseError);
+                    RecordFault(both);     // reports the release's fault; the drain's was reported when it was thrown
+                    throw both;
+                }
                 // A kill that landed during the runtime's stop may have abandoned it, also when the stop returned before this
                 // wait saw the kill: what it interrupted is recorded when it ends (nothing, when it was not abandoned).
                 finally { if (_kill.IsCancellationRequested) RecordLater(InterruptedAsync(stopping)); }

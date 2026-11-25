@@ -95,8 +95,15 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         ? started.Result.LastError
         : null);
 
-    /// <param name="cancellationToken">The application's shutdown deadline (<c>HostOptions.ShutdownTimeout</c>). It also bounds
-    /// the node's drain: at the deadline the stop becomes a kill, nothing renews, and what is still owned runs out by its lease.</param>
+    /// <summary>
+    /// Stops the node. Only the caller that starts the stop owns it: its deadline kills the drain, and if the killed stop has
+    /// not ended after <see cref="KillGrace"/> the process policy runs. A call that joins a stop already under way kills
+    /// nothing: its deadline ends only its own wait. <see cref="DisposeAsync"/> kills at its own deadline whoever owns the
+    /// stop. An owner with no deadline, and a <see cref="LoopOptions.DisposeDeadline"/> that is infinite, never kill or escalate.
+    /// </summary>
+    /// <param name="cancellationToken">The application's shutdown deadline (<c>HostOptions.ShutdownTimeout</c>). For the call
+    /// that starts the stop it also bounds the node's drain: at the deadline the stop becomes a kill, nothing renews, and what
+    /// is still owned runs out by its lease.</param>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         // It throws its own outcome: the stop's fault (also recorded on the node, LastError) or the deadline's cancellation.
@@ -149,7 +156,7 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     /// A stop bounded by <see cref="LoopOptions.DisposeDeadline"/>, for a host disposed without <see cref="StopAsync"/>
     /// (a later service failed to start): at the deadline the stop becomes a kill, also when a stop was already under way,
     /// and the process policy runs if it still has not finished after <see cref="KillGrace"/>. It never throws the stop's
-    /// fault, which the node records (<see cref="LastError"/>).
+    /// fault, which the node records (<see cref="LastError"/>). With an infinite dispose deadline it neither kills nor escalates.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
