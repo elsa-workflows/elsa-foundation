@@ -105,7 +105,8 @@ public sealed partial class EfStore
             }
             var park = await db.Database.SqlQuery<ParkMarkRow>($"""
                 SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision",
-                    "Jobs" IS NOT NULL OR "Children" IS NOT NULL OR "CustomHandles" IS NOT NULL AS "Outstanding" FROM "Instances"
+                    "Jobs" IS NOT NULL OR "Children" IS NOT NULL OR "CustomHandles" IS NOT NULL
+                        OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding" FROM "Instances"
                 WHERE "Id" = {message.Target.Id} AND "Partition" = {message.Target.Partition} AND NOT "Retired"
                 """).SingleOrDefaultAsync(token);
             var kept = await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token);
@@ -117,7 +118,7 @@ public sealed partial class EfStore
                 (charged.Length <= 1 || charged.Sum(row => row.Bytes) <= ParkRecoveryCredit.LimitBytes);
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived), kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
-                fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false };
+                fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Rereads = RereadsParkFacts(db) };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }
         return polled with { Messages = messages };

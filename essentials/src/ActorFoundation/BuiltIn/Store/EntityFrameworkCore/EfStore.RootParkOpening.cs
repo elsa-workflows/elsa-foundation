@@ -67,6 +67,11 @@ public sealed partial class EfStore
         };
     }
 
+    // Whether a Park keep marks pending Park commands unseen, and so whether their Park facts let the owner forget a
+    // copy read ahead of the keep. Composed parked-operator sets only: shipped formats keep their behaviour, where a stale
+    // Recover fails its commit and the next owner reads it again.
+    internal static bool RereadsParkFacts(KernelDb db) => db.UsesRootParkedOperators;
+
     // A stored operator header that names a Park.
     private const string ParkSelectedOperator = "%\"Park\":{%";
 
@@ -138,11 +143,12 @@ public sealed partial class EfStore
                 WHERE "Id" = ANY({Returned}) AND "Id" LIKE 'operator/%' AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
                 """, cancellationToken) != Returned.Length) return false;
-            // S5b: a keep changes the kept set, so a pending Terminate that names the Park is read again with fresh Park
-            // facts. The owner forgets the copy it read ahead of this keep (Worker), and the next poll reads the row again.
-            if (Reason == ParkKeepReason.Arrived && db.UsesRootParkedOperators)
+            // S5b: a keep, of either reason, changes the kept set, so a pending command that carries Park facts (a Recover
+            // or a Terminate that names a Park) is read again with fresh ones. The owner forgets the copy it read ahead of
+            // this keep only where its facts say so, by the same predicate.
+            if (RereadsParkFacts(db))
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    UPDATE "Messages" SET "Seen" = 0
+                    UPDATE "Messages" SET "Seen" = 0, "Trial" = 0
                     WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
                         AND "EventMatch" IS NULL AND NOT "Done" AND "Id" LIKE 'operator/%' AND "Start" LIKE {ParkSelectedOperator}
                     """, cancellationToken);

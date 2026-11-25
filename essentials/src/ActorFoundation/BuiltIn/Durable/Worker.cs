@@ -3467,10 +3467,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _woken = true;
         }
         if (unit.FoundationKeep is not null && unit.Slot is { } keeping &&
-            keeping.Inbox.Where(item => item.Durable && !item.Taken && item.Message.Operator?.RootParkFacts is not null).ToArray() is { Length: > 0 } stale)
+            keeping.Inbox.Where(item => item.Durable && !item.Taken && item.Message.Operator?.RootParkFacts is { Rereads: true }).ToArray() is { Length: > 0 } stale)
         {
-            // S5b: a keep changes the kept set, so a Park command read ahead of it carries stale Park facts. The next poll
-            // reads it again with fresh ones (the keep's commit marks it unseen), and its commit binds them.
+            // S5b: a keep changes the kept set, so a Park command read ahead of it carries stale Park facts. Where the store
+            // marks such a command unseen in the keep's commit (Rereads), the next poll reads it again with fresh facts.
             foreach (var item in stale) Forget(item);
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
             _caughtUp = false;

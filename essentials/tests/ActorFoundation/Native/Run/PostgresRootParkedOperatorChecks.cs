@@ -28,6 +28,8 @@ internal static class PostgresRootParkedOperatorChecks
     private static readonly StoreFormat ComposedRecovery = StoreFormat.Current with { MessageProtocol = 92 };
     private const string JobsSchema = "parked_jobs";
     private const string ArrivalsSchema = "parked_arrivals";
+    private const string Format22Schema = "parked_format22";
+    private const string RecoverySchema = "parked_recovery";
     private const string Fault = "deliberate actor failure";
     private const string ProbeRefusal = """{"Outcome":"refused","Operation":"probe","Reason":"parked"}""";
     private const string ProbeTerminated = """{"Outcome":"terminated","Operation":"probe","Cleared":0}""";
@@ -141,8 +143,19 @@ internal static class PostgresRootParkedOperatorChecks
         finally { await main.BypassAsync(plannedPark, """ "Children" = NULL """); }
         await main.SettledAsync(planned, "terminate-planned", reason: "outstanding");
         main.Answered("terminate-planned", "ParkOutstanding");
+        // A subscription counts as outstanding too, so the Terminate is refused instead of failing its commit.
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ('planned', {plannedPark.Actor.Id}, 'planned', 0)
+            """, stop);
+        try
+        {
+            Check(await main.TerminateAsync(planned, "terminate-subscribed", parkPlanned), "a Terminate is admitted for the root with a subscription");
+            await main.DriveAsync(planned, image => image is { Revision: 4 });
+        }
+        finally { await db.Database.ExecuteSqlRawAsync("""DELETE FROM "Subscriptions" WHERE "Key" = 'planned'""", stop); }
+        await main.SettledAsync(planned, "terminate-subscribed", reason: "outstanding");
         Check(await main.TerminateAsync(planned, "terminate-unplanned", parkPlanned), "the root without children admits its Park selection again");
-        await main.DriveAsync(planned, image => image is { Revision: 4, Status: InstanceStatus.Cancelled });
+        await main.DriveAsync(planned, image => image is { Revision: 5, Status: InstanceStatus.Cancelled });
         await main.TerminatedAsync(planned, "terminate-unplanned", cleared: 1);
 
         // A Terminate whose own turn fails opens the Park without it; the owner polls it again and refuses it.
@@ -249,6 +262,7 @@ internal static class PostgresRootParkedOperatorChecks
         }
         await RecoverNeverMeetsSuspendedPark();
         await ArrivalsSet();
+        await RereadAcrossFormats();
         await JobsInspection();
         return 0;
 
@@ -393,6 +407,54 @@ internal static class PostgresRootParkedOperatorChecks
             Check(await main.TerminateAsync(early, "predicate-control", parkEarly), "the restored parked root admits its Park selection again");
         }
 
+        // A keep ahead of a Recover read in the same poll. Shipped format 22 keeps its behaviour: the stale Recover fails its
+        // commit, the owner stands down and the next owner recovers the root. In a composed set with recovery and parked
+        // operators, a Consumed keep (an arrival at its attempt limit re-parks the root) marks the Recover unseen, so the same
+        // owner reads it again and recovers the root. The hook only delays the poll's Park facts read until the input is due.
+        async Task RereadAcrossFormats()
+        {
+            foreach (var (label, schema, format22) in new[] { ("format 22", Format22Schema, true), ("the composed recovery set", RecoverySchema, false) })
+            {
+                await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + schema, stop);
+                var schemaConnection = new NpgsqlConnectionStringBuilder(connection) { SearchPath = schema }.ConnectionString;
+                var hold = new RaceHook(schemaConnection);
+                var schemaOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(schemaConnection).AddInterceptors(hold).Options;
+                var recoveryTerminations = RootProfiles.Formats[StoreFormat.RootParkRecovery] | RootProfiles.Formats[StoreFormat.RootTerminalSelection];
+                Func<KernelDb> openSchema = format22 ? () => KernelDb.ForPostgresRootParkRecovery(schemaOptions)
+                    : () => KernelDb.ForUnshippedComposition(schemaOptions, ComposedRecovery, recoveryTerminations);
+                await using (var check = openSchema())
+                    Check(check.UsesRootParkRecovery && check.UsesRootParkedOperators != format22, $"{label} carries Park recovery" +
+                        (format22 ? " without parked operators" : " with parked operators"));
+                await using var set = new Set("parked-" + schema, openSchema, owned, inBatch, tenant, stop);
+                await set.InstallAsync(createTables: true);
+                await set.OwnAsync();
+                var root = await set.StartAsync(schema + "-root");
+                Check(await set.SendAsync(root, schema + "-fail", "fail"), $"{label} admits a failing input");
+                var parked = await set.DriveAsync(root, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+                var due = parked.AsOf + 1_500;
+                Check(await set.SendAsync(root, schema + "-input", "ordinary", due), $"{label} admits an input due shortly");
+                if (!format22) await set.AttemptLimitAsync(root, schema + "-input");
+                Check(await set.OperateAsync(root, schema + "-recover", Contract.Kinds.Recover, await set.ParkSelectionAsync(root, 2)),
+                    $"{label} admits a Recover with the Park selection behind it");
+                hold.Hold(parked.Actor.Id, due);
+                var first = set.Owner;
+                if (format22)
+                {
+                    await set.PassUntilAsync(() => set.StoodDown);
+                    Check(hold.Held == 1 && await set.ImageAsync(root) is { Status: InstanceStatus.Faulted },
+                        "format 22: the stale Recover failed its commit after the keep, and the owner stood down");
+                    await set.RetakeAsync();
+                }
+                var recovered = await set.DriveAsync(root, image => image is { Status: InstanceStatus.Running });
+                var journal = await set.Cold.ReadJournalOfAsync(0, recovered.Actor.Id, 0, stop);
+                Check(journal[^1].Entries == Json.Write(new { Outcome = "recovered", Operation = schema + "-recover",
+                        Restored = format22 ? 1 : 0, Cleared = format22 ? 1 : 2, AlreadyRearmed = 0 }) &&
+                        (format22 || ReferenceEquals(set.Owner, first) && !set.StoodDown),
+                    format22 ? "format 22: the next owner read the Recover again and recovered the root with the kept arrival"
+                        : "the composed recovery set: the owner that re-parked the root read the Recover again and recovered it, with no stand-down");
+            }
+        }
+
         // A composed set with Park arrivals and termination journals the refusal through the arrivals branch and keeps
         // arrivals on a parked root, suspended or not. A held command is refused there and the arrival behind it is kept.
         async Task ArrivalsSet()
@@ -514,12 +576,15 @@ internal static class PostgresRootParkedOperatorChecks
             var togetherPark = await set.ParkSelectionAsync(together, 2);
             var arrivalDue = (await set.ImageAsync(together)).AsOf + 1_500;
             Check(await set.SendAsync(together, "together-arrival", "ordinary", arrivalDue) &&
-                    await set.TerminateAsync(together, "together-terminate", togetherPark),
+                    await set.OperateAsync(together, "together-terminate", Contract.Kinds.Terminate, togetherPark, reply: true),
                 "an arrival due shortly and a Terminate with the Park selection behind it are admitted");
             race.Hold(togetherImage.Actor.Id, arrivalDue);
+            var togetherOwner = set.Owner;
             await set.DriveAsync(together, image => image is { Status: InstanceStatus.Cancelled });
             await set.TerminatedAsync(together, "together-terminate", cleared: 2);
-            Check(race.Held == 1 && race.Fired == 3, "one owner kept the arrival and ended the root, with no stand-down");
+            Check(race.Held == 1 && ReferenceEquals(set.Owner, togetherOwner) && !set.StoodDown,
+                "the owner that kept the arrival read the held Terminate again and ended the root, with no stand-down and no retake");
+            set.Answered("together-terminate", "terminated");
 
             // A Park larger than one page is refused with a recorded reason, and keeps every row.
             Check(await set.SendAsync(large, "arrivals-large-fail", "fail"), "the arrivals set admits a failing input for the large Park");
@@ -679,6 +744,9 @@ internal static class PostgresRootParkedOperatorChecks
         private readonly Dictionary<string, string> _names = new(StringComparer.Ordinal);
         private IScopeActivation _owner = null!;
         internal Probe Probe { get; } = new();
+        internal IScopeActivation Owner => _owner;
+        // The owner gave up its partition after a commit that did not land.
+        internal bool StoodDown => _owner is Worker { Owns: false };
         internal EfStore Cold { get; private set; } = null!;
         internal PostgresRootAdmission Admission { get; private set; } = null!;
         private PostgresRootReads _reads = null!;
@@ -698,7 +766,11 @@ internal static class PostgresRootParkedOperatorChecks
             await Admission.InstallAsync(stop);
             _cursor = await Admission.OpenJournalCursorAsync(stop);
             _reads = new PostgresRootReads(Cold, _cursor, 12);
-            _ingress = await Cold.OpenSelectedRootIngressAsync(Probe.Type, TimeSpan.FromHours(1), (scope, _) => ReferenceEquals(scope, tenant), stop);
+            await using (var profile = open())
+                // Format 22 has no selected-root ingress; its Recover is admitted directly.
+                _ingress = profile.UsesRootTerminalSelection
+                    ? await Cold.OpenSelectedRootIngressAsync(Probe.Type, TimeSpan.FromHours(1), (scope, _) => ReferenceEquals(scope, tenant), stop)
+                    : new PostgresRootIngress(Admission, Probe.Type, authorizeRecover: (_, _) => true);
         }
 
         internal async Task<IScopeActivation> OwnAsync()
@@ -769,6 +841,17 @@ internal static class PostgresRootParkedOperatorChecks
         {
             await using var read = open();
             return await read.Messages.AsNoTracking().SingleAsync(row => row.InboxScope == -4 && row.Id.StartsWith("operator/" + root.Id + "/"), stop);
+        }
+
+        // Puts a pending input at the owner's attempt limit, so its next delivery re-parks the root.
+        internal async Task AttemptLimitAsync(Contract.ActorRef root, string id)
+        {
+            await using var write = open();
+            var actor = (await ImageAsync(root)).Actor.Id;
+            if (await write.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Messages" SET "Attempts" = {new WorkerOptions().MaxAttempts} WHERE "Target" = {actor} AND "InboxScope" = -4
+                    AND "Id" LIKE {"%/" + FoundationRootCreator.OperationDigest(id) + "/%"} AND NOT "Done"
+                """, stop) != 1) throw new InvalidOperationException("The attempt-limit fixture changed no row.");
         }
 
         internal string SealPark(Contract.ActorRef root, long revision, long at) => PostgresRootSelection.SealPark(_cursor, tenant.Tenant, root.Id, revision, at);

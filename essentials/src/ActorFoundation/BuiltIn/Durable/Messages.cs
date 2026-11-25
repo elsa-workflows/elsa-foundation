@@ -75,8 +75,11 @@ internal sealed record FoundationParkMark(long Revision, long At);
 
 internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arrived, int Consumed, bool FitsPage, string KeptDigest)
 {
-    // S5b: the row holds jobs, children or custom handles, which a parked Terminate cannot dispose of yet.
+    // S5b: the row holds jobs, children, custom handles or subscriptions, which a parked Terminate cannot dispose of yet.
     internal bool Outstanding { get; init; }
+    // S5b: the store marks the command's row unseen when a Park keep changes the kept set (EfStore.RereadsParkFacts), so
+    // the owner forgets a copy read ahead of the keep and reads it again. Without it the stale command stays in memory.
+    internal bool Rereads { get; init; }
 }
 
 /// <summary>A message. Times are database time in milliseconds.</summary>
