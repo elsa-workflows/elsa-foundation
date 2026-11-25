@@ -27,7 +27,10 @@ short worktree path (MSB3030).
     `Microsoft.AspNetCore.TestHost`.
 
   Then:
-  - add both to `Elsa.Server.slnx`, and regenerate the solution filters and the dependency map;
+  - add both to `Elsa.Server.slnx`, and regenerate the solution filters;
+  - add the host to `essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj` as a build-only reference
+    (`ReferenceOutputAssembly="false"`), as main lists its other hosts, so
+    `Every_production_project_is_built_before_the_architecture_tests` reaches it and the EF guard finds it restored;
   - register the test project as PR tier in `tools/ci/test-tiers.json`, in exactly one PR shard;
   - add `Elsa.Migration.Host` to `ArchitectureGuardTests.ExpectedProjectPath` and `ExpectedSolutionFolder` the way
     `Elsa.Essentials.Host` is listed, and run `ArchitectureGuardTests` (R-1).

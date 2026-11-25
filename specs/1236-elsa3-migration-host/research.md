@@ -22,8 +22,9 @@ acceptance set and templates from the merged S-15, or from the head current at t
   Workbench's tests under `essentials/tests/Workbench/`. Constitution §E2.1 lists the host and test groupings that are
   not domains (`Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples`, `Elsa.Testing`); the implementing PR adds
   nothing there, as main's precedent for `Elsa.Essentials.Host` and `Elsa.Foundation.Host` shows (R-11). The
-  generated dependency map classifies the host as domain `Elsa.Migration`, role feature/implementation, as it does the
-  essentials host today; no map change is made for it.
+  architecture test project lists every `apps/` host as a build-only reference (`ReferenceOutputAssembly="false"`),
+  because `Every_production_project_is_built_before_the_architecture_tests` walks its reference graph; T002 adds this
+  host there too.
 - **Elsa 3 boundary.** The host references no `Elsa3.*` project and no Elsa 3 package (FR-003). A test checks its
   dependency closure (R-5), in addition to `Elsa3MigrationBoundaryTests`.
 - **Alternatives.**
