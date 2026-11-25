@@ -615,6 +615,9 @@ public sealed class DurableTurn
     public void CancelJob(string key) =>
         CancelJob(key, InboxKey.Ticket(Id, key, _input.Creation, JobGeneration(key) ?? 0), null);
 
+    /// <summary>Whether this turn started the job <paramref name="key"/>, whose ticket it has not sent yet.</summary>
+    internal bool StartedThisTurn(string key) => _started.ContainsKey(key);
+
     internal void CancelJob(string key, InboxKey? pending, string? deadline)
     {
         if (JobGeneration(key) is not { } generation) return; // never started, done, or its result is in this turn's inbox

@@ -356,13 +356,30 @@ preview node, which runs the registry it serves into, and the default shell. The
 kernel's and leaves out the old core's HTTP route table; the Workbench logs once at startup that it composed the feature.
 Before the node runs a turn, the default shell serves every slot its publications left active. An instance started on a
 version no slot serves any more loads that version from the default shell's executable store at its next turn. Studio's
-toolbox in the default shell hides the activities the kernel does not run (`kernel-unsupported`). Two limits stand,
-each with its own slice coming:
+toolbox in the default shell hides the activities the kernel does not run (`kernel-unsupported`). The HTTP edge, and
+the limits that stand, each with its own slice coming:
 
-- **No HTTP edge yet.** A served start route is in `KernelServing.Routes`, and nothing in the Workbench routes requests to
-  it.
-- **No schedule actor.** The PostgreSQL foundation hosts no schedule actor yet, so a Timer or Cron publish is refused at
-  the serving check, before anything is minted, and the refusal says what to change.
+- **HTTP edge.** A published workflow's HTTP endpoint is served on the kernel at `Elsa:CorePreview:HttpBasePath`
+  (default `/workflows/http`, the address Studio shows; the Workbench does not start when it differs from the default
+  shell's HTTP base path), within `Elsa:CorePreview:HttpTimeout` (default 30 s; past it the caller gets 504 and the
+  workflow runs on), in the tenant `Elsa:CorePreview:Tenant` (when unset, `Elsa:CorePreview:ReadsTenant`, else `default`; the
+  Embedded foundation binds one tenant per process, so two different values are refused). The route is matched before the body is read; a body over
+  `Elsa:CorePreview:HttpMaxRequestBodyBytes` (default 1 MiB) gets 413, a text body reaches the workflow as its string, a
+  body that is neither JSON nor text gets 415, an over-long query 414 and over-long headers 431. Only start routes are
+  served there, so a publish with an HTTP Endpoint that waits (anywhere but where the workflow begins, or with its
+  start-a-workflow option off) is refused (`definition_unsupported`). The old
+  core's standalone HTTP triggers still serve under the same base path, ahead of the edge. Studio's HTTP test run
+  (`/workflows/test-runs`) still runs on the old core (slice 8). `Elsa:CorePreview:HttpProbe` serves probes at
+  `{base}/core-preview/probe` and `{base}/core-preview/echo` for the Workbench check.
+- **No schedule actor, timers, child workflows or self-sends on format 24 yet.** The Workbench says so in its
+  `KernelHostCapabilities`, so a publish with a Timer or Cron, a Delay or a Dispatch Workflow is refused where it is
+  mapped (`definition_unsupported`), naming the node and what to change. Without self-sends the Native model does not
+  split a burst at the activity cap: it runs on to the next wait, bounded by the state and history size limits and by
+  10,000 activities (with a 30 s backstop that keeps a turn from holding its node), past which the workflow faults with `native.burst.limit` (`pg-held-callers` finishes a ForEach
+  over 1,200 items and faults a `While(true)` on format 24).
+- **A Faulted end commits on format 24** (profiles 9, 18 and 24): its held callers get the Faulted end, and a job issued
+  in the same turn is dropped. A timed job still registered at any end, a cancelled one included, is settled in the
+  terminal commit. On profiles 2, 6, 10 and 17 a Faulted end still stalls the node, as before.
 
 Run `PG_PREVIEW_PROFILE=publications bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release` to check
 that a Workbench with publications on serves its default shell on the kernel.

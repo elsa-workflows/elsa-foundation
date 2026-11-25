@@ -79,7 +79,9 @@ public sealed partial class EfStore
             // comparison. A missing bind or changed envelope returns false and rolls back all effects.
             var family = RootStatePrefix(db);
             var fingerprint = CreationProtocol.Fingerprint(Creator.Start, Creator.Kind, Creator.Payload);
-            var finished = Row.Status == InstanceStatus.Finished;
+            // A first turn that ends the root marks it terminal: Finished, or a Faulted or Cancelled end of a family that ends it.
+            var finished = Row.Status == InstanceStatus.Finished ||
+                Row.Status is InstanceStatus.Faulted or InstanceStatus.Cancelled && db.RootStateFamily.Ends(Row.Status);
             var candidates = await db.Messages.FromSqlInterpolated(AddRootWire(db, $"""
                 WITH consumed AS (
                     DELETE FROM "Messages" m USING "FoundationRootBirths" b

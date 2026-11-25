@@ -24,9 +24,10 @@ public sealed class HostOwnershipAdministration(RuntimeNode node, Func<bool> aut
     /// <param name="partitions">The virtual partitions to release, each in range for the node once authorized.</param>
     /// <param name="cancellationToken">Cancels the release; a partition already given up stays released.</param>
     /// <returns>
-    /// Not authorized on refusal, before the partitions are checked. Otherwise the partitions given up: a listed partition
-    /// that the node does not hold, or is taking, giving up or passing, is skipped, and none is given up once a stop or kill
-    /// has begun.
+    /// Not authorized on refusal, before the partitions are checked. Otherwise the partitions given up, those
+    /// whose fence the store released (<see cref="PartitionRuntime.ReleaseAsync"/>): a listed partition that the node does
+    /// not hold, or is taking, giving up or passing, is skipped, as is one the cancellation stopped before, and none is given
+    /// up once a stop or kill has begun. The result does not say which of these left a partition out.
     /// </returns>
     public async ValueTask<PartitionRelease> ReleaseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
     {

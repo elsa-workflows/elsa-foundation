@@ -8,7 +8,9 @@ namespace Kernel.Foundation.Postgres;
 
 /// <summary>Runs one PostgreSQL Core Preview node for the lifetime of its application host.</summary>
 /// <param name="logger">Each fault the node or this service records about its stop is logged once, at Error: a lost
-/// fence or a drain fault, a dispose that returned at its bound, a fault after a kill, and a fault of the shutdown itself.</param>
+/// fence or a drain fault, a dispose that returned at its bound, and a fault of the shutdown itself. Once a deadline has
+/// killed the drain, an error recorded later (by an operation the kill interrupted, possibly after the stop returned) is
+/// logged at Warning, beside the kill's own Warning.</param>
 /// <param name="requests">The held callers the node answers, on a store with held replies (<see cref="PostgresPreviewHosting.StartAsync"/>).</param>
 public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor,
     Action<string> endProcess, LoopOptions? options = null, ILogger<PostgresPreviewHostedService>? logger = null,
@@ -16,22 +18,35 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Exception, object> _logged = [];     // weak: no exception is kept alive
     private Exception? _shutdownFault;
+    private int _drainKilled;     // 1 once a stop that a deadline killed has returned: later errors are logged at Warning
 
     // One Error entry per fault, whether the node recorded it or the shutdown around it raised it.
-    private void Fault(Exception fault)
+    private void Fault(Exception fault) => Log(fault, again: false);
+
+    // The node's own reports: it reports each stop fault once, and a loop error again once its window has passed, with
+    // the repeats it suppressed, also when the loop rethrows the same instance. Each is logged as reported.
+    internal void NodeFault(Exception fault) => Log(fault, again: true);
+
+    private void Log(Exception fault, bool again)
     {
-        if (!_logged.TryAdd(fault, fault)) return;
-        if (fault is AggregateException aggregate)
+        if (!_logged.TryAdd(fault, fault) && !again) return;
+        if (fault is AggregateException { InnerExceptions.Count: > 0 } aggregate)     // an empty one is logged as itself
         {
             // The node has logged an aggregate's inner exceptions already: log only those that are not, never the aggregate.
-            foreach (var inner in aggregate.InnerExceptions) Fault(inner);
+            foreach (var inner in aggregate.InnerExceptions) Log(inner, again);
             return;
         }
         // The phase the node was in: a loop error on a running node is no stop fault.
         var phase = Volatile.Read(ref _shutdown) is null ? "running" : "stopping";
-        var repeats = fault.Data["SuppressedRepeats"] is long suppressed ? suppressed : 0;
-        logger?.LogError(fault, "The PostgreSQL preview node {Node} recorded an error while {Phase} ({Repeats} earlier repeats not logged).",
-            node, phase, repeats);
+        var repeats = fault.Data?["SuppressedRepeats"] is long suppressed ? suppressed : 0;
+        // After the deadline killed the drain, what the kill interrupted may end with an error the kill caused (its store
+        // torn down, say): a Warning beside the kill's own, still with the error, which LastError keeps too.
+        if (Volatile.Read(ref _drainKilled) == 1)
+            logger?.LogWarning(fault, "The PostgreSQL preview node {Node} recorded an error after the deadline killed its drain ({Repeats} earlier repeats not logged).",
+                node, repeats);
+        else
+            logger?.LogError(fault, "The PostgreSQL preview node {Node} recorded an error while {Phase} ({Repeats} earlier repeats not logged).",
+                node, phase, repeats);
     }
 
     private readonly Action<string> _endProcess = endProcess ?? throw new ArgumentNullException(nameof(endProcess));
@@ -57,12 +72,17 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         }
     }
 
+    /// <summary>Starts the node in place of the PostgreSQL hosting, given the node's fault callback and the startup token;
+    /// for witnesses of what this service logs around a node of their own.</summary>
+    internal Func<Action<Exception>, CancellationToken, Task<RuntimeNode>>? StartNode { get; init; }
+
     private async Task<RuntimeNode> StartNodeAsync(CancellationToken cancellationToken)
     {
         using var startup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancelStartup.Token);
+        if (StartNode is { } start) return await start(NodeFault, startup.Token);
         Kernel.Durable.IReplyTransport? replies = _requests;
         if (replies is not null && ObserveReplies is { } observe) replies = observe(replies);
-        return await PostgresPreviewHosting.StartAsync(create, node, actor, Escalate, options, startup.Token, Fault, replies);
+        return await PostgresPreviewHosting.StartAsync(create, node, actor, Escalate, options, startup.Token, NodeFault, replies);
     }
 
     /// <summary>
@@ -177,7 +197,13 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
                 await ((Task)startup).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
                 // The caller's deadline and a dispose deadline both end the drain as a kill.
                 using var stop = CancellationTokenSource.CreateLinkedTokenSource(deadline, _killNode.Token);
-                if (startup.IsCompletedSuccessfully) await startup.Result.StopAsync(stop.Token);
+                if (startup.IsCompletedSuccessfully)
+                {
+                    // Once the stop has returned: a fault the halt recorded before then (its drain's, also one it throws
+                    // at the kill) stays an Error; only what lands later, from an operation the kill interrupted, is not.
+                    try { await startup.Result.StopAsync(stop.Token); }
+                    finally { if (stop.IsCancellationRequested) Volatile.Write(ref _drainKilled, 1); }
+                }
                 AfterNodeStop?.Invoke();
             }
         }

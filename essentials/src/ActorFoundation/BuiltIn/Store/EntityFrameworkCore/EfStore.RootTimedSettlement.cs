@@ -47,7 +47,8 @@ public sealed partial class EfStore
 
     private static void RequireRootTimedIssuance(TurnCommit turn, InstanceRow row)
     {
-        if (row.Status == InstanceStatus.Faulted || turn.Sent.Count != 0 && !RootJobTicket.StartsTimedPair(turn.Sent, row.Id, row.Model))
+        // A root that ends Faulted issues no job; one that runs issues only a timed pair.
+        if (turn.Sent.Count != 0 && (row.Status == InstanceStatus.Faulted || !RootJobTicket.StartsTimedPair(turn.Sent, row.Id, row.Model)))
             throw RootShape();
     }
 
@@ -69,8 +70,8 @@ public sealed partial class EfStore
         if (inputs is [var recorded])
         {
             if (!recorded.FoundationJobResult || recorded.JobGeneration != job.Generation ||
-                recorded.Read<JobFinished>() is not { } result || result.Key != job.Key ||
-                row.Status == InstanceStatus.Faulted && result is not { Error: "timeout", Result: null } || completion is not null)
+                // The applied result may end the root Faulted, whatever it was: the family ends Faulted roots.
+                recorded.Read<JobFinished>() is not { } result || result.Key != job.Key || completion is not null)
                 throw RootShape();
             if (RootTimedJobPreviewEnabled && turn.Sent.Count != 0)
             {

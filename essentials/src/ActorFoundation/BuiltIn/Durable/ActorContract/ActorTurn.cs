@@ -151,6 +151,14 @@ internal sealed partial class ActorAdapter
         public void CancelJob(string key)
         {
             if (_turn.JobGeneration(key) is not { } generation) return;
+            if (_inMemory is null)
+            {
+                // A root provider: a job this turn started goes with its ticket and deadline, which were never sent. An earlier
+                // one stays registered: the root's end settles it in its terminal commit, or its result lands where nothing
+                // waits for it any more.
+                if (_turn.StartedThisTurn(key)) _turn.CancelJob(key, null, null);
+                return;
+            }
             var ticketKey = Durable.InboxKey.Ticket(_row.Id, key, _row.Creation, generation);
             var ticket = Store.FoundationJob(_row.Id, _row.Creation, key, generation).Ticket;
             if (ticket is null && _input.VolatileMessage(ticketKey) is { Kind: Durable.Kinds.Job } local)
@@ -224,6 +232,10 @@ internal sealed partial class ActorAdapter
             outcome.FoundationValues = _values;
             var cascades = outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Terminate) ||
                 ended && _status == Contract.ActorStatus.Cancelled;
+            // A root provider settles the jobs still registered at the model's own end (Finished or Faulted; a cancelled job
+            // stays registered until then) in a cascade of those jobs alone, which its terminal commit discharges. Its
+            // children are untouched, as at an end with no job.
+            var settlesJobs = !cascades && ended && _inMemory is null && _turn.Jobs() is not null;
 
             outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
             for (var i = 0; i < outcome.Replied.Count; i++)
@@ -234,7 +246,8 @@ internal sealed partial class ActorAdapter
                 if (message.Read<Durable.FoundationChildNotice>().Final) _children.Remove(new(message.Sender!, message.SenderCreation));
             }
 
-            var cascade = cascades ? new Durable.CascadeRegistry(_turn.MoveJobsToCascade(), [.. _children]) : null;
+            var cascade = cascades ? new Durable.CascadeRegistry(_turn.MoveJobsToCascade(), [.. _children])
+                : settlesJobs ? new Durable.CascadeRegistry(_turn.MoveJobsToCascade(), []) : null;
             var row = _row.WithFoundationState(State) with { Revision = _turn.Revision, Status = (Durable.InstanceStatus)_status, Jobs = _turn.Jobs(),
                 Children = cascades ? null : Durable.ChildRegistry.Write(_children) };
             if (ended)
@@ -267,7 +280,11 @@ internal sealed partial class ActorAdapter
                 }
             }
             var sealedTurn = _turn.Seal(outcome, row, State, journal);
-            return cascade is null ? sealedTurn : Durable.CascadeProtocol.Open(sealedTurn, cascade);
+            if (cascade is null) return sealedTurn;
+            var opened = Durable.CascadeProtocol.Open(sealedTurn, cascade);
+            // Opening a cascade clears the row's registries; a jobs-only one leaves its children where they were.
+            if (settlesJobs && opened.Row is { } settled) opened.Row = settled with { Children = row.Children };
+            return opened;
         }
 
         private long InlineUntil()
