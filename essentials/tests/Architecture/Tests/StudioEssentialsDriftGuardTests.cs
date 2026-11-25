@@ -13,7 +13,7 @@ namespace Elsa.Architecture.Tests;
 /// <remarks>
 /// <para>
 /// Both sides are read statically. <b>The server's capabilities</b> are the <c>elsa.api.*</c> ids declared, in a source file that
-/// builds an <c>ApiCapabilityDeclaration</c>, by a project in the server's transitive <c>ProjectReference</c> closure that
+/// uses one of the declaration forms in <see cref="DeclarationTokens"/>, by a project in the server's transitive <c>ProjectReference</c> closure that
 /// declares at least one feature its <c>shells.json</c> enables. That is a project-level approximation: a project carries one
 /// domain's API, and its capability sources (the user-task source in the runtime API, for one) are registered by its enabled
 /// feature rather than declared beside it, so a finer per-feature split would miss them. It can overstate what the server
@@ -39,6 +39,8 @@ public sealed class StudioEssentialsDriftGuardTests
         {
             ["Elsa.Studio.Workflows"] = (id => id.StartsWith("elsa.api.bpmn-", StringComparison.Ordinal),
                 "The BPMN process and run screens live in the Workflows module and show once the BPMN server add-on advertises elsa.api.bpmn-*."),
+            ["Elsa.Studio.Dashboard"] = (id => id == "elsa.api.studio-dashboard-authoring",
+                "Dashboard question authoring in the Weaver dock (native/weaverAuthoring.tsx); Weaver's server add-on declares it."),
         };
 
     /// <summary>Modules that name no backend capability and ship compiled into Studio Essentials.</summary>
@@ -51,14 +53,26 @@ public sealed class StudioEssentialsDriftGuardTests
             ["Elsa.Studio.ExpressionEditors.Liquid"] = (["Liquid"], "The Liquid expression editor; the server compiles in Liquid expressions."),
         };
 
-    /// <summary>Modules that name no backend capability and reach Studio Essentials only from the feed.</summary>
-    internal static readonly IReadOnlyDictionary<string, string> FeedOnlyWithoutBackend = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        ["Elsa.Studio.Weaver.Workflows"] = "Weaver's workflow tools; the Weaver server API is a feed add-on on the Essentials server.",
-        ["Elsa.Studio.ExtensionBuilder"] = "A development tool; extensions and diagnostics stay feed add-ons (#5717).",
-        ["Elsa.Studio.ConsoleStream"] = "A development tool that streams the Studio host's console; it stays a feed add-on (#5717).",
-        ["Elsa.Studio.Samples.WeatherForecast"] = "The sample feature; it stays a feed add-on (#5717).",
-    };
+    /// <summary>
+    /// Modules that name no backend capability and reach Studio Essentials only from the feed. Where the module has a server
+    /// side, <c>ServerRoot</c> names it, and the guard checks the reason: no project under it is in the Essentials server's
+    /// closure, and the server advertises none of the capabilities it declares.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, (string? ServerRoot, string Reason)> FeedOnlyWithoutBackend =
+        new Dictionary<string, (string?, string)>(StringComparer.Ordinal)
+        {
+            ["Elsa.Studio.Weaver.Workflows"] = ("extensions/Weaver/src", "Weaver's workflow tools; the Weaver server side is a feed add-on on the Essentials server."),
+            ["Elsa.Studio.ExtensionBuilder"] = ("extensions/ExtensionBuilder/src", "A development tool; extensions and diagnostics stay feed add-ons (#5717)."),
+            ["Elsa.Studio.ConsoleStream"] = (null, "A development tool that streams the Studio host's own console, with no server side; it stays a feed add-on (#5717)."),
+            ["Elsa.Studio.Samples.WeatherForecast"] = (null, "The sample feature, with no server side; it stays a feed add-on (#5717)."),
+        };
+
+    /// <summary>
+    /// Every form a production source file uses to declare a capability: a declaration record, the registration helper, the
+    /// service-collection extensions and capability sources. <see cref="Every_capability_literal_sits_in_a_declaration_file"/>
+    /// fails when a file names an <c>elsa.api.*</c> id without one, so a new declaration form cannot slip past the scan.
+    /// </summary>
+    internal static readonly string[] DeclarationTokens = ["ApiCapabilityDeclaration", "ApiCapabilityRegistration", "AddApiCapability", "IApiCapabilitySource"];
 
     private static readonly Regex CapabilityLiteral = new("""["'](?<id>elsa\.api\.[a-z0-9][a-z0-9.-]*)["']""", RegexOptions.Compiled);
     private static readonly Regex StudioModuleAttribute = new(@"^\s*\[StudioModule\(", RegexOptions.Compiled | RegexOptions.Multiline);
@@ -79,7 +93,7 @@ public sealed class StudioEssentialsDriftGuardTests
             $"{StudioProject} is out of step with {ServerProject}.",
             .. missing.Select(module => $"  Missing: {module}, whose requirement [{string.Join(", ", Requirement(module, modules[module]))}] the server serves. Add its ProjectReference, its assembly in Program.cs and its feature in shells.json."),
             .. extra.Select(module => modules[module].Count == 0
-                ? $"  Not in the set: {module} names no capability and is reviewed as feed-only ({FeedOnlyWithoutBackend.GetValueOrDefault(module, "unlisted")}). Remove it."
+                ? $"  Not in the set: {module} names no capability and is reviewed as feed-only ({(FeedOnlyWithoutBackend.TryGetValue(module, out var entry) ? entry.Reason : "unlisted")}). Remove it."
                 : $"  Not served: {module}, which requires [{string.Join(", ", Requirement(module, modules[module]).Except(served))}] beyond what the server advertises. Remove it; it is a feed add-on."),
         ]));
     }
@@ -100,6 +114,39 @@ public sealed class StudioEssentialsDriftGuardTests
         Assert.True(unlisted.Length == 0, $"Studio modules that name no elsa.api.* capability must be listed in InSetWithoutBackend or FeedOnlyWithoutBackend, with a reason: {string.Join(", ", unlisted)}");
         Assert.True(stale.Length == 0, $"Listed as naming no capability, but missing or naming one now: {string.Join(", ", stale)}");
         Assert.Empty(InSetWithoutBackend.Keys.Intersect(FeedOnlyWithoutBackend.Keys));
+    }
+
+    /// <summary>A feed-only module with a server side is feed-only because the Essentials server leaves that side out.</summary>
+    [Fact]
+    public void Feed_only_modules_have_their_server_side_left_out_of_the_essentials_server()
+    {
+        var closure = Closure(Path.Join(RepoRoot, ServerProject));
+        var served = ServerCapabilities();
+        foreach (var (module, (serverRoot, _)) in FeedOnlyWithoutBackend)
+        {
+            if (serverRoot is null)
+                continue;
+            var root = Path.GetFullPath(Path.Join(RepoRoot, serverRoot)) + Path.DirectorySeparatorChar;
+            Assert.True(Directory.Exists(root), $"{module}: {serverRoot} does not exist.");
+            var compiledIn = closure.Where(project => project.StartsWith(root, StringComparison.OrdinalIgnoreCase)).ToArray();
+            Assert.True(compiledIn.Length == 0, $"{module} is reviewed as feed-only, but the Essentials server compiles in {string.Join(", ", compiledIn)}.");
+            var declared = SourceFiles(root, "*.cs").Select(File.ReadAllText).Where(IsDeclarationFile).SelectMany(CapabilityIds).ToArray();
+            Assert.True(!declared.Any(served.Contains), $"{module} is reviewed as feed-only, but the Essentials server serves {string.Join(", ", declared.Where(served.Contains))}.");
+        }
+    }
+
+    /// <summary>Every production file that names an <c>elsa.api.*</c> id uses a declaration form the server scan reads.</summary>
+    [Fact]
+    public void Every_capability_literal_sits_in_a_declaration_file()
+    {
+        var roots = new[] { Path.Join(RepoRoot, "essentials", "src") }
+            .Concat(Directory.EnumerateDirectories(Path.Join(RepoRoot, "extensions")).Select(extension => Path.Join(extension, "src")).Where(Directory.Exists));
+        var unread = roots.SelectMany(root => SourceFiles(root, "*.cs"))
+            .Where(file => File.ReadAllText(file) is var source && CapabilityLiteral.IsMatch(source) && !IsDeclarationFile(source))
+            .Select(file => Path.GetRelativePath(RepoRoot, file))
+            .ToArray();
+
+        Assert.True(unread.Length == 0, $"These files name an elsa.api.* id without a form in DeclarationTokens; add the form so the server scan reads them: {string.Join(", ", unread)}");
     }
 
     /// <summary>An in-set module without a capability id still depends on server features; those must stay enabled.</summary>
@@ -186,14 +233,14 @@ public sealed class StudioEssentialsDriftGuardTests
                 .SelectMany(source => ShellFeatureName.Matches(source).Select(match => match.Groups["name"].Value))
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
-            var capabilities = sources
-                .Where(source => source.Contains("ApiCapabilityDeclaration", StringComparison.Ordinal))
-                .SelectMany(source => CapabilityLiteral.Matches(source).Select(match => match.Groups["id"].Value))
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
+            var capabilities = sources.Where(IsDeclarationFile).SelectMany(CapabilityIds).Distinct(StringComparer.Ordinal).ToArray();
             yield return (project, features, capabilities);
         }
     }
+
+    private static bool IsDeclarationFile(string source) => DeclarationTokens.Any(token => source.Contains(token, StringComparison.Ordinal));
+
+    private static IEnumerable<string> CapabilityIds(string source) => CapabilityLiteral.Matches(source).Select(match => match.Groups["id"].Value);
 
     /// <summary>Every Studio module (a project with a <c>[StudioModule]</c> feature) by assembly name, with the capability ids its client names.</summary>
     private static Dictionary<string, IReadOnlySet<string>> StudioModules()
