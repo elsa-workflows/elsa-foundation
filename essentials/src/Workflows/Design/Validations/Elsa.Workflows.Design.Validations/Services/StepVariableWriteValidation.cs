@@ -25,8 +25,8 @@ namespace Elsa.Workflows.Design.Validations.Services;
 /// </summary>
 internal static class StepVariableWriteValidation
 {
-    public const string ReferenceRuleId = "ValueFlow/VariableReference";
-    public const string OverlapRuleId = "ValueFlow/StepWriteOverlapsCapture";
+    public const string ReferenceRuleId = Core.Contracts.StepVariableWriteRules.VariableReference;
+    public const string OverlapRuleId = Core.Contracts.StepVariableWriteRules.StepWriteOverlapsCapture;
 
     public static async Task<(StepVariableWriteFacts Facts, IReadOnlyList<ValidationError> Errors)> AnalyzeAsync(
         ActivityNode root,
@@ -34,7 +34,8 @@ internal static class StepVariableWriteValidation
         IActivityStructureService structures,
         IActivityDefinitionLookup catalog,
         CancellationToken cancellationToken,
-        ScriptVariableReadResolver? scriptReads = null)
+        ScriptVariableReadResolver? scriptReads = null,
+        bool reportRefusedScriptWrites = false)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(structures);
@@ -115,6 +116,13 @@ internal static class StepVariableWriteValidation
                     .Resolve(workflowVariables, root, ScopedVariablePicker.DefaultMaxDepth, includeIterationScopes: true);
                 if (scriptReads.Resolve("JavaScript", script, visibility.GetVisibleScopes(node.NodeId), scriptBody: true) is { } plan)
                 {
+                    // Spec 1241 FR-009: a graph body has no script read validator of its own, so its refused literal writes
+                    // are reported here, as a workflow's script read validator reports them.
+                    if (reportRefusedScriptWrites)
+                        foreach (var (write, code) in plan.RefusedLiteralWrites())
+                            errors.Add(new ValidationError($"{node.NodeId}/inputs/{scriptInput}", Core.Contracts.StepVariableWriteRules.RefusedScriptWrite,
+                                ScriptVariableReadDiagnostics.DescribeLiteralWriteRefusal(code, scriptInput, node.NodeId, script, write)));
+
                     if (plan.WorkflowState.HasInvalidLiteralCall)
                         errors.Add(new ValidationError(node.NodeId, "VF-STATE-001",
                             "A workflow-state call has an invalid literal output name, identity kind, argument count or undefined payload. Use a nonblank string output name, string/null identity, defined JSON payload and the method's exact arguments."));

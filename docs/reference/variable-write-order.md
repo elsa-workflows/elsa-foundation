@@ -48,8 +48,12 @@ in workflow draft validation: an activity with a `VariableReference<T>` input wr
 to, and an activity type marked `[AccessesUndeclaredVariables]` counts as writing every variable visible to it, which
 the warning says. A step that writes a variable in its body and also captures an output into it gets
 `ValueFlow/StepWriteOverlapsCapture`: both commit with the step, the capture last, so the capture wins. A reusable
-(graph) activity's body is not checked for step writers yet: its warning counts captures only, and a session write to
-a body variable faults the step at run time, since a step session cannot write a closed scope's variables yet (#4805).
+(graph) activity's body gets the same checks in its draft validation and compilation
+([spec 1241](../../specs/1241-closed-scope-step-writes/spec.md)): its step writers join
+`activity.graph.unordered-variable-write`, a step write that overlaps the node's own capture is
+`activity.graph.step-write-overlaps-capture` (a warning), a variable reference that is unbound, undeclared, not a
+variable or of another type is `activity.graph.variable-reference`, and a script's literal write to a name the body does
+not declare, or to a loop item or index, is `activity.graph.script-write` (both errors).
 
 ## Which writes count as unordered
 
@@ -80,8 +84,9 @@ Each structure declares how its children relate in time; the warning has no list
 
 The analysis sees declared writes and step writers: captures, intrinsics, a C# activity's writable variable
 references, an activity marked `[AccessesUndeclaredVariables]`, and a script's may-write set (a script that writes by a
-computed name counts as writing every visible variable; spec 1231). It does not see writes inside sub-workflows and
-graph activities (#4805). No warning does not mean no write conflict.
+computed name counts as writing every visible variable; spec 1231). It does not see writes inside sub-workflows. A
+graph activity's body writes only its own variables, which the graph activity's own validation checks; to its caller a
+graph activity writes only through its output captures. No warning does not mean no write conflict.
 A BPMN process with link events, with a cycle that can be entered at more than one element, or with a cycle that only
 a boundary event leads into, declares nothing, so its writes are reported as undeclared.
 A `Break` that ends a Flowchart cancels the other paths' running activities, so they commit nothing afterwards.

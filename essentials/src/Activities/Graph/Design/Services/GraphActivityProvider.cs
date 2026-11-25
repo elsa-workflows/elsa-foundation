@@ -76,6 +76,9 @@ public sealed class GraphActivityProvider(
     private const string ArgumentMalformedCode = "activity.graph.argument-malformed";
     private const string UnorderedWriteCode = "activity.graph.unordered-variable-write";
     private const string DuplicateCaptureTargetCode = "activity.graph.duplicate-capture-target";
+    private const string StepVariableReferenceCode = "activity.graph.variable-reference";
+    private const string StepScriptWriteCode = "activity.graph.script-write";
+    private const string StepWriteOverlapsCaptureCode = "activity.graph.step-write-overlaps-capture";
     private static readonly JsonSerializerOptions NodeSerializerOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
@@ -125,7 +128,13 @@ public sealed class GraphActivityProvider(
         new("activity.graph.manifest.value-required", "The expression value is missing.",
             "Choose a value for the expression in the activity settings."),
         new("activity.graph.manifest.string-required", "A required graph setting is missing or has an unsupported format.",
-            "Review the variable and output settings and supply the required value.")
+            "Review the variable and output settings and supply the required value."),
+        new(StepVariableReferenceCode, "A variable-reference input is not bound to a declared variable of a fitting type.",
+            "Bind the input to a variable this activity declares, or one of an enclosing container, whose type fits the input."),
+        new(StepScriptWriteCode, "A script writes a variable it cannot write.",
+            "Declare the variable on this activity or an enclosing container, or write another variable. A loop's item and index are read-only."),
+        new(StepWriteOverlapsCaptureCode, "A step writes a variable that its own output capture also writes; the capture wins.",
+            "Write the variable in one place: in the step, or through the output capture.")
     ];
 
     public string ProviderKey => Key;
@@ -239,13 +248,13 @@ public sealed class GraphActivityProvider(
             ValidateGraph(graph, contract, subject, diagnostics, completeNodes);
             // A draft has no resolved dependencies yet, so producer results and capture types are checked at compile.
             ValidateBodyReferences(graph, contract, nodes, dependencyContracts: null, subject, diagnostics);
-            ValidateWriteOrder(nodes, subject, diagnostics);
+            await ValidateWriteOrderAsync(graph, nodes, subject, diagnostics, cancellationToken);
         }
 
         return ActivityDiagnosticOrderer.Order(diagnostics);
     }
 
-    public ValueTask<ActivityTemplateCompilation> CompileAsync(
+    public async ValueTask<ActivityTemplateCompilation> CompileAsync(
         ActivityTemplateCompilationRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -276,12 +285,12 @@ public sealed class GraphActivityProvider(
                     .ToDictionary(x => x.Key, x => x.First().Contract, StringComparer.Ordinal),
                 subject,
                 diagnostics);
-            ValidateWriteOrder(nodes, subject, diagnostics);
+            await ValidateWriteOrderAsync(graph, nodes, subject, diagnostics, cancellationToken);
         }
 
         var orderedDiagnostics = ActivityDiagnosticOrderer.Order(diagnostics);
         if (graph is null || orderedDiagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
-            return ValueTask.FromResult(EmptyCompilation(request.ProviderFingerprint, orderedDiagnostics));
+            return EmptyCompilation(request.ProviderFingerprint, orderedDiagnostics);
 
         var directDependencies = request.ResolvedDirectDependencies
             .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
@@ -314,7 +323,7 @@ public sealed class GraphActivityProvider(
             }
         }
         if (diagnostics.Any(diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error))
-            return ValueTask.FromResult(EmptyCompilation(request.ProviderFingerprint, ActivityDiagnosticOrderer.Order(diagnostics)));
+            return EmptyCompilation(request.ProviderFingerprint, ActivityDiagnosticOrderer.Order(diagnostics));
         var occupied = nodes.Select(node => node.NodeId).Concat(localNodes.Select(node => node.ExecutableNodeId)).ToHashSet(StringComparer.Ordinal);
         var boundaryId = "graph-boundary";
         for (var suffix = 1; occupied.Contains(boundaryId); suffix++) boundaryId = $"graph-boundary:{suffix}";
@@ -351,7 +360,7 @@ public sealed class GraphActivityProvider(
             { StructureInputs = OptionalInputProjection(node.Activity) })
             .ToArray();
 
-        return ValueTask.FromResult(new ActivityTemplateCompilation(
+        return new ActivityTemplateCompilation(
             executableRoot,
             new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal),
             directDependencies,
@@ -367,7 +376,7 @@ public sealed class GraphActivityProvider(
             request.ProviderFingerprint,
             [],
             orderedDiagnostics,
-            occurrences));
+            occurrences);
     }
 
     public ValueTask<ActivityTemplateDependencyDiscovery> DiscoverDependenciesAsync(
@@ -1811,15 +1820,50 @@ public sealed class GraphActivityProvider(
     }
 
     // Spec 266: captures into the activity's own variables whose order the body does not fix are reported as warnings,
-    // alongside any errors; compilation still succeeds when there are no errors.
-    private void ValidateWriteOrder(IReadOnlyList<GraphNode> nodes, ActivityDiagnosticSubject subject, List<ActivityDiagnostic> diagnostics)
+    // alongside any errors; compilation still succeeds when there are no errors. Spec 1241 FR-009: the body's step writes
+    // are checked as a workflow draft's are, and its step writers join the concurrent-write rule.
+    private async ValueTask ValidateWriteOrderAsync(
+        ActivityGraphManifest graph,
+        IReadOnlyList<GraphNode> nodes,
+        ActivityDiagnosticSubject subject,
+        List<ActivityDiagnostic> diagnostics,
+        CancellationToken cancellationToken)
     {
-        if (writeOrderAnalyzer is null ||
-            nodes.FirstOrDefault(x => x.ParentOccurrenceId is null)?.Activity is not { } root)
+        if (nodes.FirstOrDefault(x => x.ParentOccurrenceId is null)?.Activity is not { } root)
             return;
 
         var pointers = nodes.GroupBy(x => x.NodeId, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.First().JsonPointer, StringComparer.Ordinal);
-        var result = writeOrderAnalyzer.Analyze(root, activityStructureService, includeIntrinsics: false);
+        var stepWrites = await AnalyzeStepWritesAsync(graph, root, cancellationToken);
+        foreach (var finding in stepWrites.Findings)
+        {
+            var nodeId = finding.Path.Split('/')[0];
+            var (code, severity) = finding.Type switch
+            {
+                StepVariableWriteRules.VariableReference => (StepVariableReferenceCode, ActivityDiagnosticSeverity.Error),
+                StepVariableWriteRules.RefusedScriptWrite => (StepScriptWriteCode, ActivityDiagnosticSeverity.Error),
+                StepVariableWriteRules.StepWriteOverlapsCapture => (StepWriteOverlapsCaptureCode, ActivityDiagnosticSeverity.Warning),
+                // Workflow-state findings belong to the body's own workflow-state checks.
+                _ => (null, ActivityDiagnosticSeverity.Warning)
+            };
+            if (code is null)
+                continue;
+            diagnostics.Add(new ActivityDiagnostic(
+                code,
+                severity,
+                finding.Message,
+                subject,
+                new ActivityDiagnosticLocation(Key, pointers.GetValueOrDefault(nodeId)),
+                Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["validationType"] = finding.Type,
+                    ["validationPath"] = finding.Path
+                }));
+        }
+
+        if (writeOrderAnalyzer is null)
+            return;
+
+        var result = writeOrderAnalyzer.Analyze(root, activityStructureService, includeIntrinsics: false, stepWrites.Facts, cancellationToken);
         foreach (var finding in result.UnorderedWrites)
         {
             diagnostics.Add(Warning(
@@ -1841,6 +1885,24 @@ public sealed class GraphActivityProvider(
                 "ValueFlow/DuplicateCaptureTarget",
                 $"{duplicate.NodeId}/outputs/{duplicate.OutputKeys[^1]}"));
         }
+    }
+
+    // Spec 1241 FR-009: the step-write checks a graph body shares with a workflow draft. Without a composed analyzer or
+    // catalog the body is checked for captures only, as before.
+    private async ValueTask<StepVariableWriteAnalysis> AnalyzeStepWritesAsync(ActivityGraphManifest graph, ActivityNode root, CancellationToken cancellationToken)
+    {
+        if (scopeFactory is null)
+            return StepVariableWriteAnalysis.None;
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        if (scope.ServiceProvider.GetService<IStepVariableWriteAnalyzer>() is not { } analyzer)
+            return StepVariableWriteAnalysis.None;
+
+        var variables = graph.Variables
+            .Select(x => new VariableDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
+                x.InitialValue is null ? null : new ArgumentValue(x.InitialValue.Value, x.InitialValue.Syntax)))
+            .ToArray();
+        return await analyzer.AnalyzeAsync(root, variables, cancellationToken);
     }
 
     private static ActivityDiagnostic Warning(

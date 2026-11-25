@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-25
 
-**Status**: Approved (coordinator, 2026-11-25)
+**Status**: Implemented (PR #5786)
 
 **Input**: A step inside a reusable (graph) activity body changes that body's own variables through its variable
 session, as a step in a workflow already can. Graph bodies get the same step-write checks at publish as workflow

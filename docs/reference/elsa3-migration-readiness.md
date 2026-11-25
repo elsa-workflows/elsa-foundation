@@ -92,11 +92,13 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
    Do not move Correlate, Set Name or Finish into a regular workflow called by Dispatch or Execute Workflow instead:
    there they would act on the called workflow, not the caller.
 
-   No JavaScript or Liquid assigns a value either (`setVariable`, `setOutput`, `setInput`, `setResult`, a generated
-   `set{Name}(...)`, `setCorrelationId`, `setWorkflowInstanceName`, `variables.x = ...`, Liquid `assign`): that is
-   refused in a reusable workflow (`VF-IMP-005`), and the Set, Correlate or Set Name activity its guidance points to is
-   not available in a reusable body yet. In a regular workflow, a RunJavaScript script's `setVariable`, generated
-   setters and member changes convert (spec 1231); see the Elsa 3 mapping README.
+   A RunJavaScript script changes the reusable workflow's own variables as in a regular workflow: `setVariable`,
+   generated setters and member changes convert (specs 1231 and 1241); see the Elsa 3 mapping README. A script that
+   sets one of the reusable workflow's inputs, which Elsa 3 held as a local variable, is refused (`VF-IMP-005`): declare
+   a variable, initialize it from the input, and set that variable. No input expression or Liquid assigns a value, and
+   no script sets the running workflow's state (`setOutput`, `setInput`, `setResult`, `setCorrelationId`,
+   `setWorkflowInstanceName`, Liquid `assign`): that is refused in a reusable workflow (`VF-IMP-005`), and the Set,
+   Correlate or Set Name activity its guidance points to is not available in a reusable body yet.
 3. **Reading values.** A body reads its own values as in Elsa 3 (spec 265): `getInput(...)`, a generated `get{Name}()`
    accessor, `getVariable(...)`, `variables.x`, a property bound to a variable or to another activity's output, and an
    output captured into one of its variables. These convert to the same bindings as in a regular workflow; Liquid
