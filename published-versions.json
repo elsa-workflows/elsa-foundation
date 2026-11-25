@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "bd25e0d1847b283d77e7716c33f7765c4c627a0d",
+  "last_publish_commit": "18de037a36588a01be45e180505a3c812c7e7b16",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -1199,13 +1199,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Activities",
-      "version": "4.0.3-preview",
-      "commit": "bd25e0d1847b283d77e7716c33f7765c4c627a0d"
+      "version": "4.0.4-preview",
+      "commit": "18de037a36588a01be45e180505a3c812c7e7b16"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Model",
-      "version": "4.0.4-preview",
-      "commit": "bd25e0d1847b283d77e7716c33f7765c4c627a0d"
+      "version": "4.0.5-preview",
+      "commit": "18de037a36588a01be45e180505a3c812c7e7b16"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
@@ -1239,8 +1239,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.WorkflowActor",
-      "version": "4.0.4-preview",
-      "commit": "6721ba94545a6ba23af0e3aeedf4b1f0391983bf"
+      "version": "4.0.5-preview",
+      "commit": "18de037a36588a01be45e180505a3c812c7e7b16"
     },
     {
       "package_id": "Elsa3.Activities.Design.Import",
