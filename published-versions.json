@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "8d03ee2fda79dd791640f9eb936ea2a542c575c0",
+  "last_publish_commit": "1261e47871ecaf2e573869889232359bbc8c853a",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -44,8 +44,8 @@
     },
     {
       "package_id": "Elsa.Activities.Design.Core",
-      "version": "4.0.32-preview",
-      "commit": "5d835d43b653f169f0bf491cab75861b5a5a45dc"
+      "version": "4.0.33-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Activities.Design.Persistence.Core",
@@ -64,8 +64,8 @@
     },
     {
       "package_id": "Elsa.Activities.Design.Reconciliation.Clr",
-      "version": "4.0.27-preview",
-      "commit": "5d835d43b653f169f0bf491cab75861b5a5a45dc"
+      "version": "4.0.28-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Activities.Design.Reconciliation.Json",
@@ -349,13 +349,13 @@
     },
     {
       "package_id": "Elsa.Attention.Core",
-      "version": "4.0.25-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.26-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Caching.Core",
-      "version": "4.0.25-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.26-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Caching.Memory",
@@ -569,8 +569,8 @@
     },
     {
       "package_id": "Elsa.Events.Core",
-      "version": "4.0.25-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.26-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Events.Strategies",
@@ -589,8 +589,8 @@
     },
     {
       "package_id": "Elsa.Expressions.Core",
-      "version": "4.0.25-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.26-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Expressions.JavaScript",
@@ -764,8 +764,8 @@
     },
     {
       "package_id": "Elsa.Locking.Core",
-      "version": "4.0.25-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.26-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Locking.Database",
@@ -784,8 +784,8 @@
     },
     {
       "package_id": "Elsa.Mediator.Core",
-      "version": "4.0.25-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.26-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Modularity.Api",
@@ -829,13 +829,13 @@
     },
     {
       "package_id": "Elsa.Pipelines.Core",
-      "version": "4.0.25-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.26-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Primitives",
-      "version": "4.0.25-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.26-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Primitives.Hosting",
@@ -904,8 +904,8 @@
     },
     {
       "package_id": "Elsa.Serialization.Core",
-      "version": "4.0.25-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.26-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Serialization.Newtonsoft",
@@ -959,8 +959,8 @@
     },
     {
       "package_id": "Elsa.Tasks.Core",
-      "version": "4.0.25-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.26-preview",
+      "commit": "1261e47871ecaf2e573869889232359bbc8c853a"
     },
     {
       "package_id": "Elsa.Tasks.Schedules",
