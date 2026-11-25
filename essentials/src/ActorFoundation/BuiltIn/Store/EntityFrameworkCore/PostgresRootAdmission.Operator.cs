@@ -108,7 +108,7 @@ internal sealed partial class PostgresRootAdmission
                     if (park is not { Revision: > 0, At: > 0 }) return null;
                 }
                 // S5b: in a parked-operator set a Terminate may name the root's Park instead of its running selection.
-                else if (db.UsesRootParkedOperators && !thenDelete &&
+                else if (db.UsesRootParkedOperators &&
                          PostgresRootSelection.OpenPark(cursor, selection, tenant, reference) is { Revision: > 0, At: > 0 } named)
                     park = named;
                 else if (!PostgresRootSelection.MatchesRunning(cursor, selection, tenant, reference))
@@ -154,9 +154,9 @@ internal sealed partial class PostgresRootAdmission
             }
             if (!deletion && park is null)
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
-            // S5b: a composed Park set admits a Terminate for a parked root, held or not, only with the selection of its Park.
-            // A running selection, and Terminate and delete, are refused there; a command admitted before the Park opened is
-            // refused by the owner, which answers a held caller.
+            // S5b: a composed Park set admits a Terminate, or a Terminate and delete, for a parked root, held or not, only with the
+            // selection of its Park. A running selection is refused there; a command admitted before the Park opened is refused
+            // by the owner, which answers a held caller.
             var parked = selectedStatus == InstanceStatus.Faulted && db.UsesRootParkedOperators && kind == Kinds.Terminate &&
                 await LocksParkedRootAsync(db, address, tenant, reference, token);
             var eligible = deletion ? exactTerminal : park is not null ? exactPark
@@ -255,9 +255,10 @@ internal sealed partial class PostgresRootAdmission
             """).SingleAsync(token);
 
     // The next control of an open clearing: the Terminate's operation and Park mark under a fresh occurrence.
-    internal static (string Id, string Header) ClearControl(string reference, string operation, FoundationParkMark park, long window) =>
+    internal static (string Id, string Header) ClearControl(string reference, string operation, FoundationParkMark park, long window,
+        bool thenDelete) =>
         ($"{OperatorOccurrencePrefix}{reference}/{FoundationRootCreator.OperationDigest(operation)}/{Guid.NewGuid():N}",
-            OperatorPrefix + DurableKeyJson.Write(new StoredOperator(reference, operation, 1, Kinds.Terminate, false)
+            (thenDelete ? TerminateThenDeletePrefix : OperatorPrefix) + DurableKeyJson.Write(new StoredOperator(reference, operation, 1, Kinds.Terminate, false)
                 { Park = park, Window = window, Clear = true }));
 
     // A parked root in a composed Park set, whose running selection admission refuses. A Park keeps the row's Suspended
@@ -433,7 +434,7 @@ internal sealed partial class PostgresRootAdmission
             (kind == Kinds.Recover ? header.Park is not { Revision: > 0, At: > 0 } || header.Window is not >= 0 || due != 0 || header.ExplicitZeroDue ||
                 held || thenDelete || retentionDelete
             : kind == Kinds.Terminate && parkedTerminate && header.Park is not null
-                ? header.Park is not { Revision: > 0, At: > 0 } || header.Window is not >= 0 || thenDelete || retentionDelete ||
+                ? header.Park is not { Revision: > 0, At: > 0 } || header.Window is not >= 0 || thenDelete && !terminateThenDelete || retentionDelete ||
                     header.Clear is false || header.Clear == true && (held || header.ExplicitZeroDue || due != 0)
             : header.Park is not null || header.Window is not null) ||
             header.Clear is not null && (kind != Kinds.Terminate || header.Park is null || !parkedTerminate) ||

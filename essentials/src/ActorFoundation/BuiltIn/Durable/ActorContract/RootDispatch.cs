@@ -98,7 +98,8 @@ internal sealed partial class ActorAdapter
         var (mark, facts, clear) = (control.Operator!.RootParkMark, control.Operator.RootParkFacts, control.Operator.RootParkClear);
         var reason = control.Kind != Durable.Kinds.Terminate || mark is null || facts is null ? "parked"
             : clear ? facts.Clearing != control.Id || facts.Mark != mark ? "selection" : null
-            : facts.Clearing is not null ? "clearing" : facts.Mark != mark ? "selection" : facts.Outstanding ? "outstanding" : null;
+            : facts.Clearing is not null ? "clearing" : facts.Mark != mark ? "selection"
+            : facts.Outstanding || control.Operator.RootThenDelete && facts.Residue ? "outstanding" : null;
         if (reason is null && !facts!.FitsPage)
         {
             var page = new Durable.TurnOutcome(input.Actor)
@@ -116,12 +117,28 @@ internal sealed partial class ActorAdapter
                 Status = Durable.InstanceStatus.Cancelled, Suspended = false, Revision = revision,
                 FoundationDispatchHeader = header with { RefreshTerminal = roots.RequiresCommittedTerminal }
             };
+            var cleared = facts!.Cleared + facts.Arrived + facts.Consumed;
+            // S5b-3a: a Terminate-then-delete retires the ended root in the same commit, unless the row is protected then;
+            // a protected row is terminated and kept, as the in-memory drain's Complete does.
+            var kept = control.Operator.RootThenDelete && DeletionRefusal(RootHeader(ended), row.State, input.Services.Now) is not null;
+            if (control.Operator.RootThenDelete && !kept)
+            {
+                var marker = Durable.CreationProtocol.Retire(row with { Status = Durable.InstanceStatus.Cancelled });
+                var deleted = new Durable.TurnOutcome(input.Actor)
+                {
+                    Row = marker, Expected = row.Revision, Revision = marker.Revision, Status = marker.Status, Consumed = [refused],
+                    Journal = """["delete"]""", Delete = true, Unsubscribe = true
+                };
+                deleted.ReplyTo(refused, "deleted");
+                return deleted;
+            }
             var terminated = new Durable.TurnOutcome(input.Actor)
             {
                 Expected = row.Revision, Row = ended, Revision = revision, Status = ended.Status, Consumed = [refused], Unsubscribe = true,
-                Journal = Durable.Json.Write(new { Outcome = "terminated", Operation = control.Id, Cleared = facts!.Cleared + facts.Arrived + facts.Consumed })
+                Journal = kept ? Durable.Json.Write(new { Outcome = "protected", Disposition = "terminated", Operation = control.Id, Cleared = cleared })
+                    : Durable.Json.Write(new { Outcome = "terminated", Operation = control.Id, Cleared = cleared })
             };
-            terminated.ReplyTo(refused, "terminated");
+            terminated.ReplyTo(refused, kept ? "terminated and kept" : "terminated");
             return terminated;
         }
         var outcome = new Durable.TurnOutcome(input.Actor)
@@ -136,6 +153,14 @@ internal sealed partial class ActorAdapter
             }, control.TargetCreation, row.Creation), creationRefusal: true);
         return outcome;
     }
+
+    // S5b-3a: a command that names a Park the root no longer has, because the root ended before it ran, is refused as a
+    // stale selection and its held caller answered once. An ended root takes no journal entry; the command settles there.
+    private Durable.TurnOutcome? RefuseStaleParkCommand(Durable.TurnInput input) =>
+        roots is { RefusesParkedOperators: true } &&
+        input.Row is { Status: not Durable.InstanceStatus.Running, Retired: false, Creation: 1, FoundationDispatchHeader.Terminal: not null } row &&
+        input.Taken is [{ Durable: true, Message: { Operator.RootParkMark: not null } control }] && IsRootControl(control) && control.Target.Id == row.Id
+            ? Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection") : null;
 
     private bool RestoresNothing(Durable.InstanceRow row)
     {

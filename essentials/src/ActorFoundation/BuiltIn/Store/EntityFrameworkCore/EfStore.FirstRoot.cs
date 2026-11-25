@@ -132,6 +132,7 @@ public sealed partial class EfStore
                             AND ((OLD."Status" <> 0 AND NEW."Status" = OLD."Status"
                                 AND NEW."FoundationTerminalRevision" = OLD."FoundationTerminalRevision"
                                 AND NEW."FoundationTerminalAt" = OLD."FoundationTerminalAt")
+                            OR /*root-parked-retirement*/
                             OR (/*root-atomic-retirement*/ AND OLD."Status" = 0 AND NEW."Status" = /*cancelled*/
                                 AND OLD."FoundationTerminalRevision" IS NULL AND OLD."FoundationTerminalAt" IS NULL
                                 AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL))))
@@ -227,8 +228,11 @@ public sealed partial class EfStore
                 ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'"""
                 : db.UsesRootParkedOperators ? """OR NEW."Entries" LIKE '{{"Outcome":"refused",%' /*root-parked-terminated-journal*/""" : "", StringComparison.Ordinal)
             // S5b: a Terminate that names the Park ends a parked root in one commit, journalled "terminated" at its revision.
-            .Replace("/*root-parked-terminated-journal*/", db.UsesRootParkedOperators ? ParkedTerminatedJournal : "", StringComparison.Ordinal)
+            .Replace("/*root-parked-terminated-journal*/", db.UsesRootParkedOperators ? ParkedTerminatedJournal(db) : "", StringComparison.Ordinal)
             .Replace("/*root-parked-terminate*/", db.UsesRootParkedOperators ? ParkedTerminateCheckpoint(db) : "false", StringComparison.Ordinal)
+            // S5b-3a: a Terminate-then-delete retires a parked root, Cancelled with its terminal mark and its Park cleared.
+            .Replace("/*root-parked-retirement*/", db.UsesRootParkedOperators && db.UsesRootTerminateThenDelete ? ParkedRetirementCheckpoint : "false",
+                StringComparison.Ordinal)
             // S5b-2: a refusal leaves an open clearing as it is, and no keep or other write moves a root whose Park is being cleared.
             .Replace("/*parked-clearing-continues*/", db.UsesRootParkedOperators ? ParkedClearingPinned + ParkedClearingKeeps : "", StringComparison.Ordinal)
             .Replace("/*parked-clearing-pinned*/", db.UsesRootParkedOperators ? ParkedClearingPinned : "", StringComparison.Ordinal)

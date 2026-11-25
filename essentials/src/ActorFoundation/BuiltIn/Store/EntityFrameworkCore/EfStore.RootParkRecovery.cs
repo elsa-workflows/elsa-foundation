@@ -63,7 +63,11 @@ public sealed partial class EfStore
 
     private sealed record KeptRow(string Id, short KeptBy, string Digest, string Envelope, long Bytes);
 
-    private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding, string? Clearing, long? Cleared);
+    private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding, bool Residue, string? Clearing, long? Cleared);
+
+    // A pending row other than a direct input: the parked retirement branch and the Park facts share it, and the C# retirement
+    // lock (EfStore.RootRetirement.cs) states the same condition with the direct scope as a parameter.
+    private const string PendingResidue = """NOT m."Done" AND (m."InboxScope" <> -4 OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL)""";
 
     // A page clears or restores at most 170 rows and 4 MiB of stored rows, and always has room for its first row.
     private static int PageLength(IEnumerable<KeptRow> rows)
@@ -122,6 +126,8 @@ public sealed partial class EfStore
                 SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision",
                     "Jobs" IS NOT NULL OR "Children" IS NOT NULL OR "CustomHandles" IS NOT NULL
                         OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding",
+                    EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = "Instances"."Id" AND m."Partition" = "Instances"."Partition"
+                        AND {PendingResidue}) AS "Residue",
                     {clearing} FROM "Instances"
                 WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
                 """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
@@ -136,7 +142,7 @@ public sealed partial class EfStore
             var fits = page == charged.Length;
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived), kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
-                fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page,
+                fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Residue = park?.Residue ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page,
                     ClearsInPages = ClearsParkInPages(db) };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }

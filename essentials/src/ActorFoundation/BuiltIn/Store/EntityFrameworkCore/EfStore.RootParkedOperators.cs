@@ -49,12 +49,17 @@ public sealed partial class EfStore
         if (turn.Row is not { Retired: false, FoundationDispatchHeader: { Terminal: null } header } row ||
             turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
             !PostgresRootAdmission.IsOperatorOccurrence(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
-            command is not { Kind: Kinds.Terminate, Operator: { RootParkMark: { } mark, RootParkWindow: >= 0, RootParkFacts: { } facts, RootThenDelete: false } } ||
-            (command.ReplyTo is not null) != command.Operator.RootHeldReply || facts.Mark != mark || facts.Outstanding && !command.Operator.RootParkClear ||
+            command is not { Kind: Kinds.Terminate, Operator: { RootParkMark: { } mark, RootParkWindow: >= 0, RootParkFacts: { } facts } } ||
+            (command.ReplyTo is not null) != command.Operator.RootHeldReply || facts.Mark != mark ||
+            (facts.Outstanding || command.Operator.RootThenDelete && facts.Residue) && !command.Operator.RootParkClear ||
             facts.Clearing != (command.Operator.RootParkClear ? command.Id : null) || command.Operator.RootParkClear && command.ReplyTo is not null)
             throw RootShape();
         var ends = facts.FitsPage;
-        var journal = ends ? Json.Write(new { Outcome = "terminated", Operation = command.Id, Cleared = facts.Cleared + facts.Arrived + facts.Consumed })
+        // A Terminate-then-delete reaches this end only when the row is protected: it is terminated and kept.
+        var total = facts.Cleared + facts.Arrived + facts.Consumed;
+        var journal = ends ? command.Operator.RootThenDelete
+                ? Json.Write(new { Outcome = "protected", Disposition = "terminated", Operation = command.Id, Cleared = total })
+                : Json.Write(new { Outcome = "terminated", Operation = command.Id, Cleared = total })
             : command.Operator.RootParkClear ? null : Json.Write(new { Outcome = "clearing", Operation = command.Id, Cleared = facts.Page });
         if (row is not { Status: InstanceStatus.Cancelled or InstanceStatus.Faulted } || (row.Status == InstanceStatus.Cancelled) != ends ||
             ends && row.Suspended || turn.Journal != journal ||
@@ -100,7 +105,7 @@ public sealed partial class EfStore
                 AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
                     AND k."InboxScope" = -4 AND k."FoundationKeptBy" IS NOT NULL)
                 AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
-                    AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"terminated",%'))
+                    AND j."Revision" = NEW."Revision" AND (j."Entries" LIKE '{{"Outcome":"terminated",%' OR j."Entries" LIKE '{{"Outcome":"protected",%')))
             OR /*clearing-open*/ (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND NEW."Suspended" = OLD."Suspended"
                 AND OLD."FoundationParkClearing" IS NULL AND NEW."FoundationParkClearing" IS NOT NULL AND NEW."FoundationParkCleared" > 0
                 {{{Parked}}}
@@ -138,8 +143,26 @@ public sealed partial class EfStore
                     OLD."Children", OLD."Parent", OLD."Model", OLD."Definition", OLD."NextJobGeneration", OLD."CustomHandles")
         """;
 
+    // The retirement of a parked root by its Terminate-then-delete carries the C# retirement lock's conditions itself (#5746):
+    // no jobs, children, parent, custom handles or subscriptions, no pending row but a direct occurrence, and nothing kept.
+    private static readonly string ParkedRetirementCheckpoint = """
+        (OLD."Status" = 2 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationTerminalRevision" IS NULL
+            AND NEW."Status" = 3 AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
+            AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
+            AND OLD."Jobs" IS NULL /*retire-children*/ AND OLD."Children" IS NULL /*retire-parent*/ AND OLD."Parent" IS NULL
+            /*retire-handles*/ AND OLD."CustomHandles" IS NULL
+            /*retire-subscriptions*/ AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = NEW."Id")
+            /*retire-pending*/ AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = NEW."Id" AND m."Partition" = NEW."Partition"
+                AND /*pending-residue*/)
+            /*retire-kept*/ AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
+                AND k."FoundationKeptBy" IS NOT NULL))
+        """.Replace("/*pending-residue*/", PendingResidue, StringComparison.Ordinal);
+
     // The journal trigger admits a "terminated" entry on the parked root at its next revision.
-    private const string ParkedTerminatedJournal = """OR NEW."Entries" LIKE '{{"Outcome":"terminated",%' OR NEW."Entries" LIKE '{{"Outcome":"clearing",%'""";
+    // A protected entry (a Terminate-then-delete terminated and kept) needs a set with Terminate-then-delete.
+    private static string ParkedTerminatedJournal(KernelDb db) => """
+        OR NEW."Entries" LIKE '{{"Outcome":"terminated",%' OR NEW."Entries" LIKE '{{"Outcome":"clearing",%'
+        """ + (db.UsesRootTerminateThenDelete ? """ OR NEW."Entries" LIKE '{{"Outcome":"protected",%' """ : "");
 
     // A composed set's refused entry pins the whole row but its revision, as format 22's refused-row rule does, at any status.
     // Each column of the set's Instances table is compared; the Park revision and the state wire exist only with their capability.
@@ -172,7 +195,7 @@ public sealed partial class EfStore
             BEGIN
                 IF EXISTS (SELECT 1 FROM "Instances" i WHERE i."Id" = NEW."Instance" AND i."FoundationReference" IS NOT NULL
                     AND NOT (i."Partition" = NEW."Partition" AND i."Revision" = NEW."Revision"
-                        AND (NEW."Entries" NOT LIKE '{{"Outcome":"terminated",%' OR (i."Status" = 3 AND NOT i."Retired"
+                        AND (NEW."Entries" NOT LIKE '{{"Outcome":"terminated",%' AND NEW."Entries" NOT LIKE '{{"Outcome":"protected",%' OR (i."Status" = 3 AND NOT i."Retired"
                             AND i."FoundationParkAt" IS NULL AND i."FoundationTerminalRevision" = NEW."Revision"))
                         AND (NEW."Entries" NOT LIKE '{{"Outcome":"clearing",%' OR i."FoundationParkClearing" IS NOT NULL)))
                 THEN RAISE EXCEPTION 'An operator outcome entry requires the checkpoint write at its revision' USING ERRCODE = '23514'; END IF;
@@ -271,6 +294,7 @@ public sealed partial class EfStore
             var kept = await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token, Clearing is null ? int.MaxValue : InMemoryStore.ParkPageLimit + 1);
             var page = kept.Take(PageLength(kept)).ToArray();
             // While a clearing is open the root receives only operator rows, so the settled prefix is its operator rows.
+            // The page count already refuses a row kept since the facts (M8); the digest also binds each row's content, as defence.
             if (KeptSetDigest(kept) != KeptDigest || page.Length != Count || Ends != (page.Length == kept.Count) ||
                 !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
                     suspended: !db.UsesRootParkArrivals || prior.Clearing, token)) return false;
@@ -308,7 +332,7 @@ public sealed partial class EfStore
             if (!Ends)
             {
                 // The next control, bound to the Terminate's operation and Park mark, clears the next page.
-                var (id, header) = PostgresRootAdmission.ClearControl(Root.Reference, Command.Id, Mark, window);
+                var (id, header) = PostgresRootAdmission.ClearControl(Root.Reference, Command.Id, Mark, window, Command.Operator.RootThenDelete);
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial")
                     VALUES ({InboxKey.FoundationOccurrenceScope}, {id}, {Root.Partition}, {Root.Actor}, {Kinds.Terminate}, {header}, 0,
