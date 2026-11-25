@@ -94,14 +94,17 @@ public sealed partial class EfStore
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired"
                     AND i."Suspended" = {Suspended} AND i."Status" = {(int)priorStatus} AND i."Revision" = {Expected}
-                    AND (i."FoundationParkAt" IS NULL) = {Opening}
+                    AND (i."FoundationParkAt" IS NULL) = {Opening} /*no-clearing*/
                     AND ({Opening} OR i."Fault" = {EncodedFault})
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
                 """;
             var openRevisionColumn = db.RecordsRootParkRevision ? """i."FoundationParkRevision" """ : "NULL::bigint";
             var locked = await db.Database.SqlQuery<LockedParkCheckpoint>(FormattableStringFactory.Create(
-                read.Format.Replace("/*open-revision*/", openRevisionColumn, StringComparison.Ordinal), read.GetArguments()))
+                read.Format.Replace("/*open-revision*/", openRevisionColumn, StringComparison.Ordinal)
+                    // S5b-2: nothing is kept while the Park is being cleared.
+                    .Replace("/*no-clearing*/", db.UsesRootParkedOperators ? """AND i."FoundationParkClearing" IS NULL""" : "", StringComparison.Ordinal),
+                read.GetArguments()))
                 .ToListAsync(cancellationToken);
             if (locked is not [var prior] || db.RecordsRootParkRevision &&
                 (Opening ? prior.OpenRevision is not null : prior.OpenRevision is not > 0 || prior.OpenRevision > Expected)) return false;

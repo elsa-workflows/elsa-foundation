@@ -67,6 +67,8 @@ internal sealed record FoundationOperatorCommand(string? Selection)
     internal FoundationParkMark? RootParkMark { get; init; }
     internal long? RootParkWindow { get; init; }
     internal FoundationRootParkFacts? RootParkFacts { get; init; }
+    // S5b-2: the store's control that clears the next page of an open clearing.
+    internal bool RootParkClear { get; init; }
 }
 
 internal sealed record FoundationTerminalStamp(long Revision, long At);
@@ -80,6 +82,13 @@ internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arr
     // S5b: the store marks the command's row unseen when a Park keep changes the kept set (EfStore.RereadsParkFacts), so
     // the owner forgets a copy read ahead of the keep and reads it again. Without it the stale command stays in memory.
     internal bool Rereads { get; init; }
+    // S5b-2: the open clearing's operation and total, and the rows of the next page (Page == the whole set when it fits).
+    internal string? Clearing { get; init; }
+    internal long Cleared { get; init; }
+    internal int Page { get; init; }
+    // S5b-2: the store marks the root's pending inputs unseen in a clearing's Open (EfStore.ClearsParkInPages), so the owner
+    // forgets the copies it read ahead and the poll withholds them until the end.
+    internal bool ClearsInPages { get; init; }
 }
 
 /// <summary>A message. Times are database time in milliseconds.</summary>
