@@ -144,7 +144,12 @@ internal sealed partial class PostgresRootAdmission
             }
             if (!deletion && !recover)
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
+            // A composed Park set admits an unheld Terminate, or Terminate and delete, for a parked root. A held command
+            // there is refused at admission; one admitted before the Park opened is refused by the owner, which answers it.
+            var parked = selectedStatus == InstanceStatus.Faulted && db.UsesRootParkedOperators && kind == Kinds.Terminate &&
+                await LocksParkedRootAsync(db, address, tenant, reference, token);
             var eligible = deletion ? exactTerminal : recover ? exactPark
+                : parked ? reply is null
                 : thenDelete ? selectedStatus is InstanceStatus.Running or InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled
                 : selectedStatus == InstanceStatus.Running;
             if (!eligible)
@@ -231,6 +236,19 @@ internal sealed partial class PostgresRootAdmission
             FOR SHARE
             """).ToListAsync(token)).Count == 1;
 
+    // S5a: a composed Park set admits a Terminate for a parked root with the root's running selection. The owner refuses it
+    // there with a journalled reason; S5b checks it against the Park selection and ends the root. A Park keeps the row's
+    // Suspended flag, so a root parked while suspended is admitted the same way.
+    private static async Task<bool> LocksParkedRootAsync(KernelDb db, CreationAddress address, string tenant, string reference,
+        CancellationToken token) =>
+        address.Creation == 1 && (await db.Database.SqlQuery<long>($"""
+            SELECT "Revision" AS "Value" FROM "Instances"
+            WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
+                AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
+                AND "Status" = {(int)InstanceStatus.Faulted} AND "FoundationParkAt" IS NOT NULL AND "FoundationTerminalRevision" IS NULL
+            FOR SHARE
+            """).ToListAsync(token)).Count == 1;
+
     private static bool IsUnavailableSelectedSchema(PostgresException error) =>
         error.SqlState is PostgresErrorCodes.UndefinedTable or PostgresErrorCodes.UndefinedColumn
             or PostgresErrorCodes.InvalidSchemaName or PostgresErrorCodes.WrongObjectType;
@@ -275,7 +293,8 @@ internal sealed partial class PostgresRootAdmission
             """, token);
         if (db.UsesRootParkOpening)
         {
-            var receipts = db.UsesRootParkRecovery;
+            // Every Park set that admits operator commands, Recover or a composed one, pins their receipts too.
+            var receipts = db.UsesRootOperatorProtocol;
             await db.Database.ExecuteSqlRawAsync(receipts ? ParkRecoverySources : ParkSources, token);
             var parkSources = await db.Database.SqlQuery<bool>($"""
                 SELECT count(*) = {(receipts ? 14 : 13)} AS "Value"

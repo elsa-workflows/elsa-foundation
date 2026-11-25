@@ -124,20 +124,25 @@ public class KernelDb : DbContext
     {
         RequiredFormat = format;
         Capabilities = capabilities;
+        RootStateFamily = RootStateFamily.Of(capabilities);
     }
 
     private static KernelDb Profile(DbContextOptions<KernelDb> options, StoreFormat format) =>
         new(options, format, RootProfiles.CapabilitiesOf(format));
 
     // A capability set that no shipped format carries, for database-backed composition guards only. Its format must be unshipped,
-    // so that its marker is refused by every shipped profile.
+    // so that its marker is refused by every shipped profile, and the set must hold every prerequisite of its members.
     internal static KernelDb ForUnshippedComposition(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) =>
         RootProfiles.Formats.ContainsKey(format)
             ? throw new ArgumentOutOfRangeException(nameof(format), format, "A shipped format carries its own capabilities.")
-            : new(options, format, capabilities);
+            : RootProfiles.MissingPrerequisites(capabilities) is not RootCapabilities.None and var missing
+                ? throw new ArgumentException($"The capability set lacks the prerequisites {missing}.", nameof(capabilities))
+                : new(options, format, capabilities);
 
     internal StoreFormat RequiredFormat { get; }
     internal RootCapabilities Capabilities { get; }
+    // The one state family this set writes and reads, with its terminal statuses.
+    internal RootStateFamily RootStateFamily { get; }
     private bool Has(RootCapabilities capability) => (Capabilities & capability) != 0;
     internal bool UsesRootSelfProtocol => Has(RootCapabilities.SelfProtocol);
     internal bool UsesRootTimers => Has(RootCapabilities.Timers);
@@ -152,15 +157,21 @@ public class KernelDb : DbContext
     internal bool UsesRootParkInspection => Has(RootCapabilities.ParkInspection);
     internal bool UsesRootParkArrivals => Has(RootCapabilities.ParkArrivals);
     internal bool UsesRootParkRecovery => Has(RootCapabilities.ParkRecovery);
+    // A composed set with Park and Termination (S5a, #4229): an operator command reaches a parked root, passes its withheld
+    // inputs and is refused there with a journalled reason. No shipped format carries both capabilities.
+    internal bool UsesRootParkedOperators => UsesRootParkOpening && UsesRootTermination;
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;
-    // Workflow history removes no row of a retired root, and outside a pinned namespace it does not bind its reads to a
-    // qualified list. Until the composed install provides both, a qualified list carries history only in a pinned namespace
-    // without retirement, so the shipped formats 13 to 17 refuse it as before.
+    // A qualified list carries workflow history only in a pinned namespace. Retirement deletes a retired root's history
+    // row in its own commit and the history reader binds to the qualified list (S4), so any other closed set with a
+    // qualified list in a pinned namespace carries history, a later shipped one included. The shipped formats 13 to 17
+    // keep refusing it as they shipped, named by format.
+    private static readonly HashSet<StoreFormat> HistoryRefusingFormats = [StoreFormat.RootTerminalSelection, StoreFormat.RootRetirement,
+        StoreFormat.RootTerminateThenDelete, StoreFormat.RootRetention, StoreFormat.RootOperatorReplies];
     internal bool SupportsRootWorkflowHistory => !(UsesRootTerminalSelection || UsesRootRetirement) ||
-        RequiresPinnedRootNamespace && !UsesRootRetirement;
+        RequiresPinnedRootNamespace && !HistoryRefusingFormats.Contains(RequiredFormat);
     internal static KernelDb ForPostgresRootParkOpening(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkOpening);
     internal bool UsesRootReplyProtocol => Has(RootCapabilities.ReplyProtocol);
     internal static KernelDb ForPostgresRootReplies(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootReplies);
@@ -813,13 +824,15 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
-             {(db.UsesRootOperatorProtocol ? db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter : RootOperatorPollFilter : "")}
+             {(db.UsesRootOperatorProtocol ? db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
+                 : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : RootOperatorPollFilter : "")}
              AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({RootInputScopes}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
                  WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"
-                   {(db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL""" : "")}
+                   {(WithholdsParkInputs(db) ? """AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%')"""
+                       : db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL""" : "")}
                    {(db.UsesRootParkRecovery ? RootReleasedCohortFilter : "")})))
             """;
     // Commands are exposed only when database time makes them due. On a suspended root the
@@ -834,7 +847,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                        WHERE prior."Partition" = m."Partition" AND prior."Target" = m."Target" AND prior."Seq" < m."Seq"
                          AND prior."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND prior."EventMatch" IS NULL
                          AND NOT prior."Done" AND prior."Due" <= t.now
-                         AND (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%'))
+                         AND (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running} OR prior."Id" LIKE 'operator/%')
+                         /*withheld-prior*/)
                    ELSE (NOT target."Suspended" OR target."Status" <> {(int)InstanceStatus.Running}) AND (/*released-cohort*/ NOT EXISTS (
                        SELECT 1 FROM "Messages" op
                        WHERE op."Partition" = m."Partition" AND op."Target" = m."Target" AND op."Seq" < m."Seq"
@@ -842,6 +856,11 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                          AND op."EventMatch" IS NULL AND NOT op."Done" AND op."Due" <= t.now))
                    END)))
         """;
+    // A parked root without Park arrivals withholds its ordinary inputs, so only an earlier operator row holds a command back.
+    // A held command admitted before the Park opened passes too: the owner refuses it there and answers its caller.
+    private static bool WithholdsParkInputs(KernelDb db) => db.UsesRootParkedOperators && !db.UsesRootParkArrivals;
+    private static readonly string RootParkedOperatorPollFilter = RootOperatorPollFilter.Replace("/*withheld-prior*/",
+        """AND (target."FoundationParkAt" IS NULL OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);
     // A released row of the root's current generation goes before every control: an earlier operator row waits for the cohort.
     private static readonly string RootRecoveryOperatorPollFilter = RootOperatorPollFilter.Replace("/*released-cohort*/",
         """m."FoundationReleasedBy" = target."FoundationParkGeneration" OR """, StringComparison.Ordinal);

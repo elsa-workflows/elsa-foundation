@@ -71,6 +71,6 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public async ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken)
     {
         if (Options.Gate is { } gate) await gate(job, cancellationToken);
-        return await NativeExecutionModel.ExecuteBackground(registry, new(job.Instance.Id), job.Arguments, cancellationToken);
+        return await NativeExecutionModel.ExecuteBackground(registry, new(job.Instance.Id), job.Arguments, cancellationToken, Options.Http);
     }
 }
