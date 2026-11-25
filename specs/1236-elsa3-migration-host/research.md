@@ -252,12 +252,12 @@ The host references no EF vendor package directly, so `OpenIddictPersistenceArch
 
 - **Decision.** Use the S-15 Elsa 4 templates and environment unchanged, except base URL and credentials (the
   development administrator from R-6). The S-15 environment file `environments/elsa4.json` reads its values from
-  variables, so the run reuses it and sets them as the S-15 README does: `ELSA_API_BASE_URL` to the host's fixed URL
+  variables, so the run reuses it and sets them as spec 1235's `contracts/run-hosts.md` gives them for Elsa 4: `ELSA_API_BASE_URL` to the host's fixed URL
   (R-2), `ELSA_EXECUTOR_BASE_URL` to `<host URL>/workflows/http` (Elsa 4's default `HttpRoutePublicationOptions.BasePath`, as spec 1235's run-hosts
   contract uses; most suites call their HTTP trigger through it), `JTEST_CONFIG_FILE` to
   `global-configuration.elsa4.json` (which selects the `templates-elsa4/*` search path),
   `ADMIN_USERNAME` and `ADMIN_PASSWORD` to the development administrator, and `CORRELATION_ID` and
-  `DATE_NOW_ISO_STRING` as the README sets them. The Notes column records both URLs and the user name (no secret). The run record is a row in the S-15 ledger,
+  `DATE_NOW_ISO_STRING` as that contract and the S-15 README set them. The Notes column records both URLs and the user name (no secret). The run record is a row in the S-15 ledger,
   `extensions/Elsa3/tests/JTest/ledger/runs.md`, in its existing columns: Engine `Elsa 4`; Source names the migration
   host, the CLI version that wrote `migrated/`, and whether spec 1207 is implemented; Notes names the Workbench run it is
   compared with. Both runs on one head then sit side by side, and spec 1235's ledger format doesn't change. Capture is set through the diagnostics settings API (`PUT runtime/workflows/diagnostics/settings`) after start, as
