@@ -171,6 +171,19 @@ public class ActivityContext
 
     /// <summary>The host's outbound HTTP, for an activity that runs as a background job; null where the host composes none.</summary>
     public NativeHttpOptions? Http { get; internal init; }
+
+    /// <summary>The host's script engine, for <see cref="RunJavaScript"/>; null where the host composes none.</summary>
+    public INativeScripts? Scripts { get; internal init; }
+}
+
+/// <summary>
+/// The host's script engine for <see cref="RunJavaScript"/>: it runs a program that sees only its frozen <c>args</c> and
+/// returns the program's value as JSON. The host bounds its time, statements and recursion, as the old core's evaluator
+/// does, and it reads no workflow state, so a run inside the turn is safe to repeat.
+/// </summary>
+public interface INativeScripts
+{
+    ValueTask<JsonNode?> EvaluateAsync(string script, JsonObject arguments, CancellationToken cancellationToken);
 }
 
 /// <summary>

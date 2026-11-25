@@ -110,6 +110,16 @@ public static class Wf
 
     public static Node Complete(string id, Binding outcome) => Node<Complete>(id, ("Outcome", outcome));
 
+    public static Node Inline(string id, Binding expression) => Node<Inline>(id, ("Expression", expression));
+
+    public static Node RunJavaScript(string id, Binding script, Binding? arguments = null, Binding? possibleOutcomes = null)
+    {
+        var node = Node<RunJavaScript>(id, ("Script", script));
+        if (arguments is not null) node.Inputs["Arguments"] = arguments;
+        if (possibleOutcomes is not null) node.Inputs["PossibleOutcomes"] = possibleOutcomes;
+        return node;
+    }
+
     public static Node ForEach(string id, Binding items, Node body) => Node<ForEach>(id, ("Items", items)).With(body);
     public static Node While(string id, Binding condition, Node body) => Node<While>(id, ("Condition", condition)).With(body);
 

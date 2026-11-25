@@ -89,6 +89,67 @@ public sealed class Complete : Activity
             : Complete().With(new ExitEffect(Outcome)));
 }
 
+/// <summary>The old core's Inline: its result is its <see cref="Expression"/>'s value, evaluated as any input is.</summary>
+public sealed class Inline : Activity<JsonNode?>
+{
+    [Input] public JsonNode? Expression { get; set; }
+
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) => new(Complete(Expression));
+}
+
+public sealed record RunJavaScriptResult(JsonNode? Value);
+
+/// <summary>
+/// The old core's RunJavaScript: a program that sees only its <see cref="Arguments"/> as <c>args</c>, run in the turn by
+/// the host's engine (<see cref="INativeScripts"/>). Its value is the result. With <see cref="PossibleOutcomes"/> it routes
+/// by returning: a string or number naming one of them is the outcome, anything else <see cref="UnmatchedOutcome"/>. A
+/// blank script returns null.
+/// </summary>
+public sealed class RunJavaScript : Activity<RunJavaScriptResult>
+{
+    public const string UnmatchedOutcome = "Unmatched";
+
+    [Input] public string? Script { get; set; }
+    /// <summary>An object, or null for none.</summary>
+    [Input] public JsonNode? Arguments { get; set; }
+    /// <summary>A list of outcome names, strings or numbers, or null for the single Done.</summary>
+    [Input] public JsonNode? PossibleOutcomes { get; set; }
+
+    protected override async ValueTask<Transition> ExecuteAsync(ActivityContext context)
+    {
+        if (Arguments is not (null or JsonObject))
+            return Fault("javascript.arguments.invalid", "RunJavaScript's arguments must be an object.");
+        if (PossibleOutcomes is not (null or JsonArray) || PossibleOutcomes is JsonArray names && names.Any(n => Name(n) is null))
+            return Fault("javascript.outcomes.invalid", "RunJavaScript's possible outcomes must be a list of strings or numbers.");
+        JsonNode? value = null;
+        if (!string.IsNullOrWhiteSpace(Script))
+        {
+            if (context.Scripts is not { } scripts) return Fault("javascript.unavailable", "The host composes no script engine for RunJavaScript.");
+            try { value = await scripts.EvaluateAsync(Script, (JsonObject?)Arguments?.DeepClone() ?? [], context.CancellationToken); }
+            catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception error)
+            {
+                var message = error.GetType().Name + ": " + error.Message;
+                return Fault("javascript.failed", message[..Math.Min(message.Length, 2048)]);
+            }
+        }
+        var result = new RunJavaScriptResult(value);
+        if (PossibleOutcomes is not JsonArray { Count: > 0 } outcomes) return Complete(result);
+        var selected = Name(value);
+        return Complete(result, selected is not null && outcomes.Any(o => Name(o) == selected) ? selected : UnmatchedOutcome);
+    }
+
+    // Only a string or a number names an outcome; a number by its JSON text, as the old core reads it.
+    private static string? Name(JsonNode? node) => node is JsonValue v
+        ? v.GetValueKind() switch
+        {
+            System.Text.Json.JsonValueKind.String => v.GetValue<string>(),
+            System.Text.Json.JsonValueKind.Number => v.ToJsonString(),
+            _ => null,
+        }
+        : null;
+}
+
 /// <summary>A variable write is an engine intrinsic: the interpreter applies it, as Elsa 4's Set intrinsic.</summary>
 public sealed class SetVariable : ActivityBase, IIntrinsic
 {
