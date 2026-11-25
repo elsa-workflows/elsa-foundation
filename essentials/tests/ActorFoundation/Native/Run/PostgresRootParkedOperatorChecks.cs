@@ -938,13 +938,14 @@ internal static class PostgresRootParkedOperatorChecks
             EfStore? frozen = null;
             var pageSeen = false;
             var during = new Dictionary<string, (Contract.ActorRef Root, string Park, string[] Arrivals)>();
+            Contract.ActorRef large = default;
             await using var set = new Set("parked-delete", OpenDelete, owned, inBatch, tenant, stop);
             set.Write = Write;
             await set.InstallAsync(createTables: true);
             await set.Cold.InstallRootWorkflowHistoryAsync(stop);
             await set.OwnAsync();
             var one = await set.StartAsync("del-one");
-            var large = await set.StartAsync("del-large");
+            large = await set.StartAsync("del-large");
             var kept = await set.StartAsync("del-kept");
             var keptLarge = await set.StartAsync("del-kept-large");
             var stale = await set.StartAsync("del-stale");
