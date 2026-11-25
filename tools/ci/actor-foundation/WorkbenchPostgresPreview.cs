@@ -541,13 +541,21 @@ internal static class WorkbenchPostgresPreview
         using (var xml = await client.PostAsync($"{address}/workflows/http/core-preview/echo",
                    new StringContent("<a/>", System.Text.Encoding.UTF8, "application/xml"), token))
             Require(xml.StatusCode == System.Net.HttpStatusCode.UnsupportedMediaType, "a body that is neither JSON nor text is refused with 415");
+        using (var unknownCharset = new System.Net.Http.ByteArrayContent("Hello"u8.ToArray()))
+        {
+            unknownCharset.Headers.TryAddWithoutValidation("Content-Type", "text/plain; charset=x-no-such-charset");
+            using var refused = await client.PostAsync($"{address}/workflows/http/core-preview/echo", unknownCharset, token);
+            Require(refused.StatusCode == System.Net.HttpStatusCode.UnsupportedMediaType &&
+                    (await refused.Content.ReadAsStringAsync(token)).Contains("x-no-such-charset", StringComparison.Ordinal),
+                "a text body in a charset the edge does not read is refused with 415, naming the charset");
+        }
         using (var unrouted = await client.PostAsync($"{address}/workflows/http/no-such-route",
                    new StringContent(oversized, System.Text.Encoding.UTF8, "text/plain"), token))
             Require(unrouted.StatusCode == System.Net.HttpStatusCode.NotFound, "an unrouted request is not found whatever its body");
         Require(workbench.WaitProbeRefusal is { } refusal &&
-                refusal.Contains("An HTTP Endpoint that waits mid-workflow doesn't run on this host yet. Move it to the start of the workflow", StringComparison.Ordinal) &&
+                refusal.Contains("An HTTP Endpoint that waits for a request doesn't run on this host yet", StringComparison.Ordinal) &&
                 refusal.Contains("node 'decision'", StringComparison.Ordinal),
-            "the edge's host refuses a workflow with an HTTP Endpoint that waits mid-workflow, with the reason and what to change");
+            "the edge's host refuses a workflow with an HTTP Endpoint that waits, with the reason and what to change");
     }
 
     private static async Task CheckEntryBeforeListeningAsync()

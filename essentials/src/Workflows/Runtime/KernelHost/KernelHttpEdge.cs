@@ -43,8 +43,7 @@ public static class KernelHttpEdge
         ArgumentNullException.ThrowIfNull(request);
         // What serves now: the route the match found, still served by the same workflow's node.
         if (match.Route is not { Start: true } route || !serving.Routes.TryStart(route.Method, route.Template.Text, out var served) ||
-            served != (route.Workflow, route.Node) || !serving.Registry.Contains(route.Workflow)) return null;
-        var workflow = serving.Registry.Get(route.Workflow);
+            served != (route.Workflow, route.Node) || !serving.Registry.TryGet(route.Workflow, out var workflow)) return null;
         var trigger = Values.From(request with { RouteValues = match.Values });
         var start = NativeExecutionModel.Start(workflow.Id, Modes.Balanced, null, route.Node, trigger, workflow.Definition);
         return new(Kernel.WorkflowActor.WorkflowActor.Start(start), workflow.Id, route.RespondBeforeCommit);
@@ -69,6 +68,8 @@ public static class KernelHttpEdge
             { Error: "lost" } => Text(503, "the workflow's owner was lost"),
             { Status: Contract.ActorStatus.Faulted } => Text(500, "the workflow faulted"),
             { Error: null, Channel: "response", Item: JsonNode item } when Values.To<HttpResponse>(item) is { } response => Designed(response),
+            // Terminated before it answered: no response, which a 204 would pass off as one.
+            { Error: null, Item: null, Status: Contract.ActorStatus.Cancelled } => Text(503, "The workflow was terminated before it answered."),
             { Error: null, Item: null } => new(204, "text/plain", null, NoHeaders),
             _ => Text(500, "the workflow answered with something this edge cannot send")
         };

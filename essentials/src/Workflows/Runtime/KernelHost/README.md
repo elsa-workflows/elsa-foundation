@@ -38,9 +38,11 @@ the Native model's definitions.
     instead."
   - without child workflows, a Dispatch Workflow, waited or not: "Dispatch Workflow doesn't run on this host yet. Remove
     it, or start the other workflow from an HTTP endpoint or an event."
-  - with an edge that serves no wait routes (`HttpWaits: false`), an HTTP Endpoint that waits, anywhere but where a run
-    starts or with `CanStartWorkflow` false: "An HTTP Endpoint that waits mid-workflow doesn't run on this host yet. Move
-    it to the start of the workflow, or wait for an event instead."
+  - with an edge that serves no wait routes (`HttpWaits: false`), an HTTP Endpoint that waits: one anywhere but where
+    the workflow begins, or one there whose start-a-workflow option (`CanStartWorkflow`) is off, as it is by default on
+    the old core: "An HTTP Endpoint that waits for a request doesn't run on this host yet: only one that starts the
+    workflow does. Turn on its start-a-workflow option and put it where the workflow begins, or wait for an event
+    instead."
   - without self-sends, nothing is refused: a turn that reaches the activity cap cannot continue in a self-send, so the
     host sets `NativeExecutionOptions.SelfSends` to false and the Native model runs a burst on to its next wait. The
     state and history size limits still bound the turn, and so does `MaxActivitiesPerBurst` (10,000 activities, the

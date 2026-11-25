@@ -87,8 +87,11 @@ internal sealed class KernelHttpEdgeHost(KernelServing serving, Func<KernelDb> o
                 var type = MediaTypeHeaderValue.TryParse(request.ContentType, out var media) ? media : null;
                 if (type?.MediaType is { } mediaType && mediaType.StartsWith("text/", StringComparison.OrdinalIgnoreCase))
                 {
-                    try { body = JsonValue.Create((EncodingOf(type) ?? StrictUtf8).GetString(read)); }
-                    catch (DecoderFallbackException) { return Plain(400, "the request body is not text in its charset"); }
+                    // The charsets .NET ships (UTF-8, UTF-16, UTF-32, ASCII, Latin-1); UTF-8 without one.
+                    var charset = type.CharSet?.Trim('"');
+                    if (EncodingOf(charset) is not { } encoding) return Plain(415, $"this endpoint does not read text in the charset {charset}");
+                    try { body = JsonValue.Create(encoding.GetString(read)); }
+                    catch (DecoderFallbackException) { return Plain(400, $"the request body is not text in {encoding.WebName}"); }
                 }
                 else if (type?.MediaType is null || IsJson(type.MediaType))
                 {
@@ -144,10 +147,11 @@ internal sealed class KernelHttpEdgeHost(KernelServing serving, Func<KernelDb> o
     private static bool IsJson(string mediaType) =>
         mediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase) || mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase);
 
-    private static Encoding? EncodingOf(MediaTypeHeaderValue type)
+    // The strict decoder of a charset this runtime ships, strict UTF-8 without one, or null for one it does not know.
+    private static Encoding? EncodingOf(string? charset)
     {
-        if (type.CharSet is not { Length: > 0 } charset) return null;
-        try { return Encoding.GetEncoding(charset.Trim('"'), EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback); }
+        if (string.IsNullOrEmpty(charset)) return StrictUtf8;
+        try { return Encoding.GetEncoding(charset, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback); }
         catch (ArgumentException) { return null; }
     }
 

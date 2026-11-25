@@ -35,9 +35,13 @@ public sealed record KernelHostCapabilities(bool Schedules = true, bool Timers =
     public const string DispatchUnavailable =
         "Dispatch Workflow doesn't run on this host yet. Remove it, or start the other workflow from an HTTP endpoint or an event.";
 
-    /// <summary>Why an HTTP Endpoint that waits is refused on a host whose edge serves no wait routes.</summary>
+    /// <summary>
+    /// Why an HTTP Endpoint that waits is refused on a host whose edge serves no wait routes: one anywhere but where the
+    /// workflow begins, or one there whose start-a-workflow option is off.
+    /// </summary>
     public const string HttpWaitUnavailable =
-        "An HTTP Endpoint that waits mid-workflow doesn't run on this host yet. Move it to the start of the workflow, or wait for an event instead.";
+        "An HTTP Endpoint that waits for a request doesn't run on this host yet: only one that starts the workflow does. " +
+        "Turn on its start-a-workflow option and put it where the workflow begins, or wait for an event instead.";
 
     /// <summary>The first node of <paramref name="workflow"/>, by id, that needs what this host lacks, with why; or null.</summary>
     internal (string Node, string Reason)? Refusal(Kernel.Native.Workflow workflow)

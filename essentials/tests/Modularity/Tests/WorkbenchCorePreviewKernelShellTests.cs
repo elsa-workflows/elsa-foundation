@@ -88,4 +88,19 @@ public sealed class WorkbenchCorePreviewKernelShellTests
     [Fact]
     public void The_http_edge_base_path_is_never_the_root() =>
         Assert.Throws<InvalidOperationException>(() => KernelHttpEdgeHost.NormalizeBasePath("/"));
+
+    [Theory]
+    [InlineData(null, null, "default", null)]
+    [InlineData("acme", null, "acme", "acme")]
+    [InlineData(null, "acme", "acme", "acme")]
+    [InlineData("acme", "acme", "acme", "acme")]
+    public void The_core_preview_binds_one_tenant_for_its_edge_and_reads(string? tenant, string? reads, string edge, string? expectedReads) =>
+        Assert.Equal((edge, expectedReads), WorkbenchCorePreview.Tenants(tenant, reads));
+
+    [Fact]
+    public void The_core_preview_refuses_two_different_tenants()
+    {
+        var refused = Assert.Throws<InvalidOperationException>(() => WorkbenchCorePreview.Tenants("acme", "globex"));
+        Assert.Contains("one tenant per process", refused.Message, StringComparison.Ordinal);
+    }
 }

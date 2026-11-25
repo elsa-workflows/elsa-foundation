@@ -732,6 +732,20 @@ public sealed class KernelCoordinatorTests
     }
 
     [Fact]
+    public async Task A_host_whose_edge_serves_no_wait_routes_refuses_an_http_endpoint_at_the_start_that_may_not_start_a_run()
+    {
+        var host = new Host(capabilities: StartRoutesOnly);
+        var waitsFirst = ExecutableOf("waits-first@1", "waits-first", Sequence("root",
+            Node("in", Types.HttpEndpoint, [Literal("Path", "waits-first", "String"), Literal("SupportedMethods", new[] { "POST" }), Literal("CanStartWorkflow", false, "Boolean")]),
+            Node("out", Types.WriteHttpResponse, [Literal("Body", "no", "String")])));
+
+        var refused = await host.ActivateAsync(waitsFirst, "waits-first-1");
+
+        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.Mapping), (refused.Outcome, refused.FailedStep));
+        Assert.Equal($"{NativeMappingRefusedException.ActivityUnsupported}: Node 'in': {KernelHostCapabilities.HttpWaitUnavailable}", refused.Diagnostic);
+    }
+
+    [Fact]
     public async Task The_edge_starts_the_workflow_a_start_route_serves_with_the_request_as_its_trigger()
     {
         var host = new Host(capabilities: StartRoutesOnly);
@@ -807,6 +821,9 @@ public sealed class KernelCoordinatorTests
         Assert.Equal(503, KernelHttpEdge.Answer(new(null, null, null, "lost")).StatusCode);
         Assert.Equal(404, KernelHttpEdge.Answer(new(null, null, null, "missing")).StatusCode);
         Assert.Equal(500, KernelHttpEdge.Answer(new(null, null, Kernel.Foundation.Contracts.ActorStatus.Faulted)).StatusCode);
+        // Terminated before it answered is no success.
+        var terminated = KernelHttpEdge.Answer(new(null, null, Kernel.Foundation.Contracts.ActorStatus.Cancelled));
+        Assert.Equal((503, "The workflow was terminated before it answered."), (terminated.StatusCode, terminated.Body));
     }
 
     [Fact]

@@ -22,10 +22,13 @@ internal static class WorkbenchCorePreview
     internal const string PublicationsKey = "Elsa:CorePreview:Publications";
 
     /// <summary>
-    /// The tenant the Core Preview's HTTP edge starts workflows in (<see cref="DefaultTenant"/> when unset). Set, the reads list
-    /// from it too, unless <c>Elsa:CorePreview:ReadsTenant</c> names another.
+    /// The tenant the Core Preview's HTTP edge starts workflows in. Unset, it is <c>Elsa:CorePreview:ReadsTenant</c>, or
+    /// <see cref="DefaultTenant"/> when that is unset too; the reads list from it when <c>ReadsTenant</c> is unset. The
+    /// Embedded foundation binds one tenant per process, so the two set to different tenants are refused.
     /// </summary>
     internal const string TenantKey = "Elsa:CorePreview:Tenant";
+
+    internal const string ReadsTenantKey = "Elsa:CorePreview:ReadsTenant";
 
     internal const string DefaultTenant = "default";
 
@@ -153,8 +156,7 @@ internal static class WorkbenchCorePreview
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
         // On the shipped format the node answers held callers: the held requests of this host's edge.
         var requests = publications ? PostgresPreviewHosting.CreateRequests(Open, node, WorkflowActor.ActorType) : null;
-        // The tenant the edge starts workflows in ("default" when unset); set, the reads list from it unless ReadsTenant names another.
-        var tenant = configuration[TenantKey];
+        var (edgeTenant, readsTenantOrNull) = Tenants(configuration[TenantKey], configuration[ReadsTenantKey]);
         KernelHttpEdgeHost? edge = null;
         if (requests is not null)
         {
@@ -165,7 +167,7 @@ internal static class WorkbenchCorePreview
             if (maxBody <= 0)
                 throw new InvalidOperationException($"{KernelHttpEdgeHost.MaxRequestBodyBytesKey} must be a positive number of bytes; it is {maxBody}.");
             services.AddSingleton(requests);
-            edge = new KernelHttpEdgeHost(serving!, Open, requests, EmbeddedTenant.Bind(tenant ?? DefaultTenant),
+            edge = new KernelHttpEdgeHost(serving!, Open, requests, EmbeddedTenant.Bind(edgeTenant),
                 KernelHttpEdgeHost.NormalizeBasePath(configuration[KernelHttpEdgeHost.BasePathKey]), timeout, maxBody);
             services.AddSingleton(edge);
         }
@@ -211,12 +213,25 @@ internal static class WorkbenchCorePreview
                 // of an instance in flight finds its workflow served.
                 starting: serving is null ? null : token => ServeActiveSlotsAsync(shells, shellName, logger, token));
         });
-        if ((configuration["Elsa:CorePreview:ReadsTenant"] ?? tenant) is { } readsTenant)
+        if (readsTenantOrNull is { } readsTenant)
             services.AddSingleton(new WorkbenchCorePreviewReads(Open, EmbeddedTenant.Bind(readsTenant)));
 
         KernelDb Open() => publications ? PostgresPreviewHosting.CreateShippedContext(options) :
             timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(options) :
             nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);
+    }
+
+    /// <summary>
+    /// The one tenant of the process: the edge's (Tenant, else ReadsTenant, else <see cref="DefaultTenant"/>) and the reads'
+    /// (ReadsTenant, else Tenant, else none). Two different configured tenants are refused.
+    /// </summary>
+    internal static (string Edge, string? Reads) Tenants(string? tenant, string? readsTenant)
+    {
+        if (tenant is not null && readsTenant is not null && tenant != readsTenant)
+            throw new InvalidOperationException(
+                $"{TenantKey} ('{tenant}') and {ReadsTenantKey} ('{readsTenant}') name different tenants, and the Core Preview's " +
+                "Embedded foundation binds one tenant per process. Set one of them, or both to the same tenant.");
+        return (tenant ?? readsTenant ?? DefaultTenant, readsTenant ?? tenant);
     }
 
     /// <summary>Refuses an edge whose base path is not the default shell's HTTP base path (its HttpEndpointOptions).</summary>
