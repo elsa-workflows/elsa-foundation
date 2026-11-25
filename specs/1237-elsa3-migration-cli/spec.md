@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/claude/3052-spec-migration-cli`
 
-**Status**: Draft — redesigned to run from source after specification 1236's rescope
+**Status**: Approved
 
 **Input**: A test migration an engineer migrating from Elsa 3 runs on their own machine, as often as they like. It
 converts their Elsa 3 workflow export, runs the real Elsa 4 import and publish against a disposable in-memory database,
