@@ -66,6 +66,7 @@ public static class Smoke
         await HttpRouteChecks.RunAsync(Check);
         await HttpTemplateChecks.RunAsync(Check);
         await PortChecks.RunAsync(Check);
+        await GraphChecks.RunAsync(Check);
         var registry = Reference.Registry();
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
         {

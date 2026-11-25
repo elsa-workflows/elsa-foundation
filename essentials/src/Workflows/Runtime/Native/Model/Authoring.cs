@@ -46,6 +46,32 @@ public enum Gateway { Decision, ParallelFork, ParallelJoin, InclusiveFork, Inclu
 /// </summary>
 public sealed record SwitchCase(string Label, Binding? Condition = null);
 
+/// <summary>
+/// What a GraphActivity declares, as the old core's pinned descriptor does for a placed reusable activity: its inputs,
+/// its local variables, its outputs and the outcomes it completes with. The body is the boundary's one child.
+/// </summary>
+public sealed record GraphBoundary
+{
+    public IReadOnlyList<GraphInput> Inputs { get; init; } = [];
+    public IReadOnlyList<GraphVariable> Variables { get; init; } = [];
+    public IReadOnlyList<GraphOutput> Outputs { get; init; } = [];
+
+    /// <summary>The body's outcome to the boundary's, when the body ends by itself. Empty: it ends on Done.</summary>
+    public IReadOnlyDictionary<string, string> OutcomeMappings { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>A Complete node's reference key to the boundary's outcome.</summary>
+    public IReadOnlyDictionary<string, string> CompleteOutcomes { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>An input of a GraphActivity, bound on its node under its name; unbound, it takes its default, else it is null or, when required, refused.</summary>
+public sealed record GraphInput(string Name, bool Required = false, Binding? Default = null);
+
+/// <summary>A local variable of a GraphActivity's body, initialized where its inputs are visible.</summary>
+public sealed record GraphVariable(string Name, Binding? Value = null);
+
+/// <summary>An output of a GraphActivity, read where its inputs and variables are visible when it completes.</summary>
+public sealed record GraphOutput(string Name, Binding Value);
+
 /// <summary>A flowchart connection from a source's outcome to a target.</summary>
 public sealed record Connection(string Source, string Target, string Outcome = "Done");
 
@@ -61,6 +87,8 @@ public sealed class Node(string id, Type type)
     public Dictionary<string, Gateway> Gateways { get; } = new(StringComparer.Ordinal);
     /// <summary>For a Switch: its cases, in the order they are tried. A case's branch is the child in its slot (<see cref="Native.Switch.CaseSlot"/>).</summary>
     public List<SwitchCase> Cases { get; } = [];
+    /// <summary>For a GraphActivity: what it declares.</summary>
+    public GraphBoundary? Graph { get; set; }
     /// <summary>Output captures: variable name to a path in the result ("" is the whole result).</summary>
     public Dictionary<string, string> Captures { get; } = new(StringComparer.Ordinal);
     /// <summary>The named child slot this node fills in its parent, where the parent has slots (If: Then, Else).</summary>
@@ -84,10 +112,20 @@ public sealed class Workflow
                 throw new ArgumentException($"Node '{node.Id}' requires a nonnegative timeout on a background activity.");
             if (node.Type == typeof(Switch)) Switch.Validate(node, id);
             else if (node.Cases.Count != 0) throw new InvalidOperationException($"Node '{node.Id}' in '{id}' has cases and is no Switch.");
+            if (node.Type == typeof(GraphActivity)) GraphActivity.Validate(node, id);
+            else if (node.Graph is not null) throw new InvalidOperationException($"Node '{node.Id}' in '{id}' declares a boundary and is no GraphActivity.");
+            if (node.Type == typeof(Complete)) GraphActivity.ValidateExit(node, Boundary(parent), id);
             if (parent is not null) Parents[node.Id] = parent;
             foreach (var child in node.Children) Index(child, node);
         }
         Index(root, null);
+
+        Node? Boundary(Node? node)
+        {
+            for (; node is not null; node = Parents.GetValueOrDefault(node.Id))
+                if (node.Type == typeof(GraphActivity)) return node;
+            return null;
+        }
     }
 
     // Private M0 experiment; this request is not a product incident-strategy setting.

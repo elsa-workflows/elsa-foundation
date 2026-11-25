@@ -100,6 +100,16 @@ public static class Wf
         return node;
     }
 
+    /// <summary>A GraphActivity with its body, its declaration and its inputs bound by name.</summary>
+    public static Node GraphActivity(string id, GraphBoundary graph, Node body, params (string Input, Binding Value)[] inputs)
+    {
+        var node = Node<GraphActivity>(id, inputs).With(body);
+        node.Graph = graph;
+        return node;
+    }
+
+    public static Node Complete(string id, Binding outcome) => Node<Complete>(id, ("Outcome", outcome));
+
     public static Node ForEach(string id, Binding items, Node body) => Node<ForEach>(id, ("Items", items)).With(body);
     public static Node While(string id, Binding condition, Node body) => Node<While>(id, ("Condition", condition)).With(body);
 

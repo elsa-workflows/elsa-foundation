@@ -96,6 +96,13 @@ public sealed record DispatchEffect(string Workflow, JsonNode? Input, string Mod
 public sealed record EmitEffect(string Channel, JsonNode? Item) : Effect;                 // live, not durable: the kernel's Emit
 
 /// <summary>
+/// The exit a graph <c>Complete</c> sends: the model completes the leaf without telling its parent, and its nearest
+/// enclosing GraphActivity takes the exit, ending the rest of its body. Only a completion carries it; nothing between the
+/// leaf and the boundary sees it.
+/// </summary>
+public sealed record ExitEffect(string Outcome) : Effect;
+
+/// <summary>
 /// An effect on the outside world that is not replay-safe, performed by the host (round 5 C). <see cref="Key"/> is the
 /// effect key the activity put where the receiver looks for a repeat: an HTTP request's <c>Idempotency-Key</c> header,
 /// an email's <c>Message-ID</c>. The activity derives it from <see cref="ActivityContext.EffectKey"/>; the host sends it
