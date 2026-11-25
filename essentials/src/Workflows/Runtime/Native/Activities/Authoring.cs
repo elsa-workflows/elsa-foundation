@@ -179,7 +179,9 @@ public class ActivityContext
 /// <summary>
 /// The host's script engine for <see cref="RunJavaScript"/>: it runs a program that sees only its frozen <c>args</c> and
 /// returns the program's value as JSON. The host bounds its time, statements and recursion, as the old core's evaluator
-/// does, and it reads no workflow state, so a run inside the turn is safe to repeat.
+/// does, and it reads no workflow state, so a run inside the turn is safe to repeat. While the token is cancelled, any
+/// exception it throws abandons the turn (an engine's own cancellation exception included); otherwise an exception
+/// faults the activity. A number in the value keeps its JSON text, which names an outcome.
 /// </summary>
 public interface INativeScripts
 {

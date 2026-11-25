@@ -24,11 +24,12 @@ internal static class ScriptChecks
                 "pick" => new(arguments["choice"]?.DeepClone()),
                 "touch" => Touch(arguments),
                 "throw" => throw new InvalidOperationException("the script threw"),
+                "timeout" => throw new OperationCanceledException("engine timeout"),
                 _ => throw new ArgumentException($"no program '{script}'"),
             };
         }
 
-        // A program that changes its args changes only its own copy.
+        // A program that changes its args changes nothing of the workflow's (the old core's engine freezes them).
         private static ValueTask<JsonNode?> Touch(JsonObject arguments)
         {
             arguments["a"] = 99;
@@ -71,9 +72,14 @@ internal static class ScriptChecks
             ("args", null), ("output", null));
 
         yield return Workflow("script-throws", RunJavaScript("js", "throw"));
+        // The engine's own timeout, with the turn's token not cancelled, faults the activity.
+        yield return Workflow("script-timeout", RunJavaScript("js", "timeout"));
+        yield return Workflow("script-number", RunJavaScript("js", Binding.Literal(5)));
+        // A blank script reads no arguments, as the old core builds no request for one.
+        yield return Workflow("script-blank-arguments", Sequence("root", RunJavaScript("js", " ", Literal(new JsonArray(1))).Capture("v", "Value"), Set("o", "output", "ran"), Hold()), ("output", null));
         yield return Workflow("script-arguments", RunJavaScript("js", "sum", Literal(new JsonArray(1, 2))));
         yield return Workflow("script-outcomes", RunJavaScript("js", "sum", Literal(new JsonObject { ["a"] = 1, ["b"] = 2 }), Literal(new JsonArray(new JsonObject()))));
-        foreach (var child in new[] { "script-throws", "script-arguments", "script-outcomes" })
+        foreach (var child in new[] { "script-throws", "script-timeout", "script-number", "script-arguments", "script-outcomes" })
             yield return Workflow("script-parent-" + child, Sequence("root", Dispatch("child", child, wait: true).Capture("result"), Hold()), ("result", null));
     }
 
@@ -110,7 +116,7 @@ internal static class ScriptChecks
             var routes = Output(await Run(owner, "script-routes"));
             check(routes == "approve unmatched 7", $"{mode}: with possible outcomes the program routes by its value, a number by its text, else Unmatched ('{routes}')");
             var frozen = Output(await Run(owner, "script-frozen"));
-            check(frozen == "1", $"{mode}: the program changes only its own copy of its arguments ('{frozen}')");
+            check(frozen == "1", $"{mode}: a program that changes its arguments changes nothing of the workflow's ('{frozen}')");
 
             async Task<string?> Code(Owner on, string workflow) =>
                 Values.To<ActivityFault>(Values.To<DispatchResult>((await Run(on, "script-parent-" + workflow))?.Variables.GetValueOrDefault("result"))?.Output)?.Code;
@@ -118,6 +124,11 @@ internal static class ScriptChecks
             check(unavailable == "javascript.unavailable", $"{mode}: a script on a host without an engine faults ({unavailable})");
             var thrown = await Code(owner, "script-throws");
             check(thrown == "javascript.failed", $"{mode}: a program that throws faults the activity ({thrown})");
+            var timeout = await Code(owner, "script-timeout");
+            var number = await Code(owner, "script-number");
+            var blankArguments = Output(await Run(owner, "script-blank-arguments"));
+            check(timeout == "javascript.failed" && number == "javascript.script.invalid" && blankArguments == "ran",
+                $"{mode}: the engine's own timeout faults, a script that is no string faults, and a blank script reads no arguments ({timeout}, {number}, {blankArguments})");
             var arguments = await Code(owner, "script-arguments");
             var outcomes = await Code(owner, "script-outcomes");
             check(arguments == "javascript.arguments.invalid" && outcomes == "javascript.outcomes.invalid",
