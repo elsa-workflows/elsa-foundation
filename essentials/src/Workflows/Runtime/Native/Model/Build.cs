@@ -34,8 +34,17 @@ public static class Wf
     public static Node WriteLine(string id, Binding text) => Node<WriteLine>(id, ("Text", text));
     public static Node Set(string id, string variable, Binding value) => Node<SetVariable>(id, ("Name", variable), ("Value", value));
     public static Node Notify(string id, Binding message) => Node<SendNotification>(id, ("Message", message));
-    public static Node Http(string id, Binding url, Binding? body = null, string method = "POST") =>
-        body is null ? Node<SendHttpRequest>(id, ("Url", url), ("Method", method)) : Node<SendHttpRequest>(id, ("Url", url), ("Method", method), ("Body", body));
+    public static Node Http(string id, Binding url, Binding? body = null, string method = "POST", Binding? headers = null, int[]? expectedStatusCodes = null,
+        TimeSpan? timeout = null, string? connection = null)
+    {
+        var node = Node<SendHttpRequest>(id, ("Url", url), ("Method", method));
+        if (body is not null) node.Inputs["Body"] = body;
+        if (headers is not null) node.Inputs["Headers"] = headers;
+        if (expectedStatusCodes is not null) node.Inputs["ExpectedStatusCodes"] = Binding.Literal(expectedStatusCodes);
+        if (timeout is { } t) node.Inputs["Timeout"] = Binding.Literal(t.TotalMilliseconds);
+        if (connection is not null) node.Inputs["Connection"] = connection;
+        return node;
+    }
     public static Node Email(string id, Binding to, Binding subject, Binding body) => Node<SendEmail>(id, ("To", to), ("Subject", subject), ("Body", body));
     public static Node Call(string id, Binding service, long milliseconds = 0) => Node<CallService>(id, ("Service", service), ("Milliseconds", milliseconds));
     public static Node Delay(string id, Binding milliseconds) => Node<Delay>(id, ("Milliseconds", milliseconds));
@@ -72,8 +81,12 @@ public static class Wf
         return node;
     }
 
-    public static Node HttpEndpoint(string id, Binding path, string method = "POST", bool respondBeforeCommit = false) =>
-        Node<HttpEndpoint>(id, ("Path", path), ("Method", method), ("RespondBeforeCommit", respondBeforeCommit));
+    public static Node HttpEndpoint(string id, Binding path, string method = "POST", bool respondBeforeCommit = false, Binding? routeValues = null)
+    {
+        var node = Node<HttpEndpoint>(id, ("Path", path), ("Method", method), ("RespondBeforeCommit", respondBeforeCommit));
+        if (routeValues is not null) node.Inputs["RouteValues"] = routeValues;
+        return node;
+    }
 
     public static Node Respond(string id, Binding body, int status = 200, string contentType = "text/plain", Binding? headers = null) =>
         headers is null

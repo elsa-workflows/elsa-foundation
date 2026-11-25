@@ -46,7 +46,7 @@ public sealed partial class EfStore
             db.UsesRootTerminalSelection || db.UsesRootRetirement, db.UsesRootParkInspection, db.UsesRootParkRecovery);
 
         // A qualified projector writes through its trigger's schema and has a guard that refuses root writes without it.
-        private bool Qualified => TerminalMarks || Retires;
+        internal bool Qualified => TerminalMarks || Retires;
         private string Projector => Qualified ? "kernel_project_root_actor_list_v13" : "kernel_project_root_actor_list";
         // A schema-bound list encodes read filters locally and requires the list and marker in the trigger's schema.
         internal bool SchemaBound => Qualified || Park;

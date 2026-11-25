@@ -221,14 +221,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
                 finally { ObserveFault(reading); }
             }
             if (answer.Item is CreationResult refusal)
-                return new(null, refusal.OwningOperation, Error: refusal.Result switch
-                {
-                    "Protected" => "protected",
-                    "ProtectionUnavailable" => "protection unavailable",
-                    "StaleSelection" => "stale selection",
-                    "TargetMismatch" => "target",
-                    _ => "missing"
-                });
+                return new(null, refusal.OwningOperation, Error: RefusalError(refusal.Result));
             return new(answer.Channel, answer.Item, (Contract.ActorStatus?)answer.Status, answer.Error);
         }
 
@@ -265,6 +258,17 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
     public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
         CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("Event starts are outside this preview.");
+
+    // The error an operator caller sees when the owner refused its held command.
+    internal static string RefusalError(string result) => result switch
+    {
+        "Protected" => "protected",
+        "ProtectionUnavailable" => "protection unavailable",
+        "StaleSelection" => "stale selection",
+        "TargetMismatch" => "target",
+        "Parked" => "parked",
+        _ => "missing"
+    };
 }
 
 public sealed partial class EfStore
