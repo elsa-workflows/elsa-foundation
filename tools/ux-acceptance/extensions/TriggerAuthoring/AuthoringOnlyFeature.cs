@@ -39,6 +39,11 @@ internal sealed class NoServingInputs : ITriggerInputMapper
     public ValueTask<WorkflowExecutableInputValidation> MapAsync(WorkflowExecutableInputContract contract, IReadOnlyList<TriggerInputMapping> mappings,
         JsonElement sourceEnvelope, CancellationToken cancellationToken = default)
     { cancellationToken.ThrowIfCancellationRequested(); return ValueTask.FromResult(ValidateMappings(contract, mappings)); }
+    public WorkflowExecutableInputValidation ValidateMappings(WorkflowExecutableInputContract contract, IReadOnlyList<TriggerInputMapping> mappings,
+        WorkflowValuePolicies policies, TriggerInputSemantics semantics = TriggerInputSemantics.Native) => ValidateMappings(contract, mappings);
+    public ValueTask<WorkflowExecutableInputValidation> MapAsync(WorkflowExecutableInputContract contract, IReadOnlyList<TriggerInputMapping> mappings,
+        JsonElement sourceEnvelope, WorkflowValuePolicies policies, CancellationToken cancellationToken = default,
+        TriggerInputSemantics semantics = TriggerInputSemantics.Native) => MapAsync(contract, mappings, sourceEnvelope, cancellationToken);
 }
 
 /// <summary>Owned demonstration store: scoped/idempotent paused metadata only, intentionally not durable across processes.</summary>
