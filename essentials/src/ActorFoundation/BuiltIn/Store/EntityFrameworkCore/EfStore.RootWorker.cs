@@ -442,9 +442,10 @@ public sealed partial class EfStore
             turn.Subscribed, turn.Unsubscribed, turn.Journal, turn.Unsubscribe, turn.Held)
         {
             FoundationHeader = turn.FoundationHeader, FoundationRootOperator = turn.FoundationRootOperator, FoundationSelfRecalls = recalls,
-            // A Terminate's, or a Faulted end's, cascade of outstanding timed jobs alone, which its terminal commit settles.
+            // A Terminate's, or a Faulted or Finished end's, cascade of outstanding timed jobs alone, which its terminal commit settles.
             FoundationCascade = turn is { FoundationCascade: { Entries.Children.IsEmpty: true, Input: null } jobs } &&
-                (terminated || timedFault && turn.FoundationRootOperator is null) && RootTimedJobSettlementEnabled ? jobs : null,
+                (terminated || (timedFault || row.Status == InstanceStatus.Finished) && turn.FoundationRootOperator is null) &&
+                RootTimedJobSettlementEnabled ? jobs : null,
             FoundationRootJobCompletion = RootJobsEnabled ? turn.FoundationRootJobCompletion : null,
             FoundationValues = values
         };
@@ -484,7 +485,7 @@ public sealed partial class EfStore
             throw RootShape();
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, cancellationToken);
         if (current?.Revision != turn.Expected) return null;
-        // A Terminate or a Faulted end of a root with outstanding timed jobs settles them: its cascade names exactly the root's
+        // A Terminate, or a Faulted or Finished end, of a root with outstanding timed jobs settles them: its cascade names exactly the root's
         // jobs, and their ticket and deadline rows leave in its terminal commit.
         IReadOnlyList<InboxKey> inputKeys = turn.Consumed;
         string[]? settledJobs = null;
@@ -530,7 +531,7 @@ public sealed partial class EfStore
         if (row.Suspended != current.Suspended || inputs.Any(input => input.Operator is not null)) throw RootShape();
         if (settledJobs is not null)
         {
-            if (!timedFault || turn.Sent.Count != 0 || recalls is not null || row.Jobs is not null || turn.FoundationRootJobCompletion is not null ||
+            if (!(timedFault || row.Status == InstanceStatus.Finished) || turn.Sent.Count != 0 || recalls is not null || row.Jobs is not null || turn.FoundationRootJobCompletion is not null ||
                 values is not null || inputs.Any(input => input.Kind == Kinds.Job)) throw RootShape();
             return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
                 row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal,

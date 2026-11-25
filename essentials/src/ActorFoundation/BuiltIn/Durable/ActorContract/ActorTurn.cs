@@ -230,11 +230,11 @@ internal sealed partial class ActorAdapter
             var ended = wasRunning && _status != Contract.ActorStatus.Running;
             var outcome = _turn.Outcome((Durable.InstanceStatus)_status);
             outcome.FoundationValues = _values;
-            // A root provider settles a Faulted end's outstanding jobs the way it settles a Terminate's: in a jobs-only cascade
-            // its terminal commit discharges.
+            // A root provider settles the jobs still registered at any end (a cancelled one stays registered until then) the
+            // way it settles a Terminate's: in a jobs-only cascade its terminal commit discharges.
             var cascades = outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Terminate) ||
                 ended && _status == Contract.ActorStatus.Cancelled ||
-                ended && _status == Contract.ActorStatus.Faulted && _inMemory is null && _turn.Jobs() is not null;
+                ended && _inMemory is null && _turn.Jobs() is not null;
 
             outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
             for (var i = 0; i < outcome.Replied.Count; i++)

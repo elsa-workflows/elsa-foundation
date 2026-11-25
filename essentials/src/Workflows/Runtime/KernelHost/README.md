@@ -39,8 +39,11 @@ the Native model's definitions.
   - without child workflows, a Dispatch Workflow, waited or not: "Dispatch Workflow doesn't run on this host yet. Remove
     it, or start the other workflow from an HTTP endpoint or an event."
   - without self-sends, nothing is refused: a turn that reaches the activity cap cannot continue in a self-send, so the
-    host sets `NativeExecutionOptions.SplitsBursts` to false and the Native model runs a burst on to its next wait. The
-    state and history size limits still bound the turn, and the 1,000-item ForEach cap stands.
+    host sets `NativeExecutionOptions.SelfSends` to false and the Native model runs a burst on to its next wait. The
+    state and history size limits still bound the turn, and so do `MaxActivitiesPerBurst` (10,000) and
+    `MaxBurstDuration` (5 s): past either the workflow faults with `native.burst.limit`, saying how long it ran and what
+    to change. The 1,000-item ForEach cap stands. A PostgreSQL host reads whether its store format takes self-sends from
+    `PostgresPreviewHosting.TakesSelfSends`.
 - `KernelHttpEdge` is the framework-free half of a host's HTTP edge. `Match` matches a request's path, relative to the
   edge's base path, against the start routes of what serves now and returns the start of the route's workflow, with the
   request (and its route values) as the trigger; a wait route or no route is not served. `Answer` maps a held start's
