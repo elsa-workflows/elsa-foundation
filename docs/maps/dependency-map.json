@@ -5341,8 +5341,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Workflows.Runtime",
-          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         },
         {
           "type": "external",
@@ -5378,11 +5378,6 @@
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
           "version": "0.0.31"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Cronos",
-          "version": "0.13.0"
         },
         {
           "type": "pinned-transitive",
@@ -19236,6 +19231,11 @@
           "type": "internal",
           "id": "Elsa.Diagnostics.OpenTelemetry.Workflows",
           "path": "essentials/src/Diagnostics/OpenTelemetry/Workflows/Elsa.Diagnostics.OpenTelemetry.Workflows.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime",
+          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
         },
         {
           "type": "internal",
