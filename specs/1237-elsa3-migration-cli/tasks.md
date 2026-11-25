@@ -129,7 +129,7 @@
   `extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Services/`. It returns the plan items, the skips with
   their cause and code, the publication outcomes and the publish diagnostics. Move the registration of its collaborators
   (`Elsa3ImportSelection`, `ImportedWorkflowPublisher`, `Elsa3StartupPublishingGrant`, the publishing authorization
-  decoration) out of `Elsa3JsonReconciliationFeature` into an internal `Elsa3ImportRunRegistration.Add`, which the
+  decoration, and the `TimeProvider.System` registration `ImportedWorkflowPublisher` needs) out of `Elsa3JsonReconciliationFeature` into an internal `Elsa3ImportRunRegistration.Add`, which the
   feature calls. Make the startup task call the run and log as before, and add
   `InternalsVisibleTo("Elsa3.Migration.Tooling")`. The existing reconciliation integration tests must
   stay green unchanged (§2.21.1, FR-013).
@@ -150,7 +150,8 @@
   reads: when it is set, the initializer calls the startup-only member instead of `StartExecutingRegisteredTasks`.
   Document the setting in the Tasks README. Test the order, the default, and that with the setting no
   `IBackgroundTask` or recurring task starts (R-5).
-- [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It takes the host assembly, the host project folder and
+- [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It depends on T013 (the addition list and the
+  `Elsa3MigrationImportRun` feature), so do T013 first even though it is listed under US3. It takes the host assembly, the host project folder and
   the CLI project folder from the CLI, builds an empty generic host (`Host.CreateEmptyApplicationBuilder`) that is
   never started, with `ContentRootPath` set to the host folder and `EnvironmentName` set to Development, and uses the
   T004a methods; it copies none of the host's wiring. After building, it activates the shell itself with
@@ -204,7 +205,8 @@
 ## Phase 3: User Story 3 - Same composition as the migration host (P1)
 
 - [ ] T013 [US3] Add `Tooling/Elsa3MigrationImportRunFeature.cs`, the shell feature `Elsa3MigrationImportRun`. It
-  `DependsOn` `WorkflowsPublishingApi`, `Elsa3ImportActivitiesPublishing` and `Tasks`, and its `ConfigureServices`
+  `DependsOn` `WorkflowsPublishingApi`, `WorkflowsPublishing`, `Elsa3ImportActivitiesPublishing` and `Tasks`, as
+  `Elsa3JsonReconciliationFeature` does for the same publisher, and its `ConfigureServices`
   calls `Elsa3ImportRunRegistration.Add` (R-5). Add `Cli/elsa3-migration.features.json`, the Elsa 3 addition list in
   the CShells feature shape of the host's `shells.json`: `Elsa3Mapping`, the collection import for reusables, the
   import's EF ledger, the publishing bridge and `Elsa3MigrationImportRun`. It is read from the CLI project folder only,

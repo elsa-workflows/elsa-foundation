@@ -242,7 +242,7 @@ hosted service never runs because the CLI's host is never started, so `Migration
 `composition-failed`, and `--out` is created only after it returns. No web server starts.
 
 The shell-level parts are a feature of the tooling's own, `Elsa3MigrationImportRun`, in the addition list. It
-`DependsOn` `WorkflowsPublishingApi`, `Elsa3ImportActivitiesPublishing` and `Tasks`, and its `ConfigureServices` calls
+`DependsOn` `WorkflowsPublishingApi`, `WorkflowsPublishing`, `Elsa3ImportActivitiesPublishing` and `Tasks`, and its `ConfigureServices` calls
 `Elsa3ImportRunRegistration.Add`, so the import run and its publishing authorization decoration are registered in the
 shell, after the context they decorate. Startup tasks only is a supported Tasks setting, `StartupTasksOnly` on the
 `Tasks` feature (default `false`): `RunShellTasksInitializer` reads it and, when it is set, runs only the startup
