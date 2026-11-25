@@ -67,6 +67,9 @@ public sealed partial class EfStore
         };
     }
 
+    // A stored operator header that names a Park.
+    private const string ParkSelectedOperator = "%\"Park\":{%";
+
     private sealed record LockedParkCheckpoint(long At, long? ParkAt, long? OpenRevision, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
 
     private sealed record RootParkOpening(WorkerRoot Root, long Expected, bool Opening, ParkKeepReason Reason, string EncodedFault,
@@ -135,6 +138,14 @@ public sealed partial class EfStore
                 WHERE "Id" = ANY({Returned}) AND "Id" LIKE 'operator/%' AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
                 """, cancellationToken) != Returned.Length) return false;
+            // S5b: a keep changes the kept set, so a pending Terminate that names the Park is read again with fresh Park
+            // facts. The owner forgets the copy it read ahead of this keep (Worker), and the next poll reads the row again.
+            if (Reason == ParkKeepReason.Arrived && db.UsesRootParkedOperators)
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Seen" = 0
+                    WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        AND "EventMatch" IS NULL AND NOT "Done" AND "Id" LIKE 'operator/%' AND "Start" LIKE {ParkSelectedOperator}
+                    """, cancellationToken);
             if (Reason == ParkKeepReason.Consumed)
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     DELETE FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition}

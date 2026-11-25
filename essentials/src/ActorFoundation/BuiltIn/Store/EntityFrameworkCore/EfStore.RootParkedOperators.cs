@@ -11,7 +11,7 @@ public sealed partial class EfStore
     {
         var command = turn.FoundationRootOperator!;
         string[] reasons = command.Operator?.RootParkMark is null ? ["parked"]
-            : command is { Kind: Kinds.Terminate, Operator.RootParkFacts: not null } ? ["selection", "plan", "page"] : [];
+            : command is { Kind: Kinds.Terminate, Operator.RootParkFacts: not null } ? ["selection", "outstanding", "page"] : [];
         // The refusal keeps the Suspended flag: a Park on a suspended root keeps it, as the in-memory reference does.
         if (turn.Row is not { Status: InstanceStatus.Faulted, Retired: false, FoundationDispatchHeader: { Terminal: null } header } row ||
             turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
@@ -67,8 +67,8 @@ public sealed partial class EfStore
     }
 
     // The checkpoint writer's branch for that commit: a parked root becomes Cancelled and unsuspended with its Park mark
-    // cleared and its terminal mark written, every kept row already cleared, no jobs, children or custom handles, and the
-    // rest of the row unchanged, beside a "terminated" entry at its revision. The raw command is formatted, so the literal brace is doubled.
+    // cleared and its terminal mark written, its fault kept, every kept row already cleared, no jobs, children, custom
+    // handles or subscriptions, and the rest of the row unchanged, beside a "terminated" entry at its revision. The raw command is formatted, so the literal brace is doubled.
     private static string ParkedTerminateCheckpoint(KernelDb db)
     {
         const string columns = """
@@ -82,7 +82,8 @@ public sealed partial class EfStore
                 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0 AND OLD."FoundationTerminalRevision" IS NULL
                 AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
                 AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
-                AND NEW."Jobs" IS NULL AND NEW."Children" IS NULL AND NEW."CustomHandles" IS NULL
+                AND NEW."Jobs" IS NULL AND NEW."Children" IS NULL AND NEW."CustomHandles" IS NULL AND OLD."Fault" IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = NEW."Id")
                 AND {{{Row("NEW")}}} IS NOT DISTINCT FROM {{{Row("OLD")}}}
                 AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
                     AND k."InboxScope" = -4 AND k."FoundationKeptBy" IS NOT NULL)
