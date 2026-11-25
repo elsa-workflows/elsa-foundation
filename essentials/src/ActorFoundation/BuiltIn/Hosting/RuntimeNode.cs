@@ -343,6 +343,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     // A cancellation the kill caused carries the kill's token: what the node runs gets that token, and a watched store
     // call, whose own token is linked to it, reports the kill on it too (Watchdog.RunAsync). One on any other token, a
     // drain's own expired deadline say, is the drain's own, also when it surfaces after the kill.
+    // So it relies on a watched store: an unwatched host's store call would report the kill on its own linked token (LeaseIoDeadline's).
     private bool KillCaused(OperationCanceledException cancellation) => cancellation.CancellationToken == _kill.Token;
 
     // The runtime's stop returns at the kill. The job drain or release it interrupted may still fault, or end with a
@@ -422,8 +423,10 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 try { await draining.WaitAsync(_kill.Token); }
                 catch (OperationCanceledException) when (_kill.IsCancellationRequested) { RecordLater(draining); }
                 catch (Exception error) { drainError = error; }
-                // The drain's own cancellation, no kill: record it as thrown, now, whatever a later kill does to the stop.
+                // The drain's fault, or its own cancellation, no kill: record it as thrown, now, whatever a later kill does
+                // to the stop, so the host reports it as a fault of the stop and never as an error after a kill.
                 if (drainError is OperationCanceledException own) KeepOwnCancellation(own);
+                else if (drainError is not null) RecordFault(drainError);
             }
 
             // A kill during shutdown leaves remaining ownership to expire instead of returning it as clean. So does a

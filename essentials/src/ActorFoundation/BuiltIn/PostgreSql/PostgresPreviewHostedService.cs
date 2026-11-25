@@ -18,7 +18,7 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Exception, object> _logged = [];     // weak: no exception is kept alive
     private Exception? _shutdownFault;
-    private int _drainKilled;     // 1 once a deadline killed the node's stop: later errors are logged at Warning
+    private int _drainKilled;     // 1 once a stop that a deadline killed has returned: later errors are logged at Warning
 
     // One Error entry per fault, whether the node recorded it or the shutdown around it raised it.
     private void Fault(Exception fault) => Log(fault, again: false);
@@ -72,9 +72,14 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         }
     }
 
+    /// <summary>Starts the node in place of the PostgreSQL hosting, given the node's fault callback and the startup token;
+    /// for witnesses of what this service logs around a node of their own.</summary>
+    internal Func<Action<Exception>, CancellationToken, Task<RuntimeNode>>? StartNode { get; init; }
+
     private async Task<RuntimeNode> StartNodeAsync(CancellationToken cancellationToken)
     {
         using var startup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancelStartup.Token);
+        if (StartNode is { } start) return await start(NodeFault, startup.Token);
         Kernel.Durable.IReplyTransport? replies = _requests;
         if (replies is not null && ObserveReplies is { } observe) replies = observe(replies);
         return await PostgresPreviewHosting.StartAsync(create, node, actor, Escalate, options, startup.Token, NodeFault, replies);
@@ -194,10 +199,10 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
                 using var stop = CancellationTokenSource.CreateLinkedTokenSource(deadline, _killNode.Token);
                 if (startup.IsCompletedSuccessfully)
                 {
-                    var stopping = startup.Result.StopAsync(stop.Token);
-                    // Registered after the node's own kill registration, so it runs before it (callbacks run last first).
-                    using (stop.Token.Register(static state => Volatile.Write(ref ((PostgresPreviewHostedService)state!)._drainKilled, 1), this))
-                        await stopping;
+                    // Once the stop has returned: a fault the halt recorded before then (its drain's, also one it throws
+                    // at the kill) stays an Error; only what lands later, from an operation the kill interrupted, is not.
+                    try { await startup.Result.StopAsync(stop.Token); }
+                    finally { if (stop.IsCancellationRequested) Volatile.Write(ref _drainKilled, 1); }
                 }
                 AfterNodeStop?.Invoke();
             }

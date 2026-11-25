@@ -107,7 +107,7 @@ internal static class PostgresPreviewLifetimeChecks
             Require((await ReadFenceAsync()).Owner is null, "the replacement also releases ownership through application shutdown");
         }
         // KERNEL_LIFETIME_PROBES=name[,name]: run only these deadline probes after the main flow (for fail-before witnesses).
-        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault", "joined-stop-warning", "aggregate-once", "loop-error-repeat"];
+        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault", "joined-stop-warning", "aggregate-once", "loop-error-repeat", "drain-fault-then-kill", "late-fault-warning"];
         var only = Environment.GetEnvironmentVariable("KERNEL_LIFETIME_PROBES")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (only is { Length: 0 } || only?.FirstOrDefault(name => !probes.Contains(name, StringComparer.Ordinal)) is { } unknown)
             throw new InvalidOperationException($"KERNEL_LIFETIME_PROBES names no known probe ({string.Join(", ", probes)}).");
@@ -124,7 +124,80 @@ internal static class PostgresPreviewLifetimeChecks
         if (Probe("joined-stop-warning")) await CheckJoinedStopWarningAsync();
         if (Probe("aggregate-once")) await CheckAggregateOnceAsync();
         if (Probe("loop-error-repeat")) CheckLoopErrorRepeat();
+        if (Probe("drain-fault-then-kill")) await CheckDrainFaultThenKillAsync();
+        if (Probe("late-fault-warning")) await CheckLateFaultWarningAsync();
         return 0;
+
+        // The turn drain faults before any kill; the job drain then waits for a job that ignores cancellation until the
+        // application deadline kills it. The fault is logged once at Error, the kill once at Warning.
+        async Task CheckDrainFaultThenKillAsync()
+        {
+            var fault = new InvalidOperationException("injected turn drain fault before the kill");
+            var job = new HeldJobActor();
+            var log = new RecordingLogger();
+            var service = InMemoryService("drain-fault-then-kill", log, (store, report) =>
+            {
+                var node = new RuntimeNode("drain-fault-then-kill", store, 1, InMemoryLoop, beforeRelease: async _ =>
+                {
+                    await Task.Yield();
+                    throw fault;
+                }, onFault: report);
+                return (node, DurableHost.ForNode(node.Node, store, new Kernel.Durable.ActorAdapter(store, job), 1, InMemoryWorkers));
+            }, async (store, node) => await StartInMemoryActorAsync(store, node, HeldJobActor.Name));
+            await service.StartAsync(token);
+            try
+            {
+                await job.Entered.Task.WaitAsync(token);
+                using var application = new CancellationTokenSource(TimeSpan.FromMilliseconds(800));     // lands while the job drain waits
+                try { await service.StopAsync(application.Token); }
+                catch (OperationCanceledException) when (application.IsCancellationRequested) { }
+            }
+            finally { job.Finish.TrySetResult(); }
+            await Task.Delay(300, token);
+            await service.DisposeAsync();
+            Require(log.Errors.Count == 1 && ReferenceEquals(log.Errors[0], fault) && log.Warnings.Count == 1 && log.Warnings[0].Contains("lease expiry", StringComparison.Ordinal),
+                $"a turn drain fault before the kill is logged once at Error and the kill once at Warning ({log.Errors.Count} Error, {log.Warnings.Count} Warning: {string.Join(" | ", log.Warnings)})");
+        }
+
+        // The deadline kills the stop while its release is in flight; the release faults later. The fault is logged once,
+        // at Warning, with no Error. (The kill's own Warning is not asserted: it is logged only when the service's wait
+        // sees the deadline before the node's stop returns.)
+        async Task CheckLateFaultWarningAsync()
+        {
+            var scopes = new SlowReleaseScopes();
+            var log = new RecordingLogger();
+            var service = InMemoryService("late-fault-warning", log, (store, report) =>
+                (new RuntimeNode("late-fault-warning", store, 1, InMemoryLoop, onFault: report), scopes), static (_, _) => Task.CompletedTask);
+            await service.StartAsync(token);
+            using var application = new CancellationTokenSource();
+            var stopping = service.StopAsync(application.Token);
+            await scopes.Releasing.Task.WaitAsync(token);
+            application.Cancel();     // the kill lands while the release is in flight
+            try { await stopping.WaitAsync(token); }
+            catch (OperationCanceledException) when (application.IsCancellationRequested) { }
+            scopes.Finish.TrySetResult();     // the release returns, and faults
+            await Task.Delay(300, token);
+            await service.DisposeAsync();
+            Require(log.Errors.Count == 0 && log.WarningErrors.Count(error => ReferenceEquals(error, scopes.Fault)) == 1 &&
+                log.Warnings.Count(warning => warning.Contains("after the deadline killed its drain", StringComparison.Ordinal)) == 1,
+                $"a fault from an operation the kill interrupted is logged once at Warning, with no Error ({log.Errors.Count} Error, {log.Warnings.Count} Warning: {string.Join(" | ", log.Warnings)})");
+        }
+
+        PostgresPreviewHostedService InMemoryService(string name, RecordingLogger log,
+            Func<Kernel.Durable.InMemoryStore, Action<Exception>, (RuntimeNode Node, Kernel.Runtime.IScopeHost Host)> build,
+            Func<Kernel.Durable.InMemoryStore, RuntimeNode, Task> started) =>
+            new(Open, name, new WaitingActor(false), _ => { }, InMemoryLoop, log)
+            {
+                StartNode = async (report, cancellationToken) =>
+                {
+                    var store = new Kernel.Durable.InMemoryStore(1, () => Environment.TickCount64);
+                    var (node, host) = build(store, report);
+                    await node.StartAsync(host, cancellationToken);
+                    while (!node.Runtime.Owns(0)) await Task.Delay(10, cancellationToken);
+                    await started(store, node);
+                    return node;
+                }
+            };
 
         // The node reports a loop error again once its window has passed, with the repeats it suppressed, also when the
         // loop rethrows the same instance (an awaited faulted task): the service logs each report. An aggregate with no
@@ -446,10 +519,82 @@ internal static class PostgresPreviewLifetimeChecks
     }
 
     /// <summary>A logger that keeps the exceptions of its Error entries.</summary>
+    private static readonly LoopOptions InMemoryLoop = new()
+    {
+        BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+    };
+
+    private static readonly Kernel.Durable.WorkerOptions InMemoryWorkers = new() { Partitions = 1, JobScheduler = TaskScheduler.Default };
+
+    private static async Task StartInMemoryActorAsync(Kernel.Durable.InMemoryStore store, RuntimeNode node, string type)
+    {
+        var ingress = new Kernel.Foundation.InMemory.InMemoryIngress(store, new Kernel.Durable.Requests(node.Node), node.Node);
+        var receipt = await ingress.SendAsync(Elsa.ActorFoundation.TestSupport.ContractScopes.Bind(node.Node),
+            new Contract.Target.Start(new(type, "held", History: Contract.History.Full)), "start", Contract.Kinds.Start);
+        if (receipt.Outcome != Contract.AdmissionOutcome.Accepted) throw new InvalidOperationException("The held job actor must start.");
+    }
+
+    /// <summary>An actor whose start issues one job that waits for <see cref="Finish"/>, ignoring cancellation.</summary>
+    private sealed class HeldJobActor : Contract.IActorType
+    {
+        internal const string Name = "held-job-actor";
+        public string Type => Name;
+        internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Finish { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool Withholds(Contract.ActorHeader header) => false;
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            if (turn.Inbox.Any(message => message.Kind == Contract.Kinds.Start))
+            {
+                turn.State = Kernel.Durable.Json.Write("waiting");
+                turn.StartJob("held");
+            }
+            return default;
+        }
+
+        public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult();
+            await Finish.Task;
+            return "done";
+        }
+    }
+
+    /// <summary>A host whose one scope's give-up waits for <see cref="Finish"/> and then throws <see cref="Fault"/>.</summary>
+    private sealed class SlowReleaseScopes : Kernel.Runtime.IScopeHost
+    {
+        internal InvalidOperationException Fault { get; } = new("injected release fault after the kill");
+        internal TaskCompletionSource Releasing { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Finish { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask<Kernel.Runtime.IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default) =>
+            new(new SlowScope(this, scope));
+
+        private sealed class SlowScope(SlowReleaseScopes host, int scope) : Kernel.Runtime.IScopeActivation
+        {
+            public int Scope => scope;
+            public bool Active { get; private set; } = true;
+            public ValueTask WokenAsync(Kernel.Runtime.InstanceRef? actor, CancellationToken cancellationToken = default) => default;
+            public ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default) => new(TimeSpan.FromMilliseconds(50));
+            public async ValueTask DisposeAsync()
+            {
+                host.Releasing.TrySetResult();
+                await host.Finish.Task;
+                Active = false;
+                throw host.Fault;
+            }
+        }
+    }
+
     private sealed class RecordingLogger : ILogger<PostgresPreviewHostedService>
     {
         private readonly List<Exception?> _errors = [];
         private readonly List<string> _warnings = [], _errorMessages = [];
+        private readonly List<Exception?> _warningErrors = [];
+        internal IReadOnlyList<Exception?> WarningErrors { get { lock (_errors) return [.. _warningErrors]; } }
         internal IReadOnlyList<Exception?> Errors { get { lock (_errors) return [.. _errors]; } }
         internal IReadOnlyList<string> ErrorMessages { get { lock (_errors) return [.. _errorMessages]; } }
         internal IReadOnlyList<string> Warnings { get { lock (_errors) return [.. _warnings]; } }
@@ -463,7 +608,11 @@ internal static class PostgresPreviewLifetimeChecks
                     _errors.Add(exception);
                     _errorMessages.Add(formatter(state, exception));
                 }
-                else if (logLevel == LogLevel.Warning) _warnings.Add(formatter(state, exception));
+                else if (logLevel == LogLevel.Warning)
+                {
+                    _warnings.Add(formatter(state, exception));
+                    _warningErrors.Add(exception);
+                }
         }
     }
 
