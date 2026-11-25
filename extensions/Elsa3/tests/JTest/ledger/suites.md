@@ -5,7 +5,7 @@ One row per suite file under `tests/` (spec 1235, data-model.md). Results: see d
 | Suite | Definitions | Elsa 3 result | Elsa 4 result | Last run |
 |---|---|---|---|---|
 | `branching/fork-parallel-tests.json` | branching-fork-parallel.json | pass | blocked: JOIN (#4193; `ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED`: WaitAny join whose branches can run at the same time) | 11, 29 |
-| `branching/if-then-else-tests.json` | branching-flows.json | pass | pass | 11, 29 |
+| `branching/if-then-else-tests.json` | branching-flows.json | pass | pass (run 29); run 32: load failure, the run took 27 s at 97 % CPU and the synchronous HTTP response window closed before the final response activity ran | 11, 32 |
 | `branching/implicit-tests.json` | branching-implicit.json | excluded (coordinator, 2026-11-24: re-evaluate on Elsa 4) | excluded | 4 |
 | `branching/join-wait-all-active-tests.json` | branching-wait-all-active.json | excluded (coordinator, 2026-11-24: re-evaluate on Elsa 4) | excluded | 4 |
 | `branching/join-wait-all-tests.json` | branching-wait-all.json | pass | blocked: JOIN (#4193; `ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED`: WaitAll join where not every branch provably runs) | 11, 29 |
@@ -27,7 +27,7 @@ One row per suite file under `tests/` (spec 1235, data-model.md). Results: see d
 | `correlate/correlate-guid-tests.json` | correlate-guid.json | pass | pass | 11, 29 |
 | `events/basic-event-tests.json` | events-listener.json, events-publisher.json | pass | blocked: value capture (`output.EventListenerCorrelationIdentifier`, `output.Result`: Elsa 4 returns snapshot trees, no plain-JSON read) | 11, 29 |
 | `http/form-files-tests.json` | http-endpoints.json | pass | blocked: #1152 (HttpEndpoint file upload; resource variables #3194); the adjusted copy drops the file reads, so the response holds no files | 11, 29 |
-| `http/headers-tests.json` | http-endpoints.json | pass | blocked: #5803 (a header value read as a single string, `Host`, is refused where Elsa 4 expects `string[]`; fix in PR #5813); its activity-state header assertion is a value read (value capture, #5647) | 11, 29 |
+| `http/headers-tests.json` | http-endpoints.json | pass | blocked: value capture (#5647): since #5803 was fixed the workflow runs and responds; what fails is reading the HttpEndpoint's and WriteHttpResponse's activity state (`outputs.Headers['custom-header']`), a value read | 11, 32 |
 | `http/multiple-supported-methods-tests.json` | http-endpoints.json | pass | pass | 11, 29 |
 | `http/query-parameter-tests.json` | http-endpoints.json | pass | pass | 11, 29 |
 | `http/request-body-tests.json` | http-endpoints.json | pass | pass (XML case per engine, suite-changes W2) | 11, 31 |
