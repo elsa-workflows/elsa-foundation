@@ -195,8 +195,9 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 
 - **FR-001**: The canonical skill MUST be one self-contained folder,
   `plugins/elsa3-migration/skills/elsa3-workflows-migration/`, holding `SKILL.md`, `migration-plan-template.md` and
-  `porting-catalog.md`. No step the user must take may depend on a repository file outside the folder; links to
-  the repository are for further reading only.
+  `porting-catalog.md`. No step may depend on reading a repository document outside the folder; links to the
+  repository are for further reading only. The code the steps run, the command-line tool and the migration host,
+  comes from the user's clone (FR-022).
 - **FR-002**: `SKILL.md` MUST use the open agent-skill format (a `name` and `description` front matter, then plain
   markdown) and MUST read as ordinary documentation: no wording addressed to one AI model or vendor, and every step
   doable by a human.
@@ -252,7 +253,10 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   workspace; `assess` also composes the features the migration host references and lists (FR-011). The skill records
   the command in the plan. Before the first run of a session, the skill MUST check that the .NET SDK is available
   and that the clone is at the commit the plan records (FR-004). When either fails, it stops, says what is missing,
-  and runs nothing. When the tool refuses to run, the skill shows the tool's reason and stops.
+  and runs nothing. When the tool refuses to run, the skill shows the tool's reason and stops. A run produced a report only when it
+  exits 0 or 1 and its last standard-output line is the output path; any other ending is a build or tool failure
+  (most often a half-ported feature project that does not compile): the skill shows the errors, records them on the
+  component being ported, does not read the previous report in the output folder, and stops.
 
 **The porting catalog**
 
@@ -307,8 +311,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   read, says that installing it as an AI skill is optional, and lists what the migration does not cover (FR-021).
 - **FR-020**: The skill MUST end with the handoff, as text only: the user keeps their feature projects in any
   repository and stores the migrated workflows anywhere. For now, the user runs the result on the migration host
-  (`apps/Elsa.Migration.Host`) from the same clone and commit, with their feature projects referenced and its workflow and
-  activity folder settings pointing at the `migrated/` folder. This local setup is a temporary development setup, not
+  (`apps/Elsa.Migration.Host`) from the same clone and commit, with their feature projects referenced, its workflows-folder
+  setting pointing at `migrated/workflows/` and its activities-file setting at `migrated/activities/activities.json`. This local setup is a temporary development setup, not
   the production go-live: that comes with an Elsa 3 migration app profile once Elsa 4's distribution channels are
   decided, and the handoff is updated then. The skill performs no publishing or deployment step.
 - **FR-021**: The skill and the README section MUST state what is out of scope: live workflow instances, running

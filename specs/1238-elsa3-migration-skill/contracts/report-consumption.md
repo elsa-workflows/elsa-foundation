@@ -8,7 +8,7 @@ worked around here.
 | Need | Used for |
 |---|---|
 | Schema version | Stop on an unknown version (R-4). |
-| Tool name and version, command (`inventory` or `assess`), exit code (0: no Must fix or Reconsider finding, Take into account findings may remain; 1: findings) and the redacted marker | Record in the plan; know whether the local features were composed; confirm what reached the AI provider (FR-005). |
+| Tool name and version, command (`inventory` or `assess`), exit code (0: no Must fix or Reconsider finding, Take into account findings may remain; 1: findings) and the redacted marker | Record the command and exit code in the plan; know whether the local features were composed; confirm what reached the AI provider (FR-005). |
 | Summary counts | Report progress per run. |
 | Custom-component inventory: kind (activity type, JavaScript function, variable type, storage driver), Elsa 3 name, usage count, the definitions using it | Fill the plan's components (FR-008). |
 | Per definition: identity, name, version, bucket (`convert-as-is`, `convert-with-adjustments`, `incompatible`), blocked by dependency and its root | Order the work; fix roots first (FR-012). |
@@ -25,7 +25,9 @@ patch the definition and no component kind, and the function leaves the inventor
 definition and JSON path, where case 14 says to make it a direct call. The skill needs nothing special for it.
 
 A refusal to run (exit code 2) writes no report: the skill reads the `dotnet run` exit code and the tool's one-line
-reason on standard error (spec 1237's command-line contract) and stops (FR-022).
+reason on standard error (spec 1237's command-line contract) and stops (FR-022). A run wrote a report only when it
+exits 0 or 1 and its last standard-output line is the output path; otherwise the build or the tool failed, and a
+`report.json` left in the output folder is from an earlier run and is not read.
 
 A storage-driver finding names the Elsa 3 driver, memory or custom, as a storage-driver component; the skill answers
 it with the case 17 interview, not with a port, once per driver type (the component name), not once per finding.
