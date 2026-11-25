@@ -549,16 +549,21 @@ public sealed class Elsa3VariableWriteConversionTests
     }
 
     [Theory]
-    [InlineData("setVariable('amount', 5); return 1;")]
-    [InlineData("setVariable('Amount', 5); return 1;")]
-    [InlineData("getVariable('Amount').x = 1; return 1;")]
-    [InlineData("variables.amount.x = 1; return 1;")]
-    public async Task A_reusable_variable_named_like_an_input_in_another_letter_case_is_ambiguous(string source)
+    [InlineData("Amount", "setVariable('amount', 5); return 1;")]
+    [InlineData("Amount", "setVariable('Amount', 5); return 1;")]
+    [InlineData("Amount", "getVariable('Amount').x = 1; return 1;")]
+    [InlineData("Amount", "variables.amount.x = 1; return 1;")]
+    [InlineData("AMOUNT", "setAmount(5); return 1;")]
+    [InlineData("AMOUNT", "setAMOUNT(5); return 1;")]
+    [InlineData("AMOUNT", "getAmount().x = 1; return 1;")]
+    [InlineData("AMOUNT", "setVariable('amount', 5); return 1;")]
+    public async Task A_reusable_variable_named_like_an_input_in_another_letter_case_is_ambiguous(string input, string source)
     {
-        // Names compare as the converter resolves variables and inputs, without regard to letter case.
+        // Names compare as the converter resolves variables and inputs, without regard to letter case, whichever write form
+        // the script uses and whichever of the two its generated accessor resolves to.
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
         var definition = ConversionServices.Definition(root, variables: [new Elsa3Variable { Id = "amount-id", Name = "amount", TypeName = "Object" }]);
-        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" }];
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = input, Type = "Int32" }];
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
 

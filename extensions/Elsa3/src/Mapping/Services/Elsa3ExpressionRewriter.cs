@@ -2031,11 +2031,17 @@ public sealed class Elsa3ExpressionRewriter(
         {
             var resolution = resolve(new Elsa3AmbientReference(kind, name));
             // Spec 1241 FR-011: Elsa 3 held a reusable workflow's inputs as local variables a script could set; in Elsa 4
-            // they are the activity's inputs, which a script reads and never writes. A literal setVariable name that the
-            // variable lookup also finds names a variable and an input at once, as set{Name} does (VF-IMP-002).
-            if (kind == Elsa3AmbientReferenceKind.Variable && resolution.Succeeded && IsReusableInput(name))
+            // they are the activity's inputs, which a script reads and never writes. Whatever the call resolved to, a name
+            // that is both a variable and an input is ambiguous (VF-IMP-002), for every write form.
+            var target = resolution.Binding switch
             {
-                Issues.Add(AmbiguousWithInput(calleeName, name));
+                VariableExpressionParameterBinding when resolution.VariableName is { } resolvedName => resolvedName,
+                WorkflowRequestExpressionParameterBinding input => input.MemberKey,
+                _ => name
+            };
+            if (NamesVariableAndInput(target))
+            {
+                Issues.Add(AmbiguousWithInput(calleeName, target));
                 return;
             }
 
@@ -2123,7 +2129,7 @@ public sealed class Elsa3ExpressionRewriter(
                     var name = !member.Computed && member.Property is Identifier property ? property.Name
                         : member.Computed && member.Property is Literal { Value: string literal } ? literal
                         : null;
-                    return name is not null && IsWritableMemberRoot(name);
+                    return name is not null && IsWritableMemberRoot(Elsa3AmbientReferenceKind.Variable, name);
                 }
 
                 current = member.Object;
@@ -2133,11 +2139,13 @@ public sealed class Elsa3ExpressionRewriter(
                 return false;
             if (reader.Name == "getVariable")
                 return read.Arguments.Count == 1 && read.Arguments[0] is Literal { Value: string variable } &&
-                       IsWritableMemberRoot(variable);
+                       IsWritableMemberRoot(Elsa3AmbientReferenceKind.Variable, variable);
             if (read.Arguments.Count != 0 || !TryGetAccessorName(reader.Name, "get", out var accessor))
                 return false;
-            if (IsSessionVariable(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor))
+            if (IsWritableMemberRoot(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor))
                 return true;
+            if (_ambiguousMemberTarget is not null)
+                return false;
             // In a reusable workflow, where Elsa 3 declared inputs as variables too, report a getter whose name is ambiguous as
             // that (VF-IMP-002) rather than as a change of an ambient value.
             if (IsReusable && resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor)).Issue is
@@ -2159,15 +2167,24 @@ public sealed class Elsa3ExpressionRewriter(
             $"JavaScript calls '{calleeName}' for '{name}', which names both a variable and an input of this reusable workflow; Elsa 3 declared the input as a variable too.",
             $"Rename the variable or the input '{name}' in the Elsa 3 workflow before import.");
 
-        private bool IsWritableMemberRoot(string name)
+        private bool IsWritableMemberRoot(Elsa3AmbientReferenceKind kind, string name)
         {
-            if (!IsSessionVariable(Elsa3AmbientReferenceKind.Variable, name))
+            if (resolve(new Elsa3AmbientReference(kind, name)) is not { Succeeded: true, VariableName: { } variableName, Binding: VariableExpressionParameterBinding variable } ||
+                IsReadAsCopy(variable))
                 return false;
-            if (!IsReusableInput(name))
+            if (!NamesVariableAndInput(variableName))
                 return true;
-            _ambiguousMemberTarget = AmbiguousWithInput("a member change", name);
+            _ambiguousMemberTarget = AmbiguousWithInput("a member change", variableName);
             return false;
         }
+
+        /// <summary>
+        /// Whether <paramref name="name"/> names both a variable and an input of the reusable workflow, which Elsa 3 declared
+        /// as a variable too (spec 1241), compared as the converter resolves both: without regard to letter case.
+        /// </summary>
+        private bool NamesVariableAndInput(string name) =>
+            IsReusableInput(name) && resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.Variable, name)) is
+                { Succeeded: true } or { Issue.Code: Elsa3ImportDiagnosticCodes.AmbiguousReference };
 
         private bool IsSessionVariable(Elsa3AmbientReferenceKind kind, string name) =>
             resolve(new Elsa3AmbientReference(kind, name)) is { Succeeded: true, VariableName: not null, Binding: VariableExpressionParameterBinding variable } &&
