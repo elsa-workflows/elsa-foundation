@@ -320,6 +320,7 @@ jobs:
     timeout-minutes: 45
     env:
       PROFILE: ${{ matrix.profile }}
+      PLATFORM: linux/${{ matrix.arch }}
       FOUNDATION_IMAGE: elsaworkflows/elsa-foundation-host@${{ needs.build-and-push-foundation-host.outputs.digest }}
       IMAGE: elsa-server-${{ matrix.profile }}:4.0.0-preview.${{ github.run_number }}
     steps:
@@ -328,23 +329,30 @@ jobs:
         with:
           global-json-file: global.json
       - name: Prepare the package closure against the verified Foundation image
+        shell: bash
         env:
           PACKAGE_VERSIONS: ${{ needs.versions.outputs.package-versions }}
         run: |
           printf '%s' "$PACKAGE_VERSIONS" | base64 -d | gunzip > "$RUNNER_TEMP/package-versions.props"
-          python3 docker/profiles/prepare.py --profile "docker/profiles/$PROFILE" \
+          python3 docker/profiles/prepare.py --platform "$PLATFORM" --profile "docker/profiles/$PROFILE" \
             --versions "$RUNNER_TEMP/package-versions.props" --foundation-image "$FOUNDATION_IMAGE" \
             --output "$RUNNER_TEMP/context"
       - name: Build and verify the image without network access at runtime
         run: |
-          docker build --build-arg FOUNDATION_IMAGE="$FOUNDATION_IMAGE" -f docker/profiles/Dockerfile \
+          docker build --platform "$PLATFORM" --build-arg FOUNDATION_IMAGE="$FOUNDATION_IMAGE" -f docker/profiles/Dockerfile \
             -t "$IMAGE" "$RUNNER_TEMP/context"
           python3 tools/docker-profiles/smoke.py "$IMAGE" --variant "$PROFILE" --timeout 300
-      - name: Export the tested image and its locks
+      - name: Export the tested image and its build inputs
+        shell: bash
         run: |
           mkdir "$RUNNER_TEMP/profile-image"
           docker save "$IMAGE" | gzip -1 > "$RUNNER_TEMP/profile-image/image.tar.gz"
-          cp "$RUNNER_TEMP/context/"{packages.lock.json,nuplane.lock.json,shells.json} "$RUNNER_TEMP/profile-image/"
+          cp "$RUNNER_TEMP/context/"{packages.lock.json,nuplane.lock.json,shells.json} \
+            "$RUNNER_TEMP/package-versions.props" "$RUNNER_TEMP/profile-image/"
+          jq -n --arg profile "$PROFILE" --arg image "$IMAGE" --arg base "$FOUNDATION_IMAGE" \
+            --arg platform "$PLATFORM" --arg commit "$GITHUB_SHA" \
+            '{profile: $profile, image: $image, foundationImage: $base, platform: $platform, commit: $commit}' \
+            > "$RUNNER_TEMP/profile-image/build.json"
       - uses: actions/upload-artifact@v4
         with:
           name: elsa-server-${{ matrix.profile }}-${{ matrix.arch }}-${{ github.run_number }}
