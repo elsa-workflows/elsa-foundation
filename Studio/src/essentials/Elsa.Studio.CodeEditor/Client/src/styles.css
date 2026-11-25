@@ -64,6 +64,10 @@
   white-space: pre-line;
 }
 
+.cm-tooltip-hover .studio-code-editor-hover {
+  padding: 0.25rem 0.5rem;
+}
+
 .studio-code-editor-rich .cm-editor:focus-within,
 .studio-code-editor-input:focus,
 .studio-code-editor-preview:focus-visible {
