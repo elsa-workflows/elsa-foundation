@@ -30,7 +30,7 @@ One row per suite file under `tests/` (spec 1235, data-model.md). Results: see d
 | `http/headers-tests.json` | http-endpoints.json | pass | blocked: #5803 (a header value read as a single string, `Host`, is refused where Elsa 4 expects `string[]`; fix in PR #5813); its activity-state header assertion is a value read (value capture, #5647) | 11, 29 |
 | `http/multiple-supported-methods-tests.json` | http-endpoints.json | pass | pass | 11, 29 |
 | `http/query-parameter-tests.json` | http-endpoints.json | pass | pass | 11, 29 |
-| `http/request-body-tests.json` | http-endpoints.json | pass | fail (engine behaviour: an XML body; Elsa 3 answered 500, Elsa 4 accepts it and answers 202; the other content types pass) — coordinator decision pending | 11, 29 |
+| `http/request-body-tests.json` | http-endpoints.json | pass | pass (XML case per engine, suite-changes W2) | 11, 31 |
 | `http/route-parameter-tests.json` | http-endpoints.json | pass | pass | 11, 29 |
 | `javascript/array-methods-tests.json` | javascript-array-methods.json | pass | blocked: #5686 (publish fails with VF-STATE-002 on `Body`) | 11, 29 |
 | `javascript/date-methods-tests.json` | javascript-date-methods.json | pass | incompatible (`VF-IMP-005`: date parsed from text without an offset) | 11, 29 |

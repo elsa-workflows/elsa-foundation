@@ -13,5 +13,6 @@
             "channel_Default": ""
         }
     },
-    "dispatchWaitTimeMilliseconds": 60000
+    "dispatchWaitTimeMilliseconds": 60000,
+    "xmlRequestBodyStatusCode": 202
 }
