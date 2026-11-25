@@ -65,7 +65,8 @@ internal sealed partial class Burst
             Fail(frame, new ActivityFault("workflow.label.invalid", $"'{frame.Node}' sets {label} to a value that is not a string."));
             return;
         }
-        try { turn.SetLabel(label, text); }
+        // A blank value clears the label, as the old core reads a blank correlation id or name as none.
+        try { turn.SetLabel(label, string.IsNullOrWhiteSpace(text) ? null : text); }
         catch (Exception refused) when (refused is ArgumentException or NotSupportedException)
         {
             Fail(frame, new ActivityFault("workflow.label.refused", refused.Message));

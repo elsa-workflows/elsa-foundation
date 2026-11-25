@@ -29,9 +29,9 @@ public interface ITurn
 
     /// <summary>
     /// Sets one of the instance's own labels, or removes it with null: metadata reads filter on labels (ActorQuery.Labels),
-    /// such as a correlation id or a display name. A model may hold two; the actor hosting it keeps the header's other labels
-    /// for its own names. A name and a value are at most 1,024 UTF-8 bytes. A host that projects no model labels refuses.
+    /// such as a correlation id or a display name. The host holds them within its budget and refuses one past it, one of
+    /// its own names, or a name or value longer than the foundation allows (ArgumentException).
     /// </summary>
-    void SetLabel(string name, string? value) => throw new NotSupportedException("This host sets no model labels.");
+    void SetLabel(string name, string? value);
     void SetStatus(ActorStatus status, string? subStatus = null, object? output = null);
 }

@@ -257,8 +257,8 @@ public sealed class GraphActivity : CompositeActivity, IExitBoundary
     /// <summary>A Set Output names a literal output; inside a GraphActivity's body, one the boundary declares and maps no binding to.</summary>
     internal static void ValidateOutput(Node setOutput, Node? boundary, string workflow)
     {
-        if (!(setOutput.Inputs.GetValueOrDefault("Name") is LiteralBinding { Value: JsonValue literal } && literal.TryGetValue<string>(out var name) && !string.IsNullOrEmpty(name)))
-            throw new InvalidOperationException($"Set Output '{setOutput.Id}' in '{workflow}' needs a literal output name.");
+        if (!(setOutput.Inputs.GetValueOrDefault("Name") is LiteralBinding { Value: JsonValue literal } && literal.TryGetValue<string>(out var name) && !string.IsNullOrWhiteSpace(name)))
+            throw new InvalidOperationException($"Set Output '{setOutput.Id}' in '{workflow}' needs a literal, non-blank output name.");
         if (boundary is not null && boundary.Graph?.Outputs.FirstOrDefault(o => o.Name == name) is not { Value: null })
             throw new InvalidOperationException($"Set Output '{setOutput.Id}' in '{workflow}' names '{name}', which GraphActivity '{boundary.Id}' does not declare as an output to assign.");
     }

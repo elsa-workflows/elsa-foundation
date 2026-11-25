@@ -168,10 +168,14 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
             JsonSerializer.Deserialize(state, model.StateType) ?? throw new InvalidOperationException("The workflow state is absent.");
     }
 
-    /// <summary>The header labels the actor writes itself; any other label is a model's (<see cref="ITurn.SetLabel"/>).</summary>
-    private static bool ActorLabel(string name) => name is "definition" or "version" or AnsweredPlanLabel;
+    /// <summary>
+    /// The header labels the actor writes itself: the definition, which reads select instances by, and the migration plan an
+    /// instance answered, which must outlive a full type data. Any other label is a model's (<see cref="ITurn.SetLabel"/>).
+    /// The state version is in the type data only.
+    /// </summary>
+    private static bool ActorLabel(string name) => name is "definition" or AnsweredPlanLabel;
 
-    /// <summary>The most labels a model holds: the header holds four, and a workflow's own are its definition and version.</summary>
+    /// <summary>The most labels a model holds: the foundation's header holds four, and the actor's own are at most two.</summary>
     internal const int MaxModelLabels = 2;
 
     private static void WriteHeader(IActorTurn turn, WorkflowHeader previous, WorkflowHeader next, string? answeredPlan = null,
@@ -179,7 +183,6 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     {
         if (previous == next && answeredPlan is null && modelLabels is null) return;
         var labels = new Dictionary<string, string>(StringComparer.Ordinal) { ["definition"] = next.Definition };
-        if (next.Version is { } version) labels.Add("version", version.ToString(CultureInfo.InvariantCulture));
         answeredPlan ??= turn.Header.Labels.GetValueOrDefault(AnsweredPlanLabel);
         if (answeredPlan is not null) labels.Add(AnsweredPlanLabel, answeredPlan);
         // A model's labels are kept across the actor's own header writes.
