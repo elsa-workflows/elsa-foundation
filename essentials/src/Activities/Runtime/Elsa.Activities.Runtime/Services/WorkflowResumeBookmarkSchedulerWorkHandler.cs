@@ -610,13 +610,15 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             RuntimeMetadataKeys.ResumeSchedulerWorkItemId,
             _timeProvider.GetUtcNow()));
 
+        // Spec 1241: the step's commit into closed-scope variable rows, shared by its session writes and its captures.
+        var rowCommit = ClosedScopeRowCommits.Create(serviceProvider);
         if (replacementSuspendedState is not null)
         {
             // A step that suspends again commits its session changes so far with the suspension (spec 1231 FR-015).
             var suspendedAt = _timeProvider.GetUtcNow();
             var suspensionWrites = await StepVariableCommit.TryApplyAsync(
                 stepSession, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
-                workItem.WorkflowExecutionId, executableNode, replacementSuspendedState, suspendedAt, cancellationToken, stateSession, serviceProvider.GetService<IWorkflowStateChangePreparer>());
+                workItem.WorkflowExecutionId, executableNode, replacementSuspendedState, suspendedAt, cancellationToken, stateSession, serviceProvider.GetService<IWorkflowStateChangePreparer>(), rowCommit);
             if (suspensionWrites.LostUpdateFault is { } suspensionLostUpdate)
             {
                 await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
@@ -645,7 +647,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     replacementSuspendedState,
                     replacementWorkItems,
                     valueSnapshots,
-                    suspensionWrites.StateValues,
+                    [.. suspensionWrites.StateValues, .. suspensionWrites.RowValues],
                     StepWorkflowChange(suspensionWrites, workItem, RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason))
                     .WithVariableOwnerChanges(suspensionWrites.Owners)
                     .WithHistorySourceFacts(historyFacts),
@@ -674,7 +676,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var completedAt = _timeProvider.GetUtcNow();
         var stepWrites = await StepVariableCommit.TryApplyAsync(
             stepSession, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), serviceProvider.GetRequiredService<IActivityExecutionStateStore>(),
-            workItem.WorkflowExecutionId, executableNode, completedState, completedAt, cancellationToken, stateSession, serviceProvider.GetService<IWorkflowStateChangePreparer>());
+            workItem.WorkflowExecutionId, executableNode, completedState, completedAt, cancellationToken, stateSession, serviceProvider.GetService<IWorkflowStateChangePreparer>(), rowCommit);
         if (stepWrites.LostUpdateFault is { } stepLostUpdate)
         {
             await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
@@ -703,7 +705,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
                 closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken),
-                invocation: completedState, durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>());
+                // Spec 1241 FR-007: judged against the rows as the step's session writes, applied above, left them.
+                invocation: completedState, source: VariableWriteSource.Capture, durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>(),
+                rowCommit: rowCommit);
         completedState = completedState.WithWarnings(stepWarnings.Warnings);
         // Spec 1221 T003: a refused write into a closed scope's variable row refuses the completion, as a frame write does.
         if (captureProjection.LostUpdateFault is { } rowLostUpdate)
@@ -763,7 +767,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 SchedulerWorkItems.NewCompletionWorkItem(
                     _timeProvider, workItem, resumePayload.PinnedExecutable, resumePayload.ExecutableNodeId, resumePayload.ActivityExecutionId, completedState),
                 valueSnapshots,
-                stepWrites.StateValues.Concat(captureProjection.DurableValues)
+                stepWrites.StateValues.Concat(stepWrites.RowValues).Concat(captureProjection.DurableValues)
                     .GroupBy(change => change.StateId, StringComparer.Ordinal).Select(group => group.Last()).ToArray(),
                 workflowVariableWriteBack)
                 .WithVariableOwnerChanges(stepWrites.Owners)

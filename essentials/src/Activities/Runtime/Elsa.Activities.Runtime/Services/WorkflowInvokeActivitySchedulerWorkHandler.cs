@@ -171,6 +171,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         // Spec 1221 T003: captures into closed-scope variable rows, versioned by the projector.
         IReadOnlyList<VariableWriteRecord> rowVariableWrites = [];
         VariableWriteRecord? rowLostUpdateFault = null;
+        // Spec 1241: the step's commit into closed-scope variable rows, shared by its session writes and its captures.
+        var rowCommit = ClosedScopeRowCommits.Create(serviceProvider);
 
         // Carrier identity (correlation id / instance name) is projected from the IdentityName-tagged durable
         // values this invocation already re-lists, so a plain activity populates the carrier without
@@ -634,7 +636,16 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 TimeProvider.GetUtcNow(),
                 () => StepStateReadProtection.Read(stepSession, stateSession),
                 cancellationToken);
-            var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().WithValuePolicies(executable.ValuePolicies, stepWarnings).ProjectAsync(
+            // Spec 1241 FR-003, FR-007: the step's session writes into its body's variable rows apply first, so its captures
+            // are judged against the rows as those writes left them, and its own write never conflicts with its capture.
+            var sessionRows = rowCommit is null
+                ? ClosedScopeSessionRowWrites.None
+                : await StepVariableCommit.ApplyRowIntentsAsync(stepSession, rowCommit, workItem.WorkflowExecutionId, executableNode, stagedState,
+                    TimeProvider.GetUtcNow(), cancellationToken, stateSession);
+            // A refused session row write refuses the step when its commit applies; no capture is projected for it.
+            var captureProjection = sessionRows.LostUpdateFault is not null || sessionRows.Failure is not null
+                ? RuntimeOutputCaptureProjection.Empty
+                : await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().WithValuePolicies(executable.ValuePolicies, stepWarnings).ProjectAsync(
                 workItem.WorkflowExecutionId,
                 invokePayload.ActivityExecutionId,
                 executableNode,
@@ -644,9 +655,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
                 closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken),
-                invocation: stagedState,
+                invocation: InvocationVariableBases.Advance(stagedState, sessionRows.Records),
+                source: backgroundResult is null ? VariableWriteSource.Capture : VariableWriteSource.BackgroundResult,
                 durableValueStateStore: serviceProvider.GetService<IDurableValueStateStore>(),
-                source: backgroundResult is null ? VariableWriteSource.Capture : VariableWriteSource.BackgroundResult);
+                rowCommit: rowCommit);
             durableValueChanges = MergeDurableValueChanges(durableValueChanges, captureProjection.DurableValues);
             workflowVariableWrites = captureProjection.WorkflowVariableWrites;
             rowVariableWrites = captureProjection.VariableWrites;
@@ -707,7 +719,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             var suspendedAt = TimeProvider.GetUtcNow();
             var suspensionWrites = await StepVariableCommit.TryApplyAsync(
                 stepSession, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), activityExecutionStateStore,
-                workItem.WorkflowExecutionId, executableNode, typedSuspendedState, suspendedAt, cancellationToken, stateSession, serviceProvider.GetService<IWorkflowStateChangePreparer>());
+                workItem.WorkflowExecutionId, executableNode, typedSuspendedState, suspendedAt, cancellationToken, stateSession, serviceProvider.GetService<IWorkflowStateChangePreparer>(), rowCommit);
             if (suspensionWrites.LostUpdateFault is { } suspensionLostUpdate)
             {
                 await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
@@ -774,7 +786,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         // Fault lost update refuses the whole step. The captures then apply on top, so a capture wins.
         var stepWrites = await StepVariableCommit.TryApplyAsync(
             stepSession, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(), activityExecutionStateStore,
-            workItem.WorkflowExecutionId, executableNode, completedState, occurredAt, cancellationToken, stateSession, serviceProvider.GetService<IWorkflowStateChangePreparer>());
+            workItem.WorkflowExecutionId, executableNode, completedState, occurredAt, cancellationToken, stateSession, serviceProvider.GetService<IWorkflowStateChangePreparer>(), rowCommit);
         if (stepWrites.LostUpdateFault is { } stepLostUpdate)
         {
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
@@ -852,7 +864,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             payloadCapturePolicy, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, invokePayload.ExecutableNodeId,
             captureCommit.Records, captureCommit.RecordedWrites, occurredAt));
         var workflowVariableWriteBack = captureCommit.Change ?? StepWorkflowChange(stepWrites, workItem, invokePayload.Reason);
-        durableValueChanges = MergeDurableValueChanges(stepWrites.StateValues, durableValueChanges);
+        // Spec 1241: the session's row writes go ahead of the captures, which were judged on top of them.
+        durableValueChanges = MergeDurableValueChanges([.. stepWrites.StateValues, .. stepWrites.RowValues], durableValueChanges);
 
         history?.Outcome(RuntimeHistorySourceFactKind.ActivityContinuationCompleted, SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(completedState, SkippedSubStatus).ToArray());
         await CommitCompletedActivityAsync(
@@ -1136,7 +1149,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                         bookmark,
                         metadata))
                     .ToArray(),
-                durableValues: stepWrites?.StateValues ?? [],
+                durableValues: stepWrites is null ? [] : [.. stepWrites.StateValues, .. stepWrites.RowValues],
                 incidents: [],
                 operational: [],
                 workflowDispatches: workflowDispatches,

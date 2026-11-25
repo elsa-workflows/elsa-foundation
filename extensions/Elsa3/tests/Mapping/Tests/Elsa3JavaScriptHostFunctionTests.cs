@@ -394,24 +394,29 @@ public sealed class Elsa3JavaScriptHostFunctionTests
     }
 
     /// <summary>
-    /// A claimed converted name stays native, so a reusable script's write through it is still found: String runs the
-    /// argument's toString, which changes the variable.
+    /// A claimed converted name stays native. Since spec 1241 a reusable script writes its own variables, so a write through
+    /// it (String runs the argument's toString, which changes the variable) converts exactly as in a workflow.
     /// </summary>
     [Fact]
-    public async Task A_reusable_script_writing_through_a_claimed_converted_name_is_refused()
+    public async Task A_reusable_script_writing_through_a_claimed_converted_name_converts_as_in_a_workflow()
     {
         var claim = new JavaScriptHostFunctionDeclaration("acme.String", _ => default) { ReplacesGlobalFunctions = ["String"] };
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script",
             Literal("const o = getVariable('Order'); String({ toString() { o.Status = 'Paid'; return ''; } }); return 1;"))));
 
-        var result = await ConversionServices.ConvertAsync(
-            RealActivityCatalog.Create(),
-            ConversionServices.Definition(root, variables: [new Elsa3Variable { Id = "order-id", Name = "Order", TypeName = "Object" }]),
-            isReusable: true,
-            configure: services => services.AddSingleton(claim));
+        async Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertAsync(bool isReusable) =>
+            await ConversionServices.ConvertAsync(
+                RealActivityCatalog.Create(),
+                ConversionServices.Definition(root, variables: [new Elsa3Variable { Id = "order-id", Name = "Order", TypeName = "Object" }]),
+                isReusable: isReusable,
+                configure: services => services.AddSingleton(claim));
 
-        Assert.False(result.Succeeded);
-        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        var workflow = await ConvertAsync(false);
+        var reusable = await ConvertAsync(true);
+
+        Assert.True(workflow.Succeeded, Describe(workflow.Diagnostics));
+        Assert.True(reusable.Succeeded, Describe(reusable.Diagnostics));
+        Assert.Equal(Text(Input(Node(workflow.Value!.State, "node"), "script")), Text(Input(Node(reusable.Value!.State, "node"), "script")));
     }
 
     /// <summary>A declaration does not take over a name the converter converts itself.</summary>

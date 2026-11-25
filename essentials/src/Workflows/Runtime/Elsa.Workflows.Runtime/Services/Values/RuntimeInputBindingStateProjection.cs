@@ -53,6 +53,39 @@ public static class RuntimeInputBindingStateProjection
         return result;
     }
 
+    /// <summary>
+    /// Reference key → declared type of one closed scope's variables (spec 1241): a step's write into one of them is
+    /// checked against it, as a write into a workflow variable is. A row that names no type reads as <c>Any</c>.
+    /// </summary>
+    public static IReadOnlyDictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor> ProjectBoundaryVariableTypes(
+        IEnumerable<DurableValueState> durableValues,
+        string boundaryActivityExecutionId)
+    {
+        ArgumentNullException.ThrowIfNull(durableValues);
+        ArgumentException.ThrowIfNullOrWhiteSpace(boundaryActivityExecutionId);
+
+        var result = new Dictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor>(StringComparer.Ordinal);
+        foreach (var durableValue in BoundaryRows(durableValues, boundaryActivityExecutionId, ActivityExecutionScopeValues.VariableRole))
+        {
+            Elsa.Primitives.Models.TypeReference? type = null;
+            try
+            {
+                type = durableValue.Type.Schema is { ValueKind: JsonValueKind.Object } schema
+                    ? schema.Deserialize<Elsa.Primitives.Models.TypeReference>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                    : null;
+            }
+            catch (JsonException)
+            {
+                // A schema that is no type reference leaves the variable untyped, as before.
+            }
+
+            if (type is not null && !string.IsNullOrWhiteSpace(type.Alias))
+                result[durableValue.Metadata[RuntimeMetadataKeys.BoundaryReferenceKey]] = Elsa.Primitives.Models.ValueTypeDescriptor.FromTypeReference(type);
+        }
+
+        return result;
+    }
+
     /// <summary>Reference key → declared name of one closed scope's variables, for name-based JavaScript reads.</summary>
     public static IReadOnlyDictionary<string, string> ProjectBoundaryVariableNames(
         IEnumerable<DurableValueState> durableValues,

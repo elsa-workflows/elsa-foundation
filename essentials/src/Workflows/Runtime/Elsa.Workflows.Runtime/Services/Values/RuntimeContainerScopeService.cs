@@ -104,7 +104,12 @@ public sealed class RuntimeContainerScopeService(
                 boundary,
                 durableValues is null
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
-                    : RuntimeInputBindingStateProjection.ProjectBoundaryVariableNames(durableValues, boundary.InvocationId));
+                    : RuntimeInputBindingStateProjection.ProjectBoundaryVariableNames(durableValues, boundary.InvocationId))
+            {
+                RootVariableTypes = durableValues is null
+                    ? new Dictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor>(StringComparer.Ordinal)
+                    : RuntimeInputBindingStateProjection.ProjectBoundaryVariableTypes(durableValues, boundary.InvocationId)
+            };
     }
 
     /// <summary>
@@ -591,4 +596,11 @@ public sealed class RuntimeVisibleVariableFrames
 
     /// <summary>Reference key → name of a closed scope's root variables; empty for the workflow root.</summary>
     public IReadOnlyDictionary<string, string> RootVariableNames { get; }
+
+    /// <summary>
+    /// Reference key → declared type of a closed scope's root variables (spec 1241), which a step's write is checked
+    /// against; the frame itself holds them as <c>Any</c>. Empty for the workflow root.
+    /// </summary>
+    public IReadOnlyDictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor> RootVariableTypes { get; init; } =
+        new Dictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor>(StringComparer.Ordinal);
 }
