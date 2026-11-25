@@ -73,9 +73,10 @@ public class NativeExecutionOptions
     /// <summary>
     /// The workflow a Dispatch Workflow starts, by the id it names. A designer's Dispatch names a definition, and a publishing
     /// host serves each definition as one artifact at a time, so the host resolves the definition to the workflow id it serves
-    /// now; null when the id names no served definition. Consulted when the child starts; without it, or when it returns
-    /// null, the child starts the workflow the id names. It is read inside the turn, so a turn that runs again after a lost
-    /// commit may start a version published in between.
+    /// now; null when the id names no served definition. Consulted when the child starts. When it returns null, the child
+    /// starts the workflow the id names if the registry holds it, and otherwise the Dispatch faults
+    /// (<c>dispatch.unpublished</c>); without it, the child starts the workflow the id names. It is read inside the turn, so
+    /// a turn that runs again after a lost commit may start a version published in between.
     /// </summary>
     public Func<string, string?>? ServedWorkflow { get; init; }
 
@@ -83,7 +84,8 @@ public class NativeExecutionOptions
     /// The workflow for an id the registry does not hold, which the host loads (null when it has none). A publishing host's
     /// registry holds, after a restart, the versions its slots serve, and an instance started on an earlier version still runs
     /// that version: the host loads it from its artifacts. Consulted before a turn or a job whose workflow the registry lacks;
-    /// what it returns joins the registry. A migration's check reads the registry only.
+    /// what it returns joins the registry. A migration's check reads the registry only, and a Dispatch never starts a child
+    /// through it (<see cref="ServedWorkflow"/>).
     /// </summary>
     public Func<string, CancellationToken, ValueTask<Workflow?>>? ResolveWorkflow { get; init; }
 }
@@ -490,6 +492,11 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
 
     private void Apply(Frame frame, Transition t)
     {
+        if (Unpublished(t) is { } missing)
+        {
+            Fail(frame, new ActivityFault(UnpublishedFaultCode, $"Definition '{missing}' is not published on this host."));
+            return;
+        }
         if (t.Kind == TransitionKind.Complete && t.Effects?.OfType<ExitEffect>().FirstOrDefault() is { } exit)
         {
             foreach (var effect in t.Effects) if (effect is not ExitEffect) Do(frame, effect);
@@ -549,6 +556,22 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
 
     // A Dispatch names a definition or a workflow; the host says which workflow serves a definition (NativeExecutionOptions.ServedWorkflow).
     private string Served(string workflow) => options.ServedWorkflow?.Invoke(workflow) ?? workflow;
+
+    internal const string UnpublishedFaultCode = "dispatch.unpublished";
+
+    /// <summary>
+    /// On a publishing host (one with <see cref="NativeExecutionOptions.ServedWorkflow"/>), the first Dispatch of
+    /// <paramref name="t"/> that names neither a definition the host serves nor a workflow its registry holds. That Dispatch
+    /// faults before a child is minted, so a child starts only on what the host serves or holds, and
+    /// <see cref="NativeExecutionOptions.ResolveWorkflow"/> never loads another of the host's stored artifacts for it.
+    /// </summary>
+    private string? Unpublished(Transition t)
+    {
+        if (options.ServedWorkflow is not { } served) return null;
+        return (t.Triggers ?? []).OfType<ChildTrigger>().Select(child => child.Workflow)
+            .Concat((t.Effects ?? []).OfType<DispatchEffect>().Select(dispatch => dispatch.Workflow))
+            .FirstOrDefault(workflow => served(workflow) is null && !registry.Contains(workflow));
+    }
 
     private void Unregister(string id, WaitEntry wait, bool cancel)
     {

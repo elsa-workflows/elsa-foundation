@@ -65,7 +65,10 @@ Each is refused with the node and input named, and the refusal says what to chan
 - Activations, deactivations and serving checks run one at a time on a host, so each one checks its routes and
   schedules against the serving set it changes.
 - A Dispatch reaches the workflow its definition's `default` slot serves. When no `default` slot serves the definition,
-  it reaches the one slot that does. When several other slots do, it reaches none, and the child starts the id itself.
+  it reaches the one slot that does. When several other slots do, it reaches none: the child starts the id itself when
+  the registry holds that workflow, and otherwise the Dispatch faults with `dispatch.unpublished` ("Definition '…' is
+  not published on this host") before a child is minted. A Dispatch never loads a stored artifact through
+  `ResolveWorkflow`, which serves turns and jobs of instances that exist.
 - When a host starts, `ServeActiveSlotsAsync` finds the definitions with activations from the live activation source
   references, and their slots from the slot authority. It serves each active slot as `EnsureServingAsync` does. A host
   runs it before its node runs a turn, so a due turn of an instance in flight finds its workflow served.
