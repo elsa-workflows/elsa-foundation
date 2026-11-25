@@ -453,9 +453,21 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                     KeepOwnCancellation(own);
                     throw;
                 }
+                // The job drain's or the release's fault is recorded now, as the turn drain's is: the halt still waits for
+                // its heartbeats and beside loop, and a kill in that wait must not make it an error after a kill.
+                catch (Exception releaseError) when (drainError is null)
+                {
+                    RecordFault(releaseError);
+                    throw;
+                }
                 // A fence lost in both drains is one loss.
                 catch (ScopeOwnershipLostException) when (drainError is ScopeOwnershipLostException) { ExceptionDispatchInfo.Throw(drainError); }
-                catch (Exception releaseError) when (drainError is not null) { throw new AggregateException(drainError, releaseError); }
+                catch (Exception releaseError) when (drainError is not null)
+                {
+                    var both = new AggregateException(drainError, releaseError);
+                    RecordFault(both);     // reports the release's fault; the drain's was reported when it was thrown
+                    throw both;
+                }
                 // A kill that landed during the runtime's stop may have abandoned it, also when the stop returned before this
                 // wait saw the kill: what it interrupted is recorded when it ends (nothing, when it was not abandoned).
                 finally { if (_kill.IsCancellationRequested) RecordLater(InterruptedAsync(stopping)); }
@@ -473,6 +485,10 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
 
     /// <summary>Run on the node's scheduler, one task at a time with the loop and what it started.</summary>
     private Task OnNode(Func<Task> work) => Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.DenyChildAttach, _scheduler).Unwrap();
+
+    /// <summary>The node was killed: by a stop's deadline, a dispose deadline or <see cref="KillAsync"/>. True from the moment
+    /// the kill is requested, before anything the kill cancels has run.</summary>
+    internal bool Killed => _kill.IsCancellationRequested;
 
     private long Now => _clock.ElapsedMilliseconds;
     private long _errors;
