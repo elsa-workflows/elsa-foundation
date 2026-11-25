@@ -40,7 +40,7 @@ internal static class HostJobDrainChecks
             ("fault-masked-by-loss", FaultMaskedByLossAsync),
             ("stop-during-set-gain", StopDuringSetGainAsync),
             ("dispose-deadline", DisposeDeadlineAsync),
-            ("transient-answer-error", TransientAnswerErrorAsync),
+            ("transient-answer-error", () => TransientAnswerErrorAsync(Failure.Transient)),
             ("queued-start-after-loss", QueuedStartAfterLossAsync),
             ("joined-administration", JoinedAdministrationAsync),
             ("dispose-joins-stop", DisposeJoinsStopAsync),
@@ -50,6 +50,12 @@ internal static class HostJobDrainChecks
             ("answer-fault", () => AnswerFaultAsync(new InvalidOperationException("injected answer fault"))),
             ("answer-definite-store-error", () => AnswerFaultAsync(new StoreException(Failure.Definite, "injected definite store failure"))),
             ("turn-drain-pending", TurnDrainPendingAsync),
+            ("dispose-infinite-deadline", DisposeInfiniteDeadlineAsync),
+            ("dispose-bound-expiry", DisposeBoundExpiryAsync),
+            ("concurrent-stop-dispose", ConcurrentStopDisposeAsync),
+            ("unknown-answer-error", () => TransientAnswerErrorAsync(Failure.Unknown)),
+            ("abandon-waits-turn-drains", AbandonWaitsTurnDrainsAsync),
+            ("faulted-drain-pass", FaultedDrainPassAsync),
         ];
         // HOST_JOB_DRAIN_ONLY=name[,name]: run only these cases (fail-before witnesses run them one at a time).
         var only = Environment.GetEnvironmentVariable("HOST_JOB_DRAIN_ONLY")?.Split(',', StringSplitOptions.RemoveEmptyEntries);
@@ -1111,7 +1117,7 @@ internal static class HostJobDrainChecks
     }
 
     // A store error while the drain judges a heartbeat answer is retried, as a pass retries it; the stop then completes.
-    private static async Task TransientAnswerErrorAsync()
+    private static async Task TransientAnswerErrorAsync(Failure failure)
     {
         var fixture = new Fixture();
         var type = new JobProbe();
@@ -1120,7 +1126,7 @@ internal static class HostJobDrainChecks
         {
             BeforeDrainAnswer = () =>
             {
-                if (Interlocked.Decrement(ref failures) >= 0) throw new StoreException(Failure.Transient, "injected transient store error");
+                if (Interlocked.Decrement(ref failures) >= 0) throw new StoreException(failure, $"injected {failure} store error");
             }
         };
         var node = fixture.Node("transient-answer");
@@ -1142,7 +1148,7 @@ internal static class HostJobDrainChecks
         await DisposeQuietlyAsync(node);
         var recorded = host.NodeWorker!.DrainStoreErrors;
         Check(reported is null && fixture.Fence.Owner is null && fixture.Fence.Epoch == epoch && recorded.Count == 3 && recorded.Last is not null,
-            $"transient store errors while the drain judges answers are recorded and retried, and the stop releases at the original epoch ({reported?.Message ?? "no error"}, recorded {recorded.Count})");
+            $"{failure} store errors while the drain judges answers are recorded and retried, and the stop releases at the original epoch ({reported?.Message ?? "no error"}, recorded {recorded.Count})");
     }
 
     // A start queued behind a stop that released and then reported a lost fence attaches without that loss.
@@ -1266,8 +1272,10 @@ internal static class HostJobDrainChecks
         finally { type.Finish.TrySetResult(); }
         var reported = await OutcomeAsync(stop);
         await DisposeQuietlyAsync(node);
-        Check(canceled && waited && type.Exited.Task.IsCompleted,
-            "a turn drain fault still cancels the entered job and waits for it to exit before the stop ends");
+        var ticket = fixture.JobTicket();
+        var published = fixture.Store.Messages.Values.Any(row => row.Message.Kind == Kinds.JobFinished);
+        Check(canceled && waited && type.Exited.Task.IsCompleted && !ticket.Done && !published,
+            $"a turn drain fault still cancels the entered job and waits for it to exit before the stop ends; its ticket stays outstanding and nothing is published (done {ticket.Done}, published {published})");
         Check(ReferenceEquals(reported, fault) && fixture.Fence.Owner == node.Node,
             $"a turn drain fault abandons the run: the stop reports it and releases nothing ({reported?.Message ?? "no error"}, owner {fixture.Fence.Owner ?? "none"})");
     }
@@ -1437,6 +1445,237 @@ internal static class HostJobDrainChecks
         await DisposeQuietlyAsync(node);
         Check(ReferenceEquals(reported, fault) && fixture.Fence.Owner == node.Node,
             $"an error other than a transient store error while the drain judges an answer faults the drain and releases nothing ({fault.GetType().Name}: {reported?.Message ?? "no error"}, owner {fixture.Fence.Owner ?? "none"})");
+    }
+
+    // An infinite dispose deadline is an infinite bound: the dispose waits for the graceful stop, which drains on.
+    private static async Task DisposeInfiniteDeadlineAsync()
+    {
+        var fixture = new Fixture();
+        var type = new JobProbe();
+        var node = new RuntimeNode("dispose-infinite", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100),
+            PollInterval = TimeSpan.FromMilliseconds(20), DisposeDeadline = System.Threading.Timeout.InfiniteTimeSpan
+        });
+        await node.StartAsync(fixture.Host(node, type, fixture.Store, ownedSet: true));
+        await fixture.StartActorAsync(node);
+        await type.Entered.Task.WaitAsync(Timeout);
+        var epoch = fixture.Fence.Epoch;
+        var dispose = node.DisposeAsync().AsTask();
+        try
+        {
+            await Task.Delay(DisposeGracePlus);
+            var beats = node.Heartbeats.Renewed;
+            await Task.Delay(300);
+            Check(!dispose.IsCompleted && node.Heartbeats.Renewed > beats && fixture.Fence.Owner == node.Node,
+                "with an infinite dispose deadline the dispose waits past the grace while the stop drains and renews");
+        }
+        finally { type.Finish.TrySetResult(); }
+        var outcome = await OutcomeAsync(dispose);
+        Check(outcome is null && fixture.Fence.Owner is null && fixture.Fence.Epoch == epoch,
+            "after the job exits, the graceful stop releases and the dispose returns");
+    }
+
+    private static readonly TimeSpan DisposeGracePlus = RuntimeNode.DisposeGrace + TimeSpan.FromSeconds(1);
+
+    // A pass stuck past the kill holds the stop. The dispose returns at its deadline plus the grace and records that.
+    private static async Task DisposeBoundExpiryAsync()
+    {
+        var fixture = new Fixture();
+        var host = new StuckHost();
+        var node = new RuntimeNode("dispose-bound-expiry", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100),
+            PollInterval = TimeSpan.FromMilliseconds(20), DisposeDeadline = TimeSpan.FromMilliseconds(200)
+        });
+        await node.StartAsync(host);
+        try
+        {
+            await host.Stuck.Task.WaitAsync(Timeout);
+            var clock = Stopwatch.StartNew();
+            var outcome = await OutcomeAsync(node.DisposeAsync().AsTask());
+            var took = clock.Elapsed;
+            Check(outcome is null && took < TimeSpan.FromSeconds(5) && node.LastError is TimeoutException && node.Errors > 0,
+                $"a dispose whose killed stop is held by a stuck pass returns after its bound and records it ({took.TotalMilliseconds:F0} ms, {node.LastError?.GetType().Name ?? "nothing recorded"})");
+        }
+        finally { host.Release.TrySetResult(); }
+    }
+
+    /// <summary>A host whose one scope's pass, once started, stays stuck until released, whatever the cancellation.</summary>
+    private sealed class StuckHost : IScopeHost
+    {
+        internal TaskCompletionSource Stuck { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default) =>
+            new(new StuckScope(this, scope));
+
+        private sealed class StuckScope(StuckHost host, int scope) : IScopeActivation
+        {
+            public int Scope => scope;
+            public bool Active { get; private set; } = true;
+            public ValueTask WokenAsync(InstanceRef? actor, CancellationToken cancellationToken = default) => default;
+            public async ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default)
+            {
+                host.Stuck.TrySetResult();
+                await host.Release.Task;
+                return TimeSpan.FromMilliseconds(20);
+            }
+            public ValueTask DisposeAsync()
+            {
+                Active = false;
+                return default;
+            }
+        }
+    }
+
+    // A stop and a dispose waiting together for a failed stop report it once, whichever of them waits first.
+    private static async Task ConcurrentStopDisposeAsync()
+    {
+        foreach (var disposeFirst in new[] { true, false })
+        {
+            var fixture = new Fixture();
+            var type = new JobProbe();
+            var fault = new InvalidOperationException("injected turn drain fault");
+            var node = new RuntimeNode("stop-and-dispose", fixture.Store, 1, new LoopOptions
+            {
+                BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+            }, beforeRelease: _ => Task.FromException(fault));
+            await node.StartAsync(fixture.Host(node, type, fixture.Store, ownedSet: true));
+            await fixture.StartActorAsync(node);
+            await type.Entered.Task.WaitAsync(Timeout);
+            Task first, second;
+            if (disposeFirst)
+            {
+                first = node.DisposeAsync().AsTask();
+                await Task.Delay(100);
+                second = node.StopAsync().AsTask();
+            }
+            else
+            {
+                first = node.StopAsync().AsTask();
+                await Task.Delay(100);
+                second = node.DisposeAsync().AsTask();
+            }
+            await type.Canceled.Task.WaitAsync(Timeout);
+            await Task.Delay(100);
+            type.Finish.TrySetResult();
+            var outcomes = new[] { await OutcomeAsync(first), await OutcomeAsync(second) };
+            var reports = outcomes.Count(outcome => ReferenceEquals(outcome, fault));
+            Check(reports == 1 && outcomes.All(outcome => outcome is null || ReferenceEquals(outcome, fault)),
+                $"a stop and a dispose waiting together report the failure once ({(disposeFirst ? "dispose" : "stop")} first, {reports} report(s))");
+        }
+    }
+
+    // The abandon path: Worker 1's drain round faults while Worker 0's entered turn still drains. The job drain that ends
+    // the entered jobs must wait for every Worker's turn drain, so it never judges answers beside a turn drain's flush.
+    private static async Task AbandonWaitsTurnDrainsAsync()
+    {
+        const int partitions = 2;
+        var fixture = new Fixture(partitions);
+        MixedProbe[] types = [new(), new()];
+        types[0].JobFinish.TrySetResult();      // Worker 0: a turn that stays entered; its jobs end at once
+        types[1].TurnRelease.TrySetResult();    // Worker 1: a job that stays entered; its turns end at once
+        var fault = new InvalidOperationException("injected drain round fault");
+        var faulting = 0;
+        var options = fixture.Options with { BeforeDrainRound = () => { if (Volatile.Read(ref faulting) == 1) throw fault; } };
+        var workers = Enumerable.Range(0, partitions).Select(partition => new Worker("abandon-turns", partition, fixture.Store,
+            new ActorAdapter(fixture.Store, types[partition]), partition == 1 ? options : fixture.Options)).ToArray();
+        var host = new DurableHost(workers);
+        var node = new RuntimeNode("abandon-turns", fixture.Store, partitions, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, beforeRelease: host.DrainEnteredTurnsAsync);
+        await node.StartAsync(host);
+        await WaitFor(() => fixture.Store.Partitions.All(row => row.Owner == node.Node));
+        for (var key = 0; key < 32 && !types[0].TurnEntered.Task.IsCompleted; key++)
+        {
+            await fixture.StartActorAsync(node.Node, "turn-" + key, MixedProbe.TypeKey);
+            await Task.Delay(50);
+        }
+        for (var key = 0; key < 32 && !types[1].JobEntered.Task.IsCompleted; key++)
+        {
+            await fixture.StartActorAsync(node.Node, "job-" + key, MixedProbe.TypeKey);
+            await Task.Delay(50);
+        }
+        Check(types[0].TurnEntered.Task.IsCompleted && types[1].JobEntered.Task.IsCompleted,
+            "Worker 0 has an entered turn and Worker 1 an entered job");
+        Volatile.Write(ref faulting, 1);
+        var stop = node.StopAsync().AsTask();
+        bool canceledEarly;
+        try
+        {
+            await Task.Delay(700);
+            canceledEarly = types[1].JobCanceled.Task.IsCompleted;
+        }
+        finally { types[0].TurnRelease.TrySetResult(); }
+        var canceledAfter = await Task.WhenAny(types[1].JobCanceled.Task, Task.Delay(Timeout)) == types[1].JobCanceled.Task;
+        types[1].JobFinish.TrySetResult();
+        var reported = await OutcomeAsync(stop);
+        await DisposeQuietlyAsync(node);
+        Check(!canceledEarly && canceledAfter,
+            $"the abandon path waits for every Worker's turn drain before the job drain cancels entered jobs (cancelled early {canceledEarly})");
+        Check(ReferenceEquals(reported, fault) && fixture.Store.Partitions.All(row => row.Owner == node.Node),
+            $"the abandoned run reports the fault and releases nothing ({reported?.Message ?? "no error"})");
+    }
+
+    // A Worker whose own drain faulted with anything but a lost fence still gets the drain's pass while others drain.
+    private static async Task FaultedDrainPassAsync()
+    {
+        var fixture = new Fixture(2);
+        var rounds = 0;
+        var counting = fixture.Options with { BeforeDrainRound = () => Interlocked.Increment(ref rounds) };
+        Worker[] workers =
+        [
+            new("faulted-pass", 0, fixture.Store, new ActorAdapter(fixture.Store, new JobProbe()), fixture.Options),
+            new("faulted-pass", 1, fixture.Store, new ActorAdapter(fixture.Store, new JobProbe()), counting),
+        ];
+        var host = new DurableHost(workers);
+        var pending = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fault = new InvalidOperationException("own drain fault");
+        var drain = host.KeepLiveWhileAsync(workers, [pending.Task, Task.FromException(fault)], drainsKeepThemselves: true, CancellationToken.None);
+        await WaitFor(() => Volatile.Read(ref rounds) > 0);
+        pending.TrySetResult();
+        var reported = await OutcomeAsync(drain);
+        Check(rounds > 0 && ReferenceEquals(reported, fault),
+            $"a Worker whose own drain faulted keeps getting the drain's pass, and the fault is reported once all drains end ({rounds} round(s))");
+    }
+
+    /// <summary>A start whose type data begins with "turn-" stays entered until released; "job-" starts a job.</summary>
+    private sealed class MixedProbe : Contract.IActorType
+    {
+        internal const string TypeKey = "host-drain-mixed-probe";
+        internal TaskCompletionSource TurnEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource TurnRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource JobEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource JobCanceled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource JobFinish { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public string Type => TypeKey;
+        public bool Withholds(Contract.ActorHeader header) => false;
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+
+        public async ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            if (!turn.Inbox.Any(message => message.Kind == Contract.Kinds.Start)) return;
+            if (turn.Header.TypeData?.StartsWith("job-", StringComparison.Ordinal) == true)
+            {
+                turn.State = Json.Write("waiting");
+                turn.StartJob("cleanup");
+                return;
+            }
+            TurnEntered.TrySetResult();
+            await TurnRelease.Task;
+            turn.State = Json.Write("released");
+        }
+
+        public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        {
+            using var registration = cancellationToken.Register(() => JobCanceled.TrySetResult());
+            JobEntered.TrySetResult();
+            await JobFinish.Task;
+            return "completed";
+        }
     }
 
     private static async Task<Exception?> OutcomeAsync(Task task)
