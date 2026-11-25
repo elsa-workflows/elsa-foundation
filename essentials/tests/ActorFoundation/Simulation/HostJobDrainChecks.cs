@@ -1568,7 +1568,8 @@ internal static class HostJobDrainChecks
             type.Finish.TrySetResult();
             var stopOutcome = await OutcomeAsync(disposeFirst ? second : first);
             var disposeOutcome = await OutcomeAsync(disposeFirst ? first : second);
-            await WaitFor(() => node.Errors > errors);
+            var recording = Stopwatch.StartNew();
+            while (node.Errors == errors && recording.Elapsed < TimeSpan.FromSeconds(3)) await Task.Delay(20);
             await Task.Delay(100);
             Check(ReferenceEquals(stopOutcome, fault) && disposeOutcome is null && node.Errors - errors == 1 && ReferenceEquals(node.LastError, fault),
                 $"a stop and a dispose waiting together: the stop throws the fault, the dispose stays quiet, and the fault is recorded once ({(disposeFirst ? "dispose" : "stop")} first, recorded {node.Errors - errors})");
