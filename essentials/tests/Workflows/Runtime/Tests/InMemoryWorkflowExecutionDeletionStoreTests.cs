@@ -378,7 +378,7 @@ public sealed class InMemoryWorkflowExecutionDeletionStoreTests
         var store = new InMemoryRuntimeCheckpointCommitStore(state: fixture.CheckpointState);
         await store.AddPendingForTestingAsync(new RuntimePostCommitOutboxItem("late-outbox",
             new RuntimePostCommitIntent("late-intent", "run-outbox", RuntimePostCommitIntentKinds.EnqueueSchedulerWork, Now,
-                activityExecutionId: null, idempotencyKey: "late-intent", payload: JsonSerializer.SerializeToElement(workItem)),
+                activityExecutionId: null, idempotencyKey: "late-intent", payload: JsonSerializer.SerializeToElement(workItem, Elsa.Serialization.Core.JsonBaseline.Options)),
             status: RuntimePostCommitOutboxStatus.Pending, recordedAt: Now, availableAt: Now));
         var candidate = await fixture.DeletionStore.ReadAsync("run-outbox");
         Assert.Equal(WorkflowExecutionDeletionResult.Deleted, await fixture.DeletionStore.TryDeleteTerminalAsync(candidate!));

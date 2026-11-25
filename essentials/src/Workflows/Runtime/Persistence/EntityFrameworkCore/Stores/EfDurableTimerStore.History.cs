@@ -151,7 +151,7 @@ public sealed partial class EfDurableTimerStore
             PendingHistoryCursor cursor;
             try
             {
-                cursor = JsonSerializer.Deserialize<PendingHistoryCursor>(continuationCodec.Decode(PendingHistoryPurpose, token)) ?? throw new FormatException();
+                cursor = JsonSerializer.Deserialize<PendingHistoryCursor>(continuationCodec.DecodeJson(PendingHistoryPurpose, token), options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new FormatException();
                 if (cursor.Binding != binding || cursor.RunHash.Length != 64 || cursor.TimerHash.Length != 64) throw new FormatException();
             }
             catch (Exception exception) when (exception is JsonException or ArgumentException or FormatException or InvalidOperationException)
@@ -163,7 +163,7 @@ public sealed partial class EfDurableTimerStore
         var hasMore = rows.Length > query.Limit;
         if (hasMore) rows = rows[..query.Limit];
         var items = rows.Select(row => ReadChecked(row, scope)).ToArray();
-        var next = hasMore ? continuationCodec.Encode(PendingHistoryPurpose, JsonSerializer.SerializeToUtf8Bytes(new PendingHistoryCursor(binding, rows[^1].WorkflowExecutionIdHash, rows[^1].TimerIdHash))) : null;
+        var next = hasMore ? continuationCodec.EncodeJson(PendingHistoryPurpose, JsonSerializer.SerializeToUtf8Bytes(new PendingHistoryCursor(binding, rows[^1].WorkflowExecutionIdHash, rows[^1].TimerIdHash), options: Elsa.Serialization.Core.JsonBaseline.Options)) : null;
         CheckHistoryAccess(captured, cancellationToken); return new(query, items, next);
     }
 

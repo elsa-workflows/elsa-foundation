@@ -59,17 +59,16 @@ public static class ReflectionOnlyAttributes
     }
 
     /// <summary>
-    /// Resolves the same-named, same-signature property declared on the immediate base class of
+    /// Resolves the next same-named property declared on a base class of
     /// <paramref name="property"/>'s declaring type, or <see langword="null"/> when the base chain is
-    /// exhausted. <see cref="BindingFlags.DeclaredOnly"/> keeps the walk moving one level at a time.
+    /// exhausted. Non-declaring ancestors do not terminate attribute inheritance.
     /// </summary>
     private static PropertyInfo? FindBaseProperty(PropertyInfo property)
     {
-        var baseType = property.DeclaringType?.BaseType;
-
-        return baseType?.GetProperty(
-            property.Name,
-            BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+        for (var baseType = property.DeclaringType?.BaseType; baseType is not null; baseType = baseType.BaseType)
+            if (baseType.GetProperty(property.Name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly) is { } declaration)
+                return declaration;
+        return null;
     }
 
     /// <summary>

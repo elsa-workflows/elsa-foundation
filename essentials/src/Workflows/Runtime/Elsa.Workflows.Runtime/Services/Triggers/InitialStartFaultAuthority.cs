@@ -16,13 +16,13 @@ internal static class InitialStartFaultAuthority
     {
         var start = ReadPayload(work);
         return start?.StartAuthority?.StandaloneTrigger is not null || start?.StartAuthority?.ModelWork is not null || start?.StimulusDeliveryOrigin is not null
-            ? JsonSerializer.Serialize(work) : null;
+            ? JsonSerializer.Serialize(work, options: Elsa.Serialization.Core.JsonBaseline.Options) : null;
     }
 
     internal static RuntimeSchedulerWorkItem? ReadWork(RuntimeSchedulerPoisonRecord record)
     {
         if (!record.Metadata.TryGetValue(WorkSnapshotMetadata, out var snapshot)) return null;
-        try { return JsonSerializer.Deserialize<RuntimeSchedulerWorkItem>(snapshot) ?? throw Invalid(); }
+        try { return JsonSerializer.Deserialize<RuntimeSchedulerWorkItem>(snapshot, options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw Invalid(); }
         catch (Exception exception) when (exception is JsonException or ArgumentException or NotSupportedException)
         { throw new InvalidDataException("The parked initial scheduler work is malformed.", exception); }
     }
@@ -30,9 +30,9 @@ internal static class InitialStartFaultAuthority
     internal static WorkflowExecutionStartCommandPayload? ReadPayload(RuntimeSchedulerWorkItem work)
     {
         if (work.Payload is not { } json) return null;
-        if (work.CommandKind == WorkflowExecutionCommandKind.Start) return json.Deserialize<WorkflowExecutionStartCommandPayload>();
+        if (work.CommandKind == WorkflowExecutionCommandKind.Start) return json.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options);
         if (work.CommandKind != WorkflowExecutionCommandKind.Checkpoint ||
-            json.Deserialize<RuntimeCheckpointCommandPayload>() is not { CheckpointName: RuntimeCheckpointNames.WorkflowStarted } checkpoint) return null;
+            json.Deserialize<RuntimeCheckpointCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options) is not { CheckpointName: RuntimeCheckpointNames.WorkflowStarted } checkpoint) return null;
         return new(checkpoint.PinnedExecutable, checkpoint.PinnedExecutable.ArtifactId, checkpoint.SeedVariables, checkpoint.SeedInputs,
             checkpoint.SeedStimulusInput, checkpoint.SeedTriggerNodeId, checkpoint.RunKind, checkpoint.PinnedSource,
             checkpoint.ParentWorkflowExecutionId, checkpoint.CorrelationId, checkpoint.TenantId, checkpoint.Partition, checkpoint.Authority,
@@ -46,7 +46,7 @@ internal static class InitialStartFaultAuthority
     internal static WorkflowExecutionCommandEnvelope ProjectStart(RuntimeSchedulerWorkItem work) =>
         new(work.EnvelopeId, work.WorkflowExecutionId,
             new(work.CommandId, work.WorkflowExecutionId, WorkflowExecutionCommandKind.Start, work.EnqueuedAt,
-                JsonSerializer.SerializeToElement(ReadPayload(work) ?? throw Invalid()), work.CommandMetadata),
+                JsonSerializer.SerializeToElement(ReadPayload(work) ?? throw Invalid(), options: Elsa.Serialization.Core.JsonBaseline.Options), work.CommandMetadata),
             work.IdempotencyKey, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, work.EnqueuedAt, work.Sequence, work.EnvelopeMetadata);
 
     internal static bool IsProtected(WorkflowExecutionState state) =>
@@ -125,7 +125,7 @@ internal static class InitialStartFaultAuthority
              start.RunKind != WorkflowRunKind.PublishedRun || start.DispatchNestingDepth != 0 ||
              start.RequestedArtifactId != workOrigin.WorkerExecutable.ArtifactId ||
              start.Inputs.Count != (workOrigin.Inputs?.Count ?? 0) ||
-             workOrigin.Inputs is { } inputs && inputs.Any(item => !start.Inputs.TryGetValue(item.Key, out var value) || !JsonElement.DeepEquals(item.Value, value))))
+             workOrigin.Inputs is { } inputs && inputs.Any(item => !start.Inputs.TryGetValue(item.Key, out var value) || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(item.Value, value))))
             throw Invalid();
         if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(state.PinnedExecutable, start.PinnedExecutable) ||
             !NativeIngressTargetEvidence.Equal(state.PinnedSource, start.PinnedSource) ||
@@ -145,7 +145,7 @@ internal static class InitialStartFaultAuthority
             actual.Command.Kind, actual.EnvelopeId, actual.IdempotencyKey, actual.EnqueuedAt, work.RecordedAt,
             actual.Sequence, actual.Command.Payload, actual.Command.Metadata, actual.Metadata);
         var expected = work.CommandKind == WorkflowExecutionCommandKind.Start ? start :
-            NativeIngressStartLineage.Build(start, actual.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!, material.RootActivity.ExecutableNodeId);
+            NativeIngressStartLineage.Build(start, actual.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!, material.RootActivity.ExecutableNodeId);
         if (!NativeIngressTargetEvidence.Equal(work, expected)) throw Invalid();
     }
 

@@ -58,5 +58,5 @@ internal sealed class BpmnWorkBinder : IBpmnWorkBinder
     private static ActivityNode Node(BpmnWorkBindingRequest request, string activityVersionId, params ArgumentState[] inputs) =>
         new(request.BindingRef, activityVersionId, inputs, []);
 
-    private static ArgumentState Literal(string key, object? value) => new(key, new ArgumentValue(value, "Literal"), null, null, null, null);
+    private static ArgumentState Literal(string key, object? value) => new(key, ArgumentValue.FromClr(value, "Literal"), null, null, null, null);
 }

@@ -81,7 +81,7 @@ public sealed class IntrinsicVariableTargetValidatorTests
         new(
             nodeId,
             "$intrinsic",
-            [new ArgumentState("value", new ArgumentValue("1", "Literal"), null, null, null, null)],
+            [new ArgumentState("value", ArgumentValue.FromClr("1", "Literal"), null, null, null, null)],
             [])
         {
             Intrinsic = new AuthoredWorkflowIntrinsic(
@@ -91,5 +91,5 @@ public sealed class IntrinsicVariableTargetValidatorTests
         };
 
     private static ArgumentState NonVariableOutcomeInput() =>
-        new("outcome", new ArgumentValue("Done", "Literal"), null, null, null, null);
+        new("outcome", ArgumentValue.FromClr("Done", "Literal"), null, null, null, null);
 }

@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="../../../../../../specs/1207-json-data-integrity-baseline/evidence/compiler-hash-vectors.json" LogicalName="compiler-hash-vectors.json" />
     <!-- Required to self-host a minimal FastEndpoints app for endpoint-routing tests. -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>

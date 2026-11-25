@@ -17,7 +17,7 @@ internal static class RuleAdmissionCapacity
         var program = RulesCodec.ReadArtifact(invocation.Artifact);
         RulesCodec.ResolveMaxRounds(program, invocation.InitialFacts, invocation.MaxRounds);
         var vocabulary = RuleRecordCodec.CanonicalFacts(program.Vocabulary);
-        var fingerprint = new RuleInvocationFingerprint(RuleRecordCodec.Hash(common));
+        var fingerprint = new RuleInvocationFingerprint(RuleRecordCodec.JsonHash(common));
         var round = new RuleRoundIdentity(invocation.Identity, fingerprint, invocation.MaxRounds - 1, RuleRecordCodec.FactsHash(vocabulary));
 
         // All vocabulary facts plus every firing is a conservative superset of every reachable

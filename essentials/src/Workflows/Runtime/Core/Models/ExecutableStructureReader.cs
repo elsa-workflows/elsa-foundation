@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public static class ExecutableStructureReader
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>
     /// Validates the node's structure kind/schema version against the owning activity's declared values

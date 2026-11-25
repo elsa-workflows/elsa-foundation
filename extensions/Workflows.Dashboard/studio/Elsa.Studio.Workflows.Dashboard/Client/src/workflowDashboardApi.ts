@@ -1,3 +1,4 @@
+import { resolveStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
 export interface UnavailableSnapshot { status: "unavailable"; generatedAt: string; errorCode?: string; }
@@ -62,7 +63,7 @@ export async function loadRunHealth(api: ElsaStudioModuleApi, settings: unknown,
   const duration = options.range === "24h" ? 86_400_000 : options.range === "7d" ? 604_800_000 : 2_592_000_000;
   const from = new Date(now.getTime() - duration).toISOString();
   const to = now.toISOString();
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const timeZone = resolveStudioTimeZone();
   const bucket = options.range === "24h" ? "hour" : "day";
   const query = new URLSearchParams({ from, to, timeZone, bucket, includeTestRuns: String(options.includeTestRuns) });
   const snapshot = await loadDashboardResource<RunHealthSnapshot>(api, `/_elsa/workflows/dashboard/runs?${query}`, signal);

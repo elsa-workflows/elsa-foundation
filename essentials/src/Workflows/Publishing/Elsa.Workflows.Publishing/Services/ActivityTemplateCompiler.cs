@@ -848,7 +848,7 @@ public sealed class ActivityTemplateCompiler(
             return local with
             {
                 ClosedNodeCount = local.LocalNodeCount + closed.Sum(x => (long)x.NodesById.Count),
-                DescriptorBytes = local.DescriptorBytes + closed.Sum(x => x.NodesById.Values.Sum(node => (long)JsonSerializer.SerializeToUtf8Bytes(node.Descriptor).Length)),
+                DescriptorBytes = local.DescriptorBytes + closed.Sum(x => x.NodesById.Values.Sum(node => (long)JsonSerializer.SerializeToUtf8Bytes(node.Descriptor, Elsa.Serialization.Core.JsonBaseline.Options).Length)),
                 LayoutBytes = layoutBytes
             };
         }

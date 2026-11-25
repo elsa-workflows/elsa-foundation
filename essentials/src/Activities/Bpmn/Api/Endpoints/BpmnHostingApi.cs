@@ -26,7 +26,7 @@ internal static class BpmnHostingApi
     public const string RetryService = "bpmn:retry-service";
     public static void Map(IEndpointRouteBuilder endpoints) =>
         MinimalEndpoints.Generated.ElsaActivitiesBpmnApiEndpoints.Map(
-            endpoints.MapEndpointGroup(Owner, BpmnHostingJsonContext.Default, jsonContentType: "application/json; charset=utf-8", tag: "BPMN"));
+            endpoints.MapEndpointGroup(Owner, BpmnHostingJsonContext.WireContext, jsonContentType: "application/json; charset=utf-8", tag: "BPMN"));
     public static string Route(HttpContext context, string key) =>
         context.Request.RouteValues[key]?.ToString() ?? throw new ArgumentException("A required route identity is missing.");
     public static int CommandStatus(BpmnModelCommandOutcome result, bool start = false) =>
@@ -340,7 +340,7 @@ internal sealed class GetCommandEndpoint(BpmnApiCaller caller) : ApiEndpoint<Get
     }
 }
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(PublishBpmnModelRequest))]
 [JsonSerializable(typeof(StartBpmnModelRequest))]
 [JsonSerializable(typeof(GetBpmnExecutionRequest))]
@@ -362,4 +362,15 @@ internal sealed class GetCommandEndpoint(BpmnApiCaller caller) : ApiEndpoint<Get
 [JsonSerializable(typeof(BpmnCatalogRequest))]
 [JsonSerializable(typeof(BpmnCatalogResponse<BpmnPublicationView>))]
 [JsonSerializable(typeof(BpmnCatalogResponse<BpmnExecutionView>))]
-internal partial class BpmnHostingJsonContext : JsonSerializerContext;
+internal partial class BpmnHostingJsonContext : JsonSerializerContext
+{
+    internal static BpmnHostingJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+
+}

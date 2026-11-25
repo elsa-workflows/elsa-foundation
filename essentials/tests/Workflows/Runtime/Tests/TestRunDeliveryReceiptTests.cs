@@ -9,6 +9,27 @@ public sealed class TestRunDeliveryReceiptTests
     private static readonly DateTimeOffset Now = new(2026, 10, 16, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void Delivery_digest_pins_canonical_data_and_keeps_the_existing_absent_null_contract()
+    {
+        // Independently hashed canonical ASCII bytes: {"items":[1e0,2e0],"n":1e0,"text":"a"}.
+        const string expected = "b2eaa6f53648c748a7f98db8fcf64a116cebbc27bcabeef7435024530261493f";
+        var first = Parse("""{"items":[1,2],"n":1,"text":"a"}""");
+        var equivalent = Parse("""{ "text":"\u0061", "n":1e0, "items":[1.0,2e0] }""");
+        var actual = TestRunDeliveryReceipt.Digest(first);
+        Assert.True(expected == actual, $"Delivery JSON hash golden: Actual={actual}. From Elsa 4's first stable release, this hash is frozen and changes require an explicit decision.");
+        Assert.Equal(actual, TestRunDeliveryReceipt.Digest(equivalent));
+        Assert.NotEqual(actual, TestRunDeliveryReceipt.Digest(Parse("""{"items":[2,1],"n":1,"text":"a"}""")));
+        Assert.NotEqual(actual, TestRunDeliveryReceipt.Digest(Parse("""{"items":[1,2],"n":2,"text":"a"}""")));
+        Assert.NotEqual(TestRunDeliveryReceipt.Digest(Parse("{}")), TestRunDeliveryReceipt.Digest(Parse("{\"n\":null}")));
+        Assert.Equal(TestRunDeliveryReceipt.Digest(null), TestRunDeliveryReceipt.Digest(Parse("null")));
+        var receipt = new TestRunDeliveryReceipt("test-run", "b66df011-c1a1-481c-ac79-d7dcbf1a5c55", "wait", actual);
+        var recorded = receipt.Record(Execution());
+        Assert.True(new TestRunDeliveryReceipt(receipt.TestRunId, receipt.DeliveryId, receipt.WaitId, TestRunDeliveryReceipt.Digest(equivalent)).MatchesExisting(recorded));
+    }
+
+    private static JsonElement Parse(string json) { using var document = JsonDocument.Parse(json); return document.RootElement.Clone(); }
+
+    [Fact]
     public void Receipt_BindsExactWaitAndConfiguration_AndSurvivesConsumedPayloadRemoval()
     {
         var payload = JsonSerializer.SerializeToElement(new { approved = true });

@@ -396,7 +396,7 @@ internal static partial class RulesProviderContractTests
         Assert.Equal(invocation.NativeDestination, envelope.Destination);
         Assert.Equal(lease.DeliveryId, envelope.DeliveryId);
         Assert.Equal(RuleTerminalKind.Cancelled, envelope.Result.Kind);
-        Assert.Equal(RuleRecordCodec.Hash(RuleRecordCodec.DeliveryBytes(envelope.DeliveryId,
+        Assert.Equal(RuleRecordCodec.JsonHash(RuleRecordCodec.DeliveryBytes(envelope.DeliveryId,
             envelope.Destination, envelope.Result)), envelope.CanonicalPayloadSha256);
 
         var wrongIdentity = MakeInvocation("wrong-delivery-scope").Identity;

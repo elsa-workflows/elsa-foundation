@@ -1240,9 +1240,13 @@ describe("workflow run workbench incident navigation", () => {
     click(buttonByText([...container.querySelectorAll<HTMLElement>(".wf-instance-incident")]
       .find(candidate => candidate.textContent?.includes(`Failure-${lastIndex}`))!, "View input data"));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
-    const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
-      .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
-    expect(incidentCount).toBe("1");
+    await showActivityData();
+    await vi.waitFor(() => {
+      expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
+      const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
+        .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
+      expect(incidentCount).toBe("1");
+    });
   });
 
   it("keeps the newest incident selected when exact activity lookups finish out of order", async () => {

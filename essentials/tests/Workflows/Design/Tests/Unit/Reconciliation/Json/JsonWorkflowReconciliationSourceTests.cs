@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Serialization.Core;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Reconciliation.Json.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Json.Exceptions;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Elsa.Testing;
+using Elsa.Workflows.Design.Tests.Unit.Reconciliation.Git;
 
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Json;
 
@@ -21,6 +23,46 @@ namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Json;
 /// </summary>
 public sealed class JsonWorkflowReconciliationSourceTests
 {
+    // A real file-catalog fixture, rather than a result supplied by StubSerializer. The
+    // surrounding names are owned; the state contains deliberately mixed-case raw data.
+    internal static string CurrentCatalogFixtureJson => $$"""
+        [{"definitionId":"fixture-catalog","name":"Catalog sentinel","description":null,"version":"1.0.0","state":{{GitTestSupport.AuthoredStateJson}},"sourceCreatedAt":null,"contentHash":null,"deleted":false}]
+        """;
+
+    [Fact]
+    public void Reader_real_payload_serializer_keeps_camel_case_members_and_verbatim_authored_values()
+    {
+        var path = Path.Join(Path.GetTempPath(), $"real-workflow-catalog-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, CurrentCatalogFixtureJson);
+        try
+        {
+            var reader = new JsonWorkflowCatalogReader(SerializationServices.PayloadSerializer(), NullLogger<JsonWorkflowCatalogReader>.Instance);
+            var model = Assert.Single(reader.Read(path, CancellationToken.None));
+            Assert.Equal("fixture-catalog", model.DefinitionId);
+            Assert.Equal("Catalog sentinel", model.Name);
+            Assert.Null(model.Description);
+            var variable = Assert.Single(model.State.Variables);
+            Assert.Equal("FixtureName", variable.Name);
+            Assert.Equal(GitTestSupport.AuthoredRawFixtureValue, variable.Default!.Value!.Value.GetRawText());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Reader_real_payload_serializer_does_not_match_a_Pascal_case_owned_member()
+    {
+        var path = Path.Join(Path.GetTempPath(), $"wrong-case-workflow-catalog-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, CurrentCatalogFixtureJson.Replace("\"name\":\"Catalog sentinel\"", "\"Name\":\"Catalog sentinel\"", StringComparison.Ordinal));
+        try
+        {
+            var reader = new JsonWorkflowCatalogReader(SerializationServices.PayloadSerializer(), NullLogger<JsonWorkflowCatalogReader>.Instance);
+            var model = Assert.Single(reader.Read(path, CancellationToken.None));
+            Assert.Null(model.Name); // Exact own-contract reads deliberately lose this wrongly named member (FR-024a).
+            Assert.Equal("FixtureName", Assert.Single(model.State.Variables).Name);
+        }
+        finally { File.Delete(path); }
+    }
+
     private static WorkflowVersionReconciliationModel Model(string id, string version) =>
         new(id, id, null, version, WorkflowDefinitionState.Empty);
 

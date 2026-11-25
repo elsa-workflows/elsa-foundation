@@ -35,8 +35,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     {
         // Studio stores { referenceKey }; an in-process caller may hand over the reference itself.
         var read = new WorkflowArgumentState("Text", payload == "stored"
-            ? new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "customer-ref" }), "Input")
-            : new ArgumentValue(new VariableReference("customer-ref"), "Input"), null, null, null, null);
+            ? ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "customer-ref" }), "Input")
+            : ArgumentValue.FromClr(new VariableReference("customer-ref"), "Input"), null, null, null, null);
         var version = InputReadVersion(Node("consumer", read));
 
         var publication = await Handler(version).Handle(new PublishWorkflow(version.Id), CancellationToken.None);
@@ -52,7 +52,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task A_workflow_level_Input_read_of_an_undeclared_input_is_refused_before_any_write()
     {
-        var read = new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "missing" }), "Input"),
+        var read = new WorkflowArgumentState("Text", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "missing" }), "Input"),
             null, null, null, null);
         var version = InputReadVersion(Node("consumer", read));
         var before = await CountPublishWritesAsync();
@@ -70,7 +70,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     {
         var set = new ActivityNode("set", "elsa.intrinsic.set@1",
             [new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Value,
-                new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "customer-ref" }), "Input"), null, null, null, null)], [])
+                ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "customer-ref" }), "Input"), null, null, null, null)], [])
         {
             Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Set, new TypeReference("String"), new VariableReference("target", "workflow"))
         };

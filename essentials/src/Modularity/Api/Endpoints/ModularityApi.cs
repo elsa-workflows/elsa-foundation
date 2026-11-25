@@ -20,7 +20,7 @@ public static class ModularityApi
                               ?? typeof(ModularityApi).Assembly.GetName().Name!;
         var api = endpoints.MapEndpointGroup(
             OwnerId,
-            ModularityJsonContext.Default,
+            ModularityJsonContext.WireContext,
             jsonContentType: "application/json; charset=utf-8",
             tag: applicationName);
 

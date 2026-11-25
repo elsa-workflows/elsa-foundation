@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Conversion;
 using Elsa3.Mapping.Resolution;
@@ -90,8 +91,9 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
 
         var nodeId = $"{Elsa3ConversionDiagnostics.NodeId(endpoint)}.http-{suffix}";
         var source =
-            "(function (values) { var shaped = {}; for (var key in values) { var list = values[key]; " +
-            "shaped[key] = list.length === 0 ? null : list.length === 1 ? list[0] : list; } return shaped; })" +
+            // No computed member access by name: the read-only analysis treats values[key] as possible state access.
+            "(function (values) { return Object.fromEntries(Object.entries(values).map(function (pair) { var list = pair[1]; " +
+            "return [pair[0], list.length === 0 ? null : list.length === 1 ? list[0] : list]; })); })" +
             // The request reaches the script as JSON; read either casing of the property so neither serializer
             // convention yields a silently empty value.
             $"(args.request.{requestProperty} || args.request.{char.ToUpperInvariant(requestProperty[0])}{requestProperty[1..]} || {{}})";
@@ -103,7 +105,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
             {
                 ["request"] = new ActivityResultExpressionParameterBinding(Elsa3ConversionDiagnostics.NodeId(endpoint), RequestOutput)
             },
-            JsonSerializer.SerializeToElement(new { }),
+            JsonSerializer.SerializeToElement(new { }, JsonBaseline.Options),
             ExpressionCapabilityProfiles.BindingReadonlyV1);
         var setNode = new Elsa3Activity
         {
@@ -117,7 +119,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
                 {
                     typeName = "Object",
                     expression = new { type = "JavaScript", value = expression }
-                })
+                }, JsonBaseline.Options)
             }
         };
 

@@ -134,7 +134,7 @@ public sealed class RunEtlActivityTests
         int stateFormatVersion = 1, int completionFormatVersion = 1)
     {
         var stored = EtlNativeCheckpointTests.Activity(fixture.Scope);
-        var state = stored.PrivateState!.Value.InlineValue!.Value.Deserialize<RunEtlState>()! with { FormatVersion = stateFormatVersion };
+        var state = stored.PrivateState!.Value.InlineValue!.Value.Deserialize<RunEtlState>(Elsa.Serialization.Core.JsonConversionContract.Default.Options)! with { FormatVersion = stateFormatVersion };
         var completion = new RunEtlCompletion(completionFormatVersion, EtlRuntimeJson.WriteElement(invocation ?? fixture.Invocation),
             EtlRuntimeJson.WriteElement(result ?? fixture.Delivery.Result));
         return new(Context(fixture), state, completion, registrationId ?? fixture.Invocation.ResultAddress.RegistrationId,

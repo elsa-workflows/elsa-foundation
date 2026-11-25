@@ -17,7 +17,7 @@ namespace Elsa.Activities.Scripting.Services;
 /// </summary>
 internal sealed class StepScriptVariables : IScriptVariableSession
 {
-    private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null);
+    private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly IStepVariableSession _session;
     private readonly List<string> _missing = [];
     private readonly bool _protectedInputs;
@@ -77,7 +77,7 @@ internal sealed class StepScriptVariables : IScriptVariableSession
             return ExpressionVariableRead.Refused(exception.Message);
         }
 
-        return ExpressionVariableRead.Present(value is null ? JsonNull : JsonSerializer.SerializeToElement(value));
+        return ExpressionVariableRead.Present(value is null ? JsonNull : JsonSerializer.SerializeToElement(value, Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     public void Write(string name, JsonElement? value)

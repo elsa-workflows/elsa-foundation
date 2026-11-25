@@ -1,0 +1,317 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+
+namespace Elsa.Serialization.Core;
+
+/// <summary>A cached, scoped contract used symmetrically to read and write a user's .NET type.</summary>
+public sealed class JsonConversionContract
+{
+    private static readonly ConditionalWeakTable<Type, JsonConversionContract> Types = new();
+    private static readonly ConditionalWeakTable<MemberInfo, ConditionalWeakTable<Type, JsonConversionContract>> Members = new();
+    private readonly JsonKnownNamingPolicy namingPolicy;
+    private readonly bool caseInsensitive;
+    private readonly (string Json, string Member)[] mappings;
+    private readonly Type? rootType;
+    private readonly bool memberOverride;
+
+    private JsonConversionContract(JsonConversionAttribute? selection, Type? rootType = null, bool memberOverride = false)
+    {
+        namingPolicy = selection?.NamingPolicy ?? JsonKnownNamingPolicy.CamelCase;
+        caseInsensitive = selection?.CaseInsensitive ?? false;
+        RefuseUnmatchedMembers = selection?.RefuseUnmatchedMembers ?? false;
+        mappings = (selection?.MemberMappings ?? []).Select(ParseMapping).ToArray();
+        this.rootType = rootType;
+        this.memberOverride = memberOverride;
+    }
+
+    // An unannotated polymorphic child keeps its enclosing scope, but needs its own metadata root
+    // so discriminator participants are ordinary object contracts in the native STJ dispatch table.
+    private JsonConversionContract(JsonConversionContract parent, Type rootType)
+    {
+        namingPolicy = parent.namingPolicy;
+        caseInsensitive = parent.caseInsensitive;
+        RefuseUnmatchedMembers = parent.RefuseUnmatchedMembers;
+        mappings = [];
+        this.rootType = rootType;
+    }
+
+    private JsonSerializerOptions CreateOptions(Operation operation, Type? converterRootType = null)
+    {
+        var options = JsonBaseline.CreateCopy();
+        options.PropertyNamingPolicy = Naming(namingPolicy);
+        options.PropertyNameCaseInsensitive = caseInsensitive;
+        var polymorphicTypes = PolymorphicTypes(converterRootType ?? rootType);
+        // A member overrides this occurrence only. A recursive child selects the type's annotation again,
+        // just as the scanner does. Ordinary type contracts need no additional boundary or option set.
+        var recursiveTypeContract = memberOverride && rootType is not null && HasSelection(rootType) ? For(rootType) : null;
+        options.TypeInfoResolver = new DefaultJsonTypeInfoResolver
+        {
+            Modifiers = { info =>
+            {
+                // Our transparent adapter delegates to an inner declared-type root, which owns native
+                // discriminator dispatch. The outer value converter cannot itself carry that metadata.
+                if (info.Kind == JsonTypeInfoKind.None && IsContractAdapter(info.Converter)) info.PolymorphismOptions = null;
+                info.NumberHandling = JsonNumberHandling.Strict;
+                foreach (var property in info.Properties)
+                {
+                    property.NumberHandling = JsonNumberHandling.Strict;
+                    if (property.AttributeProvider is not MemberInfo member) continue;
+                    // A discriminator chooses the runtime shape within this declared conversion scope.
+                    // Its derived metadata must retain the same naming, matching and member mappings.
+                    var mapping = info.Type == rootType || polymorphicTypes.Contains(info.Type) ? mappings.FirstOrDefault(x => x.Member == member.Name) : default;
+                    if (mapping.Member is not null) property.Name = mapping.Json;
+                    var temporalType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+                    if (temporalType == typeof(DateTime) || temporalType == typeof(DateTimeOffset) || temporalType == typeof(DateOnly) || temporalType == typeof(TimeOnly) || temporalType == typeof(TimeSpan))
+                        property.CustomConverter = null;
+                    if (member.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null)
+                        property.CustomConverter = CreateBoundaryConverter(property.PropertyType, For(property.PropertyType, member), operation);
+                    else if (recursiveTypeContract is not null && (Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType) == rootType)
+                        property.CustomConverter = CreateBoundaryConverter(property.PropertyType, recursiveTypeContract, operation);
+                    else if (property.CustomConverter is null && polymorphicTypes.Contains(Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType) && HasSelection(property.PropertyType))
+                        property.CustomConverter = CreateBoundaryConverter(property.PropertyType, For(property.PropertyType), operation);
+                    else if (property.CustomConverter is null && !HasSelection(property.PropertyType) &&
+                        (recursiveTypeContract is not null && ContainsCollectionElement(property.PropertyType, rootType!) ||
+                         polymorphicTypes.Any(type => HasSelection(type) && ContainsCollectionElement(property.PropertyType, type))))
+                        property.CustomConverter = (JsonConverter)Activator.CreateInstance(typeof(RecursiveCollectionConverter<>).MakeGenericType(property.PropertyType), this, operation)!;
+                }
+            } }
+        };
+        options.Converters.Insert(0, new ScopedConverterFactory(converterRootType ?? rootType, polymorphicTypes, this, operation));
+        StrictDateTimeConverters.Configure(options);
+        options.MakeReadOnly();
+        return options;
+    }
+
+    /// <summary>Gets the default camelCase, exact-match, warn-and-continue contract.</summary>
+    public static JsonConversionContract Default { get; } = new(null);
+    /// <summary>Gets read-only options with operation-local metadata for this contract.</summary>
+    /// <remarks>A stable root can carry collectible runtime types in object slots. Its cached contract
+    /// must not retain the serializer's discovered metadata for those types.</remarks>
+    public JsonSerializerOptions Options => new Operation().GetOptions(this);
+    /// <summary>Gets whether unmatched members refuse conversion.</summary>
+    public bool RefuseUnmatchedMembers { get; }
+
+    /// <summary>Resolves a member override, otherwise the target type's contract. The cache does not pin unloadable types.</summary>
+    public static JsonConversionContract For(Type type, MemberInfo? member = null)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        if (member?.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null)
+            return Members.GetValue(member, _ => new()).GetValue(type, key => new(member.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key, memberOverride: true));
+        return Types.GetValue(type, key => new(key.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key));
+    }
+
+    /// <summary>Resolves a nested declared type or member while retaining the enclosing scope for unannotated types.</summary>
+    /// <remarks>Unannotated polymorphic children need their own metadata root. Cache such selections only within the conversion operation.</remarks>
+    public JsonConversionContract ForNested(Type type, MemberInfo? member = null)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        if (HasSelection(type, member)) return For(type, member);
+        if (!HasPolymorphicShape(type) || rootType == type) return this;
+        return new(this, type);
+    }
+
+    internal JsonConversionContract ForRoot(Type type) => rootType is null ? ForNested(type) : this;
+
+    internal static bool HasSelection(Type type, MemberInfo? member = null) => member?.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null ||
+        (Nullable.GetUnderlyingType(type) ?? type).GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null;
+
+    /// <summary>Reads a typed copy without modifying stored JSON. Reports every unmatched key through the supplied recording sink.</summary>
+    public object? Read(JsonElement value, Type type, Action<JsonConversionDiagnostic>? report = null)
+    {
+        var contract = ForRoot(type);
+        // These fixed BCL contracts have no member naming, custom converter or temporal policy.
+        // Reusing their baseline metadata avoids rebuilding a reflection resolver on every scalar input.
+        // User, enum, collection and object contracts remain operation-local, including nested collectible types.
+        if (IsBaselineScalar(Nullable.GetUnderlyingType(type) ?? type))
+        {
+            _ = Naming(contract.namingPolicy); // Invalid selections must still refuse even though scalar naming has no effect.
+            if (value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+                foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, contract)) report?.Invoke(diagnostic);
+            return value.Deserialize(type, JsonBaseline.Options);
+        }
+        var operation = new Operation();
+        foreach (var diagnostic in UnmatchedMemberScanner.Scan(value, type, contract, operation)) report?.Invoke(diagnostic);
+        return value.Deserialize(type, operation.GetOptions(contract));
+    }
+
+    private static bool IsBaselineScalar(Type type) => type == typeof(string) || type == typeof(bool) || type == typeof(char) ||
+        type == typeof(byte) || type == typeof(sbyte) || type == typeof(short) || type == typeof(ushort) ||
+        type == typeof(int) || type == typeof(uint) || type == typeof(long) || type == typeof(ulong) ||
+        type == typeof(float) || type == typeof(double) || type == typeof(decimal);
+
+    /// <summary>Writes with the same effective contract used for reads.</summary>
+    public JsonElement Write(object? value, Type type) => JsonSerializer.SerializeToElement(value, type, options: ForRoot(type).Options);
+
+    /// <summary>Converts a CLR value using its type's declared contract.</summary>
+    public static JsonElement SerializeToElement(object? value, Type? type = null)
+    {
+        type ??= value?.GetType() ?? typeof(object);
+        return For(type).Write(value, type);
+    }
+
+    /// <summary>Converts a value with an explicitly selected CLR contract.</summary>
+    public static JsonElement SerializeToElement<T>(T value) => For(typeof(T)).Write(value, typeof(T));
+
+    /// <summary>Converts a CLR value to JSON text using its type's declared contract.</summary>
+    public static string Serialize(object? value) => SerializeToElement(value).GetRawText();
+    /// <summary>Converts a value to text with an explicitly selected CLR contract.</summary>
+    public static string Serialize(object? value, Type type) => For(type).Write(value, type).GetRawText();
+
+    /// <summary>Reads a typed copy with the target's contract.</summary>
+    public static object? Deserialize(JsonElement value, Type type) => For(type).Read(value, type);
+    /// <summary>Reads a typed copy with the target's contract.</summary>
+    public static T? Deserialize<T>(JsonElement value) => (T?)For(typeof(T)).Read(value, typeof(T));
+    /// <summary>Reads a typed copy of JSON text with the target's contract.</summary>
+    public static object? Deserialize(string value, Type type)
+    {
+        using var document = JsonDocument.Parse(value);
+        return Deserialize(document.RootElement, type);
+    }
+    /// <summary>Reads a typed copy of JSON text with the target's contract.</summary>
+    public static T? Deserialize<T>(string value) => (T?)Deserialize(value, typeof(T));
+
+    private static JsonConverter CreateBoundaryConverter(Type type, JsonConversionContract contract, Operation operation) =>
+        (JsonConverter)Activator.CreateInstance(typeof(BoundaryConverter<>).MakeGenericType(type), contract, operation)!;
+
+    private sealed class ScopedConverterFactory(Type? rootType, HashSet<Type> polymorphicTypes, JsonConversionContract parent, Operation operation) : JsonConverterFactory
+    {
+        // STJ requires object metadata for discriminator-selected types. A converter around a derived
+        // type disables that metadata, even when its annotation is merely inherited from this root.
+        public override bool CanConvert(Type typeToConvert)
+        {
+            var declaredType = Nullable.GetUnderlyingType(typeToConvert) ?? typeToConvert;
+            return declaredType != rootType && !polymorphicTypes.Contains(declaredType) &&
+                (HasSelection(declaredType) || HasPolymorphicShape(declaredType));
+        }
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) => CreateBoundaryConverter(typeToConvert, operation.ChildContract(typeToConvert, parent), operation);
+    }
+
+    private interface IContractAdapter { }
+
+    /// <summary>Identifies only the transparent adapters this contract adds around its own member metadata.</summary>
+    /// <remarks>Import and format adapters may inspect that metadata; user converters keep their own opaque shape.</remarks>
+    public static bool IsContractAdapter(JsonConverter? converter) => converter is IContractAdapter;
+
+    private sealed class BoundaryConverter<T>(JsonConversionContract contract, Operation operation) : JsonConverter<T>, IContractAdapter
+    {
+        public override T? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => JsonSerializer.Deserialize<T>(ref reader, options: operation.GetOptions(contract));
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) => JsonSerializer.Serialize(writer, value, options: operation.GetOptions(contract));
+    }
+
+    private interface IRecursiveCollectionConverter : IContractAdapter { }
+
+    // A collection's elements must not inherit the root-only converter exclusion. Keep the enclosing
+    // naming/mapping policy, but let annotated elements select their own contract in these local options.
+    private sealed class RecursiveCollectionConverter<T>(JsonConversionContract contract, Operation operation) : JsonConverter<T>, IRecursiveCollectionConverter
+    {
+        public override T? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => JsonSerializer.Deserialize<T>(ref reader, options: operation.GetCollectionOptions(contract, typeof(T)));
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) => JsonSerializer.Serialize(writer, value, options: operation.GetCollectionOptions(contract, typeof(T)));
+    }
+
+    internal static bool IsRecursiveCollectionConverter(JsonConverter? converter) => converter is IRecursiveCollectionConverter;
+
+    private static HashSet<Type> PolymorphicTypes(Type? root)
+    {
+        var result = new HashSet<Type>();
+        if (root is null) return result;
+        var pending = new Stack<Type>();
+        pending.Push(root);
+        while (pending.TryPop(out var type))
+            foreach (var derived in type.GetCustomAttributes<JsonDerivedTypeAttribute>(inherit: false))
+                if (derived.DerivedType != root && result.Add(derived.DerivedType)) pending.Push(derived.DerivedType);
+        return result;
+    }
+
+    private static bool HasPolymorphicShape(Type type) => (Nullable.GetUnderlyingType(type) ?? type).GetCustomAttributes<JsonDerivedTypeAttribute>(inherit: false).Any();
+
+    private static bool ContainsCollectionElement(Type type, Type elementType)
+    {
+        if (type == typeof(string)) return false;
+        HashSet<Type>? visited = null;
+        while (type != elementType)
+        {
+            Type? itemType;
+            if (type.IsArray) itemType = type.GetElementType();
+            else
+            {
+                var interfaces = type.GetInterfaces().Append(type);
+                var dictionary = interfaces.FirstOrDefault(item => item.IsGenericType &&
+                    (item.GetGenericTypeDefinition() == typeof(IDictionary<,>) || item.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)));
+                itemType = dictionary?.GetGenericArguments()[1] ?? interfaces.FirstOrDefault(item =>
+                    item.IsGenericType && item.GetGenericTypeDefinition() == typeof(IEnumerable<>))?.GetGenericArguments()[0];
+            }
+            if (itemType is null || !(visited ??= []).Add(type)) return false;
+            type = Nullable.GetUnderlyingType(itemType) ?? itemType;
+        }
+        return true;
+    }
+
+    // Reuse effective metadata within one conversion, including repeated scoped collection elements.
+    // The cache belongs to the operation/options graph, never to a stable type or global serializer.
+    internal sealed class Operation
+    {
+        private readonly object gate = new();
+        private readonly Dictionary<JsonConversionContract, JsonSerializerOptions> options = new();
+        private readonly Dictionary<(Type Type, MemberInfo? Member, JsonConversionContract Parent), JsonConversionContract> children = new();
+        private Dictionary<(JsonConversionContract Contract, Type Type), JsonSerializerOptions>? collectionOptions;
+
+        internal JsonConversionContract ChildContract(Type type, JsonConversionContract parent, MemberInfo? member = null)
+        {
+            lock (gate)
+            {
+                var key = (type, member, parent);
+                if (children.TryGetValue(key, out var existing)) return existing;
+                var selected = parent.ForNested(type, member);
+                children.Add(key, selected);
+                return selected;
+            }
+        }
+
+        internal JsonSerializerOptions GetOptions(JsonConversionContract contract)
+        {
+            lock (gate)
+            {
+                if (options.TryGetValue(contract, out var existing)) return existing;
+                var created = contract.CreateOptions(this);
+                options.Add(contract, created);
+                return created;
+            }
+        }
+
+        internal JsonSerializerOptions GetCollectionOptions(JsonConversionContract contract, Type type)
+        {
+            lock (gate)
+            {
+                var key = (contract, type);
+                var cache = collectionOptions ??= new();
+                if (cache.TryGetValue(key, out var existing)) return existing;
+                var created = contract.CreateOptions(this, type);
+                cache.Add(key, created);
+                return created;
+            }
+        }
+    }
+
+    private static (string Json, string Member) ParseMapping(string mapping)
+    {
+        var separator = mapping.IndexOf('=');
+        if (separator <= 0 || separator == mapping.Length - 1) throw new ArgumentException("A JSON member mapping must be JSON-name=CLR-member-name.");
+        return (mapping[..separator], mapping[(separator + 1)..]);
+    }
+
+    private static JsonNamingPolicy? Naming(JsonKnownNamingPolicy policy) => policy switch
+    {
+        JsonKnownNamingPolicy.Unspecified => null,
+        JsonKnownNamingPolicy.CamelCase => JsonNamingPolicy.CamelCase,
+        JsonKnownNamingPolicy.SnakeCaseLower => JsonNamingPolicy.SnakeCaseLower,
+        JsonKnownNamingPolicy.SnakeCaseUpper => JsonNamingPolicy.SnakeCaseUpper,
+        JsonKnownNamingPolicy.KebabCaseLower => JsonNamingPolicy.KebabCaseLower,
+        JsonKnownNamingPolicy.KebabCaseUpper => JsonNamingPolicy.KebabCaseUpper,
+        _ => throw new ArgumentOutOfRangeException(nameof(policy))
+    };
+}

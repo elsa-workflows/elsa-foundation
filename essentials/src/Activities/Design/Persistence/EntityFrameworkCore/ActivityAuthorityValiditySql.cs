@@ -276,9 +276,9 @@ public static class ActivityAuthorityValiditySql
             ActivityAuthorityClause.Sql(ActivityAuthorityCheck.AuthorityKeyTokenAgreesWithColumn, $"LEFT({authorityKeyToken}, 1) = N'\"'"),
             ActivityAuthorityClause.Sql(ActivityAuthorityCheck.AuthorityKeyTokenAgreesWithColumn, $"RIGHT({authorityKeyToken}, 1) = N'\"'"),
             ActivityAuthorityClause.Sql(ActivityAuthorityCheck.AuthorityKeyTokenAgreesWithColumn, $"ISJSON(CONCAT(N'[', {authorityKeyToken}, N']')) = 1"),
-            ActivityAuthorityClause.Sql(ActivityAuthorityCheck.AuthorityKeyTokenAgreesWithColumn, $"(LEN({authorityKey}) > 4000 OR JSON_VALUE(CONCAT(N'[', {authorityKeyToken}, N']'), '$[0]') = {authorityKey})"),
+            ActivityAuthorityClause.Sql(ActivityAuthorityCheck.AuthorityKeyTokenAgreesWithColumn, $"(DATALENGTH({authorityKey}) > 8000 OR JSON_VALUE(CONCAT(N'[', {authorityKeyToken}, N']'), '$[0]') = {authorityKey})"),
             ActivityAuthorityClause.Sql(ActivityAuthorityCheck.SourceIdIsNullOrAgreeingString,
-                $"({sourceIdToken} IS NULL OR {sourceIdToken} = N'null' OR (LEFT({sourceIdToken}, 1) = N'\"' AND RIGHT({sourceIdToken}, 1) = N'\"' AND ISJSON(CONCAT(N'[', {sourceIdToken}, N']')) = 1 AND (LEN({sourceId}) > 4000 OR JSON_VALUE(CONCAT(N'[', {sourceIdToken}, N']'), '$[0]') = {sourceId})))"),
+                $"({sourceIdToken} IS NULL OR {sourceIdToken} = N'null' OR (LEFT({sourceIdToken}, 1) = N'\"' AND RIGHT({sourceIdToken}, 1) = N'\"' AND ISJSON(CONCAT(N'[', {sourceIdToken}, N']')) = 1 AND (DATALENGTH({sourceId}) > 8000 OR JSON_VALUE(CONCAT(N'[', {sourceIdToken}, N']'), '$[0]') = {sourceId})))"),
             ActivityAuthorityClause.Sql(ActivityAuthorityCheck.SourceIdIsNullOrAgreeingString,
                 $"(({sourceIdToken} = N'null' AND {sourceId} IS NULL) OR ({sourceIdToken} <> N'null' AND {sourceId} IS NOT NULL))"),
             ActivityAuthorityClause.CoveredBy(ActivityAuthorityCheck.IntegrityHashIsString, ActivityAuthorityCheck.MaterialDigestAgrees, digestReason),
@@ -306,5 +306,5 @@ public static class ActivityAuthorityValiditySql
     private static string MySqlNonWhitespace(string expression) => $"CHAR_LENGTH(REGEXP_REPLACE({expression}, '[[:space:]]', '')) > 0";
 
     private static string SqlServerHashSegment(string expression) =>
-        $"CONCAT(CASE WHEN {expression} IS NULL THEN '-1' ELSE CONVERT(varchar(20), LEN({expression} + N'#') - 1) END, N':', COALESCE({expression}, N''))";
+        $"CONCAT(CASE WHEN {expression} IS NULL THEN '-1' ELSE CONVERT(varchar(20), DATALENGTH({expression}) / 2) END, N':', COALESCE({expression}, N''))";
 }

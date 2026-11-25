@@ -20,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="../../../../../../../specs/1207-json-data-integrity-baseline/evidence/structured-log-hash-vectors.json" LogicalName="structured-log-hash-vectors.json" />
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
     <!-- Arranges and asserts a newer-schema row that must report skew, not corruption. -->

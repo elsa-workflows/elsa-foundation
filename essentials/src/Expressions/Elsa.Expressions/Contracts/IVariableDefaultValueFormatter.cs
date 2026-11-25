@@ -4,5 +4,5 @@ namespace Elsa.Expressions.Contracts;
 
 internal interface IVariableDefaultValueFormatter
 {
-    ArgumentValue? Format(object? value);
+    ArgumentValue? Format(object? value, Type? declaredType = null);
 }

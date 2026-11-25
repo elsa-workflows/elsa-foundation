@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { StudioDialog, StudioDialogFooter } from "@elsa-workflows/studio-ui";
@@ -19,6 +21,7 @@ interface SecretDetailProps {
   onClose(): void;
 }
 export function SecretDetail(props: SecretDetailProps) {
+
   return props.presentation === "page" ? <SecretMetadataForm {...props} /> : <SecretDetailDialog {...props} />;
 }
 function SecretDetailDialog(props: SecretDetailProps) {
@@ -32,6 +35,7 @@ function SecretDetailDialog(props: SecretDetailProps) {
   </StudioDialog>;
 }
 function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose, onStateChange, notifications, copyScope, initialField }: SecretDetailProps & { initialField?: React.RefObject<HTMLElement | null> }) {
+  useStudioTimeZone();
   const formRef = useRef<HTMLFormElement>(null);
   const initiallyFocused = useRef(false);
   useLayoutEffect(() => { if (!initialField && !initiallyFocused.current) { initiallyFocused.current = true; formRef.current?.querySelector<HTMLElement>("[data-dialog-initial-focus]")?.focus(); } }, [initialField]);
@@ -91,4 +95,4 @@ function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose
     <StudioDialogFooter className="secrets-dialog-actions" onCancel={onClose} cancelDisabled={cannotClose} confirmLabel={saving ? "Saving…" : "Save"} confirmDisabled={!changed || cannotClose} />
   </form>;
 }
-function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : "-"; }
+function formatDate(value?: string | null) { return value ? formatStudioDate(value) : "-"; }

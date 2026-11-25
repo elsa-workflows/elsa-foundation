@@ -5,11 +5,8 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Characterises, on main before #4078, how member names are matched by the input hydrator (the activity-value
-/// profile) and by <see cref="JsonElement.TryGetProperty(string, out JsonElement)"/>, the API an exact-segment member
-/// selector would use. They agree on duplicate keys (the last one wins) and on literal names with dots, digits or no
-/// characters. They disagree on case: the profile matches case-insensitively, the element lookup does not, so an
-/// ordinal selector reads absent where hydration of the whole value would have found the member.
+/// The default conversion contract and exact-segment JSON selection agree on names and duplicate keys.
+/// A differently cased key remains data and produces an unmatched-member diagnostic.
 /// </summary>
 public sealed partial class ActivityValueJsonTests
 {
@@ -24,22 +21,26 @@ public sealed partial class ActivityValueJsonTests
     }
 
     [Fact]
-    public void Hydration_matches_a_member_name_case_insensitively_and_element_lookup_does_not()
+    public void Hydration_and_element_lookup_both_match_exact_names()
     {
         var order = Parse("""{"CustomerName":"pascal","total":1}""");
 
-        Assert.True(ActivityValueJsonProfile.CreateOptions().PropertyNameCaseInsensitive);
-        Assert.Equal("pascal", Hydrate(order).Order!.CustomerName);
+        var warnings = new Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector();
+        Assert.False(ActivityValueJsonProfile.CreateOptions().PropertyNameCaseInsensitive);
+        Assert.Null(Hydrate(order, warnings).Order!.CustomerName);
+        Assert.Equal("json-unmatched-member", Assert.Single(warnings.Warnings).Code);
         Assert.False(order.TryGetProperty("customerName", out _));
         Assert.True(order.TryGetProperty("CustomerName", out _));
     }
 
     [Fact]
-    public void With_two_spellings_of_one_name_hydration_takes_the_last_and_element_lookup_takes_the_exact_one()
+    public void With_two_spellings_hydration_and_element_lookup_take_the_exact_one()
     {
         var order = Parse("""{"customerName":"camel","CustomerName":"pascal","total":1}""");
 
-        Assert.Equal("pascal", Hydrate(order).Order!.CustomerName);
+        var warnings = new Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector();
+        Assert.Equal("camel", Hydrate(order, warnings).Order!.CustomerName);
+        Assert.Equal("json-unmatched-member", Assert.Single(warnings.Warnings).Code);
         Assert.True(order.TryGetProperty("customerName", out var camel));
         Assert.Equal("camel", camel.GetString());
     }

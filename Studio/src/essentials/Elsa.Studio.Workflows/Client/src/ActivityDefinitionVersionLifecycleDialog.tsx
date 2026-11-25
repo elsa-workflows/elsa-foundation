@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,6 +40,7 @@ export function ActivityDefinitionVersionLifecycleDialog({
   onClose(): void;
   onApplied(): void;
 }) {
+  useStudioTimeZone();
   const queryClient = useQueryClient();
   const [reason, setReason] = useState("");
   const [recommendationDisposition, setRecommendationDisposition] = useState<"Replace" | "Clear">("Replace");
@@ -266,5 +269,5 @@ function submitLabel(action: ActivityDefinitionVersionLifecycleAction) {
 
 function formatTimestamp(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : formatStudioDate(date);
 }

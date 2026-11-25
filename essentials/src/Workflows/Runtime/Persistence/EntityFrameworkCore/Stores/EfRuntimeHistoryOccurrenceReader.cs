@@ -197,7 +197,7 @@ internal static class EfRuntimeHistoryOccurrenceReader
                     member.Ordinal < last && index + 1 < slice.Length ? EfRelationalIdentity.Decode(slice[index + 1].Activity) : null));
             }
         }
-        var nextToken = query.SequenceToken ?? codec.Encode(Purpose, JsonSerializer.SerializeToUtf8Bytes(new Window(binding, upper, lower, Policy(head.Policy), firstOrdinal, count)));
+        var nextToken = query.SequenceToken ?? codec.EncodeJson(Purpose, JsonSerializer.SerializeToUtf8Bytes(new Window(binding, upper, lower, Policy(head.Policy), firstOrdinal, count), options: Elsa.Serialization.Core.JsonBaseline.Options));
         return new(head, head.CapturedFromStart && lower == 0 ? RuntimeHistoryOccurrenceAvailability.Available : RuntimeHistoryOccurrenceAvailability.Partial,
             lower > 0 ? "retained-prefix-purged" : head.CapturedFromStart ? null : "capture-not-from-start",
             upper, lower, count, count == 0 ? null : selected, items.AsReadOnly(), nextToken, newer);
@@ -224,7 +224,7 @@ internal static class EfRuntimeHistoryOccurrenceReader
         if (token is null) return null;
         try
         {
-            var value = JsonSerializer.Deserialize<Window>(codec.Decode(Purpose, token));
+            var value = JsonSerializer.Deserialize<Window>(codec.DecodeJson(Purpose, token), options: Elsa.Serialization.Core.JsonBaseline.Options);
             if (value is null || value.Binding != binding || value.Upper < 0 || value.Purged < 0 || value.Purged > value.Upper || string.IsNullOrEmpty(value.Policy) ||
                 value.FirstOrdinal is null or < 0 || value.Count is null or < 0 || value.FirstOrdinal > long.MaxValue - value.Count)
                 throw new FormatException();

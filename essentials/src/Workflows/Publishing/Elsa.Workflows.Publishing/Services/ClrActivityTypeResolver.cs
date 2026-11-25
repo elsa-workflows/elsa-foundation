@@ -18,6 +18,8 @@ internal static class ClrActivityTypeResolver
             return null;
 
         var clrDescriptor = descriptor.Payload.Deserialize<ClrActivityDescriptor>(DescriptorPayloadSerializer.Options);
+        if (string.IsNullOrWhiteSpace(clrDescriptor?.TypeAlias))
+            throw new JsonException("A CLR activity descriptor requires a non-empty typeAlias member.");
         return clrDescriptor is not null &&
                wellKnownTypeRegistry.TryGetTypeOrDefault(clrDescriptor.TypeAlias, out var activityType) &&
                activityType != typeof(object)

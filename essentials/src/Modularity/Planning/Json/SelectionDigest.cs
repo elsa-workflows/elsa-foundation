@@ -6,8 +6,7 @@ using Elsa.Modularity.Planning.Models;
 namespace Elsa.Modularity.Planning.Json;
 
 /// <summary>
-/// RFC 8785 canonicalization for the v1 selection catalog's string/array/object-only semantic projection.
-/// This is deliberately not a general-purpose JCS writer for arbitrary JSON numbers.
+/// The selection catalog's string/array/object-only semantic projection, hashed through the shared JSON contract.
 /// </summary>
 public static class SelectionDigest
 {
@@ -77,8 +76,7 @@ public static class SelectionDigest
 
     private static string Hash(object value)
     {
-        var bytes = s_utf8.GetBytes(Canonicalize(value));
-        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        return Elsa.Serialization.Core.JsonHashInput.HashJson(Canonicalize(value));
     }
 
     private static string Canonicalize(object value)

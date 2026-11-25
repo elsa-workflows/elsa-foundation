@@ -125,8 +125,8 @@ internal sealed class ScheduleResourceSource(ScheduleSourceContext context, ISta
         try
         {
             var signal = new StandaloneTriggerSignal(owner.TriggerId, schedule.BuildOccurrenceKey(), ScheduleSourceContext.Schema,
-                JsonSerializer.SerializeToElement(new { dueAt = schedule.NextOccurrence, generation = owner.Generation }),
-                JsonSerializer.SerializeToElement(new { dueAt = schedule.NextOccurrence, timezone = owner.TimeZoneId, generation = owner.Generation }));
+                JsonSerializer.SerializeToElement(new { dueAt = schedule.NextOccurrence, generation = owner.Generation }, options: Elsa.Serialization.Core.JsonBaseline.Options),
+                JsonSerializer.SerializeToElement(new { dueAt = schedule.NextOccurrence, timezone = owner.TimeZoneId, generation = owner.Generation }, options: Elsa.Serialization.Core.JsonBaseline.Options));
             var result = owner.SourceTypeKey == "timer" ? await timers.AdmitAsync(signal, cancellationToken) : await cron.AdmitAsync(signal, cancellationToken);
             var sourceId = RuntimeStandaloneIngressSource.BuildOutboxItemId(scope, owner.TenantId, owner.TriggerId, owner.SourceFamily, signal.SourceKey);
             var item = await delivery.FindDeliveryAsync(new(scope, owner.TenantId), sourceId, cancellationToken) ??

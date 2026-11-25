@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { StudioBackendSession } from "@elsa-workflows/studio-sdk";
+import { hashJsonTextAsync } from "@elsa-workflows/studio-sdk";
 import { createBpmnRuntimeClient } from "../api/bpmnRuntime";
 import { getDraft, promoteDraft } from "../api/workflowDesign";
 import type { WorkflowDraft } from "../workflowTypes";
@@ -17,8 +18,7 @@ interface PublicationReceipt {
 }
 
 async function draftHash(draft: WorkflowDraft) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(getDraftSignature(draft)));
-  return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, "0")).join("");
+  return hashJsonTextAsync(getDraftSignature(draft));
 }
 
 function readReceipt(key: string, scope: string, definitionId: string): PublicationReceipt | null {

@@ -126,8 +126,6 @@ internal sealed class CompensationHandlerVariableValidator(IActivityStructureSer
 
         return value.Value switch
         {
-            bool literal => literal,
-            string text => bool.TryParse(text.Trim(), out var parsed) && parsed,
             JsonElement { ValueKind: JsonValueKind.True } => true,
             JsonElement { ValueKind: JsonValueKind.String } element => bool.TryParse(element.GetString()?.Trim(), out var parsed) && parsed,
             _ => false

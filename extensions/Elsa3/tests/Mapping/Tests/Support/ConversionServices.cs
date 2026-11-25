@@ -62,6 +62,8 @@ internal static class ConversionServices
         registry.RegisterType(typeof(decimal), "Decimal");
         registry.RegisterType(typeof(bool), "Boolean");
         registry.RegisterType(typeof(DateTime), "DateTime");
+        registry.RegisterType(typeof(DateTimeOffset), "DateTimeOffset");
+        registry.RegisterType(typeof(DateOnly), "DateOnly");
         registry.RegisterType(typeof(Guid), "Guid");
         return registry;
     }

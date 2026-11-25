@@ -14,7 +14,18 @@ internal sealed class RuntimePlacementReleaseInspector(IReleaseRuntimeSiteReader
 {
     private static readonly string[] MetadataKeys = ["activity.invocationOrigin", "activity.placementNamespace", "activity.templateNodeId", "activity.definitionId",
         "activity.definitionVersionId", "activity.version", "activity.templateHash", "activity.sourceReferenceId"];
-    private static readonly JsonSerializerOptions OriginJson = new() { PropertyNameCaseInsensitive = false, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, MaxDepth = 32 };
+    // Placement metadata already retains CLR member names. Share its strict reader with
+    // the other readers of the same recorded field rather than changing retained material.
+    internal static readonly JsonSerializerOptions OriginJson = CreateOriginJson();
+    private static JsonSerializerOptions CreateOriginJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.PropertyNamingPolicy = null;
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        options.MaxDepth = 32;
+        options.MakeReadOnly();
+        return options;
+    }
     private readonly ConditionalWeakTable<IReleaseContentReader, ConcurrentDictionary<ReleaseMemberKey, Lazy<PlacementIndex>>> _members = new();
     public ReleaseSemanticAdapterIdentity Identity { get; } = new("elsa.runtime-placement-release-profile", "1");
     public IReadOnlyCollection<ReleaseSiteKey> SupportedSites { get; } = Array.AsReadOnly(MetadataKeys.Select(key => new ReleaseSiteKey(ReleaseRuntimeSiteKinds.Metadata, key, 1))
@@ -57,7 +68,7 @@ internal sealed class RuntimePlacementReleaseInspector(IReleaseRuntimeSiteReader
                 if (!node.Metadata.TryGetValue("activity.invocationOrigin", out var text) || !node.Metadata.TryGetValue("activity.placementNamespace", out var space) ||
                     !node.Metadata.TryGetValue("activity.templateNodeId", out var templateNode) || string.IsNullOrWhiteSpace(templateNode)) throw Refuse("incomplete_placement_origin");
                 ReleaseRuntimeArtifactCodec.CheckJson(System.Text.Encoding.UTF8.GetBytes(text), new());
-                var segments = JsonSerializer.Deserialize<ActivityInvocationOriginSegment[]>(text, OriginJson) ?? throw Refuse("invalid_placement_origin");
+                var segments = JsonSerializer.Deserialize<ActivityInvocationOriginSegment[]>(text, options: OriginJson) ?? throw Refuse("invalid_placement_origin");
                 if (segments.Length < 3 || segments[0].Kind != ActivityInvocationOriginSegmentKind.WorkflowRoot || segments[1].Kind != ActivityInvocationOriginSegmentKind.AuthoredNode ||
                     segments[2].Kind != ActivityInvocationOriginSegmentKind.TemplateBoundary || segments.Any(segment => !Enum.IsDefined(segment.Kind) || string.IsNullOrWhiteSpace(segment.Id)))
                     throw Refuse("invalid_placement_origin");
@@ -110,7 +121,7 @@ internal sealed class RuntimePlacementReleaseInspector(IReleaseRuntimeSiteReader
                         throw Refuse("placement_executable_node_id_mismatch");
                     if (node.Descriptor.ConsumerKey == WellKnownRuntimeActivityConsumers.ClrActivity)
                     {
-                        if (!node.Descriptor.Payload.TryGetProperty("typeAlias", out var alias) || !original.Descriptor.Payload.TryGetProperty("typeAlias", out var sourceAlias) || !JsonElement.DeepEquals(alias, sourceAlias))
+                        if (!node.Descriptor.Payload.TryGetProperty("typeAlias", out var alias) || !original.Descriptor.Payload.TryGetProperty("typeAlias", out var sourceAlias) || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(alias, sourceAlias))
                             throw Refuse("placement_clr_alias_mismatch");
                         if (ReferenceEquals(node, frame.Root))
                             foreach (var field in new[] { "definitionId", "definitionVersionId", "version", "templateHash", "sourceReferenceId" })

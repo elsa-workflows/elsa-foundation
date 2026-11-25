@@ -315,7 +315,7 @@ public sealed class WeaverDisclosureBoundaryTests
                 : request.Context, []));
         }
         private static WeaverContextAttachment Resource() => new("resource", ModuleId, "one", "Owner resource", "boundary.resource", WeaverContextSensitivity.Internal,
-            "resource", "Bounded owner evidence", new { resourceValue = "original-value" }, new Dictionary<string, string>())
+            "resource", "Bounded owner evidence", WeaverJsonData.From(new { resourceValue = "original-value" }), new Dictionary<string, string>())
         { ModuleId = ModuleId, Target = new(ModuleId, "boundary-resource", "one", "revision-1") };
     }
 

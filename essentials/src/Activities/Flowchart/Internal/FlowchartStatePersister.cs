@@ -20,7 +20,7 @@ public sealed class FlowchartStatePersister
     /// <summary>Maximum diagnostics retained in the persisted state blob (#382); oldest are dropped first.</summary>
     private const int DiagnosticsCap = 200;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public static FlowchartExecutionState CreateInitialState(string? startNodeId)
     {

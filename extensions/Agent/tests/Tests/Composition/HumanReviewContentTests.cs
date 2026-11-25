@@ -29,7 +29,7 @@ public sealed class HumanReviewContentTests
     }
 
     [Fact]
-    public void Whitespace_and_escaping_do_not_change_identity_but_key_order_does()
+    public void Equivalent_json_spellings_have_one_content_identity()
     {
         var compact = JsonDocument.Parse("""{"a":"é","b":[1,2]}""").RootElement;
         var pretty = JsonDocument.Parse("{\n  \"a\" : \"é\",\n  \"b\" : [ 1, 2 ]\n}").RootElement;
@@ -38,7 +38,12 @@ public sealed class HumanReviewContentTests
 
         Assert.Equal(ReviewDecisionCodec.HashContent(compact), ReviewDecisionCodec.HashContent(pretty));
         Assert.Equal(ReviewDecisionCodec.HashContent(compact), ReviewDecisionCodec.HashContent(escaped));
-        Assert.NotEqual(ReviewDecisionCodec.HashContent(compact), ReviewDecisionCodec.HashContent(reordered));
+        Assert.Equal(ReviewDecisionCodec.HashContent(compact), ReviewDecisionCodec.HashContent(reordered));
+        Assert.Equal(ReviewDecisionCodec.HashContent(compact), ReviewDecisionCodec.HashContent(JsonDocument.Parse("""{"a":"é","b":[1e0,2.00]}""").RootElement));
+        Assert.NotEqual(ReviewDecisionCodec.HashContent(compact), ReviewDecisionCodec.HashContent(JsonDocument.Parse("""{"a":"é","b":[2,1]}""").RootElement));
+        var exact = JsonDocument.Parse("""{"n":100000000000000000000000000000000000001,"nil":null}""").RootElement;
+        Assert.NotEqual(ReviewDecisionCodec.HashContent(exact), ReviewDecisionCodec.HashContent(JsonDocument.Parse("""{"n":100000000000000000000000000000000000002,"nil":null}""").RootElement));
+        Assert.NotEqual(ReviewDecisionCodec.HashContent(exact), ReviewDecisionCodec.HashContent(JsonDocument.Parse("""{"n":100000000000000000000000000000000000001}""").RootElement));
         Assert.False(HumanReview.ContentFits(JsonDocument.Parse("null").RootElement));
     }
 

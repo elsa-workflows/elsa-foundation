@@ -28,7 +28,7 @@ internal sealed class ArchiveFixture
     internal ArchiveFixture(int value = 1)
     {
         Payload = Encoding.UTF8.GetBytes("{\"value\":" + value + ",\"opaque\":{\"z\":1,\"a\":2}}");
-        BlobDigest = "sha256:" + Convert.ToHexString(SHA256.HashData(Payload)).ToLowerInvariant();
+        BlobDigest = "sha256:" + Elsa.Serialization.Core.JsonHashInput.HashUtf8(Payload);
         static JsonObject Key() => new() { ["kind"] = "workflow-executable", ["identity"] = "fixture-artifact" };
         Manifest = new JsonObject
         {

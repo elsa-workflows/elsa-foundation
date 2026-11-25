@@ -445,7 +445,7 @@ public sealed class ReusableActivityCollectionAnalyzer(
 
     private static string SourceFingerprint(Elsa3WorkflowDefinition source)
     {
-        var fields = new List<string>
+        var fields = new List<object>
         {
             source.Id, source.DefinitionId, source.Name, source.Description ?? string.Empty,
             source.Version.ToString(), source.CreatedAt.ToUniversalTime().ToString("O"),
@@ -463,7 +463,7 @@ public sealed class ReusableActivityCollectionAnalyzer(
         foreach (var outcome in source.Outcomes ?? [])
             fields.AddRange(["outcome", outcome]);
         foreach (var property in (source.CustomProperties ?? new Dictionary<string, JsonElement>()).OrderBy(x => x.Key, StringComparer.Ordinal))
-            fields.AddRange(["workflow-property", property.Key, property.Value.GetRawText()]);
+            fields.AddRange(["workflow-property", property.Key, property.Value]);
         foreach (var (activity, _, _) in EnumerateActivities(source.Root))
         {
             fields.AddRange([
@@ -477,13 +477,14 @@ public sealed class ReusableActivityCollectionAnalyzer(
                 activity.Metadata?.Designer.Size.Height.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty
             ]);
             foreach (var property in activity.AdditionalProperties.OrderBy(x => x.Key, StringComparer.Ordinal))
-                fields.AddRange([property.Key, property.Value.GetRawText()]);
+                fields.AddRange([property.Key, property.Value]);
             foreach (var property in (activity.Metadata?.AdditionalProperties ?? new Dictionary<string, JsonElement>()).OrderBy(x => x.Key, StringComparer.Ordinal))
-                fields.AddRange(["activity-metadata", property.Key, property.Value.GetRawText()]);
+                fields.AddRange(["activity-metadata", property.Key, property.Value]);
             foreach (var connection in activity.Connections ?? [])
                 fields.AddRange(["connection", connection.Source.Activity, connection.Source.Port, connection.Target.Activity, connection.Target.Port]);
         }
-        return ReusableActivityImportIdentity.Create("source", fields.ToArray());
+        return "elsa3-source-" + Elsa.Serialization.Core.JsonHashInput.Hash(
+            Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new { Kind = "source", Fields = fields }, _ => null));
     }
 
     private static Dictionary<string, string> ReferenceMetadata(Elsa3Activity activity, ReusableReference reference) => new(StringComparer.Ordinal)

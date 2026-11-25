@@ -24,6 +24,21 @@ namespace Elsa.Activities.Design.Tests.Api;
 public sealed class ActivitiesDesignSerializationContractTests
 {
     [Fact]
+    public void Catalog_argument_data_is_detached_JSON_through_the_actual_owner_context()
+    {
+        const string raw = """{ "OrderID":9007199254740993, "amount":1.00, "nil":null, "text":"\u0061 <+>" }""";
+        ActivityArgumentValue value;
+        using (var source = JsonDocument.Parse(raw)) value = new(source.RootElement, "Literal");
+        Assert.Equal(typeof(JsonElement?), typeof(ActivityArgumentValue).GetProperty(nameof(ActivityArgumentValue.Value))!.PropertyType);
+        var restored = Deserialize<ActivityArgumentValue>(Serialize(value));
+        Assert.Equal(raw, restored.Value!.Value.GetRawText());
+        using (var replacement = JsonDocument.Parse("{ \"next\":2.00 }")) value = value with { Value = replacement.RootElement };
+        Assert.Equal("{ \"next\":2.00 }", value.Value!.Value.GetRawText());
+        using var nil = JsonDocument.Parse(Serialize(new ActivityArgumentValue(null, "Literal")));
+        Assert.Equal(JsonValueKind.Null, nil.RootElement.GetProperty("value").ValueKind);
+    }
+
+    [Fact]
     public void Node_presentation_wire_array_preserves_omitted_versus_empty_and_rejects_duplicates()
     {
         const string body = """{"expectedRevision":1,"contract":{"contractSchemaVersion":"1","inputs":[],"outputs":[],"outcomes":[]},"provider":{"providerKey":"test","schemaVersion":"1","payload":{}},"layout":[]}""";
@@ -208,7 +223,12 @@ public sealed class ActivitiesDesignSerializationContractTests
         options.TypeInfoResolverChain.Add((IJsonTypeInfoResolver)Activator.CreateInstance(ResolverType)!);
         options.TypeInfoResolverChain.Add(fallback);
 
-        foreach (var type in RouteContractTypes)
+        var owned = RouteContractTypes.Where(type => Elsa.Serialization.Core.JsonModuleMetadata.Owns(type, "Elsa.Activities.Design")).ToArray();
+        var foreign = RouteContractTypes.Except(owned).ToArray();
+        Assert.NotEmpty(owned); Assert.NotEmpty(foreign);
+        var ownerResolver = (IJsonTypeInfoResolver)Activator.CreateInstance(ResolverType)!;
+        foreach (var type in foreign) Assert.Null(ownerResolver.GetTypeInfo(type, options));
+        foreach (var type in owned)
         {
             var info = options.GetTypeInfo(type);
             Assert.NotNull(info);
@@ -227,22 +247,24 @@ public sealed class ActivitiesDesignSerializationContractTests
         var summaryJson = JsonSerializer.Serialize(summary, options.GetTypeInfo(typeof(ReusableActivityDraftSummaryView))!);
         Assert.Contains("\"status\":\"active\"", summaryJson, StringComparison.Ordinal);
 
-        Assert.Equal(0, fallback.Calls);
+        Assert.DoesNotContain(fallback.RequestedTypes, owned.Contains);
+        Assert.Contains(typeof(string), fallback.RequestedTypes);
     }
 
     [Fact]
     public void Feature_registers_owner_resolver_and_fastendpoints_compatible_enum_options()
     {
         var services = new ServiceCollection();
+        services.ConfigureHttpJsonOptions(json => { Elsa.Serialization.Core.JsonBaseline.Configure(json.SerializerOptions); Elsa.Serialization.Core.StrictDateTimeConverters.Configure(json.SerializerOptions, apiMode: true); });
         new ActivitiesDesignApiFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions;
 
         Assert.IsType(ResolverType, options.TypeInfoResolverChain[0]);
-        Assert.Contains(options.Converters, converter => converter.GetType() == EnumConverterType);
-        Assert.True(options.PropertyNameCaseInsensitive);
+        Assert.DoesNotContain(options.Converters, converter => converter.GetType() == EnumConverterType);
+        Assert.False(options.PropertyNameCaseInsensitive);
         Assert.Same(JsonNamingPolicy.CamelCase, options.PropertyNamingPolicy);
-        Assert.Same(JsonNamingPolicy.CamelCase, options.DictionaryKeyPolicy);
+        Assert.Null(options.DictionaryKeyPolicy);
 
         var summary = new ReusableActivityDraftSummaryView(
             "draft-1",
@@ -263,9 +285,9 @@ public sealed class ActivitiesDesignSerializationContractTests
     {
         var options = Context.Options;
 
-        Assert.True(options.PropertyNameCaseInsensitive);
+        Assert.False(options.PropertyNameCaseInsensitive);
         Assert.Same(JsonNamingPolicy.CamelCase, options.PropertyNamingPolicy);
-        Assert.Same(JsonNamingPolicy.CamelCase, options.DictionaryKeyPolicy);
+        Assert.Null(options.DictionaryKeyPolicy);
 
         var summary = new ReusableActivityDraftSummaryView(
             "draft-1",
@@ -287,7 +309,7 @@ public sealed class ActivitiesDesignSerializationContractTests
     }
 
     [Fact]
-    public void Input_is_case_insensitive_and_dictionary_keys_are_camel_case()
+    public void Input_is_exact_and_dictionary_keys_are_verbatim()
     {
         var input = """
             {
@@ -298,7 +320,7 @@ public sealed class ActivitiesDesignSerializationContractTests
             }
             """;
         var contract = Deserialize<ActivityContractView>(input);
-        Assert.Equal("1.0", contract.ContractSchemaVersion);
+        Assert.Null(contract.ContractSchemaVersion);
 
         var template = new ActivityAuthoringTemplateView(
             "node-1",
@@ -311,8 +333,8 @@ public sealed class ActivitiesDesignSerializationContractTests
             null);
         var json = Serialize(template);
 
-        Assert.Contains("\"someInput\"", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"SomeInput\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"SomeInput\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"someInput\"", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -347,21 +369,8 @@ public sealed class ActivitiesDesignSerializationContractTests
         Assert.True(roundTrip.Payload.Value.GetProperty("opaque").GetProperty("nested").GetBoolean());
     }
 
-    private static JsonSerializerContext Context
-    {
-        get
-        {
-            var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
-            {
-                PropertyNameCaseInsensitive = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DictionaryKeyPolicy = JsonNamingPolicy.CamelCase
-            };
-            options.Converters.Add((JsonConverter)Activator.CreateInstance(EnumConverterType)!);
-            return (JsonSerializerContext)(Activator.CreateInstance(ContextType, options)
-                ?? throw new InvalidOperationException("ActivitiesDesignJsonContext could not be constructed."));
-        }
-    }
+    private static JsonSerializerContext Context => (JsonSerializerContext)ContextType
+        .GetProperty("WireContext", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
 
     private static string Serialize<T>(T value) =>
         JsonSerializer.Serialize(value, Context.GetTypeInfo(typeof(T))
@@ -374,12 +383,13 @@ public sealed class ActivitiesDesignSerializationContractTests
 
     private sealed class CountingResolver : IJsonTypeInfoResolver
     {
-        public int Calls { get; private set; }
+        public List<Type> RequestedTypes { get; } = [];
+        private readonly DefaultJsonTypeInfoResolver resolver = new();
 
         public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
         {
-            Calls++;
-            return null;
+            RequestedTypes.Add(type);
+            return resolver.GetTypeInfo(type, options);
         }
     }
 }

@@ -16,6 +16,7 @@
     <PackageReference Include="CShells.AspNetCore" />
     <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
@@ -32,6 +33,7 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../Fixtures/JsonHostOptionsProbe/JsonHostOptionsProbe.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <!--
@@ -44,6 +46,9 @@
     <ProjectReference Include="..\..\..\..\extensions\Integrations\src\Templates\Elsa.Integrations.Templates.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
+    <!-- The JSON hash guard inspects Studio C# images, including the standalone host and optional sample. -->
+    <ProjectReference Include="../../../../Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\src\Cli\Worker\Elsa.Cli.Worker.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\src\Workflows\Design\CodeGeneration\Elsa.Workflows.Design.CodeGeneration.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>

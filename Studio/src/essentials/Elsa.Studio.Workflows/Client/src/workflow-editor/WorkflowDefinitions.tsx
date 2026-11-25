@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { qualifyStudioBackendPath, useStudioWorkspaceTab, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
 import type { WorkflowWeaverController } from "../workflowWeaver";
 import type { WorkflowTemplate } from "../workflowTemplates";
@@ -95,6 +96,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   onHomeCreateRequestHandled?(requestId: string): void;
   runInputEditors?: StudioWorkflowRunInputEditorContribution[];
 }) {
+  useStudioTimeZone();
   const {
     browseLocation,
     page,
@@ -1059,6 +1061,7 @@ function ResultFolderBreadcrumb({
   definition: WorkflowDefinitionSummary;
   onSelect(selection: WorkflowFolderSelection): void;
 }) {
+
   const hasFolderProjection = Object.prototype.hasOwnProperty.call(definition, "folderId");
   const crumbs = definition.folderBreadcrumb ?? [];
   const isProjectedUnfiled = hasFolderProjection && definition.folderId === null && crumbs.length === 0;

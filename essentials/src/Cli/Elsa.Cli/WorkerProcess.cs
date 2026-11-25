@@ -52,7 +52,7 @@ public static class WorkerProcess
             startInfo.ArgumentList.Add(argument);
 
         using var process = Start(startInfo);
-        await JsonSerializer.SerializeAsync(process.StandardInput.BaseStream, request, WorkerContract.Json, cancellationToken);
+        await JsonSerializer.SerializeAsync(process.StandardInput.BaseStream, request, options: WorkerContract.Json, cancellationToken);
         await process.StandardInput.BaseStream.FlushAsync(cancellationToken);
         process.StandardInput.Close();
 

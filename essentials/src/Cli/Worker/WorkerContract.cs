@@ -110,7 +110,7 @@ public static class WorkerContract
     /// front end from different builds must fail loudly rather than silently ignore a field one of them
     /// meant as an instruction.
     /// </summary>
-    public static readonly JsonSerializerOptions Json = new()
+    public static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = false,

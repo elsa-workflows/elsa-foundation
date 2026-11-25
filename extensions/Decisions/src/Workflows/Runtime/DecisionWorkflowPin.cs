@@ -8,7 +8,7 @@ namespace Elsa.Decisions.Workflows.Runtime;
 public sealed record DecisionWorkflowPin(string Selection, string TenantId, string AssetId, string VersionId, DecisionArtifact Artifact)
 {
     public const string MetadataKey = "decisions.artifact.v1";
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions Options = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         MaxDepth = 16

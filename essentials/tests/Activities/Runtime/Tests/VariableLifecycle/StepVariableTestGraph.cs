@@ -139,7 +139,7 @@ internal static class StepVariableTestGraph
                     new { name = "right", activity = right.ExecutableNodeId }
                 },
                 variables = new[] { declaration }
-            }));
+            }, Elsa.Serialization.Core.JsonBaseline.Options));
         var root = new ExecutableNode(
             executableNodeId: parallel.ExecutableNodeId,
             authoredActivityId: parallel.AuthoredActivityId,

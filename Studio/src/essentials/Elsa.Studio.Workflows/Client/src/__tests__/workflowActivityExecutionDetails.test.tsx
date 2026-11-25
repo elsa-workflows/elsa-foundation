@@ -3,6 +3,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { StudioActivityInputDescriptor, StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
+import { setStudioTimeZonePreference } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getActivityExecutionDescendants, getActivityExecutionInspection, getActivityExecutionLayout } from "../api/runtime";
 import { getActivityExecutionValuePayload } from "../api/activityExecutionValuePayload";
@@ -249,6 +250,27 @@ function valueEvidence(overrides: Partial<ActivityExecutionInspectionValueSnapsh
 const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 setNotifications(notifications);
 describe("WorkflowActivityExecutionDetails", () => {
+  it.each([
+    ["UTC", "10:00:00", "UTC+00:00"],
+    ["Europe/Amsterdam", "12:00:00", "UTC+02:00"]
+  ])("renders accepted workflow changes in the selected %s zone with a visible offset", async (zone, clock, offset) => {
+    const acceptedAt = "2026-07-09T12:00:00+02:00";
+    setStudioTimeZonePreference(zone);
+    try {
+      vi.mocked(getActivityExecutionInspection).mockResolvedValue({
+        ...inspection([]), workflowStateEffects: ["outputs"],
+        workflowStateEffectReceipts: [{ attemptId: "attempt-1", acceptedAt, transition: "Completion", kinds: ["outputs"] }]
+      });
+      const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+      await waitFor(() => {
+        const receipt = container.querySelector('section[aria-label="Committed workflow changes"] time');
+        expect(receipt?.getAttribute("datetime")).toBe(acceptedAt);
+        expect(receipt?.textContent).toContain(clock);
+        expect(receipt?.textContent).toContain(offset);
+      });
+    } finally { setStudioTimeZonePreference("browser"); }
+  });
+
   it("groups run data into accessible tabs while keeping activity identity visible", () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);

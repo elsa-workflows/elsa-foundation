@@ -676,7 +676,7 @@ public sealed class EfExecutionLivenessStateStore(
 
     private string EncodeIdentityCursor(string scope, string workflow, string last, string purpose)
     {
-        var token = continuationCodec.Encode(purpose, JsonSerializer.SerializeToUtf8Bytes(new IdentityCursor(scope, workflow, last)));
+        var token = continuationCodec.EncodeJson(purpose, JsonSerializer.SerializeToUtf8Bytes(new IdentityCursor(scope, workflow, last)));
         return RuntimeStorePageRequest.ValidateContinuationToken(token, nameof(token))!;
     }
 
@@ -685,7 +685,7 @@ public sealed class EfExecutionLivenessStateStore(
         if (token is null) return null;
         try
         {
-            var cursor = JsonSerializer.Deserialize<IdentityCursor>(continuationCodec.Decode(purpose, token)) ?? throw new InvalidDataException();
+            var cursor = JsonSerializer.Deserialize<IdentityCursor>(continuationCodec.DecodeJson(purpose, token)) ?? throw new InvalidDataException();
             if (cursor.Scope != scope || cursor.WorkflowExecutionId != workflow) throw new InvalidDataException("The continuation belongs to another query.");
             EfRuntimeOperationalStoreSupport.ValidateIdentity(cursor.Last, nameof(request));
             return cursor;
@@ -696,7 +696,7 @@ public sealed class EfExecutionLivenessStateStore(
 
     private string EncodeGlobalCursor(string scope, ExecutionLivenessState state)
     {
-        var token = continuationCodec.Encode(GlobalCursorPurpose, JsonSerializer.SerializeToUtf8Bytes(new GlobalCursor(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId)));
+        var token = continuationCodec.EncodeJson(GlobalCursorPurpose, JsonSerializer.SerializeToUtf8Bytes(new GlobalCursor(scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId)));
         return RuntimeStorePageRequest.ValidateContinuationToken(token, nameof(token))!;
     }
 
@@ -705,7 +705,7 @@ public sealed class EfExecutionLivenessStateStore(
         if (token is null) return null;
         try
         {
-            var cursor = JsonSerializer.Deserialize<GlobalCursor>(continuationCodec.Decode(GlobalCursorPurpose, token)) ?? throw new InvalidDataException();
+            var cursor = JsonSerializer.Deserialize<GlobalCursor>(continuationCodec.DecodeJson(GlobalCursorPurpose, token)) ?? throw new InvalidDataException();
             if (cursor.Scope != scope) throw new InvalidDataException("The continuation belongs to another persistence scope.");
             EfRuntimeOperationalStoreSupport.ValidateIdentity(cursor.WorkflowExecutionId, nameof(request));
             EfRuntimeOperationalStoreSupport.ValidateIdentity(cursor.OperationalStateId, nameof(request));
@@ -716,7 +716,7 @@ public sealed class EfExecutionLivenessStateStore(
     }
 
     private static string RecoveryBinding(string scope, RuntimeRecoveryScanRequest request) =>
-        JsonSerializer.Serialize(new RecoveryScanBinding(
+        Elsa.Serialization.Core.JsonHashInput.Hash(new RecoveryScanBinding(
             scope,
             request.Now.UtcTicks,
             request.LeaseTimeout.Ticks,
@@ -725,7 +725,7 @@ public sealed class EfExecutionLivenessStateStore(
 
     private string EncodeRecoveryCursor(string binding, DateTimeOffset eligibleAt, ExecutionLivenessState state)
     {
-        var token = continuationCodec.Encode(RecoveryCursorPurpose, JsonSerializer.SerializeToUtf8Bytes(new RecoveryCursor(binding, eligibleAt.UtcTicks, state.WorkflowExecutionId, state.ExecutionLivenessStateId)));
+        var token = continuationCodec.EncodeJson(RecoveryCursorPurpose, JsonSerializer.SerializeToUtf8Bytes(new RecoveryCursor(binding, eligibleAt.UtcTicks, state.WorkflowExecutionId, state.ExecutionLivenessStateId)));
         return RuntimeStorePageRequest.ValidateContinuationToken(token, nameof(token))!;
     }
 
@@ -734,7 +734,7 @@ public sealed class EfExecutionLivenessStateStore(
         if (token is null) return null;
         try
         {
-            var cursor = JsonSerializer.Deserialize<RecoveryCursor>(continuationCodec.Decode(RecoveryCursorPurpose, token)) ?? throw new InvalidDataException();
+            var cursor = JsonSerializer.Deserialize<RecoveryCursor>(continuationCodec.DecodeJson(RecoveryCursorPurpose, token)) ?? throw new InvalidDataException();
             if (cursor.Binding != binding) throw new InvalidDataException("The continuation belongs to another recovery scan.");
             EfRuntimeOperationalStoreSupport.ValidateIdentity(cursor.WorkflowExecutionId, nameof(request));
             EfRuntimeOperationalStoreSupport.ValidateIdentity(cursor.OperationalStateId, nameof(request));

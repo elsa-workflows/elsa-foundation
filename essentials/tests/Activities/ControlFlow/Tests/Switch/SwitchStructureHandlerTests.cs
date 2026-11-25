@@ -42,7 +42,7 @@ public sealed class SwitchStructureHandlerTests : IDisposable
         Assert.Equal(SwitchActivity.ConditionInputKey("a"), input.ReferenceKey);
         Assert.Equal("Boolean", input.Definition!.Type.Alias);
         Assert.NotNull(input.State);
-        Assert.False(Assert.IsType<bool>(input.State.Value.Value));
+        Assert.Equal(JsonValueKind.False, input.State.Value.Value!.Value.ValueKind);
         var compiled = _handler.CompileExecutableStructure(node);
         Assert.Equal(input.ReferenceKey, compiled.Payload.GetProperty("cases")[0].GetProperty("conditionInputKey").GetString());
     }
@@ -62,7 +62,7 @@ public sealed class SwitchStructureHandlerTests : IDisposable
             JsonSerializer.SerializeToElement(new { cases = new[] { new { caseId = "clear", match = "Approved", condition } } }, new JsonSerializerOptions(JsonSerializerDefaults.Web))) };
         var original = node.Structure!.Payload.GetRawText();
         var input = Assert.Single(_handler.ProjectInputs(node).Inputs);
-        Assert.False(Assert.IsType<bool>(input.State!.Value.Value));
+        Assert.Equal(JsonValueKind.False, input.State!.Value.Value!.Value.ValueKind);
         Assert.Null(input.State.Conversion);
         Assert.Equal(original, node.Structure.Payload.GetRawText());
     }
@@ -77,6 +77,34 @@ public sealed class SwitchStructureHandlerTests : IDisposable
         Assert.Equal("kept", payload.GetProperty("cases")[0].GetProperty("future").GetString());
         Assert.Equal("keep", payload.GetProperty("future").GetString());
         Assert.Equal(node.Structure!.Payload.GetProperty("cases")[0].GetProperty("condition").GetRawText(), payload.GetProperty("cases")[0].GetProperty("condition").GetRawText());
+    }
+
+    [Fact]
+    public void Replacing_children_keeps_carried_condition_child_and_extension_tokens_exact()
+    {
+        const string raw = "{ \"OwnerKey\":\"Ren\\u00e9<+>\", \"N\":1.0, \"wide\":12345678901234567890123456789012345, \"x\":null }";
+        using var authored = JsonDocument.Parse("""
+            {"cases":[{"caseId":"a","match":"Approved","activity":null,
+              "condition":{"referenceKey":"predicate","value":{"expressionType":"JavaScript","value":__RAW__}},
+              "future":__RAW__}],"default":null,"future":__RAW__}
+            """.Replace("__RAW__", raw, StringComparison.Ordinal));
+        var node = NewNode() with { Structure = new(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion, authored.RootElement.Clone()) };
+        var original = node.Structure.Payload.GetRawText();
+        using var data = JsonDocument.Parse(raw);
+        var child = NewBranchNode("child") with
+        {
+            Inputs = [new ArgumentState("data", new(data.RootElement.Clone(), "Literal"), null, null, null, null)]
+        };
+        var replaced = _handler.ReplaceChildren(node,
+            [new(SwitchActivity.CaseSlotName("Approved"), [child]), new(SwitchActivity.DefaultSlotName, [child])]);
+        var payload = replaced.Structure!.Payload;
+        var item = payload.GetProperty("cases")[0];
+        Assert.Equal(raw, item.GetProperty("condition").GetProperty("value").GetProperty("value").GetRawText());
+        Assert.Equal(raw, item.GetProperty("future").GetRawText());
+        Assert.Equal(raw, payload.GetProperty("future").GetRawText());
+        Assert.Equal(raw, item.GetProperty("activity").GetProperty("inputs")[0].GetProperty("value").GetProperty("value").GetRawText());
+        Assert.Equal(raw, payload.GetProperty("default").GetProperty("inputs")[0].GetProperty("value").GetProperty("value").GetRawText());
+        Assert.Equal(original, node.Structure.Payload.GetRawText());
     }
 
     [Theory]

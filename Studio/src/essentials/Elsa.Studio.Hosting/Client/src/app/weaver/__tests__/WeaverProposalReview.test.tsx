@@ -3,8 +3,31 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { WeaverProposalReview } from "../WeaverProposalReview";
+import { formatStudioDate, getStudioTimeZonePreference, setStudioTimeZonePreference } from "../../../sdk/timeZone";
 
 describe("WeaverProposalReview", () => {
+  it("reacts to the selected zone for recorded audit time while preserving the instant", () => {
+    const previous = getStudioTimeZonePreference();
+    const recordedAt = "2026-07-28T07:15:00Z";
+    setStudioTimeZonePreference("Europe/Amsterdam");
+    const { container, unmount } = render(<WeaverProposalReview proposals={[{
+      id: "audited", title: "Recorded proposal", summary: "A recorded proposal.", revision: "r1", risk: "review-required", status: "approved",
+      audit: { state: "applied", recordedAt }
+    }]} onApprove={() => {}} onDeny={() => {}} onExecute={() => {}} />);
+    try {
+      const timestamp = container.querySelector<HTMLTimeElement>("time")!;
+      expect(timestamp.textContent).toBe(formatStudioDate(recordedAt, "Europe/Amsterdam"));
+      expect(timestamp.textContent).toContain("UTC+02:00");
+
+      flushSync(() => setStudioTimeZonePreference("UTC"));
+
+      expect(timestamp.textContent).toBe(formatStudioDate(recordedAt, "UTC"));
+      expect(timestamp.textContent).toContain("UTC+00:00");
+      expect(timestamp.dateTime).toBe(recordedAt);
+      expect(container.querySelector("time")).toBe(timestamp);
+    } finally { unmount(); setStudioTimeZonePreference(previous); }
+  });
+
   it.each(["supports", "component"])("keeps structured preview and common controls usable after a module %s failure", failure => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {}); const approve = vi.fn();
     const { container, unmount } = render(<WeaverProposalReview proposals={[{ id: "review", title: "Review resource", summary: "Review the resource change.", revision: "r1", risk: "review-required", status: "awaiting-approval", resourceTarget: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" }, resultType: "sample.preview", result: { value: 42 } }]} resultRenderers={[{ id: "sample", displayName: "Sample", supports: () => { if (failure === "supports") throw new Error("Broken predicate"); return true; }, component: () => { throw new Error("Broken presentation"); } }]} onApprove={approve} onDeny={() => {}} onExecute={() => {}} />);

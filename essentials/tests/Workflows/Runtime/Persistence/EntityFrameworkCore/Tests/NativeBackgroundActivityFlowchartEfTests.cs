@@ -295,7 +295,7 @@ public sealed partial class NativeBackgroundActivityFlowchartEfTests : IDisposab
 
             // Observe the actual parent callback; do not reconstruct a callback from its known IDs.
             var parentCallback = Assert.Single(callbacks.WorkItems);
-            var parentPayload = parentCallback.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+            var parentPayload = parentCallback.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
             Assert.Equal(first.Request.ActivityExecutionId, parentPayload.CompletedChildActivityExecutionId);
             Assert.Equal(BpmnNodeId, parentPayload.ExecutableNodeId);
             var beforeReplay = await NativeReplayFactsAsync(restartedHarness, executionId, workers);

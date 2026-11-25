@@ -13,7 +13,7 @@ namespace Elsa.Activities.ControlFlow.Loops;
 /// </summary>
 internal sealed class LoopStructureHandler(LoopKind loop) : IActivityStructureHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         // Authored ArgumentState.Conversion enums (AuthoredValueConversionMode) arrive as camelCase
         // strings from the global web JSON options; nested structure payload reads must match.
@@ -66,8 +66,6 @@ internal sealed class LoopStructureHandler(LoopKind loop) : IActivityStructureHa
 
         return value.Value switch
         {
-            bool flag => !flag,
-            string text => bool.TryParse(text.Trim(), out var parsed) && !parsed,
             JsonElement { ValueKind: JsonValueKind.False } => true,
             JsonElement { ValueKind: JsonValueKind.String } element => bool.TryParse(element.GetString()?.Trim(), out var parsed) && !parsed,
             _ => false

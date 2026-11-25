@@ -332,7 +332,7 @@ public sealed class EfActivityExecutionStateStore(
             return null;
         try
         {
-            var cursor = RuntimeArtifactJson.Deserialize<StateCursor>(Encoding.UTF8.GetString(continuationCodec.Decode(ContinuationPurpose, token)));
+            var cursor = RuntimeArtifactJson.Deserialize<StateCursor>(Encoding.UTF8.GetString(continuationCodec.DecodeJson(ContinuationPurpose, token)));
             if (cursor.Version != 1 || cursor.ScopeHash != ActivityExecutionEfSupport.Hash(scope) ||
                 !StringComparer.Ordinal.Equals(cursor.WorkflowExecutionId, workflow) ||
                 !StringComparer.Ordinal.Equals(cursor.ParentActivityExecutionId, parent) ||
@@ -347,7 +347,7 @@ public sealed class EfActivityExecutionStateStore(
         }
     }
 
-    private string EncodeCursor(StateCursor cursor) => continuationCodec.Encode(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(cursor)));
+    private string EncodeCursor(StateCursor cursor) => continuationCodec.EncodeJson(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(cursor)));
 
     private static void ValidateIdentity(string workflowExecutionId, string activityExecutionId)
     {

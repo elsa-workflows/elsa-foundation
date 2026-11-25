@@ -113,6 +113,21 @@ public sealed class FixturePayload
 /// <c>FullName</c>) for these non-primitive element types, and the runtime registration pass registers those
 /// same aliases so they resolve back to the real CLR type instead of <c>object</c>.
 /// </summary>
+public sealed class NullableDefaultFixtureActivity : FixtureActivity
+{
+    [ActivityInput(DefaultValue = "true")]
+    public bool? Enabled { get; set; }
+
+    [ActivityInput(DefaultValue = "7")]
+    public int? Count { get; set; }
+
+    [ActivityInput(DefaultValue = "2.5")]
+    public double? Multiplier { get; set; }
+
+    [ActivityInput(DefaultValue = "\"2.5\"")]
+    public double? QuotedMultiplier { get; set; }
+}
+
 public sealed class ComplexInputFixtureActivity : FixtureActivity
 {
     [ActivityInput(Order = 20, Tier = InputTier.Optional)]

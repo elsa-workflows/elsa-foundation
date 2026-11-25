@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using CShells;
 using Elsa.Modularity.Api.Options;
 using Elsa.Modularity.Core.Contracts;
@@ -20,11 +19,6 @@ public sealed class JsonShellFeatureConfigurationStore(
     IOptions<FeatureManagementOptions> options,
     HostBuilderContext hostContext) : IShellFeatureConfigurationStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = true
-    };
-
     private static readonly byte[] s_processRevisionKey = RandomNumberGenerator.GetBytes(32);
 
     private static readonly JsonElement s_emptyObject = CreateEmptyObject();
@@ -51,19 +45,15 @@ public sealed class JsonShellFeatureConfigurationStore(
         if (!string.Equals(current.Revision, expectedRevision, StringComparison.Ordinal))
             throw new FeatureCatalogRevisionConflictException(expectedRevision, current.Revision);
 
-        var featuresNode = GetFeaturesNode(document.Document, create: true);
-        featuresNode.Clear();
-
+        var accepted = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         foreach (var feature in features.Where(x => x.Enabled).OrderBy(x => x.Id, StringComparer.OrdinalIgnoreCase))
         {
-            var configuration = feature.Configuration.ValueKind is JsonValueKind.Object
-                ? JsonNode.Parse(feature.Configuration.GetRawText()) ?? new JsonObject()
-                : new JsonObject();
-
-            featuresNode[feature.Id] = configuration;
+            accepted[feature.Id] = feature.Configuration.ValueKind == JsonValueKind.Object ? feature.Configuration.Clone() : s_emptyObject;
         }
-
-        var json = document.Document.ToJsonString(JsonOptions);
+        var replacement = JsonSerializer.SerializeToElement(accepted, Elsa.Serialization.Core.JsonBaseline.Options);
+        var json = ReplaceFeatures(document.Document, replacement);
+        using var saved = JsonDocument.Parse(json);
+        var savedSnapshot = CreateSnapshot(new ShellDocument(document.Path, json, saved.RootElement.Clone()));
         await File.WriteAllTextAsync(document.Path, json + Environment.NewLine, cancellationToken);
         try
         {
@@ -75,7 +65,7 @@ public sealed class JsonShellFeatureConfigurationStore(
             throw new InvalidOperationException("Feature configuration was saved, but host configuration reload failed. Inspect the host configuration and reload or restart before applying further changes.", error);
         }
 
-        return CreateSnapshot(new ShellDocument(document.Path, json, document.Document));
+        return savedSnapshot;
     }
 
     private async Task<ShellDocument> ReadDocumentAsync(CancellationToken cancellationToken)
@@ -85,17 +75,18 @@ public sealed class JsonShellFeatureConfigurationStore(
             throw new InvalidOperationException($"Could not find shell configuration file at '{path}'.");
 
         var json = await File.ReadAllTextAsync(path, cancellationToken);
-        JsonNode? node;
+        JsonElement document;
         try
         {
-            node = JsonNode.Parse(json);
+            using var parsed = JsonDocument.Parse(json);
+            document = parsed.RootElement.Clone();
         }
         catch (JsonException e)
         {
             throw new InvalidOperationException("Shell configuration file is not valid JSON.", e);
         }
 
-        if (node is not JsonObject document)
+        if (document.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("Shell configuration root must be a JSON object.");
 
         return new ShellDocument(path, json, document);
@@ -103,81 +94,82 @@ public sealed class JsonShellFeatureConfigurationStore(
 
     private ShellFeatureConfigurationSnapshot CreateSnapshot(ShellDocument document)
     {
-        var featuresNode = GetFeaturesNode(document.Document, create: false);
+        var featuresNode = GetObject(GetShellNode(document.Document), "Features");
         var features = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var (name, configuration) in featuresNode)
+        foreach (var property in featuresNode.EnumerateObject())
         {
-            if (string.IsNullOrWhiteSpace(name) || configuration is null)
+            var name = property.Name;
+            var configuration = property.Value;
+            if (string.IsNullOrWhiteSpace(name) || configuration.ValueKind == JsonValueKind.Null)
                 continue;
 
-            if (configuration is JsonValue jsonBool && jsonBool.TryGetValue<bool>(out var flagEnabled))
+            if (configuration.ValueKind is JsonValueKind.True or JsonValueKind.False)
             {
-                if (flagEnabled)
+                if (configuration.GetBoolean())
                     features[name] = s_emptyObject;
                 continue;
             }
 
-            var element = JsonSerializer.Deserialize<JsonElement>(configuration.ToJsonString());
-            features[name] = element.ValueKind is JsonValueKind.Object
-                ? element.Clone()
+            features[name] = configuration.ValueKind == JsonValueKind.Object
+                ? configuration.Clone()
                 : s_emptyObject;
         }
 
-        var revision = CreateRevision(featuresNode.ToJsonString(JsonOptions));
+        var revision = CreateRevision(featuresNode);
         var shellConfiguration = GetOptionalConfigurationNode(document.Document);
         return new ShellFeatureConfigurationSnapshot(CurrentShellId, revision, features, shellConfiguration);
     }
 
-    private JsonObject GetFeaturesNode(JsonObject document, bool create) =>
-        GetObject(GetShellNode(document, create), "Features", create);
-
     /// <summary>
     /// The shell's own <c>Configuration</c> node — the same one <c>EfMigrateOptions</c> documents as
     /// overriding the host's <c>Elsa:Persistence:EntityFramework:Migrate:Policy</c> — or an empty object
-    /// when the shell declares none. Unlike <see cref="GetFeaturesNode"/>, absence here is not an error: most
+    /// when the shell declares none. Absence here is not an error: most
     /// shells override nothing.
     /// </summary>
-    private JsonElement GetOptionalConfigurationNode(JsonObject document)
+    private JsonElement GetOptionalConfigurationNode(JsonElement document)
     {
-        var shell = GetShellNode(document, create: false);
-        return shell["Configuration"] is JsonObject configuration
-            ? JsonSerializer.Deserialize<JsonElement>(configuration.ToJsonString())
+        var shell = GetShellNode(document);
+        return shell.TryGetProperty("Configuration", out var configuration) && configuration.ValueKind == JsonValueKind.Object
+            ? configuration.Clone()
             : s_emptyObject;
     }
 
-    private JsonObject GetShellNode(JsonObject document, bool create)
+    private JsonElement GetShellNode(JsonElement document)
     {
-        var shells = GetObject(document, "CShells", create);
-        shells = GetObject(shells, "Shells", create);
-        return GetObjectCaseInsensitive(shells, CurrentShellId, create);
+        var shells = GetObject(GetObject(document, "CShells"), "Shells");
+        return GetObject(shells, CurrentShellId, ignoreCase: true);
     }
 
-    private static JsonObject GetObject(JsonObject parent, string propertyName, bool create)
+    private static JsonElement GetObject(JsonElement parent, string propertyName, bool ignoreCase = false)
     {
-        if (parent[propertyName] is JsonObject existing)
-            return existing;
-
-        if (!create)
-            throw new InvalidOperationException($"Shell configuration must contain '{propertyName}'.");
-
-        var created = new JsonObject();
-        parent[propertyName] = created;
-        return created;
+        var property = parent.EnumerateObject().FirstOrDefault(property => string.Equals(property.Name, propertyName,
+            ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+        if (property.Value.ValueKind == JsonValueKind.Object) return property.Value;
+        throw new InvalidOperationException($"Shell configuration must contain '{propertyName}'.");
     }
 
-    private static JsonObject GetObjectCaseInsensitive(JsonObject parent, string propertyName, bool create)
+    private string ReplaceFeatures(JsonElement document, JsonElement replacement)
     {
-        var existingName = parent.Select(x => x.Key).FirstOrDefault(x => string.Equals(x, propertyName, StringComparison.OrdinalIgnoreCase));
-        if (existingName is not null && parent[existingName] is JsonObject existing)
-            return existing;
+        var path = new[] { "CShells", "Shells", CurrentShellId, "Features" };
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder })) WritePath(document, 0, writer);
+        return Encoding.UTF8.GetString(stream.ToArray());
 
-        if (!create)
-            throw new InvalidOperationException($"Shell configuration must contain shell '{propertyName}'.");
-
-        var created = new JsonObject();
-        parent[propertyName] = created;
-        return created;
+        void WritePath(JsonElement current, int depth, Utf8JsonWriter writer)
+        {
+            if (depth == path.Length) { writer.WriteRawValue(replacement.GetRawText(), skipInputValidation: true); return; }
+            writer.WriteStartObject();
+            var replaced = false;
+            foreach (var property in current.EnumerateObject())
+            {
+                writer.WritePropertyName(property.Name);
+                if (!replaced && string.Equals(property.Name, path[depth], depth == 2 ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                { replaced = true; WritePath(property.Value, depth + 1, writer); }
+                else writer.WriteRawValue(property.Value.GetRawText(), skipInputValidation: true);
+            }
+            writer.WriteEndObject();
+        }
     }
 
     private string ResolvePath()
@@ -193,15 +185,15 @@ public sealed class JsonShellFeatureConfigurationStore(
     /// a stale apply. It is keyed because the catalog shows everything else in that section: a plain hash would let a
     /// reader rebuild the section with each candidate secret and compare, which recovers a guessable one.
     /// </summary>
-    private string CreateRevision(string value)
+    private string CreateRevision(JsonElement value)
     {
         var key = string.IsNullOrWhiteSpace(Options.RevisionKey) ? s_processRevisionKey : Encoding.UTF8.GetBytes(Options.RevisionKey);
-        return Convert.ToHexStringLower(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(value)));
+        return Convert.ToHexStringLower(Elsa.Serialization.Core.JsonHashInput.HashKeyed(value, key));
     }
 
     private FeatureManagementOptions Options => options.Value;
 
     private string CurrentShellId => shellSettings.Id.Name;
 
-    private sealed record ShellDocument(string Path, string Json, JsonObject Document);
+    private sealed record ShellDocument(string Path, string Json, JsonElement Document);
 }

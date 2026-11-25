@@ -561,6 +561,9 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
 
     private sealed class FakeCodec : IRuntimeRecoveryContinuationCodec
     {
+        public string EncodeJson(string purpose, ReadOnlySpan<byte> payload) => ((IRuntimeRecoveryContinuationCodec)this).Encode(purpose, payload);
+        public byte[] DecodeJson(string purpose, string token) => ((IRuntimeRecoveryContinuationCodec)this).Decode(purpose, token);
+
         public string Encode(string purpose, ReadOnlySpan<byte> payload) => throw new NotSupportedException();
         public byte[] Decode(string purpose, string token) => throw new NotSupportedException();
     }

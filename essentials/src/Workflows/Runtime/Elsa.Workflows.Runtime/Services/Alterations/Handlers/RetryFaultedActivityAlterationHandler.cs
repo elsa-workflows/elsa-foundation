@@ -311,7 +311,7 @@ public sealed class RetryFaultedActivityAlterationHandler(
 
         var completion = recorded.Completion;
         var metadata = successor.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(completion.OutcomeNames);
+        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(completion.OutcomeNames, Elsa.Serialization.Core.JsonBaseline.Options);
         var completed = RuntimeContainerScopeService.CloseOwnedFrames(successor with
         {
             Status = ActivityExecutionStatus.Completed,
@@ -331,7 +331,7 @@ public sealed class RetryFaultedActivityAlterationHandler(
         StringComparer.Ordinal.Equals(left.Alias, right.Alias) &&
         left.CollectionKind == right.CollectionKind &&
         left.SchemaVersion == right.SchemaVersion &&
-        StringComparer.Ordinal.Equals(left.Schema?.GetRawText(), right.Schema?.GetRawText());
+        Elsa.Serialization.Core.JsonCanonicalForm.Equals(left.Schema, right.Schema);
 
     private sealed record AcceptedRecordedWritesStagedChange(
         int Ordinal,

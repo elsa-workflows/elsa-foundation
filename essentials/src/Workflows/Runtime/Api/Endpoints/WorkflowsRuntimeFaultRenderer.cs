@@ -28,7 +28,7 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
             case Elsa.Workflows.Runtime.Core.UserTasks.UserTaskException task:
                 var status = task.Code switch { "unauthorized" => 401, "forbidden" => 403, "missing" => 404, "conflict" => 409, "validation" => 400, _ => 503 };
                 context.Response.StatusCode = status;
-                await context.Response.WriteAsJsonAsync(new UserTasks.UserTaskProblem(task.Code, task.Message, task.Errors is null ? null : System.Text.Json.JsonSerializer.SerializeToElement(task.Errors)), WorkflowsRuntimeJsonContext.Default.UserTaskProblem, cancellationToken: context.RequestAborted);
+                await context.Response.WriteAsJsonAsync(new UserTasks.UserTaskProblem(task.Code, task.Message, task.Errors is null ? null : System.Text.Json.JsonSerializer.SerializeToElement(task.Errors)), WorkflowsRuntimeJsonContext.WireContext.UserTaskProblem, cancellationToken: context.RequestAborted);
                 return true;
 
             case InstanceComparisonRefusedSignal refused:
@@ -142,7 +142,7 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
                     await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status409Conflict, rejected.Message);
                     return true;
                 case WorkflowExecutableStartRejectedException { Category: WorkflowExecutableStartRejectionCategory.Input } refused when runtime.ExecutableArms:
-                    await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status400BadRequest, refused.Message);
+                    await RuntimeProblemWriting.InputProblemAsync(context, refused.ReasonCode, refused.Message, refused.InputPath);
                     return true;
                 case WorkflowAlterationResourceNotFoundException when runtime.NotFoundArms:
                 case EntityNotFoundException when runtime.NotFoundArms:

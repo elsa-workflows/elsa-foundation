@@ -453,7 +453,7 @@ public sealed class CandidateWorkerProcess
         using var buffer = new CandidateRequestBuffer(RequestMaximumBytes);
         try
         {
-            System.Text.Json.JsonSerializer.Serialize(buffer, request, WorkerContract.Json);
+            System.Text.Json.JsonSerializer.Serialize(buffer, request, options: WorkerContract.Json);
             return buffer.ToArray();
         }
         catch (Exception failure) when (IsNonFatal(failure))

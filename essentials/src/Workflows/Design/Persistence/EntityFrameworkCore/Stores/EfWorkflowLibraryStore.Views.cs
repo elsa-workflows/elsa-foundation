@@ -10,7 +10,7 @@ internal sealed partial class EfWorkflowLibraryStore
     private sealed record ViewContent(WorkflowLibraryQuery Query, IReadOnlyList<string> Columns, int SchemaVersion = 1);
     private static WorkflowLibraryView View(WorkflowLibraryViewEntity row)
     {
-        var content = JsonSerializer.Deserialize<ViewContent>(row.ContentJson, Json) ?? throw new InvalidDataException("The stored workflow view is invalid.");
+        var content = JsonSerializer.Deserialize<ViewContent>(row.ContentJson, options: Json) ?? throw new InvalidDataException("The stored workflow view is invalid.");
         if (content.SchemaVersion != 1) throw new InvalidDataException("This workflow view requires a newer schema reader.");
         return new(row.Id, row.Name, row.Shared, row.OwnerId, content.Query, content.Columns, row.Revision, content.SchemaVersion);
     }
@@ -79,16 +79,18 @@ internal sealed partial class EfWorkflowLibraryStore
         var columns = input.Columns ?? [];
         if (columns.Count > 16 || columns.Any(column => column is not ("name" or "id" or "state" or "folder" or "location" or "tags" or "modified" or "version" or "favorite")))
             throw new ArgumentException("Workflow views contain at most 16 supported columns.");
-        var content = JsonSerializer.Serialize(new ViewContent(query, columns.Distinct(StringComparer.Ordinal).ToArray()), Json);
+        var content = JsonSerializer.Serialize(new ViewContent(query, columns.Distinct(StringComparer.Ordinal).ToArray()), options: Json);
         if (content.Length > 32768) throw new ArgumentException("The saved view exceeds 32 KiB.");
+        using var contentDocument = JsonDocument.Parse(content, new JsonDocumentOptions { MaxDepth = 1000 });
+        var hashContent = contentDocument.RootElement;
         var keyHash = clientKey is null ? null : ClientKeyHash(clientKey);
-        var fingerprint = keyHash is null ? null : Fingerprint(new { name, content, input.Shared });
+        var fingerprint = keyHash is null ? null : Fingerprint(new { name, content = hashContent, input.Shared });
         // A repeated keyed create rereads by its key first and writes nothing; the writer's own key stays server-generated.
         if (keyHash is not null && await KeyedViewAsync(keyHash, fingerprint!, subjectId, cancellationToken) is { } existing) return existing;
         var key = NewId("save-view-");
         try
         {
-            return await WriteAsync(key, "workflow.view.save.v1", new { id, name, content, input.Shared, input.Revision, subjectId, operationKey = keyHash }, async token =>
+            return await WriteAsync(key, "workflow.view.save.v1", new { id, name, content = hashContent, input.Shared, input.Revision, subjectId, operationKey = keyHash }, async token =>
             {
                 // Another create under this key committed first: abandon this write (no fence touch, no audit) and let the
                 // reread below return that create's view.

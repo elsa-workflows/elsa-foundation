@@ -383,7 +383,7 @@ public sealed class ReplaySafeFusionDriver
         RuntimeScheduleActivityCommandPayload? payload;
         try
         {
-            payload = workItem.Payload?.Deserialize<RuntimeScheduleActivityCommandPayload>();
+            payload = workItem.Payload?.Deserialize<RuntimeScheduleActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {

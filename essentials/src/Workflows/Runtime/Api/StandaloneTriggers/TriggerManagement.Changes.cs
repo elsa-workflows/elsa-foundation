@@ -42,7 +42,7 @@ internal sealed partial class TriggerManagement
         var observations = await ObserveAsync(aggregate, command, ct);
         var expires = time.GetUtcNow().AddMinutes(5);
         var proof = new TriggerPreviewProof(access.Subject, access.Scope, id, aggregate.Trigger.Revision, fingerprint, observations, expires);
-        var token = previewProtector.Protect(JsonSerializer.Serialize(proof, StandaloneTriggersApi.Json));
+        var token = previewProtector.Protect(JsonSerializer.Serialize(proof, options: StandaloneTriggersApi.Json));
         return new(token, expires, aggregate.Trigger.Revision, fingerprint, findings.Count == 0, impact, findings);
     }
 
@@ -64,7 +64,7 @@ internal sealed partial class TriggerManagement
         }
         var aggregate = await RequireResourceAsync(id, ct);
         TriggerPreviewProof proof;
-        try { proof = JsonSerializer.Deserialize<TriggerPreviewProof>(previewProtector.Unprotect(Text(request, "previewId")), StandaloneTriggersApi.Json) ?? throw Conflict(); }
+        try { proof = JsonSerializer.Deserialize<TriggerPreviewProof>(previewProtector.Unprotect(Text(request, "previewId")), options: StandaloneTriggersApi.Json) ?? throw Conflict(); }
         catch (CryptographicException) { throw Conflict(); }
         catch (JsonException) { throw Conflict(); }
         if (proof.Actor != access.Subject || proof.Scope != access.Scope || proof.TriggerId != id || proof.Revision != aggregate.Trigger.Revision ||
@@ -77,7 +77,7 @@ internal sealed partial class TriggerManagement
             prepared.Trigger, prepared.Subscriptions) { ObservedTargets = observedTargets }, ct);
         await events.Publish(new StandaloneTriggerResourceCommitted(access.Scope, id, prepared.Trigger.TypeKey, receipt.Revision), ct);
         return new(requestId, "Applied", receipt.Revision, await ViewAsync(prepared, ct), Effects:
-            [new { message = "The reviewed resource change was committed. Accepted deliveries were not cancelled." }]);
+            JsonSerializer.SerializeToElement(new[] { new { message = "The reviewed resource change was committed. Accepted deliveries were not cancelled." } }, options: StandaloneTriggersApi.Json));
     }
 
     private async ValueTask<TriggerAggregate> PrepareAsync(TriggerAggregate aggregate, JsonElement command, CancellationToken ct)
@@ -235,7 +235,7 @@ internal sealed partial class TriggerManagement
     }
 
     private static bool SameConfigurationValue(JsonElement? before, JsonElement? after) =>
-        before is { } value ? after is { } other && JsonElement.DeepEquals(value, other) : after is null;
+        before is { } value ? after is { } other && Elsa.Serialization.Core.JsonCanonicalForm.Equals(value, other) : after is null;
 
     private static string ConfigurationValueText(JsonElement? value, bool sensitive) => value is not { } configured
         ? "Not configured" : sensitive ? "[Protected]" : configured.ValueKind switch
@@ -333,7 +333,7 @@ internal sealed partial class TriggerManagement
     private static TriggerExpressionBinding Expression(JsonElement value)
     {
         var template = Property(value, "template");
-        var resultType = JsonSerializer.Deserialize<TypeReference>(Property(template, "resultType"), StandaloneTriggersApi.Json) ?? throw Validation("Choose an expression result type.");
+        var resultType = JsonSerializer.Deserialize<TypeReference>(Property(template, "resultType"), options: StandaloneTriggersApi.Json) ?? throw Validation("Choose an expression result type.");
         return new(Text(template, "language"), Text(template, "source"), resultType, Property(template, "options"), Text(template, "capabilityProfile"),
             Object(Property(value, "parameters")).EnumerateObject().ToDictionary(item => item.Name, item => Binding(item.Value), StringComparer.Ordinal));
     }
@@ -345,9 +345,9 @@ internal sealed partial class TriggerManagement
             TriggerSourceBinding source => new { kind = "SourceField", path = source.Path },
             TriggerExpressionBinding expression => new { kind = "Expression", template = new { expression.Language, expression.Source,
                 expression.ResultType, expression.Options, expression.CapabilityProfile }, parameters = expression.Parameters.ToDictionary(pair => pair.Key,
-                    pair => JsonSerializer.SerializeToElement(pair.Value, StandaloneTriggersApi.Json), StringComparer.Ordinal) },
+                    pair => JsonSerializer.SerializeToElement(pair.Value, options: StandaloneTriggersApi.Json), StringComparer.Ordinal) },
             _ => throw Validation("The stored input binding kind is unsupported.")
         };
-        return JsonSerializer.SerializeToElement(new { mapping.InputName, binding }, StandaloneTriggersApi.Json);
+        return JsonSerializer.SerializeToElement(new { mapping.InputName, binding }, options: StandaloneTriggersApi.Json);
     }
 }

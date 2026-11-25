@@ -379,26 +379,15 @@ public sealed class SourceOwnedActivityVersionPublisher(
     /// compared unless it is listed there, so a new difference fails rather than passes.
     /// </summary>
     private static bool IsIdentical(ActivityDefinitionVersionPublication? stored, ActivityDefinitionVersionPublication candidate) =>
-        stored is not null && StringComparer.Ordinal.Equals(PublishedContent(stored), PublishedContent(candidate));
+        stored is not null && Elsa.Serialization.Core.JsonCanonicalForm.Equals(PublishedContent(stored), PublishedContent(candidate));
 
-    private static string PublishedContent(ActivityDefinitionVersionPublication publication)
+    private static JsonElement PublishedContent(ActivityDefinitionVersionPublication publication)
     {
-        var members = JsonSerializer.SerializeToNode(publication)!.AsObject();
+        var members = JsonSerializer.SerializeToNode(publication, Elsa.Serialization.Core.JsonBaseline.Options)!.AsObject();
         foreach (var member in MembersNotCompared)
-            members.Remove(member);
-        return CanonicalJson(members);
+            members.Remove(JsonNamingPolicy.CamelCase.ConvertName(member));
+        return JsonSerializer.SerializeToElement(members, Elsa.Serialization.Core.JsonBaseline.Options);
     }
-
-    /// <summary>Writes <paramref name="node"/> with every object's members in ordinal order, so equal content reads the same.</summary>
-    private static string CanonicalJson(JsonNode? node) => node switch
-    {
-        JsonObject members => "{" + string.Join(',', members
-            .OrderBy(member => member.Key, StringComparer.Ordinal)
-            .Select(member => JsonSerializer.Serialize(member.Key) + ":" + CanonicalJson(member.Value))) + "}",
-        JsonArray items => "[" + string.Join(',', items.Select(CanonicalJson)) + "]",
-        null => "null",
-        _ => node.ToJsonString()
-    };
 
     /// <summary>The members that do not describe what was published: the clock fields, the row number and the lifecycle status.</summary>
     private static readonly string[] MembersNotCompared =

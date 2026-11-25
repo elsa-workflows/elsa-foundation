@@ -5,6 +5,7 @@ import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointCont
 import type { WorkflowDraft, WorkflowTestRunView } from "../workflowTypes";
 import { getDraftSignature } from "../workflow-editor/editorHelpers";
 import { useTestRunRestoration } from "../workflow-editor/useTestRunRestoration";
+import { sha256 } from "../sha256";
 
 const api = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock("../api/publishing", () => ({ getWorkflowTestRun: api.read }));
@@ -31,12 +32,8 @@ async function saveReceipt() {
 }
 beforeEach(() => {
   vi.resetAllMocks(); sessionStorage.clear();
-  // Model the digest contract deterministically; browser coverage exercises Web Crypto itself.
-  const digests = new Map<string, number>();
   vi.stubGlobal("crypto", { subtle: { digest: vi.fn(async (_algorithm: string, bytes: Uint8Array) => {
-    const input = Array.from(bytes).join(",");
-    if (!digests.has(input)) digests.set(input, digests.size + 1);
-    return new Uint8Array(32).fill(digests.get(input)!).buffer;
+    return sha256(bytes).buffer;
   }) } });
   api.read.mockResolvedValue(view);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
@@ -47,6 +44,8 @@ afterEach(() => { flushSync(() => root.unmount()); container.remove(); vi.unstub
 it("stores references and an opaque digest, then reauthorizes the same run after a reload", async () => {
   await saveReceipt();
   const stored = sessionStorage.getItem(sessionStorage.key(0)!);
+  expect(JSON.parse(stored!).snapshotDigest, "First-stable hash freeze: changes require an explicit identity/migration decision.")
+    .toBe("0afed1be51d558ebe1f7dd33386425ca48185302ffc55fc119d9c1b9225dbbf0");
   expect(stored).not.toContain("PRIVATE_AUTHORED_VALUE"); expect(stored).not.toContain("rootActivity");
   expect(stored).not.toContain("snapshot\":"); expect(api.read).not.toHaveBeenCalled();
   await current.restore();

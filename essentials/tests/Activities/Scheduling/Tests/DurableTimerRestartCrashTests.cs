@@ -236,7 +236,7 @@ public sealed class DurableTimerRestartCrashTests
             WorkflowExecutionHarness.WorkflowExecutionId,
             DurableTimerConstants.TimerStimulusType,
             timerId,
-            input: JsonSerializer.SerializeToElement(new DurableTimerElapsed(timerId)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(timerId)),
             idempotencyKey: $"timer:{timerId}",
             requestedBy: DurableTimerConstants.PumpRequestedBy,
             payloadType: new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(DurableTimerElapsed)), schemaVersion: 1),

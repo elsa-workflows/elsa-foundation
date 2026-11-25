@@ -689,7 +689,8 @@ public sealed class WorkflowsDesignApiContractTests
     private static async Task AssertWorkflowDesignProblemAsync(HttpResponseMessage response, HttpStatusCode expectedStatus)
     {
         Assert.Equal(expectedStatus, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
 
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var problem = document.RootElement;

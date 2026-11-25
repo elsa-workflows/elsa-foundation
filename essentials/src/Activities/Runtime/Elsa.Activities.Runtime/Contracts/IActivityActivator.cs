@@ -31,4 +31,8 @@ public sealed record ActivityActivationRequest(
     ActivityAttempt Attempt,
     ActivityPrivateState? PrivateState = null,
     ActivityTriggerDelivery? Trigger = null,
-    RuntimeActivityDescriptor? Descriptor = null);
+    RuntimeActivityDescriptor? Descriptor = null)
+{
+    /// <summary>The step-owned recording sink for typed-input conversion diagnostics.</summary>
+    public Elsa.Expressions.Core.Contracts.IExecutionWarningSink? Warnings { get; init; }
+}

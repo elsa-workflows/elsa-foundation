@@ -584,7 +584,7 @@ public sealed class FaultIncidentExecutionTests
             WorkflowExecutionId: "wfexec-1",
             Kind: WorkflowExecutionCommandKind.Start,
             EnqueuedAt: _now,
-            Payload: JsonSerializer.SerializeToElement(payload),
+            Payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             Metadata: new Dictionary<string, string>());
 
         return new WorkflowExecutionCommandEnvelope(

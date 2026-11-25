@@ -29,7 +29,7 @@ public static class EfToolingContract
     /// build does not know — a future slice's, say — must be told, not quietly given an answer to a
     /// different question.
     /// </summary>
-    internal static readonly JsonSerializerOptions Json = new()
+    internal static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = false,

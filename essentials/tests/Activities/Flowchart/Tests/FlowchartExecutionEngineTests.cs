@@ -84,7 +84,7 @@ public sealed class FlowchartExecutionEngineTests
         Assert.Equal(flowchart.Execution.ActivityExecutionId, child.Provenance.ExecutionScopeId);
         var childScheduleCommit = Assert.Single(fixture.CheckpointCommits, commit => SchedulesChild(commit, "node-a"));
         var scheduledChild = Assert.Single(childScheduleCommit.PostCommitIntents)
-            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(flowchart.Execution.ActivityExecutionId, scheduledChild.ExecutionScopeId);
         Assert.Equal("scope:root", scheduledChild.CommandMetadata[FlowchartExecutionEngine.ExecutionScopeIdMetadataKey]);
     }
@@ -618,11 +618,11 @@ public sealed class FlowchartExecutionEngineTests
         if (!StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork) || intent.Payload is null)
             return false;
 
-        var workItem = intent.Payload.Value.Deserialize<RuntimeSchedulerWorkItem>();
+        var workItem = intent.Payload.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options);
         if (workItem?.CommandKind != WorkflowExecutionCommandKind.ScheduleActivity || workItem.Payload is null)
             return false;
 
-        var payload = workItem.Payload.Value.Deserialize<RuntimeScheduleActivityCommandPayload>();
+        var payload = workItem.Payload.Value.Deserialize<RuntimeScheduleActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options);
         return StringComparer.Ordinal.Equals(payload?.ExecutableNodeId, executableNodeId);
     }
 

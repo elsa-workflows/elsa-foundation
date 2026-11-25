@@ -131,11 +131,21 @@ public sealed class WorkflowExecutableCompilerGoldenTests(ITestOutputHelper outp
         var expectedJson = File.ReadAllText(goldenPath);
         if (!StringComparer.Ordinal.Equals(Normalize(expectedJson), Normalize(actualJson)))
             output.WriteLine($"Observed canonical golden for {corpusName}:\n{actualJson}");
-        Assert.Equal(Normalize(expectedJson), Normalize(actualJson));
+        Assert.True(Normalize(expectedJson) == Normalize(actualJson),
+            "Compiler snapshot changed. First-stable hash freeze: changes require an explicit identity/migration decision.");
 
         // Explicit, independent hash pin: the sharpest byte-identity guard.
         var expectedHash = JsonNode.Parse(expectedJson)!["identity"]!["artifactHash"]!.GetValue<string>();
-        Assert.Equal(expectedHash, executable.Identity.ArtifactHash);
+        if (corpusName == "declared-input-contract")
+        {
+            using var stream = typeof(WorkflowExecutableCompilerGoldenTests).Assembly.GetManifestResourceStream("compiler-hash-vectors.json")!;
+            using var vectors = JsonDocument.Parse(stream);
+            var independent = vectors.RootElement.EnumerateArray().Single(v => v.GetProperty("name").GetString() == corpusName);
+            Assert.True(expectedHash == "sha256:" + independent.GetProperty("sha256").GetString(),
+                "First-stable hash freeze: changes require an explicit identity/migration decision.");
+        }
+        Assert.True(expectedHash == executable.Identity.ArtifactHash,
+            "First-stable hash freeze: changes require an explicit identity/migration decision.");
     }
 
     [Fact]
@@ -385,7 +395,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests(ITestOutputHelper outp
             Name: "Counter",
             Type: new TypeReference("String"),
             StorageDriverType: null,
-            Default: new ArgumentValue("0", "Literal"));
+            Default: ArgumentValue.FromClr("0", "Literal"));
 
         var variableReference = JsonSerializer.SerializeToElement(new { referenceKey = "var-counter", declaringScopeId = "node-sequence" });
 
@@ -556,16 +566,16 @@ public sealed class WorkflowExecutableCompilerGoldenTests(ITestOutputHelper outp
             Structure: new ActivityNodeStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
 
     private static WorkflowArgumentState Text(string value) =>
-        new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
+        new("Text", ArgumentValue.FromClr(value, "Literal"), null, null, null, null);
 
     private static WorkflowArgumentState JavaScriptText(string expression) =>
-        new("Text", new ArgumentValue(expression, "JavaScript"), null, null, null, null);
+        new("Text", ArgumentValue.FromClr(expression, "JavaScript"), null, null, null, null);
 
     private static WorkflowArgumentState VariableText(JsonElement reference) =>
-        new("Text", new ArgumentValue(reference, "Variable"), null, null, null, null);
+        new("Text", ArgumentValue.FromClr(reference, "Variable"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
         ActivityVersion(
@@ -587,7 +597,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests(ITestOutputHelper outp
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(
+            DescriptorPayload = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor(
                 id switch
                 {
                     "activity-probe" => TypeAliasConvention.CanonicalAlias(typeof(ResumeProbeActivity)),

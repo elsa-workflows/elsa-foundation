@@ -375,7 +375,7 @@ public sealed class EfWorkflowPortfolioDataSource(
 
     private static JsonSerializerOptions CreateRuntimeJsonOptions()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         options.Converters.Add(new JsonStringEnumConverter());
         options.Converters.Add(new LosslessUtf16StringConverter());
         return options;

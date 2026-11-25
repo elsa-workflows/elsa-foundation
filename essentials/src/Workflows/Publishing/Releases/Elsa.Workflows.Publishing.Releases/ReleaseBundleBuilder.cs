@@ -148,9 +148,9 @@ internal sealed class ReleaseBundleBuilder(IReleaseBundleCodec codec, ReleaseSem
                 var payload = source.GetPayload(member.Key);
                 if (payload.Length != descriptor.ByteLength) throw Refuse("blob_length_mismatch");
                 var bytes = payload.ToArray();
-                if (Hash(bytes) != descriptor.PayloadDigest) throw Refuse("blob_digest_mismatch");
                 if (bytes[^1] is 10 or 13) throw Refuse("invalid_blob_encoding");
                 CheckJson(bytes, bounds.MaxJsonDepth);
+                if (Hash(bytes) != descriptor.PayloadDigest) throw Refuse("blob_digest_mismatch");
                 if (distinct) { Blobs.Add(descriptor.PayloadDigest, bytes); expanded += bytes.Length; }
             }
             Members = Array.AsReadOnly(_members.Values.ToArray());

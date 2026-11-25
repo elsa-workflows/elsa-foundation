@@ -208,7 +208,7 @@ public sealed class OutcomeSelectionPublicationTests
     private static ActivityNode Flowchart(IReadOnlyCollection<ActivityNode> activities, IReadOnlyCollection<FlowchartConnection> connections) =>
         new("flowchart", typeof(FlowchartActivity).FullName!, [], [],
             new(FlowchartActivity.StructureKind, FlowchartActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new FlowchartAuthoredStructure(activities, connections, activities.First().NodeId), Web)));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new FlowchartAuthoredStructure(activities, connections, activities.First().NodeId))));
 
     private static ActivityNode Switch(string nodeId, string? mode) =>
         new(nodeId, typeof(SwitchActivity).FullName!, [Literal(nameof(SwitchActivity.Value), "a")], [],
@@ -216,7 +216,7 @@ public sealed class OutcomeSelectionPublicationTests
                 new SwitchAuthoredStructure([new("a") { CaseId = "case-a" }, new("b") { CaseId = "case-b" }], mode: mode), Web)));
 
     private static ArgumentState Literal(string key, object value) =>
-        new(key, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
+        new(key, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
 
     private static IActivityStructureService StructureService()
     {

@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Studio.Api.Authorization;
@@ -7,14 +8,14 @@ namespace Elsa.Studio.Hosting.Nuplane;
 
 internal static class PackageMaintenanceEndpoints
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter() }
     };
 
     public static void Map(IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/_elsa/module-management");
+        var group = endpoints.MapGroup("/_elsa/module-management").WithElsaJsonResponseHeaders();
         group.MapPost("/prune", PruneAsync).RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
         group.MapPut("/retention-policy", SaveRetentionAsync).RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
     }

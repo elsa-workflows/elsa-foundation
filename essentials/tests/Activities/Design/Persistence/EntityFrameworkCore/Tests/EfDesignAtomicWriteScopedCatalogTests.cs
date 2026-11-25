@@ -27,6 +27,35 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfDesignAtomicWriteScopedCatalogTests
 {
+    [Theory]
+    [InlineData("[\"Ren\\u00e9\", \"tail\"]", EfDesignAtomicWriteStatus.Replayed)]
+    [InlineData(" [ \"René\", \"tail\" ] ", EfDesignAtomicWriteStatus.Replayed)]
+    [InlineData("[\"changed\",\"tail\"]", EfDesignAtomicWriteStatus.Conflict)]
+    [InlineData("[\"tail\",\"René\"]", EfDesignAtomicWriteStatus.Conflict)]
+    [InlineData("[\"René\"]", EfDesignAtomicWriteStatus.Conflict)]
+    [InlineData("[\"René\",null]", EfDesignAtomicWriteStatus.Conflict)]
+    [InlineData("null", EfDesignAtomicWriteStatus.Conflict)]
+    [InlineData("{", EfDesignAtomicWriteStatus.Conflict)]
+    public async Task Sqlite_replay_compares_mutated_units_as_JSON_and_damaged_markers_remain_conflicts(string stored, EfDesignAtomicWriteStatus expected)
+    {
+        await using var connection = await OpenDatabaseAsync();
+        await using var db = CreateContext(connection);
+        var writer = CreateWriter(db, PersistenceAccessContext.Scoped(new PersistenceScope("acme")));
+        var request = new EfDesignAtomicWriteRequest(new("activity.authoring.create.v1", "canonical-replay"), "same-request", ["René", "tail"]);
+        var initial = await writer.ExecuteAsync(request, (_, _) => Task.FromResult(Accepted()));
+        Assert.Equal(EfDesignAtomicWriteStatus.Committed, initial.Status);
+        db.ChangeTracker.Clear();
+        var marker = await db.ActivityDesignOperations.SingleAsync();
+        marker.MutatedUnitsJson = stored;
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var replay = await writer.ExecuteAsync(request, (_, _) => throw new InvalidOperationException("An existing operation must never stage again."));
+
+        Assert.Equal(expected, replay.Status);
+        Assert.Equal(stored, (await db.ActivityDesignOperations.SingleAsync()).MutatedUnitsJson);
+    }
+
     [Fact]
     public async Task Sqlite_ordinary_scoped_authoring_create_without_request_tenant_keeps_marker_in_bound_scope()
     {

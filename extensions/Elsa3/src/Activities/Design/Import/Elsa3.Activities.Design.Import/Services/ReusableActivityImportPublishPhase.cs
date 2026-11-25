@@ -36,7 +36,7 @@ public sealed class ReusableActivityImportPublishPhase(
     /// </summary>
     private const string ApplyAgain = "upload the same export again and apply it under a new idempotency key";
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <param name="operationKey">Names this import operation in the publisher's idempotency keys: the receipt id.</param>
     public async ValueTask<IReadOnlyList<ReusableActivityPublicationState>> PublishAsync(
@@ -130,8 +130,8 @@ public sealed class ReusableActivityImportPublishPhase(
         StringComparer.Ordinal.Equals(draft.DefinitionId, version.DefinitionId) &&
         StringComparer.Ordinal.Equals(draft.State.Provider.ProviderKey, ReusableActivityImportDrafts.GraphProviderKey) &&
         StringComparer.Ordinal.Equals(draft.State.Provider.SchemaVersion, ReusableActivityImportDrafts.GraphProviderSchemaVersion) &&
-        JsonNode.DeepEquals(JsonNode.Parse(draft.State.Provider.Payload.GetRawText()), JsonNode.Parse(version.GraphManifest.GetRawText())) &&
-        JsonNode.DeepEquals(JsonSerializer.SerializeToNode(draft.State.Contract, Json), JsonSerializer.SerializeToNode(version.Contract, Json));
+        Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(JsonNode.Parse(draft.State.Provider.Payload.GetRawText()), JsonNode.Parse(version.GraphManifest.GetRawText())) &&
+        Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(JsonSerializer.SerializeToNode(draft.State.Contract, Json), JsonSerializer.SerializeToNode(version.Contract, Json));
 
     /// <summary>
     /// The publisher's remediation speaks to a Studio author who picks the version. In an import the Elsa 3 version picks

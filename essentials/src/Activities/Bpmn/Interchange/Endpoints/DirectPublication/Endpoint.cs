@@ -18,7 +18,7 @@ internal static class BpmnDirectPublishingApi
 {
     internal const string Owner = "Elsa.Activities.Bpmn.DirectPublishing";
     public static void Map(IEndpointRouteBuilder endpoints) => endpoints.MapEndpointGroup(Owner,
-        BpmnDirectPublishingJsonContext.Default, jsonContentType: "application/json; charset=utf-8", tag: "BPMN")
+        BpmnDirectPublishingJsonContext.WireContext, jsonContentType: "application/json; charset=utf-8", tag: "BPMN")
         .MapEndpoint<Endpoint>();
 }
 
@@ -64,7 +64,18 @@ internal sealed class BpmnDirectPublishingFaultRenderer(IEndpointProblemWriter w
     }
 }
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(PublishAuthoredBpmnRequest))]
 [JsonSerializable(typeof(BpmnPublishedModel))]
-internal partial class BpmnDirectPublishingJsonContext : JsonSerializerContext;
+internal partial class BpmnDirectPublishingJsonContext : JsonSerializerContext
+{
+    internal static BpmnDirectPublishingJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+
+}

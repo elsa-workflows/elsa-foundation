@@ -40,7 +40,7 @@ internal static class WorkflowRunContext
     internal const string RunControls =
         "Retry, cancel, delete and dispatch are not available to Weaver; use the run page's own controls (the run toolbar and the Runs list) for them.";
 
-    internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>The disclosure gate: the host's current workflow runtime read permission for the session actor in its tenant.</summary>
     internal static readonly WeaverToolDescriptor ReadGate = new("workflow_run_read", "Read workflow Run", "Reads one exact workflow Run.",
@@ -65,9 +65,7 @@ internal static class WorkflowRunContext
         reference = null;
         error = "The workflow Run context must name exactly one Workflow Instance and, where one is selected, one activity execution of it, bound to its Run target.";
         if (attachment.ModuleId != ModuleId || attachment.ContentType != RunKind || attachment.SchemaVersion != "1") return false;
-        JsonElement content;
-        try { content = attachment.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(attachment.Content, JsonOptions); }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
+        if (attachment.Content is not { } content) return false;
         if (content.ValueKind != JsonValueKind.Object) return false;
         string? workflowExecutionId = null, activityExecutionId = null;
         var admitted = attachment.Origin == WeaverContextOrigin.AuthoritativeRead;

@@ -1,23 +1,18 @@
 import { chromium, expect, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
+import { expectedStudioDate, selectStudioTimeZone } from "./studioDateAssertions";
+import type { QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
+import { openQuestionSection as openQuerySection, openQuestionProperties, closeQuestionProperties, selectQuestionTab } from "./questionNavigation";
 import { attachDashboardJson, dashboardBackend, registerDashboardCleanup, observeNativeWeaverBoundary, seedDashboardRuns, signInDashboardReader, tag, type Capture, type Resource, type Result } from "./dashboardJourneySupport";
-
-async function openQuerySection(page: Page, path: string) {
-  const section = page.locator(`[data-query-path="${path}"]`).first();
-  const trigger = section.locator("button[aria-expanded]").first();
-  if (await trigger.getAttribute("aria-expanded") !== "true") await trigger.click();
-  return section;
-}
 
 /** Native authoring against real Workflow/Identity/Dashboard authorities; no provider or result mocks. */
 export async function nativeDashboardsJourney(page: Page, info: TestInfo, capture: Capture) {
   info.setTimeout(300_000);
-  const requestedViewport = info.project.use.viewport;
-  if (requestedViewport && requestedViewport.width < 700) await page.setViewportSize({ width: 320, height: requestedViewport.height });
   await capture(page, info, "dashboard-native-reference");
   const backendSelection = new URL(page.url()).searchParams.get("backend");
   const expectResourceLocation = (kind: "questions" | "dashboards", id: string) => expect(page).toHaveURL(url =>
     url.pathname === `/${kind}/${id}` && url.searchParams.get("backend") === backendSelection);
   const backend = await dashboardBackend(page.request);
+  await selectStudioTimeZone(page, "Europe/Amsterdam");
   const suffix = `${info.project.name}-${Date.now()}`;
   // Own the independent reader browser; trace:on records both contexts in the runner trace.
   const readerBrowser = await chromium.launch();
@@ -39,7 +34,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
     }
     async function share(kind: "questions" | "dashboards", id: string, revoke = false) {
       await page.goto(`/${kind}/${id}`);
-      await page.getByRole("button", { name: kind === "dashboards" ? "Dashboard actions" : "Question actions", exact: true }).click();
+      await page.getByRole("button", { name: kind === "dashboards" ? "Dashboard actions" : "More question actions", exact: true }).click();
       await page.getByRole("menuitem", { name: "Share", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: /^Share / });
       if (revoke) await dialog.getByRole("button", { name: "Remove dashboard-qa-reader", exact: true }).click();
@@ -123,10 +118,21 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("combobox", { name: "Visualization", exact: true }).selectOption("bar");
       await page.getByRole("combobox", { name: "Horizontal axis", exact: true }).selectOption("status");
       await page.getByRole("listbox", { name: "Value columns", exact: true }).selectOption(["started", "failed", "rate"]);
-      await page.getByRole("region", { name: "Ask Weaver", exact: true }).getByLabel("Your question", { exact: true }).fill("A provider-disabled native question remains editable");
-      await expect(page.getByRole("button", { name: "Ask Weaver", exact: true })).toBeDisabled();
+      await closeQuestionProperties(page);
+      await selectQuestionTab(page, "build");
+      await page.locator(".named-weaver-disclosure > summary").click();
+      const unavailableAuthoring = page.getByRole("region", { name: "Ask Weaver", exact: true });
+      await expect(unavailableAuthoring.getByRole("status")).toContainText(/unavailable|connection|provider|configured/i);
+      await expect(unavailableAuthoring.getByRole("textbox", { name: "Your question", exact: true })).toHaveCount(0);
+      await unavailableAuthoring.scrollIntoViewIfNeeded();
+      await expect(unavailableAuthoring).toBeInViewport();
+      await capture(page, info, "question-optional-provider-unavailable");
+      await openQuestionProperties(page);
+      await expect(page.getByRole("combobox", { name: "Visualization", exact: true })).toBeVisible();
+      await expect(page.getByRole("combobox", { name: "Visualization", exact: true })).toBeEnabled();
       await capture(page, info, "question-controls");
       // A real native validation response identifies the invalid field and moves focus there.
+      await openQuerySection(page, "query.sort");
       const limit = page.getByLabel("Maximum result rows/groups", { exact: true });
       await limit.fill("0");
       const invalidResponse = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/dashboard-queries/validate"));
@@ -141,9 +147,12 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("button", { name: "Validate question", exact: true }).click();
       expect(await (await validResponse).json()).toMatchObject({ isValid: true, problems: [] });
       await expect(page.getByRole("group", { name: "Sort and limit", exact: true })).not.toHaveAttribute("aria-invalid", "true");
+      await openQuestionProperties(page);
       await expect(page.getByLabel("Name", { exact: true })).toHaveValue(`Started run quality ${suffix}`);
+      await closeQuestionProperties(page);
+      await selectQuestionTab(page, "preview");
       const preview = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/dashboard-queries/preview"));
-      await page.getByRole("button", { name: "Preview question", exact: true }).click();
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
       const resultResponse = await preview; expect(resultResponse.ok()).toBe(true);
       const result = await resultResponse.json() as Result;
       expect(result.outcome).toBe("succeeded"); expect(result.coverage.status).toBe("unknown"); expect(result.rows).toHaveLength(1);
@@ -165,7 +174,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/questions/${saved.id}/audience`)).items).toEqual([]);
       await expectResourceLocation("questions", saved.id);
       const execute = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/questions/${saved.id}/execute`));
-      await page.getByRole("button", { name: "Refresh results", exact: true }).click();
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
       const executed = await execute; expect(executed.ok()).toBe(true); expect(executed.request().headers()["if-match"]).toBe(`"${saved.revision}"`);
       await capture(page, info, "question-saved");
       const freshRun = await backend.api<{ workflowExecutionId: string }>(`/runtime/workflows/executables/${seeded.published.artifactId}/execute`, "POST", { sourceReferenceId: seeded.published.sourceReferenceId });
@@ -173,13 +182,15 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       seeded.executionIds.push(freshRun.workflowExecutionId);
       seeded.observedInstances.push({ workflowExecutionId: freshRun.workflowExecutionId, status: (await backend.api<{ instance: { status: string } }>(`/runtime/workflows/instances/${freshRun.workflowExecutionId}`)).instance.status });
       const refreshedResponse = page.waitForResponse(response => response.url().endsWith(`/questions/${saved.id}/execute`));
-      await page.getByRole("button", { name: "Refresh results", exact: true }).click();
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
       const refreshed = await (await refreshedResponse).json() as Result;
       expect(refreshed.rows[0].values.started.value).toBe("4");
       await expect(page.getByRole("region", { name: "Exact result values", exact: true }).getByRole("cell", { name: "4", exact: true })).toBeVisible();
       await capture(page, info, "question-refreshed");
       await captureDashboardAppearances(page, info, capture, "question-editor-preview", async name => {
+        await selectQuestionTab(page, "build");
         await expect(page.getByRole("combobox", { name: "Dataset", exact: true })).toHaveValue("elsa.workflows.runs");
+        await selectQuestionTab(page, "preview");
         await expect(page.getByRole("region", { name: "Exact result values", exact: true }).getByRole("cell", { name: "4", exact: true })).toBeVisible();
         await expect(page.getByRole("button", { name: "Save question", exact: true })).toBeEnabled();
         await capture(page, info, name);
@@ -189,19 +200,22 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
         const presentation = await openQuerySection(page, "visualization");
         await captureScrollPosition(page, info, capture, `${name}-presentation`, presentation.getByRole("combobox", { name: "Visualization", exact: true }));
         await captureScrollPosition(page, info, capture, `${name}-presentation-end`, presentation.getByRole("textbox", { name: "Display label", exact: true }), "end");
+        await selectQuestionTab(page, "preview");
         await captureNativeResultSections(page, info, capture, name, page.locator(".named-preview > .named-result"));
       });
       const savedDrill = page.waitForResponse(response => response.url().endsWith(`/questions/${saved.id}/drill`));
       await page.getByRole("button", { name: "View matching records for result 1", exact: true }).click();
       expect((await savedDrill).ok()).toBe(true); await expect(drill.getByRole("cell", { name: seeded.executionIds[0], exact: true })).toBeVisible(); await drill.press("Escape");
+      await openQuestionProperties(page);
       await page.getByRole("textbox", { name: "Description", exact: true }).fill("Native edit creates the second definition revision.");
       const updated = page.waitForResponse(response => response.request().method() === "PUT" && response.url().endsWith(`/questions/${saved.id}`));
       await page.getByRole("button", { name: "Save question", exact: true }).click();
       const updatedReply = await updated; expect(updatedReply.ok()).toBe(true);
       const updatedQuestion = await updatedReply.json() as Resource;
+      await selectQuestionTab(page, "preview");
       await expect(page.getByRole("button", { name: "View matching records for result 1", exact: true })).toHaveCount(0);
       const afterSaveRefresh = page.waitForResponse(response => response.url().endsWith(`/questions/${saved.id}/execute`));
-      await page.getByRole("button", { name: "Refresh results", exact: true }).click();
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
       const afterSaveReply = await afterSaveRefresh; expect(afterSaveReply.ok()).toBe(true);
       expect(afterSaveReply.request().headers()["if-match"]).toBe(tag(updatedQuestion.revision)["If-Match"]);
       const afterSaveDrill = page.waitForResponse(response => response.url().endsWith(`/questions/${saved.id}/drill`));
@@ -212,23 +226,37 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await capture(page, info, "question-saved-refresh-drill");
       await captureReadableDrillValues(page, info, capture, "question-saved-refresh-drill-values", drill);
       await drill.press("Escape");
+      await openQuestionProperties(page);
       await page.getByRole("textbox", { name: "Description", exact: true }).fill("Unsaved local description to replace from history.");
-      await page.getByRole("button", { name: "Question actions", exact: true }).click();
+      await page.getByRole("button", { name: "More question actions", exact: true }).click();
       await page.getByRole("menuitem", { name: "History", exact: true }).click();
       const history = page.getByRole("dialog", { name: "Definition history", exact: true });
       await expect(history.getByRole("button", { name: /^Inspect revision / })).toHaveCount(2);
-      await expect(history.getByText("Current", { exact: true })).toBeVisible();
+      await expect(history.getByRole("button", { name: `Inspect revision ${updatedQuestion.revision}`, exact: true }).getByText("Current", { exact: true })).toBeVisible();
       await expect(history.getByRole("button", { name: `Restore revision ${updatedQuestion.revision}`, exact: true })).toHaveCount(0);
       await history.getByRole("button", { name: `Inspect revision ${saved.revision}`, exact: true }).click();
       await history.getByText("View technical definition", { exact: true }).click();
       await expect(history.locator("pre")).toContainText("workflow.started-count");
+      const revisions = await backend.api<{ items: { revision: string; updatedAt: string }[] }>(`/_elsa/studio/questions/${saved.id}/revisions`);
+      const retainedRevision = revisions.items.find(item => item.revision === saved.revision)!;
+      expect(retainedRevision, "Owned saved revision timestamp").toBeTruthy();
+      const revisionTime = history.locator(".named-history-detail time");
+      await expect(revisionTime).toHaveAttribute("datetime", retainedRevision.updatedAt);
+      await expect(revisionTime).toHaveText((await expectedStudioDate(page, retainedRevision.updatedAt, "Europe/Amsterdam")).full);
       await capture(page, info, "question-history");
+      await selectStudioTimeZone(page, "UTC");
+      await expect(revisionTime).toHaveAttribute("datetime", retainedRevision.updatedAt);
+      await expect(revisionTime).toHaveText((await expectedStudioDate(page, retainedRevision.updatedAt, "UTC")).full);
+      await capture(page, info, "question-history-time-zone-utc");
+      await selectStudioTimeZone(page, "Europe/Amsterdam");
       await history.getByRole("button", { name: `Restore revision ${saved.revision}`, exact: true }).click();
       await expect(history).toContainText("Unsaved changes will be replaced");
       await capture(page, info, "question-history-restore-confirmation");
       await history.getByRole("button", { name: `Confirm restore ${saved.revision}`, exact: true }).click();
-      await expect(history).toBeHidden(); await expect(page.getByRole("textbox", { name: "Description", exact: true })).toHaveValue(saved.description);
-      await page.getByRole("button", { name: "Question actions", exact: true }).click();
+      await expect(history).toBeHidden();
+      await openQuestionProperties(page);
+      await expect(page.getByRole("textbox", { name: "Description", exact: true })).toHaveValue(saved.description);
+      await page.getByRole("button", { name: "More question actions", exact: true }).click();
       await page.getByRole("menuitem", { name: "Copy saved version", exact: true }).click();
       const copy = page.getByRole("dialog", { name: "Save a private copy", exact: true });
       await copy.getByRole("textbox").fill(`Private question copy ${suffix}`);
@@ -238,20 +266,50 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/questions/${copied.id}/audience`)).items).toEqual([]);
       expect((await backend.api<{ items: unknown[] }>(`/_elsa/studio/questions/${copied.id}/revisions`)).items).toHaveLength(1);
       await expectResourceLocation("questions", copied.id); await capture(page, info, "question-copy");
+      await selectQuestionTab(page, "build");
       await page.getByRole("combobox", { name: "Query form", exact: true }).selectOption("records");
       const columns = page.getByRole("group", { name: "Columns", exact: true });
-      for (const label of ["Run", "Current status", "Run kind"]) await columns.getByLabel(label, { exact: true }).check();
+      for (const label of ["Run", "Current status", "Run kind", "Started at", "Completed at"]) await columns.getByLabel(label, { exact: true }).check();
       await openQuerySection(page, "visualization");
       await page.getByRole("combobox", { name: "Visualization", exact: true }).selectOption("table");
       await page.getByRole("listbox", { name: "Value columns", exact: true }).selectOption([]);
+      await selectQuestionTab(page, "preview");
       const recordsResponse = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/questions/${copied.id}/preview`));
-      await page.getByRole("button", { name: "Preview question", exact: true }).click();
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
       const recordsReply = await recordsResponse;
       expect(recordsReply.request().headers()["if-match"]).toBe(tag(copied.revision)["If-Match"]);
-      const records = await recordsReply.json() as Result;
+      const records = await recordsReply.json() as QueryResult;
       expect(records.rows).toHaveLength(4);
       expect(new Set(records.rows.map(row => row.values.executionId.value))).toEqual(new Set(seeded.executionIds));
+      const recordTable = page.getByRole("region", { name: "Exact result values", exact: true });
+      const timestampColumns = ["startedAt", "completedAt"].map(id => ({ id, index: records.columns.findIndex(column => column.id === id) }));
+      async function checkRecordDates(zone: string) {
+        for (const row of records.rows) {
+          const displayed = recordTable.getByRole("row").filter({ has: page.getByRole("cell", { name: row.values.executionId.value!, exact: true }) });
+          for (const column of timestampColumns) {
+            expect(column.index).toBeGreaterThanOrEqual(0);
+            const value = row.values[column.id]; expect(value.type).toBe("instant");
+            if (column.id === "startedAt") expect(value.value).toBeTruthy();
+            await expect(displayed.getByRole("cell").nth(column.index)).toHaveText(value.value === null
+              ? value.nullReason ?? "Missing" : (await expectedStudioDate(page, value.value, zone)).full);
+          }
+        }
+        expect(records.generatedAt, "Actual result generation instant").toBeTruthy();
+        await expect(page.locator(`.named-preview > .named-result time[datetime="${records.generatedAt}"]`))
+          .toHaveText((await expectedStudioDate(page, records.generatedAt!, zone)).full);
+      }
+      await checkRecordDates("Europe/Amsterdam");
+      const firstRecord = recordTable.getByRole("row").filter({ has: page.getByRole("cell", { name: records.rows[0].values.executionId.value!, exact: true }) });
+      const visibleDateCell = firstRecord.getByRole("cell").nth(timestampColumns[1].index);
+      await visibleDateCell.scrollIntoViewIfNeeded();
+      await expect(visibleDateCell).toBeVisible();
       await capture(page, info, "question-records");
+      await selectStudioTimeZone(page, "UTC");
+      await checkRecordDates("UTC");
+      await visibleDateCell.scrollIntoViewIfNeeded();
+      await expect(visibleDateCell).toBeVisible();
+      await capture(page, info, "question-records-time-zone-utc");
+      await selectStudioTimeZone(page, "Europe/Amsterdam");
       const dashboardNavigation = page.getByRole("navigation", { name: "Operate", exact: true }).getByRole("link", { name: "Dashboards", exact: true });
       async function revealDashboardNavigation() {
         if (!await dashboardNavigation.isVisible()) await page.getByRole("button", { name: "Operate", exact: true }).click();
@@ -260,7 +318,9 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await revealDashboardNavigation();
       await dashboardNavigation.click();
       await page.getByRole("dialog", { name: "Discard unsaved changes" }).getByRole("button", { name: "Cancel", exact: true }).click();
-      await expectResourceLocation("questions", copied.id); await expect(page.getByRole("combobox", { name: "Query form", exact: true })).toHaveValue("records");
+      await expectResourceLocation("questions", copied.id);
+      await selectQuestionTab(page, "build");
+      await expect(page.getByRole("combobox", { name: "Query form", exact: true })).toHaveValue("records");
       await capture(page, info, "question-navigation-cancelled");
       const tabs = page.getByRole("tablist", { name: "Open screens", exact: true });
       const questionTabId = await tabs.getByRole("tab", { selected: true }).getAttribute("data-tab-id"); expect(questionTabId).toBeTruthy();
@@ -268,6 +328,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await dashboardNavigation.click({ modifiers: ["Alt"] }); await expect(page.getByRole("heading", { name: "Dashboards", level: 2, exact: true })).toBeVisible();
       const dashboardTabId = await tabs.getByRole("tab", { selected: true }).getAttribute("data-tab-id"); expect(dashboardTabId).not.toBe(questionTabId);
       await tabs.locator(`[data-tab-id="${questionTabId}"]`).click();
+      await selectQuestionTab(page, "build");
       await expect(page.getByRole("combobox", { name: "Query form", exact: true })).toHaveValue("records");
       await expect(page.getByRole("group", { name: "Columns", exact: true }).getByLabel("Run", { exact: true })).toBeChecked();
       await capture(page, info, "question-retained-tab");
@@ -478,8 +539,11 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await capture(reader, info, "question-shared-search");
       await reader.getByRole("link", { name: saved.name, exact: true }).click();
       await expect(reader.getByRole("button", { name: "Save question", exact: true })).toHaveCount(0);
-      await expect(reader.getByRole("button", { name: "Share", exact: true })).toHaveCount(0);
-      await reader.getByRole("button", { name: "Refresh results", exact: true }).click();
+      await reader.getByRole("button", { name: "More question actions", exact: true }).click();
+      await expect(reader.getByRole("menuitem", { name: "History", exact: true })).toBeVisible();
+      await expect(reader.getByRole("menuitem", { name: "Share", exact: true })).toHaveCount(0);
+      await reader.getByRole("menuitem", { name: "History", exact: true }).press("Escape");
+      await reader.getByRole("button", { name: "Preview", exact: true }).click();
       await expect(reader.getByRole("region", { name: "Exact result values", exact: true }).getByRole("cell", { name: "4", exact: true })).toBeVisible();
       await capture(reader, info, "shared-question");
       await reader.goto(`/dashboards/${dashboardId}`); await expect(reader.locator(".named-tile .named-result")).toHaveCount(4);
@@ -527,13 +591,15 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await backend.api(`/_elsa/studio/questions/${questionId}/audience`, "PUT", originalAudience, tag(afterRepair.revision));
       await profile("dashboard-native-reader"); await readerContext.clearCookies(); await signInDashboardReader(reader, info);
       // With the reader's question still open, revoke only that resource's ACL through the native owner dialog.
-      await reader.goto(`/questions/${questionId}`); await reader.getByRole("button", { name: "Refresh results", exact: true }).click();
+      await reader.goto(`/questions/${questionId}`); await reader.getByRole("button", { name: "Preview", exact: true }).click();
       await expect(reader.getByRole("button", { name: "Save question", exact: true })).toHaveCount(0);
+      await selectQuestionTab(reader, "build");
       await expect(reader.getByRole("combobox", { name: "Dataset", exact: true })).toHaveValue("elsa.workflows.runs");
+      await selectQuestionTab(reader, "preview");
       await expect(reader.locator(".named-result")).toBeVisible();
       await capture(reader, info, "question-repair-reopened");
       await expect(reader.locator(".named-result")).toBeVisible(); await share("questions", questionId, true);
-      await reader.getByRole("button", { name: "Refresh results", exact: true }).click();
+      await reader.getByRole("button", { name: "Preview", exact: true }).click();
       await expect(reader.getByRole("heading", { name: "Current access could not authorize this definition", exact: true })).toBeVisible();
       await expect(reader.locator(".named-result")).toHaveCount(0); await expect(reader.locator(".named-query-controls")).toHaveCount(0);
       await capture(reader, info, "question-access-lost");
@@ -542,6 +608,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await expect(reader.locator(".named-result")).toHaveCount(0); await capture(reader, info, "dashboard-unavailable-tiles");
       // A dashboard reference added after the question editor opened must still earn confirmation.
       await page.goto(`/questions/${copied.id}`);
+      await openQuestionProperties(page);
       await expect(page.getByLabel("Name", { exact: true })).toHaveValue(copied.name);
       await expect(page.getByRole("region", { name: "Question reuse", exact: true })).toHaveCount(0);
       const lateReference = await backend.api<Resource>("/_elsa/studio/dashboards", "POST", { name: `Late question reference ${suffix}`, description: "Added after opening the question editor", operationKey: `late-reference-${suffix}`, tiles: [{ id: "late-reference", questionId: copied.id, size: "medium" }] });
@@ -567,6 +634,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       });
       // A current saved revision mismatch is rejected instead of silently overwriting the editor's draft.
       await page.goto(`/questions/${questionId}`); const current = await backend.api<Resource>(`/_elsa/studio/questions/${questionId}`);
+      await openQuestionProperties(page);
       await page.getByRole("textbox", { name: "Description", exact: true }).fill("Keep this local conflicted draft");
       await openQuerySection(page, "query.sort");
       await page.getByLabel("Maximum result rows/groups", { exact: true }).fill("24");
@@ -575,10 +643,13 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await expect(page.getByRole("dialog", { name: "Update reused question", exact: true })).toHaveCount(0);
       await expect(page.locator(".named-inline-error")).toContainText("The saved question changed. Your unsaved draft and original revision remain here.");
       await expect(page.getByRole("region", { name: "Question reuse", exact: true })).toContainText(`Private operations ${suffix}`);
-      await expect(page.locator(".named-inline-error")).toBeVisible(); await expect(page.getByRole("textbox", { name: "Description", exact: true })).toHaveValue("Keep this local conflicted draft");
+      await expect(page.locator(".named-inline-error")).toBeVisible();
+      await openQuestionProperties(page);
+      await expect(page.getByRole("textbox", { name: "Description", exact: true })).toHaveValue("Keep this local conflicted draft");
+      await openQuerySection(page, "query.sort");
       await expect(page.getByLabel("Maximum result rows/groups", { exact: true })).toHaveValue("24");
       await capture(page, info, "question-conflict");
-      await page.getByRole("button", { name: "Question actions", exact: true }).click();
+      await page.getByRole("button", { name: "More question actions", exact: true }).click();
       await page.getByRole("menuitem", { name: "Save draft as new question", exact: true }).click();
       const recovery = page.getByRole("dialog", { name: "Save draft as new question", exact: true });
       await recovery.getByRole("textbox").fill(`Recovered local draft ${suffix}`);
@@ -616,8 +687,10 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       // The source requires no grouping for a single-value metric. Refine the independent
       // recovered question through ordinary controls, rather than forcing an invalid tile.
       await page.goto(`/questions/${recovered.id}`);
+      await openQuestionProperties(page);
       const longQuestionName = `Metric${"Q".repeat(140)}${suffix.replaceAll("-", "")}`;
       await page.getByRole("textbox", { name: "Name", exact: true }).fill(longQuestionName);
+      await selectQuestionTab(page, "build");
       const metricGrouping = page.getByRole("group", { name: "Group by", exact: true });
       await metricGrouping.getByRole("checkbox", { name: "Current status", exact: true }).uncheck();
       await metricGrouping.getByRole("checkbox", { name: "Run kind", exact: true }).uncheck();
@@ -625,8 +698,9 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await metricPresentation.getByRole("combobox", { name: "Visualization", exact: true }).selectOption("metric");
       await metricPresentation.getByRole("combobox", { name: "Horizontal axis", exact: true }).selectOption("");
       await metricPresentation.getByRole("listbox", { name: "Value columns", exact: true }).selectOption(["started"]);
+      await selectQuestionTab(page, "preview");
       const metricPreviewResponse = page.waitForResponse(response => response.url().endsWith(`/questions/${recovered.id}/preview`));
-      await page.getByRole("button", { name: "Preview question", exact: true }).click();
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
       const metricPreviewReply = await metricPreviewResponse; expect(metricPreviewReply.ok()).toBe(true); const metricPreview = await metricPreviewReply.json() as Result;
       expect(metricPreview.outcome).toBe("succeeded"); expect(metricPreview.rows).toHaveLength(1); expect(metricPreview.rows[0].values.started.value).toBe("4");
       const metricSavedResponse = page.waitForResponse(response => response.request().method() === "PUT" && response.url().endsWith(`/questions/${recovered.id}`));

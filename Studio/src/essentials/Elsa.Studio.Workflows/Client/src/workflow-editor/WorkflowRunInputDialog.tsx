@@ -1,3 +1,4 @@
+import { localDateTimeToIso, resolveStudioTimeZone, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { typeAllowsNull } from "../typeNullability";
 import { StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { Component, useId, useRef, useState, type ErrorInfo, type FormEvent, type ReactNode } from "react";
@@ -12,13 +13,15 @@ import {
   type WorkflowRunInputValues
 } from "../workflowRunInputs";
 
-export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onSubmit, onCancel }: {
+export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, returnFocusTo, onSubmit, onCancel }: {
   inputs: WorkflowInput[];
   editors?: StudioWorkflowRunInputEditorContribution[];
   busy?: boolean;
+  returnFocusTo?: HTMLElement | null;
   onSubmit(values: WorkflowRunInputValues): void;
   onCancel(): void;
 }) {
+  const timeZone = useStudioTimeZone();
   const firstInput = useRef<HTMLElement | null>(null);
   const [drafts, setDrafts] = useState<WorkflowRunInputDrafts>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -41,7 +44,11 @@ export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onS
   };
 
   return (
-    <StudioDialog open title="Run workflow" description="Provide the workflow inputs for this run."
+    <StudioDialog open title="Run workflow" description={`Provide the workflow inputs for this run. Dates use ${resolveStudioTimeZone(timeZone)}. A repeated hour uses its earlier offset.`}
+      onCloseAutoFocus={returnFocusTo ? event => {
+        event.preventDefault();
+        if (document.activeElement === document.body && returnFocusTo.isConnected) returnFocusTo.focus();
+      } : undefined}
       onClose={onCancel} initialFocusRef={firstInput} dismissDisabled={busy} dismissOnOutsideClick={false}
       noValidate onSubmit={submit}
       footer={<StudioDialogFooter onCancel={onCancel} cancelDisabled={busy} confirmDisabled={busy}
@@ -115,6 +122,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
   isNull?: boolean;
   onNull?(): void;
 }) {
+  useStudioTimeZone();
   const fieldId = useId();
   const descriptionId = `${fieldId}-description`;
   const errorId = `${fieldId}-error`;
@@ -158,6 +166,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
           />
         </WorkflowRunInputEditorBoundary>
       ) : fallback}
+      {!isNull && getWorkflowRunInputControlKind(input) === "datetime" && value && !error ? <small>{dateOffsetPreview(value)}</small> : null}
       {onNull && typeAllowsNull(input.type) ? <button type="button" aria-label={`${isNull ? "Enter a value" : "Send null"} for ${label}`} onClick={isNull ? () => onChange("") : onNull} disabled={disabled}>{isNull ? "Enter a value" : "Send null"}</button> : null}
       {input.description ? <small id={descriptionId}>{input.description}</small> : null}
       {hasDefault && !input.isRequired ? <small>Uses default if omitted.</small> : null}
@@ -240,4 +249,8 @@ function renderInputControl(
 
 function ownValue<T>(record: Record<string, T>, key: string): T | undefined {
   return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
+}
+
+function dateOffsetPreview(value: string) {
+  try { return `Sent as ${localDateTimeToIso(value)}`; } catch (error) { return error instanceof Error ? error.message : "Enter a valid date and time."; }
 }

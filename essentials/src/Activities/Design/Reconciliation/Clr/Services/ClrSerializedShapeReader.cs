@@ -18,6 +18,7 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
     CancellationToken cancellationToken, string? metadataSeed = null)
 {
     private const string JsonPrefix = "System.Text.Json.Serialization.";
+    private const string ConversionAttribute = "Elsa.Serialization.Core.JsonConversionAttribute";
     private readonly Dictionary<string, string> _assets = new(StringComparer.Ordinal);
     private readonly HashSet<string> _visitedTypes = new(StringComparer.Ordinal);
     private int _remainingMembers = limits.MaximumMembers;
@@ -209,6 +210,9 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
             result.Add(new(name, property.Name.Humanize(),
                 new(property.PropertyType, nullability, conditional ? false : TypeNullability(property.PropertyType, nullability),
                     conditional ? ActivitySerializedPresence.Optional : ActivitySerializedPresence.Required),
+                ReflectionOnlyAttributes.EnumeratePropertyChain(property).Any(declaration =>
+                    declaration.GetCustomAttributesData().Any(attribute => attribute.AttributeType.FullName == ConversionAttribute))
+                    ? "activity.shape.conversion-contract-opaque" :
                 Attribute(property, "JsonConverterAttribute") is not null ? "activity.shape.converter-opaque" :
                 Attribute(property, "JsonNumberHandlingAttribute") is not null ? "activity.shape.number-handling-opaque" : null));
         }
@@ -230,6 +234,10 @@ internal sealed class ClrSerializedShapeReader(string sourceRevision, ActivitySe
         {
             var attributes = current.GetCustomAttributesData();
             TrackAttributes(attributes);
+            // Scoped conversion may rename the root or its descendants. Until those selections
+            // are modeled here, default camelCase metadata cannot claim to describe that wire contract.
+            if (attributes.Any(a => a.AttributeType.FullName == ConversionAttribute))
+                return "activity.shape.conversion-contract-opaque";
             if (attributes.Any(a => a.AttributeType.FullName == JsonPrefix + "JsonConverterAttribute"))
                 return "activity.shape.converter-opaque";
             if (attributes.Any(a => a.AttributeType.FullName == JsonPrefix + "JsonNumberHandlingAttribute"))

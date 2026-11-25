@@ -69,7 +69,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
                     $"Portable expression input '{inputName}' on executable node '{nodeId}'");
             activityResultPolicyResolved = true;
 
-            var parameters = await MaterializeParametersAsync(expression, resolutionContext, nodeId, inputName, cancellationToken);
+            var parameters = await MaterializeParametersAsync(expression, resolutionContext, nodeId, inputName, cancellationToken, warnings);
 
             // Spec 1222 FR-008, FR-013: only an expression publish marked for a computed or opaque read gets the run-time
             // lookup, and only then are the visible variables loaded. A literal-only expression reads its pinned
@@ -221,7 +221,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
 
     // Spec 1229 FR-006: a sensitive, encrypted or redacted value is not shown, nor anything that can come from it.
     private static bool Protects(ValueProtectionPolicy policy) =>
-        policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode);
+        policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) || !string.IsNullOrWhiteSpace(policy.RetentionPolicy);
 
     private static ExpressionInputFailureException NewInputFailure(
         string code,
@@ -299,8 +299,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
         WorkflowInstanceExpressionParameterBinding binding,
         RuntimeInputBindingResolutionContext context) => binding.Member switch
     {
-        WorkflowInstanceExpressionParameterBinding.Members.InstanceId => JsonSerializer.SerializeToElement(context.WorkflowExecutionId),
-        _ => JsonSerializer.SerializeToElement(context.CorrelationId),
+        WorkflowInstanceExpressionParameterBinding.Members.InstanceId => JsonSerializer.SerializeToElement(context.WorkflowExecutionId, Elsa.Serialization.Core.JsonBaseline.Options),
+        _ => JsonSerializer.SerializeToElement(context.CorrelationId, Elsa.Serialization.Core.JsonBaseline.Options),
     };
 
     private async ValueTask<PortableExpressionParameters> MaterializeParametersAsync(
@@ -308,7 +308,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
         RuntimeInputBindingResolutionContext context,
         string nodeId,
         string inputName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IExecutionWarningSink warnings)
     {
         var values = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         ValueProtectionPolicy? dependencyPolicy = null;
@@ -323,7 +324,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 WorkflowInstanceExpressionParameterBinding instance => new PortableExpressionParameter(ReadWorkflowInstanceParameter(instance, context), null),
                 _ => throw new InvalidOperationException($"Portable expression parameter '{name}' on input '{inputName}' uses unsupported binding type '{binding.GetType().Name}'.")
             };
-            var materialized = ApplyParameterConversionPlan(expression, name, parameter, nodeId, inputName);
+            var materialized = ApplyParameterConversionPlan(expression, name, parameter, nodeId, inputName, warnings);
             values.Add(name, materialized.Value);
             if (materialized.Policy is not null)
             {
@@ -344,7 +345,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
         string parameterName,
         PortableExpressionParameter parameter,
         string nodeId,
-        string inputName)
+        string inputName,
+        IExecutionWarningSink warnings)
     {
         if (!expression.ParameterConversionPlans.TryGetValue(parameterName, out var plan))
             return parameter;
@@ -353,7 +355,12 @@ internal sealed class RuntimePortableExpressionEvaluator(
         var source = parameter.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
             ? ValueEnvelope.Null(plan.SourceType, policy)
             : ValueEnvelope.Inline(plan.SourceType, parameter.Value, policy);
-        var converted = _valueConversionExecutor.Convert(source, plan);
+        var converted = _valueConversionExecutor.Convert(source, plan, diagnostic =>
+        {
+            var warning = ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType,
+                diagnostic.Converter, $"args.{inputName}.parameters.{parameterName}");
+            warnings.Report(Protects(policy) ? warning.ProtectedForm! : warning);
+        });
         if (converted.Presence == ValuePresence.Absent)
             throw NewParameterException(parameterName, nodeId, inputName, "converted to an absent value");
         if (converted.ExternalReference is not null)
@@ -361,7 +368,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
         if (converted.Policy.Lifecycle == DurableValueLifecycle.None)
             throw NewParameterException(parameterName, nodeId, inputName, "converted to a transient value that cannot cross the durable expression boundary");
         if (converted.Presence == ValuePresence.ExplicitNull)
-            return new PortableExpressionParameter(JsonSerializer.SerializeToElement<object?>(null), converted.Policy);
+            return new PortableExpressionParameter(JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options), converted.Policy);
         if (converted.InlineValue is not { } value)
             throw NewParameterException(parameterName, nodeId, inputName, "converted without an inline payload");
 
@@ -413,8 +420,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
         {
             var value = !NullPolicyDefaults.AcceptsNull(envelope.Type.ToTypeReference(), wellKnownTypeRegistry, typeDescriptors) &&
                 NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, wellKnownTypeRegistry, out var typeDefault)
-                ? JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType())
-                : JsonSerializer.SerializeToElement<object?>(null);
+                ? JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType(), Elsa.Serialization.Core.JsonBaseline.Options)
+                : JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options);
             return new PortableExpressionParameter(value, envelope.Policy);
         }
         return new PortableExpressionParameter(
@@ -434,7 +441,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
             ?? throw NewParameterException(parameterName, nodeId, inputName, "requires a consumer invocation identity");
         var resolution = new CausalActivityResultResolver().Resolve(binding, consumer, context.RuntimeView);
         if (resolution is null)
-            return new PortableExpressionParameter(JsonSerializer.SerializeToElement<object?>(null), null);
+            return new PortableExpressionParameter(JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options), null);
 
         var result = resolution.Completion.Result;
         var value = await ReadPersistableEnvelopeAsync(result, parameterName, nodeId, inputName, cancellationToken);
@@ -471,7 +478,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
         if (envelope.Presence == ValuePresence.Absent)
             throw NewParameterException(parameterName, nodeId, inputName, "is absent");
         if (envelope.Presence == ValuePresence.ExplicitNull)
-            return JsonSerializer.SerializeToElement<object?>(null);
+            return JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options);
         if (envelope.InlineValue.HasValue)
             return envelope.InlineValue.Value.Clone();
         if (envelope.ExternalReference is null)

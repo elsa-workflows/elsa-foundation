@@ -8,8 +8,7 @@ internal sealed record ExternalAntiforgeryResponse(string RequestToken, string F
 internal sealed record ExternalAuthenticationFailureResponse(string Error);
 internal sealed record ExternalAuthenticationStartRequest(string? ReturnUrl, string? ConnectionRecordId = null);
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata,
-    UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(ExternalAntiforgeryResponse))]
 [JsonSerializable(typeof(ExternalAuthenticationFailureResponse))]
 [JsonSerializable(typeof(ExternalAuthenticationPreview))]
@@ -33,4 +32,15 @@ internal sealed record ExternalAuthenticationStartRequest(string? ReturnUrl, str
 [JsonSerializable(typeof(ManagedLinkAttachResponse))]
 [JsonSerializable(typeof(ManagedLinkRemoveRequest))]
 [JsonSerializable(typeof(ManagedLinkRemoveResponse))]
-internal partial class ExternalAuthenticationApiJsonContext : JsonSerializerContext;
+internal partial class ExternalAuthenticationApiJsonContext : JsonSerializerContext
+{
+    internal static ExternalAuthenticationApiJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+}

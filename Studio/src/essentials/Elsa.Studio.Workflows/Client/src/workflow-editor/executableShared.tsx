@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import { useNotificationGuard } from "./notifications";
@@ -8,6 +9,7 @@ import type { ExecutableRunState } from "./editorTypes";
 import { copyTextToClipboard, formatReferenceScope, getExecutableReferenceStatus } from "./editorHelpers";
 
 export function ExecutableRunStatusLine({ status, run, compact = false }: { status: string; run: ExecutableRunState | null; compact?: boolean }) {
+
   const openRun = () => {
     if (!run?.workflowExecutionId) return;
     window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(run.workflowExecutionId)}`));
@@ -62,6 +64,7 @@ export function ExecutableReferenceList({ references, activeReferenceId, onSelec
   ariaLabel?: string;
   variant?: "compact" | "collection";
 }) {
+  useStudioTimeZone();
   if (references.length === 0) return <p className="wf-muted">No source references.</p>;
 
   return (

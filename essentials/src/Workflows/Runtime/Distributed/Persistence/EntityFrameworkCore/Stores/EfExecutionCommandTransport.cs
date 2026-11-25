@@ -26,7 +26,7 @@ public sealed class EfExecutionCommandTransport(
     private const int MaxCasAttempts = 16;
     private static readonly EfWriteRetry AppendAndLeaseRetry = new(MaxCasAttempts, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient);
     private static readonly EfWriteRetry AckRetry = new(MaxCasAttempts, EfWriteConflict.Concurrency | EfWriteConflict.Transient);
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public async ValueTask<ExecutionCommandTransportItem> SendAsync(
         string workflowExecutionId,

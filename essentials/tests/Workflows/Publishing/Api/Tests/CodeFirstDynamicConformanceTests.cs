@@ -2,6 +2,8 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Serialization.Core;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Expressions.Core.Models;
@@ -25,8 +27,27 @@ public sealed class CodeFirstDynamicConformanceTests
 {
     private const string ProducerVersionId = "actver_L_fnSHOvU1fBt1DIPoBkEOI3idvorapeGRYQMbhDXkE";
     private const string ConsumerVersionId = "actver_Y5CcEH_PHxAHMVlKY8akaR3uJhPUUhRg30v4Rtppyk0";
+    private const string MemberVersionId = "member-scoped@1";
     private static readonly DateTimeOffset CompiledAt = new(2026, 7, 16, 12, 0, 0, TimeSpan.Zero);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Typed_authoring_and_publication_use_the_same_input_member_contract(bool sourceLiteral)
+    {
+        var state = new MemberScopedWorkflow(sourceLiteral).Compile("version-1");
+        var child = Assert.Single(Assert.Single(CreateStructureService().ProjectChildren(state.RootActivity)).Activities);
+        var authored = Assert.Single(child.Inputs).Value.Value!.Value;
+        Assert.Equal("retained name", authored.GetProperty("member_name").GetString());
+        Assert.False(authored.TryGetProperty("type_name", out _));
+
+        var executable = await CompileAsync(state);
+        var literal = executable.NodesById["member-consumer"].InputBindings["payload-custom"].Literal!.InlineValue!.Value;
+        var member = typeof(MemberScopedActivity).GetProperty(nameof(MemberScopedActivity.Payload))!;
+        var value = (MemberScopedLiteral)JsonConversionContract.For(typeof(MemberScopedLiteral), member).Read(literal, typeof(MemberScopedLiteral))!;
+        Assert.Equal("retained name", value.Name);
+    }
 
     [Fact]
     public async Task EquivalentGeneratedCodeFirstAndDynamicDefinitionsCompileToTheSameCanonicalBindingsAndHash()
@@ -88,6 +109,8 @@ public sealed class CodeFirstDynamicConformanceTests
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(GeneratedProducerActivity), TypeAliasConvention.CanonicalAlias(typeof(GeneratedProducerActivity)));
         registry.RegisterType(typeof(GeneratedConsumerActivity), TypeAliasConvention.CanonicalAlias(typeof(GeneratedConsumerActivity)));
+        registry.RegisterType(typeof(MemberScopedActivity), TypeAliasConvention.CanonicalAlias(typeof(MemberScopedActivity)));
+        registry.RegisterType(typeof(MemberScopedLiteral), TypeAliasConvention.CanonicalAlias(typeof(MemberScopedLiteral)));
         var compiler = TestCompiler.Create(
             new UnusedWorkflowVersionStore(),
             new FakeActivityVersionStore(ActivityVersions().ToList()),
@@ -158,7 +181,7 @@ public sealed class CodeFirstDynamicConformanceTests
             new ActivityNodeStructure(
                 "elsa.sequence.structure",
                 "1.0.0",
-                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities, variables), JsonOptions)));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
         return new WorkflowDefinitionState(variables, root, [], [], null);
     }
 
@@ -166,7 +189,7 @@ public sealed class CodeFirstDynamicConformanceTests
         new(nodeId, activityVersionId, inputs, Outputs: []);
 
     private static ArgumentState Input(string key, object? value, string expressionType) =>
-        new(key, new ArgumentValue(value, expressionType), null, null, null, null);
+        new(key, ArgumentValue.FromClr(value, expressionType), null, null, null, null);
 
     private static VariableDefinition RetryVariable() =>
         new(
@@ -174,12 +197,14 @@ public sealed class CodeFirstDynamicConformanceTests
             "RetryCount",
             TypeReferenceFactory.FromClrType(typeof(int), TypeAliasConvention.CanonicalAlias),
             StorageDriverType: null,
-            Default: new ArgumentValue(3, "Literal"));
+            Default: ArgumentValue.FromClr(3, "Literal"));
 
     private static IReadOnlyCollection<ActivityDefinitionVersion> ActivityVersions() =>
     [
         ActivityVersion("elsa.sequence@1", "Elsa.Sequence", []),
         ActivityVersion(ProducerVersionId, typeof(GeneratedProducerActivity).FullName!, []),
+        ActivityVersion(MemberVersionId, typeof(MemberScopedActivity).FullName!,
+            [InputDefinition("payload-custom", TypeAliasConvention.CanonicalAlias(typeof(MemberScopedLiteral)))]),
         ActivityVersion(ConsumerVersionId, typeof(GeneratedConsumerActivity).FullName!,
         [
             InputDefinition("request", "String"),
@@ -212,7 +237,7 @@ public sealed class CodeFirstDynamicConformanceTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(
+            DescriptorPayload = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor(
                 id switch
                 {
                     // Producer/consumer catalog keys already carry the generated CLR type's full name.
@@ -247,6 +272,34 @@ public sealed class CodeFirstDynamicConformanceTests
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
         new ActivitiesSequenceFeature().ConfigureServices(services);
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
+    }
+
+    private sealed class MemberScopedWorkflow(bool sourceLiteral) : WorkflowDefinition<ConformanceRequest, string>
+    {
+        protected override void Build(IWorkflowBuilder<ConformanceRequest, string> workflow)
+        {
+            var value = new MemberScopedLiteral { Name = "retained name" };
+            workflow.Sequence.Add<MemberScopedActivity, string>(MemberVersionId, inputs =>
+            {
+                if (sourceLiteral) inputs.From("payload-custom", workflow.Value(value));
+                else inputs.Value("payload-custom", value);
+            }, "member-consumer");
+        }
+    }
+
+    [JsonConversion(MemberMappings = ["type_name=Name"])]
+    public sealed class MemberScopedLiteral
+    {
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public sealed class MemberScopedActivity : Activity<string>
+    {
+        [ActivityInput(Key = "payload-custom")]
+        [JsonConversion(MemberMappings = ["member_name=Name"], RefuseUnmatchedMembers = true)]
+        public MemberScopedLiteral Payload { get; set; } = new();
+        protected override ValueTask<ActivityTransition<string>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(Payload.Name));
     }
 
     private sealed class ConformanceWorkflow : WorkflowDefinition<ConformanceRequest, string>

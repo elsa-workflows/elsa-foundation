@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Events;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
@@ -32,6 +33,40 @@ namespace Elsa.Studio.Dashboard.ResourceTests;
 
 public sealed class DashboardResourceApiTests
 {
+    [Theory]
+    [InlineData(false, "time", "from")]
+    [InlineData(false, "time", "to")]
+    [InlineData(false, "comparison", "from")]
+    [InlineData(false, "comparison", "to")]
+    [InlineData(true, "time", "from")]
+    [InlineData(true, "time", "to")]
+    [InlineData(true, "comparison", "from")]
+    [InlineData(true, "comparison", "to")]
+    public async Task Offsetless_query_dates_return_owned_diagnostics_before_execution_or_storage(
+        bool save, string section, string member)
+    {
+        await using var host = await DashboardResourceApiHost.CreateAsync();
+        var input = DashboardResourceTests.Question("date-contract");
+        var body = JsonSerializer.SerializeToNode(save ? (object)input : input.Definition!,
+            options: Elsa.Serialization.Core.JsonBaseline.Options)!.AsObject();
+        var definition = save ? body["definition"]!.AsObject() : body;
+        var query = definition["query"]!.AsObject();
+        query[section] = new JsonObject { [member] = "2026-11-24T12:34:56",
+            [section == "comparison" ? "mode" : "field"] = section == "comparison" ? "custom" : "createdAt" };
+
+        using var response = await host.SendAsync(HttpMethod.Post,
+            save ? "/_elsa/studio/questions" : "/_elsa/studio/dashboard-queries/preview", "owner", body);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("json-datetime-offset-missing", problem.RootElement.GetProperty("code").GetString());
+        var path = problem.RootElement.GetProperty("path").GetString();
+        Assert.Contains(section, path);
+        Assert.EndsWith(member, path);
+        Assert.DoesNotContain("2026-11-24", problem.RootElement.ToString());
+        Assert.Equal(0, host.Queries.Executions);
+        Assert.Equal(0, await host.StoredQuestionCountAsync());
+    }
+
     [Fact]
     public async Task Question_details_and_updates_show_only_current_readable_same_tenant_dashboard_uses()
     {

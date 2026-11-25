@@ -9,7 +9,7 @@ namespace Elsa.Studio.Hosting.Themes;
 /// </summary>
 internal sealed class ThemeDirectorySource
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true };
     private readonly ThemeStoreSettings _config;
     private readonly ILogger<ThemeDirectorySource> _logger;
 

@@ -15,7 +15,7 @@ internal static class EfModelCheckpointStaging
         var row = await context.Set<RuntimeModelExecutionEntity>().SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new DbUpdateConcurrencyException("The native worker's authorizing model execution is absent.");
         var current = EfRuntimeModelExecutionReader.Read(row, scope, expected.ExecutionId);
-        if (RuntimeArtifactJson.Serialize(current) != RuntimeArtifactJson.Serialize(expected))
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(RuntimeArtifactJson.Serialize(current), RuntimeArtifactJson.Serialize(expected)))
             throw new DbUpdateConcurrencyException("The model decision changed before native worker admission.");
         // A read alone cannot order a concurrent cancellation against admission. Force the same physical
         // revision compare as model decisions while retaining the model's exact bytes and semantic revision.
@@ -52,13 +52,13 @@ internal static class EfModelCheckpointStaging
                 throw new InvalidOperationException("A model decision cannot change its execution authority or pinned material.");
             if (current.IngressOrigin is { } origin ? !origin.IsEquivalentTo(state.IngressOrigin) : state.IngressOrigin is not null)
                 throw new InvalidOperationException("A model decision cannot replace or introduce its captured ingress origin.");
-            if (retainsState && RuntimeArtifactJson.Serialize(current) != RuntimeArtifactJson.Serialize(state))
+            if (retainsState && !Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(RuntimeArtifactJson.Serialize(current), RuntimeArtifactJson.Serialize(state)))
                 throw new InvalidOperationException("A retained-state input cannot change the committed model state.");
             // A model may discover physical responsibility retained by an older prematurely settled writer.
             // Only terminal bookkeeping can change: the semantic result remains immutable, never Running.
             if (!retainsState && (current.Lifecycle is RuntimeModelLifecycle.TerminalSettled or RuntimeModelLifecycle.TerminalPendingSettlement) &&
                 (state.Lifecycle is not (RuntimeModelLifecycle.TerminalPendingSettlement or RuntimeModelLifecycle.TerminalSettled) ||
-                 !JsonElement.DeepEquals(current.TerminalResult!.Value, state.TerminalResult!.Value)))
+                 !Elsa.Serialization.Core.JsonCanonicalForm.Equals(current.TerminalResult!.Value, state.TerminalResult!.Value)))
                 throw new InvalidOperationException("A terminal model execution cannot resume semantic progression or replace its result.");
         }
 

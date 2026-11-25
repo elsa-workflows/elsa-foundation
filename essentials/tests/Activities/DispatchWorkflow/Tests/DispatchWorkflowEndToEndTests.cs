@@ -519,7 +519,7 @@ public sealed class DispatchWorkflowEndToEndTests
                         envelope.Command.Kind == WorkflowExecutionCommandKind.Start);
         Assert.Equal(run.Identity.StartIdempotencyKey, childEnvelope.IdempotencyKey);
         Assert.Equal(new WorkflowExecutionPartition("partition-eu"), childEnvelope.Partition);
-        var start = childEnvelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var start = childEnvelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(DispatchWorkflowRuntimeTestFixture.ChildIdentity, start.PinnedExecutable);
         Assert.Null(start.PinnedSource);
         Assert.Equal(WorkflowExecutableStartAuthorityKind.RetainedDependency, start.StartAuthority!.Kind);
@@ -990,7 +990,7 @@ public sealed class DispatchWorkflowEndToEndTests
             fixture.Actors.Envelopes,
             envelope => envelope.WorkflowExecutionId == run.Identity.ChildWorkflowExecutionId &&
                         envelope.Command.Kind == WorkflowExecutionCommandKind.Start);
-        var payload = childStart.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = childStart.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(DispatchWorkflowRuntimeTestFixture.ChildIdentity, payload.PinnedExecutable);
         Assert.Null(payload.PinnedSource);
         Assert.Equal(WorkflowExecutableStartAuthorityKind.RetainedDependency, payload.StartAuthority!.Kind);

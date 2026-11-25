@@ -26,17 +26,23 @@ internal class EtlBoundedCountingStream(long maxBytes) : Stream
     }
 }
 
-/// <summary>Hashes the exact bytes accepted by a bounded counting stream.</summary>
-internal sealed class EtlBoundedHashingStream(IncrementalHash hash, long maxBytes)
+/// <summary>Bounds the actual JSON byte count independently of its canonical value hash.</summary>
+internal sealed class EtlBoundedHashingStream(long maxBytes)
     : EtlBoundedCountingStream(maxBytes)
 {
+    private readonly MemoryStream buffer = new();
+
     public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
 
     public override void Write(ReadOnlySpan<byte> buffer)
     {
         base.Write(buffer);
-        hash.AppendData(buffer);
+        this.buffer.Write(buffer);
     }
+
+    public string ContentHash() => Elsa.Serialization.Core.JsonHashInput.HashUtf8(buffer.GetBuffer().AsMemory(0, checked((int)ByteLength)));
+
+    protected override void Dispose(bool disposing) { if (disposing) buffer.Dispose(); base.Dispose(disposing); }
 }
 
 /// <summary>Provides one bounded sequential view over a range in a shared source stream.</summary>

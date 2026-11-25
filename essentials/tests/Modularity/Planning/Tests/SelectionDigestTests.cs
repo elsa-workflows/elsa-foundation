@@ -13,11 +13,11 @@ public sealed class SelectionDigestTests
     }
 
     [Fact]
-    public void Unicode_definition_matches_independent_ecmascript_vector()
+    public void Unicode_definition_matches_independent_fixed_encoder_vector()
     {
         var definition = PlannerFixture.Definition("group", "unicode-demo", ["B", "A"], rationale: "Café ☕", title: "Grüße", description: "Δ workflow",
             explanations: [new("A", "B", "optional", "Éviter les surprises")]);
-        Assert.Equal("44de77def0d72ef7c1d8a4b6ba0e7a04724d26c905cca9482df7ec5491b52e52", definition.Digest);
+        Assert.Equal("87e43149c81bc45c3362bec77bbd685c21324b346df129a8662370400689ca9c", definition.Digest);
     }
 
     [Fact]

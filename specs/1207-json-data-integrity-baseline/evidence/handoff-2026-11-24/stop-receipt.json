@@ -1,0 +1,16 @@
+{
+  "reason": "Owner requested commit/push/handoff and stop implementation/review work",
+  "sourceHead": "3f3f7b9cca4a77b488408b20dc8db31bbc666097",
+  "interrupted": "Architecture shipping build after whole BPMN passed877/877; guard/manual source probe not started",
+  "terminated": [
+    {
+      "pid": 272097,
+      "command": "dotnet build essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-restore -m:1 "
+    },
+    {
+      "pid": 266055,
+      "command": "owned validation launcher"
+    }
+  ],
+  "runHead": "04ae1285c2f8b3eef1a464c28adea65781724c62"
+}

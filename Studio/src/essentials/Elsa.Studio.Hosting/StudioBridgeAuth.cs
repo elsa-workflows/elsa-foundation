@@ -331,7 +331,7 @@ internal sealed class StudioBridgeAuthHandler(
         return AuthenticateResult.Success(ticket);
     }
 
-    private static readonly JsonSerializerOptions SessionJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SessionJsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     // Mirrors the backend AuthSession contract's fields the gate needs: `status` (authenticated/anonymous), `subject`,
     // and the flat `permissions` array the backend already emits (camelCase over the wire).

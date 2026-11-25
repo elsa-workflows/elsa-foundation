@@ -92,7 +92,7 @@ internal sealed class RuntimePersistenceModeResolver(
         WorkflowExecutionStartCommandPayload? payload;
         try
         {
-            payload = start.Payload?.Deserialize<WorkflowExecutionStartCommandPayload>();
+            payload = start.Payload?.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options);
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException)
         {

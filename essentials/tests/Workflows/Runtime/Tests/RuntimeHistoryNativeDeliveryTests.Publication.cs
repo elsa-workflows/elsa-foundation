@@ -45,7 +45,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         else { Assert.Null(before.Head); Assert.Empty(before.Items); }
         Assert.Equal(0, f.Activator.Calls); Assert.NotNull(await f.Bookmarks.FindAsync(Run, Wait));
         var queued = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
-        var cause = queued.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.HistoryCausation!;
+        var cause = queued.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!.HistoryCausation!;
         Assert.Equal(captured ? receipt!.HistoryEventId : published.HistoryEventId, cause.HistoryEventId);
         var drained = await f.DrainAsync();
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single(drained.Items).Status);
@@ -71,7 +71,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
                 Assert.True(consumed.Sequence < fault.Sequence); Assert.Single(page.Items, item => item.Name == "IncidentRecorded");
             }
             Assert.DoesNotContain(page.Items, item => item.Name == "DeliveryFaulted");
-            Assert.DoesNotContain("private", JsonSerializer.Serialize(page.Items));
+            Assert.DoesNotContain("private", JsonSerializer.Serialize(page.Items, options: Elsa.Serialization.Core.JsonBaseline.Options));
             Assert.False(page.Head!.CapturedFromStart);
         }
         else
@@ -170,7 +170,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         {
             var sp = scope.ServiceProvider; var now = clock.GetUtcNow();
             sp.GetRequiredService<IPublishStimulusStager>().StagePublishStimulus(new("publisher", activityId, "approval", null,
-                JsonSerializer.SerializeToElement(new Approval(true)), false));
+                JsonSerializer.SerializeToElement(new Approval(true), options: Elsa.Serialization.Core.JsonBaseline.Options), false));
             var intent = Assert.Single(sp.GetRequiredService<IPublishStimulusStagingAccessor>().TakePublishStimuli("publisher", activityId));
             var commit = new RuntimeCheckpointCommit(publicationId, new(publicationId + ":checkpoint", RuntimeCheckpointNames.ActivityCompleted,
                 "publisher", now, [activityId], new Dictionary<string, string> { [RuntimeMetadataKeys.CommandId] = publicationId + ":command" }),

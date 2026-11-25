@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
@@ -20,4 +20,7 @@
     <PackageReference Include="ValenceWorks.MinimalEndpoints" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

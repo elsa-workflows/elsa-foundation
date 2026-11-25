@@ -24,7 +24,7 @@ public static class NullPolicyDefaults
         if (!policies.DefaultOnNull || !supported)
             throw new NullContractViolationException(target);
         warnings?.Report(new ExecutionWarning("VF-NULL-001", $"{target} used its type default because DefaultOnNull is enabled.", ExecutionWarningSeverity.Information));
-        return ValueEnvelope.Inline(value.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType()), value.Policy);
+        return ValueEnvelope.Inline(value.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType(), JsonBaseline.Options), value.Policy);
     }
 
     /// <summary>Type-derived nullability of an authored member, including JSON kinds and collections.</summary>

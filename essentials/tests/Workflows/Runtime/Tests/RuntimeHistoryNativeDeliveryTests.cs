@@ -46,7 +46,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         Assert.Equal(BookmarkResumeDispatchStatus.Duplicate, (await f.Dispatcher.DispatchAsync(request)).Status);
         Assert.Equal(0, f.Activator.Calls);
         var queued = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
-        Assert.Equal(received.HistoryEventId, queued.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.HistoryCausation!.HistoryEventId);
+        Assert.Equal(received.HistoryEventId, queued.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!.HistoryCausation!.HistoryEventId);
         var drained = await f.DrainAsync();
         Assert.Equal(1, drained.DrainedCount);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single(drained.Items).Status);
@@ -76,7 +76,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
             Assert.Equal(received.HistoryEventId, faulted.Causation!.HistoryEventId);
             Assert.Equal(outcome == "returned-fault" ? 1 : 0, events.Count(e => e.Name == "ActivityContinuationReturned"));
         }
-        Assert.DoesNotContain("private", JsonSerializer.Serialize(events));
+        Assert.DoesNotContain("private", JsonSerializer.Serialize(events, options: Elsa.Serialization.Core.JsonBaseline.Options));
         Assert.False((await f.History.FindHeadAsync(Run))!.CapturedFromStart);
     }
 
@@ -178,7 +178,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
             var stimulusHash = publication ? PublicationStimulusHash : "hash";
             await executions.SaveAsync(new(Run, Pin, WorkflowExecutionStatus.Running, null, At, At, At, null, null, null, "native-history", new Dictionary<string, string>())
                 { HistoryCapturePolicy = captured ? policy : null, HistoryCaptureEnabledAtAdmission = captured, Partition = new("native-history"), RunKind = WorkflowRunKind.PublishedRun });
-            var descriptor = JsonSerializer.SerializeToElement(new { type = "native-history" });
+            var descriptor = JsonSerializer.SerializeToElement(new { type = "native-history" }, options: Elsa.Serialization.Core.JsonBaseline.Options);
             var contract = new ActivityContract("test/native-history", "1", "native-history", descriptor, [],
                 new ActivityResultContract(new("Elsa.Unit"), true, ActivityValuePolicy.Default, []), ["Done"],
                 new ActivityActivationRequirement("native-history", "test/native-history"));
@@ -196,7 +196,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
                 InputSnapshot = new(ActivityId, contract.SchemaFingerprint, "seeded-no-input", new Dictionary<string, ValueEnvelope>(), At),
                 Attempts = [new("initial-attempt", ActivityId, 1, ActivityAttemptReason.Initial, At, At,
                     transitionKind: Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend)],
-                PrivateState = new(ActivityId, 1, ValueEnvelope.Inline(stateType, JsonSerializer.SerializeToElement(new WaitState("request")),
+                PrivateState = new(ActivityId, 1, ValueEnvelope.Inline(stateType, JsonSerializer.SerializeToElement(new WaitState("request"), options: Elsa.Serialization.Core.JsonBaseline.Options),
                     ValueProtectionPolicy.InstanceInline), "initial-attempt", At),
                 TriggerRegistrations = [new Elsa.Workflows.Runtime.Core.Models.ActivityTriggerRegistration(Wait, ActivityId, Resume, triggerType,
                     stimulusType, stimulusHash, ActivityTriggerDeduplicationPolicy.IdempotencyKey)], TriggerDeliveries = []
@@ -205,7 +205,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
             var payload = new RuntimeCreateBookmarkCommandPayload(Pin, Wait, ActivityId, Node, Resume, stimulusType, stimulusHash, null, expiresAt,
                 RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason);
             var work = new RuntimeSchedulerWorkItem("create", Run, "create-command", WorkflowExecutionCommandKind.CreateBookmark,
-                "create-envelope", "create-key", At, At, payload: JsonSerializer.SerializeToElement(payload));
+                "create-envelope", "create-key", At, At, payload: JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options));
             await new WorkflowCreateBookmarkSchedulerWorkHandler(sp.GetRequiredService<IWorkflowExecutableStore>(), activities,
                 sp.GetRequiredService<RuntimeCheckpointCommitter>(), sp.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>(), clock).HandleAsync(work);
             if (captured) Assert.NotNull(await f.History.FindHeadAsync(Run)); else Assert.Null(await f.History.FindHeadAsync(Run));
@@ -215,7 +215,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         {
             var expected = StimulusResumeRecipient.From((await Bookmarks.ObserveAsync(Run, Wait))!,
                 (await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(Run))!, new("native-history"));
-            return new(Run, "approval", "hash", JsonSerializer.SerializeToElement(new Approval(true)), "native-history-delivery",
+            return new(Run, "approval", "hash", JsonSerializer.SerializeToElement(new Approval(true), options: Elsa.Serialization.Core.JsonBaseline.Options), "native-history-delivery",
                 payloadType: Descriptor<Approval>(), providerId: "approval-provider") { ExpectedRecipient = expected };
         }
         internal ValueTask<RuntimeSchedulerDrainResult> DrainAsync(CancellationToken cancellationToken = default) => new WorkflowSchedulerDrainer(Queue,

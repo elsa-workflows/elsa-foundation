@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <summary>One physical slot/source/material/ordinary-queue admission over the selected EF runtime stores.</summary>
 internal sealed class EfAuthoredModelQueue : IAuthoredModelQueue
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly EfWriteRetry Writes = new(EfWriteRetry.DefaultMaxAttempts,
         EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient);
     private readonly RuntimeDbContext context;

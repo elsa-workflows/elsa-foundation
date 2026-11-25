@@ -228,8 +228,8 @@ public sealed partial class ChildControlContractTests
         var control = Transport(Batch());
         var original = new RuntimeChildControlCommandPayload(Pin, "consumer-node", control.ConsumerActivityExecutionId,
             "enclosing-parent", "branch-a", control);
-        var json = JsonSerializer.Serialize(original);
-        var restored = JsonSerializer.Deserialize<RuntimeChildControlCommandPayload>(json)!;
+        var json = JsonSerializer.Serialize(original, Elsa.Serialization.Core.JsonBaseline.Options);
+        var restored = JsonSerializer.Deserialize<RuntimeChildControlCommandPayload>(json, Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(json, JsonSerializer.Serialize(restored));
         Assert.Equal(control.SourceOutboxItemId, restored.Control.SourceOutboxItemId);
         Assert.Equal("enclosing-parent", restored.ParentActivityExecutionId);

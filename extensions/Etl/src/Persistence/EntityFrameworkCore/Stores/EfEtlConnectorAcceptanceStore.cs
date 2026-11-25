@@ -278,7 +278,7 @@ internal sealed partial class EfEtlRuntimeStore
     }
 
     private static string SourceWatermarkKey(EtlConnectorSourceWatermarkKey key) =>
-        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new
+        Elsa.Serialization.Core.JsonHashInput.Hash(Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new
         {
             FormatVersion = 1,
             key.DefinitionId,
@@ -286,7 +286,7 @@ internal sealed partial class EfEtlRuntimeStore
             key.SourceHandle,
             key.Table,
             key.Column
-        })));
+        }, _ => null));
 
     private static EtlConnectorFilePublications ReadConnectorFilePublications(EtlConnectorBatchRecord batch, EtlConnectorBatchOutput? output)
     {

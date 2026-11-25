@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, type Edge, type Node } from "@xyflow/react";
@@ -104,6 +105,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
   sourceReferenceId: string | null;
   onSelectReference(sourceReferenceId: string | null): void;
 }) {
+
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [data, setData] = useState<ExecutableInspectionData | null>(null);
@@ -279,6 +281,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
       {executableRun.pending ? (
         <WorkflowRunInputDialog
           inputs={executableRun.pending.inputs}
+          returnFocusTo={executableRun.pending.opener}
           editors={runInputEditors}
           onSubmit={values => { void executableRun.confirm(values); }}
           onCancel={executableRun.cancel}
@@ -357,6 +360,7 @@ export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, frame
   selectedNodeId: string | null;
   onSelectNode(nodeId: string | null): void;
 }) {
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const canvas = useMemo(
     () => buildExecutableInspectorCanvas(graph, activityCatalog, detail.chosenReference?.layout ?? [], frames, onNavigateToScope, selectedNodeId),
@@ -504,6 +508,7 @@ function WorkflowExecutablePanelContent({ activeTab, detail, activityCatalog, gr
   selectedNodeId: string | null;
   onSelectReference(sourceReferenceId: string | null): void;
 }) {
+  useStudioTimeZone();
   const selectedFact = selectedNodeId ? graph.factsByNodeId.get(selectedNodeId) : null;
   const selectedPresentation = selectedNodeId
     ? graph.activityPresentation.find(record => record.nodeId === selectedNodeId)
@@ -708,6 +713,7 @@ function SourceDefinitionAction({ reference, sourceDefinition, onOpen }: {
   sourceDefinition: SourceDefinitionState;
   onOpen(): void;
 }) {
+
   const disabledReason = getSourceDefinitionDisabledReason(reference, sourceDefinition);
 
   return (
@@ -740,6 +746,7 @@ function SourceDriftCaption({ reference, sourceDefinition, hasDraftEquivalence }
   sourceDefinition: SourceDefinitionState;
   hasDraftEquivalence: boolean;
 }) {
+
   if (!reference) return null;
   if (sourceDefinition.status === "absent") {
     return <p className="wf-instance-note">This workflow definition is not available in this environment. The artifact renders from its own Execution Material and carried layout.</p>;

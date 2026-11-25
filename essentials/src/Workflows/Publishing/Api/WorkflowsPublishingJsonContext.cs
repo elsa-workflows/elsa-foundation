@@ -22,21 +22,21 @@ internal static class WorkflowsPublishingJsonOptions
 {
     public static JsonSerializerOptions Create()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         Configure(options);
         return options;
     }
 
     /// <summary>The owner context bound to the effective wire options, shared by the mapper and the problem writer.</summary>
-    internal static WorkflowsPublishingJsonContext WireContext { get; } = new(Create());
+    internal static WorkflowsPublishingJsonContext WireContext => WorkflowsPublishingJsonContext.WireContext;
 
     public static void Configure(JsonSerializerOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        options.PropertyNameCaseInsensitive = true;
+        options.PropertyNameCaseInsensitive = false;
         options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-        options.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
         // The former Minimal API JsonResult path wrote with the host HTTP options, whose default
         // encoder is relaxed; the owner options keep that wire shape.
         options.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
@@ -55,10 +55,8 @@ internal static class WorkflowsPublishingJsonOptions
 /// host payloads but must never be required for this route contract graph.
 /// </summary>
 [JsonSourceGenerationOptions(
-    JsonSerializerDefaults.Web,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase,
-    PropertyNameCaseInsensitive = true,
+    PropertyNameCaseInsensitive = false,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 
 // Request and lifecycle command models, including path-bound commands with no JSON body.
@@ -182,6 +180,8 @@ internal static class WorkflowsPublishingJsonOptions
 [JsonSerializable(typeof(JsonElement))]
 internal partial class WorkflowsPublishingJsonContext : JsonSerializerContext
 {
+    internal static WorkflowsPublishingJsonContext WireContext { get; } = new(WorkflowsPublishingJsonOptions.Create());
+
 }
 
 /// <summary>Resolves generated metadata using the host's exact mutable serializer options.</summary>
@@ -189,12 +189,6 @@ internal sealed class JsonTypeInfoResolver : IJsonTypeInfoResolver
 {
     public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
     {
-        ArgumentNullException.ThrowIfNull(type);
-        ArgumentNullException.ThrowIfNull(options);
-
-        // API Explorer modifies metadata using the host options. A fresh generated context supplies
-        // factories without becoming a process-global metadata cache that could retain host state.
-        return ((IJsonTypeInfoResolver)new WorkflowsPublishingJsonContext(WorkflowsPublishingJsonOptions.Create()))
-            .GetTypeInfo(type, options);
+        return Elsa.Serialization.Core.JsonModuleMetadata.Resolve(new WorkflowsPublishingJsonContext(WorkflowsPublishingJsonOptions.Create()), type, options, "Elsa.Workflows.Publishing");
     }
 }

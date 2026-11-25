@@ -34,6 +34,7 @@ public sealed class RuntimeGeneratorEmissionScheduler : IRuntimeGeneratorEmissio
         _schedulerWorkQueue = schedulerWorkQueue;
         _timeProvider = timeProvider;
         _payloadJsonSerializerOptions = new JsonSerializerOptions(payloadJsonSerializerOptions);
+        Elsa.Serialization.Core.JsonBaseline.Configure(_payloadJsonSerializerOptions);
     }
 
     public async ValueTask<RuntimeGeneratorEmissionScheduleResult> ScheduleAsync(
@@ -76,10 +77,7 @@ public sealed class RuntimeGeneratorEmissionScheduler : IRuntimeGeneratorEmissio
         $"{generatedEvent.WorkflowExecutionId}:{purpose}:{generatedEvent.GeneratedEventId}";
 
     private static JsonSerializerOptions CreateDefaultPayloadJsonSerializerOptions() =>
-        new(JsonSerializerDefaults.General)
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        Elsa.Serialization.Core.JsonBaseline.CreateCopy();
 
     private static IReadOnlyDictionary<string, string> CreateCommandMetadata(GeneratedEvent generatedEvent)
     {

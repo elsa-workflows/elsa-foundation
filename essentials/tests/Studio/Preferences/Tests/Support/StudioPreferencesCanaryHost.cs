@@ -51,9 +51,9 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
 
     public IServiceProvider Services => host.Services;
 
-    public static Task<StudioPreferencesCanaryHost> StartMigratedAsync() => StartAsync();
+    public static Task<StudioPreferencesCanaryHost> StartMigratedAsync(Action<IServiceCollection>? configureServices = null) => StartAsync(configureServices);
 
-    private static async Task<StudioPreferencesCanaryHost> StartAsync()
+    private static async Task<StudioPreferencesCanaryHost> StartAsync(Action<IServiceCollection>? configureServices)
     {
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -87,6 +87,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
                     {
                         options.Assemblies = [typeof(UnrelatedFastEndpointsEndpoint).Assembly];
                     });
+                    configureServices?.Invoke(services);
                 });
                 webHost.Configure(app =>
                 {

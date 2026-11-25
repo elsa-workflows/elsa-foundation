@@ -55,7 +55,7 @@ public sealed class BackgroundEligibilityPublicationTests
             : new[]
             {
                 new WorkflowArgumentState("Balance",
-                    new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "balance", declaringScopeId = "workflow" }), "Variable"),
+                    ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "balance", declaringScopeId = "workflow" }), "Variable"),
                     null, null, null, null)
             };
 
@@ -69,7 +69,7 @@ public sealed class BackgroundEligibilityPublicationTests
     [Fact]
     public async Task C10_refuses_a_sensitive_input_that_is_not_a_secret_reference()
     {
-        var sensitive = new WorkflowArgumentState("token", new ArgumentValue(JsonSerializer.SerializeToElement("p@ss"), "Literal"), null, null, null, IsSensitive: true);
+        var sensitive = new WorkflowArgumentState("token", ArgumentValue.FromClr(JsonSerializer.SerializeToElement("p@ss"), "Literal"), null, null, null, IsSensitive: true);
 
         var refusal = await AssertRefusedAsync(Background(typeof(BackgroundSafeTokenActivity), sensitive), typeof(BackgroundSafeTokenActivity));
 
@@ -80,7 +80,7 @@ public sealed class BackgroundEligibilityPublicationTests
     [Fact]
     public async Task C10_refuses_a_stream_input_bound_to_a_variable()
     {
-        var input = new WorkflowArgumentState("content", new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "content" }), "Variable"), null, null, null, null);
+        var input = new WorkflowArgumentState("content", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "content" }), "Variable"), null, null, null, null);
         var variables = new[] { new VariableDefinition("content", "Content", new TypeReference("Stream"), null, null) };
 
         var refusal = await Assert.ThrowsAnyAsync<Exception>(() => SecretBindingCompilerFixture.CompileAsync(
@@ -109,7 +109,7 @@ public sealed class BackgroundEligibilityPublicationTests
         Assert.Equal(ActivityExecutionPlacement.Background, secret.RootActivity.ExecutionPlacement);
         Assert.Equal(RuntimeInputBindingSource.SecretRead, secret.RootActivity.InputBindings["token"].Source);
 
-        var json = new WorkflowArgumentState("document", new ArgumentValue(JsonSerializer.SerializeToElement(new { a = 1 }), "Literal"), null, null, null, null);
+        var json = new WorkflowArgumentState("document", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { a = 1 }), "Literal"), null, null, null, null);
         var any = await SecretBindingCompilerFixture.CompileAsync(
             Background(typeof(BackgroundSafeAnyInputActivity), json), [typeof(BackgroundSafeAnyInputActivity)]);
         Assert.Equal(ActivityExecutionPlacement.Background, any.RootActivity.ExecutionPlacement);

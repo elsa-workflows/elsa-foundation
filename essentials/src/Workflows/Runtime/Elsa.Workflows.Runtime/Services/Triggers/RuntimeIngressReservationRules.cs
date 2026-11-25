@@ -51,5 +51,5 @@ internal static partial class RuntimeIngressReservationRules
             throw new TriggerOperationException("conflict", "The matched source reservation changed before admission.");
     }
 
-    internal static bool Same<T>(T left, T right) => JsonElement.DeepEquals(JsonSerializer.SerializeToElement(left), JsonSerializer.SerializeToElement(right));
+    internal static bool Same<T>(T left, T right) => Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(left, options: Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(right, options: Elsa.Serialization.Core.JsonBaseline.Options));
 }

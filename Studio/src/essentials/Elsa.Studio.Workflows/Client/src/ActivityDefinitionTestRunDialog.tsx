@@ -1,3 +1,4 @@
+import { useStudioTimeZone, formatStudioDate } from "@elsa-workflows/studio-sdk";
 import type { ActivityContractTypeCapability } from "./activityDefinitionTypes";
 import { typeAllowsNull } from "./typeNullability";
 import { StatusChip, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
@@ -96,6 +97,7 @@ export function ActivityDefinitionTestRunDialog({
   restoreFocus?(): void;
   onOpenRun(path: string): void;
 }) {
+
   const titleId = useId();
   const pollTimerRef = useRef<number | null>(null);
   const prepareExactRevisionRef = useRef(prepareExactRevision);
@@ -462,6 +464,7 @@ function ActivityTestRunEvidence({
   history: ActivityDraftTestRunView[];
   onOpenRun(path: string): void;
 }) {
+
   const copy = stageCopy(stage);
   const resultTitleId = useId();
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -674,6 +677,7 @@ function ActivityTestRunTechnicalIdentity({
 }
 
 function ExpirationEvidence({ view }: { view: ActivityDraftTestRunView }) {
+  useStudioTimeZone();
   const expiration = view.expiration;
   if (!expiration.sourceReferenceExpired) {
     return <p className="ad-test-run-expiry">Source Reference expires {formatTime(expiration.sourceReferenceExpiresAt)}. The durable receipt expires {formatTime(expiration.receiptExpiresAt)}.</p>;
@@ -743,7 +747,7 @@ function safeCode(code: string) {
 
 function formatTime(value: string) {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.valueOf()) ? "at the server-defined retention boundary" : parsed.toLocaleString();
+  return Number.isNaN(parsed.valueOf()) ? "at the server-defined retention boundary" : formatStudioDate(parsed);
 }
 
 function clearError(

@@ -21,7 +21,8 @@ public sealed class WeaverSseContextTests
         var streamEvent = new WeaverStreamEvent("context-event", WeaverStreamEventKind.ContextAdmitted,
             null, null, null, DateTimeOffset.UtcNow) { Payload = payload };
 
-        var json = JsonSerializer.Serialize(streamEvent, WeaverSseJsonContext.Default.WeaverStreamEvent);
+        var context = (WeaverSseJsonContext)typeof(WeaverSseJsonContext).GetProperty("WireContext", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        var json = JsonSerializer.Serialize(streamEvent, context.WeaverStreamEvent);
 
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;

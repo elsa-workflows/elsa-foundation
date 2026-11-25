@@ -190,7 +190,7 @@ public sealed class EtlNativeResultDeliveryTests
         Assert.Equal(address.PayloadSchemaVersion, request.PayloadType.SchemaVersion);
         Assert.Equal(EtlNativeBoundary.CompletionType.Schema?.GetRawText(), request.PayloadType.Schema?.GetRawText());
         Assert.Equal(fixture.Delivery.DeliveryId, request.IdempotencyKey);
-        var completion = System.Text.Json.JsonSerializer.Deserialize<RunEtlCompletion>(request.Input!.Value)
+        var completion = Elsa.Serialization.Core.JsonConversionContract.Deserialize<RunEtlCompletion>(request.Input!.Value)
             ?? throw new InvalidDataException("The dispatched typed ETL completion is missing.");
         var dispatchedInvocation = EtlRuntimeJson.Read<EtlInvocation>(completion.Invocation, EtlNativeBoundary.MaximumRequestBytes);
         var dispatchedResult = EtlRuntimeJson.Read<EtlTerminalResult>(completion.Result, EtlNativeBoundary.MaximumResultBytes);
@@ -245,7 +245,7 @@ public sealed class EtlNativeResultDeliveryTests
             EtlRuntimeJson.WriteElement(fixture.Invocation), EtlRuntimeJson.WriteElement(fixture.Delivery.Result));
         var receipt = new ActivityTriggerDelivery(fixture.Delivery.DeliveryId,
             registrationId ?? address.RegistrationId, type,
-            ValueEnvelope.Inline(type, System.Text.Json.JsonSerializer.SerializeToElement(completion), ValueProtectionPolicy.InstanceInline),
+            ValueEnvelope.Inline(type, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(completion), ValueProtectionPolicy.InstanceInline),
             address.ProviderId, EtlNativeTestFixture.Now, fixture.Delivery.DeliveryId, ActivityTriggerDeliveryStatus.Consumed);
         await fixture.Activities.SaveAsync(activity with { TriggerRegistrations = [], TriggerDeliveries = [receipt] }, cancellationToken);
         return receipt;

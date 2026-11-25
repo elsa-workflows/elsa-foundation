@@ -1,3 +1,4 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -692,6 +693,11 @@ public sealed class WorkflowExecutionStartCommandPayload
     /// </summary>
     public IReadOnlyDictionary<string, JsonElement> Inputs { get; }
 
+    /// <summary>Accepted workflow-input conversion warnings, carried durably to the root invocation.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning>? InputWarnings { get; init; }
+
+
     /// <summary>
     /// The stimulus payload carried from start dispatch so the workflow-started checkpoint can
     /// seed it on its reserved durable channel, separate from <see cref="Inputs"/>. Null for non-stimulus starts.
@@ -743,7 +749,7 @@ public sealed class WorkflowExecutionStartCommandPayload
     public static IReadOnlyDictionary<string, JsonElement> ToJsonValues(IReadOnlyDictionary<string, object?> values) =>
         values.ToDictionary(
             item => item.Key,
-            item => item.Value is JsonElement json ? json.Clone() : JsonSerializer.SerializeToElement(item.Value, item.Value?.GetType() ?? typeof(object)),
+            item => item.Value is JsonElement json ? json.Clone() : JsonValueConversion.SerializeToElement(item.Value, item.Value?.GetType() ?? typeof(object)),
             StringComparer.Ordinal);
 
     private static IReadOnlyDictionary<string, JsonElement> SnapshotElements(IReadOnlyDictionary<string, JsonElement>? values) =>

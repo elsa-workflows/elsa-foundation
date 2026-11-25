@@ -1,14 +1,14 @@
 ﻿using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 using Elsa.Serialization.Core;
-using System.Text.Json.Nodes;
+using System.Text.Json;
 
 namespace Elsa.Http.Services;
 
 /// <summary>
 /// Reads application/json and text/json content type streams.
 /// </summary>
-internal sealed class JsonHttpContentParser(IObjectConverter objectConverter, IPayloadSerializer payloadSerializer) : IHttpContentParser
+internal sealed class JsonHttpContentParser : IHttpContentParser
 {
     /// <inheritdoc />
     public int Priority => 0;
@@ -21,21 +21,16 @@ internal sealed class JsonHttpContentParser(IObjectConverter objectConverter, IP
     {
         var content = context.Content;
         using var reader = new StreamReader(content, leaveOpen: true);
-        var json = await reader.ReadToEndAsync();
+        var json = await reader.ReadToEndAsync(context.CancellationToken);
         var returnType = context.ReturnType;
 
-        if (returnType == typeof(string))
+        if (returnType is null || returnType == typeof(string))
             return json;
 
-        if (returnType == null || returnType.IsPrimitive)
-            return objectConverter.ConvertTo(json, returnType ?? typeof(string))!;
-
-        if (returnType != typeof(object) && !typeof(JsonNode).IsAssignableFrom(returnType))
-        {
-            return payloadSerializer.Deserialize(json, returnType);
-        }
-
-        // Dynamic (Any) payload: the canonical runtime representation is a mutable JsonNode.
-        return JsonNode.Parse(json)!;
+        // Any carries received JSON unchanged. Explicit types, including mutable DOM
+        // shapes, use the same target contract as other typed value conversions.
+        using var document = JsonDocument.Parse(json);
+        if (returnType == typeof(object)) return document.RootElement.Clone();
+        return JsonConversionContract.For(returnType).Read(document.RootElement, returnType, context.ReportJsonDiagnostic)!;
     }
 }

@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { studioRowInteraction, StudioRefreshControl, StudioResultState, StudioButton, StudioCollectionEmptyState, StudioPageHeader, StudioTimestamp } from "@elsa-workflows/studio-ui";
@@ -16,6 +18,7 @@ const runPath = (id: string) => `/workflows/bpmn/runs/${encodeURIComponent(id)}`
 function readLocation() { return { path: window.location.pathname, search: window.location.search }; }
 
 export function BpmnWorkflowsPage({ session, view, navigate }: Props) {
+
   const [location, setLocation] = useState(readLocation);
   useEffect(() => { const sync = () => setLocation(readLocation()); window.addEventListener("popstate", sync); return () => window.removeEventListener("popstate", sync); }, []);
   const client = createBpmnRuntimeClient(session);
@@ -39,6 +42,7 @@ export function BpmnWorkflowsPage({ session, view, navigate }: Props) {
 }
 
 function BpmnCatalog({ client, session, view, artifactId, open }: { client: Client; session: StudioBackendSession; view: "processes" | "runs"; artifactId?: string; open(path: string): void }) {
+  useStudioTimeZone();
   const queryClient = useQueryClient();
   const queryKey = [...client.queryKey, client.scope, view, artifactId ?? null];
   const query = useInfiniteQuery({ queryKey, initialPageParam: null as string | null,
@@ -68,7 +72,7 @@ function BpmnCatalog({ client, session, view, artifactId, open }: { client: Clie
         <tbody>{items.map(item => "sourceReferenceId" in item ? <ProcessRow key={item.sourceReferenceId} client={client} session={session} publication={item}
           canStart={runtimeAvailable && admission.data?.admitNewExecutions === true && !admission.isFetching} open={open} />
           : <tr key={item.executionId} {...studioRowInteraction<HTMLTableRowElement>(() => open(runPath(item.executionId)))}><td><StudioTimestamp value={item.createdAt} fallback="—" />
-            <WorkflowListIdentifiers name={`BPMN run ${new Date(item.createdAt).toLocaleString()}`} kind="BPMN run" identifiers={[{ label: "BPMN run", value: item.executionId }, { label: "Executable", value: item.executable.artifactId }]} /></td>
+            <WorkflowListIdentifiers name={`BPMN run ${formatStudioDate(item.createdAt)}`} kind="BPMN run" identifiers={[{ label: "BPMN run", value: item.executionId }, { label: "Executable", value: item.executable.artifactId }]} /></td>
             <td>{bpmnRunState(item)}</td><td><StudioTimestamp value={item.updatedAt} fallback="—" /></td>
             <td><StudioButton type="button" onClick={() => open(runPath(item.executionId))}>Open run</StudioButton></td></tr>)}</tbody>
       </table></div>}
@@ -78,6 +82,7 @@ function BpmnCatalog({ client, session, view, artifactId, open }: { client: Clie
 }
 
 function ProcessRow({ client, session, publication, canStart, open }: { client: Client; session: StudioBackendSession; publication: BpmnPublication; canStart: boolean; open(path: string): void }) {
+
   const command = useBpmnCommand(client, { kind: "start", sourceReferenceId: publication.sourceReferenceId }, () => undefined);
   const name = publication.displayName?.trim() || "BPMN process";
   return <tr><td><strong>{name}</strong><WorkflowListIdentifiers name={name} kind="BPMN process" identifiers={[

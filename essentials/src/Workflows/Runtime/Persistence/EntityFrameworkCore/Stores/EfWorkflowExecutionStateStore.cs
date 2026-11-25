@@ -324,7 +324,7 @@ public sealed class EfWorkflowExecutionStateStore(
             {
                 var input = EfSchedulerWorkQueueStore.ReadChecked(row, scope);
                 if (input.CommandKind != WorkflowExecutionCommandKind.ExecuteModel) continue;
-                var command = input.Payload?.Deserialize<RuntimeModelExecutionCommand>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))
+                var command = input.Payload?.Deserialize<RuntimeModelExecutionCommand>(Elsa.Serialization.Core.JsonBaseline.Options)
                     ?? throw new InvalidDataException("An accepted model input has no material pin.");
                 if (command.InputId != input.CommandId) throw new InvalidDataException("The model input identity differs from its retained queue command.");
                 if (seen.Add(command.Executable.ArtifactId)) ids.Add(command.Executable.ArtifactId);
@@ -992,18 +992,19 @@ public sealed class EfWorkflowExecutionStateStore(
     private HistoryCursor? DecodeHistoryCursor(string? token, string scope, string filterScope, string purpose)
     {
         if (token is null) return null;
-        try { var cursor = RuntimeArtifactJson.Deserialize<HistoryCursor>(Encoding.UTF8.GetString(continuationCodec.Decode(purpose, token))); if (cursor.Version != 1 || cursor.ScopeHash != Hash(scope) || cursor.FilterScope != filterScope || cursor.OrderKey != OrderKey(cursor.ExecutionId)) throw new FormatException(); return cursor; }
+        try { var cursor = RuntimeArtifactJson.Deserialize<HistoryCursor>(Encoding.UTF8.GetString(continuationCodec.DecodeJson(purpose, token))); if (cursor.Version != 1 || cursor.ScopeHash != Hash(scope) || cursor.FilterScope != filterScope || cursor.OrderKey != OrderKey(cursor.ExecutionId)) throw new FormatException(); return cursor; }
         catch (Exception ex) when (ex is ArgumentException or FormatException or JsonException or InvalidDataException or InvalidOperationException) { throw new ArgumentException("The workflow execution history cursor is invalid or does not belong to this query.", nameof(token), ex); }
     }
-    private string EncodeHistoryCursor(WorkflowExecutionStateEntity row, string scope, string filterScope, string purpose) => continuationCodec.Encode(purpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new HistoryCursor(1, Hash(scope), filterScope, Decode(row.WorkflowExecutionId), row.SortTimestampUtcTicks, row.WorkflowExecutionIdOrderKey))));
+    private string EncodeHistoryCursor(WorkflowExecutionStateEntity row, string scope, string filterScope, string purpose) => continuationCodec.EncodeJson(purpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new HistoryCursor(1, Hash(scope), filterScope, Decode(row.WorkflowExecutionId), row.SortTimestampUtcTicks, row.WorkflowExecutionIdOrderKey))));
     private CaptureCursor? DecodeCaptureCursor(string? token, WorkflowExecutionAlterationCaptureQuery query, string scope)
     {
         if (token is null) return null;
-        try { var cursor = RuntimeArtifactJson.Deserialize<CaptureCursor>(Encoding.UTF8.GetString(continuationCodec.Decode(CaptureCursorPurpose, token))); if (cursor.Version != 1 || cursor.ScopeHash != Hash(scope) || cursor.FilterScope != CaptureScope(query) || cursor.OrderKey != OrderKey(cursor.ExecutionId)) throw new FormatException(); return cursor; }
+        try { var cursor = RuntimeArtifactJson.Deserialize<CaptureCursor>(Encoding.UTF8.GetString(continuationCodec.DecodeJson(CaptureCursorPurpose, token))); if (cursor.Version != 1 || cursor.ScopeHash != Hash(scope) || cursor.FilterScope != CaptureScope(query) || cursor.OrderKey != OrderKey(cursor.ExecutionId)) throw new FormatException(); return cursor; }
         catch (Exception ex) when (ex is ArgumentException or FormatException or JsonException or InvalidDataException or InvalidOperationException) { throw new ArgumentException("The alteration capture cursor is invalid or does not belong to this query.", nameof(token), ex); }
     }
-    private string EncodeCaptureCursor(WorkflowExecutionStateEntity row, WorkflowExecutionAlterationCaptureQuery query, string scope) => continuationCodec.Encode(CaptureCursorPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new CaptureCursor(1, Hash(scope), CaptureScope(query), Decode(row.WorkflowExecutionId), row.WorkflowExecutionIdOrderKey))));
-    private static string CaptureScope(WorkflowExecutionAlterationCaptureQuery query) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new { query.TenantPartition, query.SystemIdentity, query.RootInitiator, query.AuthorityPartitionKey, Metadata = query.AuthorityMetadata.OrderBy(x => x.Key, StringComparer.Ordinal), query.Selector.DefinitionId, query.Selector.Status, query.Selector.RunKind, From = query.Selector.From?.UtcTicks, To = query.Selector.To?.UtcTicks, query.Selector.CorrelationId, query.Selector.WorkflowExecutionId, query.Selector.ArtifactId, query.Selector.MatchAllAuthorized }))));
+    private string EncodeCaptureCursor(WorkflowExecutionStateEntity row, WorkflowExecutionAlterationCaptureQuery query, string scope) => continuationCodec.EncodeJson(CaptureCursorPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new CaptureCursor(1, Hash(scope), CaptureScope(query), Decode(row.WorkflowExecutionId), row.WorkflowExecutionIdOrderKey))));
+    private static string CaptureScope(WorkflowExecutionAlterationCaptureQuery query) => Elsa.Serialization.Core.JsonHashInput.Hash(
+        RuntimeJsonHashProjection.Project(new { query.TenantPartition, query.SystemIdentity, query.RootInitiator, query.AuthorityPartitionKey, Metadata = query.AuthorityMetadata.OrderBy(x => x.Key, StringComparer.Ordinal), query.Selector.DefinitionId, query.Selector.Status, query.Selector.RunKind, From = query.Selector.From?.UtcTicks, To = query.Selector.To?.UtcTicks, query.Selector.CorrelationId, query.Selector.WorkflowExecutionId, query.Selector.ArtifactId, query.Selector.MatchAllAuthorized })).ToUpperInvariant();
     private sealed record HistoryCursor(int Version, string ScopeHash, string FilterScope, string ExecutionId, long SortTicks, string OrderKey);
     private sealed record CaptureCursor(int Version, string ScopeHash, string FilterScope, string ExecutionId, string OrderKey);
 }

@@ -1,4 +1,8 @@
 <!--
+SYNC IMPACT REPORT — 6.5.0 -> 6.5.1 (2026-11-22)
+PATCH: re-pins framework v6.1.1, whose draft pattern catalog now lists ADR 0091's already accepted shared serialization baseline. No Elsa rule changes and no draft/provisional section is ratified. Authority: accepted ADR 0091 and approved spec 1207 implementation. Templates pin no catalog/version and need no change.
+-->
+<!--
 SYNC IMPACT REPORT — 6.4.0 -> 6.5.0 (2026-11-09)
 MINOR: admits optional Elsa.Weaver to §E2.1 (the Studio assistant: sessions, proposals, audit and provider modules, today the eight packages moved from Elsa.Agent.*) and fixes Elsa.Agent as the domain of user-defined agents (ADR 0094 amendment of 2026-11-09, issue #4027). §E6 R8 names both reservations and its exception list follows the moved Elsa.Weaver.Api. No other domain purpose, package boundary or framework pin changes.
 Authority: Sipke Schoorstra decided the roots, the clean break and the sequencing in the owning session on 2026-11-09 (https://github.com/elsa-workflows/elsa-foundation/issues/4027); the program lead records the admission under the standing delegated authority, as for Etl, Rules and Decisions.
@@ -54,7 +58,8 @@ Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to 
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 6.5.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-11-09 | **Derives from:** [framework constitution](constitution-framework.md) **v6.1.0**
+
+**Version:** 6.5.1 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-11-22 | **Derives from:** [framework constitution](constitution-framework.md) **v6.1.1**
 
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance calls for consensus among Joey Barten, Sipke Schoorstra and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Sections marked draft or provisional (§E2.8 activity versioning and Model X, §E2.9) are **not** covered by it.
 

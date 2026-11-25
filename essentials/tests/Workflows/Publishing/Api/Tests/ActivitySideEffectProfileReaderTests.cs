@@ -97,7 +97,7 @@ public sealed class ActivitySideEffectProfileReaderTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(alias ?? TypeAliasConvention.CanonicalAlias(activityType!))),
+            DescriptorPayload = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor(alias ?? TypeAliasConvention.CanonicalAlias(activityType!))),
             Inputs = []
         };
 

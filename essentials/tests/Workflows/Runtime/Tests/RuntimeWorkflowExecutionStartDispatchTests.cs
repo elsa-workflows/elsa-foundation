@@ -19,6 +19,25 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
     private readonly KeyedWorkflowStartIdentity _keyed = KeyedWorkflowStartIdentity.For("delivery-1", "artifact-1");
     private readonly WorkflowStartDispatcher _dispatcher;
 
+    [Fact]
+    public async Task Dispatch_preserves_raw_values_and_verbatim_keys_in_the_start_command()
+    {
+        const string raw = """{ "OrderID":9007199254740993, "nil":null, "amount":1.00, "text":"Ren\u00e9" }""";
+        var value = JsonDocument.Parse(raw).RootElement.Clone();
+        await ActivateAsync();
+        await _dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "raw-integrity",
+            variables: new Dictionary<string, object?> { ["OrderTotal"] = value },
+            inputs: new Dictionary<string, object?> { ["Amount"] = value }, stimulusInput: value));
+        var json = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value;
+        Assert.Equal(raw, json.GetProperty("variables").GetProperty("OrderTotal").GetRawText());
+        Assert.Equal(raw, json.GetProperty("inputs").GetProperty("Amount").GetRawText());
+        Assert.Equal(raw, json.GetProperty("stimulusInput").GetRawText());
+        var restored = json.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
+        Assert.Equal(raw, restored.Variables["OrderTotal"].GetRawText());
+        Assert.Equal(raw, restored.Inputs["Amount"].GetRawText());
+        Assert.Equal(raw, restored.StimulusInput!.Value.GetRawText());
+    }
+
     public RuntimeWorkflowExecutionStartDispatchTests()
     {
         _dispatcher = new WorkflowStartDispatcher(
@@ -99,7 +118,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
         await _dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
 
         var envelope = Assert.Single(_agentProvider.Agent.Envelopes);
-        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("artifact-1", payload.RequestedArtifactId);
         Assert.Equal("artifact-1", payload.PinnedExecutable.ArtifactId);
         Assert.Equal("definition-1", payload.PinnedExecutable.DefinitionId);
@@ -126,7 +145,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
 
         await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
 
-        var payload = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(1, resolutions);
         Assert.Equal(enabled, payload.HistoryCaptureEnabledAtAdmission);
         if (enabled) Assert.True(policy.IsEquivalentTo(payload.HistoryCapturePolicy));
@@ -180,7 +199,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
             runKind: WorkflowRunKind.BackgroundWeaverRun));
 
         var envelope = Assert.Single(_agentProvider.Agent.Envelopes);
-        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowRunKind.BackgroundWeaverRun, payload.RunKind);
     }
 
@@ -231,7 +250,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
 
         Assert.Null(result.PinnedSource);
         var payload = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value
-            .Deserialize<WorkflowExecutionStartCommandPayload>()!;
+            .Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutableStartAuthorityKind.RetainedDependency, payload.StartAuthority!.Kind);
         Assert.Equal(parent.Identity.ArtifactId, payload.StartAuthority.RetainedDependency!.ParentArtifactId);
         Assert.Equal(parent.Identity.ArtifactHash, payload.StartAuthority.RetainedDependency.ParentArtifactHash);
@@ -317,7 +336,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
         var result = await _dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
 
         var envelope = Assert.Single(_agentProvider.Agent.Envelopes);
-        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Null(result.PinnedSource);
         Assert.Null(payload.PinnedSource);
         Assert.Equal("1.0.0", envelope.Command.Metadata["runtime.artifactVersion"]);
@@ -365,7 +384,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
         var result = await _dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
 
         var envelope = Assert.Single(_agentProvider.Agent.Envelopes);
-        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("draft:snapshot-1", payload.PinnedExecutable.DefinitionVersionId);
         Assert.Equal("draft", payload.PinnedExecutable.ArtifactVersion);
         Assert.Equal(payload.PinnedExecutable, result.PinnedExecutable);
@@ -415,7 +434,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
         Assert.Equal("sha256:test", result.PinnedExecutable.ArtifactHash);
         Assert.Equal("ref-v2", result.PinnedSource!.SourceReferenceId);
         Assert.Equal("ref-v2", Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value
-            .Deserialize<WorkflowExecutionStartCommandPayload>()!.PinnedSource!.SourceReferenceId);
+            .Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.PinnedSource!.SourceReferenceId);
     }
 
     [Theory]
@@ -595,7 +614,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
 
         var result = await _dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
         var payloadBeforeRetirement = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value
-            .Deserialize<WorkflowExecutionStartCommandPayload>()!;
+            .Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
 
         await _references.RetireAsync("ref-v2", _now.AddMinutes(1), "superseded");
 
@@ -646,7 +665,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
             inputs: new Dictionary<string, object?> { ["name"] = "World" }));
 
         var envelope = Assert.Single(_agentProvider.Agent.Envelopes);
-        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("Hello", payload.Variables["greeting"].GetString());
         Assert.Equal("World", payload.Inputs["name"].GetString());
     }
@@ -954,7 +973,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
-            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { type = "test" })),
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { type = "test" }, options: Elsa.Serialization.Core.JsonBaseline.Options)),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
 

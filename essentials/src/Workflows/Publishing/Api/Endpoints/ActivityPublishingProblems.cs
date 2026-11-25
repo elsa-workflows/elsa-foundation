@@ -65,7 +65,7 @@ internal static class ActivityPublishingProblems
         await System.Text.Json.JsonSerializer.SerializeAsync(
             response.Body,
             problem,
-            WorkflowsPublishingJsonContext.Default.ActivityPublishingProblemDetails,
+            WorkflowsPublishingJsonContext.WireContext.ActivityPublishingProblemDetails,
             cancellationToken);
     }
 

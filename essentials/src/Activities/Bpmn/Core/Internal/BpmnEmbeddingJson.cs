@@ -24,7 +24,7 @@ internal static class BpmnEmbeddingJson
     internal static BpmnModelValidationException Invalid() => new("The RunBpmn invocation differs from its pinned model and actual native wait.");
     private static JsonSerializerOptions CreateOptions()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
         options.Converters.Add(new TextConverter());
         return options;
     }

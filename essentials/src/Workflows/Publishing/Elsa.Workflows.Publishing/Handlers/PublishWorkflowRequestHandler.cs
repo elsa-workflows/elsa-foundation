@@ -87,7 +87,8 @@ public sealed class PublishWorkflowRequestHandler(
         if (expressionValidation.State != ExpressionDraftValidationState.Valid)
             throw new ExpressionPublicationValidationException(expressionValidation);
         var now = timeProvider.GetUtcNow();
-        var executable = await CompileAsync(request.VersionId, request.TenantId, now, cancellationToken);
+        var conversionWarnings = new PublicationConversionWarnings();
+        var executable = await CompileAsync(request.VersionId, request.TenantId, now, cancellationToken, conversionWarnings);
         var identity = executable.Identity;
         var resolvedReview = request.PreflightToken is { } preflightToken
             ? await (snapshotReviews ?? throw new InvalidOperationException("Publication snapshot review services are not configured."))
@@ -132,7 +133,7 @@ public sealed class PublishWorkflowRequestHandler(
 
         var resolved = plan.ResolvedAction;
         var slot = plan.Slot;
-        IReadOnlyList<string> warnings = [];
+        IReadOnlyList<string> warnings = conversionWarnings.Items.Select(warning => warning.Message).ToArray();
         if (slot is { ActiveActivationId: { } activePublicationId, Source: { } activeSource } &&
             activeSource.IsSameOwnerAs(PublicationActivator.Source))
         {
@@ -141,7 +142,7 @@ public sealed class PublishWorkflowRequestHandler(
             // replaced is a warning.
             if (current is not null && !StringComparer.Ordinal.Equals(current.ArtifactId, identity.ArtifactId))
             {
-                warnings = ScriptReadShadowChanges.Find(await executableStore.FindAsync(current.ArtifactId, cancellationToken), executable);
+                warnings = warnings.Concat(ScriptReadShadowChanges.Find(await executableStore.FindAsync(current.ArtifactId, cancellationToken), executable)).ToArray();
                 foreach (var warning in warnings)
                     logger?.LogWarning("Publish: {Warning}", warning);
             }
@@ -151,7 +152,7 @@ public sealed class PublishWorkflowRequestHandler(
                 plan.Result.Changes.All(change => change.Change == PublicationTriggerChangeKind.Retained))
             {
                 if (await AlreadyPublishedAsync(executable, current, resolved.SlotName, request.TenantId, cancellationToken) is { } answer)
-                    return answer;
+                    return answer with { Warnings = warnings.Count == 0 ? answer.Warnings : warnings };
             }
         }
 
@@ -183,11 +184,12 @@ public sealed class PublishWorkflowRequestHandler(
         if (!StringComparer.Ordinal.Equals(activation.Publication.PublicationId, publicationId))
         {
             var served = activation.Publication;
-            return await AlreadyPublishedAsync(executable, served, resolved.SlotName, request.TenantId, cancellationToken)
+            var existing = await AlreadyPublishedAsync(executable, served, resolved.SlotName, request.TenantId, cancellationToken)
                 ?? throw ActivationFailed(served.PublicationId, served.WorkflowDefinitionId, new PublicationFailure(
                     PublicationFailureCodes.PublicationActivationFailed,
                     $"Publication '{served.PublicationId}' already serves definition '{served.WorkflowDefinitionId}' slot '{resolved.SlotName}', " +
                     "but its source reference is gone. It is not reported as published."));
+            return existing with { Warnings = warnings.Count == 0 ? existing.Warnings : warnings };
         }
 
         return PublishedWorkflowView.From(executable, reference, activation.Publication) with
@@ -266,7 +268,8 @@ public sealed class PublishWorkflowRequestHandler(
         string versionId,
         string? tenantId,
         DateTimeOffset now,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken,
+        Elsa.Expressions.Core.Contracts.IExecutionWarningSink warnings) =>
         compiler.CompileAsync(
             new WorkflowExecutableCompileRequest(
                 versionId,
@@ -276,7 +279,7 @@ public sealed class PublishWorkflowRequestHandler(
                 ExpiresAt: null,
                 PublishedArtifactPrefix,
                 new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" },
-                tenantId),
+                tenantId) { Warnings = warnings },
             cancellationToken);
 
     private static PublicationRequestIntent? RequestIntent(PublicationAction? action, string? slotName) =>
@@ -324,6 +327,12 @@ public sealed class PublishWorkflowRequestHandler(
                     placementSidecars?.GetPresentation(identity.DefinitionVersionId)));
     }
 
+    private sealed class PublicationConversionWarnings : Elsa.Expressions.Core.Contracts.IExecutionWarningSink
+    {
+        public List<Elsa.Expressions.Core.Models.ExecutionWarning> Items { get; } = [];
+        public void Report(Elsa.Expressions.Core.Models.ExecutionWarning warning) => Items.Add(warning);
+    }
+
 }
 
 public sealed class PublicationActivationException(PublicationFailure? failure)
@@ -337,4 +346,6 @@ public sealed class PublicationPreflightConflictException(IReadOnlyCollection<Pu
 {
     public IReadOnlyCollection<PublicationTriggerConflict> Conflicts { get; } = conflicts;
     public string Code => PublicationFailureCodes.TriggerConflict;
+
+
 }

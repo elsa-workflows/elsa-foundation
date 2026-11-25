@@ -1,0 +1,52 @@
+[
+  {
+    "name": "omitted",
+    "action": null,
+    "slot": null,
+    "revision": null,
+    "canonical": "{\"action\":null,\"actorId\":\"author\",\"definitionId\":\"process-definition\",\"expectedPublicationId\":null,\"expectedSlotRevision\":null,\"formatVersion\":1e0,\"intentProvided\":false,\"requestId\":\"operation\",\"slotName\":null,\"tenantId\":null,\"versionId\":\"version-1\"}",
+    "expected": "7258166d967e137aaae7d1c28856704f7d61ce201fa9e2b554c0a848a2abdf96",
+    "publicationCanonical": "[\"\",\"author\",\"operation\"]",
+    "publicationId": "bpmn-publication:b906bae92325f14432fdcc63c0e56b1d900e0d85121963a7c0900d69f0b3f233"
+  },
+  {
+    "name": "replace",
+    "action": 0,
+    "slot": null,
+    "revision": null,
+    "canonical": "{\"action\":0,\"actorId\":\"author\",\"definitionId\":\"process-definition\",\"expectedPublicationId\":null,\"expectedSlotRevision\":null,\"formatVersion\":1e0,\"intentProvided\":true,\"requestId\":\"operation\",\"slotName\":null,\"tenantId\":null,\"versionId\":\"version-1\"}",
+    "expected": "d7b69743fe8e4d2d3b646ea5328dcfffeb7db5f9788e7b1d03507422ebf28e99",
+    "publicationCanonical": "[\"\",\"author\",\"operation\"]",
+    "publicationId": "bpmn-publication:b906bae92325f14432fdcc63c0e56b1d900e0d85121963a7c0900d69f0b3f233"
+  },
+  {
+    "name": "named-slot",
+    "action": 0,
+    "slot": "Review",
+    "revision": null,
+    "canonical": "{\"action\":0,\"actorId\":\"author\",\"definitionId\":\"process-definition\",\"expectedPublicationId\":null,\"expectedSlotRevision\":null,\"formatVersion\":1e0,\"intentProvided\":true,\"requestId\":\"operation\",\"slotName\":\"Review\",\"tenantId\":null,\"versionId\":\"version-1\"}",
+    "expected": "873fa199de32722a697777d7bfdde664b38f0386b4b420246635f9e9fefbfb59",
+    "publicationCanonical": "[\"\",\"author\",\"operation\"]",
+    "publicationId": "bpmn-publication:b906bae92325f14432fdcc63c0e56b1d900e0d85121963a7c0900d69f0b3f233"
+  },
+  {
+    "name": "side-by-side",
+    "action": 1,
+    "slot": null,
+    "revision": null,
+    "canonical": "{\"action\":1e0,\"actorId\":\"author\",\"definitionId\":\"process-definition\",\"expectedPublicationId\":null,\"expectedSlotRevision\":null,\"formatVersion\":1e0,\"intentProvided\":true,\"requestId\":\"operation\",\"slotName\":null,\"tenantId\":null,\"versionId\":\"version-1\"}",
+    "expected": "f518dbd1039a29e550330afed1d68a50f06c676bffc10717259d2f2627085570",
+    "publicationCanonical": "[\"\",\"author\",\"operation\"]",
+    "publicationId": "bpmn-publication:b906bae92325f14432fdcc63c0e56b1d900e0d85121963a7c0900d69f0b3f233"
+  },
+  {
+    "name": "revision-zero",
+    "action": null,
+    "slot": null,
+    "revision": 0,
+    "canonical": "{\"action\":null,\"actorId\":\"author\",\"definitionId\":\"process-definition\",\"expectedPublicationId\":null,\"expectedSlotRevision\":0,\"formatVersion\":1e0,\"intentProvided\":false,\"requestId\":\"operation\",\"slotName\":null,\"tenantId\":null,\"versionId\":\"version-1\"}",
+    "expected": "4aedb6afa5643abd8f983e97c745a2cd788a59766a4fbba1bce3b9aa56f20b64",
+    "publicationCanonical": "[\"\",\"author\",\"operation\"]",
+    "publicationId": "bpmn-publication:b906bae92325f14432fdcc63c0e56b1d900e0d85121963a7c0900d69f0b3f233"
+  }
+]

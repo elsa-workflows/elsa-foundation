@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Core/Elsa.Studio.Dashboard.Core.csproj" />
+    <ProjectReference Include="../../../Serialization/Core/Elsa.Serialization.Core.csproj" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />

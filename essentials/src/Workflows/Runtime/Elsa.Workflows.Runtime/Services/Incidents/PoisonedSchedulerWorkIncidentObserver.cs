@@ -219,7 +219,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         var unstartedExecution = await ReadUnstartedExecutionAsync(envelope, workflowExecutionId, occurredAt, cancellationToken);
         var metadata = NewMetadata(incidentId, record);
         if (unstartedExecution?.StimulusDeliveryOrigin is { } savedOrigin)
-            metadata[Elsa.Workflows.Runtime.Services.Triggers.SavedStimulusStartSeal.OriginMetadata] = System.Text.Json.JsonSerializer.Serialize(savedOrigin);
+            metadata[Elsa.Workflows.Runtime.Services.Triggers.SavedStimulusStartSeal.OriginMetadata] = System.Text.Json.JsonSerializer.Serialize(savedOrigin, options: Elsa.Serialization.Core.JsonBaseline.Options);
         var activityExecutionId = ValueOrNull(metadata, RuntimeMetadataKeys.ActivityExecutionId);
         var executableNodeId = ValueOrNull(metadata, RuntimeMetadataKeys.ExecutableNodeId);
         ActivityExecutionState? activityState = null;

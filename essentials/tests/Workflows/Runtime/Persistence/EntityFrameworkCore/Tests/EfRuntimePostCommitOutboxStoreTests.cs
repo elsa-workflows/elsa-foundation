@@ -42,8 +42,8 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
     }
 
     /// <summary>
-    /// Storage re-serializes an intent payload: whitespace is dropped and non-ASCII text is escaped. A replay of the same
-    /// pending item must still be recognised as the same intent, so payloads compare as JSON values, not as text.
+    /// Raw storage preserves an intent payload. If stored text is reformatted, replay must still recognise the same
+    /// intent because payloads compare as exact JSON values, independently of whitespace, escaping and number spelling.
     /// </summary>
     [Fact]
     public async Task Pending_replay_is_idempotent_when_storage_reformats_the_payload()
@@ -60,6 +60,10 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
             Now);
 
         await store.SavePendingAsync(pending);
+        var row = await context.RuntimePostCommitOutbox.SingleAsync();
+        Assert.Contains(payload.RootElement.GetRawText(), row.ContentJson, StringComparison.Ordinal);
+        row.ContentJson = row.ContentJson.Replace(payload.RootElement.GetRawText(), "{\"count\":1e0,\"name\":\"caf\\u00e9\"}", StringComparison.Ordinal);
+        await context.SaveChangesAsync();
         var persisted = (await store.FindAsync("reformatted"))!;
         await store.SavePendingAsync(pending);
 

@@ -71,7 +71,8 @@ internal sealed class StepVariableSession : IStepVariableSession
         IReadOnlyDictionary<(string ScopeId, string Key), bool>? boundReferences = null,
         bool engineConsumer = false,
         IWellKnownTypeRegistry? registry = null,
-        IRuntimeTypeNullability? typeDescriptors = null)
+        IRuntimeTypeNullability? typeDescriptors = null,
+        IExecutionWarningSink? warnings = null)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(invocation);
@@ -88,6 +89,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         _suspends = suspends;
         _bound = boundReferences ?? new Dictionary<(string ScopeId, string Key), bool>();
         _engineConsumer = engineConsumer;
+        _warnings = warnings;
         _valuePolicies = executable.ValuePolicies;
         _registry = registry;
         _typeDescriptors = typeDescriptors;
@@ -117,7 +119,8 @@ internal sealed class StepVariableSession : IStepVariableSession
     }
 
     public bool HasReadProtectedValue => ReadPolicies.Any(policy =>
-        policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode));
+        policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) ||
+        !string.IsNullOrWhiteSpace(policy.RetentionPolicy));
 
     public void ObservePendingRead(StepVariableTarget target)
     {
@@ -251,7 +254,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         if (resolved.IsTransient)
             throw Fault(new InvalidOperationException(
                 $"Variable '{resolved.Name}' is transient: a script cannot write it."));
-        var json = value is null ? (JsonElement?)null : JsonSerializer.SerializeToElement(value);
+        var json = value is null ? (JsonElement?)null : JsonSerializer.SerializeToElement(value, Elsa.Serialization.Core.JsonBaseline.Options);
         Stage(resolved, json, StepVariableWriteKind.WholeAssignment, droppedMembers: null);
     }
 
@@ -298,7 +301,14 @@ internal sealed class StepVariableSession : IStepVariableSession
         T value;
         try
         {
-            value = inline.Deserialize<T>(ActivityValueJson.Options)!;
+            value = (T)Elsa.Serialization.Core.JsonConversionContract.For(typeof(T)).Read(inline, typeof(T),
+                diagnostic =>
+                {
+                    var warning = Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"variables.{variable.Name}");
+                    var policy = envelope.Policy;
+                    _warnings?.Report(policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) ||
+                        !string.IsNullOrWhiteSpace(policy.RetentionPolicy) ? warning.ProtectedForm! : warning);
+                })!;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
@@ -350,7 +360,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         if (envelope.Presence == ValuePresence.Absent &&
             !NullPolicyDefaults.AcceptsNull(envelope.Type.ToTypeReference(), _registry, _typeDescriptors) &&
             NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, _registry, out var typeDefault))
-            return ValueEnvelope.Inline(envelope.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType()), envelope.Policy);
+            return ValueEnvelope.Inline(envelope.Type, JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType(), JsonBaseline.Options), envelope.Policy);
         return envelope;
     }
 
@@ -370,7 +380,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         JsonElement? json;
         try
         {
-            json = value is null ? null : JsonSerializer.SerializeToElement(value, ActivityValueJson.Options);
+            json = value is null ? null : Elsa.Serialization.Core.JsonConversionContract.For(typeof(T)).Write(value, typeof(T));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
@@ -458,6 +468,10 @@ internal sealed class StepVariableSession : IStepVariableSession
             throw Fault(new InvalidOperationException(
                 $"The value written to variable '{variable.Name}' on node '{_node.ExecutableNodeId}' does not match its type '{value.Type.Alias}': " +
                 string.Join(" ", validation.Findings.Select(finding => finding.Message))));
+        var protect = value.Policy.IsSensitive || value.Policy.RequiresEncryption ||
+                      !string.IsNullOrWhiteSpace(value.Policy.RedactionMode) || !string.IsNullOrWhiteSpace(value.Policy.RetentionPolicy);
+        foreach (var warning in validation.Warnings)
+            _warnings?.Report(protect ? warning.ProtectedForm ?? warning : warning);
     }
 
     // ---- resolution ----

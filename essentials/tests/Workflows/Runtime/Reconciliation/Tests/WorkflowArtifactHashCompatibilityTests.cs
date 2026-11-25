@@ -59,7 +59,7 @@ public sealed class WorkflowArtifactHashCompatibilityTests : IDisposable
     }
 
     [Fact]
-    public async Task A_retained_v1_hash_with_an_altered_expression_remains_rejected()
+    public async Task The_regenerated_artifact_with_an_altered_expression_is_rejected()
     {
         await using var harness = ArtifactImportHarness.Build(_mount);
         var legacy = LegacyWorkflowHashFixture.Load();

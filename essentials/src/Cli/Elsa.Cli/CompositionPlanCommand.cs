@@ -12,7 +12,7 @@ namespace Elsa.Cli;
 /// <summary>Plans a supplied authored selection without loading a host or entering the persistence worker.</summary>
 internal static class CompositionPlanCommand
 {
-    internal static readonly JsonSerializerOptions JsonOptions = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true

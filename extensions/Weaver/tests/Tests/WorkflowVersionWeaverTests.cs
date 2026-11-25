@@ -691,7 +691,7 @@ public sealed class WorkflowVersionWeaverTests
     }
 
     internal static ActivityNode Leaf(string id, string text) =>
-        new(id, "version-write-line", [new ArgumentState("text", new ArgumentValue(JsonSerializer.SerializeToElement(text), "Literal"), null, null, null, null)], []);
+        new(id, "version-write-line", [new ArgumentState("text", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(text), "Literal"), null, null, null, null)], []);
 
     internal static ActivityNode Flow(string id, ActivityNode[] children, params (string Source, string Target)[] connections) =>
         Flow(id, children, null, "Acme.Flow", connections);

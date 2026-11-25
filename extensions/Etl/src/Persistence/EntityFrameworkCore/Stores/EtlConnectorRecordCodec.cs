@@ -25,9 +25,9 @@ internal static class EtlConnectorRecordCodec
         try
         {
             var value = EtlRuntimeJson.Read<T>(json, MaximumDocumentBytes);
-            // We only read our own canonical documents. This also rejects duplicate/missing properties,
-            // unknown members and alternate representations before they can authorize progression.
-            if (!StringComparer.Ordinal.Equals(Write(value), json))
+            // Compare the complete typed projection without mistaking JSON spelling for a state change.
+            // Missing/null, extra members and shape changes still differ from the owner contract.
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(Write(value), json))
                 throw new InvalidDataException("The connector state is not canonical.");
             return value;
         }

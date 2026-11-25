@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import "./elsa3Import.css";
 import { StudioStepper, StudioButton, TechnicalDetails, StudioShellBreadcrumbs, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
 import {
@@ -68,6 +70,7 @@ export function Elsa3ReusableImportPage({
   context: StudioEndpointContext;
   navigate(path: string): void;
 }) {
+  useStudioTimeZone();
   const [file, setFile] = useState<File | null>(null);
   const [collectionHandleInput, setCollectionHandleInput] = useState("");
   const [uploadStatus, setUploadStatus] = useState<OperationStatus>("idle");
@@ -688,6 +691,7 @@ function SourceVersionRow({
   disabled: boolean;
   onChange(checked: boolean): void;
 }) {
+
   const selectable = isElsa3ReusableImportItemSelectable(item);
   return (
     <article className="elsa3-import-row" data-selectable={selectable}>
@@ -756,6 +760,7 @@ function DiagnosticList({
   diagnostics: Elsa3MigrationDiagnostic[];
   compact?: boolean;
 }) {
+
   return (
     <section className={compact ? "elsa3-import-compact-diagnostics" : "elsa3-import-diagnostics"} aria-label="Structured Elsa 3 import diagnostics">
       {!compact ? <h2>Structured diagnostics</h2> : null}
@@ -790,6 +795,7 @@ function ImportReceipt({
   receipt: Elsa3ReusableImportReceipt;
   navigate(path: string): void;
 }) {
+  useStudioTimeZone();
   const publicationSummary = summarizeImportPublications(receipt.publications);
   const outcomeLabel = importReceiptOutcomeLabel(receipt);
   const unpublished = publicationSummary.outcome === "partlyPublished" || publicationSummary.outcome === "nonePublished";
@@ -864,6 +870,7 @@ function ImportReceipt({
 }
 
 function PublicationState({ publication }: { publication: Elsa3ReusableImportPublication }) {
+
   const status = importPublicationStatus(publication.status);
   const published = isPublishedImportStatus(publication.status);
   return (
@@ -888,6 +895,7 @@ function PublicationState({ publication }: { publication: Elsa3ReusableImportPub
 }
 
 function ConversionWarnings({ warnings }: { warnings: Elsa3MigrationDiagnostic[] }) {
+
   return (
     <section className="elsa3-import-warning" aria-label="Conversion warnings">
       <h3>Conversion warnings</h3>
@@ -979,5 +987,5 @@ function formatBytes(value: number) {
 
 function formatDateTime(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : formatStudioDate(date);
 }

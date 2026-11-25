@@ -214,7 +214,7 @@ public sealed class ActivityDraftTestRunService(
             draft,
             candidateVersionId,
             candidateVersion,
-            Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(layout.Records)) + JsonSerializer.SerializeToUtf8Bytes(layout.ActivityPresentation).LongLength), cancellationToken);
+            Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(layout.Records, Elsa.Serialization.Core.JsonBaseline.Options)) + JsonSerializer.SerializeToUtf8Bytes(layout.ActivityPresentation, Elsa.Serialization.Core.JsonBaseline.Options).LongLength), cancellationToken);
         if (!compilation.IsSuccessful || compilation.Template is null)
             return await RejectValidationAsync(
                 receipt,
@@ -560,11 +560,11 @@ public sealed class ActivityDraftTestRunService(
         // Hashes exclude node inspection metadata and do not cover every wrapper contract field.
         // Check the actual winner's complete payload, including template provenance and resume targets.
         // Only first-writer producer attribution and creation time are independent publication facts.
-        var winner = JsonSerializer.SerializeToNode(stored)!.AsObject();
-        var candidate = JsonSerializer.SerializeToNode(proposed)!.AsObject();
-        winner.Remove(nameof(WorkflowExecutable.Identity)); candidate.Remove(nameof(WorkflowExecutable.Identity));
-        winner.Remove(nameof(WorkflowExecutable.CreatedAt)); candidate.Remove(nameof(WorkflowExecutable.CreatedAt));
-        if (!JsonNode.DeepEquals(winner, candidate))
+        var winner = JsonSerializer.SerializeToNode(stored, Elsa.Serialization.Core.JsonBaseline.Options)!.AsObject();
+        var candidate = JsonSerializer.SerializeToNode(proposed, Elsa.Serialization.Core.JsonBaseline.Options)!.AsObject();
+        winner.Remove("identity"); candidate.Remove("identity");
+        winner.Remove("createdAt"); candidate.Remove("createdAt");
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(winner, candidate))
             throw new InvalidDataException("The saved Test Run wrapper content or provenance conflicts with preparation.");
     }
 
@@ -1046,16 +1046,17 @@ public sealed class ActivityDraftTestRunService(
             {
                 name = x.Key,
                 state = x.Value.State,
-                value = x.Value.Value?.GetRawText()
+                hasValue = x.Value.Value.HasValue,
+                value = x.Value.Value
             });
-        var canonical = JsonSerializer.Serialize(new
+        var canonical = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new
         {
             request.DraftId,
             request.ExpectedRevision,
             request.CorrelationId,
             inputs
-        });
-        return StableHash(canonical);
+        }, _ => null);
+        return Elsa.Serialization.Core.JsonHashInput.Hash(canonical);
     }
 
     private static string RequestFingerprint(StartActivityVersionTestRun request)
@@ -1066,14 +1067,15 @@ public sealed class ActivityDraftTestRunService(
             {
                 name = x.Key,
                 state = x.Value.State,
-                value = x.Value.Value?.GetRawText()
+                hasValue = x.Value.Value.HasValue,
+                value = x.Value.Value
             });
-        return StableHash(JsonSerializer.Serialize(new
+        return Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             request.VersionId,
             request.CorrelationId,
             inputs
-        }));
+        });
     }
 
     private static string ActivityVersionReceiptId(string versionId) =>

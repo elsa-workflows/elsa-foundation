@@ -1,10 +1,10 @@
 {
   "identity": {
-    "artifactId": "artifact-7d70c113a0f4",
+    "artifactId": "artifact-354c49dcf733",
     "definitionId": "definition-legacy-set",
     "definitionVersionId": "version-legacy-set",
     "artifactVersion": "1.0.0",
-    "artifactHash": "sha256:7d70c113a0f4fd8857721b9cfafbb4e19b7f400700475ff8904de6a203f92edf"
+    "artifactHash": "sha256:354c49dcf733ba1a2ed2a4b66584df9c9b3e8e930c89e12d385f4d6fe165e029"
   },
   "rootActivity": {
     "executableNodeId": "set-counter",

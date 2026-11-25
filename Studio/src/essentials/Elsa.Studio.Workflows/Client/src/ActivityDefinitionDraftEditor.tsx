@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
 import { getActivityGraphOutputSetters } from "./activityGraphOutputSources";
 import { activityGraphDocumentAdapter } from "./activityGraphDocumentAdapter";
@@ -164,6 +166,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   onOpenVersion(definitionId: string, versionId: string): void;
   onOpenStudioPath(path: string): void;
 }) {
+  useStudioTimeZone();
   const initialDraftIsActive = isActiveDraft(initialDraft.status);
   const [draft, setDraft] = useState(initialDraft);
   const [publishedVersion, setPublishedVersion] = useState(initialVersion && !initialDraftIsActive ? initialVersion.version : null);
@@ -1479,7 +1482,7 @@ function saveStatusDescription(status: SaveStatus, blocked: boolean) {
 
 function formatRecoveryTime(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "at an unknown time" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "at an unknown time" : formatStudioDate(date);
 }
 
 function formatRecoveryPreview(recovery: ActivityDefinitionRecoverySnapshot) {

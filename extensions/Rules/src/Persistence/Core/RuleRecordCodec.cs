@@ -38,7 +38,7 @@ public static partial class RuleRecordCodec
             throw new NotSupportedException("rules.invocation-schema");
         var artifact = invocation.Artifact;
         var artifactBytes = artifact.CanonicalBytes;
-        if (Hash(artifactBytes.Span) != artifact.Sha256 || artifact.ArtifactId != "rules:" + artifact.Sha256)
+        if (ArtifactHash(artifact.FormatVersion, artifactBytes.Span) != artifact.Sha256 || artifact.ArtifactId != "rules:" + artifact.Sha256)
             throw new InvalidDataException("rules.artifact-identity");
         var facts = CanonicalFacts(invocation.InitialFacts);
         ValidatePinShape(invocation.ExpectedImplementation);
@@ -70,7 +70,7 @@ public static partial class RuleRecordCodec
     }
 
     public static RuleInvocationFingerprint Fingerprint(RuleInvocationEnvelope invocation) =>
-        new(Hash(InvocationBytes(invocation)));
+        new(JsonHash(InvocationBytes(invocation)));
 
     public static byte[] TerminalBytes(RuleTerminalResult result) => RuleJson.Write(writer =>
     {
@@ -119,7 +119,7 @@ public static partial class RuleRecordCodec
             writer.WriteStartObject();
             writer.WritePropertyName("delivery");
             writer.WriteRawValue(body);
-            writer.WriteString("canonicalPayloadSha256", Hash(body));
+            writer.WriteString("canonicalPayloadSha256", JsonHash(body));
             writer.WriteEndObject();
         }, RuleLimits.MaxEnvelopeBytes);
     }
@@ -188,9 +188,9 @@ public static partial class RuleRecordCodec
         return copy.OrderBy(fact => fact.Atom, StringComparer.Ordinal).ToArray();
     }
 
-    public static string FactsHash(IReadOnlyList<RuleFact> facts) => Hash(FactsBytes(facts));
+    public static string FactsHash(IReadOnlyList<RuleFact> facts) => JsonHash(FactsBytes(facts));
 
-    public static string PinHash(RuleSemanticPin pin) => Hash(RuleJson.Write(writer => WritePin(writer, pin), RuleLimits.MaxEnvelopeBytes));
+    public static string PinHash(RuleSemanticPin pin) => JsonHash(RuleJson.Write(writer => WritePin(writer, pin), RuleLimits.MaxEnvelopeBytes));
 
     public static byte[] ReceiptBytes(RuleRoundReceipt receipt) => RuleJson.Write(writer =>
     {
@@ -226,6 +226,12 @@ public static partial class RuleRecordCodec
     }
 
     public static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+    /// <summary>Hashes a JSON value through the shared, frozen hash-input contract.</summary>
+    public static string JsonHash(ReadOnlySpan<byte> bytes) => Elsa.Serialization.Core.JsonHashInput.HashUtf8(bytes.ToArray());
+
+    /// <summary>Hashes format-one JSON programs; other artifact formats retain their opaque-byte integrity contract.</summary>
+    public static string ArtifactHash(int formatVersion, ReadOnlySpan<byte> bytes) => formatVersion == 1 ? JsonHash(bytes) : Hash(bytes);
 
     private static void WriteFacts(Utf8JsonWriter writer, IEnumerable<RuleFact> facts)
     {

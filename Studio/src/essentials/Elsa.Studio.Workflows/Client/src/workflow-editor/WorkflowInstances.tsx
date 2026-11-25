@@ -1,3 +1,4 @@
+import { localDateTimeToIso, resolveStudioTimeZone, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { getNotifications } from "./notifications";
 import { StudioHttpError, useStudioWorkspaceTab } from "@elsa-workflows/studio-sdk";
 import { loadExecutionScope, activityExecutionSummaryFromInspection, type IncidentActivityInspection } from "./executionScope";
@@ -142,6 +143,7 @@ export function WorkflowInstances({ context, navigate }: {
   context: StudioEndpointContext;
   navigate(path: string): void;
 }) {
+  useStudioTimeZone();
   const healthFilterHelpId = useId();
   const [location, setLocation] = useState<RunHistoryLocation>(readRunHistoryLocation);
   const [draftFilters, setDraftFilters] = useState<RunHistoryFilters>(location.filters);
@@ -506,6 +508,7 @@ export function WorkflowInstances({ context, navigate }: {
             </fieldset>
             <fieldset className="wf-run-filter-group">
               <legend>Date range</legend>
+              <p>Dates use {resolveStudioTimeZone()}; each bound is converted with its date's offset.</p>
               <div className="wf-run-filter-grid">
                 <RunFilterInput label="From" type="datetime-local" value={draftFilters.from} onChange={value => setDraftFilters(current => ({ ...current, from: value }))} />
                 <RunFilterInput label="To" type="datetime-local" value={draftFilters.to} onChange={value => setDraftFilters(current => ({ ...current, to: value }))} />
@@ -677,6 +680,7 @@ function RunFilterInput({ label, value, type = "text", onChange }: {
   type?: "text" | "datetime-local";
   onChange(value: string): void;
 }) {
+
   return (
     <StudioField className="wf-run-filter-field" label={label}><input aria-label={`Workflow run ${label.toLowerCase()}`} type={type} value={value} onChange={event => onChange(event.target.value)} /></StudioField>
   );
@@ -836,6 +840,7 @@ export function formatCurrentIncidentHealth(instance: Pick<WorkflowInstanceSumma
 }
 
 function CurrentIncidentHealthLabel({ instance }: { instance: WorkflowInstanceSummary }) {
+
   const available = typeof instance.activeIncidentCount === "number" && typeof instance.blockingIncidentCount === "number";
   const health = !available
     ? "unavailable"
@@ -853,8 +858,10 @@ function CurrentIncidentHealthLabel({ instance }: { instance: WorkflowInstanceSu
 
 function toUtcIso(value: string) {
   if (!value) return undefined;
-  const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString();
+  const explicit = localDateTimeToIso(value);
+  const fraction = /\.(\d{1,7})(?:Z|[+-]\d{2}:\d{2})$/.exec(explicit)?.[1];
+  const utc = new Date(explicit).toISOString();
+  return fraction ? utc.replace(/\.\d{3}Z$/, `.${fraction}Z`) : utc;
 }
 
 interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
@@ -890,6 +897,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   navigate(path: string): void;
   onRunTitleChange?(title: string): void;
 }) {
+
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [loadedData, setData] = useState<WorkflowInstanceWorkbenchData | null>(null);
@@ -2468,6 +2476,7 @@ function WorkflowInstanceCanvas({
   journals?: CompensationJournals;
   operator?: CompensationOperatorControls;
 }) {
+
   const scopeKey = getInstanceScopeKey(frames);
   const [flowInstance, setFlowInstance] = useState<WorkflowRunFlowInstance | null>(null);
   const journalOf = journals?.get;
@@ -2605,6 +2614,7 @@ function ReadOnlyWorkflowFlow({
   onSelectEvidence(evidenceId: string | null): void;
   focusRequestId: number;
 }) {
+
   const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(nodes);
 
   return (
@@ -2862,6 +2872,7 @@ function WorkflowInstanceInspector({
   onToggleCollapsed?(): void;
   onToggleMaximized?(): void;
 }) {
+  useStudioTimeZone();
   const inspectorRef = useRef<HTMLElement>(null);
   // Spec 1229 FR-017: the variable lifecycle reads, on hosts that advertise them.
   // null while the host's capabilities are being read.
@@ -3284,6 +3295,7 @@ export function WorkflowIncidentList({
   onOpenDefinition?(definitionId: string): void;
   definitionAccess?: DefinitionAccessObservation;
 }) {
+  useStudioTimeZone();
   const [copyStatus, setCopyStatus] = useState("");
   const [loadingAssociations, setLoadingAssociations] = useState(false);
   const [incidentDetailsId, setIncidentDetailsId] = useState<string | null>(null);
@@ -3462,6 +3474,7 @@ export function getIncidentInputLabel(
 }
 
 function IncidentStackTrace({ incident }: { incident: IncidentStateSummary }) {
+
   const stackTrace = getIncidentStackTrace(incident);
   if (!stackTrace) return null;
 
@@ -3474,6 +3487,7 @@ function IncidentStackTrace({ incident }: { incident: IncidentStateSummary }) {
 }
 
 function IncidentTechnicalContent({ incident }: { incident: IncidentStateSummary }) {
+  useStudioTimeZone();
   const activityExecutionId = readIncidentActivityExecutionId(incident);
   const inputKey = readIncidentInputKey(incident);
   const inputFailureCode = incident.metadata?.["runtime.inputFailureCode"];
@@ -3541,6 +3555,7 @@ function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDef
   actions?: ReactNode;
   incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
 }) {
+  useStudioTimeZone();
   const [copyStatus, setCopyStatus] = useState("");
 
   return (
@@ -3592,6 +3607,7 @@ function NamedIdentity({
   id: string;
   secondary?: string | null;
 }) {
+
   const identity = resolveNamedIdentity(name, id, [secondary]);
   const secondaryText = identity.secondaryIds.join(" · ") || null;
   return (
@@ -3609,6 +3625,7 @@ function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId, activity
   activityCatalog?: ActivityCatalogItem[];
   executableGraph?: ExecutableActivityGraph | null;
 }) {
+
   if (!graphNodeIds) return null;
 
   const unmatchedActivities = details.activities.filter(activity => {
