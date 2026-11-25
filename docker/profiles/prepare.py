@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Turn a Foundation profile's package roots into a Docker build context."""
+"""Assemble a locked Foundation package feed."""
 
 import argparse
 import base64
@@ -15,9 +15,10 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 
-PROFILE_DIRECTORY = Path(__file__).resolve().parent
-REPOSITORY = PROFILE_DIRECTORY.parent.parent
+TOOL_DIRECTORY = Path(__file__).resolve().parent
+FOUNDATION_DIRECTORY = TOOL_DIRECTORY / "foundation"
 DEPS_FILE = "Elsa.Foundation.Host.deps.json"
+FOUNDATION_FILES = (DEPS_FILE, "Elsa.Foundation.Host.dll", "appsettings.json", "appsettings.Production.json")
 FEED_NAME = "profile-packages"
 # The lock schema requires timestamps. A fixed value keeps identical package sets byte-identical.
 PROFILE_TIME = "1970-01-01T00:00:00Z"
@@ -46,23 +47,14 @@ def run(command, **kwargs):
     return subprocess.run(command, check=True, text=True, **kwargs)
 
 
-def inspect_foundation(image, platform, destination):
-    command = ["docker", "create"]
-    if platform:
-        command.extend(["--platform", platform])
-    container = run([*command, image], capture_output=True).stdout.strip()
-    files = (DEPS_FILE, "Elsa.Foundation.Host.dll", "appsettings.json", "appsettings.Production.json")
-    try:
-        for name in files:
-            run(["docker", "cp", f"{container}:/app/{name}", str(destination / name)])
-    finally:
-        run(["docker", "rm", container], stdout=subprocess.DEVNULL)
-    return {name: hashlib.sha256((destination / name).read_bytes()).hexdigest() for name in files}
+def foundation_hashes():
+    return {
+        name: hashlib.sha256((FOUNDATION_DIRECTORY / name).read_bytes()).hexdigest()
+        for name in FOUNDATION_FILES
+    }
 
 
 def read_versions(path):
-    if path is None:
-        return {}
     versions = {}
     for group in ET.parse(path).getroot().findall("PropertyGroup"):
         version = group.findtext("ElsaComputedPackageVersion")
@@ -111,8 +103,7 @@ def expand_pack_references(path, packs_directory):
             yield entry, entry_location
 
 
-def read_roots(path, versions, packs_directory=None):
-    packs_directory = packs_directory or path.parent.parent / "packs"
+def read_roots(path, versions, packs_directory):
     roots = {}
     locations = {}
     for line, location in expand_pack_references(path, packs_directory):
@@ -125,7 +116,7 @@ def read_roots(path, versions, packs_directory=None):
         if computed and explicit_version and explicit_version.lower() != computed[1].lower():
             raise ValueError(f"{location} pins {package_id} to {explicit_version}, version plan has {computed[1]}")
         if not explicit_version and not computed:
-            raise ValueError(f"{location} needs --versions containing {package_id}, or an exact version pin")
+            raise ValueError(f"{location} needs an exact version pin for {package_id}; it is absent from the builder's version plan")
         resolved = computed or (package_id, explicit_version)
         if key in roots:
             first_version = roots[key][1]
@@ -165,7 +156,7 @@ def foundation_pins(host_directory, versions, roots, configuration, production):
 
 
 def default_nuget_config(path):
-    configuration = ET.parse(REPOSITORY / "NuGet.config")
+    configuration = ET.parse(TOOL_DIRECTORY / "NuGet.config")
     mappings = configuration.getroot().find("packageSourceMapping")
     foundation = mappings.find("packageSource[@key='Elsa 4 Preview']")
     ET.SubElement(foundation, "package", pattern="Elsa.*")
@@ -203,11 +194,11 @@ def restore_graph(directory, pins, roots, config, reviewed_lock):
     if reviewed_lock is not None:
         shutil.copyfile(reviewed_lock, lock)
         command.append("--locked-mode")
-    run(command, cwd=REPOSITORY)
+    run(command, cwd=TOOL_DIRECTORY)
     return json_data(directory / "obj" / "project.assets.json"), lock
 
 
-def stage_libraries(graph, host, restore_packages, output):
+def stage_libraries(graph, host, roots, restore_packages, output):
     feed = output / FEED_NAME
     feed.mkdir()
     activities = output / "profile-activities"
@@ -216,7 +207,8 @@ def stage_libraries(graph, host, restore_packages, output):
     lock_entries = []
     target = graph["targets"]["net10.0"]
     for identity, package_id, version in sorted(package_identities(target), key=lambda package: package[0].lower()):
-        provided = host.get(package_id.lower())
+        package_key = package_id.lower()
+        provided = host.get(package_key)
         if provided and provided[1].lower() == version.lower():
             continue
         library = graph["libraries"][identity]
@@ -240,8 +232,8 @@ def stage_libraries(graph, host, restore_packages, output):
             "hash": f"sha512:{content_hash}",
             "timestamp": PROFILE_TIME,
         })
-        # The CLR activity reconciler scans one top-level directory of managed assemblies.
-        if package_id.lower().startswith(("elsa.", "elsa3.")):
+        # Scan explicit roots (including third-party activities) and Elsa packages reached through dependencies.
+        if package_key in roots or package_key.startswith(("elsa.", "elsa3.")):
             with zipfile.ZipFile(archive) as package:
                 for asset in sorted(target[identity].get("runtime", {})):
                     if not asset.endswith(".dll"):
@@ -260,7 +252,7 @@ def stage_libraries(graph, host, restore_packages, output):
     return len(lock_entries)
 
 
-def stage_configuration(profile, configuration, production, output):
+def stage_configuration(configuration, production, output):
     if production.get("Nuplane", {}).get("Setup", {}).get("Feeds"):
         raise ValueError("Foundation production settings already declare feeds. The profile would inherit extra sources.")
     nuplane = configuration["Nuplane"]
@@ -275,60 +267,71 @@ def stage_configuration(profile, configuration, production, output):
     nuplane.setdefault("Reconciliation", {})["StartupFailurePolicy"] = "FailHost"
     nuplane["Loading"]["DefaultLoadMode"] = "HostIntegrated"
     write_json(output / "appsettings.json", configuration)
-    shells = profile / "shells.json"
-    if "CShells" not in json_configuration(shells):
-        raise ValueError(f"{shells} must declare CShells configuration")
-    shutil.copyfile(shells, output / "shells.json")
 
 
-def prepare(args):
+def assemble(args):
     output = args.output.resolve()
-    if output.exists():
-        raise ValueError(f"Output already exists: {output}")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    versions = read_versions(args.versions)
-    roots = read_roots(args.profile / "packages.txt", versions, args.packs_directory)
-    with tempfile.TemporaryDirectory(prefix=".profile-", dir=output.parent) as temporary:
-        temporary = Path(temporary)
-        base = temporary / "foundation"
-        base.mkdir()
-        restore = temporary / "restore"
-        restore.mkdir()
-        context = temporary / "context"
-        context.mkdir()
-        hashes = inspect_foundation(args.foundation_image, args.platform, base)
-        configuration = json_configuration(base / "appsettings.json")
-        production = json_configuration(base / "appsettings.Production.json")
-        host, shared = foundation_pins(base, versions, roots, configuration, production)
-        config = args.nuget_config.resolve() if args.nuget_config else default_nuget_config(restore / "NuGet.config")
-        graph, lock = restore_graph(restore, {**shared, **versions, **roots}, roots, config, args.lock)
-        count = stage_libraries(graph, host, restore / "packages", context)
-        if args.lock:
-            reviewed_runtime_lock = args.lock.with_name("nuplane.lock.json")
-            if json_data(reviewed_runtime_lock) != json_data(context / "nuplane.lock.json"):
+    profile = Path.cwd()
+    versions = read_versions(TOOL_DIRECTORY / "package-versions.props")
+    roots = read_roots(profile / "packages.txt", versions, args.packs_directory)
+    reviewed_lock = None
+    if args.locked:
+        reviewed_lock = profile / "packages.lock.json"
+        reviewed_runtime_lock = profile / "nuplane.lock.json"
+        for lock in (reviewed_lock, reviewed_runtime_lock):
+            if not lock.is_file():
+                raise ValueError(f"--locked requires {lock}")
+    output.mkdir(parents=True, exist_ok=True)
+    if any(output.iterdir()):
+        raise ValueError(f"Output directory must be empty: {output}")
+    # Stage on the output filesystem because /out may be a bind mount.
+    context = output / ".assembling"
+    context.mkdir()
+    try:
+        app = context / "app"
+        app.mkdir()
+        with tempfile.TemporaryDirectory(prefix="elsa-profile-restore-") as temporary:
+            restore = Path(temporary)
+            configuration = json_configuration(FOUNDATION_DIRECTORY / "appsettings.json")
+            production = json_configuration(FOUNDATION_DIRECTORY / "appsettings.Production.json")
+            host, shared = foundation_pins(FOUNDATION_DIRECTORY, versions, roots, configuration, production)
+            config = args.nuget_config.resolve() if args.nuget_config else default_nuget_config(restore / "NuGet.config")
+            graph, lock = restore_graph(restore, {**shared, **versions, **roots}, roots, config, reviewed_lock)
+            count = stage_libraries(graph, host, roots, restore / "packages", app)
+            runtime_lock = app / "nuplane.lock.json"
+            if args.locked and json_data(reviewed_runtime_lock) != json_data(runtime_lock):
                 raise ValueError(f"Resolved archive hashes differ from {reviewed_runtime_lock}")
-        stage_configuration(args.profile, configuration, production, context)
-        shutil.copyfile(lock, context / "packages.lock.json")
-        (context / "foundation-base.sha256").write_text(
-            "".join(f"{digest}  /app/{name}\n" for name, digest in hashes.items()), encoding="utf-8"
-        )
-        context.rename(output)
-    print(f"Prepared {args.profile.name} with {count} Nuplane packages at {output}")
+            stage_configuration(configuration, production, app)
+            shutil.copyfile(lock, context / "packages.lock.json")
+            shutil.copyfile(runtime_lock, context / "nuplane.lock.json")
+            (context / "foundation-base.sha256").write_text(
+                "".join(f"{digest}  /app/{name}\n" for name, digest in foundation_hashes().items()),
+                encoding="utf-8",
+            )
+            published = []
+            try:
+                for entry in sorted(context.iterdir()):
+                    published.append(entry.rename(output / entry.name))
+            except OSError:
+                for entry in published:
+                    entry.rename(context / entry.name)
+                raise
+    finally:
+        shutil.rmtree(context)
+    print(f"Assembled {count} Nuplane packages at {output}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", required=True, type=Path, help="directory containing packages.txt and shells.json")
-    parser.add_argument("--packs-directory", type=Path, help="directory of named packs, defaults to packs/ beside the profile directory")
-    parser.add_argument("--foundation-image", required=True, help="the matching Foundation image, preferably digest-pinned")
-    parser.add_argument("--platform", help="Foundation image platform, for example linux/arm64")
-    parser.add_argument("--versions", type=Path, help="package-versions.props from the matching Foundation Packages run")
-    parser.add_argument("--lock", type=Path, help="reviewed packages.lock.json next to its matching nuplane.lock.json")
-    parser.add_argument("--nuget-config", type=Path, help="override build-time NuGet sources")
-    parser.add_argument("--output", required=True, type=Path, help="new directory to receive the Docker build context")
+    parser = argparse.ArgumentParser(prog="elsa-profile", description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    command = commands.add_parser("assemble", help="read packages.txt from the working directory")
+    command.add_argument("--output", required=True, type=Path, help="new or empty directory for the assembled feed and locks")
+    command.add_argument("--locked", action="store_true", help="require both locks beside packages.txt and reproduce them")
+    command.add_argument("--packs-directory", type=Path, default=TOOL_DIRECTORY / "packs", help="use this directory of named packs")
+    command.add_argument("--nuget-config", type=Path, help="override build-time NuGet sources")
     args = parser.parse_args()
     try:
-        prepare(args)
+        assemble(args)
     except (OSError, ValueError, KeyError, ET.ParseError, zipfile.BadZipFile, subprocess.CalledProcessError) as error:
         if isinstance(error, subprocess.CalledProcessError) and error.stderr:
             print(error.stderr.strip(), file=sys.stderr)
