@@ -68,6 +68,9 @@ internal static class HostJobDrainChecks
             ("loop-errors-logged", LoopErrorsLoggedAsync),
             ("answer-put-back-newest", () => AnswerPutBackAsync(newerAfterConsumption: true)),
             ("dispose-deadline-boundary", DisposeDeadlineBoundaryAsync),
+            ("job-drain-own-cancel-then-kill", JobDrainOwnCancelThenKillAsync),
+            ("loop-error-window", LoopErrorWindowAsync),
+            ("aggregate-inner-once", AggregateInnerOnceAsync),
         ];
         // HOST_JOB_DRAIN_ONLY=name[,name]: run only these cases (fail-before witnesses run them one at a time).
         var only = Environment.GetEnvironmentVariable("HOST_JOB_DRAIN_ONLY")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -2019,6 +2022,98 @@ internal static class HostJobDrainChecks
         }
         Check(results.All(result => result == "ok"),
             $"dispose deadlines at the timer limit (limit - grace, limit - grace + 1 ms, limit) stop and release ({string.Join(", ", results)})");
+    }
+
+    // The job drain throws its own cancellation (no kill); a deadline kill comes after. The cancellation is recorded once,
+    // as thrown.
+    private static async Task JobDrainOwnCancelThenKillAsync()
+    {
+        var fixture = new Fixture();
+        var type = new JobProbe();
+        var own = new OperationCanceledException("the job drain's own cancellation");
+        var armed = 0;
+        var options = fixture.Options with { BeforeDrainRound = () => { if (Interlocked.Exchange(ref armed, 0) == 1) throw own; } };
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var node = new RuntimeNode("job-own-cancel", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, onFault: logged.Enqueue);
+        await node.StartAsync(fixture.Host(node, type, fixture.Store, ownedSet: true, options));
+        await fixture.StartActorAsync(node);
+        await type.Entered.Task.WaitAsync(Timeout);
+        Volatile.Write(ref armed, 1);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(2));     // the kill comes after the drain's cancellation
+        var stop = node.StopAsync(deadline.Token).AsTask();
+        await WaitFor(() => Volatile.Read(ref armed) == 0);
+        await Task.Delay(200);
+        type.Finish.TrySetResult();     // the drain's wait ends, and its own cancellation is rethrown
+        var outcome = await OutcomeAsync(stop);
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        await DisposeQuietlyAsync(node);
+        Check(logged.Count(entry => entry is OperationCanceledException) == 1 && logged.Any(entry => ReferenceEquals(entry, own)) &&
+            ReferenceEquals(node.LastError, own),
+            $"the job drain's own cancellation, then a kill, is recorded once, as thrown ({string.Join(", ", logged.Select(entry => entry.Message))}; stop {outcome?.GetType().Name ?? "returned"})");
+    }
+
+    // Loop-error reports are bounded: at most LoopErrorKeys distinct keys (the oldest evicted, so it reports again),
+    // and a key reports again after LoopErrorWindow, with the repeats it suppressed.
+    private static Task LoopErrorWindowAsync()
+    {
+        var fixture = new Fixture();
+        long now = 0;
+        var logged = new List<Exception>();
+        var node = new RuntimeNode("loop-window", fixture.Store, 1, new LoopOptions { ErrorReportClock = () => now }, onFault: logged.Add);
+        for (var i = 0; i < RuntimeNode.LoopErrorKeys + 6; i++, now++) node.RecordLoopError(new InvalidOperationException("distinct " + i));
+        var distinct = logged.Count;
+        node.RecordLoopError(new InvalidOperationException("distinct 0"));     // evicted as the oldest: reported again
+        var evictedAgain = logged.Count - distinct;
+        var last = "distinct " + (RuntimeNode.LoopErrorKeys + 5);
+        node.RecordLoopError(new InvalidOperationException(last));
+        node.RecordLoopError(new InvalidOperationException(last));
+        var withinWindow = logged.Count - distinct - evictedAgain;
+        now += (long)RuntimeNode.LoopErrorWindow.TotalMilliseconds;
+        var after = new InvalidOperationException(last);
+        node.RecordLoopError(after);
+        var reported = logged.LastOrDefault();
+        Check(distinct == RuntimeNode.LoopErrorKeys + 6 && evictedAgain == 1 && withinWindow == 0 && ReferenceEquals(reported, after) &&
+            after.Data["SuppressedRepeats"] is long repeats && repeats == 2 && node.Errors == RuntimeNode.LoopErrorKeys + 10,
+            $"loop-error reports are bounded and windowed ({distinct} distinct, evicted reported again {evictedAgain}, within window {withinWindow}, suppressed {after.Data["SuppressedRepeats"] ?? "none"})");
+        return Task.CompletedTask;
+    }
+
+    // An own-cancelled turn drain followed by a release error: the aggregate reports only its inner exception not yet
+    // reported, so the cancellation is logged once.
+    private static async Task AggregateInnerOnceAsync()
+    {
+        var fixture = new Fixture();
+        var type = new JobProbe();
+        var own = new OperationCanceledException("the turn drain's own cancellation");
+        var fault = new InvalidOperationException("injected release fault");
+        var armed = 0;
+        var options = fixture.Options with { BeforeDrainRound = () => { if (Interlocked.Exchange(ref armed, 0) == 1) throw fault; } };
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var node = new RuntimeNode("aggregate-once", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, beforeRelease: async _ =>
+        {
+            await Task.Yield();
+            throw own;
+        }, onFault: logged.Enqueue);
+        await node.StartAsync(fixture.Host(node, type, fixture.Store, ownedSet: true, options));
+        await fixture.StartActorAsync(node);
+        await type.Entered.Task.WaitAsync(Timeout);
+        Volatile.Write(ref armed, 1);
+        var stop = node.StopAsync().AsTask();
+        await WaitFor(() => Volatile.Read(ref armed) == 0);
+        await Task.Delay(200);
+        type.Finish.TrySetResult();
+        var outcome = await OutcomeAsync(stop);
+        await Task.Delay(200);
+        await DisposeQuietlyAsync(node);
+        Check(outcome is AggregateException && logged.Count == 2 && logged.Count(entry => ReferenceEquals(entry, own)) == 1 &&
+            logged.Count(entry => ReferenceEquals(entry, fault)) == 1 && !logged.Any(entry => entry is AggregateException),
+            $"an aggregate of an own cancellation and a release error logs each inner exception once ({string.Join(", ", logged.Select(entry => entry.GetType().Name))})");
     }
 
     private static async Task<Exception?> OutcomeAsync(Task task)

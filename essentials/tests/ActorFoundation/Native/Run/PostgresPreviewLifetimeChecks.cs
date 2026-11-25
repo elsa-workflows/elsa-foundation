@@ -107,7 +107,7 @@ internal static class PostgresPreviewLifetimeChecks
             Require((await ReadFenceAsync()).Owner is null, "the replacement also releases ownership through application shutdown");
         }
         // KERNEL_LIFETIME_PROBES=name[,name]: run only these deadline probes after the main flow (for fail-before witnesses).
-        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault"];
+        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault", "joined-stop-warning"];
         var only = Environment.GetEnvironmentVariable("KERNEL_LIFETIME_PROBES")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (only is { Length: 0 } || only?.FirstOrDefault(name => !probes.Contains(name, StringComparer.Ordinal)) is { } unknown)
             throw new InvalidOperationException($"KERNEL_LIFETIME_PROBES names no known probe ({string.Join(", ", probes)}).");
@@ -121,7 +121,44 @@ internal static class PostgresPreviewLifetimeChecks
         if (Probe("dispose-joins")) await CheckJoinedDisposeKillsAsync();
         if (Probe("negative-deadline")) CheckNegativeDisposeDeadline();
         if (Probe("shutdown-fault")) await CheckShutdownFaultAsync();
+        if (Probe("joined-stop-warning")) await CheckJoinedStopWarningAsync();
         return 0;
+
+        // A StopAsync that joins another caller's stop kills nothing when its own deadline fires: no Warning. A later
+        // dispose deadline that does kill the drain logs the one Warning.
+        async Task CheckJoinedStopWarningAsync()
+        {
+            const string name = "joined-stop-warning";
+            var admitted = await ingress.SendAsync(scope, new Contract.Target.Start(new(WaitingActor.Name, "fixture")),
+                name + "-start", Contract.Kinds.Start, cancellationToken: token);
+            Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, $"the {name} probe admits an independent root");
+            var held = new WaitingActor();
+            var log = new RecordingLogger();
+            var service = new PostgresPreviewHostedService(Open, name, held, _ => { },
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25), DisposeDeadline = TimeSpan.FromMilliseconds(500) }, log);
+            using var application = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            Task? first = null;
+            try
+            {
+                await service.StartAsync(token);
+                await held.Entered.Task.WaitAsync(token);
+                first = service.StopAsync(application.Token);
+                using var joined = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+                try { await service.StopAsync(joined.Token).WaitAsync(token); }
+                catch (OperationCanceledException) when (!token.IsCancellationRequested) { }
+                var afterJoined = log.Warnings.Count;
+                await service.DisposeAsync().AsTask().WaitAsync(token);
+                Require(afterJoined == 0 && log.Warnings.Count == 1 && log.Errors.Count == 0,
+                    $"a joined stop's deadline warns nothing, and the dispose deadline that kills the drain warns once ({afterJoined} then {log.Warnings.Count} Warning)");
+            }
+            finally
+            {
+                held.Release.TrySetResult();
+                if (first is not null)
+                    try { await first.WaitAsync(token); }
+                    catch (Exception) when (!token.IsCancellationRequested) { }
+            }
+        }
 
         // A fault the shutdown raises outside the node is kept on LastError and logged once at Error.
         async Task CheckShutdownFaultAsync()
@@ -291,18 +328,20 @@ internal static class PostgresPreviewLifetimeChecks
             var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var escalation = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var startupLog = new RecordingLogger();
             await using var service = new PostgresPreviewHostedService(() =>
             {
                 entered.TrySetResult();
                 release.Task.GetAwaiter().GetResult();
                 return Open();
-            }, "lifetime-startup", new WaitingActor(false), reason => escalation.TrySetResult(reason));
+            }, "lifetime-startup", new WaitingActor(false), reason => escalation.TrySetResult(reason), logger: startupLog);
             var starting = service.StartAsync(token);
             try
             {
                 await entered.Task.WaitAsync(token);
                 await ExpectDeadlineAsync(service.StopAsync, escalation, escalates: true);
-                Require(!starting.IsCompleted, "a host deadline requests escalation while preflight is still blocked");
+                Require(!starting.IsCompleted && startupLog.Warnings.Count == 0,
+                    $"a host deadline requests escalation while preflight is still blocked, and warns of no kill: nothing was owned ({startupLog.Warnings.Count} Warning)");
             }
             finally { release.TrySetResult(); }
             try
