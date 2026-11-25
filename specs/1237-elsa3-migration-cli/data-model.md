@@ -95,7 +95,8 @@ converter's, the import's and reconciliation's codes, and the tooling's own `ELS
 wrapper, imported for its findings but neither published nor exported, as in startup reconciliation; an older
 reusable version's activity is published and exported) and `ELS3-MIGRATION-RUN-REFUSED` (Error, remedy
 `patch-definition`: a selected definition that a run-level refusal kept from being applied). The table lists `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` as a `storage-driver` component code
-(a Reconsider warning; its remedy, `build-component`, applies only if it is ever emitted at Error).
+(a Reconsider warning; its remedy, `build-component`, applies only if it is ever emitted at Error). The new JavaScript
+component code of FR-016a (T004b) has kind `javascript-function` and remedy `build-component`.
 `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED` is a `storage-driver` component code too. `fixedText` is the
 report text for a code the converter does not own. Every Elsa 3 code needs an entry, whatever its severity. An Elsa 4
 code with no entry gets `patch-definition` and a default fixed text. Every skip is reported as an `error` finding. Codes with an `ELS3-BEHAVIOUR-` prefix are

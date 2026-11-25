@@ -124,7 +124,9 @@
   `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` already carries `ComponentName`, leave it; test that the inventory
   lists both the custom driver and the memory driver as storage-driver components. Give every call, and every read of an undeclared global used as a value, that the
   converter reports as matchable (`CanBeMatched`: an undeclared custom global or a refused built-in a host function may
-  take over) a `javascript-function` component code of its own, separate from the forbidden-capability code, which
+  take over) a `javascript-function` component code of its own (a new constant, for example
+  `ELS3-JS-HOST-FUNCTION-MISSING`, with its code-table entry: kind `javascript-function`, remedy `build-component`, not
+  routine, so the T004 completeness test stays green), separate from the forbidden-capability code, which
   unmatchable calls and forbidden capabilities keep. Cover every emission site, not only the `CanBeMatched` one in
   `Elsa3ExpressionRewriter`: the `get{Name}()` and `set{Name}()` calls with no matching variable or input in
   `Elsa3ValueFlowLowerer` (the `UndeclaredFunctionGuidance` sites) get the component code too, and so does the
@@ -142,7 +144,8 @@
   stay green unchanged (§2.21.1, FR-013).
 - [ ] T006 [P] Add `IJsonWorkflowCatalogWriter` and `JsonWorkflowCatalogWriter` in
   `essentials/src/Workflows/Design/Reconciliation/Json/`, with a round-trip test against `JsonWorkflowCatalogReader`.
-  Update the project's README, and create its `EXTENSION_POINTS.md`, which it does not have yet (R-8).
+  Update the project's README, and create its `EXTENSION_POINTS.md`, which it does not have yet (R-8), with a row for
+  it in the root `EXTENSION_POINTS.md` under the Workflows design family (`CatalogLinkGuardTests`).
 - [ ] T007 [P] Add `IJsonActivityCatalogWriter` and `JsonActivityCatalogWriter` in
   `essentials/src/Activities/Design/Reconciliation/Json/`, with a round-trip test against `JsonActivityCatalogReader`.
   Update the project's README and `EXTENSION_POINTS.md` (R-8).
@@ -224,11 +227,12 @@
 - [ ] T013 [US3] Add `Tooling/Elsa3MigrationImportRunFeature.cs`, the shell feature `Elsa3MigrationImportRun`. It
   `DependsOn` `WorkflowsPublishingApi`, `WorkflowsPublishing`, `Elsa3ImportActivitiesPublishing` and `Tasks`, as
   `Elsa3JsonReconciliationFeature` does for the same publisher, and its `ConfigureServices`
-  calls `Elsa3ImportRunRegistration.Add` (R-5). Add `Cli/elsa3-migration.features.json`, the Elsa 3 addition list in
+  calls `Elsa3ImportRunRegistration.Add` (R-5) and registers the T006 and T007 writers, so the JSON reconciliation
+  features' behaviour does not change (R-10). Add `Cli/elsa3-migration.features.json`, the Elsa 3 addition list in
   the CShells feature shape of the host's `shells.json`: `Elsa3Mapping`, the collection import for reusables, the
   import's EF ledger, the publishing bridge and `Elsa3MigrationImportRun`. It is read from the CLI project folder only,
-  never copied to the output. It only adds feature entries. Test that the feature registers the import run and the
-  publishing authorization decoration in the shell.
+  never copied to the output. It only adds feature entries. Test that the feature registers the import run, the
+  publishing authorization decoration and both writers in the shell.
 - [ ] T015 [US3] Add the composition parity test (R-5): in both a baseline empty application builder with the same
   settings and the CLI's builder, snapshot the descriptors before and after the `MigrationHost.AddHostServices` call,
   and compare the descriptors that call added as multisets (the CLI's added set taken after its Data Protection
@@ -255,7 +259,7 @@
   golden file assert. It keeps every input that shares
   a selected version id, or a selected definition id and version, so that duplicates still reach the duplicate-input
   refusal. Test each fixture case, the duplicate case included.
-- [ ] T018 [US1] Wire `Elsa3MigrationRun`: read and validate the export first, before composition (`ExportInputReader`
+- [ ] T018 [US1] Wire `Elsa3MigrationRun` (its report-level tests, such as the run-refusal case, follow T019 and T023): read and validate the export first, before composition (`ExportInputReader`
   needs no shell, so `input-missing`, `input-unreadable` and `input-empty` refuse before `--out` exists; test that an
   `input-empty` refusal leaves a missing `--out` missing), then compose (T009), select, run `Elsa3ImportRun`, and collect every diagnostic with its stage.
   Publish stops at the first error and marks `publishStoppedHere` (FR-013, FR-014). `Elsa3ImportRun` returns a refusal
@@ -288,7 +292,8 @@
 
 ## Phase 5: User Story 4 - Migrated content (P1)
 
-- [ ] T022 [US4] Add `Tooling/MigratedExporter.cs` (FR-023, FR-024). It reads the published workflow versions and
+- [ ] T022 [US4] Add `Tooling/MigratedExporter.cs` (FR-023, FR-024). It resolves the T006 and T007 writers from the
+  shell, where T013's feature registers them. It reads the published workflow versions and
   reusable activity versions back from the design stores and writes them through the T006 and T007 writers: one file
   per workflow definition, the wrapper workflow of each reusable among them, and one activities file in dependency
   order. A reusable's `exportedTo` is the activities file, and its `wrapperExportedTo` is the wrapper's file. Every
@@ -324,7 +329,8 @@
   `CShells:Shells:default` and `ConnectionStrings`, never machine environment variables outside them, and set
   `persistenceOverridden` when a persistence connection setting was replaced (FR-009, FR-018 item 4). Test that no
   setting value reaches the report.
-- [ ] T026 [US2] Map composition failures to the `composition-failed` refusal, with no partial run: a listed feature
+- [ ] T026 [US2] Do this with T009, whose refusal tests (and T015's) depend on it. Map composition failures to the
+  `composition-failed` refusal, with no partial run: a listed feature
   that the build does not provide (`FeatureNotFoundException`), and a feature that throws while the shell is
   composed. Name the feature or setting key, never a value, and do not copy the exception message. Test with a listed
   feature that no project provides, and with a fixture feature whose configuration throws.
