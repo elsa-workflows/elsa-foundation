@@ -560,6 +560,8 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("AMOUNT", "getAMOUNT().x = 1; return 1;")]
     [InlineData("Amount", "const o = getVariable('amount'); o.x = 1; return 1;")]
     [InlineData("Amount", "function pay(x) { x.Status = 'Paid'; } pay(getVariable('amount')); return 1;")]
+    [InlineData("amount", "const k = 'am' + 'ount'; setVariable(k, 5); return 1;")]
+    [InlineData("Amount", "setVariable('Total', 1); return 1;")]
     public async Task A_reusable_variable_named_like_an_input_in_another_letter_case_is_ambiguous(string input, string source)
     {
         // Names compare as the converter resolves variables and inputs, without regard to letter case, whichever write form

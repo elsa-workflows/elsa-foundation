@@ -895,15 +895,16 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             return;
         }
 
-        // Spec 1241: Elsa 3 declared a reusable workflow's inputs as variables too, so a name a variable and an input share
-        // named two variables there. A script that may write variables and mentions such a name, directly or through an
-        // alias or helper, could write either: refuse it rather than guess (VF-IMP-002).
+        // Spec 1241 FR-010a: Elsa 3 declared a reusable workflow's inputs as variables too, so a name a variable and an input
+        // share named two variables there. A script that may write variables could write either, by a literal name, a
+        // computed one, an alias or a helper: in such a workflow it is refused rather than guessed (VF-IMP-002). A script
+        // that only reads converts.
         if (accessors.IsReusable &&
-            SharedVariableInputNames(definition).FirstOrDefault(name => expression.Value.Contains(name, StringComparison.OrdinalIgnoreCase)) is { } shared &&
+            SharedVariableInputNames(definition).FirstOrDefault() is { } shared &&
             expressionRewriter.ScriptMayWriteVariables(expression.Value, ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient)))
         {
             diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.AmbiguousReference,
-                $"The script writes variables and uses '{shared}', which names both a variable and an input of this reusable workflow; Elsa 3 declared the input as a variable too.",
+                $"The script writes variables, and this reusable workflow has both a variable and an input named '{shared}'; Elsa 3 declared the input as a variable too, so a write could reach either.",
                 $"Rename the variable or the input '{shared}' in the Elsa 3 workflow before import.",
                 $"{property.JsonPath}.expression.value"));
             return;

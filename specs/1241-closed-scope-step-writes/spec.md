@@ -190,8 +190,14 @@ A team migrating from Elsa 3 imports reusable workflows whose scripts set their 
   that are unbound, undeclared, not a variable, or of the wrong type, with the same diagnostics as workflow drafts.
 - **FR-010**: The Elsa 3 converter MUST convert script writes to a reusable workflow's declared variables as it does in
   a non-reusable workflow.
+- **FR-010a**: Where a variable and an input of a reusable workflow share a name (compared without regard to letter
+  case), the converter MUST refuse every script of that workflow that may write variables, as ambiguous (`VF-IMP-002`):
+  Elsa 3 declared the input as a variable too, so a write could reach either. A script that only reads converts.
+  *(Added 2026-11-25 during review: a literal, computed, aliased or helper write to the shared name would otherwise
+  convert to one of the two silently.)*
 - **FR-011**: The Elsa 3 converter MUST refuse a script write to a reusable workflow's input, with guidance to declare a
-  variable initialized from the input and write that variable.
+  variable initialized from the input and write that variable. A write whose name is computed resolves when the script
+  runs, so a computed name that only an input has faults the step, as an undeclared name does.
 - **FR-012**: The runtime lifecycle and write-order documentation and their catalog entries MUST describe body variable
   writes as supported and drop the closed-scope "not yet" limitations this spec removes.
 - **FR-013**: Studio MUST show the graph body's step-write warnings and refusals where it shows a graph draft's other
