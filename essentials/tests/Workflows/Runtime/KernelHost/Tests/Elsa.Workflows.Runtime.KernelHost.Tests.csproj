@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- NativeExecutableMapper's checks: compiled executables, built as publishing compiles them, mapped onto the Native
-       model, and a few run through the Native model's turn. -->
+       model, and a few run through the Native model's turn; and the kernel coordinator's, on the old runtime's in-memory stores. -->
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
@@ -10,8 +10,11 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../../src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
+    <!-- The in-memory slot authority, switch, projection stores and executable store the coordinator checks run on. -->
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
   </ItemGroup>
 </Project>

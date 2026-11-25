@@ -6034,6 +6034,8 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSource.SourceId.init -> voi
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSource.WorkflowActivationSource(string! Kind, string? SourceId = null) -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.ChannelValidation = 6 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
+Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.Mapping = 7 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
+Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.ServingCheck = 8 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.None = 0 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.ProjectionActivation = 4 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep
 Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep.ProjectionPreparation = 2 -> Elsa.Workflows.Runtime.Core.Models.WorkflowActivationStep

@@ -190,15 +190,40 @@ public sealed class NativeDefinitionException(string node, string message) : Inv
     public string Node { get; } = node;
 }
 
+/// <summary>
+/// The workflows a model runs, by id, in the order they were added. A publishing host adds to it while turns read it, so
+/// every read and write takes its lock, and <see cref="All"/> is a snapshot.
+/// </summary>
 public sealed class WorkflowRegistry
 {
     private readonly Dictionary<string, Workflow> _workflows = new(StringComparer.Ordinal);
-    public WorkflowRegistry Add(Workflow workflow) { _workflows[workflow.Id] = workflow; return this; }
-    public Workflow Get(string id) => _workflows.TryGetValue(id, out var w) ? w : throw new InvalidOperationException($"No workflow '{id}'.");
-    internal bool TryGet(string id, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Workflow? workflow) =>
-        _workflows.TryGetValue(id, out workflow);
-    public bool Remove(string id) => _workflows.Remove(id);
-    public IEnumerable<Workflow> All => _workflows.Values;
+    private readonly Lock _lock = new();
+
+    public WorkflowRegistry Add(Workflow workflow)
+    {
+        lock (_lock) _workflows[workflow.Id] = workflow;
+        return this;
+    }
+
+    public Workflow Get(string id) => TryGet(id, out var w) ? w : throw new InvalidOperationException($"No workflow '{id}'.");
+
+    internal bool TryGet(string id, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Workflow? workflow)
+    {
+        lock (_lock) return _workflows.TryGetValue(id, out workflow);
+    }
+
+    /// <summary>Whether a workflow with this id is registered.</summary>
+    public bool Contains(string id) => TryGet(id, out _);
+
+    public bool Remove(string id)
+    {
+        lock (_lock) return _workflows.Remove(id);
+    }
+
+    public IEnumerable<Workflow> All
+    {
+        get { lock (_lock) return [.. _workflows.Values]; }
+    }
 }
 
 public sealed record ChildCompleted(string Frame, string Node, string Outcome, JsonNode? Result, string? Tag);

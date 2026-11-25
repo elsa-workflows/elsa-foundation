@@ -7,6 +7,18 @@ the Native model's definitions.
 - `NativeExecutableMapper` maps a `WorkflowExecutable` to a `Kernel.Native.Workflow`, or refuses it with a
   `NativeMappingRefusedException` (`activity-unsupported` or `binding-unsupported`) that names the node and, where it
   matters, the input.
+- `KernelActivationCoordinator` is a kernel host's `IWorkflowActivationCoordinator`. It maps first, checks the routes
+  and schedules over the serving set, moves the slot through `IWorkflowActivationSwitch` with empty projections, and
+  then serves. `ServeActiveSlotsAsync` serves every active slot when a host starts.
+- `KernelServing` is the host singleton that holds what serves:
+  - the Native `WorkflowRegistry`;
+  - the serving set (slot to workflow);
+  - the `HttpRoutes` and `NativeSchedules` built over the serving set;
+  - `ServedWorkflow`, which a host passes as `NativeExecutionOptions.ServedWorkflow` so that a Dispatch reaches the
+    version its definition serves.
+- `IScheduleActors` is how the coordinator reaches the schedule actors. `IngressScheduleActors` implements it on the
+  host's ingress.
+- `KernelTriggerBindingExtractor` reports no old-core triggers, so the publication preflight checks only the slot.
 
 The mapping rules are in [definitions on the kernel](../../../../../docs/architecture/definitions-on-the-kernel.md#mapping-rules).
 
@@ -32,3 +44,28 @@ Each is refused with the node and input named, and the refusal says what to chan
 - A Dispatch Workflow names a definition; the Native model asks the host's `NativeExecutionOptions.ServedWorkflow` for
   the artifact that serves it when the child starts. It is read inside the turn, so a turn that runs again after a lost
   commit may start a version published in between.
+
+## Serving
+
+- Activations, deactivations and serving checks run one at a time on a host, so each one checks its routes and
+  schedules against the serving set it changes.
+- A Dispatch reaches the workflow its definition's `default` slot serves. When no `default` slot serves the definition,
+  it reaches the one slot that does. When several other slots do, it reaches none, and the child starts the id itself.
+- When a host starts, `ServeActiveSlotsAsync` finds the definitions with activations from the live activation source
+  references, and their slots from the slot authority. It serves each active slot as `EnsureServingAsync` does.
+- A definition serves one scheduled channel in release 1. Its schedule actors are keyed by definition and trigger, so a
+  second slot that would schedule the same trigger is refused at the serving check, and the refusal says to publish
+  the scheduled definition to one channel.
+- After each committed activation, deactivation and repair, the coordinator tells the trigger observers, so that Studio's
+  workflow library refreshes. A kernel host's composition (slice 7) leaves out the old core's HTTP route-table observer.
+- A deactivation stops the schedules of what the slot serves, also when this host does not serve it (after a restart):
+  it maps the slot's executable again to find them.
+- A republish that drops or renames a Timer or Cron stops the old schedule after the new version serves. If the process
+  stops between the switch and that stop, or a revert fails, the old schedule actor keeps firing on the old version,
+  and a restart serves only the new version's schedules. Stopping a definition's stray schedules needs a read of its
+  schedule actors by key, which comes later.
+- The publish preview shows no route or schedule conflicts on a kernel host, because the kernel trigger extractor
+  reports no triggers. A conflict surfaces as a failed publish (`trigger_conflict`). Showing it in the preview is later
+  work.
+- A deactivation stands even when a schedule cannot be stopped. The failure is in its diagnostic and its log, and an
+  operator stops the schedule actor.
