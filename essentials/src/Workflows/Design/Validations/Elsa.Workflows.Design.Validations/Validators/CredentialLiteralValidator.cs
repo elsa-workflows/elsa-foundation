@@ -13,13 +13,16 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// the nested ones a registered structure handler projects), reads each input the catalog version declares a credential
 /// (<c>InputDefinition.IsCredential</c>) and refuses its binding unless <see cref="CredentialInputBinding.IsAccepted"/>
 /// accepts it. Each finding is <see cref="CredentialLiteralFinding"/>'s, keyed by <c>{NodeId}/inputs/{ReferenceKey}</c>.
+/// A state with a node whose argument list is missing is not judged: it returns only the
+/// <c>Graph/MalformedArgumentList</c> findings, over the whole tree.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Engine intrinsics have no catalog version, and a node whose version the catalog does not hold cannot be judged: both
 /// are skipped, as <see cref="RequiredInputOutputValidator"/> skips them. <see cref="UnknownActivityVersionValidator"/>
 /// reports the unresolvable node, and publication refuses it because it cannot compile it. Recurses through the iterative
-/// <see cref="ActivityTreeWalker"/>; max depth is <see cref="WorkflowDesignValidatorOptions.MaxRecursionDepth"/>.
+/// <see cref="ActivityTreeWalker"/>; max depth is <see cref="WorkflowDesignValidatorOptions.MaxRecursionDepth"/> (the
+/// malformed-list check walks the whole tree, as the validation gate does).
 /// </para>
 /// <para>
 /// Registered as <see cref="ICredentialLiteralValidator"/>, which the admitting writers of workflow state take, and as an

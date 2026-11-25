@@ -20,7 +20,10 @@ namespace Elsa.Workflows.Design.Validations.Core;
 /// </remarks>
 public static class WorkflowStateAdmission
 {
-    /// <summary>Throws <see cref="CredentialLiteralRefusedException"/> when <paramref name="state"/> holds a refused binding.</summary>
+    /// <summary>
+    /// Throws <see cref="CredentialLiteralRefusedException"/> when <paramref name="state"/> holds a refused binding or a node
+    /// whose argument list is missing.
+    /// </summary>
     public static async Task AdmitAsync(this ICredentialLiteralValidator validator, WorkflowDefinitionState state, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(state);

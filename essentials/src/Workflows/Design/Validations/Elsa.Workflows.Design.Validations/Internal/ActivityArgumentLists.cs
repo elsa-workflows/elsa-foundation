@@ -30,5 +30,6 @@ internal static class ActivityArgumentLists
     }
 
     private static ValidationError Refusal(ActivityNode node, string list) => new(
-        $"{node.NodeId}/{list}", MalformedType, $"An activity node's '{list}' must be a list of arguments ([] when it has none).");
+        $"{node.NodeId}/{list}", MalformedType,
+        $"{MalformedType}: activity node '{node.NodeId}' has no '{list}' list; a node with no arguments carries [].");
 }
