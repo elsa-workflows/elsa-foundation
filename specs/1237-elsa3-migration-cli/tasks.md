@@ -55,6 +55,7 @@
   - a JavaScript call of a .NET-style member on a sentinel literal, which the converter refuses as `VF-IMP-012` with
     the analyzer's message, which quotes the call;
   - a dispatch target absent from the export;
+  - a Switch whose case conditions are a non-boolean literal and an unparsable JavaScript expression;
   - a definition with three versions: the latest published one, an older one pinned by a reusable reference, and an
     unpinned one;
   - duplicate input;
@@ -267,7 +268,9 @@
 
 - [ ] T028 [US5] Make every message and guidance from the converter, the import and reconciliation free of input text
   (FR-019). Start with the strict-mode parse message and the `VF-IMP-012` message (the .NET-usage analyzer's message,
-  passed through, which quotes the call), and find the others with the sentinel test (T029). For codes the
+  passed through, which quotes the call), and the Switch case-condition messages of
+  `Elsa3SwitchValueSynthesisRewrite` (the literal reason, which quotes the literal, and the parse reason, which passes
+  the parser's message through), and find the others with the sentinel test (T029). For codes the
   converter does not own, the report builder uses the code table's fixed text (T004), never the Elsa 4 message. Unit-test
   that path directly: a publish-stage diagnostic with an Elsa 4 code and a sentinel in its message reaches the report
   with the fixed text only. Change each

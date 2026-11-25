@@ -277,7 +277,8 @@ both change other owners for a problem the exporter can solve alone.
 **Decision**: `report.html` is one static template, embedded in the tooling assembly, with inline CSS and script. The
 report JSON is embedded as a `<script type="application/json">` block, and the script renders it. Script content is raw text. `report.json` is serialized from the JSON baseline
 (ADR 0091, `JsonBaseline.Options`), whose relaxed encoder leaves `<`, `>` and `&` alone and which writes nulls; the report model's optional
-members carry `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`, so an absent member stays absent, as
+members carry `[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]`, and the two flags `publishStoppedHere`
+and `routine` are `bool?` set only when true, so an absent member stays absent, as
 the schema requires. The baseline's encoder keeps those characters, so the HTML step itself
 rewrites them as `\u003c`-style JSON escapes when it inlines the JSON, never as HTML entities. No
 other data is written into the page (FR-021).
