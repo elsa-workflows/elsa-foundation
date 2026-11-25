@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Runtime.Hosting;
@@ -107,7 +108,7 @@ internal static class PostgresPreviewLifetimeChecks
             Require((await ReadFenceAsync()).Owner is null, "the replacement also releases ownership through application shutdown");
         }
         // KERNEL_LIFETIME_PROBES=name[,name]: run only these deadline probes after the main flow (for fail-before witnesses).
-        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault", "joined-stop-warning", "aggregate-once", "loop-error-repeat", "drain-fault-then-kill", "late-fault-warning"];
+        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault", "joined-stop-warning", "aggregate-once", "loop-error-repeat", "drain-fault-then-kill", "late-fault-warning", "joined-stop-no-escalation", "kill-warning-inline", "kill-window-warning", "release-fault-before-kill"];
         var only = Environment.GetEnvironmentVariable("KERNEL_LIFETIME_PROBES")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (only is { Length: 0 } || only?.FirstOrDefault(name => !probes.Contains(name, StringComparer.Ordinal)) is { } unknown)
             throw new InvalidOperationException($"KERNEL_LIFETIME_PROBES names no known probe ({string.Join(", ", probes)}).");
@@ -126,7 +127,133 @@ internal static class PostgresPreviewLifetimeChecks
         if (Probe("loop-error-repeat")) CheckLoopErrorRepeat();
         if (Probe("drain-fault-then-kill")) await CheckDrainFaultThenKillAsync();
         if (Probe("late-fault-warning")) await CheckLateFaultWarningAsync();
+        if (Probe("joined-stop-no-escalation")) await CheckJoinedStopNoEscalationAsync();
+        if (Probe("kill-warning-inline")) await CheckKillWarningInlineAsync();
+        if (Probe("kill-window-warning")) await CheckKillWindowWarningAsync();
+        if (Probe("release-fault-before-kill")) await CheckReleaseFaultBeforeKillAsync();
         return 0;
+
+        // The stop's release faults before any kill, with no drain fault; the halt then waits for its beside loop, which the
+        // test holds, and the deadline kills it there. The fault predates the kill: one Error, and no Warning carries it.
+        async Task CheckReleaseFaultBeforeKillAsync()
+        {
+            var scopes = new SlowReleaseScopes();
+            scopes.Finish.TrySetResult();     // the release faults at once
+            var beside = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var log = new RecordingLogger();
+            var service = InMemoryService("release-fault-before-kill", log, (store, report) =>
+                (new RuntimeNode("release-fault-before-kill", store, 1, InMemoryLoop, beside: async end =>
+                {
+                    try { await Task.Delay(System.Threading.Timeout.Infinite, end); }
+                    catch (OperationCanceledException) { }
+                    await beside.Task;     // the halt waits for this after the release faulted
+                }, onFault: report), scopes), static (_, _) => Task.CompletedTask);
+            await service.StartAsync(token);
+            using var application = new CancellationTokenSource();
+            var stopping = service.StopAsync(application.Token);
+            await scopes.Releasing.Task.WaitAsync(token);
+            await Task.Delay(300, token);     // the release has faulted; the halt waits for the beside loop
+            var before = stopping.IsCompleted;
+            application.Cancel();     // the deadline kills the halt in that wait
+            await Task.Delay(300, token);
+            beside.TrySetResult();
+            try { await stopping.WaitAsync(token); }
+            catch (Exception) when (!token.IsCancellationRequested) { }
+            await Task.Delay(200, token);
+            await service.DisposeAsync();
+            Require(!before && log.Errors.Count == 1 && ReferenceEquals(log.Errors[0], scopes.Fault) && !log.WarningErrors.Any(error => ReferenceEquals(error, scopes.Fault)),
+                $"a release fault before the kill is logged once at Error, not demoted by a kill while the halt waits ({log.Errors.Count} Error, {log.Warnings.Count} Warning: {string.Join(" | ", log.Warnings)})");
+        }
+
+        // A StopAsync that joins a stop under way, with a short deadline of its own, kills nothing and so never runs the
+        // process policy, even past KillGrace while the stop it joined still drains.
+        async Task CheckJoinedStopNoEscalationAsync()
+        {
+            const string name = "joined-stop-no-escalation";
+            var admitted = await ingress.SendAsync(scope, new Contract.Target.Start(new(WaitingActor.Name, "fixture")),
+                name + "-start", Contract.Kinds.Start, cancellationToken: token);
+            Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, $"the {name} probe admits an independent root");
+            var held = new WaitingActor();
+            var escalations = 0;
+            var service = new PostgresPreviewHostedService(Open, name, held, _ => Interlocked.Increment(ref escalations),
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25) });
+            using var application = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            Task? first = null;
+            try
+            {
+                await service.StartAsync(token);
+                await held.Entered.Task.WaitAsync(token);
+                first = service.StopAsync(application.Token);     // the stop with a distant deadline is under way
+                using var joined = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+                Exception? outcome = null;
+                try { await service.StopAsync(joined.Token).WaitAsync(token); }
+                catch (OperationCanceledException error) when (!token.IsCancellationRequested) { outcome = error; }
+                await Task.Delay(PostgresPreviewHostedService.KillGrace + TimeSpan.FromMilliseconds(700), token);
+                Require(outcome is OperationCanceledException && Volatile.Read(ref escalations) == 0 && !first.IsCompleted,
+                    $"a joined stop's deadline ends only its own wait and never runs the process policy ({Volatile.Read(ref escalations)} escalations, first stop {(first.IsCompleted ? "ended" : "still draining")})");
+            }
+            finally
+            {
+                held.Release.TrySetResult();
+                if (first is not null)
+                    try { await first.WaitAsync(token); }
+                    catch (Exception) when (!token.IsCancellationRequested) { }
+                await service.DisposeAsync();
+            }
+        }
+
+        // The deadline's kill completes the node's stop inside the kill's own callback: the turn drain waits on the kill
+        // token, and the node has no heartbeat or beside loop to join. The kill is still warned of, once.
+        async Task CheckKillWarningInlineAsync()
+        {
+            var log = new RecordingLogger();
+            var service = InMemoryService("kill-warning-inline", log, (store, report) =>
+                (new RuntimeNode("kill-warning-inline", store, 1, InMemoryLoop,
+                    beforeRelease: kill => Task.Delay(System.Threading.Timeout.Infinite, kill), onFault: report), new SlowReleaseScopes()),
+                static (_, _) => Task.CompletedTask);
+            await service.StartAsync(token);
+            using var application = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+            try { await service.StopAsync(application.Token).WaitAsync(token); }
+            catch (OperationCanceledException) when (application.IsCancellationRequested) { }
+            await Task.Delay(200, token);
+            await service.DisposeAsync();
+            Require(log.Errors.Count == 0 && log.Warnings.Count == 1 && log.Warnings[0].Contains("lease expiry", StringComparison.Ordinal),
+                $"a deadline kill whose stop completes inside the kill is warned of once ({log.Errors.Count} Error, {log.Warnings.Count} Warning)");
+        }
+
+        // The kill interrupts the stop's release; the halt then waits for its beside loop, which the test holds. The release
+        // faults inside that window, before the stop returns: the fault is the kill's and is logged at Warning, not Error.
+        async Task CheckKillWindowWarningAsync()
+        {
+            var scopes = new SlowReleaseScopes();
+            var beside = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var log = new RecordingLogger();
+            var service = InMemoryService("kill-window-warning", log, (store, report) =>
+                (new RuntimeNode("kill-window-warning", store, 1, InMemoryLoop, beside: async end =>
+                {
+                    try { await Task.Delay(System.Threading.Timeout.Infinite, end); }
+                    catch (OperationCanceledException) { }
+                    await beside.Task;     // the halt waits for this after the kill
+                }, onFault: report), scopes), static (_, _) => Task.CompletedTask);
+            await service.StartAsync(token);
+            using var application = new CancellationTokenSource();
+            var stopping = service.StopAsync(application.Token);
+            await scopes.Releasing.Task.WaitAsync(token);
+            application.Cancel();     // the kill lands while the release is in flight
+            await Task.Delay(200, token);
+            scopes.Finish.TrySetResult();     // the release faults while the halt still waits for the beside loop
+            var deadline = Stopwatch.StartNew();
+            while (log.Errors.Count + log.WarningErrors.Count(error => ReferenceEquals(error, scopes.Fault)) == 0 && deadline.Elapsed < TimeSpan.FromSeconds(5))
+                await Task.Delay(20, token);
+            var returned = stopping.IsCompleted;
+            beside.TrySetResult();
+            try { await stopping.WaitAsync(token); }
+            catch (OperationCanceledException) when (application.IsCancellationRequested) { }
+            await Task.Delay(200, token);
+            await service.DisposeAsync();
+            Require(!returned && log.Errors.Count == 0 && log.WarningErrors.Count(error => ReferenceEquals(error, scopes.Fault)) == 1,
+                $"a kill-caused fault that lands before the killed stop returns is logged at Warning, not Error (stop returned {returned}, {log.Errors.Count} Error, {log.Warnings.Count} Warning)");
+        }
 
         // The turn drain faults before any kill; the job drain then waits for a job that ignores cancellation until the
         // application deadline kills it. The fault is logged once at Error, the kill once at Warning.
