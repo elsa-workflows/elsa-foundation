@@ -126,6 +126,17 @@ internal static class MigrationPlanRunnerChecks
               newerHeader.Labels.GetValueOrDefault("definition") == "orders",
             $"a plan selects one definition's instances on its source version, and the migration keeps the definition label and rebinds the version ({definitionResults?.Results.Count} selected; {versionedHeader.Labels.GetValueOrDefault("definition")}; {versionedHeader.TypeData})");
 
+        // A host that knows each workflow's definition fills it into a plan that names none, and refuses one that names another.
+        var knowing = new MigrationPlanModel(authority, (_, from, to) => registry.TryGet(from, out Workflow? _) && registry.TryGet(to, out Workflow? _),
+            (_, workflow) => registry.TryGet(workflow, out var found) ? found.Definition : null);
+        var filled = knowing.Start(new("orders@1", "orders@2", expires, NativeExecutionModel.ModelKey));
+        var plain = knowing.Start(new(source, target, expires, NativeExecutionModel.ModelKey));
+        var mismatched = false;
+        try { knowing.Start(new("orders@1", "orders@2", expires, NativeExecutionModel.ModelKey, "invoices")); }
+        catch (ArgumentException) { mismatched = true; }
+        check(filled.Input!.Contains("\"Definition\":\"orders\"", StringComparison.Ordinal) && !plain.Input!.Contains("Definition", StringComparison.Ordinal) && mismatched,
+            $"a plan takes its source's definition from the host, a workflow that is its own definition adds none, and a plan naming another definition is refused ({filled.Input})");
+
         var customPlan = (await service.StartAsync(scope, "custom-model", new(source, target, expires, OtherExecutionModel.ModelKey))).Actor!.Value;
         var customDriver = service.Open(scope, customPlan);
         await Pump(successor);
