@@ -1612,7 +1612,7 @@ public sealed class Elsa3ExpressionRewriter(
                         Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                         $"JavaScript calls '{callee.Name}', but '{setter}' is a workflow input, which is read-only: Elsa 3 generated no setter for it.",
                         "Copy the input into a declared variable and set that variable in the Elsa 3 workflow before import. " +
-                        $"If '{callee.Name}' was a custom function, {RebuiltFunctionGuidance(callee.Name)}"));
+                        RebuiltFunctionGuidance(callee.Name)));
                     return;
                 }
 

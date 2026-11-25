@@ -47,12 +47,13 @@ If two candidates match at the same step, the result is `VF-IMP-002`.
 
 Since #5664 a callee that is the name after the namespace prefix of a registered host function, and not one the
 converter never matches (its own built-ins, the setters and instance-state helpers, the read roots, JavaScript and CLR
-globals), is checked before this lookup and converts to that function; if the accessor lookup would also resolve it,
-the result is `VF-IMP-002`.
+globals), is checked before this lookup and converts to that function; if Elsa 3 generated an accessor under the name
+(resolvable or not; for `set{N}`, the setter lookup below), the result is `VF-IMP-002`.
 
 A `set{N}(value)` call resolves separately: Elsa 3 generated setters for variables only (in a reusable run, for the inputs
 it declared as variables too). A standalone input `N` has no setter: the call is refused as a read-only input (unless a registered host function has the
-member name `set{N}`, which then takes the call), and a
+member name `set{N}` and `set{N}` is not one the converter never matches, such as `setInput` or `setOutcome`; that
+function then takes the call), and a
 variable `N` next to an input `N` is the one `set{N}` writes (#5703).
 
 ### `Elsa3JavaScriptNames` (new, internal static)
