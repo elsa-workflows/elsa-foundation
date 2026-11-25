@@ -255,6 +255,7 @@ public sealed class Elsa3NodeRewriteTests
               { "label": "null-value", "condition": { "type": "JavaScript", "value": null } },
               { "label": "blank", "condition": { "type": "JavaScript", "value": "  " } },
               { "label": "comment", "condition": { "type": "JavaScript", "value": "// later" } },
+              { "label": "null-literal", "condition": { "type": "Literal", "value": "null" } },
               { "label": "bare-true", "condition": { "type": "Literal", "value": true } }
             ]
             """).RootElement.Clone();
@@ -263,7 +264,7 @@ public sealed class Elsa3NodeRewriteTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var value = Source(Input(Node(result.Value!.State, "switch"), "Value"));
-        foreach (var label in new[] { "absent", "null", "no-value", "null-value", "blank", "comment" })
+        foreach (var label in new[] { "absent", "null", "no-value", "null-value", "blank", "comment", "null-literal" })
             Assert.Contains($"if (false) {{ return \"{label}\"; }}", value, StringComparison.Ordinal);
         Assert.Contains("if (true) { return \"bare-true\"; }", value, StringComparison.Ordinal);
     }

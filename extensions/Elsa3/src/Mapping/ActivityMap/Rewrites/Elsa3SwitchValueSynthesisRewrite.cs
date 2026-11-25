@@ -164,14 +164,16 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
 
         if (Elsa3TypedValues.TryGetLiteral(value, out var literal))
         {
-            var text = literal?.Trim();
-            if (string.IsNullOrEmpty(text) || bool.TryParse(text, out _))
+            // An empty literal (blank, null, [] or {}) is unset, so false, as before; otherwise only true or false.
+            if (Elsa3TypedValues.IsEmptyLiteral(literal))
+                return true;
+            if (bool.TryParse(literal!.Trim(), out var flag))
             {
-                condition = string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
+                condition = flag ? "true" : "false";
                 return true;
             }
 
-            reason = $"is the literal '{text}', which is neither true nor false";
+            reason = $"is the literal '{literal.Trim()}', which is neither true nor false";
             return false;
         }
 
