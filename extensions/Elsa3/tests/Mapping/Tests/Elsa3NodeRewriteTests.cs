@@ -203,6 +203,100 @@ public sealed class Elsa3NodeRewriteTests
     }
 
     /// <summary>
+    /// #5789: Elsa 3 exports a case condition as a bare expression <c>{ type, value }</c>, not the typed-value shape of
+    /// an activity property. Its JavaScript reaches the Elsa 4 switch in both modes instead of becoming <c>false</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("MatchFirst")]
+    [InlineData("MatchAny")]
+    public async Task A_bare_case_condition_carries_its_JavaScript_into_the_switch(string mode)
+    {
+        var flowSwitch = Activity("switch", "Elsa.FlowSwitch", ("mode", Literal(mode)));
+        flowSwitch.AdditionalProperties["cases"] = JsonDocument.Parse("""
+            [
+              { "label": "Approve", "condition": { "type": "JavaScript", "value": "\"approve\".length === 7" } },
+              { "label": "Reject", "condition": { "type": "JavaScript", "value": "\"reject\".length === 7" } },
+              { "label": "Never", "condition": { "type": "Literal", "value": "" } }
+            ]
+            """).RootElement.Clone();
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", flowSwitch)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var node = Node(result.Value!.State, "switch");
+        if (mode == "MatchFirst")
+        {
+            var value = Source(Input(node, "Value"));
+            Assert.Contains("if ((\"approve\".length === 7)) { return \"Approve\"; }", value, StringComparison.Ordinal);
+            Assert.Contains("if ((\"reject\".length === 7)) { return \"Reject\"; }", value, StringComparison.Ordinal);
+            Assert.Contains("if (false) { return \"Never\"; }", value, StringComparison.Ordinal);
+            return;
+        }
+
+        var conditions = node.Structure!.Payload.GetProperty("cases").EnumerateArray()
+            .Select(item => item.GetProperty("condition").Deserialize<Elsa.Workflows.Design.Core.Models.ArgumentState>(
+                new JsonSerializerOptions(JsonSerializerDefaults.Web) { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } })!)
+            .ToArray();
+        Assert.Contains("\"approve\".length === 7", Source(conditions[0]), StringComparison.Ordinal);
+        Assert.Contains("\"reject\".length === 7", Source(conditions[1]), StringComparison.Ordinal);
+        Assert.Equal(("Literal", "false"), (conditions[2].Value.ExpressionType, Text(conditions[2])));
+    }
+
+    /// <summary>#5789: a condition that carries no source is false, as Elsa 3 evaluated it; a bare true literal is true.</summary>
+    [Fact]
+    public async Task Case_conditions_without_source_are_false_and_a_bare_true_literal_is_true()
+    {
+        var @switch = Activity("switch", "Elsa.Switch");
+        @switch.AdditionalProperties["cases"] = JsonDocument.Parse("""
+            [
+              { "label": "absent" },
+              { "label": "null", "condition": null },
+              { "label": "no-value", "condition": { "type": "JavaScript" } },
+              { "label": "null-value", "condition": { "type": "JavaScript", "value": null } },
+              { "label": "blank", "condition": { "type": "JavaScript", "value": "  " } },
+              { "label": "comment", "condition": { "type": "JavaScript", "value": "// later" } },
+              { "label": "null-literal", "condition": { "type": "Literal", "value": "null" } },
+              { "label": "bare-true", "condition": { "type": "Literal", "value": true } }
+            ]
+            """).RootElement.Clone();
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", @switch)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var value = Source(Input(Node(result.Value!.State, "switch"), "Value"));
+        foreach (var label in new[] { "absent", "null", "no-value", "null-value", "blank", "comment", "null-literal" })
+            Assert.Contains($"if (false) {{ return \"{label}\"; }}", value, StringComparison.Ordinal);
+        Assert.Contains("if (true) { return \"bare-true\"; }", value, StringComparison.Ordinal);
+    }
+
+    /// <summary>#5789: a case condition the converter cannot read is refused at its case, never read as <c>false</c>.</summary>
+    [Theory]
+    [InlineData("""{ "type": "Liquid", "value": "{{ true }}" }""", "'Liquid' expression")]
+    [InlineData("""{ "type": "JavaScript", "value": 1 }""", "source is not text")]
+    [InlineData("""{ "language": "JavaScript", "script": "true" }""", "does not recognise")]
+    [InlineData("""[ "true" ]""", "does not recognise")]
+    [InlineData("\"1 > 0\"", "does not recognise")]
+    [InlineData("2", "does not recognise")]
+    [InlineData("""{ "type": "Literal", "value": "yes" }""", "neither true nor false")]
+    [InlineData("""{ "expression": { "type": "Literal", "value": 1 } }""", "neither true nor false")]
+    public async Task An_unreadable_case_condition_is_refused_at_its_case(string condition, string reason)
+    {
+        var @switch = Activity("switch", "Elsa.Switch");
+        @switch.AdditionalProperties["cases"] = JsonDocument.Parse(
+            $$"""[ { "label": "first", "condition": { "type": "JavaScript", "value": "true" } }, { "label": "second", "condition": {{condition}} } ]""").RootElement.Clone();
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", @switch)));
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code != "ELS3-NULL-POLICIES");
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
+        Assert.Contains("'second'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains(reason, diagnostic.Message, StringComparison.Ordinal);
+        Assert.Equal("$.root.activities[0].cases[1].condition", diagnostic.Path);
+        Assert.False(string.IsNullOrWhiteSpace(diagnostic.Guidance));
+    }
+
+    /// <summary>
     /// Spec 1208 FR-028: Elsa 3 MatchAny, in each form Elsa 3 serializes, becomes the Elsa 4 Switch's <c>MatchAny</c>
     /// mode with one condition per case under its case identity, and no synthesized <c>Value</c>.
     /// </summary>

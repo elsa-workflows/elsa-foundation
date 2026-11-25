@@ -139,27 +139,92 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// The case condition as JavaScript source. Elsa 3 exports a case condition as a bare expression
+    /// <c>{ type, value }</c>, unlike the typed-value shape <c>{ typeName, expression: { type, value } }</c> of an activity
+    /// property; both are read. An absent condition, or one with no or blank source, is false, as Elsa 3 evaluated it. Any other
+    /// shape is refused rather than read as false (#5789).
+    /// </summary>
     private static bool TryCondition(JsonElement @case, out string condition, out string reason)
     {
         condition = "false";
-        reason = "is not JavaScript or a literal";
-        if (!@case.TryGetProperty("condition", out var value) || !Elsa3TypedValues.IsBound(value))
+        reason = string.Empty;
+        if (!@case.TryGetProperty("condition", out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             return true;
-        if (Elsa3TypedValues.TryGetLiteral(value, out var literal))
+
+        // Elsa 3 deserializes a case condition into an expression object; a bare JSON scalar is no shape it wrote.
+        if (value.ValueKind != JsonValueKind.Object)
         {
-            condition = string.Equals(literal?.Trim(), "true", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
-            return true;
+            reason = "has a shape the converter does not recognise";
+            return false;
         }
 
-        if (Elsa3TypedValues.TryGetExpression(value, out var type, out var expression) &&
-            string.Equals(type, "JavaScript", StringComparison.OrdinalIgnoreCase) &&
-            expression.ValueKind == JsonValueKind.String)
+        if (IsBareExpression(value))
+            value = Wrap(value);
+
+        if (Elsa3TypedValues.TryGetLiteral(value, out var literal))
         {
+            // An empty literal (blank, null, [] or {}) is unset, so false, as before; otherwise only true or false.
+            if (Elsa3TypedValues.IsEmptyLiteral(literal))
+                return true;
+            if (bool.TryParse(literal!.Trim(), out var flag))
+            {
+                condition = flag ? "true" : "false";
+                return true;
+            }
+
+            reason = $"is the literal '{literal.Trim()}', which is neither true nor false";
+            return false;
+        }
+
+        if (Elsa3TypedValues.TryGetExpression(value, out var type, out var expression))
+        {
+            if (!string.Equals(type, "JavaScript", StringComparison.OrdinalIgnoreCase))
+            {
+                reason = $"is a '{type}' expression, and only JavaScript or a literal is converted";
+                return false;
+            }
+
+            if (expression.ValueKind != JsonValueKind.String)
+            {
+                reason = "is a JavaScript expression whose source is not text";
+                return false;
+            }
+
             return TryConditionExpression(expression.GetString() ?? string.Empty, out condition, out reason);
         }
 
+        if (HasNoExpressionValue(value))
+            return true;
+
+        reason = "has a shape the converter does not recognise";
         return false;
     }
+
+    /// <summary>The bare Elsa 3 expression <c>{ type, value }</c> of a case condition.</summary>
+    private static bool IsBareExpression(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Object &&
+        !value.TryGetProperty("expression", out _) &&
+        value.TryGetProperty("type", out var type) &&
+        type.ValueKind == JsonValueKind.String;
+
+    private static JsonElement Wrap(JsonElement bare) =>
+        JsonSerializer.SerializeToElement(new JsonObject { ["expression"] = JsonNode.Parse(bare.GetRawText()) });
+
+    /// <summary>
+    /// A known condition shape that carries no source: a null expression, or an expression whose value is null or
+    /// missing. Elsa 3 evaluated it to a falsy result.
+    /// </summary>
+    private static bool HasNoExpressionValue(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Object &&
+        value.TryGetProperty("expression", out var expression) &&
+        (expression.ValueKind == JsonValueKind.Null || HasNoSource(expression));
+
+    private static bool HasNoSource(JsonElement expression) =>
+        expression.ValueKind == JsonValueKind.Object &&
+        expression.TryGetProperty("type", out var type) &&
+        type.ValueKind == JsonValueKind.String &&
+        (!expression.TryGetProperty("value", out var source) || source.ValueKind == JsonValueKind.Null);
 
     /// <summary>
     /// The case's single expression, without a statement terminator or trailing comment, which would otherwise break
@@ -177,6 +242,13 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
         {
             reason = $"could not be parsed ({exception.Message})";
             return false;
+        }
+
+        // An empty source, or one holding only comments, evaluated to undefined in Elsa 3: false.
+        if (parsed.Body.Count == 0)
+        {
+            reason = string.Empty;
+            return true;
         }
 
         if (parsed.Body is not [ExpressionStatement statement])
