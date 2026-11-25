@@ -40,11 +40,15 @@ acceptance set and templates from the merged S-15, or from the head current at t
   call `Build` (R-5), because the test server must be set before the app is built. The wiring starts from main's
   `apps/Elsa.Essentials.Host/Program.cs` after the sync (the closest host to what this one composes); each piece it
   drops is named with its reason in the implementing PR. It contains at least:
-  - main's shell hosting model: `AddFoundationNuplane` with no feeds and no shared assemblies (R-6), then
-    `AddFoundationShellHosting(shells => shells.WithHostAssemblies()...)`, which discovers the project-referenced
-    features through the `DependencyContext` and fails activation with `FeatureNotFoundException` for an unknown one;
-  - `MapFoundationHealth`, which maps `/health/live` and `/health/ready`; readiness returns 200 once the default shell
-    is active, which is what *Refusing to start* in the spec relies on;
+  - plain CShells hosting (spec FR-018): `AddCShellsAspNetCore(shells => shells.WithHostAssemblies()
+    .WithAuthenticationAndAuthorization().WithWebRouting(...).WithConfigurationProvider(configuration))`.
+    `WithHostAssemblies()` discovers the project-referenced features through the `DependencyContext` and fails
+    activation with `FeatureNotFoundException` for an unknown one. No Nuplane: main's `AddFoundationShellHosting`
+    always adds Nuplane feature discovery, so the host doesn't call it or `AddFoundationNuplane`;
+  - the default shell activated at startup (a small hosted service, since main's `EagerShellActivationHostedService` is
+    internal to `Elsa.Foundation.Hosting`), and `/health/ready` returning 200 once it is active: main's
+    `MapFoundationHealth` with a registered `ShellActivationTracker` if it works without Foundation's Nuplane hosting,
+    otherwise a minimal endpoint. *Refusing to start* in the spec relies on this;
   - no `AddEfPersistenceResources`: main's essentials host doesn't call it (the Workbench does, with its own EF tooling
     defaults), and its EF features read `ConnectionStrings:Elsa`, so this host does the same;
   - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` (EF key store) and
@@ -56,21 +60,14 @@ acceptance set and templates from the merged S-15, or from the head current at t
   - `AddAuthentication`/`AddAuthorization`, and the OpenIddict token store from main's
     `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore` (`AddOpenIddictEntityFrameworkCoreStore`, R-7);
   - a CORS policy for the repository's Studio host (R-8);
-  - `AddEfSchemaReadability`, `AddConfiguredClusterMembership` and `AddWorkflowRuntimeRunnabilityReport`, and the
-    shell-activation attention contributor (`ShellActivationAttentionContributor` in `Elsa.Foundation.Hosting`, implementing `IAttentionContributor` from
-    `Elsa.Attention.Core`), as
-    main's essentials host registers them.
+  - the host services the composed features resolve when they activate (main's essentials host registers
+    `AddEfSchemaReadability`, `AddConfiguredClusterMembership` and `AddWorkflowRuntimeRunnabilityReport`); each is kept
+    only if activation or the S-15 suites need it, and the PR says which.
 
-  These are required, not optional: the host joins `HostOwnedServicesAreSharedWithShellsTests` (its `Hosts` and
-  `FoundationNuplaneHosts` lists and the separate `[InlineData]` host sets of the runner, key ring, startup validation
-  and Nuplane observer order theories; the test loads each host by `Assembly.Load`, so `Elsa.Modularity.Tests.csproj`
-  gains a project reference to the host and its lock file updates), whose theories compare `ShellActivationTracker`, an `IAttentionContributor`, the
-  durable cluster membership arm, `IClusterMembership`, `IEfSchemaFleet` and the EF data protection key repository
-  and migrator between host and shells. That test copies `appsettings.json` and `appsettings.Development.json` from
-  `apps/<host>/`, so the host has both files.
-
-  It leaves out the boot timeline, the composition observation endpoints, Weaver, the OpenTelemetry bridge, Nuplane
-  package loading (R-6) and the module-management API.
+  It leaves out Nuplane, the module-management API and every other admin endpoint, the attention contributor, the boot
+  timeline, the composition observation endpoints, Weaver and the OpenTelemetry bridge. The host is temporary (spec
+  Q12), so it does not join `HostOwnedServicesAreSharedWithShellsTests`, which names its hosts explicitly; the Workbench
+  and main's hosts keep that coverage.
 - **Environment.** `Properties/launchSettings.json` sets `ASPNETCORE_ENVIRONMENT=Development` and one fixed local URL.
   `DevelopmentOrDemoGuard` refuses to start a host whose identity features run in development mode outside the
   Development environment, and the Workbench gets Development the same way. The tests set the builder's environment to
@@ -176,12 +173,9 @@ and the folder settings. `FeatureCompositionTests` already proves each feature c
 
 ## R-6 Settings and data
 
-- **No runtime packages.** The host loads no packages at runtime: its audience adds their own features as project
-  references in their clone (FR-005). It still calls `AddFoundationNuplane`, because `AddFoundationShellHosting`
-  always adds Nuplane feature discovery (`FoundationShellHostingExtensions`), but with no feed and no
-  `Nuplane:Loading:SharedAssemblies`, so nothing loads and nothing is shared. `HostProvidedPackagesGuardTests` and the
-  other Nuplane host guards scan the `apps/` hosts that share assemblies (`NuplaneHostSettings.HostsThatShareAssemblies`);
-  this host shares none, so they skip it, and they would cover it if it ever started sharing.
+- **No runtime packages.** The host loads no packages at runtime and has no Nuplane: its audience adds their own
+  features as project references in their clone (FR-005, FR-018). The Nuplane host guards
+  (`NuplaneHostSettings.HostsThatShareAssemblies`) scan only the `apps/` hosts that share assemblies, so they skip it.
 - **Working directory.** `JsonWorkflowReconciliationSource.ScanFolder` calls `Directory.Exists` on the raw path, so
   relative paths resolve against the process's working directory, and `dotnet run --project` from the repository root
   makes that the repository root. The project sets `<RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>`,
@@ -191,9 +185,7 @@ and the folder settings. `FeatureCompositionTests` already proves each feature c
   to start it (R-2). The README says so.
 - **Data.** `ConnectionStrings:Elsa` is `Data Source=data/elsa.db`, as main's essentials host configures its EF
   features. Nothing in the persistence code
-  creates the folder, so the host creates `data/` at startup when it is missing. `data/` is git-ignored, and so is
-  the `nuplane.lock.json` that `AddFoundationNuplane` may write to the content root (the root `.gitignore` already
-  ignores it for the Workbench and the Studio hosts).
+  creates the folder, so the host creates `data/` at startup when it is missing. `data/` is git-ignored.
   The migration policy (`Elsa:Persistence:EntityFramework:Migrate:Policy`) is left at its default,
   `AutoMigrate`. In development mode the OpenIddict store is in memory (main,
   `OpenIddictVendorStoreRegistration`), so no identity database file is configured.

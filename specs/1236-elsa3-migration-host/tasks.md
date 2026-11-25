@@ -48,25 +48,19 @@ short worktree path (MSB3030).
   a `Program.cs` that calls both (R-2). Start from main's `apps/Elsa.Essentials.Host/Program.cs`, and name in the PR
   each piece dropped and why. Include:
   - the configuration order of R-3 (`shells.Local.json` and user secrets re-added above the shells files);
-  - `AddFoundationShellHosting` with `WithHostAssemblies()` and `MapFoundationHealth` (`/health/live`,
-    `/health/ready`);
+  - plain CShells hosting with `WithHostAssemblies()`, the default shell activated at startup, and `/health/ready`
+    (R-2); no Nuplane, no module-management or other admin endpoints (FR-018);
   - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` and `AddShellStartupValidation`;
   - the JSON baseline: `AddElsaJsonResponseHeaders()` and `ConfigureHttpJsonOptions` with `JsonBaseline.Configure`
     and `StrictDateTimeConverters.Configure(..., apiMode: true)`, as the Workbench registers them (R-2);
   - authentication, authorization and `AddOpenIddictEntityFrameworkCoreStore`;
   - the Studio CORS policy;
-  - `AddEfSchemaReadability`, `AddConfiguredClusterMembership`, `AddWorkflowRuntimeRunnabilityReport` and the
-    shell-activation attention contributor (R-2);
-  - the host added to every host list of `HostOwnedServicesAreSharedWithShellsTests` (`Hosts`,
-    `FoundationNuplaneHosts` and each theory's `[InlineData]` host set), with a project reference from
-    `essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj` (lock file updated), and an
-    `appsettings.Development.json` beside `appsettings.json`;
+  - the host services the composed features resolve when they activate (R-2), each kept only if needed;
+  - an `appsettings.Development.json` beside `appsettings.json` for development overrides;
   - creating `data/` when missing, and logging the absolute workflows folder, activities file and data paths.
 
-  `AddFoundationNuplane` with no feed and no shared assemblies, so no package loads (R-6). Every host on main has at
-  least one feed, so confirm on the first run that Nuplane starts without one and that the Nuplane observer-order
-  theory of `HostOwnedServicesAreSharedWithShellsTests` passes; if it doesn't, configure one empty
-  directory feed under the git-ignored `data/` folder, still with no shared assemblies, and say so in the PR.
+  Mark the project temporary: a `<Description>` and the README's first line name #5800 as the issue whose cleanup
+  removes it (FR-001, Q12).
 - [ ] T006 Write `appsettings.json` and the settings in `shells.json` (R-6):
   - `ConnectionStrings:Elsa` set to `Data Source=data/elsa.db`, with the migration policy left at its default `AutoMigrate`
     (`Elsa:Persistence:EntityFramework:Migrate:Policy` unset);
@@ -78,7 +72,7 @@ short worktree path (MSB3030).
   - `SourceId` `elsa3-migration` and the sample folder paths on both reconciliation features, and `PublishOnReconcile`
     `true` on `JsonWorkflowReconciliation` (the activity options have no such setting).
 
-  Add `.gitignore` entries for `data/`, `shells.Local.json` and `nuplane.lock.json`. Add the sample
+  Add `.gitignore` entries for `data/` and `shells.Local.json`. Add the sample
   `migrated/workflows/hello.json` (an HTTP trigger and `WriteHttpResponse`, with a fixed `definitionId`) and `migrated/activities/activities.json`
   (`[]`) (FR-011).
 
@@ -140,7 +134,7 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 ## Phase 7: Polish
 
 - [ ] T014 [P] Finish the host's README:
-  - "local migration tool, don't deploy" (FR-006), and that running the built assembly outside `dotnet run` needs
+  - "temporary local migration tool, don't deploy; removed by the cleanup on #5800" (FR-001, FR-006), and that running the built assembly outside `dotnet run` needs
     `ASPNETCORE_ENVIRONMENT=Development`;
   - the two folder settings and where to set them (FR-011, R-3);
   - adding your own features by project reference (FR-005);

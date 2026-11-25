@@ -1,5 +1,8 @@
 # Contract: migration host composition and folders
 
+**Temporary.** The host is removed by the follow-up cleanup on #5800, once a Docker app profile covers the Elsa 3
+import story; the migrated-folder layout and the composition's reasons are what carry over.
+
 This is what other parts of the migration (the migration CLI in spec 1237, the migration skill in spec 1238, the
 quickstart) may rely on.
 

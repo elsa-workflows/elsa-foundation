@@ -16,7 +16,7 @@ its folder. There are no images, no new Studio app, and no Workbench change.
 
 **Language/Version**: C# / .NET 10; JSON for the composition and settings.
 
-**Primary Dependencies**: CShells (shell composition), JSON workflow and
+**Primary Dependencies**: CShells (shell composition, no Nuplane), JSON workflow and
 activity reconciliation, main's OpenIddict store library (R-7), and `jtest` for acceptance (as in spec 1235).
 
 **Storage**: SQLite in the host's git-ignored `data/` folder (R-6).
@@ -64,7 +64,7 @@ activity reconciliation, main's OpenIddict store library (R-7), and `jtest` for 
 | # | Decision | Detail |
 |---|---|---|
 | P-1 | Host | R-1: `Elsa.Migration.Host` at `apps/Elsa.Migration.Host/`, with explicit guard entries. |
-| P-2 | Wiring | R-2: main's hosting model (`AddFoundationShellHosting`, `MapFoundationHealth`), starting from main's essentials host. |
+| P-2 | Wiring | R-2: a plain CShells host (`WithHostAssemblies`), no Nuplane or admin endpoints; temporary until #5800's app profiles (Q12). |
 | P-3 | Composition | R-3: `shells.json`, with every composed feature listed; reasons in `composition-reasons.json`, shown by the README. |
 | P-4 | Feature list | R-4: candidates, each confirmed with a reason or dropped. |
 | P-5 | Tests | R-5. |
@@ -98,7 +98,7 @@ apps/Elsa.Migration.Host/
 ├── Elsa.Migration.Host.csproj     # project references of every composed feature; not packed
 ├── Program.cs                      # host wiring (R-2)
 ├── appsettings.json                # persistence, logging
-├── appsettings.Development.json    # development overrides (read by the host-services guard)
+├── appsettings.Development.json    # development overrides
 ├── Properties/launchSettings.json  # Development, fixed local URL (R-2)
 ├── shells.json                     # the composition (R-3, R-6)
 ├── composition-reasons.json        # feature → reason (R-3)
@@ -115,16 +115,14 @@ essentials/tests/Migration/Host/Tests/
 
 essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs   # host admission (R-9)
 essentials/tests/Architecture/Tests/ArchitectureGuardTests.cs      # host path entries (R-1)
-essentials/tests/Modularity/Tests/HostOwnedServicesAreSharedWithShellsTests.cs # + the host in every host list (R-2)
-essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj      # + project reference to the host (R-2)
 tools/ci/test-tiers.json                                            # + the test project
 Elsa.Server.slnx, solution filters, dependency map                  # + the two projects (regenerated)
 extensions/Elsa3/tests/JTest/ledger/runs.md                         # migration-host run rows (after S-15 merges)
 ```
 
 **Structure Decision**: one thin host over existing features, in `apps/` with the other hosts. Nothing in
-`essentials/src` changes. Outside the two new projects, only the guard tests and the test project file named above, and
-the generated solution, lock and map files change.
+`essentials/src` changes. Outside the two new projects, only the guard tests named above and the generated solution, lock
+and map files change.
 
 ## Complexity Tracking
 

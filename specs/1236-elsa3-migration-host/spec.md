@@ -31,6 +31,11 @@ their own host must compose, and a suite could pass only because some Workbench 
 **Out of scope.** The GA composition story: a thin base, essentials profiles, opt-in triggers and images (#5800). This
 host must not become that product.
 
+**Temporary.** The host is a stopgap to unblock the migration work. #5800 delivers Docker app profiles on
+`Elsa.Foundation.Host`, including one for the Elsa 3 import story (Sipke, 2026-11-25). When that profile exists,
+the cleanup listed on #5800 removes this host project and moves the migration story to the profile; only how the
+host is run changes (a local ASP.NET Core server now, a stable app-profile image then).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Run my migrated workflows (Priority: P1)
@@ -143,7 +148,10 @@ returns 200, and the log names the setting, feature or file and the reason. The 
 **The host**
 
 - **FR-001**: The migration host MUST be one ASP.NET Core project in this repository, built and run from source. It
-  MUST NOT be published as an image or a package, and MUST NOT be presented as a product or deployment host.
+  MUST NOT be published as an image or a package, and MUST NOT be presented as a product or deployment host. It MUST
+  be marked temporary in its README and project description, naming #5800 as the issue whose cleanup removes it.
+- **FR-018**: The host MUST be a plain CShells host: it activates the features of the assemblies it references, with
+  no package loading (no Nuplane) and no admin or module-management endpoints.
 - **FR-002**: The host MUST compose only:
   - the features the JTest acceptance set needs;
   - the features the repository's Studio designer needs against it (US4);
@@ -236,6 +244,7 @@ folder) and converted reusables in `activities/activities.json` (the activities 
 | Q9 | How do converted reusables reach the host? | As composite activities in the activities file, loaded by JSON activity reconciliation (Joey on PR #5678, spec 1237). |
 | Q10 | On the initiative branch, the OpenIddict token store is Workbench host code; the migration host needs one. Where does it come from? | Main has already moved it into `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore` (`AddOpenIddictEntityFrameworkCoreStore`, 2026-11-24), in line with Frans's reading of ADR 0073 ("kept on the host side"). The migration host calls that library, so this specification moves nothing. Implementation starts after a main sync brings the library to the initiative branch. |
 | Q11 | Published images, a base image and a designer-only Studio, or a host built from source? | A migration-specific ASP.NET Core project built from source with project references, with no images and no new Studio app (Joey, 2026-11-25). The audience clones the repository. The GA composition story (base, essentials profiles, images) moved to #5800. This replaces the earlier image decisions: the image names (old Q3, whose number now holds the host's location), Q5 and Q7. |
+| Q12 | Is the host permanent? | No. It is temporary until #5800's Docker app profiles cover the Elsa 3 import story; #5800 lists removing it as follow-up cleanup (Joey, 2026-11-25, after Sipke's direction on #5800). Until then it is a plain CShells host without Nuplane or admin endpoints, so swapping it for a profile image changes only how it is run. |
 
 ## Success Criteria *(mandatory)*
 
