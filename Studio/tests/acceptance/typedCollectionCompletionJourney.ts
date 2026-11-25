@@ -14,6 +14,7 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   const s = await activityDataSupport(page, info, registerCleanup);
   const tooling: { path: string; request: unknown; status: number; response: unknown }[] = [], pending: Promise<void>[] = [];
   const presses: { prefix: string; presses: number }[] = [];
+  const layout: unknown[] = [];
   const isTooling = (response: Response) => /\/design\/workflows\/expression-tooling\/(completions|hover)$/.test(new URL(response.url()).pathname);
   page.on("response", response => {
     if (!isTooling(response)) return;
@@ -24,7 +25,7 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   });
   registerCleanup(async () => {
     await Promise.all(pending);
-    await attachActivityDataJson(info, "typed-collection-proof.json", { sourceSha: process.env.UX_SOURCE_SHA, tooling, presses });
+    await attachActivityDataJson(info, "typed-collection-proof.json", { sourceSha: process.env.UX_SOURCE_SHA, tooling, presses, layout });
   });
 
   const orders = { referenceKey: "orders", name: "orders", type: { alias: customerAlias, collectionKind: "List" }, storageDriverType: null };
@@ -67,6 +68,16 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   await settled("variables.orders[0].");
   await complete("variables.orders[0].");
   await expect(list()).toBeVisible();
+  layout.push(await editor.evaluate(content => {
+    const rect = (node: Element) => { const r = node.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)]; };
+    const chain: string[] = [];
+    for (let node: Element | null = content; node && chain.length < 12; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      chain.push(`${node.tagName.toLowerCase()}.${[...node.classList].join(".")} rect=${rect(node)} client=${node.clientWidth} scroll=${node.scrollWidth} left=${node.scrollLeft} ox=${style.overflowX} display=${style.display} minw=${style.minWidth}`);
+    }
+    const popup = document.querySelector(".cm-tooltip-autocomplete"), cursor = document.querySelector(".cm-cursor");
+    return { viewport: innerWidth, popup: popup && rect(popup), cursor: cursor && rect(cursor), chain };
+  }));
   await expect(list().getByRole("option")).toHaveCount(3);
   for (const name of ["customerId", "display_name", "nickname"]) {
     await expect(option(name)).toHaveCount(1);
