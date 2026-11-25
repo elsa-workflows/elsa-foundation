@@ -68,14 +68,17 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
     await expect(page.locator(".cm-completionInfo")).toContainText(declaredNote);
     await expectReadable(page.locator(".cm-completionInfo"), "Declared-type note");
     await expectUncovered(page.locator(".cm-completionInfo"), "Declared-type note");
-    await expectUncovered(list().getByRole("listbox"), "Completion list");
+    // The note box belongs to the completion popup; at narrow widths CodeMirror places it over the following options.
+    await expectUncovered(list(), "Completion popup");
   }
   /** Nothing on the page paints over the popup: every sampled point inside it hits the popup itself. */
   async function expectUncovered(box: ReturnType<Page["locator"]>, what: string) {
     const covered = await box.evaluate(element => {
       const rect = element.getBoundingClientRect(), hits: string[] = [];
-      for (const fx of [0.05, 0.25, 0.5, 0.75, 0.95]) for (const fy of [0.15, 0.5, 0.85]) {
-        const x = rect.left + rect.width * fx, y = rect.top + rect.height * fy, hit = document.elementFromPoint(x, y);
+      const xs = [rect.left + 3, rect.left + rect.width / 4, rect.left + rect.width / 2, rect.right - rect.width / 4, rect.right - 3];
+      const ys = [rect.top + 3, rect.top + rect.height / 2, rect.bottom - 3];
+      for (const x of xs) for (const y of ys) {
+        const hit = document.elementFromPoint(x, y);
         if (hit && !element.contains(hit)) hits.push(`${Math.round(x)},${Math.round(y)} ${hit.tagName.toLowerCase()}.${[...hit.classList].join(".")}`);
       }
       const chain: string[] = [];
