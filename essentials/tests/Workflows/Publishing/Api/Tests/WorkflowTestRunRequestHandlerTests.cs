@@ -346,6 +346,48 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public async Task DraftTestRunOptionsRefuseANodeWithoutArgumentListsBeforeCompiling()
+    {
+        var compiled = 0;
+        var handler = DraftSnapshotHandler(onCompile: _ => compiled++);
+
+        var options = await handler.GetDraftOptionsAsync(
+            new DraftTestRunOptionsRequest("definition-1", "snapshot-missing-lists", StateWithoutArgumentLists()),
+            CancellationToken.None);
+
+        Assert.Equal(0, compiled);
+        Assert.Empty(options.Options);
+        Assert.Equal(
+            [("Graph/MalformedArgumentList", "write-one"), ("Graph/MalformedArgumentList", "write-one")],
+            options.Diagnostics.Select(diagnostic => (diagnostic.Code, diagnostic.NodeId)));
+        Assert.Contains(options.Diagnostics, diagnostic => diagnostic.Message.StartsWith("write-one/inputs", StringComparison.Ordinal));
+        Assert.Contains(options.Diagnostics, diagnostic => diagnostic.Message.StartsWith("write-one/outputs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DraftTestRunRejectsANodeWithoutArgumentListsBeforeCompiling()
+    {
+        var compiled = 0;
+        var handler = DraftSnapshotHandler(onCompile: _ => compiled++);
+
+        var rejected = await handler.Handle(
+            new StartWorkflowDraftTestRun("definition-1", "snapshot-missing-lists", StateWithoutArgumentLists()),
+            CancellationToken.None);
+
+        Assert.Equal("Rejected", rejected.Status);
+        Assert.StartsWith("write-one/inputs", rejected.Reason, StringComparison.Ordinal);
+        Assert.Contains("Graph/MalformedArgumentList", rejected.Reason, StringComparison.Ordinal);
+        Assert.Contains("write-one/outputs", rejected.Reason, StringComparison.Ordinal);
+        Assert.Equal(0, compiled);
+        Assert.Empty(await _executableStore.ListAllAsync());
+        Assert.Empty(await _sourceReferenceStore.ListAllAsync());
+        Assert.Null(await _testScopeStore.FindAsync(rejected.TestRunId));
+    }
+
+    private static WorkflowDefinitionState StateWithoutArgumentLists() =>
+        new([], new ActivityNode("write-one", "activity-write-line", null!, null!), [], [], null);
+
+    [Fact]
     public async Task DraftTestRunWithInputContractFailsClosedWhenInputValidatorIsUnavailable()
     {
         var state = new WorkflowDefinitionState(
@@ -1052,7 +1094,8 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
                 : inputValidator ?? new WorkflowExecutableInputValidator(TestWellKnownTypeRegistry.Create()),
             accessContextAccessor: accessContextAccessor,
             partitionAccessor: partitionAccessor,
-            ambientServices: ambientServices);
+            ambientServices: ambientServices,
+            activityStructures: _activityStructureService);
     }
 
     private static IWorkflowExecutableCompiler ObserveCompiler(IWorkflowExecutableCompiler compiler, Action<WorkflowExecutableCompileRequest>? observer) =>

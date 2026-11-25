@@ -80,6 +80,22 @@ reaches the decorated context unchanged.
   outer activity execution identity. It must not expose synthetic wrapper/provider payloads or raw Runtime
   exception messages.
 
+### Workflow draft Test Runs
+
+`IWorkflowTestRunStarter` (default `StartWorkflowTestRunRequestHandler`, scoped) serves
+`POST publishing/workflows/drafts/test-run-options` and `POST publishing/workflows/drafts/test-runs`. Both compile the
+posted draft snapshot, which never passed the draft validation gate. Before anything reads it (expression validation or
+the compiler), a node whose `inputs` or `outputs` list is missing or null, at any depth, is refused with the
+`Graph/MalformedArgumentList` refusal of `ActivityArgumentLists` (Design Validations Core), one per list at
+`{NodeId}/inputs` or `{NodeId}/outputs`; `[]` is the only way to say "no arguments":
+
+- the options request returns no option and one diagnostic per refusal, with code `Graph/MalformedArgumentList`, the
+  message `{NodeId}/{list}: Graph/MalformedArgumentList: ...` and `nodeId` set to the authored node id;
+- the start request returns a `Rejected` test run whose reason joins those messages; nothing is compiled, stored or
+  dispatched.
+
+A replacement starter must refuse such a snapshot the same way.
+
 ## HTTP endpoint surface
 
 The endpoint surface is documented in the [module README](README.md#http-endpoint-surface). The public
