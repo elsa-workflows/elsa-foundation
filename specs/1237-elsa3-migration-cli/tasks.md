@@ -170,7 +170,10 @@
      environment variables), with no command-line arguments;
   2. `elsa3-migration.features.json` from the CLI project folder;
   3. the run-override layer: every persistence connection string set to SQLite on
-     `file:elsa3-migration-<guid>;Mode=Memory;Cache=Shared`, the migrate policy set to apply, JSON workflow
+     `file:elsa3-migration-<guid>;Mode=Memory;Cache=Shared`, which means `ConnectionStrings:<name>` for the
+     `DefaultConnectionName` of every EF module `EfModuleCatalog` finds over the composed assemblies (the Elsa 3 import
+     ledger's is `ElsaElsa3Import`, which the host's configuration never names) as well as each per-feature connection
+     setting the configuration holds, the migrate policy set to apply, JSON workflow
      reconciliation's `FolderPath` at an empty `workflows/` folder and JSON activity reconciliation's `FilePath` at an
      activities file holding `[]`, both in a run-scoped temporary folder outside `--out` that it deletes on every
      path, the `Tasks` feature's `StartupTasksOnly` (T009a), and, when the composed configuration lists
@@ -183,7 +186,8 @@
   creates `--out` and its staging folder only after the shell has been composed. All shell initializers run; the
   T013 feature registers the import run inside the shell. No background hosted service starts. It keeps one
   connection open, and disposes everything on every path. Tests:
-  - two EF modules commit in one shared transaction without `EfSharedTransactionTargetMismatchException`;
+  - the Elsa 3 import ledger and a Design EF lane commit in one shared transaction without
+    `EfSharedTransactionTargetMismatchException`, and no `elsa-elsa3-import.db` file appears;
   - after composition, the schema exists and the activity catalog holds the host's activities;
   - no background hosted service, `IBackgroundTask` or recurring task starts;
   - `inventory` ignores a `shells.Local.json`, a user secret and an environment variable that `assess` applies;
@@ -363,7 +367,10 @@
   settings pointing at the fixture run's `migrated/`, and record that every exported version loads (SC-004).
 - [ ] T033 Run `inventory --all-versions` over the specification 1235 acceptance set (34 definitions) from the clone
   with `dotnet run`. Check that every definition has one bucket, and that the published versions equal what startup
-  reconciliation publishes from the same input on the same composition (SC-002). Record the result in the PR evidence, and check the two-minute goal.
+  reconciliation publishes from the same input on the same composition (SC-002). Produce that baseline in the
+  migration test project through the tooling's internal seam, with an addition list that swaps
+  `Elsa3MigrationImportRun` for `Elsa3JsonReconciliation` (its `SourceId` set and `FolderPath` at the export), and
+  compare its published versions with the CLI run's. Record the result in the PR evidence, and check the two-minute goal.
 - [ ] T034 Add the smoke test (SC-003). From a clean build, run
   `dotnet run --project extensions/Elsa3/src/Migration/Cli -- workflows inventory` with the fixture export and a
   relative `--out`. Expect exit 1, the printed path and the same `report.json` as the in-process run, after
