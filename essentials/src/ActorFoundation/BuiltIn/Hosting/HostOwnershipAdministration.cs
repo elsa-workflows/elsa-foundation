@@ -17,25 +17,27 @@ public sealed class HostOwnershipAdministration(RuntimeNode node, Func<bool> aut
         : throw new ArgumentOutOfRangeException(nameof(drainDeadline), "The drain deadline must be positive.");
 
     /// <summary>
-    /// Releases the listed partitions that the local node holds, through the runtime's own release, so the next take of
-    /// each, by this node or another, counts no death. A listed partition the node does not hold is skipped. It reads no
-    /// tenant row.
+    /// Releases the listed partitions that the local node holds, through the runtime's own release. Each one is free at its
+    /// epoch, and placement decides who takes it next: the next balancing round may give it back to this node when it is
+    /// below its share. That take counts no death. It reads no tenant row.
     /// </summary>
-    /// <param name="partitions">The virtual partitions to release, each in range for the node.</param>
+    /// <param name="partitions">The virtual partitions to release, each in range for the node once authorized.</param>
     /// <param name="cancellationToken">Cancels the release; a partition already given up stays released.</param>
-    /// <returns>False on refusal. True once the authorized release has run. It skips a listed partition that the node does
-    /// not hold or is already taking or giving up, and gives up nothing once a stop or kill has begun.</returns>
-    public async ValueTask<bool> ReleaseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
+    /// <returns>
+    /// Not authorized on refusal, before the partitions are checked. Otherwise the partitions given up: a listed partition
+    /// that the node does not hold, or is taking, giving up or passing, is skipped, and none is given up once a stop or kill
+    /// has begun.
+    /// </returns>
+    public async ValueTask<PartitionRelease> ReleaseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(partitions);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!_authorize()) return new(false, []);
         foreach (var partition in partitions)
             if ((uint)partition >= (uint)_node.Runtime.Partitions)
                 throw new ArgumentOutOfRangeException(nameof(partitions), partition, "A partition is outside the node's range.");
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_authorize()) return false;
-        cancellationToken.ThrowIfCancellationRequested();
-        await _node.ReleaseAsync(partitions, cancellationToken);
-        return true;
+        return new(true, await _node.ReleaseAsync(partitions, cancellationToken));
     }
 
     /// <summary>Requests a graceful stop of the local node.</summary>
@@ -64,3 +66,6 @@ public sealed class HostOwnershipAdministration(RuntimeNode node, Func<bool> aut
         return true;
     }
 }
+
+/// <summary>The answer to a host-admin release: whether the caller was authorized, and the partitions given up.</summary>
+public sealed record PartitionRelease(bool Authorized, IReadOnlyList<int> Released);

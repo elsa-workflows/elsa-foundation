@@ -1827,6 +1827,8 @@ jobs:
           $SIM --lease-check
           dotnet ../../essentials/tests/Workflows/Runtime/Native/Migration/Run/$BIN/Elsa.Workflows.Runtime.Native.Migration.Run.dll --retention-pass-check
           $SIM --landed-check
+          # K5: tenancy case T12, host-admin release and drain, then a kill and a takeover after lease expiry.
+          $SIM --host-t12-check
           # K1 slice 5: the placement check witnesses the balancer's fewest moves, and must fail under its placement-cost mutation.
           $SIM --placement-check
           # It must fail on its checks (exit 1 with "placement: N check(s) FAILED"), not crash or reject the flaw name.

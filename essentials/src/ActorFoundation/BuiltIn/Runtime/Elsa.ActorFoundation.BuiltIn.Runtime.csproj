@@ -9,4 +9,7 @@
   <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Runtime.Hosting" />     <!-- the node's host-admin release (PartitionRuntime.ReleaseAsync) -->
+  </ItemGroup>
 </Project>

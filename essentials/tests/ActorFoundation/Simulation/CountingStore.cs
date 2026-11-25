@@ -20,7 +20,9 @@ public sealed class CountingStore(IKernelStore inner, Action committed, Action<C
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
-    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
+    /// <summary>False presents a store without owned sets, so a node's host keeps a worker per scope.</summary>
+    public bool? OwnedSets { get; init; }
+    public bool OwnedSetsAvailable => OwnedSets ?? inner.OwnedSetsAvailable;
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
         if (beforePartitionCount is not null) await beforePartitionCount();
@@ -73,13 +75,13 @@ public sealed class CountingStore(IKernelStore inner, Action committed, Action<C
     public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(LoadActorsAsync)); return inner.LoadActorsAsync(ids, cancellationToken); }
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => inner.PublishAsync(@event, cancellationToken);
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => inner.SubscribeAsync(subscription, cancellationToken);
-    public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => inner.FindSubscriptionsAsync(key, cancellationToken);
+    public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(FindSubscriptionsAsync)); return inner.FindSubscriptionsAsync(key, cancellationToken); }
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(FindEventsAsync)); return inner.FindEventsAsync(keys, cancellationToken); }
     public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(PublishedMatchesAsync)); return inner.PublishedMatchesAsync(published, cancellationToken); }
     public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(KeptMatchesAsync)); return inner.KeptMatchesAsync(waits, cancellationToken); }
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(ReadJournalAsync)); return inner.ReadJournalAsync(partition, after, take, cancellationToken); }
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(ReadJournalOfAsync)); return inner.ReadJournalOfAsync(partition, instance, after, cancellationToken); }
-    public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default) => inner.ProjectedAsync(partition, cancellationToken);
+    public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(ProjectedAsync)); return inner.ProjectedAsync(partition, cancellationToken); }
     public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) => inner.ProjectAsync(partition, from, to, rows, cancellationToken);
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default) => inner.SweepAsync(cancellationToken);
     public ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default) { beforeRead?.Invoke(nameof(ReadViewsAsync)); return inner.ReadViewsAsync(instances, cancellationToken); }

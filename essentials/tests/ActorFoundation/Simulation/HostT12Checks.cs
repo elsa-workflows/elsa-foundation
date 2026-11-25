@@ -18,6 +18,7 @@ internal static class HostT12Checks
 
     public static async Task<int> RunAsync(Flaw flaws = Flaw.None)
     {
+        await PassingReleaseAsync();
         const int partitions = 2;
         const long startTime = 1_701_000_000_000;
         const long readyAt = startTime + 60_000;     // past every clock step before the last, so no input runs early
@@ -27,20 +28,31 @@ internal static class HostT12Checks
         // The spy sees the reads and releases made inside a host-admin call's own flow, never the node's loops.
         var adminReads = new ConcurrentQueue<string>();
         var adminReleases = new ConcurrentQueue<string>();
-        (string? Owner, long Epoch, long Position)[]? atRelease = null;
+        (string? Owner, long Epoch, long Position)[]? atRelease = null, atSet = null;
+        var heldRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var spy = new CountingStore(store, static () => { },
             beforeRelease: () => { if (AdminStep.Value is { } step) adminReleases.Enqueue(step); },
-            afterRelease: () => { if (AdminStep.Value == "release") atRelease = OwnershipImage(); return default; },
+            afterRelease: async () =>
+            {
+                if (AdminStep.Value == "release") atRelease = OwnershipImage();
+                if (AdminStep.Value == "release-set") atSet = OwnershipImage();
+                if (AdminStep.Value != "release-held") return;
+                heldRelease.TrySetResult();
+                await finishRelease.Task;
+            },
             beforeRead: read => { if (AdminStep.Value is { } step) adminReads.Enqueue(step + ":" + read); });
         var landed = new ConcurrentQueue<CommitBatch>();
         var observed = new CountingStore(store, static () => { }, observeCommit: (batch, done) => { if (done) landed.Enqueue(batch); });
-        var probe = new Probe();
+        // The actor code is watched too: no host-admin step may reach a tenant's actor.
+        var probe = new Probe(call => { if (AdminStep.Value is { } step) adminReads.Enqueue(step + ":actor." + call); });
+        var drainEntered = false;
         var ingress = new InMemoryIngress(store, new Requests("t12"), "first");
         var reads = new ActorList(store, 10);
         var blue = ContractScopes.Bind("blue");
         var green = ContractScopes.Bind("green");
 
-        await using var first = Node("first");
+        await using var first = Node("first", _ => { drainEntered = true; return Task.CompletedTask; });
         await Start(first, spy);
         var a = await StartActor(blue, 0);
         var b = await StartActor(green, 1);
@@ -64,8 +76,9 @@ internal static class HostT12Checks
         var journal = store.Journal.Values.ToArray();
         Check(!Kept(messages, Tampered(messages, payload: true)) && !Kept(messages, Tampered(messages, payload: false)),
             "flaw control: the row check rejects a changed payload and a changed tenant");
-        Check(await AsAdmin("control", async () => (await spy.LoadAsync([.. tenantOf.Keys])).Count) == 2 &&
-            adminReads.SequenceEqual(new[] { "control:LoadAsync" }), "negative control: a payload read inside a host-admin step is caught");
+        Check(await AsAdmin("control", async () => (await spy.LoadAsync([.. tenantOf.Keys])).Count + (probe.Withholds(null!) ? 1 : 0)) == 2 &&
+            adminReads.SequenceEqual(new[] { "control:LoadAsync", "control:actor.Withholds" }),
+            "negative control: a store read and an actor call inside a host-admin step are caught");
         adminReads.Clear();
 
         var hostOperator = new object();
@@ -75,8 +88,10 @@ internal static class HostT12Checks
         foreach (var scope in new[] { blue, green })
         {
             caller = scope;
-            Check(!await release.ReleaseAsync([0]) && !await release.DrainAsync(), scope.Tenant + " operator was refused release and drain");
+            Check(!(await release.ReleaseAsync([0])).Authorized && !(await release.ReleaseAsync([partitions])).Authorized &&
+                !await release.DrainAsync(), scope.Tenant + " operator was refused release, an out-of-range release and drain");
         }
+        caller = hostOperator;
         var outside = false;
         try { await release.ReleaseAsync([partitions]); }
         catch (ArgumentOutOfRangeException) { outside = true; }
@@ -84,19 +99,30 @@ internal static class HostT12Checks
             "refusals and an out-of-range partition left ownership as it was");
 
         // Host administration releases partition 0 alone; the next take of it, here by the same node, counts no death.
-        caller = hostOperator;
-        Check(await AsAdmin("release", () => release.ReleaseAsync([0]).AsTask()), "host administration released partition 0");
+        Check(await AsAdmin("release", () => release.ReleaseAsync([0]).AsTask()) is { Authorized: true, Released: [0] },
+            "host administration released partition 0");
         Check(atRelease is [(null, var epoch0, _), ("first", _, _)] && epoch0 == ownership[0].Epoch && adminReleases.SequenceEqual(new[] { "release" }),
             "the release freed partition 0 alone, at its epoch, through the store's release");
         await WaitFor(() => store.Partitions[0] is { Owner: "first" } row && row.Epoch == ownership[0].Epoch + 1, "partition 0 was taken again");
         Check(Kept(messages, MessageImage()) && Attempted(messages, MessageImage(), None) && SameTenantData(),
             "after the release every tenant row is intact, with no attempt added");
-        Check(await AsAdmin("release-set", () => release.ReleaseAsync([1, 0, 1]).AsTask()) && adminReleases.Count(step => step == "release-set") == 1,
-            "host administration released both partitions in one store release");
-        await WaitFor(() => store.Partitions.All(row => row.Owner == "first") && store.Partitions[1].Epoch == ownership[1].Epoch + 1,
-            "both partitions were taken again");
+        var beforeSet = OwnershipImage();
+        Check(await AsAdmin("release-set", () => release.ReleaseAsync([1, 0, 1]).AsTask()) is { Released: [0, 1] } &&
+            adminReleases.Count(step => step == "release-set") == 1 && atSet is { } freed &&
+            freed.SequenceEqual(beforeSet.Select(row => (Owner: (string?)null, row.Epoch, row.Position))),
+            "host administration released both partitions, each at its epoch, in one store release");
+        await WaitFor(() => store.Partitions.Select(row => (row.Owner, row.Epoch)).SequenceEqual(beforeSet.Select(row => ((string?)"first", row.Epoch + 1))),
+            "both partitions were taken again, each one epoch on");
 
-        Check(await AsAdmin("drain", () => release.DrainAsync().AsTask()) && first.Errors == 0, "host administration drained the first node");
+        // A stop joins a release under way before its own turn drain.
+        var inFlight = AsAdmin("release-held", () => release.ReleaseAsync([0]).AsTask());
+        await heldRelease.Task.WaitAsync(Timeout);
+        var draining = AsAdmin("drain", () => release.DrainAsync().AsTask());
+        await Task.Delay(200);
+        Check(!draining.IsCompleted && !drainEntered, "the drain waited for the release under way before its turn drain");
+        finishRelease.TrySetResult();
+        Check((await inFlight.WaitAsync(Timeout)).Released is [0] && await draining.WaitAsync(Timeout) && drainEntered && first.Errors == 0,
+            "host administration drained the first node after the release, with no fault");
         Check(store.Partitions.All(row => row.Owner is null) && adminReleases.Count(step => step == "drain") > 0,
             "the drain freed both partitions through the store's release");
         Check(adminReads.IsEmpty, "no host-admin step read a tenant payload");
@@ -118,11 +144,15 @@ internal static class HostT12Checks
         Check(store.Partitions.All(row => row.Owner == "second"), "the kill gave nothing up");
         var atCrash = MessageImage();
         var crashEpochs = OwnershipImage();
-        Volatile.Write(ref now, store.Nodes["second"].LeaseUntil + 1);
-        Check(Volatile.Read(ref now) < readyAt, "the takeover comes before any input is due");
 
+        // Before the dead node's lease expires, neither a running node nor a direct take gets its partitions.
         await using var third = Node("third");
         await Start(third, observed);
+        await Task.Delay(300);
+        Check(store.Partitions.All(row => row.Owner == "second") && (await store.TakeAsync([0, 1], "early", lease)).Taken.Count == 0 &&
+            OwnershipImage().SequenceEqual(crashEpochs), "nothing was taken while the dead node's lease ran");
+        Volatile.Write(ref now, store.Nodes["second"].LeaseUntil + 1);
+        Check(Volatile.Read(ref now) < readyAt, "the takeover comes before any input is due");
         await WaitFor(() => store.Partitions.All(row => row.Owner == "third"), "the third node took both partitions after the lease expired");
         var taken = MessageImage();
         Check(store.Partitions.Select(row => row.Epoch).SequenceEqual(crashEpochs.Select(row => row.Epoch + 1)),
@@ -161,10 +191,7 @@ internal static class HostT12Checks
             return (await store.CommitAsync(CommitBatch.Owned(fences, lease, false, [], [], [.. keys]))).Landed;
         }
 
-        RuntimeNode Node(string name) => new(name, store, partitions, new LoopOptions
-        {
-            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
-        });
+        RuntimeNode Node(string name, Func<CancellationToken, Task>? beforeRelease = null) => new(name, store, partitions, Loop, beforeRelease: beforeRelease);
 
         ValueTask Start(RuntimeNode node, IKernelStore backing) =>
             node.StartAsync(DurableHost.ForNode(node.Node, backing, new ActorAdapter(store, probe), partitions,
@@ -188,6 +215,48 @@ internal static class HostT12Checks
         bool SameTenantData() => InstanceImage().SequenceEqual(instances) && journal.SequenceEqual(store.Journal.Values);
         Row[] MessageImage() => [.. store.Messages.OrderBy(pair => pair.Value.Seq).Select(pair => new Row(pair.Key, pair.Value.Tenant,
             pair.Value.Message, pair.Value.Seq, pair.Value.Done, pair.Value.Held, pair.Value.Seen, pair.Value.Trial, pair.Value.Attempts))];
+    }
+
+    private static readonly LoopOptions Loop = new()
+    {
+        BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+    };
+
+    // A worker-per-scope host (a store without owned sets): a release while the scope's pass is under way skips it.
+    private static async Task PassingReleaseAsync()
+    {
+        var store = new InMemoryStore(1, static () => 1_701_000_000_000);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var host = new CountingStore(store, static () => { }, beforeCommit: async batch =>
+        {
+            if (!batch.Turns.Any(turn => turn.Journal?.Contains("blue/held", StringComparison.Ordinal) == true)) return;
+            entered.TrySetResult();
+            await finish.Task;
+        }) { OwnedSets = false };
+        var probe = new Probe(static _ => { });
+        var ingress = new InMemoryIngress(store, new Requests("t12-pass"), "solo");
+        var blue = ContractScopes.Bind("blue");
+        await using var node = new RuntimeNode("solo", store, 1, Loop);
+        await node.StartAsync(DurableHost.ForNode("solo", host, new ActorAdapter(store, probe), 1,
+            new WorkerOptions { Partitions = 1, Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.Zero, Monotonic = static () => 0 }));
+        var admin = new HostOwnershipAdministration(node, static () => true);
+        var spec = new Contract.StartSpec(probe.Type, "t12", "blue/start", History: Contract.History.Full);
+        var actor = (await ingress.SendAsync(blue, new Contract.Target.Key("root", spec), "start", Contract.Kinds.Start)).Actor!.Value;
+        await WaitFor(() => State() is ["blue/start"], "the worker-per-scope node committed the start");
+        Check((await ingress.SendAsync(blue, new Contract.Target.Ref(actor), "held", "input", "blue/held")).Outcome == Contract.AdmissionOutcome.Accepted,
+            "the worker-per-scope node received an input for a held pass");
+        await entered.Task.WaitAsync(Timeout);
+        var during = admin.ReleaseAsync([0]).AsTask();
+        var returned = await Task.WhenAny(during, Task.Delay(TimeSpan.FromSeconds(2))) == during;
+        Check(returned && during.Result is { Authorized: true, Released: [] } && node.Runtime.Owns(0),
+            "a release during the held pass skipped the passing partition");
+        finish.TrySetResult();
+        await WaitFor(() => store.Messages.Values.Single(row => row.Message.Kind == "input") is { Done: true, Attempts: 0 } &&
+            State() is ["blue/start", "blue/held"], "the held pass committed its input once");
+        Check((await admin.ReleaseAsync([0])).Released is [0] && node.Errors == 0, "the next release gave the partition up, with no fault");
+
+        List<string>? State() => store.ReadFoundationActor("blue", actor.Id).Actor?.Row is { } row ? Json.Read<List<string>>(row.State) : null;
     }
 
     private sealed record Row(InboxKey Key, string? Tenant, Message Message, long Seq, bool Done, bool Held, long Seen, long Trial, int Attempts);
@@ -230,17 +299,18 @@ internal static class HostT12Checks
         Console.WriteLine("ok " + description);
     }
 
-    private sealed class Probe : Contract.IActorType
+    private sealed class Probe(Action<string> touched) : Contract.IActorType
     {
         public string Type => "host-t12-probe";
-        public bool Withholds(Contract.ActorHeader header) => false;
-        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
-        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public bool Withholds(Contract.ActorHeader header) { touched(nameof(Withholds)); return false; }
+        public long TerminalGrowth(Contract.ActorHeader header, string state) { touched(nameof(TerminalGrowth)); return 0; }
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) { touched(nameof(ProtectsDeletion)); return false; }
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) { touched(nameof(RestoreWaits)); return new([], [], []); }
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            touched(nameof(TurnAsync));
             var history = turn.State is null ? [] : Json.Read<List<string>>(turn.State);
             foreach (var message in turn.Inbox)
                 if (message.Payload is { } payload)
