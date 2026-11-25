@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using static Kernel.Native.Binding;
 using static Kernel.Native.Wf;
+using static Kernel.Native.TestWf;
 
 namespace Kernel.Native.Run;
 
@@ -25,7 +26,7 @@ public static class JoinVariantChecks
                     Parallel("par", null,
                         Sequence("b1", Event("e1", "v-1"),
                             Flowchart("flow",
-                                [Set("head", "round", Expr("round + 1")), Set("a", "x", 1), Set("b", "y", 1), Http("j", "https://partner.example/j", Expr("'round=' + round")), If("decide", Expr("round < 3")), Set("end", "done", "yes")],
+                                [Set("head", "round", Expr("round + 1")), Set("a", "x", 1), Set("b", "y", 1), Post("j", "https://partner.example/j", Expr("'round=' + round")), If("decide", Expr("round < 3")), Set("end", "done", "yes")],
                                 [new("head", "a"), new("head", "b"), new("a", "j"), new("b", "j"), new("j", "decide"), new("decide", "head", "True"), new("decide", "end", "False")],
                                 ("j", Gateway.ParallelJoin))),
                         Sequence("b2", tail.ToArray())),
@@ -43,7 +44,7 @@ public static class JoinVariantChecks
             var registry = new WorkflowRegistry();
             registry.Add(Workflow("v", Sequence("root",
                     Flowchart("flow",
-                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), Set("u", "a", 1), Set("v", "b", 1), WriteLine("j1", "j1"), Set("p", "c", 1), Set("q", "d", 1), Http("j2", "https://partner.example/j2", "j2"), Http("after", "https://partner.example/after", "after")],
+                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), Set("u", "a", 1), Set("v", "b", 1), WriteLine("j1", "j1"), Set("p", "c", 1), Set("q", "d", 1), Post("j2", "https://partner.example/j2", "j2"), Post("after", "https://partner.example/after", "after")],
                         [new("s0", "ea"), new("s0", "eb"), new("ea", "m"), new("eb", "m"), new("m", "u"), new("m", "v"), new("u", "j1"), new("v", "j1"), new("j1", "p"), new("j1", "q"), new("p", "j2"), new("q", "j2"), new("j2", "after")],
                         ("m", Gateway.Merge), ("j1", Gateway.ParallelJoin), ("j2", Gateway.ParallelJoin)),
                     Set("out", "output", "done")),
@@ -63,7 +64,7 @@ public static class JoinVariantChecks
             var registry = new WorkflowRegistry();
             registry.Add(Workflow("v", Sequence("root",
                     Flowchart("flow",
-                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), Set("u", "a", 1), Delay("v", 20), Http("hj", "https://partner.example/hj", "joined"), Http("after", "https://partner.example/after", "after")],
+                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), Set("u", "a", 1), Delay("v", 20), Post("hj", "https://partner.example/hj", "joined"), Post("after", "https://partner.example/after", "after")],
                         [new("s0", "ea"), new("s0", "eb"), new("ea", "m"), new("eb", "m"), new("m", "u"), new("m", "v"), new("u", "hj"), new("v", "hj"), new("hj", "after")],
                         ("m", Gateway.Merge), ("hj", Gateway.ParallelJoin)),
                     Set("out", "output", "done")),

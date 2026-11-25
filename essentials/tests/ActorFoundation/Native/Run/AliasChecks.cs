@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using static Kernel.Native.Binding;
 using static Kernel.Native.Wf;
+using static Kernel.Native.TestWf;
 
 namespace Kernel.Native.Run;
 
@@ -24,7 +25,7 @@ public static class AliasChecks
         return Workflow("alias", Sequence("root",
                 Parallel("par", null,
                     Sequence("b1", Event("e1", "alias-1"),
-                        While("loop", Expr("i < 2"), Sequence("body", Set("inc", "i", Expr("i + 1")), Http("http", "https://partner.example/orders", Expr("'i=' + i"))))),
+                        While("loop", Expr("i < 2"), Sequence("body", Set("inc", "i", Expr("i + 1")), Post("http", "https://partner.example/orders", Expr("'i=' + i"))))),
                     Sequence("b2", tail.ToArray())),
                 Set("out", "output", "done")),
             ("i", 0), ("tag", "none"), ("output", null));
@@ -69,7 +70,7 @@ public static class AliasChecks
         var registry = new WorkflowRegistry();
         registry.Add(Workflow("alias", Sequence("root",
                 Flowchart("flow",
-                    [Set("s0", "x", 1), Event("ea", "alias-1"), Event("eb", "alias-2"), WriteLine("m", "merged"), Http("h", "https://partner.example/merged", "token")],
+                    [Set("s0", "x", 1), Event("ea", "alias-1"), Event("eb", "alias-2"), WriteLine("m", "merged"), Post("h", "https://partner.example/merged", "token")],
                     [new("s0", "ea"), new("s0", "eb"), new("ea", "m"), new("eb", "m"), new("m", "h")], ("m", Gateway.Merge)),
                 Set("out", "output", "done")),
             ("x", 0), ("output", null)));
@@ -102,7 +103,7 @@ public static class AliasChecks
         connections.Add(new("y", "j"));
         registry.Add(Workflow("alias", Sequence("root",
                 Flowchart("flow",
-                    [Set("s0", "k", 1), Event("ea", "alias-1"), Event("eb", "alias-2"), WriteLine("m", "merged"), WriteLine("x", "x"), WriteLine("y", "y"), WriteLine("j", "joined"), Http("h", "https://partner.example/join", "joined")],
+                    [Set("s0", "k", 1), Event("ea", "alias-1"), Event("eb", "alias-2"), WriteLine("m", "merged"), WriteLine("x", "x"), WriteLine("y", "y"), WriteLine("j", "joined"), Post("h", "https://partner.example/join", "joined")],
                     connections.ToArray(), ("m", Gateway.Merge), ("j", Gateway.ParallelJoin)),
                 Set("out", "output", "done")),
             ("k", 0), ("output", null)));

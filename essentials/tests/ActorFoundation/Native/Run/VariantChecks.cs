@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using static Kernel.Native.Binding;
 using static Kernel.Native.Wf;
+using static Kernel.Native.TestWf;
 
 namespace Kernel.Native.Run;
 
@@ -24,7 +25,7 @@ public static class VariantChecks
             var registry = new WorkflowRegistry();
             registry.Add(Workflow("v", Sequence("root",
                     Flowchart("flow",
-                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), Set("x", "a", 1), Set("y", "b", 1), Http("j", "https://partner.example/join", "joined")],
+                        [Set("s0", "x", 1), Event("ea", "v-1"), Event("eb", "v-2"), WriteLine("m", "merged"), Set("x", "a", 1), Set("y", "b", 1), Post("j", "https://partner.example/join", "joined")],
                         [new("s0", "ea"), new("s0", "eb"), new("ea", "m"), new("eb", "m"), new("m", "x"), new("m", "y"), new("x", "j"), new("y", "j")],
                         ("m", Gateway.Merge), ("j", Gateway.ParallelJoin)),
                     Set("out", "output", "done")),
@@ -48,7 +49,7 @@ public static class VariantChecks
                     Parallel("par", null,
                         Sequence("b1", Event("e1", "v-1"),
                             ForEach("each", Expr("[10, 20]"), Sequence("outer", Set("k0", "k", 0),
-                                While("loop", Expr("k < 2"), Sequence("body", Set("inc", "k", Expr("k + 1")), Http("h", "https://partner.example/o", Expr("'o=' + CurrentIndex + ' k=' + k"))))))),
+                                While("loop", Expr("k < 2"), Sequence("body", Set("inc", "k", Expr("k + 1")), Post("h", "https://partner.example/o", Expr("'o=' + CurrentIndex + ' k=' + k"))))))),
                         Sequence("b2", tail.ToArray())),
                     Set("out", "output", "done")),
                 ("k", 0), ("tag", "none"), ("output", null)));
@@ -64,7 +65,7 @@ public static class VariantChecks
             var registry = new WorkflowRegistry();
             registry.Add(Workflow("v", Sequence("root",
                     Parallel("par", null,
-                        Sequence("b1", Event("e1", "v-1"), ForEach("each", Expr("[1, 2, 3]"), Http("h1", "https://partner.example/a", Expr("'n=' + CurrentIndex")))),
+                        Sequence("b1", Event("e1", "v-1"), ForEach("each", Expr("[1, 2, 3]"), Post("h1", "https://partner.example/a", Expr("'n=' + CurrentIndex")))),
                         Sequence("b2", Event("e2", "v-2"), While("loop", Expr("k < 3"), Sequence("body", Set("inc", "k", Expr("k + 1")), Email("h2", "ops@example.com", Expr("'k=' + k"), "b"))))),
                     Set("out", "output", "done")),
                 ("k", 0), ("output", null)));
@@ -79,7 +80,7 @@ public static class VariantChecks
             var registry = new WorkflowRegistry();
             registry.Add(Workflow("v", Sequence("root",
                     Parallel("par", null,
-                        Sequence("b1", Event("e1", "v-1"), Set("w", "wait", 1), Set("w2", "wait", 2), Set("w3", "wait", 3), ForEach("each", Var("items"), Http("h", "https://partner.example/i", Expr("'n=' + CurrentIndex")))),
+                        Sequence("b1", Event("e1", "v-1"), Set("w", "wait", 1), Set("w2", "wait", 2), Set("w3", "wait", 3), ForEach("each", Var("items"), Post("h", "https://partner.example/i", Expr("'n=' + CurrentIndex")))),
                         Sequence("b2", Event("e2", "v-2"), Set("grow", "items", Expr("[1, 2, 3]")))),
                     Set("out", "output", "done")),
                 ("items", JsonNode.Parse("[1, 2]")), ("output", null)));
@@ -96,7 +97,7 @@ public static class VariantChecks
             var registry = new WorkflowRegistry();
             registry.Add(Workflow("v", Sequence("root",
                     Parallel("par", null,
-                        Sequence("b1", Event("e1", "v-1"), Set("w", "wait", 1), Set("w2", "wait", 2), While("loop", Expr("k < limit"), Sequence("body", Set("inc", "k", Expr("k + 1")), Http("h", "https://partner.example/w", Expr("'k=' + k"))))),
+                        Sequence("b1", Event("e1", "v-1"), Set("w", "wait", 1), Set("w2", "wait", 2), While("loop", Expr("k < limit"), Sequence("body", Set("inc", "k", Expr("k + 1")), Post("h", "https://partner.example/w", Expr("'k=' + k"))))),
                         Sequence("b2", Event("e2", "v-2"), Set("more", "limit", 3))),
                     Set("out", "output", "done")),
                 ("k", 0), ("limit", 2), ("output", null)));
@@ -118,7 +119,7 @@ public static class VariantChecks
                         Sequence("b1", Event("e1", "v-1"),
                             Flowchart("flow",
                                 [Set("head", "round", Expr("round + 1")), If("split", Expr("round == 1")), Set("left", "side", "L"), Set("right", "side", "R"), WriteLine("m", "merged"),
-                                 Http("h", "https://partner.example/loop", Expr("'round=' + round + ' side=' + side")), If("decide", Expr("round < 3")), Set("end", "done", "yes")],
+                                 Post("h", "https://partner.example/loop", Expr("'round=' + round + ' side=' + side")), If("decide", Expr("round < 3")), Set("end", "done", "yes")],
                                 [new("head", "split"), new("split", "left", "True"), new("split", "right", "False"), new("left", "m"), new("right", "m"), new("m", "h"), new("h", "decide"),
                                  new("decide", "head", "True"), new("decide", "end", "False")],
                                 ("m", Gateway.Merge))),

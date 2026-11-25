@@ -28,7 +28,7 @@ internal static class NativeTenantEffectChecks
         var green = ContractScopes.Bind("green");
         var workflow = new WorkflowRegistry().Add(Wf.Workflow(Definition, Wf.Sequence("root",
             Wf.Delay("wait", Expr("input.delay")),
-            Wf.Http("http", HttpUrl, Expr("input.payload")),
+            TestWf.Post("http", HttpUrl, Expr("input.payload")),
             Wf.Email("mail", MailTo, "Invoice", Expr("input.payload")),
             Wf.Set("out", "output", Expr("input.payload"))), ("output", null)));
         var receiver = new FakeReceiver();
