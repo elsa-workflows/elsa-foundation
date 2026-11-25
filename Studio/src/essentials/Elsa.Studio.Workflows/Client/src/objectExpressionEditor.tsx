@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   StudioCodeEditor,
   type StudioCodeDiagnostic,
@@ -143,11 +143,12 @@ export function ObjectExpandedEditor({
   );
 }
 
-function GenericObjectExpandedEditor({ descriptor, value, disabled = false, context, onChange }: StudioExpressionEditorProps) {
+export function GenericObjectExpandedEditor({ descriptor, value, disabled = false, context, onChange, rawJson = false, wireJson = false }: StudioExpressionEditorProps & { rawJson?: boolean; wireJson?: boolean }) {
   const uri = `elsa://expressions/object/${encodeURIComponent(descriptor.name || "value")}.json`;
-  const externalKey = useMemo(() => serializeValue(value), [value]);
-  const [draft, setDraft] = useState(() => readDraft(context.activity, descriptor.name) ?? formatValue(value));
-  const [diagnostic, setDiagnostic] = useState<StudioCodeDiagnostic | null>(() => diagnoseJson(draft, uri));
+  const parse = rawJson ? parseJson : parseStructuredJson;
+  const externalKey = rawJson ? wireJson && typeof value === "string" ? value : JSON.stringify(value) : serializeValue(value);
+  const [draft, setDraft] = useState(() => readDraft(context.activity, descriptor.name) ?? formatJsonEditorValue(value, rawJson, wireJson));
+  const [diagnostic, setDiagnostic] = useState<StudioCodeDiagnostic | null>(() => diagnoseJson(draft, uri, rawJson));
   const emittedKey = useRef<string | null>(null);
   const document: StudioCodeDocument = { uri, language: "json", value: draft };
 
@@ -159,22 +160,22 @@ function GenericObjectExpandedEditor({ descriptor, value, disabled = false, cont
     const retainedDraft = readDraft(context.activity, descriptor.name);
     if (retainedDraft != null) {
       setDraft(retainedDraft);
-      setDiagnostic(diagnoseJson(retainedDraft, uri));
+      setDiagnostic(diagnoseJson(retainedDraft, uri, rawJson));
       return;
     }
-    const nextDraft = formatValue(value);
+    const nextDraft = formatJsonEditorValue(value, rawJson, wireJson);
     setDraft(nextDraft);
-    setDiagnostic(diagnoseJson(nextDraft, uri));
-  }, [context.activity, descriptor.name, externalKey, uri, value]);
+    setDiagnostic(diagnoseJson(nextDraft, uri, rawJson));
+  }, [context.activity, descriptor.name, externalKey, rawJson, uri, value, wireJson]);
 
   const handleChange = (nextDocument: StudioCodeDocument) => {
     setDraft(nextDocument.value);
-    const parsed = parseStructuredJson(nextDocument.value);
+    const parsed = parse(nextDocument.value);
     if (parsed.ok) {
-      emittedKey.current = serializeValue(parsed.value);
+      emittedKey.current = rawJson ? nextDocument.value : serializeValue(parsed.value);
       writeDraft(context.activity, descriptor.name, null);
       setDiagnostic(null);
-      onChange(parsed.value);
+      onChange(rawJson ? nextDocument.value : parsed.value);
     } else {
       writeDraft(context.activity, descriptor.name, nextDocument.value);
       setDiagnostic(toDiagnostic(parsed.error, uri));
@@ -195,6 +196,12 @@ function GenericObjectExpandedEditor({ descriptor, value, disabled = false, cont
       />
     </div>
   );
+}
+
+function formatJsonEditorValue(value: unknown, rawJson: boolean, wireJson: boolean) {
+  if (!rawJson) return formatValue(value);
+  if (wireJson && typeof value === "string") return value;
+  return JSON.stringify(value === undefined ? {} : value, null, 2) ?? "{}";
 }
 
 function formatValue(value: unknown): string {
@@ -238,8 +245,8 @@ function normalizeWireValue(value: unknown) {
   return parsed.ok ? parsed.value : value;
 }
 
-function diagnoseJson(value: string, uri: string) {
-  const parsed = parseStructuredJson(value);
+function diagnoseJson(value: string, uri: string, rawJson = false) {
+  const parsed = rawJson ? parseJson(value) : parseStructuredJson(value);
   return parsed.ok ? null : toDiagnostic(parsed.error, uri);
 }
 
