@@ -25,6 +25,8 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   const session = useAuthSession();
   const permissions = usePermissions();
   const registered = useMemo(() => api.homeWidgets.list(), [api]);
+  // Every installed widget, including those the backend, a feature gate or a permission keeps off this Home.
+  const contributedCount = useMemo(() => api.homeWidgets.compose({ includeUnavailable: true, includeHidden: true }).length, [api]);
   const enabledFeatures = api.runtime.enabledFeatures;
   const available = useMemo(
     () => registered.filter(widget =>
@@ -235,10 +237,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
             <StudioButton type="button" onClick={() => { setEditing(true); setPickerOpen(true); }}>Add widget</StudioButton>
           </div>
         ) : (
-          <div className="dashboard-empty" role="status">
-            <House size={22} />
-            <span>No installed module adds content to Home yet. Install or enable a module that contributes Home widgets, such as the workflow dashboard.</span>
-          </div>
+          <HomeUnavailable contributedCount={contributedCount} discoveryError={api.backendSession?.capabilities ? undefined : api.backendSession?.discoveryError} />
         )}
         {editing ? (
           <StudioButton type="button" className="home-add-slot" onClick={() => { setPickerOpen(true); setPickerQuery(""); }}>
@@ -255,6 +254,22 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
         </StudioDialog>
       ) : null}
     </section>
+  );
+}
+
+/** Home with nothing to show: no module contributes a widget, or the installed widgets are all unavailable here. */
+function HomeUnavailable({ contributedCount, discoveryError }: { contributedCount: number; discoveryError?: string }) {
+  const message = contributedCount === 0
+    ? "No installed module adds content to Home yet. Install or enable a module that contributes Home widgets, such as the workflow dashboard."
+    : discoveryError
+      ? "Home content is unavailable because the backend's capabilities could not be discovered."
+      : "The installed Home widgets need a backend capability, a module feature or a permission that this session lacks.";
+  return (
+    <div className="dashboard-empty" role="status">
+      <House size={22} />
+      <span>{message}</span>
+      {contributedCount > 0 && discoveryError ? <span className="home-unavailable-reason">{discoveryError}</span> : null}
+    </div>
   );
 }
 

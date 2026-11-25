@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
-import { AnonymousAuthProvider, createEndpointContext, registerHomeWidget, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, createEndpointContext, registerHomeWidget, type ElsaStudioModuleApi, type StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { findRouteForPath } from "../../App";
 import { loadStudioModules } from "../../loader";
 import { createStudioRegistry } from "../../registry";
@@ -49,6 +49,26 @@ describe("Home in the Studio shell", () => {
     expect(api.navigation.list().filter(item => item.placement === "main").map(item => item.label)).toEqual(["Home"]);
   });
 
+  it("tells a user whose backend lacks the capability that the installed widgets need it", async () => {
+    const api = await bootShell([workflowWidgetModule], { capabilities: { capabilities: [] } });
+    const container = renderRoute(api, "/");
+
+    await waitUntil(() => container.querySelector(".dashboard-empty") !== null);
+    expect(api.homeWidgets.list()).toEqual([]);
+    expect(container.textContent).toContain("The installed Home widgets need a backend capability, a module feature or a permission that this session lacks.");
+    expect(container.textContent).not.toContain("No installed module adds content to Home yet.");
+  });
+
+  it("reports failed backend discovery when the installed widgets cannot be admitted", async () => {
+    const api = await bootShell([workflowWidgetModule], { capabilities: null, discoveryError: "The backend at https://backend.example/ did not answer." });
+    const container = renderRoute(api, "/");
+
+    await waitUntil(() => container.querySelector(".dashboard-empty") !== null);
+    expect(container.textContent).toContain("Home content is unavailable because the backend's capabilities could not be discovered.");
+    expect(container.textContent).toContain("The backend at https://backend.example/ did not answer.");
+    expect(container.textContent).not.toContain("No installed module adds content to Home yet.");
+  });
+
   it("keeps /dashboard and /overview on Home for older links", async () => {
     const api = await bootShell([]);
     for (const path of ["/dashboard", "/overview"])
@@ -56,10 +76,23 @@ describe("Home in the Studio shell", () => {
   });
 });
 
-async function bootShell(modules: Array<{ id: string; register(api: ElsaStudioModuleApi): void }>) {
+/** A module whose Home widget needs a backend capability, as the workflow dashboard's widgets do. */
+const workflowWidgetModule = { id: "Acme.Workflows", register: (moduleApi: ElsaStudioModuleApi) => registerHomeWidget(moduleApi, {
+  id: "acme.runs",
+  moduleId: "Acme.Workflows",
+  title: "Runs",
+  requiresBackend: [{ id: "elsa.api.runtime", contractVersion: "1" }],
+  component: () => <p>Runs body</p>
+}) };
+
+async function bootShell(
+  modules: Array<{ id: string; register(api: ElsaStudioModuleApi): void }>,
+  backendSession?: Pick<StudioBackendSession, "capabilities" | "discoveryError">
+) {
   const enabledFeatures = modules.map(module => module.id);
   const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") }, {
     backendBaseUrl: "https://backend.example/",
+    backendSession: backendSession as StudioBackendSession | undefined,
     runtime: { hostId: "test", enabledFeatures }
   });
   await loadStudioModules(

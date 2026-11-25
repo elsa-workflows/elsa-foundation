@@ -24,7 +24,7 @@ export function widget(overrides: Partial<StudioDashboardWidgetContribution> = {
 export function stubApi(): ElsaStudioModuleApi {
   const makeRegistry = <T,>() => {
     const items: T[] = [];
-    return { add: (item: T) => items.push(item), list: () => items, compose: () => [], slot: { id: "test", kind: "test", owner: { kind: "host", id: "host" } } };
+    return { add: (item: T) => items.push(item), list: () => items, compose: () => items.map(contribution => ({ contribution, availability: { state: "available" } })), slot: { id: "test", kind: "test", owner: { kind: "host", id: "host" } } };
   };
   const widgets = makeRegistry();
   const notFound = async () => {
