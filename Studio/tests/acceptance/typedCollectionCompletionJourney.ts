@@ -1,4 +1,4 @@
-import { expect, type Page, type Response, type TestInfo } from "@playwright/test";
+import { expect, type Locator, type Page, type Response, type TestInfo } from "@playwright/test";
 import { activityDataSupport, attachActivityDataJson, type Capture } from "./activityDataJourneySupport";
 
 const customerAlias = "Elsa.Workbench.ActivityDataSelectionProof.Customer";
@@ -97,6 +97,7 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   await expect(list()).toHaveCount(0);
   await expect(editor).toHaveText("variables.orders[0].display_name");
   await settled("variables.orders[0].display_name");
+  await expectNoOverscroll(editor, "Applied item member");
   await capture(page, info, "collection-item-applied");
 
   // Hover on the item member carries the declared-type note.
@@ -143,4 +144,15 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   await expect.poll(inserted, { message: "The whole orders list is inserted and saved as a parameter" }).not.toBeNull();
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   await capture(page, info, "collection-member-picker");
+}
+
+/** A field scrolled sideways shows its text ending near its right edge, not a fragment followed by blank space. */
+async function expectNoOverscroll(editor: Locator, what: string) {
+  await expect.poll(() => editor.evaluate(content => {
+    const scroller = content.closest(".cm-scroller")!, line = content.querySelector(".cm-line")!;
+    if (scroller.scrollLeft === 0) return true;
+    const range = document.createRange(); range.selectNodeContents(line);
+    const end = range.getBoundingClientRect().right, visible = scroller.getBoundingClientRect();
+    return end <= visible.right + 1 && end >= visible.right - 24;
+  }), { message: `${what}: a scrolled field ends its text at its right edge` }).toBe(true);
 }

@@ -1,4 +1,4 @@
-import { expect, type Page, type Response, type TestInfo } from "@playwright/test";
+import { expect, type Locator, type Page, type Response, type TestInfo } from "@playwright/test";
 import { activityDataSupport, attachActivityDataJson, type Capture } from "./activityDataJourneySupport";
 
 const connectionAlias = "Elsa.Activities.Runtime.Core.Models.ConnectionReference";
@@ -130,6 +130,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await expect(list()).toHaveCount(0);
   await expect(compact).toHaveText("variables.conn.connection");
   await expect.poll(source).toBe("variables.conn.connection");
+  await expectNoOverscroll(compact, "Applied member");
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   await capture(page, info, "typed-member-applied");
 
@@ -222,4 +223,15 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
     return end > visible.left && end <= visible.right + 1;
   }), { message: "The end of the inserted reference is inside the editor's visible area" }).toBe(true);
   await capture(page, info, "chooser-typed-variable-whole");
+}
+
+/** A field scrolled sideways shows its text ending near its right edge, not a fragment followed by blank space. */
+async function expectNoOverscroll(editor: Locator, what: string) {
+  await expect.poll(() => editor.evaluate(content => {
+    const scroller = content.closest(".cm-scroller")!, line = content.querySelector(".cm-line")!;
+    if (scroller.scrollLeft === 0) return true;
+    const range = document.createRange(); range.selectNodeContents(line);
+    const end = range.getBoundingClientRect().right, visible = scroller.getBoundingClientRect();
+    return end <= visible.right + 1 && end >= visible.right - 24;
+  }), { message: `${what}: a scrolled field ends its text at its right edge` }).toBe(true);
 }
