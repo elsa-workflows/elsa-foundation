@@ -110,7 +110,7 @@ internal static class WorkbenchCorePreview
         if (publications && (nativeJobs || timedJobs))
             throw new InvalidOperationException(
                 "With Elsa:CorePreview:Publications on, the Core Preview runs on the shipped format, which carries Native jobs: leave NativeJobs and TimedNativeJobs off.");
-        // Format 24 runs no schedule actor, timers or child workflows yet, and the edge serves no wait routes: serving refuses
+        // Format 25 runs no schedule actor, timers or child workflows yet, and the edge serves no wait routes: serving refuses
         // a Timer, Cron, Delay, Dispatch Workflow and an HTTP Endpoint that waits where it maps them. Whether the node takes
         // self-sends is the store format's to say; without them a burst runs on to its next wait.
         var capabilities = new KernelHostCapabilities(Schedules: false, Timers: false, Children: false,
