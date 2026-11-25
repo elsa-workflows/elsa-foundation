@@ -15,7 +15,7 @@ internal static class PostgresPreviewLifetimeChecks
 
     internal static async Task<int> RunAsync()
     {
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(150));
         var token = deadline.Token;
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a dedicated PostgreSQL fixture database.");
@@ -111,7 +111,71 @@ internal static class PostgresPreviewLifetimeChecks
         await CheckStartupRetryAsync();
         await CheckDisposeDeadlineAsync(stuck: false);
         await CheckDisposeDeadlineAsync(stuck: true);
+        await CheckDisposeReportsOnceAsync();
+        await CheckJoinedDisposeKillsAsync();
         return 0;
+
+        // The first dispose to receive the stop's failure reports it; a second dispose does not throw it again.
+        async Task CheckDisposeReportsOnceAsync()
+        {
+            const string name = "dispose-report";
+            var admitted = await ingress.SendAsync(scope, new Contract.Target.Start(new(WaitingActor.Name, "fixture")),
+                name + "-start", Contract.Kinds.Start, cancellationToken: token);
+            Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, $"the {name} probe admits an independent root");
+            var held = new WaitingActor();
+            var service = new PostgresPreviewHostedService(Open, name, held, Environment.FailFast,
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25), DisposeDeadline = TimeSpan.FromSeconds(30) });
+            Exception? reported = null, again = null;
+            try
+            {
+                await service.StartAsync(token);
+                await held.Entered.Task.WaitAsync(token);
+                var first = service.DisposeAsync().AsTask();
+                await Task.Delay(300, token);
+                // A sibling takes the partition while the entered turn drains: the drain loses its fence.
+                await observer.Database.ExecuteSqlRawAsync("UPDATE \"Partitions\" SET \"Owner\" = 'dispose-thief', \"Epoch\" = \"Epoch\" + 1", token);
+                try { await first.WaitAsync(token); }
+                catch (Exception error) when (!token.IsCancellationRequested) { reported = error; }
+                try { await service.DisposeAsync().AsTask().WaitAsync(token); }
+                catch (Exception error) when (!token.IsCancellationRequested) { again = error; }
+            }
+            finally { held.Release.TrySetResult(); }
+            Require(reported is Kernel.Runtime.ScopeOwnershipLostException && again is null,
+                $"the first dispose reports the lost fence and a second dispose does not rethrow it ({reported?.GetType().Name ?? "nothing"}, then {again?.GetType().Name ?? "nothing"})");
+        }
+
+        // A dispose that joins a stop already under way kills it at the dispose deadline: no escalation, fence left for expiry.
+        async Task CheckJoinedDisposeKillsAsync()
+        {
+            const string name = "dispose-joins";
+            var admitted = await ingress.SendAsync(scope, new Contract.Target.Start(new(WaitingActor.Name, "fixture")),
+                name + "-start", Contract.Kinds.Start, cancellationToken: token);
+            Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, $"the {name} probe admits an independent root");
+            var held = new WaitingActor();
+            var escalation = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var service = new PostgresPreviewHostedService(Open, name, held, reason => escalation.TrySetResult(reason),
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25), DisposeDeadline = TimeSpan.FromMilliseconds(500) });
+            using var application = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            Task? stopping = null;
+            try
+            {
+                await service.StartAsync(token);
+                await held.Entered.Task.WaitAsync(token);
+                stopping = service.StopAsync(application.Token);     // a stop with a distant deadline is under way
+                await Task.Delay(300, token);
+                await service.DisposeAsync().AsTask().WaitAsync(token);
+                await Task.Delay(500, token);
+                Require(!escalation.Task.IsCompleted && stopping.IsCompleted && (await ReadFenceAsync()).Owner == name && !held.Release.Task.IsCompleted,
+                    "a dispose that joins a stop under way kills it at its deadline without escalation, and leaves the fence for expiry");
+            }
+            finally
+            {
+                held.Release.TrySetResult();
+                if (stopping is not null)
+                    try { await stopping.WaitAsync(token); }
+                    catch (Exception) when (!token.IsCancellationRequested) { }
+            }
+        }
 
         // Dispose without StopAsync (a later hosted service failed to start) is bounded by the dispose deadline, which kills
         // the stop. A stop that the kill ends promptly does not escalate; one that stays stuck past the grace does.

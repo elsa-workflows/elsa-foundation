@@ -47,7 +47,9 @@ internal static class HostJobDrainChecks
             ("turn-drain-fault", TurnDrainFaultAsync),
             ("drain-outcomes", DrainOutcomesAsync),
             ("pending-worker", PendingWorkerAsync),
-            ("answer-fault", AnswerFaultAsync),
+            ("answer-fault", () => AnswerFaultAsync(new InvalidOperationException("injected answer fault"))),
+            ("answer-definite-store-error", () => AnswerFaultAsync(new StoreException(Failure.Definite, "injected definite store failure"))),
+            ("turn-drain-pending", TurnDrainPendingAsync),
         ];
         // HOST_JOB_DRAIN_ONLY=name[,name]: run only these cases (fail-before witnesses run them one at a time).
         var only = Environment.GetEnvironmentVariable("HOST_JOB_DRAIN_ONLY")?.Split(',', StringSplitOptions.RemoveEmptyEntries);
@@ -1244,17 +1246,106 @@ internal static class HostJobDrainChecks
     private static async Task TurnDrainFaultAsync()
     {
         var fixture = new Fixture();
+        var type = new JobProbe();
         var fault = new InvalidOperationException("injected turn drain fault");
         var node = new RuntimeNode("turn-drain-fault", fixture.Store, 1, new LoopOptions
         {
             BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
         }, beforeRelease: _ => Task.FromException(fault));
-        await node.StartAsync(fixture.Host(node, new JobProbe(), fixture.Store, ownedSet: true));
-        await WaitFor(() => fixture.Fence.Owner == node.Node);
-        var reported = await OutcomeAsync(node.StopAsync().AsTask());
+        await node.StartAsync(fixture.Host(node, type, fixture.Store, ownedSet: true));
+        await fixture.StartActorAsync(node);
+        await type.Entered.Task.WaitAsync(Timeout);
+        var stop = node.StopAsync().AsTask();
+        bool canceled, waited;
+        try
+        {
+            canceled = await Task.WhenAny(type.Canceled.Task, Task.Delay(TimeSpan.FromSeconds(3))) == type.Canceled.Task;
+            await Task.Delay(200);
+            waited = !stop.IsCompleted;
+        }
+        finally { type.Finish.TrySetResult(); }
+        var reported = await OutcomeAsync(stop);
         await DisposeQuietlyAsync(node);
+        Check(canceled && waited && type.Exited.Task.IsCompleted,
+            "a turn drain fault still cancels the entered job and waits for it to exit before the stop ends");
         Check(ReferenceEquals(reported, fault) && fixture.Fence.Owner == node.Node,
             $"a turn drain fault abandons the run: the stop reports it and releases nothing ({reported?.Message ?? "no error"}, owner {fixture.Fence.Owner ?? "none"})");
+    }
+
+    // The turn drain: a Worker whose own drain fails with a lost fence (its short guard expired) keeps getting the drain's
+    // pass, so the gate stays open while the other Worker's entered turn drains on past two leases.
+    private static async Task TurnDrainPendingAsync()
+    {
+        const int partitions = 2;
+        var fixture = new Fixture(partitions, manualClock: true);
+        TurnProbe[] types = [new(), new()];
+        var lease = fixture.Options.Lease;
+        var shortLease = fixture.Options with { Lease = TimeSpan.FromSeconds(2) };
+        var workers = Enumerable.Range(0, partitions).Select(partition => new Worker("turn-pending", partition, fixture.Store,
+            new ActorAdapter(fixture.Store, types[partition]), partition == 1 ? shortLease : fixture.Options)).ToArray();
+        var host = new DurableHost(workers);
+        var node = new RuntimeNode("turn-pending", fixture.Store, partitions, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, beforeRelease: host.DrainEnteredTurnsAsync);
+        await node.StartAsync(host);
+        await WaitFor(() => fixture.Store.Partitions.All(row => row.Owner == node.Node));
+        for (var key = 0; key < 32 && !types.All(type => type.Entered.Task.IsCompleted); key++)
+        {
+            await fixture.StartActorAsync(node.Node, "turn-" + key, TurnProbe.TypeKey);
+            await Task.Delay(100);
+        }
+        Check(types.All(type => type.Entered.Task.IsCompleted), "each of the two Workers has an entered turn");
+        var epoch = fixture.Store.Partitions[0].Epoch;
+        var stop = node.StopAsync().AsTask();
+        try
+        {
+            await Task.Delay(300);
+            fixture.Advance(TimeSpan.FromSeconds(3));     // Worker 1's short guard expires: its own turn drain fails with a lost fence
+            await WaitFor(() => !workers[1].Owns);
+            var every = true;
+            for (var moved = TimeSpan.Zero; moved < lease * 2 + TimeSpan.FromSeconds(5); moved += TimeSpan.FromSeconds(1))
+            {
+                var renewed = node.Heartbeats.Renewed;
+                fixture.Advance(TimeSpan.FromSeconds(1));
+                every &= await RenewedAsync(node, renewed);
+                await Task.Delay(500);     // the entered turn's own drain passes on the real clock, every third of its lease
+            }
+            var sibling = await fixture.Store.TakeAsync(0, "sibling", lease);
+            Console.WriteLine($"  turn drain pending: renewed every step {every}, sibling took {sibling?.Epoch.ToString() ?? "none"}, renewals {node.Heartbeats.Renewed}");
+            Check(every && sibling is null && fixture.Store.Partitions[0].Owner == node.Node && fixture.Store.Partitions[0].Epoch == epoch && !stop.IsCompleted,
+                "in the turn drain, a Worker whose drain lost its fence keeps the gate open while the other Worker's turn drains past two leases");
+        }
+        finally
+        {
+            foreach (var type in types) type.Release.TrySetResult();
+        }
+        await OutcomeAsync(stop);
+        await DisposeQuietlyAsync(node);
+        Check(fixture.Store.Partitions[0].Owner is null && fixture.Store.Partitions[0].Epoch == epoch,
+            "after the turn ends, its partition is released at its original epoch");
+    }
+
+    /// <summary>An actor whose start turn stays entered until released, whatever the cancellation.</summary>
+    private sealed class TurnProbe : Contract.IActorType
+    {
+        internal const string TypeKey = "host-drain-turn-probe";
+        internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public string Type => TypeKey;
+        public bool Withholds(Contract.ActorHeader header) => false;
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public async ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            if (!turn.Inbox.Any(message => message.Kind == Contract.Kinds.Start)) return;
+            Entered.TrySetResult();
+            await Release.Task;
+            turn.State = Json.Write("released");
+        }
     }
 
     // The drain's outcome inspection on its own: a fault wins over a loss, a loss alone is reported as a loss, and a drain
@@ -1324,11 +1415,10 @@ internal static class HostJobDrainChecks
 
     // An error other than a store error while a drain round judges an answer is not retried: it faults the drain and the
     // run is abandoned.
-    private static async Task AnswerFaultAsync()
+    private static async Task AnswerFaultAsync(Exception fault)
     {
         var fixture = new Fixture();
         var type = new JobProbe();
-        var fault = new InvalidOperationException("injected answer fault");
         var armed = 1;
         var options = fixture.Options with { BeforeDrainAnswer = () => { if (Interlocked.Exchange(ref armed, 0) == 1) throw fault; } };
         var node = fixture.Node("answer-fault");
@@ -1346,7 +1436,7 @@ internal static class HostJobDrainChecks
         var reported = await OutcomeAsync(stop);
         await DisposeQuietlyAsync(node);
         Check(ReferenceEquals(reported, fault) && fixture.Fence.Owner == node.Node,
-            $"a non-store error while the drain judges an answer faults the drain and releases nothing ({reported?.Message ?? "no error"}, owner {fixture.Fence.Owner ?? "none"})");
+            $"an error other than a transient store error while the drain judges an answer faults the drain and releases nothing ({fault.GetType().Name}: {reported?.Message ?? "no error"}, owner {fixture.Fence.Owner ?? "none"})");
     }
 
     private static async Task<Exception?> OutcomeAsync(Task task)
@@ -1432,11 +1522,11 @@ internal static class HostJobDrainChecks
 
         internal Task<Contract.ActorRef> StartActorAsync(RuntimeNode node, string key = "drain") => StartActorAsync(node.Node, key);
 
-        internal async Task<Contract.ActorRef> StartActorAsync(string node, string key = "drain")
+        internal async Task<Contract.ActorRef> StartActorAsync(string node, string key = "drain", string type = JobProbe.TypeKey)
         {
             var first = key == "drain";
             var ingress = new InMemoryIngress(Store, new Requests(first ? "job-drain" : "job-drain-" + key), node);
-            var receipt = await ingress.SendAsync(Scope, new Contract.Target.Start(new(JobProbe.TypeKey, key, History: Contract.History.Full)),
+            var receipt = await ingress.SendAsync(Scope, new Contract.Target.Start(new(type, key, History: Contract.History.Full)),
                 first ? "start" : "start-" + key, Contract.Kinds.Start);
             if (receipt is not { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } actor })
                 throw new InvalidOperationException("The test actor must start normally.");
