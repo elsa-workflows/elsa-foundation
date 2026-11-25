@@ -401,6 +401,7 @@
         "blockedBy",
         "published",
         "exportedTo",
+        "wrapperExportedTo",
         "findings"
       ],
       "properties": {

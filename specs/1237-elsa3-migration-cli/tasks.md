@@ -280,8 +280,10 @@
   (`Elsa3SwitchValueSynthesisRewrite`), the Fork join-mode message, which can quote a typed value's raw text
   (`Elsa3ParallelBranchNamesRewrite`), the HTTP status literal message of the `EnumNameToInt` value contract (no built-in
   entry uses it, so its unit test builds that rule directly) and the `exception.Message` pass-throughs (`Elsa3ActivityNormalizer`, `Elsa3DefinitionConverter`), the JavaScript and Liquid safe-lowering parse
-  messages (`Elsa3ExpressionRewriter`), and the variable starting-value messages and the guidance that builds a
-  suggestion from the value's items (`Elsa3VariableMapper`). Give each changed site a unit test whose input carries
+  messages (`Elsa3ExpressionRewriter`), the variable starting-value messages and the guidance that builds a
+  suggestion from the value's items (`Elsa3VariableMapper`), and the `LiteralDateInterpreted` note, which quotes the
+  literal, its interpreted value and the source time-zone setting (`Elsa3LiteralConversion`; its test sets the
+  date-interpretation setting and puts the sentinel in a date literal and in the zone). Give each changed site a unit test whose input carries
   `SENTINEL-1237` and assert the sentinel is absent from message and guidance; the fixture sentinel test (T029) only
   covers the paths the fixture triggers. For codes the
   converter does not own, the report builder uses the code table's fixed text (T004), never the Elsa 4 message. Unit-test

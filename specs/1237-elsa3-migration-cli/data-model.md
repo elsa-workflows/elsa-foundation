@@ -59,7 +59,7 @@ Findings within a definition are ordered by stage, then path, then code, all ord
 `definitionId`, `name`, `version`, `sourceVersionId`, `isReusable`, `bucket`, `blockedBy` (the source version ids of
 the **root** refused definitions, the ones refused for a finding of their own, reached through any chain of
 dependencies; empty when not blocked), `published` (boolean), `exportedTo` (a path relative to `--out`, or `null`; for a reusable, the activities file), `wrapperExportedTo` (for a
-reusable, the path of its wrapper workflow file, or `null`), and `findings`.
+reusable, the path of its wrapper workflow file; `null` otherwise, always written like `exportedTo`), and `findings`.
 
 **Bucket rule** (FR-017): `incompatible` if any finding has remedy `none`. Otherwise `convert-as-is` if there is no
 `mustFix` and no `reconsider` finding. Otherwise `convert-with-adjustments`. A blocked definition has no own error

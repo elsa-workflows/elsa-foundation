@@ -89,7 +89,9 @@ instead of returning a result, and it is registered only by `Elsa3JsonReconcilia
   literals (`Elsa3SwitchValueSynthesisRewrite.cs`), the Fork join-mode message can quote a whole typed value
   (`Elsa3ParallelBranchNamesRewrite.cs`), the HTTP status message of the `EnumNameToInt` value contract quotes the literal
   (`Elsa3ActivityNormalizer.cs`; no built-in map entry uses that contract today), the variable starting-value messages echo the value and one guidance builds a
-  suggestion from its items (`Elsa3VariableMapper.cs`), and several sites pass `exception.Message` through
+  suggestion from its items (`Elsa3VariableMapper.cs`), the date-interpretation note quotes the literal, its interpreted value and the
+  source time-zone setting (`Elsa3LiteralConversion.cs`, `LiteralDateInterpreted`), and several sites pass
+  `exception.Message` through
   (`Elsa3ActivityNormalizer.cs`, `Elsa3DefinitionConverter.cs`).
 - Publish refusals come from Elsa 4 (`ExpressionPublicationValidationException`, `WorkflowExecutableCompilationException`,
   `PublicationActivationException`). Their diagnostics use Elsa 4 codes.
