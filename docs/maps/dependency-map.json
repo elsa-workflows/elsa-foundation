@@ -25857,8 +25857,18 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime",
+          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.KernelHost",
           "path": "essentials/src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.TimeProvider.Testing",
+          "version": "10.8.0"
         },
         {
           "type": "external",
