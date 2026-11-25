@@ -182,7 +182,8 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     // authoring context replaces the initial local-only providers so the visible document can
     // immediately acquire the newly available signature.
     view.dispatch({ selection: view.state.selection });
-    if (view.hasFocus) keepCaretInEditorView(view);
+    // A reclaimed compact view starts at the left edge; a field the author scrolled sideways keeps its position.
+    if (view.hasFocus && view.scrollDOM.scrollLeft === 0) keepCaretInEditorView(view);
   }, [props.completionProvider, props.completions, props.hoverProvider, props.signatureProvider]);
 
   return (
@@ -204,22 +205,28 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
  */
 function keepCaretInEditorView(view: EditorView) {
   view.requestMeasure({
+    // One pending correction per view: both refresh paths may ask in the same frame.
+    key: caretInViewMeasure,
     read: current => {
       try {
         const caret = current.coordsAtPos(current.state.selection.main.head);
-        return caret && { caret, box: current.scrollDOM.getBoundingClientRect() };
+        if (!caret) return null;
+        const box = current.scrollDOM.getBoundingClientRect(), margin = 8, scrollLeft = current.scrollDOM.scrollLeft;
+        // An absolute target, so a repeated correction cannot add up.
+        if (caret.right > box.right) return scrollLeft + caret.right - box.right + margin;
+        if (caret.left < box.left) return Math.max(0, scrollLeft - (box.left - caret.left) - margin);
+        return null;
       } catch {
         return null; // Environments without layout (jsdom) cannot measure; nothing to correct.
       }
     },
-    write: (measured, current) => {
-      if (!measured) return;
-      const { caret, box } = measured, margin = 8;
-      if (caret.right > box.right) current.scrollDOM.scrollLeft += caret.right - box.right + margin;
-      else if (caret.left < box.left) current.scrollDOM.scrollLeft -= box.left - caret.left + margin;
+    write: (target, current) => {
+      if (target !== null) current.scrollDOM.scrollLeft = target;
     }
   });
 }
+
+const caretInViewMeasure = {};
 
 function claimCompactView(entry: CodeMirrorSessionEntry, profile: StudioCodeEditorEngineProps["profile"], container: HTMLElement) {
   if (profile !== "compact" || !parkedCompactView) return undefined;
