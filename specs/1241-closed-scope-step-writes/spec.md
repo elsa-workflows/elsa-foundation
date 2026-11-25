@@ -156,8 +156,9 @@ A team migrating from Elsa 3 imports reusable workflows whose scripts set their 
   value as it does for a frame.
 - A write whose value does not match the variable's type, or a transient variable written by a step that can suspend:
   the step faults, as in a workflow.
-- An operator retry, re-execution or accepted recorded completion of a faulted body step: it applies the recorded or
-  repeated row writes under the same rules as frame writes.
+- An operator retry or re-execution of a faulted body step runs the step again, and its writes meet the same rule. A
+  refused completion that wrote body variables is not recorded for acceptance, as for a capture into a body variable
+  today.
 
 ## Requirements *(mandatory)*
 
@@ -176,8 +177,10 @@ A team migrating from Elsa 3 imports reusable workflows whose scripts set their 
   `SessionChange`, as a frame write does, readable through the existing variable-lifecycle inspection routes.
 - **FR-006**: A step's own body variable write MUST advance its base for that variable, so its own later capture or
   write into the same variable does not conflict with it.
-- **FR-007**: A step's capture into a body variable it also wrote through its session MUST be judged against the row as
-  the session write left it, so the capture wins without a conflict between the two.
+- **FR-007**: The writes of one step commit into the same body variable MUST be judged in order (session writes, then
+  captures), each against the row as the previous one left it. A capture into a body variable the step also wrote
+  through its session therefore wins without a conflict between the two, and two captures of one completion into the
+  same body variable no longer both judge against the stored row.
 - **FR-008**: Reads of a body variable within the step MUST return the step's own pending write (read-your-writes), and
   later body steps MUST read the committed value.
 - **FR-009**: Graph body validation and compilation MUST count step writers (writable references, marked types and
