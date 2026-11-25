@@ -126,7 +126,9 @@ internal static partial class ContractActorWorkload
         }
 
         async Task<string?> Version(Contract.ActorRef reference) =>
-            (await driver.Reads.GetAsync(scope, reference))?.Header.Labels.GetValueOrDefault("version");
+            (await driver.Reads.GetAsync(scope, reference))?.Header is { } header
+                ? System.Text.Json.Nodes.JsonNode.Parse(header.TypeData)?["Version"]?.ToJsonString()
+                : null;
 
         Task<List<CounterEntry>> CounterJournal(Contract.ActorRef reference) =>
             Entries<CounterEntry>(driver, scope, reference, nameof(CounterEntry.Ordinal));

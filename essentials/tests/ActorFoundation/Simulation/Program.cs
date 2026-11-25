@@ -53,6 +53,12 @@ if (args.Contains("--schedule-check"))
     await ScheduleChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--label-check"))
+{
+    var failed = false;
+    await LabelChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--native-tenant-effects-check"))
 {
     var failed = false;

@@ -69,8 +69,11 @@ public sealed record GraphInput(string Name, bool Required = false, Binding? Def
 /// <summary>A local variable of a GraphActivity's body, initialized where its inputs are visible.</summary>
 public sealed record GraphVariable(string Name, Binding? Value = null);
 
-/// <summary>An output of a GraphActivity, read where its inputs and variables are visible when it completes.</summary>
-public sealed record GraphOutput(string Name, Binding Value);
+/// <summary>
+/// An output of a GraphActivity: its mapping, read where its inputs and variables are visible when it completes, or, with
+/// none, what a Set Output in its body assigns it. A required one with neither faults the boundary, as on the old core.
+/// </summary>
+public sealed record GraphOutput(string Name, Binding? Value = null, bool Required = false);
 
 /// <summary>A flowchart connection from a source's outcome to a target.</summary>
 public sealed record Connection(string Source, string Target, string Outcome = "Done");
@@ -115,6 +118,9 @@ public sealed class Workflow
             if (node.Type == typeof(GraphActivity)) GraphActivity.Validate(node, id);
             else if (node.Graph is not null) throw new InvalidOperationException($"Node '{node.Id}' in '{id}' declares a boundary and is no GraphActivity.");
             if (node.Type == typeof(Complete)) GraphActivity.ValidateExit(node, Boundary(parent), id);
+            if (node.Type == typeof(SetOutput)) GraphActivity.ValidateOutput(node, Boundary(parent), id);
+            if (node.Type == typeof(Finish) && !(node.Inputs.GetValueOrDefault("Outcome") is LiteralBinding { Value: JsonValue outcome } && outcome.TryGetValue<string>(out var named) && !string.IsNullOrWhiteSpace(named)))
+                throw new InvalidOperationException($"Finish '{node.Id}' in '{id}' needs a literal outcome.");
             if (parent is not null) Parents[node.Id] = parent;
             foreach (var child in node.Children) Index(child, node);
         }

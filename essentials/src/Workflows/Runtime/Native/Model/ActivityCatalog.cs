@@ -27,8 +27,8 @@ public sealed class NativeActivityUnsupportedException(string node, string activ
 /// and the mapping onto the kernel refuses a definition that holds one (<see cref="Resolve"/>), since availability decides
 /// only what can be added (ADR 0026), and an imported or older definition can still hold a hidden activity. A published node
 /// may carry an activity's declared type key (<c>Elsa.HttpEndpoint</c>) where the catalog has its CLR name; both resolve.
-/// The engine intrinsics (Set Variable and the others) are placed as intrinsic nodes, not catalog activities, and are
-/// mapped outside this list.
+/// The engine intrinsics the palette always offers are placed as intrinsic nodes, not catalog activities; all five run
+/// (owner decision of 25 November), mapped by their intrinsic keys (<see cref="Intrinsics"/>).
 /// </summary>
 public static class NativeActivityCatalog
 {
@@ -94,10 +94,22 @@ public static class NativeActivityCatalog
     /// <summary>The designer activities the kernel runs, by catalog type key, to their Native types.</summary>
     public static IReadOnlyDictionary<string, Type> Supported => Runs;
 
-    /// <summary>The Native type that runs a designer activity, by its catalog or declared type key; a hidden or unknown one is refused, naming the node.</summary>
+    private static readonly Dictionary<string, Type> IntrinsicTypes = new(StringComparer.Ordinal)
+    {
+        ["Elsa.SetVariable"] = typeof(SetVariable),
+        ["Elsa.SetOutput"] = typeof(SetOutput),
+        ["Elsa.SetCorrelationId"] = typeof(SetCorrelationId),
+        ["Elsa.SetInstanceName"] = typeof(SetInstanceName),
+        ["Elsa.Finish"] = typeof(Finish),
+    };
+
+    /// <summary>The engine intrinsics the palette offers, by their intrinsic keys, to the Native types that run them.</summary>
+    public static IReadOnlyDictionary<string, Type> Intrinsics => IntrinsicTypes;
+
+    /// <summary>The Native type that runs a designer activity or intrinsic, by its catalog, declared or intrinsic key; a hidden or unknown one is refused, naming the node.</summary>
     public static Type Resolve(string activityType, string node)
     {
         var key = Declared.GetValueOrDefault(activityType) ?? activityType;
-        return Runs.TryGetValue(key, out var type) ? type : throw new NativeActivityUnsupportedException(node, activityType, Unsupported.Contains(key, StringComparer.Ordinal));
+        return Runs.TryGetValue(key, out var type) || IntrinsicTypes.TryGetValue(key, out type) ? type : throw new NativeActivityUnsupportedException(node, activityType, Unsupported.Contains(key, StringComparer.Ordinal));
     }
 }

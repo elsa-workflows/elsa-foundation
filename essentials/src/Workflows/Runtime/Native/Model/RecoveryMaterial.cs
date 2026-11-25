@@ -26,7 +26,7 @@ internal static class NativeRecoveryMaterial
     {
         ["Inputs"] = new JsonArray(g.Inputs.Select(i => (JsonNode?)new JsonObject { ["Name"] = i.Name, ["Required"] = i.Required, ["Default"] = DescribeBinding(i.Default) }).ToArray()),
         ["Variables"] = new JsonArray(g.Variables.Select(v => (JsonNode?)new JsonObject { ["Name"] = v.Name, ["Value"] = DescribeBinding(v.Value) }).ToArray()),
-        ["Outputs"] = new JsonArray(g.Outputs.Select(o => (JsonNode?)new JsonObject { ["Name"] = o.Name, ["Value"] = DescribeBinding(o.Value) }).ToArray()),
+        ["Outputs"] = new JsonArray(g.Outputs.Select(o => (JsonNode?)new JsonObject { ["Name"] = o.Name, ["Value"] = DescribeBinding(o.Value), ["Required"] = o.Required }).ToArray()),
         ["OutcomeMappings"] = new JsonObject(g.OutcomeMappings.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => KeyValuePair.Create(p.Key, (JsonNode?)p.Value))),
         ["CompleteOutcomes"] = new JsonObject(g.CompleteOutcomes.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => KeyValuePair.Create(p.Key, (JsonNode?)p.Value))),
     };
