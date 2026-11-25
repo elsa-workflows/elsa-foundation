@@ -490,7 +490,6 @@ public sealed class Elsa3VariableWriteConversionTests
 
     [Theory]
     [InlineData("setVariable('Amount', 5); return 1;", "setVariable")]
-    [InlineData("setVariable('amount', 5); return 1;", "setVariable")]
     [InlineData("setAmount(5); return 1;", "setAmount")]
     public async Task A_write_to_a_reusable_workflows_input_is_refused_with_guidance(string source, string callee)
     {
@@ -513,6 +512,8 @@ public sealed class Elsa3VariableWriteConversionTests
     [Theory]
     [InlineData("setAmount(5); return 1;")]
     [InlineData("setVariable('Amount', 5); return 1;")]
+    [InlineData("getVariable('Amount').x = 1; return 1;")]
+    [InlineData("variables.Amount.x = 1; return 1;")]
     public async Task A_reusable_setter_named_like_both_an_input_and_a_variable_is_ambiguous(string source)
     {
         // Elsa 3 declared a reusable workflow's inputs as variables too, so the name names two variables there.
@@ -524,6 +525,20 @@ public sealed class Elsa3VariableWriteConversionTests
 
         Assert.False(result.Succeeded);
         Assert.Equal(Elsa3ImportDiagnosticCodes.AmbiguousReference, Assert.Single(result.Diagnostics, item => item.IsError).Code);
+    }
+
+    [Fact]
+    public async Task A_reusable_setVariable_matching_an_input_only_in_letter_case_is_an_undeclared_variable()
+    {
+        // Only the input's exact name is the input Elsa 3 held as a variable; another spelling created a new variable there.
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("setVariable('amount', 5); return 1;"))));
+        var definition = ConversionServices.Definition(root, variables: [Total]);
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.SetterOfUndeclaredVariable, Assert.Single(result.Diagnostics, item => item.IsError).Code);
     }
 
     [Theory]
