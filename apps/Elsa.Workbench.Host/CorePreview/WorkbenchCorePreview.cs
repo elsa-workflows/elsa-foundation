@@ -74,7 +74,12 @@ internal static class WorkbenchCorePreview
                 {
                     [shell] = new System.Text.Json.Nodes.JsonObject
                     {
-                        ["Features"] = new System.Text.Json.Nodes.JsonObject { [WorkflowsRuntimeKernelFeature.FeatureName] = new System.Text.Json.Nodes.JsonObject() },
+                        // The kernel serves the shell's publications, and its runtime API's run list lists the kernel's runs.
+                        ["Features"] = new System.Text.Json.Nodes.JsonObject
+                        {
+                            [WorkflowsRuntimeKernelFeature.FeatureName] = new System.Text.Json.Nodes.JsonObject(),
+                            [Elsa.Workflows.Runtime.KernelApi.WorkflowsRuntimeKernelApiFeature.FeatureName] = new System.Text.Json.Nodes.JsonObject()
+                        },
                     },
                 },
             },
@@ -170,6 +175,10 @@ internal static class WorkbenchCorePreview
             edge = new KernelHttpEdgeHost(serving!, Open, requests, EmbeddedTenant.Bind(edgeTenant),
                 KernelHttpEdgeHost.NormalizeBasePath(configuration[KernelHttpEdgeHost.BasePathKey]), timeout, maxBody);
             services.AddSingleton(edge);
+            // The kernel shell's Runs list reads the kernel's runs of this tenant through the edge's foundation.
+            var runsEdge = edge;
+            services.AddSingleton(new KernelRuns(EmbeddedTenant.Bind(edgeTenant),
+                async token => await runsEdge.FoundationAsync(token)));
         }
         services.AddHostedService(provider =>
         {

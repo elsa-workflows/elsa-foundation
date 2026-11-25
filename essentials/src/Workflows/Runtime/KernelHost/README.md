@@ -18,6 +18,8 @@ the Native model's definitions.
   - the `HttpRoutes` and `NativeSchedules` built over the serving set;
   - `ServedWorkflow`, which a host passes as `NativeExecutionOptions.ServedWorkflow` so that a Dispatch reaches the
     version its definition serves.
+- `KernelRuns` is the host-shared run reads: the foundation's reads and the tenant the host binds them to. The
+  `WorkflowsRuntimeKernelApi` feature (`Elsa.Workflows.Runtime.KernelApi`) lists a kernel shell's runs from it.
 - `IScheduleActors` is how the coordinator reaches the schedule actors. `IngressScheduleActors` implements it on the
   host's ingress.
 - `KernelTriggerBindingExtractor` reports no old-core triggers, so the publication preflight checks only the slot.

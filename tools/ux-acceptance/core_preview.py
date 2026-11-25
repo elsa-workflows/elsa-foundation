@@ -41,7 +41,8 @@ EVIDENCE = {
 }
 JOURNEYS = set(CAPTURES)
 # The tenant the Workbench's kernel edge starts workflows in, and its reads list from.
-TENANT = 'ux-core-preview'
+# The seeded administrator's tenant: the kernel's runs are visible to Studio only in the tenant the host binds.
+TENANT = 'default'
 POSTGRES_IMAGE = os.environ.get('UX_CORE_PREVIEW_POSTGRES_IMAGE', 'postgres:17')
 DATABASE = 'ux_core_preview'
 # The Workbench logs one of these once the default shell's publications are served on the kernel, before its node runs.

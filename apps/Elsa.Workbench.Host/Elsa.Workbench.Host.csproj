@@ -192,6 +192,7 @@
 		<ProjectReference Include="../../essentials/src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />
 		<ProjectReference Include="../../essentials/src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
 		<ProjectReference Include="../../essentials/src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
+		<ProjectReference Include="../../essentials/src/Workflows/Runtime/KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
 		<ProjectReference Include="../../essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
 		<!--
 			Hosts the WorkflowsRuntimeAttention and WorkflowsRuntimeTracing features. Tracing swaps the no-op

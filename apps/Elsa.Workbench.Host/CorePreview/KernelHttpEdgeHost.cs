@@ -113,7 +113,8 @@ internal sealed class KernelHttpEdgeHost(KernelServing serving, Func<KernelDb> o
         return KernelHttpEdge.Answer(reply);
     }
 
-    private async ValueTask<PostgresPreviewFoundation> FoundationAsync(CancellationToken token)
+    /// <summary>The foundation the edge requests through, opened once when first needed; the kernel's run reads use it too.</summary>
+    internal async ValueTask<PostgresPreviewFoundation> FoundationAsync(CancellationToken token)
     {
         if (Volatile.Read(ref _foundation) is { } opened) return opened;
         await _opening.WaitAsync(token);

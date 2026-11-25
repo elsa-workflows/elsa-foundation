@@ -6,6 +6,9 @@ using Kernel.Model.Contracts;
 
 namespace Kernel.WorkflowActor;
 
+/// <summary>What a workflow actor's header says about its run (<see cref="WorkflowActor.DescribeRun"/>).</summary>
+public sealed record WorkflowRunHeader(string Model, string Workflow, string Definition, bool Suspended, string? SubStatus, DateTimeOffset? StartedAt);
+
 /// <summary>Runs workflow models through the public actor contract.</summary>
 public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
 {
@@ -84,7 +87,9 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
             await reader!.MetadataAsync(modelTurn, header.Status, header.EndedAt, cancellationToken);
 
         turn.State = JsonSerializer.Serialize(modelTurn.State, model.StateType);
-        WriteHeader(turn, workflow, modelTurn.Workflow with { Version = model.StateVersion }, modelLabels: modelTurn.LabelsChanged ? modelTurn.Labels : null);
+        // The turn that creates the state is the run's start: its time is kept in the header, which reads list runs by.
+        WriteHeader(turn, workflow, modelTurn.Workflow with { Version = model.StateVersion, StartedAt = modelTurn.Workflow.StartedAt ?? turn.Now },
+            modelLabels: modelTurn.LabelsChanged ? modelTurn.Labels : null);
         if (header.Status == ActorStatus.Running && modelTurn.Status != ActorStatus.Running)
             turn.End(modelTurn.Status, modelTurn.Output);
     }
@@ -201,9 +206,27 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
     /// <param name="Workflow">The workflow the model runs; a migration rebinds it.</param>
     /// <param name="Definition">The definition it is a version of, when not itself: the <c>definition</c> label.</param>
+    /// <param name="StartedAt">When the run started, in Unix milliseconds: the time of the turn that created its state.</param>
     private sealed record WorkflowHeader(string Model, string Workflow, int? Version, bool Suspended = false,
         string? SubStatus = null, bool Ephemeral = false, History History = History.Full,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Definition = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Definition = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? StartedAt = null);
+
+    /// <summary>
+    /// What a workflow actor's header says about its run, for reads that list runs: the workflow it runs (an artifact on a
+    /// publishing host), the definition that is a version of, whether it is suspended, its sub-status (a fault's code), and
+    /// when it started; or null when <paramref name="header"/> is not a workflow actor's.
+    /// </summary>
+    public static WorkflowRunHeader? DescribeRun(ActorHeader header)
+    {
+        ArgumentNullException.ThrowIfNull(header);
+        if (header.Type != ActorType) return null;
+        WorkflowHeader? workflow;
+        try { workflow = JsonSerializer.Deserialize<WorkflowHeader>(header.TypeData); }
+        catch (JsonException) { return null; }
+        return workflow is null ? null : new(workflow.Model, workflow.Workflow, workflow.Definition ?? workflow.Workflow,
+            workflow.Suspended, workflow.SubStatus, workflow.StartedAt is { } started ? DateTimeOffset.FromUnixTimeMilliseconds(started) : null);
+    }
 
     private sealed record WorkflowJobArguments(string Model, string? Arguments);
 
