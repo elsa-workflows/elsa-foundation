@@ -162,11 +162,23 @@ public sealed partial class EfStore
                     AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
                     AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
                     AND NEW."History" IS NOT DISTINCT FROM OLD."History")
+                """ : db.UsesRootParkedOperators ? """
+                (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND OLD."FoundationParkAt" IS NOT NULL
+                    AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationTerminalRevision" IS NULL
+                    AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
+                    AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
+                    AND NEW."History" IS NOT DISTINCT FROM OLD."History"
+                    AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
+                        AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"refused",%'))
                 """ : "false", StringComparison.Ordinal)
+            // S5a: a composed set with Park and operators journals an operator refusal on a parked root at its next revision.
             .Replace("/*root-park-journal*/", db.UsesRootParkArrivals ? """
                 (i."Status" = 2 AND NOT i."Retired" AND NEW."Partition" = i."Partition" AND NEW."Revision" = i."Revision" + 1
                     AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0
                     AND (NEW."Entries" = '["parked"]' /*root-park-recover-journal*/))
+                """ : db.UsesRootParkedOperators ? """
+                (i."Status" = 2 AND NOT i."Retired" AND NEW."Partition" = i."Partition" AND NEW."Revision" = i."Revision" + 1
+                    AND i."FoundationParkAt" IS NOT NULL AND NEW."Entries" LIKE '{{"Outcome":"refused",%')
                 """ : "false", StringComparison.Ordinal)
             // Only a recover leaves Faulted for Running. It clears the Park mark and moves the release generation by one.
             // A recover outcome at the new revision binds the write: "recovered" only with that transition, "refused"
@@ -190,7 +202,8 @@ public sealed partial class EfStore
                 """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
                 // The state wire column exists only on stable-body profiles.
                 .Replace("/*new-wire*/", db.UsesRootStableBody ? """, NEW."FoundationStateWire" """ : "", StringComparison.Ordinal)
-                .Replace("/*old-wire*/", db.UsesRootStableBody ? """, OLD."FoundationStateWire" """ : "", StringComparison.Ordinal) : "", StringComparison.Ordinal)
+                .Replace("/*old-wire*/", db.UsesRootStableBody ? """, OLD."FoundationStateWire" """ : "", StringComparison.Ordinal)
+                : db.UsesRootParkedOperators ? ParkedRefusalRow(db) : "", StringComparison.Ordinal)
             .Replace("/*root-park-recover*/", db.UsesRootParkRecovery ? """
                 (OLD."Status" = 2 AND NEW."Status" = 0 AND NOT NEW."Retired" AND NOT OLD."Suspended" AND NOT NEW."Suspended"
                     AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
@@ -211,7 +224,8 @@ public sealed partial class EfStore
                 """ : "", StringComparison.Ordinal)
             .Replace("/*root-park-recover-journal*/", db.UsesRootParkRecovery
                 // The raw command is formatted, so the literal brace is doubled.
-                ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" : "", StringComparison.Ordinal)
+                ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'"""
+                : db.UsesRootParkedOperators ? """OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" : "", StringComparison.Ordinal)
             .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
