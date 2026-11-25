@@ -120,6 +120,9 @@ public static class Wf
         return node;
     }
 
+    public static Node Timer(string id, string interval) => Node<Timer>(id, ("Interval", interval));
+    public static Node Cron(string id, string expression) => Node<Cron>(id, ("Expression", expression));
+
     public static Node ForEach(string id, Binding items, Node body) => Node<ForEach>(id, ("Items", items)).With(body);
     public static Node While(string id, Binding condition, Node body) => Node<While>(id, ("Condition", condition)).With(body);
 

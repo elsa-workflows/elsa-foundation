@@ -205,6 +205,61 @@ public sealed class CallService : Activity<string>
     }
 }
 
+/// <summary>
+/// How a Timer's interval reads, as on the old core: text that starts with <c>P</c> is an ISO 8601 duration (<c>PT5M</c>),
+/// anything else a time span (<c>00:05:00</c>, or <c>1</c> for a day); at least <see cref="MinInterval"/>. The schedule actor
+/// reads it with the same rule (its <c>RecurringSchedule.TryParseInterval</c>; layer 3 shares no project between the two).
+/// </summary>
+public static class ScheduleIntervals
+{
+    /// <summary>The shortest interval: one second.</summary>
+    public static readonly TimeSpan MinInterval = TimeSpan.FromSeconds(1);
+
+    public static bool TryParse(string? text, out TimeSpan interval)
+    {
+        interval = default;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        text = text.Trim();
+        if (text.StartsWith('P'))
+        {
+            try { interval = System.Xml.XmlConvert.ToTimeSpan(text); }
+            catch (Exception refused) when (refused is FormatException or OverflowException) { return false; }
+        }
+        else if (!TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out interval)) return false;
+        return interval >= MinInterval;
+    }
+}
+
+public sealed record TimerResult(string Interval);
+
+/// <summary>
+/// The old core's Timer: a recurring start trigger that starts a new run every <see cref="Interval"/>, counted from each
+/// occurrence. The host's schedule actor fires it; the run completes it at once with its interval. A definition with one
+/// away from where a run begins is refused, as on the old core (NativeSchedules).
+/// </summary>
+public sealed class Timer : StatefulActivity<TimerResult, Unit, JsonNode?>
+{
+    [Input] public string Interval { get; set; } = "";
+
+    protected override ValueTask<Transition> ExecuteAsync(StartContext<JsonNode?> context) => new(Complete(new TimerResult(Interval)));
+    protected override ValueTask<Transition> ResumeAsync(ResumeContext<Unit, JsonNode?> context) => new(Complete(new TimerResult(Interval)));
+}
+
+public sealed record CronResult(string Expression);
+
+/// <summary>
+/// The old core's Cron: a recurring start trigger that starts a new run at each occurrence of its <see cref="Expression"/>,
+/// in UTC. The host's schedule actor fires it; the run completes it at once with its expression. A definition with one away
+/// from where a run begins is refused, as on the old core (NativeSchedules).
+/// </summary>
+public sealed class Cron : StatefulActivity<CronResult, Unit, JsonNode?>
+{
+    [Input] public string Expression { get; set; } = "";
+
+    protected override ValueTask<Transition> ExecuteAsync(StartContext<JsonNode?> context) => new(Complete(new CronResult(Expression)));
+    protected override ValueTask<Transition> ResumeAsync(ResumeContext<Unit, JsonNode?> context) => new(Complete(new CronResult(Expression)));
+}
+
 public sealed record DelayState(long Milliseconds);
 
 /// <summary>Elsa 4 wrote a durable timer through a scheduler. Here the trigger becomes a message to self with a due time.</summary>
