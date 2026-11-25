@@ -22,4 +22,3 @@ internal static class ClosedScopeCaptureBoundary
                 serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>())
             .FindClosedScopeBoundaryAsync(workflowExecutionId, activityExecutionId, node, cancellationToken);
 }
-
