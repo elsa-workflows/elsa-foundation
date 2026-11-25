@@ -69,6 +69,17 @@ public sealed partial class StimulusDeliverySchemaGateTests
     }
 
     [Fact]
+    public async Task Timer_history_capability_requires_the_actual_adopted_operational_write_floor()
+    {
+        await using var fixture = await Fixture.Create(RuntimeOperationalStateEfModule.SchemaFamily);
+        await using (var context = fixture.Open())
+            Assert.False(new EfDurableTimerStore(context, new Accessor(), new NoTokens()).SupportsHistoryResponsibility);
+        await fixture.Finalize();
+        await using var adopted = fixture.Open();
+        Assert.True(new EfDurableTimerStore(adopted, new Accessor(), new NoTokens()).SupportsHistoryResponsibility);
+    }
+
+    [Fact]
     public async Task Finalized_operational_family_keeps_legacy_claim_content_and_accepts_sibling_state_writes()
     {
         await using var fixture = await Fixture.Create(RuntimeOperationalStateEfModule.SchemaFamily);
@@ -104,19 +115,19 @@ public sealed partial class StimulusDeliverySchemaGateTests
         var timerClaim = Assert.Single(await timers.ClaimDueAsync(new("owner", Now, TimeSpan.FromMinutes(1), 1)));
         Assert.True((await timers.RenewClaimAsync(timerClaim, Now.AddSeconds(1), TimeSpan.FromMinutes(2))).Succeeded);
         var writtenTimer = await context.DurableTimers.AsNoTracking().SingleAsync();
-        Assert.Equal(RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion, writtenTimer.SchemaVersion);
+        Assert.Equal(RuntimeOperationalStateEfModule.TimerHistorySchemaVersion, writtenTimer.SchemaVersion);
         Assert.Equal(timerContent, writtenTimer.ContentJson);
         var schedules = new EfRecurringTriggerScheduleStore(context, new Accessor(), new NoTokens());
         var scheduleClaim = Assert.Single(await schedules.ClaimDueAsync(new("owner", Now, TimeSpan.FromMinutes(1), 1)));
         Assert.NotNull(await schedules.RenewClaimAsync(scheduleClaim, Now.AddSeconds(1), TimeSpan.FromMinutes(2)));
         var writtenSchedule = await context.RecurringTriggerSchedules.AsNoTracking().SingleAsync();
-        Assert.Equal(RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion, writtenSchedule.SchemaVersion);
+        Assert.Equal(RuntimeOperationalStateEfModule.TimerHistorySchemaVersion, writtenSchedule.SchemaVersion);
         Assert.Equal(scheduleContent, writtenSchedule.ContentJson);
 
         await schedules.PrepareActivationAsync("family-activation", [schedule with
         { ScheduleId = RecurringTriggerSchedule.BuildId("family-activation", "artifact", "node"), ActivationId = "family-activation", SlotId = "family-slot", IsActive = false }]);
         await schedules.ActivateAsync("family-activation", null);
-        Assert.Equal(RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion,
+        Assert.Equal(RuntimeOperationalStateEfModule.TimerHistorySchemaVersion,
             (await context.RecurringTriggerScheduleProjectionStates.AsNoTracking().SingleAsync()).SchemaVersion);
         await new EfSchedulerStateStore(context, new Accessor()).SaveAsync(new("family-execution", 1));
         await new EfDurableValueStateStore(context, new Accessor(), new NoTokens()).SaveAsync(new("value", "family-execution", "value",
@@ -127,11 +138,11 @@ public sealed partial class StimulusDeliverySchemaGateTests
         await new EfWorkflowHoldStateStore(context, new Accessor()).SaveAsync(new("hold", "family-execution"));
         await new EfRuntimeCheckpointCommitStore(context, new Accessor()).CommitAsync(Commit(Pending("family-checkpoint", false)),
             new(RuntimeCheckpointPersistenceMode.Immediate));
-        Assert.Equal(RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion, (await context.SchedulerStates.AsNoTracking().SingleAsync()).SchemaVersion);
-        Assert.Equal(RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion, (await context.DurableValueStates.AsNoTracking().SingleAsync()).SchemaVersion);
-        Assert.Equal(RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion, (await context.ExecutionLivenessStates.AsNoTracking().SingleAsync()).SchemaVersion);
-        Assert.Equal(RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion, (await context.WorkflowHoldStates.AsNoTracking().SingleAsync()).SchemaVersion);
-        Assert.Equal(RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion, (await context.RuntimeCheckpointCommits.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal(RuntimeOperationalStateEfModule.TimerHistorySchemaVersion, (await context.SchedulerStates.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal(RuntimeOperationalStateEfModule.TimerHistorySchemaVersion, (await context.DurableValueStates.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal(RuntimeOperationalStateEfModule.TimerHistorySchemaVersion, (await context.ExecutionLivenessStates.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal(RuntimeOperationalStateEfModule.TimerHistorySchemaVersion, (await context.WorkflowHoldStates.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal(RuntimeOperationalStateEfModule.TimerHistorySchemaVersion, (await context.RuntimeCheckpointCommits.AsNoTracking().SingleAsync()).SchemaVersion);
     }
 
     [Fact]

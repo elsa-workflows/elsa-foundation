@@ -16,7 +16,7 @@ afterEach(() => {
 describe("studio auth mounting", () => {
   it.each([false, true])("waits for initial backend discovery before exposing an editable profile (failure: %s)", async failure => {
     const initialPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, "", "/settings/backends/new?backend=legacy");
+    localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, "", "/settings/backends/new?backend=default");
     const fetchMock = stubShellFetch(), original = fetchMock.getMockImplementation()!;
     let release!: (response: Response) => void;
     const pending = new Promise<Response>(resolve => { release = resolve; });
@@ -215,7 +215,7 @@ describe("studio auth mounting", () => {
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
 
     const retryButton = Array.from(container.querySelectorAll("button"))
-      .find(button => button.textContent === "Try again");
+      .find(button => button.textContent === "Retry");
     expect(retryButton).toBeDefined();
 
     flushSync(() => retryButton?.click());

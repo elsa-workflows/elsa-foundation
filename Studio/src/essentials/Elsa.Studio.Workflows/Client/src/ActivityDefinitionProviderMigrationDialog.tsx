@@ -1,9 +1,8 @@
 import { StudioField } from "@elsa-workflows/studio-ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityDefinitionDraftView } from "./activityDefinitionTypes";
 import { migrateActivityDefinitionDraft, useActivityAuthoringCapabilities } from "./api/activityDesign";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import { ActivityDefinitionManagementDialogActions, ActivityDefinitionManagementDialogShell } from "./ActivityDefinitionManagementDialogShell";
 import {
   choiceValue,
@@ -34,8 +33,6 @@ export function ActivityDefinitionProviderMigrationDialog({
   const [target, setTarget] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-  useDialogFocus(dialogRef, submitting ? null : onClose);
 
   useEffect(() => {
     if (!choices.some(item => choiceValue(item) === target)) setTarget(choices[0] ? choiceValue(choices[0]) : "");
@@ -61,7 +58,7 @@ export function ActivityDefinitionProviderMigrationDialog({
     }
   };
 
-  return <ActivityDefinitionManagementDialogShell dialogRef={dialogRef} title="Review provider migration" kicker="Atomic parallel draft" submitting={submitting} onClose={onClose}>
+  return <ActivityDefinitionManagementDialogShell title="Review provider migration" submitting={submitting} onClose={onClose}>
     <dl className="ad-review-facts">
       <div><dt>Source draft</dt><dd><code>{draft.draftId}</code> · revision {draft.revision}</dd></div>
       <div><dt>Source provider</dt><dd><code>{draft.provider.providerKey}</code> · schema {draft.provider.schemaVersion}</dd></div>

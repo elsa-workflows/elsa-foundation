@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, RefreshCw } from "lucide-react";
+import { Bot } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StatusChip, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioButton, StudioPage, SkeletonRows, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState } from "@elsa-workflows/studio-ui";
 import { InvocationEvidenceDetails, applicationText } from "./InvocationEvidence";
 import { pollDelay } from "./AgentPlayground";
 import { getInvocationEvidence, type InvocationEvidenceView } from "./playgroundApi";
@@ -38,11 +38,12 @@ export function AgentInvocationPage({ context, reference: given, navigate, refre
   { context: StudioEndpointContext; reference?: InvocationReference | null; navigate?(path: string): void; refreshInterval?: number }) {
   const reference = given ?? readInvocationReference(window.location.pathname);
   const key = reference ? invocationPath(reference) : "";
-  return <InvocationScreen key={key} context={context} reference={reference} navigate={navigate} refreshInterval={refreshInterval} />;
+  return <><StudioShellBreadcrumbs items={reference && navigate ? [{ label: "Workflow run", onClick: () => navigate(runPath(reference)) }] : [{ href: "/workflows/instances", label: "Runs" }]} current="Agent invocation" />
+    <InvocationScreen key={key} context={context} reference={reference} refreshInterval={refreshInterval} /></>;
 }
 
-function InvocationScreen({ context, reference, navigate, refreshInterval }:
-  { context: StudioEndpointContext; reference: InvocationReference | null; navigate?(path: string): void; refreshInterval: number }) {
+function InvocationScreen({ context, reference, refreshInterval }:
+  { context: StudioEndpointContext; reference: InvocationReference | null; refreshInterval: number }) {
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [tick, setTick] = useState(0);
   const loads = useRef(0);
@@ -76,7 +77,7 @@ function InvocationScreen({ context, reference, navigate, refreshInterval }:
     return () => { abort.abort(); clearTimeout(timer); };
   }, [load.kind, settled, failures, tick, refresh, refreshInterval]);
 
-  if (load.kind === "loading") return <StudioPage aria-busy="true"><p>Loading agent invocation…</p></StudioPage>;
+  if (load.kind === "loading") return <StudioPage aria-busy="true"><SkeletonRows label="Loading agent invocation" /></StudioPage>;
   if (load.kind === "missing")
     return <StudioPage data-testid="invocation-missing"><StudioResultState title="Agent invocation not found"
       description="No agent invocation you may inspect matches this link. It may belong to another tenant, or need the activity execution inspection permission." /></StudioPage>;
@@ -90,13 +91,10 @@ function InvocationScreen({ context, reference, navigate, refreshInterval }:
     <StudioPage className="agent-invocation" data-status={invocation.activityStatus}>
       <StudioPageHeader
         icon={<Bot aria-hidden="true" size={18} />}
-        eyebrow="Agent invocation"
+        compact
         title={<>{invocation.agent.version} <StatusChip tone={tone(invocation.activityStatus)}>{invocation.activityStatus}</StatusChip></>}
         description={<span role="status" data-testid="invocation-summary">{summary(invocation.activityStatus, turn ? applicationText(turn.application) : null)}</span>}
-        actions={<>
-          {navigate && reference ? <StudioButton onClick={() => navigate(runPath(reference))}>Open the run</StudioButton> : null}
-          <StudioButton aria-label="Refresh invocation" onClick={() => void refresh()}><RefreshCw aria-hidden="true" size={14} /> Refresh</StudioButton>
-        </>} />
+        refresh={{ id: "agent-invocation", label: "Refresh invocation", onRefresh: refresh }} />
       {failures > 0 ? <p className="agent-playground__hint" role="status" data-testid="invocation-stale">
         The latest evidence could not be read; showing the last loaded state.{failures >= maximumRefreshFailures ? " It is no longer refreshed automatically." : ""}</p> : null}
       <section className="agent-playground__run" aria-label="Invocation evidence">

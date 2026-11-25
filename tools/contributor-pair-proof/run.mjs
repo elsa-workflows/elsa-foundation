@@ -279,6 +279,11 @@ function inspectImage(image) {
   return { imageId, platform, source, revision, version };
 }
 
+function workbenchApplication(containerId) {
+  const published = commandOutput("docker", ["exec", containerId, "ls", "/app"]).split(/\s+/);
+  return published.includes("Elsa.Workbench.Host.deps.json") ? "Elsa.Workbench.Host" : "Elsa.Workbench";
+}
+
 function inspectApplicationVersion(containerId, application) {
   const manifest = commandOutput("docker", ["exec", containerId, "cat", `/app/${application}.deps.json`]);
   const libraries = Object.keys(JSON.parse(manifest).libraries ?? {});
@@ -740,7 +745,8 @@ async function main() {
     if (name === "workbench") ownedWorkbenchContainerId = containerId;
     log(`${name}: image ID=${metadata.imageId}; running image ID=${runningImageId}; OCI source=${metadata.source}; revision=${metadata.revision}; version=${metadata.version}; platform=${metadata.platform}`);
     stage = "application-version-provenance";
-    const application = name === "workbench" ? "Elsa.Workbench" : "Elsa.Studio.Web";
+    // The Workbench assembly is Elsa.Workbench.Host from #5675 on; images built before it publish Elsa.Workbench.
+    const application = name === "workbench" ? workbenchApplication(containerId) : "Elsa.Studio.Web";
     const artifact = inspectApplicationVersion(containerId, application);
     log(`${application}: dependency-manifest host version=${artifact.version}; trimmed manifest SHA256=${artifact.manifestHash}; this is distinct from the image tag and OCI base-image version`);
   }

@@ -114,7 +114,9 @@ public sealed class PackagesWorkflowTests
     {
         Assert.Equal("${{ github.event_name == 'release' }}", Jobs["release"]["if"]);
         Assert.Equal("${{ github.event_name != 'release' }}", Jobs["pack"]["if"]);
-        Assert.Equal("pack", Jobs["publish"]["needs"]);
+        Assert.Equal("pack", Jobs["attest"]["needs"]);
+        Assert.Equal(["pack", "attest"], ((List<object>)Jobs["publish"]["needs"]).Cast<string>());
+        Assert.Equal(Jobs["publish"]["if"], Jobs["attest"]["if"]);
         Assert.Contains("github.event_name == 'push' || github.event_name == 'workflow_dispatch'",
             (string)Jobs["publish"]["if"], StringComparison.Ordinal);
 

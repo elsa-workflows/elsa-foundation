@@ -1,8 +1,8 @@
 # Standalone triggers
 
-Use this guide to configure shared HTTP, Event, Timer and Cron entry points without changing a workflow's graph. Terminology is maintained in the [Elsa glossary](glossary/elsa.md); module contracts are maintained in the [Runtime extension catalog](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#standalone-trigger-authoring-and-source-boundaries).
+Use this guide to configure shared HTTP, Event, Timer and Cron entry points without changing a workflow's graph. Terminology is maintained in the [Elsa glossary](glossary/elsa.md); module contracts are maintained in the [Runtime extension catalog](../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 
-**Implementation status:** This guide describes the source implementation being prepared for [#3582](https://github.com/elsa-workflows/elsa-foundation/issues/3582). The examples are source-checked request shapes, not passing host, provider, restart or Studio acceptance evidence. The [qualification guide](../specs/1217-standalone-triggers/quickstart.md) records the required checks. The [specification and proposed contracts](../specs/1217-standalone-triggers/spec.md) also contain requirements whose acceptance remains open.
+**Implementation status:** Implemented for the explicitly selected host features and supported profiles described below. See the [source-bound delivery receipt](../specs/1217-standalone-triggers/evidence/delivery-2026-11-22.md) for local qualification, self-review, owner-waived CI/independent review and operational limits. The [qualification guide](../specs/1217-standalone-triggers/quickstart.md) describes repeatable verification.
 
 ## Compose the host
 
@@ -17,14 +17,39 @@ Install the following features in the shell that owns the resources. Feature nam
 | HTTP request intake | `ActivitiesHttp`, with its `WorkflowsRuntimeHttp` dependency and the ordinary Runtime composition |
 | Timer/Cron intake | `StandaloneScheduleTriggers`, with its `WorkflowsRuntimeRecurringTriggers` dependency, ordinary Runtime scheduling and the normal Tasks lifecycle |
 | Workflow-origin broadcast Events | `ActivitiesPrimitives` and the ordinary durable `PublishEvent`/Runtime delivery composition |
-| Application-origin Event producer | `AddStandaloneEventIngress<TSource>` plus the application's trusted scoped source context; see the [Event module example](../Essentials/src/Activities/Primitives/StandaloneTriggers/README.md#application-owned-event-producer) |
+| Application-origin Event producer | `AddStandaloneEventIngress<TSource>` plus the application's trusted scoped source context; see the [Event module example](../essentials/src/Activities/Primitives/Elsa.Activities.Primitives/StandaloneTriggers/README.md#application-owned-event-producer) |
 | Restart-surviving storage candidate | The complete `WorkflowsRuntimeEntityFrameworkCore` provider, including its resource, ingress, publication, material, queue and checkpoint participants |
 
 Authoring metadata does not install intake. `StandaloneTriggersApi` deliberately does not start Runtime, an HTTP listener or a schedule pump. A Design-only host can manage never-activated paused resources only when a resource store, target discovery and input mapper have been supplied. Its default authoring committer refuses enabled associations, activation and changes to previously activated resources. Installing the API feature alone supplies none of those three replacement services.
 
 `AddWorkflowRuntime()` selects the coherent in-memory family by default. Its state is process-local. The complete EF provider replaces that family together; independently replacing a resource store or an outbox does not establish durable acceptance. Mixed physical providers, missing source adapters and unavailable retention/queue capabilities refuse operations. Distributed placement, arbitrary third-party storage combinations and remote queue acknowledgements have no acceptance claim here. Genuine direct BPMN dispatch currently requires the ordinary in-process actor and qualified model queue.
 
-The checked-in Workbench feature list does not select the standalone management/authoring/schedule features automatically. Add the features required for your host explicitly. Keep the host's existing identity, permission, persistence and shell-route configuration.
+Workbench's default shell enables standalone management, HTTP/Event/Timer/Cron authoring and schedule intake. Other hosts select the features they need explicitly, keeping their existing identity, permission, persistence and shell-route configuration.
+
+## Use Studio
+
+Open **Operate → Triggers** on a backend advertising standalone-trigger contract 1. Create a paused resource, choose its family and configuration, then use **Add workflow**. Search by the workflow's human name; its exact ID stays copyable. Choose the publication slot explicitly. A never-published workflow can be saved disabled without inventing a serving input contract. **Browse published Runtime slots** provides ID-based discovery when Design metadata is unavailable.
+
+The workflow editor's **Triggers** inspector tab edits the same live associations. Saving an association does not save or publish the business graph. Map each declared serving input, authorize the shared resource and enable the association before enabling the trigger. Review the server's impact and findings before applying a change. Source-owned settings and unavailable actions retain their projected restrictions.
+
+HTTP creation asks who responds, then exposes the per-trigger admission policy for asynchronous fan-out. Delivery details keep the captured version, current serving version, committed dispatch, actual run and transport observation separate. Use **Inspect actual run** only when an execution has been observed; a planned ID or sealed command is not a run receipt. Recovery and cancel-pending also require a fresh impact review.
+
+## Activity triggers, standalone triggers and module authors
+
+An activity trigger belongs to a workflow graph; publication establishes its start bindings. A standalone trigger is an independently managed resource whose subscriptions select serving publication slots and supply workflow inputs. Both forms remain available. Mid-workflow waits retain their separate bookmark/resume semantics.
+
+The source machinery is shared. Timer/Cron resources use the ordinary recurrence calculator, schedule store and pump. HTTP resources participate in the common exclusive endpoint ownership and routing system. Event subscriptions join the existing committed Event delivery cohorts. Standalone sources use the ordinary Runtime admission, outbox, captured target and dispatch/recovery boundaries; they do not execute a hidden trigger workflow.
+
+Third-party modules can introduce their own types without modifying Runtime or Studio:
+
+1. Contribute `IStandaloneTriggerTypeSource` metadata and one scoped `ITriggerConfigurationValidator` per type key. Include configuration fields and source payload paths so the generic Studio forms work without a custom editor. Metadata alone installs no listener or invocation authority.
+2. Register `AddStandaloneTriggerIngress<TSource>(descriptor)` and one trusted scoped `IStandaloneTriggerSourceContext<TSource>`. The module owns its listener or occurrence source, establishes scope and authorizes access to the actual resource. Never derive tenant or invocation authority from an untrusted signal body.
+3. Submit a `StandaloneTriggerSignal` through `IStandaloneTriggerIngress<TSource>.AdmitAsync`. Use a stable source key for the same occurrence. Runtime selects eligible subscriptions, maps inputs and captures accepted responsibility. The producer acknowledges the actual admission result; it does not claim workflow completion.
+4. Optionally contribute a public `StudioTriggerConfigurationEditorContribution` matching the type, schema version and editor identity. Missing, conflicting or failing editors fall back to generic metadata fields while preserving saved values. Backend validation and preview/apply remain authoritative.
+
+The independently compiled [Core-only source/type consumer](../essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/ConsumerModule.cs) and its [behavioral controls](../essentials/tests/Workflows/Runtime/Tests/StandaloneTriggerPublicConsumerTests.cs) demonstrate registration, admission, replay, authorization and producer isolation. The separate [Studio editor consumer](../tools/ux-acceptance/extensions/TriggerEditor/wwwroot/studio/modules/acceptance-trigger-editor/module.js) demonstrates the optional public SDK slot.
+
+A module can expose both an activity and a standalone resource over shared source services. Adding an activity alone does not automatically provide independent resource configuration, subscriptions or activation. Those are explicit contributions, with their own ownership and lifecycle.
 
 ## Create a paused resource
 
@@ -89,7 +114,7 @@ The other three families use the same create route:
 }
 ```
 
-Timer accepts a positive ISO-8601 duration or invariant `TimeSpan`. Cron accepts five fields, or six fields with seconds first, and an installed `TimeZoneInfo` ID. Supply the timezone explicitly; these examples use UTC instants for inputs and local time only for Cron calculation. The calculator uses the repository's pinned Cronos dependency. Actual DST, clock-change and cross-host timezone qualification remains part of the pending matrix.
+Timer accepts a positive ISO-8601 duration or invariant `TimeSpan`. Cron accepts five fields, or six fields with seconds first, and an installed `TimeZoneInfo` ID. Supply the timezone explicitly; these examples use UTC instants for inputs and local time only for Cron calculation. The calculator uses the repository's pinned Cronos dependency. Calculator tests cover DST and clock changes; the composed journeys additionally prove real due Timer/Cron delivery and timezone-change preview. Participating hosts must provide the same timezone database; arbitrary cross-host database combinations are not qualified.
 
 ## Associate a serving workflow and map inputs
 
@@ -147,6 +172,8 @@ For a schedule workflow declaring a string `DueAt` input, use:
 An absent source property omits that input; explicit JSON `null` remains a value. The ordinary target input validator applies defaults, requiredness, nullability and type validation. Unknown or duplicate destinations fail validation. Preview a representative envelope through `mapping-preview` with `expectedRevision`, `target`, `mappings`, `sample` and, when available, `contractRevision`. The `sample` is the envelope, for example `{ "payload": { "orderId": "A-42" }, "metadata": {} }`, rather than the body alone. Preview is advisory and performs no admission or execution.
 
 The Core binding model includes pure `Expression` templates with detached literal/source parameters. `mapping-context` lists the languages supplied by installed portable handlers and reports each language's evaluator availability. An empty list means no handler is installed; an unavailable entry includes a reason. Literal and SourceField mappings above require no expression language. Any supplied expression still needs the composed portable evaluator and a binding-pure capability profile; discovery is not proof that an arbitrary language/profile/template will evaluate.
+
+For the genuine BPMN `foundation-inputs-v1` profile, bind a published service workflow and map its declared inputs in the service-worker editor before publishing the direct model. Literal values and compatible process-input mappings are supported, including exact collection kinds. An empty v2 mapping is valid only when worker defaults satisfy all required inputs. Literal null **values** are distinct from explicit-null **defaults**: this profile does not support explicit-null model/worker defaults. Nullable Design JSON can lose default-presence information before the publication guard, so do not use that authoring path as evidence of null-default refusal or consumption. The owning [target contract](../specs/1217-standalone-triggers/contracts/targets.md) defines the profile boundary.
 
 ## Grants and publication changes
 
@@ -213,8 +240,8 @@ Retry and cancel-pending use the same preview/apply routes as configuration chan
 
 Pause, association removal, grant revocation, unpublication and trigger deletion stop or change future intake; they do not cancel accepted work. Deletion retains a tombstone for delivery-history authorization. Do not manually delete source/outbox rows to clear an alarm: those rows retain captured material, deduplication and command authority. The protocol has no automatic source-key expiry or configurable receipt-retention window. Material remains rooted while accepted work is unresolved; after source delivery completes, guarded collection still requires the deterministic target's deletion tombstone. Missing target state alone cannot release it. Explicitly cancelled unsealed roots can release their own material hold, while operational receipts remain.
 
-## Limits still requiring qualification
+## Qualified scope and operational limits
 
-Provider/process restart, multi-worker races, actual due Timer/Cron firing, publication replacement, genuine BPMN inputs/service work, external module consumers and the complete Studio experience require the linked qualification evidence before support is claimed. Limited delivery filters and absent automatic receipt expiry are current implementation limits. Expression availability depends on the actual installed portable handlers/evaluator and profile support.
+The delivery receipt records real owned-host source/dispatch/first-checkpoint interruptions, queue peers, due Timer/Cron, slot replacement, genuine BPMN worker-input consumption and separately compiled source/Studio consumers. The 49-case Studio matrix uses six coordinated-SDK journeys and one normal-application management journey, all on one committed source. The supported .NET polling file watcher is used for owned hosts. These queue/process witnesses do not establish distributed placement or arbitrary storage-provider interoperability. Limited delivery filters and absent automatic receipt expiry remain implementation limits. Expression availability depends on the installed portable handlers/evaluator and profile support.
 
-The direct BPMN target accepts captures from the standalone source arm and from a saved workflow-origin cohort, validating the tenant from the corresponding physical source capture. Its dispatch still requires the ordinary model protocol, in-process actor, queue and committed source seal. The full real PublishEvent-to-BPMN host journey remains pending qualification. Neither this guide nor a green isolated test establishes the full feature's delivery acceptance.
+The direct BPMN target accepts captures from the standalone source arm and from a saved workflow-origin cohort, validating the tenant from the corresponding physical source capture. Its dispatch still requires the ordinary model protocol, in-process actor, queue and committed source seal. The composed genuine-model journey exercises the real PublishEvent-to-BPMN path and ordinary worker continuation. Optional nullable input values preserve explicit JSON null separately from omission/default; explicit-null model/worker default declarations remain outside the supported profile. Separately compiled source consumers demonstrate public extensibility, not compatibility of an already published package binary. Bare stopped-host EF setup can retain predecessor metadata stamps and log incomplete family backfill on startup; successful ingress does not establish a universal legacy-metadata rewrite.

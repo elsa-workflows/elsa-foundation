@@ -39,7 +39,7 @@ it("shows completed observation without offering a meaningless pause, and keeps 
 });
 
 it.each([
-  ["paused", "last confirmed evidence"], ["disconnected", "disconnected"], ["unavailable", "unavailable"],
+  ["paused", "last confirmed run data"], ["disconnected", "disconnected"], ["unavailable", "unavailable"],
   ["expired", "expired"], ["loading", "Connecting"]
 ] as const)("keeps %s observation and its failure reason visible", (status, label) => {
   flushSync(() => root.render(<RunObservationNotice status={status} error="Evidence could not be read" />));

@@ -19,6 +19,8 @@
     <ProjectReference Include="../Fixtures/StandaloneTriggerConsumer/IndependentTriggers.Consumer.csproj" />
     <ProjectReference Include="../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
     <ProjectReference Include="../../../../src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
+    <!-- Qualifies the public publication feature with internal native history; no cross-domain test friendship. -->
+    <ProjectReference Include="..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />

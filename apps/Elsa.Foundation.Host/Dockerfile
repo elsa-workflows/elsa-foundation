@@ -10,7 +10,8 @@
 # contract projects every host shares with every feature (ADR 0067, #2126), plus
 # the cluster membership it composes on its own container, whose contracts
 # (Elsa.Cluster.Core, Elsa.Persistence.Schema) it shares too (#2143), and the
-# opt-in EF membership provider with EF Core and the four engines (#2151) —
+# opt-in EF membership provider with EF Core and the four engines (#2151), and
+# the opt-in host module-management endpoints from Elsa.Modularity.Api (#5386) —
 # none of which brings a feature implementation into this host — so its
 # project and their sources must also be present in the Docker build context.
 # Example:
@@ -40,7 +41,7 @@ COPY *.props *.targets .editorconfig NuGet.config ./
 # Restore inputs: the host, its shared endpoint-metadata project, Line A, its cluster membership, the EF closure that membership's
 # durable provider carries (Elsa.Persistence.EntityFramework plus the EF Core packages, #2151), its Data Protection key store,
 # which carries the same closure (#2191), and the computed-production-settings
-# swap Elsa.Foundation.Host.csproj imports from apps/ (shared with Elsa.Workbench.csproj, #2126) -- MSBuild
+# swap Elsa.Foundation.Host.csproj imports from apps/ (shared with Elsa.Workbench.Host.csproj, #2126) -- MSBuild
 # treats a missing <Import> as an error, not a no-op the way it does for the root files above, so this one has
 # to be copied before restore too, or restore fails outright with MSB4019 rather than silently.
 # Each project comes with its committed NuGet lock file, and both restores below are locked (#2122): they
@@ -59,8 +60,14 @@ COPY essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj essentia
 COPY essentials/src/Events/Core/Elsa.Events.Core.csproj essentials/src/Events/Core/packages.lock.json essentials/src/Events/Core/
 COPY essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj essentials/src/Expressions/Core/packages.lock.json essentials/src/Expressions/Core/
 COPY essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj essentials/src/Foundation/DataProtection/EntityFrameworkCore/packages.lock.json essentials/src/Foundation/DataProtection/EntityFrameworkCore/
+COPY essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj essentials/src/Foundation/Hosting/packages.lock.json essentials/src/Foundation/Hosting/
+COPY essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj essentials/src/Foundation/Identity/Core/packages.lock.json essentials/src/Foundation/Identity/Core/
+COPY essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj essentials/src/Foundation/Identity/Elsa.Foundation.Identity/packages.lock.json essentials/src/Foundation/Identity/Elsa.Foundation.Identity/
 COPY essentials/src/Locking/Core/Elsa.Locking.Core.csproj essentials/src/Locking/Core/packages.lock.json essentials/src/Locking/Core/
 COPY essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj essentials/src/Mediator/Core/packages.lock.json essentials/src/Mediator/Core/
+COPY essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj essentials/src/Modularity/Api/packages.lock.json essentials/src/Modularity/Api/
+COPY essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj essentials/src/Modularity/Core/packages.lock.json essentials/src/Modularity/Core/
+COPY essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj essentials/src/Modularity/Nuplane/packages.lock.json essentials/src/Modularity/Nuplane/
 COPY essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj essentials/src/Persistence/EntityFramework/packages.lock.json essentials/src/Persistence/EntityFramework/
 COPY essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj essentials/src/Persistence/Core/packages.lock.json essentials/src/Persistence/Core/
 COPY essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj essentials/src/Persistence/Schema/packages.lock.json essentials/src/Persistence/Schema/
@@ -89,8 +96,14 @@ COPY essentials/src/Cluster/Readability/ essentials/src/Cluster/Readability/
 COPY essentials/src/Events/Core/ essentials/src/Events/Core/
 COPY essentials/src/Expressions/Core/ essentials/src/Expressions/Core/
 COPY essentials/src/Foundation/DataProtection/EntityFrameworkCore/ essentials/src/Foundation/DataProtection/EntityFrameworkCore/
+COPY essentials/src/Foundation/Hosting/ essentials/src/Foundation/Hosting/
+COPY essentials/src/Foundation/Identity/Core/ essentials/src/Foundation/Identity/Core/
+COPY essentials/src/Foundation/Identity/Elsa.Foundation.Identity/ essentials/src/Foundation/Identity/Elsa.Foundation.Identity/
 COPY essentials/src/Locking/Core/ essentials/src/Locking/Core/
 COPY essentials/src/Mediator/Core/ essentials/src/Mediator/Core/
+COPY essentials/src/Modularity/Api/ essentials/src/Modularity/Api/
+COPY essentials/src/Modularity/Core/ essentials/src/Modularity/Core/
+COPY essentials/src/Modularity/Nuplane/ essentials/src/Modularity/Nuplane/
 COPY essentials/src/Persistence/EntityFramework/ essentials/src/Persistence/EntityFramework/
 COPY essentials/src/Persistence/Core/ essentials/src/Persistence/Core/
 COPY essentials/src/Persistence/Schema/ essentials/src/Persistence/Schema/

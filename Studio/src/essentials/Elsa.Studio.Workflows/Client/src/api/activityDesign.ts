@@ -89,7 +89,9 @@ export function useActivityDefinitions(context: StudioEndpointContext, request: 
     placeholderData: (previous, previousQuery) => {
       const previousRequest = previousQuery?.queryKey[2] as ActivityDefinitionCollectionRequest | undefined;
       const previousAuthorityScope = previousQuery?.queryKey[3];
-      return previousAuthorityScope === authorityScope && previousRequest?.authority === request.authority ? previous : undefined;
+      return previousAuthorityScope === authorityScope
+        && previousRequest?.authority === request.authority
+        && previousRequest?.archivedOnly === request.archivedOnly ? previous : undefined;
     },
     retry: false
   });
@@ -249,6 +251,7 @@ export async function listActivityDefinitions(
   setOptionalParameter(parameters, "search", request.search);
   setOptionalParameter(parameters, "authority", request.authority);
   setOptionalParameter(parameters, "providerKey", request.providerKey);
+  if (request.archivedOnly) parameters.set("archivedOnly", "true");
   return normalizeManagementPage(await context.http.getJson<ActivityManagementPage<ActivityDefinitionManagementView>>(
     `${path}?${parameters.toString()}`,
     { signal }
@@ -258,6 +261,16 @@ export async function listActivityDefinitions(
 export async function getActivityDefinition(context: StudioEndpointContext, definitionId: string, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition", { definitionId });
   return context.http.getJson<ActivityDefinitionManagementView>(path, { signal });
+}
+
+export async function archiveActivityDefinition(context: StudioEndpointContext, definitionId: string) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition", { definitionId });
+  await context.http.deleteJson<unknown>(path);
+}
+
+export async function restoreActivityDefinition(context: StudioEndpointContext, definitionId: string) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition-restore", { definitionId });
+  await context.http.postJson<unknown>(path, undefined);
 }
 
 export async function getActivityAuthoringCapabilities(context: StudioEndpointContext, signal?: AbortSignal) {
@@ -611,5 +624,14 @@ export async function validateActivityDefinitionCandidate(
   request: ReplaceActivityDefinitionDraftRequest
 ) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-draft-candidate-validation", { draftId });
+  return context.http.postJson<{ state: string; validation?: ActivityDraftValidationView | null }>(path, request);
+}
+
+export async function validateActivityDefinitionVersionCandidate(
+  context: StudioEndpointContext,
+  versionId: string,
+  request: Omit<ReplaceActivityDefinitionDraftRequest, "expectedRevision" | "presentationLabel">
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-version-candidate-validation", { versionId });
   return context.http.postJson<{ state: string; validation?: ActivityDraftValidationView | null }>(path, request);
 }

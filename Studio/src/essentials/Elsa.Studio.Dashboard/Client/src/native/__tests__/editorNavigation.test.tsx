@@ -2,11 +2,11 @@ import React, { Activity } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AnonymousAuthProvider, StudioWorkspaceTabProvider, requestStudioNavigation, type ElsaStudioModuleApi, type StudioNavigationIntent, type StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, AuthProvider, StudioWorkspaceTabProvider, reviewStudioNavigation, type AuthProviderManager, type AuthSession, type ElsaStudioModuleApi, type StudioNavigationIntent, type StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
 import { createDashboardAuthoringController, type DashboardAuthoringController } from "../authoring";
 import { NamedDashboardsRoute } from "../NamedDashboards";
 import { initialDefinition, type DashboardResource, type DatasetDeclaration, type QueryResult } from "../types";
-import { stubApi, waitUntil } from "../../__tests__/testSupport";
+import { beginNamedDraft, selectResourceAction, stubApi, waitUntil } from "../../__tests__/testSupport";
 
 const dataset: DatasetDeclaration = { id: "acme", ownerModuleId: "Acme", schemaRevision: "1", title: "Processing", description: "Declared business data", fields: [{ id: "category", label: "Category", type: "string", filterOperators: ["eq"], groupable: true, projectable: true, sortable: true, nullable: false }], metrics: [{ id: "duration", revision: "1", label: "Duration", unit: "s", description: "Elapsed duration" }] };
 const resource = (): DashboardResource => ({ id: "q1", kind: "question", revision: "r1", name: "Question q1", description: "", ownerId: "owner", capabilities: { canRead: true, canEdit: true, canShare: true, canCopy: true, canDelete: true }, definition: initialDefinition(dataset), definitionState: "available", createdAt: "2026-11-06T12:00:00Z", updatedAt: "2026-11-06T12:00:00Z" });
@@ -14,35 +14,66 @@ const result = (): QueryResult => ({ outcome: "succeeded", interpretation: "Curr
 const disposers: (() => void)[] = [];
 
 function button(container: HTMLElement, text: string) {
-  const target = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === text);
+  const action = text === "Preview question" || text === "Refresh results" ? "Preview" : text;
+  let target = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === action);
+  if (!target && container.querySelector('[aria-label="More question actions"]')) {
+    flushSync(() => container.querySelector<HTMLButtonElement>('[aria-label="More question actions"]')!.click());
+    target = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === action);
+  }
   expect(target).toBeDefined(); flushSync(() => target!.click());
 }
 function value(container: HTMLElement, label: string) {
-  return [...container.querySelectorAll("label")].find(item => item.textContent === label)!.querySelector("input")!;
+  if ((label === "Name" || label === "Description") && ![...container.querySelectorAll("label")].some(item => item.textContent === label)) button(container, "Properties");
+  if (label === "Maximum result rows/groups") {
+    const build = container.querySelector<HTMLButtonElement>('.named-question-view-toolbar [data-tab-id="build"]');
+    if (build?.getAttribute("aria-selected") !== "true") flushSync(() => build?.click());
+    const sort = [...container.querySelectorAll<HTMLAnchorElement>(".named-query-section-nav a")].find(item => item.textContent?.startsWith("Sort"));
+    if (sort?.getAttribute("aria-current") !== "page") flushSync(() => sort?.click());
+  }
+  return ([...container.querySelectorAll("label")].find(item => item.textContent === label)!.control as HTMLInputElement);
 }
-function edit(input: HTMLInputElement, text: string) {
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, text);
+function edit(input: HTMLInputElement | HTMLTextAreaElement, text: string) {
+  const disclosure = input.closest("details");
+  if (disclosure && !disclosure.open) flushSync(() => disclosure.querySelector("summary")!.click());
+  const prototype = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(input, text);
   flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
 }
 function navigation(intent: StudioNavigationIntent = "navigate", from = "/questions/q1") {
-  return requestStudioNavigation(from, intent === "probe" ? from : "/dashboards", intent);
+  return reviewStudioNavigation(from, intent === "probe" ? from : "/dashboards", intent);
 }
 function unloadAllowed() { return window.dispatchEvent(new Event("beforeunload", { cancelable: true })); }
 
+function authenticatedManager(permissions: string[]): AuthProviderManager {
+  const session: AuthSession = { status: "authenticated", subject: "owner", tenantId: "tenant", roles: [], permissions };
+  return {
+    getSession: () => session,
+    getCapabilities: async () => ({ ownershipMode: "foundation-owned", providers: [] }),
+    initialize: async () => session,
+    login: async () => undefined,
+    handleCallback: async () => session,
+    logout: async () => undefined,
+    getAccessToken: async () => "token",
+    refresh: async () => session
+  };
+}
+
 /** Actual React Activity cleanup/restart, with the same retained tab handle the host supplies. */
-function mount(api: ElsaStudioModuleApi, controller: DashboardAuthoringController, view: "detail" | "create" = "detail", navigate = vi.fn<(path: string) => void>(), kind: "question" | "dashboard" = "question") {
-  const path = view === "detail" ? `/${kind}s/${kind === "question" ? "q1" : "d1"}` : `/${kind}s/new`;
+function mount(api: ElsaStudioModuleApi, controller: DashboardAuthoringController, view: "detail" | "create" | "edit" = "detail", navigate = vi.fn<(path: string) => void>(), kind: "question" | "dashboard" = "question", permissions?: string[]) {
+  const path = view === "detail" ? `/${kind}s/${kind === "question" ? "q1" : "d1"}` : view === "edit" ? "/dashboards/d1/edit" : `/${kind}s/new`;
   window.history.replaceState({}, "", path);
   const container = document.createElement("div"); document.body.append(container); const root = createRoot(container);
   let active = true;
+  const manager = permissions ? authenticatedManager(permissions) : undefined;
   const draw = () => {
     const tab: StudioWorkspaceTabHandle = { id: "question-tab", active, location: path, isActive: () => active, markPendingWork: vi.fn(), setTitle: vi.fn() };
-    flushSync(() => root.render(<Activity mode={active ? "visible" : "hidden"}><StudioWorkspaceTabProvider value={tab}><AnonymousAuthProvider><NamedDashboardsRoute api={api} kind={kind} view={view} authoring={controller} navigate={navigate} /></AnonymousAuthProvider></StudioWorkspaceTabProvider></Activity>));
+    const content = <NamedDashboardsRoute api={api} kind={kind} view={view} authoring={controller} navigate={navigate} />;
+    flushSync(() => root.render(<Activity mode={active ? "visible" : "hidden"}><StudioWorkspaceTabProvider value={tab}>{manager ? <AuthProvider manager={manager}>{content}</AuthProvider> : <AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</StudioWorkspaceTabProvider></Activity>));
   };
   draw();
   disposers.push(() => { flushSync(() => root.unmount()); container.remove(); });
   return {
-    container, navigate,
+    container: document.body, navigate,
     hide() { active = false; window.history.replaceState({}, "", "/dashboards"); draw(); },
     reveal() { active = true; window.history.replaceState({}, "", path); draw(); }
   };
@@ -54,7 +85,118 @@ function fixture() {
   api.backend.http.postJson = vi.fn(async (url: string) => url.endsWith("/validate") ? { isValid: true, problems: [] } : result()) as typeof api.backend.http.postJson;
   return { api, controller };
 }
+function dashboard(): DashboardResource {
+  return { ...resource(), id: "d1", kind: "dashboard", name: "Operations", description: "Current operations", definition: undefined, tiles: [{ id: "tile-1", questionId: "q1", size: "medium" }] };
+}
 afterEach(() => { disposers.splice(0).forEach(dispose => dispose()); vi.restoreAllMocks(); });
+
+describe("dashboard viewer and editor routes", () => {
+  function dashboardFixture(current = dashboard()) {
+    const { api, controller } = fixture();
+    api.backend.http.getJson = vi.fn(async (url: string) => url.includes("/dashboards/") ? current : resource()) as typeof api.backend.http.getJson;
+    return { api, controller };
+  }
+
+  it("opens saved dashboards as viewers with visible results and no layout controls", async () => {
+    const { api, controller } = dashboardFixture(); const navigate = vi.fn();
+    const viewer = mount(api, controller, "detail", navigate, "dashboard");
+    await waitUntil(() => viewer.container.querySelector(".named-result tbody tr") !== null);
+    expect(viewer.container.querySelector("input")).toBeNull();
+    expect(viewer.container.textContent).toContain("Current operations");
+    expect(viewer.container.textContent).toContain("Question q1");
+    expect(viewer.container.querySelector('button[aria-label="Dashboard actions"]')).toBeTruthy();
+    expect([...viewer.container.querySelectorAll("button")].map(item => item.textContent?.trim())).toContain("Edit dashboard");
+    expect([...viewer.container.querySelectorAll("button")].some(item => item.textContent?.includes("Move earlier"))).toBe(false);
+    expect([...viewer.container.querySelectorAll("select")]).toHaveLength(0);
+    button(viewer.container, "Edit dashboard"); expect(navigate).toHaveBeenCalledWith("/dashboards/d1/edit");
+  });
+
+  it("shows a useful empty state for dashboards without saved questions", async () => {
+    const empty = dashboard(); empty.tiles = [];
+    const { api, controller } = dashboardFixture(empty);
+    const navigate = vi.fn();
+    const viewer = mount(api, controller, "detail", navigate, "dashboard");
+    await waitUntil(() => viewer.container.querySelector("h2")?.textContent === "Operations");
+    expect(viewer.container.textContent).toContain("No questions on this dashboard");
+    expect(viewer.container.querySelector(".named-result")).toBeNull();
+    expect(viewer.container.querySelector(".named-definition-meta")).toBeNull();
+    button(viewer.container, "Add questions");
+    expect(navigate).toHaveBeenCalledWith("/dashboards/d1/edit");
+  });
+
+  it("offers a New question shortcut from the dashboard editor only when permitted", async () => {
+    const empty = dashboard(); empty.tiles = [];
+    const { api, controller } = dashboardFixture(empty);
+    const navigate = vi.fn();
+    const restricted = mount(api, controller, "edit", navigate, "dashboard");
+    await waitUntil(() => restricted.container.textContent?.includes("No questions on this dashboard") === true);
+    expect([...restricted.container.querySelectorAll("button")].some(item => item.textContent?.trim() === "New question")).toBe(false);
+    disposers.splice(0).forEach(dispose => dispose());
+
+    const permitted = mount(api, controller, "edit", navigate, "dashboard", ["studio/questions:create"]);
+    await waitUntil(() => permitted.container.textContent?.includes("No questions on this dashboard") === true);
+    button(permitted.container, "New question");
+    expect(navigate).toHaveBeenCalledWith("/questions/new");
+  });
+
+  it("pre-seeds a new dashboard draft when opened with a questionId query parameter", async () => {
+    const { api, controller } = dashboardFixture();
+    const navigate = vi.fn();
+    const path = "/dashboards/new?questionId=q1";
+    window.history.replaceState({}, "", path);
+    const container = document.createElement("div"); document.body.append(container); const root = createRoot(container);
+    const manager = authenticatedManager(["studio/dashboards:create"]);
+    flushSync(() => root.render(<AuthProvider manager={manager}><NamedDashboardsRoute api={api} kind="dashboard" view="create" authoring={controller} navigate={navigate} /></AuthProvider>));
+    disposers.push(() => { flushSync(() => root.unmount()); container.remove(); });
+    await beginNamedDraft("Seeded dashboard");
+    await waitUntil(() => document.body.textContent?.includes("Question q1") === true);
+    const post = vi.fn(async (_url: string, body: { tiles: { questionId?: string; size: string }[] }) => ({ ...dashboard(), id: "d-seeded", name: "Seeded dashboard", tiles: body.tiles }));
+    api.backend.http.postJson = post as typeof api.backend.http.postJson;
+    button(document.body, "Save");
+    await waitUntil(() => post.mock.calls.length === 1);
+    expect(post.mock.calls[0][1].tiles).toHaveLength(1);
+    expect(post.mock.calls[0][1].tiles[0]).toMatchObject({ questionId: "q1", size: "medium" });
+  });
+
+  it("does not grant editor controls through a direct edit URL without current edit access", async () => {
+    const readOnly = dashboard(); readOnly.capabilities = { ...readOnly.capabilities, canEdit: false };
+    const { api, controller } = dashboardFixture(readOnly);
+    const editorUrl = mount(api, controller, "edit", vi.fn(), "dashboard");
+    await waitUntil(() => editorUrl.container.querySelector(".named-result tbody tr") !== null);
+    expect(editorUrl.container.querySelector("input")).toBeNull();
+    expect(editorUrl.container.textContent).toContain("Current operations");
+    expect(editorUrl.container.textContent).not.toContain("Edit dashboard");
+    expect(editorUrl.container.textContent).not.toContain("Add saved question");
+    expect(editorUrl.container.querySelector(".named-result")).not.toBeNull();
+  });
+
+  it.each([false, true])("uses one host confirmation when Cancel leaves the editor (accept=%s)", async accept => {
+    const { api, controller } = dashboardFixture(); const moved: string[] = [];
+    const navigate = vi.fn(async (path: string) => { if (await reviewStudioNavigation("/dashboards/d1/edit", path)) moved.push(path); });
+    const confirm = vi.spyOn(api.dialogs, "confirm").mockResolvedValue(accept);
+    const editor = mount(api, controller, "edit", navigate, "dashboard");
+    await waitUntil(() => editor.container.querySelector(".named-definition-meta input") !== null);
+    edit(value(editor.container, "Name"), "Unsaved operations"); button(editor.container, "Cancel");
+    await waitUntil(() => confirm.mock.calls.length === 1);
+    if (accept) await waitUntil(() => moved.length === 1);
+    expect(moved).toEqual(accept ? ["/dashboards/d1"] : []);
+    if (!accept) expect(value(editor.container, "Name").value).toBe("Unsaved operations");
+  });
+
+  it("saves editor changes with the current revision and returns to the saved viewer", async () => {
+    const { api, controller } = dashboardFixture(); const navigate = vi.fn();
+    const put = vi.fn(async (_url: string, input: { description: string }) => ({ ...dashboard(), revision: "r2", description: input.description }));
+    api.backend.http.putJson = put as typeof api.backend.http.putJson;
+    const editor = mount(api, controller, "edit", navigate, "dashboard");
+    await waitUntil(() => editor.container.querySelector("textarea") !== null);
+    edit(editor.container.querySelector<HTMLTextAreaElement>("textarea")!, "Saved operations summary");
+    button(editor.container, "Save"); await waitUntil(() => put.mock.calls.length === 1);
+    await waitUntil(() => navigate.mock.calls.length === 1);
+    expect(put.mock.calls[0][1].description).toBe("Saved operations summary");
+    expect(navigate).toHaveBeenCalledWith("/dashboards/d1");
+    expect(api.backend.http.postJson).not.toHaveBeenCalled();
+  });
+});
 
 describe("native editor host navigation guards", () => {
   it("allows a clean saved definition to navigate, close, probe and unload", async () => {
@@ -65,25 +207,38 @@ describe("native editor host navigation guards", () => {
   });
 
   it.each(["navigate", "close"] as const)("reports dirty work to a noninteractive probe and confirms a %s request", async intent => {
-    const { api, controller } = fixture(); const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { api, controller } = fixture(); const confirm = vi.spyOn(api.dialogs, "confirm").mockResolvedValue(false);
     const { container } = mount(api, controller); await waitUntil(() => controller.snapshots.size === 1);
     edit(value(container, "Maximum result rows/groups"), "7");
     expect(navigation("probe")).toBe(false); expect(unloadAllowed()).toBe(false); expect(confirm).not.toHaveBeenCalled();
-    expect(navigation(intent)).toBe(false); expect(confirm).toHaveBeenCalledTimes(1);
+    expect(await navigation(intent)).toBe(false); expect(confirm).toHaveBeenCalledTimes(1);
     expect(value(container, "Maximum result rows/groups").value).toBe("7");
-    confirm.mockReturnValue(true); expect(navigation(intent)).toBe(true); expect(confirm).toHaveBeenCalledTimes(2);
-    expect(api.dialogs.confirm).not.toHaveBeenCalled();
+    confirm.mockResolvedValue(true); expect(await navigation(intent)).toBe(true); expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["edit", "hide"] as const)("rejects a stale discard decision after a new %s", async change => {
+    const { api, controller } = fixture();
+    let decide!: (allowed: boolean) => void;
+    vi.spyOn(api.dialogs, "confirm").mockImplementation(() => new Promise(resolve => { decide = resolve; }));
+    const editor = mount(api, controller);
+    await waitUntil(() => controller.snapshots.size === 1);
+    edit(value(editor.container, "Name"), "First edit");
+    const result = navigation();
+    if (change === "hide") editor.hide();
+    else edit(value(editor.container, "Name"), "Newer edit");
+    decide(true);
+    expect(await result).toBe(false);
   });
 
   it("uses the host guard once for the native Back action instead of asking two discard questions", async () => {
-    const { api, controller } = fixture(); const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { api, controller } = fixture(); const confirm = vi.spyOn(api.dialogs, "confirm").mockResolvedValue(false);
     const moved: string[] = [];
-    const go = vi.fn((path: string) => { if (requestStudioNavigation("/questions/q1", path)) moved.push(path); });
+    const go = vi.fn(async (path: string) => { if (await reviewStudioNavigation("/questions/q1", path)) moved.push(path); });
     const { container } = mount(api, controller, "detail", go); await waitUntil(() => controller.snapshots.size === 1);
     edit(value(container, "Maximum result rows/groups"), "7"); button(container, "Back to questions");
     await waitUntil(() => confirm.mock.calls.length === 1);
-    expect(moved).toEqual([]); expect(api.dialogs.confirm).not.toHaveBeenCalled();
-    confirm.mockReturnValue(true); button(container, "Back to questions");
+    expect(moved).toEqual([]);
+    confirm.mockResolvedValue(true); button(container, "Back to questions");
     await waitUntil(() => moved.length === 1); expect(moved).toEqual(["/questions"]); expect(confirm).toHaveBeenCalledTimes(2);
   });
 
@@ -98,10 +253,16 @@ describe("native editor host navigation guards", () => {
     });
     api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const { container, navigate } = mount(api, controller, "create");
+    await beginNamedDraft("Native question");
     await waitUntil(() => Boolean(container.querySelector(".named-query-controls option[value='acme']")));
+    expect(container.querySelector<HTMLButtonElement>('[data-tab-id="preview"]')?.disabled).toBe(true);
+    expect(container.textContent).not.toContain("Query form");
+    expect([...container.querySelectorAll("label")].some(item => item.textContent === "Description")).toBe(false);
     edit(value(container, "Name"), "An independent native question");
-    const datasetSelect = container.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
+    const datasetSelect = container.querySelector<HTMLSelectElement>(".named-query-controls [data-query-path='query.dataset'] select")!;
     flushSync(() => { datasetSelect.value = "acme"; datasetSelect.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(container.querySelector<HTMLButtonElement>('[data-tab-id="preview"]')?.disabled).toBe(false);
+    expect(post.mock.calls.some(call => call[0].endsWith("/preview"))).toBe(false);
     button(container, "Save question"); await waitUntil(() => typeof fail === "function");
     for (const intent of ["navigate", "close", "probe"] as const) expect(navigation(intent, "/questions/new")).toBe(false);
     expect(unloadAllowed()).toBe(false); expect(confirm).not.toHaveBeenCalled();
@@ -113,7 +274,7 @@ describe("native editor host navigation guards", () => {
     expect(creates).toHaveLength(2);
     const initial = creates[0][1] as { operationKey: string }; const retry = creates[1][1] as { operationKey: string };
     expect(initial.operationKey).toBeTruthy(); expect(retry.operationKey).toBe(initial.operationKey);
-    await waitUntil(() => navigation("probe", "/questions/new")); expect(confirm).not.toHaveBeenCalled();
+    await waitUntil(() => navigation("probe", "/questions/new") === true); expect(confirm).not.toHaveBeenCalled();
   });
 });
 
@@ -127,7 +288,7 @@ describe("settled native mutations", () => {
     if (action === "Save") edit(value(editor.container, "Name"), "Unsaved before access loss");
     button(editor.container, `${action} question`);
     await waitUntil(() => editor.container.textContent?.includes("Current access could not authorize this definition") === true);
-    await waitUntil(() => navigation("probe"));
+    await waitUntil(() => navigation("probe") === true);
     expect(unloadAllowed()).toBe(true); expect(navigation("navigate")).toBe(true); expect(navigation("close")).toBe(true);
     expect(confirm).not.toHaveBeenCalled(); await waitUntil(() => controller.snapshots.size === 0);
     expect(editor.container.querySelector(".named-query-controls")).toBeNull();
@@ -139,9 +300,10 @@ describe("retained native editor Activity lifecycle", () => {
     const { api, controller } = fixture();
     const post = vi.fn(async () => result()); api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const editor = mount(api, controller, "create");
+    await beginNamedDraft("Native question");
     await waitUntil(() => Boolean(editor.container.querySelector(".named-query-controls option[value='acme']")));
     edit(value(editor.container, "Name"), "Keep this new local question");
-    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
+    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls [data-query-path='query.dataset'] select")!;
     flushSync(() => { select.value = "acme"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     edit(value(editor.container, "Maximum result rows/groups"), "7");
     button(editor.container, "Preview question"); await waitUntil(() => editor.container.textContent?.includes("PREVIOUS-PROTECTED-ROW") === true);
@@ -203,9 +365,10 @@ describe("retained native editor Activity lifecycle", () => {
     api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const go = vi.fn((path: string) => { window.history.pushState({}, "", path); });
     const editor = mount(api, controller, "create", go);
+    await beginNamedDraft("Native question");
     await waitUntil(() => Boolean(editor.container.querySelector(".named-query-controls option[value='acme']")));
     edit(value(editor.container, "Name"), "Created while this tab is parked");
-    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
+    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls [data-query-path='query.dataset'] select")!;
     flushSync(() => { select.value = "acme"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     button(editor.container, "Save question"); await waitUntil(() => typeof finish === "function");
     expect(navigation("probe", "/questions/new")).toBe(false); expect(confirm).not.toHaveBeenCalled();
@@ -314,16 +477,16 @@ describe("current native disclosure and reuse review", () => {
     }) as typeof api.backend.http.getJson;
     const put = vi.fn(async (_url: string, input: unknown) => ({ ...dashboard(), name: (input as { name: string }).name, revision: "r2" }));
     api.backend.http.putJson = put as typeof api.backend.http.putJson;
-    const editor = mount(api, controller, "detail", vi.fn(), "dashboard");
+    const editor = mount(api, controller, "edit", vi.fn(), "dashboard");
     await waitUntil(() => editor.container.textContent?.includes("Working dashboard") === true);
     edit(value(editor.container, "Name"), "Keep my local dashboard name");
-    const size = [...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.querySelector("select")!;
+    const size = ([...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.control as HTMLSelectElement);
     flushSync(() => { size.value = "wide"; size.dispatchEvent(new Event("change", { bubbles: true })); });
     editor.hide(); revoked = true; editor.reveal();
     await waitUntil(() => editor.container.textContent?.includes("Its reference is preserved during layout saves") === true);
     expect(value(editor.container, "Name").value).toBe("Keep my local dashboard name");
     expect(editor.container.textContent).not.toContain("Settings for question 1");
-    button(editor.container, "Save layout"); await waitUntil(() => put.mock.calls.length === 1);
+    button(editor.container, "Save"); await waitUntil(() => put.mock.calls.length === 1);
     expect(put.mock.calls[0][1]).toMatchObject({ name: "Keep my local dashboard name", tiles: [{ id: "tile-1", size: "wide", preserveReference: true }] });
     expect(JSON.stringify(put.mock.calls[0][1])).not.toContain("q1"); expect(JSON.stringify(put.mock.calls[0][1])).not.toContain("OLD-PROTECTED-OVERRIDE");
   });
@@ -358,7 +521,7 @@ describe("current native disclosure and reuse review", () => {
     expect(editor.container.textContent).toContain("Recently linked dashboard");
     expect(editor.container.textContent).toContain("Save draft as new question");
     expect(value(editor.container, "Maximum result rows/groups").value).toBe("7"); expect(put).not.toHaveBeenCalled();
-    expect(editor.container.textContent).toContain("Revision r1");
+    expect(editor.container.textContent).toContain("Unsaved changes");
     confirm.mockResolvedValue(true); button(editor.container, "Save question");
     await waitUntil(() => put.mock.calls.length === 1);
     expect(put.mock.calls[0][2]).toMatchObject({ headers: { "If-Match": '"r1"' } });
@@ -384,17 +547,17 @@ describe("current native disclosure and reuse review", () => {
       tiles: disclosed ? [{ id: "tile-1", questionId: "q1", size: "medium", referenceState: "available" }] :
         JSON.parse('[{"id":"tile-1","questionId":null,"size":"medium","referenceState":"unavailable","presentation":null,"parameters":null}]') });
     api.backend.http.getJson = vi.fn(async (url: string) => url.includes("/dashboards/") ? dashboard() : resource()) as typeof api.backend.http.getJson;
-    const editor = mount(api, controller, "detail", vi.fn(), "dashboard");
+    const editor = mount(api, controller, "edit", vi.fn(), "dashboard");
     await waitUntil(() => editor.container.textContent?.includes("Its reference is preserved during layout saves") === true);
     if (dirty) {
-      const select = [...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.querySelector("select")!;
+      const select = ([...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.control as HTMLSelectElement);
       flushSync(() => { select.value = "wide"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     }
     editor.hide(); disclosed = true; editor.reveal();
     await waitUntil(() => editor.container.textContent?.includes("Settings for question 1") === true);
-    const select = [...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.querySelector("select")!;
+    const select = ([...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.control as HTMLSelectElement);
     expect(select.value).toBe(dirty ? "wide" : "medium");
-    expect(requestStudioNavigation("/dashboards/d1", "/dashboards/d1", "probe")).toBe(!dirty);
+    expect(reviewStudioNavigation("/dashboards/d1/edit", "/dashboards/d1/edit", "probe")).toBe(!dirty);
   });
 
   it("keeps an explicit local replacement when original question disclosure is restored", async () => {
@@ -404,7 +567,7 @@ describe("current native disclosure and reuse review", () => {
     }) as typeof api.backend.http.getJson;
     const editor = mount(api, controller); await waitUntil(() => editor.container.textContent?.includes("Parts of this definition are withheld") === true);
     button(editor.container, "Replace unavailable query"); await waitUntil(() => editor.container.querySelector(".named-query-controls") !== null);
-    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
+    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls [data-query-path='query.dataset'] select")!;
     flushSync(() => { select.value = "acme"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     edit(value(editor.container, "Maximum result rows/groups"), "9");
     editor.hide(); disclosed = true; editor.reveal(); await waitUntil(() => controller.snapshots.size === 1);
@@ -418,7 +581,7 @@ describe("current native disclosure and reuse review", () => {
     const editor = mount(api, controller); await waitUntil(() => controller.snapshots.size === 1);
     edit(value(editor.container, "Maximum result rows/groups"), "7"); changed = true; button(editor.container, "Save question");
     await waitUntil(() => editor.container.textContent?.includes("original revision remain here") === true);
-    expect(value(editor.container, "Maximum result rows/groups").value).toBe("7"); expect(editor.container.textContent).toContain("Revision r1"); expect(put).not.toHaveBeenCalled();
+    expect(value(editor.container, "Maximum result rows/groups").value).toBe("7"); expect(editor.container.textContent).toContain("Unsaved changes"); expect(put).not.toHaveBeenCalled();
   });
 
   it("ignores an aborted usage-review reply after a real Activity hide and reveal", async () => {
@@ -440,7 +603,7 @@ describe("current native disclosure and reuse review", () => {
   });
 
 
-  it("reviews retained dashboard references and copies a question independently without replacing the editor", async () => {
+  it("reviews retained dashboard references and copies a question independently from its viewer", async () => {
     const { api, controller } = fixture();
     const dashboard: DashboardResource = { ...resource(), id: "d1", kind: "dashboard", name: "Original dashboard", definition: undefined, tiles: [{ id: "tile-1", questionId: "q1", size: "medium", referenceState: "available" }] };
     api.backend.http.getJson = vi.fn(async (url: string) => url.includes("/audience") ? { items: [] } : url.includes("/dashboards/") ? dashboard : resource()) as typeof api.backend.http.getJson;
@@ -448,19 +611,90 @@ describe("current native disclosure and reuse review", () => {
     api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const navigate = vi.fn(); const editor = mount(api, controller, "detail", navigate, "dashboard");
     await waitUntil(() => editor.container.textContent?.includes("Original dashboard") === true);
-    button(editor.container, "Copy saved version");
+    selectResourceAction(editor.container, "Dashboard actions", "Make a copy");
     await waitUntil(() => editor.container.textContent?.includes("Review dashboard copy dependencies") === true);
     expect(api.dialogs.prompt).not.toHaveBeenCalled();
     await waitUntil(() => editor.container.textContent?.includes("Copy Question q1 as an independent question") === true);
     button(editor.container, "Copy Question q1 as an independent question"); button(editor.container, "Create independent private question");
     await waitUntil(() => editor.container.textContent?.includes("Private question created") === true);
-    expect(value(editor.container, "Name").value).toBe("Original dashboard"); expect(editor.container.textContent).toContain("Revision r1"); expect(navigate).not.toHaveBeenCalled();
+    expect(editor.container.textContent).toContain("Original dashboard"); expect(editor.container.querySelector(".named-definition-meta")).toBeNull(); expect(navigate).not.toHaveBeenCalled();
     expect(post.mock.calls.filter(call => call[0].includes("/dashboards/d1/copies"))).toHaveLength(0);
     expect(editor.container.querySelector('a[href="/questions/q-private"]')).not.toBeNull();
     button(editor.container, "Continue with retained references"); await waitUntil(() => navigate.mock.calls.length === 1);
     expect(api.dialogs.prompt).toHaveBeenCalledOnce(); expect(navigate).toHaveBeenCalledWith("/dashboards/d-private");
     expect(post.mock.calls.filter(call => call[0].includes("/questions/q1/copies"))).toHaveLength(1);
     expect(post.mock.calls.filter(call => call[0].includes("/dashboards/d1/copies"))).toHaveLength(1);
+  });
+
+  it("adds a saved question to an editable dashboard while preserving unavailable tiles and keeping the question clean", async () => {
+    const { api, controller } = fixture();
+    const editableDashboard: DashboardResource = {
+      ...dashboard(),
+      id: "d-edit",
+      name: "Operations",
+      revision: "dash-r3",
+      tiles: [{ id: "tile-hidden", size: "small", referenceState: "unavailable" }]
+    };
+    const readOnlyDashboard: DashboardResource = {
+      ...dashboard(),
+      id: "d-view",
+      name: "Read-only executive",
+      capabilities: { ...dashboard().capabilities, canEdit: false, canShare: false, canDelete: false }
+    };
+    api.backend.http.getJson = vi.fn(async (url: string) => {
+      if (url.includes("dashboard-datasets")) return { items: [dataset] };
+      if (url.includes("/dashboards?")) return { items: url.includes("ownership=mine") ? [editableDashboard] : [readOnlyDashboard] };
+      if (url.includes("/dashboards/d-edit")) return editableDashboard;
+      return { ...resource(), uses: [] };
+    }) as typeof api.backend.http.getJson;
+    const put = vi.fn(async (_url: string, body: { tiles: DashboardResource["tiles"] }, _options?: unknown) => ({
+      ...editableDashboard,
+      revision: "dash-r4",
+      tiles: body.tiles
+    }));
+    api.backend.http.putJson = put as typeof api.backend.http.putJson;
+
+    const navigate = vi.fn();
+    const editor = mount(api, controller, "detail", navigate, "question");
+    await waitUntil(() => controller.snapshots.size === 1);
+
+    selectResourceAction(editor.container, "More question actions", "Add to dashboard…");
+    await waitUntil(() => editor.container.textContent?.includes("Add to Operations") === true);
+    expect(editor.container.textContent).not.toContain("Read-only executive");
+
+    button(editor.container, "Add to Operations");
+    await waitUntil(() => put.mock.calls.length === 1);
+    expect(put.mock.calls[0][2]).toMatchObject({ headers: { "If-Match": '"dash-r3"' } });
+    expect(put.mock.calls[0][1].tiles).toEqual([
+      { id: "tile-hidden", size: "small", preserveReference: true },
+      expect.objectContaining({ questionId: "q1", size: "medium" })
+    ]);
+
+    await waitUntil(() => editor.container.textContent?.includes('Added to "Operations".') === true);
+    expect(editor.container.textContent).toContain("Dashboards using this question");
+    expect(editor.container.textContent).toContain("Operations — 1 tile");
+    expect(navigation("probe")).toBe(true);
+
+    button(editor.container, "Open Operations");
+    expect(navigate).toHaveBeenCalledWith("/dashboards/d-edit");
+  });
+
+  it("navigates to a pre-seeded new dashboard from the Add to dashboard dialog when permitted", async () => {
+    const { api, controller } = fixture();
+    api.backend.http.getJson = vi.fn(async (url: string) => {
+      if (url.includes("dashboard-datasets")) return { items: [dataset] };
+      if (url.includes("/dashboards?")) return { items: [] };
+      return resource();
+    }) as typeof api.backend.http.getJson;
+
+    const navigate = vi.fn();
+    const editor = mount(api, controller, "detail", navigate, "question", ["studio/dashboards:create"]);
+    await waitUntil(() => controller.snapshots.size === 1);
+
+    selectResourceAction(editor.container, "More question actions", "Add to dashboard…");
+    await waitUntil(() => editor.container.textContent?.includes("New dashboard with this question") === true);
+    button(editor.container, "New dashboard with this question");
+    expect(navigate).toHaveBeenCalledWith("/dashboards/new?questionId=q1");
   });
 
 });

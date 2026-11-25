@@ -32,7 +32,7 @@ const navigation: StudioNavigationContribution[] = [
   { id: "secrets", label: "Secrets", path: "/security/secrets", order: 45 },
   { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", order: 900 },
   { id: "modules", label: "Modules", path: "/modules", order: 80 },
-  { id: "theme-builder", label: "Theme Builder", path: "/theme-builder", order: 85 },
+  { id: "theme-builder", label: "Theme builder", path: "/theme-builder", order: 85 },
   { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90 },
   { id: "feature-management", label: "Features", path: "/features", order: 130 },
   { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 50, section: "settings" }

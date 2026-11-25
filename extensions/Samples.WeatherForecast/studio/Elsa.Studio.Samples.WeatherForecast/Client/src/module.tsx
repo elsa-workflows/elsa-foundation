@@ -20,7 +20,7 @@ export function register(api: ElsaStudioModuleApi) {
     path: "/weather",
     placement: "operate",
     order: 120,
-    iconColor: "#14b8a6"
+    iconColor: "var(--studio-nav-icon-teal)"
   });
 
   api.routes.add({
@@ -53,7 +53,7 @@ export function WeatherPage() {
     <StudioPage aria-labelledby="weather-title">
       <StudioPageHeader title="Weather forecast" titleId="weather-title" headingLevel={2}
         description="This module contributes both server behavior and React UI."
-        actions={<StudioButton onClick={() => void load()} disabled={loading}>Refresh</StudioButton>} />
+        refresh={{ id: "weather-forecast", label: "Refresh forecast", onRefresh: load, refreshing: loading, autoRefresh: true }} />
       {loading ? <SkeletonRows label="Loading weather forecast" /> : error ? (
         <StudioResultState headingLevel={3} tone="danger" title="Weather forecast could not be loaded" description={error}
           actions={<StudioButton onClick={() => void load()}>Retry</StudioButton>} />

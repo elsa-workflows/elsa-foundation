@@ -3,13 +3,13 @@ import { expect, type Page, type TestInfo } from "@playwright/test";
 /** Real HTTP and rendered Studio against the acceptance runner's disposable stores. */
 export async function activityValidationReportingJourney(page: Page, info: TestInfo, capture: (page: Page, info: TestInfo, name: string) => Promise<void>) {
   await page.goto("/workflows/activity-definitions");
-  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity", exact: true }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition", exact: true }).click();
   await page.getByRole("textbox", { name: "Display name", exact: true }).fill(`Validation guidance ${info.project.name} ${Date.now()}`);
   const provider = page.getByRole("combobox", { name: "Implementation type", exact: true });
   if (await provider.count()) await provider.selectOption((await provider.locator('option[value^="elsa.activity-graph|"]').first().getAttribute("value"))!);
   await page.locator("label.wf-root-card").filter({ has: page.getByRole("radio", { name: "Sequence", exact: true }) }).click();
   const loaded = page.waitForResponse(response => response.request().method() === "GET" && /\/design\/activities\/drafts\/[^/]+$/.test(new URL(response.url()).pathname));
-  await page.getByRole("button", { name: "Create definition", exact: true }).click();
+  await page.getByRole("button", { name: "Create", exact: true }).click();
   const response = await loaded;
   expect(response.ok()).toBe(true);
   let draft = await response.json();
@@ -78,7 +78,7 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
 
   let reviews = 0;
   page.on("request", request => { if (request.method() === "POST" && request.url().endsWith("/publication-preflight")) reviews++; });
-  await page.locator(".ad-publication-toolbar-trigger").click();
+  await page.locator(".studio-split-button-primary").click();
   const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
   await expect(dialog.getByRole("button", { name: "Edit output value source", exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Close publication review", exact: true }).click();
@@ -92,7 +92,7 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
   expect(reviews).toBe(existingReviews);
   await capture(page, info, "review-retained");
   await page.keyboard.press("Escape");
-  await expect(page.locator(".ad-publication-toolbar-trigger")).toBeFocused();
+  await expect(page.locator(".studio-split-button-primary")).toBeFocused();
   expect(reviews).toBe(existingReviews);
   await capture(page, info, "review-focus-return");
 }

@@ -83,6 +83,10 @@ public sealed class MongoProvider(string connection, MongoStoreOptions options) 
 
         public override IKernelStore NewClient() => new MongoStore(provider._outside.Value[Interlocked.Increment(ref _next) % 2], database);
 
+        /// <summary>K1b: a partition document whose owner has no node document, for the missing-record case.</summary>
+        public override Func<string, Task>? DeleteNodeRecord => node =>
+            provider._admin.Value.GetDatabase(database).GetCollection<BsonDocument>("nodes").DeleteOneAsync(new BsonDocument("_id", node));
+
         // A document over MongoDB's 16 MiB limit.
         public override InstanceRow? Refused(InstanceRow row) => row with { State = new string('x', 17 * 1024 * 1024) };
 

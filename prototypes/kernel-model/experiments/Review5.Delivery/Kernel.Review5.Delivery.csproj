@@ -9,12 +9,14 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Kernel.Native brings Kernel.Workflows, Kernel.Durable, Kernel.Runtime and Kernel.Graph. -->
-    <ProjectReference Include="../../models/Native/Kernel.Native.csproj" />
+    <ProjectReference Include="../../../../essentials/tests/Workflows/Runtime/Native/Legacy/Elsa.Workflows.Runtime.Native.Legacy.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />
     <Using Include="Kernel.Durable" />
     <Using Include="Kernel.Workflows" />
     <Using Include="Kernel.Native" />
+    <Using Include="Kernel.ReviewFixtures" />
+    <Compile Include="../ModeledTicket.cs" Link="ModeledTicket.cs" />
   </ItemGroup>
 </Project>

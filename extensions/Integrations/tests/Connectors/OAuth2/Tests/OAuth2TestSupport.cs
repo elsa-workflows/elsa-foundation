@@ -165,19 +165,20 @@ internal static class OAuth2TestSupport
         return Assert.IsAssignableFrom<IActivityCompletionTransition<SendHttpRequestResult>>(transition);
     }
 
-    public static ValueTask<IResolvedConnection> ResolveAsync(OAuth2Harness harness) =>
+    public static ValueTask<IResolvedConnection> ResolveAsync(OAuth2Harness harness, bool allowNeedsAuthorization = false) =>
         harness.Services.GetRequiredService<IConnectionResolver>().ResolveAsync(new ConnectionResolveRequest
         {
             TenantId = TenantId,
             Name = ConnectionName,
             RequiredType = ConnectionTypeNames.Http,
-            Owner = ConnectionOwners.Tenant
+            Owner = ConnectionOwners.Tenant,
+            AllowNeedsAuthorization = allowNeedsAuthorization
         });
 
     public static async Task AuthorizeAsync(OAuth2Harness harness, MockOAuthServer server)
     {
         var tokens = harness.Services.GetRequiredService<OAuth2TokenService>();
-        await using var connection = await ResolveAsync(harness);
+        await using var connection = await ResolveAsync(harness, allowNeedsAuthorization: true);
         var started = await tokens.BeginAuthorizationCodeAsync(connection);
         var code = server.ApproveAuthorization(new Uri(started.AuthorizationUrl));
         var callback = harness.Services.GetRequiredService<IEnumerable<IOAuthCallbackHandler>>();

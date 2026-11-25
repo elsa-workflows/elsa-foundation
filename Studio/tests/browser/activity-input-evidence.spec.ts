@@ -56,8 +56,10 @@ test("mixed output provenance keeps names readable in a narrow inspector", async
   await page.goto("/?mode=input-evidence&theme=dark");
   await page.getByRole("button", { name: "Select activity" }).click();
 
+  const inspector = page.getByRole("complementary", { name: "Run details" });
+  await inspector.getByRole("tab", { name: "Outputs", exact: true }).click();
   const outputs = page.locator(".wf-instance-section").filter({ has: page.getByRole("heading", { name: /Outputs/ }) });
-  await expect(outputs.locator(".wf-runtime-evidence-heading .wf-runtime-capture-mode")).toHaveText("Mixed evidence");
+  await expect(outputs.locator(".wf-runtime-evidence-heading .wf-runtime-capture-mode")).toHaveText("Mixed capture modes");
   for (const name of ["Total", "Response"]) {
     const row = outputs.locator(".wf-runtime-input").filter({ hasText: name });
     const label = row.locator("header strong");
@@ -67,7 +69,6 @@ test("mixed output provenance keeps names readable in a narrow inspector", async
     expect(size.width).toBeGreaterThanOrEqual(size.contentWidth);
     await expect(row.locator("header .wf-runtime-capture-mode")).toHaveCount(1);
   }
-  const inspector = page.getByRole("complementary", { name: "Run details" });
   expect(await inspector.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
 });
 
@@ -82,6 +83,20 @@ for (const theme of ["light", "dark"]) {
 
       const inspector = page.getByRole("complementary", { name: "Run details" });
       await expect(inspector).toBeVisible();
+      const tabs = inspector.getByRole("tablist", { name: "Activity execution details", exact: true });
+      const overviewTab = tabs.getByRole("tab", { name: "Overview", exact: true });
+      const inputsTab = tabs.getByRole("tab", { name: "Inputs", exact: true });
+      const outputsTab = tabs.getByRole("tab", { name: "Outputs", exact: true });
+      await expect(overviewTab).toHaveAttribute("aria-selected", "true");
+      await overviewTab.focus();
+      await page.keyboard.press("ArrowRight");
+      await expect(inputsTab).toBeFocused();
+      await expect(inputsTab).toHaveAttribute("aria-selected", "true");
+      await expect(inspector.getByText("Policy reference", { exact: true })).toBeVisible();
+      await page.keyboard.press("ArrowRight");
+      await expect(outputsTab).toBeFocused();
+      await expect(outputsTab).toHaveAttribute("aria-selected", "true");
+
       const outputs = page.locator(".wf-instance-section").filter({ has: page.getByRole("heading", { name: /Outputs/ }) });
       const outputRows = outputs.locator(".wf-runtime-input");
       const total = outputRows.filter({ hasText: "Total" });
@@ -102,6 +117,9 @@ for (const theme of ["light", "dark"]) {
       await page.keyboard.press("Enter");
       await expect(response.getByText("Accepted", { exact: true })).toBeVisible();
 
+      await outputsTab.press("Home");
+      await expect(overviewTab).toBeFocused();
+      await expect(overviewTab).toHaveAttribute("aria-selected", "true");
       const outcomes = page.locator(".wf-instance-section").filter({ has: page.getByRole("heading", { name: /Outcomes/ }) });
       await expect(outcomes.getByText("Succeeded", { exact: true })).toBeVisible();
       await expect(outcomes.getByText("NeedsReview", { exact: true })).toBeVisible();
@@ -111,6 +129,7 @@ for (const theme of ["light", "dark"]) {
       expect(await inspector.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 
+      await outputsTab.click();
       if (width === 1440) {
         const workbench = page.getByTestId("run-workbench");
         await expect(workbench).toHaveAttribute("data-layout-mode", "desktop");
@@ -147,6 +166,7 @@ for (const theme of ["light", "dark"]) {
     await mockInputEvidence(page);
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`/?mode=input-evidence&theme=${theme}`);
+    await page.getByRole("tab", { name: "Inputs", exact: true }).click();
     const policy = page.locator(".wf-input-inspection-row").filter({ hasText: "Policy reference" });
     await expect(policy).toHaveCSS("display", "block");
     await expect(policy.locator(".wf-input-inspection-value")).toHaveText("POL-1042");
@@ -183,7 +203,7 @@ for (const theme of ["light", "dark"]) {
 }
 
 for (const theme of ["light", "dark"]) {
-  test(`input evidence wraps within narrow inspectors without horizontal scrolling in ${theme} theme`, async ({ page }) => {
+  test(`input data wraps within narrow inspectors without horizontal scrolling in ${theme} theme`, async ({ page }) => {
     await mockInputEvidence(page);
     for (const width of [320, 390, 700, 1200]) {
       await page.setViewportSize({ width, height: 900 });
@@ -191,6 +211,7 @@ for (const theme of ["light", "dark"]) {
       if (width < 1000) await page.getByRole("button", { name: "Select activity" }).click();
       const inspector = page.getByRole("complementary", { name: "Run details" });
       await expect(inspector).toBeVisible();
+      await inspector.getByRole("tab", { name: "Inputs", exact: true }).click();
       await expect(page.locator(".wf-input-inspection-value").filter({ hasText: "POL-1042" })).toBeVisible();
       const row = page.locator(".wf-input-inspection-row").filter({ hasText: "Premium" });
       const source = row.getByRole("button", { name: "Technical details for Premium", exact: true });
@@ -226,6 +247,7 @@ test("long captured text expands separately from source diagnostics", async ({ p
   await mockInputEvidence(page, text);
   await page.setViewportSize({ width: 1200, height: 1000 });
   await page.goto("/?mode=input-evidence");
+  await page.getByRole("tab", { name: "Inputs", exact: true }).click();
   const notes = page.locator(".wf-input-inspection-row").filter({ hasText: "Notes" });
   await expect(notes.locator(".wf-runtime-input-value-details pre")).toBeHidden();
   await notes.locator(".wf-runtime-input-value-details > summary").click();

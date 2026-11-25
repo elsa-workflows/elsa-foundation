@@ -38,6 +38,8 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
 
 ## Cross-domain contributions
 
+- `CompensationHistory` contributes Runtime Core's `RuntimeHistorySourceSupport` and transient `RuntimeStructuralContinuation` owner facts. The scope stages registered/started/handler scheduled/completed/faulted/confirmed/resolved/completed/abandoned decisions from its typed native decision at the existing continuation checkpoint, before private-state serialization or coalescing. The observed callback return time is retained. Scoped entry/attempt/related occurrence and incident IDs are diagnostic; operation keys, private values and fault messages are excluded. V5 admissions advertise these nine kinds; Activities Runtime withholds them from retained v3/v4 source/replay shapes. A completed scope's private-state cleanup does not remove committed history. These facts do not schedule or authorize compensation and create no additional persistence boundary.
+
 - `CompensationScopeStructureHandler` implements `IActivityStructureHandler` (`Elsa.Workflows.Design.Core`). It
   projects two slots per step from the authored structure, compiles the executable structure (the ordered steps with
   their forward and handler node ids) and remaps it through publishing. Its `ChildrenCompletedBefore` tells expression

@@ -14,7 +14,8 @@ public interface IDecisionAccessPolicy
 }
 
 public sealed record DecisionAssetView(string Id, string Name, string? Description, string Revision, string SourceHash,
-    string? Xml, bool IsSensitive, string? PublishedVersionId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    string? Xml, bool IsSensitive, string? PublishedVersionId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
+    DateTimeOffset? DeletedAt = null);
 public sealed record DecisionVersionView(string Id, string AssetId, int Number, string Name, string SourceHash,
     string ContentHash, string ProfileId, string SemanticsId, string? Xml, bool IsSensitive, DateTimeOffset PublishedAt);
 public sealed record DecisionCaseView(string Id, string AssetId, string Name, string Revision,
@@ -24,6 +25,7 @@ public sealed record DecisionValidation(bool Success, IReadOnlyList<DecisionDiag
 public sealed record SaveDecisionRequest(string OperationId, string Name, string Xml, string? Description = null,
     string? ExpectedRevision = null, bool IsSensitive = false);
 public sealed record PublishDecisionRequest(string OperationId, string ExpectedRevision);
+public sealed record DecisionLifecycleRequest(string OperationId, string ExpectedRevision);
 public sealed record CloneDecisionRequest(string OperationId, string ExpectedRevision, string VersionId);
 public sealed record ValidateDecisionRequest(string ExpectedRevision);
 public sealed record EvaluateDecisionRequest(string VersionId, IReadOnlyDictionary<string, DecisionValue> Inputs, int Budget = 1000000);

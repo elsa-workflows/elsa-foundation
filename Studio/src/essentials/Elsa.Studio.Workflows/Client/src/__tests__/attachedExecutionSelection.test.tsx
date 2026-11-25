@@ -2,9 +2,10 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { ExecutableActivityGraph } from "../executableGraph";
-import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionStateSummary } from "../workflowTypes";
-import { loadExecutionScope } from "../workflow-editor/executionScope";
+import { buildExecutableActivityGraph, type ExecutableActivityGraph } from "../executableGraph";
+import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionStateSummary, WorkflowExecutableNode } from "../workflowTypes";
+import { prepareAttachedExecution } from "../workflow-editor/prepareAttachedExecution";
+import { findMatchingExecutionScope, isKnownExecutionInScope, loadExecutionScope, resolveExecutionScopeAncestorId, resolveKnownExecutionScope, sameExecutionScopes, trimExecutionScopesForTarget, type ExecutionScopeEntry } from "../workflow-editor/executionScope";
 import { useAttachedExecutionSelection, type AttachedExecutionSelection } from "../workflow-editor/useAttachedExecutionSelection";
 
 const api = vi.hoisted(() => ({ browse: vi.fn(), inspect: vi.fn(), layout: vi.fn(), supported: vi.fn(), payload: vi.fn() }));
@@ -81,6 +82,14 @@ it("requires pinned boundary structure for an execution absent from the outer gr
   await expect(loadExecutionScope(context, "run", inner, options())).rejects.toThrow("boundary identity");
 });
 
+it("does not load pinned boundary layout for executions already present in the outer graph", async () => {
+  tree.set("write-4", { ...tree.get("write-4")!, boundary: { layoutAvailable: true } as ActivityExecutionInspection["boundary"] });
+  tree.set("body-4", { ...tree.get("body-4")!, boundary: { layoutAvailable: true } as ActivityExecutionInspection["boundary"] });
+  const result = await loadExecutionScope(context, "run", summary(), options());
+  expect(result.layout).toBeNull();
+  expect(api.layout).not.toHaveBeenCalled();
+});
+
 it("stops a late ancestry read after cancellation", async () => {
   let release!: (value: ActivityExecutionInspection) => void;
   api.inspect.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
@@ -89,6 +98,71 @@ it("stops a late ancestry read after cancellation", async () => {
   controller.abort(); release(tree.get("write-4")!);
   await expect(task).rejects.toMatchObject({ name: "AbortError" });
   expect(api.inspect).toHaveBeenCalledTimes(1);
+});
+
+it("aligns execution scopes and ancestor lookups to the target node in the outer graph", () => {
+  const rootExecutable: WorkflowExecutableNode = {
+    executableNodeId: "compiled-root-seq",
+    authoredActivityId: "root-seq",
+    activityType: "Elsa.Sequence",
+    activityTypeVersion: "1",
+    structureKind: "elsa.sequence.structure",
+    inputBindings: [],
+    childSlots: [{
+      name: "Sequence.Activities",
+      activities: [
+        { executableNodeId: "compiled-write-1", authoredActivityId: "write-1", activityType: "Elsa.WriteLine", activityTypeVersion: "1", inputBindings: [], childSlots: [] },
+        {
+          executableNodeId: "compiled-greeter",
+          authoredActivityId: "greeter",
+          activityType: "Custom.Greeter",
+          activityTypeVersion: "1",
+          inputBindings: [],
+          childSlots: [{
+            name: "activity-graph",
+            activities: [{
+              executableNodeId: "compiled-inner-seq",
+              authoredActivityId: "inner-seq",
+              activityType: "Elsa.Sequence",
+              activityTypeVersion: "1",
+              structureKind: "elsa.sequence.structure",
+              inputBindings: [],
+              childSlots: [{
+                name: "Sequence.Activities",
+                activities: [{ executableNodeId: "compiled-inner-write", authoredActivityId: "inner-write", activityType: "Elsa.WriteLine", activityTypeVersion: "1", inputBindings: [], childSlots: [] }]
+              }]
+            }]
+          }]
+        }
+      ]
+    }]
+  };
+  const customGraph = buildExecutableActivityGraph(rootExecutable, []);
+  const scopes: ExecutionScopeEntry[] = [
+    { execution: summary("seq-exec", "compiled-root-seq", null), label: "Sequence" },
+    { execution: summary("greeter-exec", "compiled-greeter", "seq-exec"), label: "Greeter" }
+  ];
+
+  // Navigating back to the outer Sequence or clicking sibling Write Line trims Greeter out of the active scope.
+  expect(trimExecutionScopesForTarget(scopes, customGraph.root, customGraph, [], "root-seq").map(item => item.execution.activityExecutionId)).toEqual(["seq-exec"]);
+  expect(trimExecutionScopesForTarget(scopes, customGraph.root, customGraph, [], "write-1").map(item => item.execution.activityExecutionId)).toEqual(["seq-exec"]);
+  // Staying on Greeter or inside its activity-graph keeps Greeter in scope.
+  expect(trimExecutionScopesForTarget(scopes, customGraph.root, customGraph, [], "greeter").map(item => item.execution.activityExecutionId)).toEqual(["seq-exec", "greeter-exec"]);
+  expect(trimExecutionScopesForTarget(scopes, customGraph.root, customGraph, [], "inner-seq").map(item => item.execution.activityExecutionId)).toEqual(["seq-exec", "greeter-exec"]);
+  expect(trimExecutionScopesForTarget(scopes, customGraph.root, customGraph, [], "opaque-child").map(item => item.execution.activityExecutionId)).toEqual(["seq-exec", "greeter-exec"]);
+
+  // Resolving ancestor ID for Greeter or its sibling uses the outer Sequence, not Greeter itself.
+  expect(resolveExecutionScopeAncestorId(scopes, customGraph.root, customGraph, [], "greeter", undefined)).toBe("seq-exec");
+  expect(resolveExecutionScopeAncestorId(scopes, customGraph.root, customGraph, [], "greeter", "greeter-exec")).toBe("seq-exec");
+  expect(resolveExecutionScopeAncestorId(scopes, customGraph.root, customGraph, [], "write-1", undefined)).toBe("seq-exec");
+  // Resolving ancestor ID for nodes inside Greeter or opaque boundary nodes stays scoped to Greeter.
+  expect(resolveExecutionScopeAncestorId(scopes, customGraph.root, customGraph, [], "inner-seq", undefined)).toBe("greeter-exec");
+  expect(resolveExecutionScopeAncestorId(scopes, customGraph.root, customGraph, [], "inner-write", undefined)).toBe("greeter-exec");
+  expect(resolveExecutionScopeAncestorId(scopes, customGraph.root, customGraph, [], "opaque-child", undefined)).toBe("greeter-exec");
+  expect(resolveExecutionScopeAncestorId(scopes, customGraph.root, customGraph, [], "root-seq", undefined)).toBeUndefined();
+
+  expect(findMatchingExecutionScope(scopes, "compiled-greeter")).toEqual({ index: 1, entry: scopes[1] });
+  expect(findMatchingExecutionScope(scopes, "compiled-write-1")).toBeUndefined();
 });
 
 let root: Root | undefined;
@@ -278,7 +352,7 @@ it.each(["password", "declaration", "authored", "compiled"])("does not prefetch 
   expect(current.prepared?.values.size).toBe(0);
 });
 
-it("commits valid execution evidence when an individual captured value is unavailable", async () => {
+it("commits valid run data when an individual captured value is unavailable", async () => {
   const next = summary("write-5");
   tree.set(next.activityExecutionId, { ...inspection(next), outcomeNames: ["Done"], valueSnapshots: [{ name: "Value", inputKey: "Value", evidenceId: "unavailable",
     subject: "ActivityInput", captureMode: "Payload", captureState: "payloadCaptured", accessState: "resolutionAvailable", isSensitive: false,
@@ -303,4 +377,83 @@ it.each(["incidents", "bookmarks"] as const)("keeps exact attached selection whe
   expect(current.scopes.map(item => item.execution[count])).toEqual([null, null, null]);
   expect(current.scopes.every(item => item.execution[ids] === undefined)).toBe(true);
   expect(current.error).toBe("");
+});
+
+it("prepares Journal execution identity without reading hidden captured-value payloads", async () => {
+  const selected = summary();
+  const captured = { name: "Result", evidenceId: "journal-output", subject: "ActivityOutput" as const,
+    captureMode: "Payload", captureState: "payloadCaptured", accessState: "resolutionAvailable", isSensitive: false,
+    capturedAt: "2026-11-02T09:00:00Z", captureReason: "Diagnostic policy", metadata: {} };
+  tree.set(selected.activityExecutionId, { ...inspection(selected), valueSnapshots: [captured] });
+  const scope = await loadExecutionScope(context, "run", selected, options());
+  const prepared = await prepareAttachedExecution(context, "run", selected, scope, graph, "write",
+    new AbortController().signal, undefined, undefined, [], false);
+  expect(prepared.inspection?.activityExecutionId).toBe(selected.activityExecutionId);
+  expect(prepared.inspection?.valueSnapshots).toEqual([captured]);
+  expect(prepared.values.size).toBe(0); expect(api.payload).not.toHaveBeenCalled();
+});
+
+it("resolves known outer-graph execution scopes synchronously and falls back when async metadata is needed", () => {
+  const rootExec = summary("root-1", "root", null);
+  const doExec = summary("do-1", "do", "root-1");
+  const bodyExec = summary("body-1", "body", "do-1");
+  const writeA = summary("write-a", "write", "body-1");
+  const writeB = summary("write-b", "write", "body-1");
+  const known = [rootExec, doExec, bodyExec, writeA, writeB];
+
+  const resolvedFromKnown = resolveKnownExecutionScope("run", writeA, {
+    graph,
+    includeSelf: false,
+    currentScopes: [],
+    knownActivities: known,
+    labelFor
+  });
+  expect(resolvedFromKnown?.map(item => [item.execution.activityExecutionId, item.label])).toEqual([
+    ["root-1", "root"], ["do-1", "do"], ["body-1", "body"]
+  ]);
+
+  // Sibling in the same active scope preserves existing scope chain (including iteration labels).
+  const iterScopes: ExecutionScopeEntry[] = [
+    { execution: rootExec, label: "root" },
+    { execution: doExec, label: "do" },
+    { execution: { ...bodyExec, iterationId: "iter-1" }, label: "body · Iteration 1" }
+  ];
+  const siblingScopes = resolveKnownExecutionScope("run", writeB, {
+    graph,
+    includeSelf: false,
+    currentScopes: iterScopes,
+    knownActivities: known,
+    labelFor
+  });
+  expect(siblingScopes).toBeTruthy();
+  expect(sameExecutionScopes(iterScopes, siblingScopes!)).toBe(true);
+
+  // Clicking an ancestor crumb or root resolves synchronously.
+  expect(resolveKnownExecutionScope("run", rootExec, {
+    graph, includeSelf: false, currentScopes: iterScopes, knownActivities: known, labelFor
+  })).toEqual([]);
+  expect(resolveKnownExecutionScope("run", doExec, {
+    graph, includeSelf: true, currentScopes: iterScopes, knownActivities: known, labelFor
+  })?.map(item => item.execution.activityExecutionId)).toEqual(["root-1", "do-1"]);
+
+  // Falls back to async load when ancestry is unknown, unlabelled iteration, or outside the outer graph.
+  const unknownParent = { ...writeA, parentActivityExecutionId: undefined };
+  expect(resolveKnownExecutionScope("run", unknownParent, {
+    graph, includeSelf: false, currentScopes: [], knownActivities: known, labelFor
+  })).toBeNull();
+  expect(resolveKnownExecutionScope("run", writeA, {
+    graph, includeSelf: false, currentScopes: [], knownActivities: [rootExec, doExec, { ...bodyExec, iterationId: "iter-1" }], labelFor
+  })).toBeNull();
+  expect(resolveKnownExecutionScope("run", summary("private-1", "private-child", "body-1"), {
+    graph, includeSelf: false, currentScopes: iterScopes, knownActivities: known, labelFor
+  })).toBeNull();
+
+  // Scope membership check validates run, node, and ancestor ancestry without guessing unknown parents.
+  expect(isKnownExecutionInScope("run", "write", writeA, undefined, known)).toBe(true);
+  expect(isKnownExecutionInScope("run", "write", writeA, "body-1", known)).toBe(true);
+  expect(isKnownExecutionInScope("run", "write", writeA, "root-1", known)).toBe(true);
+  expect(isKnownExecutionInScope("run", "write", writeA, "other-scope", known)).toBe(false);
+  expect(isKnownExecutionInScope("run", "write", unknownParent, "body-1", known)).toBe(false);
+  expect(isKnownExecutionInScope("other-run", "write", writeA, undefined, known)).toBe(false);
+  expect(isKnownExecutionInScope("run", "other-node", writeA, undefined, known)).toBe(false);
 });

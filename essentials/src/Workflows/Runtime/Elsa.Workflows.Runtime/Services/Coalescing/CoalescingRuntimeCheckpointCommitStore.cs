@@ -30,6 +30,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
 {
     private readonly IRuntimeCoalescingSessionAccessor sessionAccessor;
     private readonly IRuntimeExecutionOwnershipService? ownershipService;
+    private readonly IDurableTimerStore? timerStore;
 
     public CoalescingRuntimeCheckpointCommitStore(CoalescingInner<IRuntimeCheckpointCommitStore> inner,
         IRuntimeCoalescingSessionAccessor sessionAccessor, IRuntimeExecutionOwnershipService? ownershipService = null)
@@ -38,6 +39,11 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     public CoalescingRuntimeCheckpointCommitStore(CoalescingInner<IRuntimeCheckpointCommitStore> inner,
         IRuntimeCoalescingSessionAccessor sessionAccessor, IRuntimeExecutionOwnershipService? ownershipService,
         IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions)
+        : this(inner, sessionAccessor, ownershipService, contributions, null) { }
+
+    public CoalescingRuntimeCheckpointCommitStore(CoalescingInner<IRuntimeCheckpointCommitStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor, IRuntimeExecutionOwnershipService? ownershipService,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions, IDurableTimerStore? timerStore)
     {
         ArgumentNullException.ThrowIfNull(inner);
         ArgumentNullException.ThrowIfNull(sessionAccessor);
@@ -45,6 +51,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
         _inner = inner.Value;
         this.sessionAccessor = sessionAccessor;
         this.ownershipService = ownershipService;
+        this.timerStore = timerStore;
         // Preserve contribution validation; no already-persisted outbox item is restaged by a later fold.
         _ = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
     }
@@ -60,6 +67,8 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     bool IRuntimeCheckpointCommitStore.SupportsInitialStartFaultAdmission => _inner.SupportsInitialStartFaultAdmission;
     public bool SupportsHistory => _inner.SupportsHistory;
     public bool CanCommitHistory(IRuntimeHistoryStore selectedStore) => _inner.CanCommitHistory(selectedStore);
+    ValueTask<bool> IRuntimeCheckpointCommitStore.RequiresUnrecordedTimerDischargeAsync(string workflowExecutionId, CancellationToken cancellationToken) =>
+        _inner.RequiresUnrecordedTimerDischargeAsync(workflowExecutionId, cancellationToken);
     public bool SupportsExactBookmarkResume => _inner.SupportsExactBookmarkResume;
     bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => _inner.SupportsModelParentAdmission;
     bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => _inner.SupportsModelCheckpoint;
@@ -182,6 +191,16 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
                 // that lost the run must not remove the work its new owner is about to run.
                 if (commit.ExpectedFence is { } fence && ownershipService is not null)
                     await ownershipService.EnsureCurrentAsync(commit.WorkflowExecutionId, fence.FencingToken, cancellationToken);
+                var retainedTimerChoice = await _inner.RequiresUnrecordedTimerDischargeAsync(commit.WorkflowExecutionId, cancellationToken);
+                if (retainedTimerChoice || commit.StateChanges.WorkflowExecution?.State.HistoryCapturePolicy is { } policy &&
+                    DurableTimerHistoryFacts.Kinds.Any(kind => policy.SupportedKinds.Contains(kind, StringComparer.Ordinal)))
+                {
+                    if (timerStore is not IDurableTimerHistoryStore { SupportsHistoryResponsibility: true } source ||
+                        !source.CanDischargeUnrecordedCompletion(_inner) ||
+                        !await source.DischargeUnrecordedCompletionAsync(commit, cancellationToken: cancellationToken))
+                        throw new Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException(
+                            "runtime.history.capture-unavailable", "Unrecorded completion still owes qualified timer source responsibility.");
+                }
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
             }
             finally
@@ -328,7 +347,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
                 : change)
             .ToArray();
 
-    private static RuntimePostCommitOutboxItem AsPending(RuntimePostCommitOutboxItem item) =>
+    internal static RuntimePostCommitOutboxItem AsPending(RuntimePostCommitOutboxItem item) =>
         new(
             item.OutboxItemId,
             item.Intent,

@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNotificationController, type StudioNotificationController } from "../../../sdk";
+import type { ToastDurationPreference } from "../../toastDurationPreference";
 import { NotificationCenter } from "../feedback/NotificationCenter";
 import { ToastHost } from "../feedback/ToastHost";
 
@@ -14,13 +15,25 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mount(controller: StudioNotificationController, props: { navigate?: (path: string) => void; now?: () => number; withToasts?: boolean } = {}): HTMLElement {
+function mount(controller: StudioNotificationController, props: {
+  navigate?: (path: string) => void;
+  now?: () => number;
+  withToasts?: boolean;
+  toastDurationPreference?: ToastDurationPreference;
+  onToastDurationPreferenceChange?(preference: ToastDurationPreference): void;
+} = {}): HTMLElement {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
   const navigate = props.navigate ?? (() => {});
   flushSync(() => root.render(<>
-    <NotificationCenter controller={controller} navigate={navigate} now={props.now} />
+    <NotificationCenter
+      controller={controller}
+      navigate={navigate}
+      now={props.now}
+      toastDurationPreference={props.toastDurationPreference}
+      onToastDurationPreferenceChange={props.onToastDurationPreferenceChange}
+    />
     {props.withToasts ? <ToastHost controller={controller} navigate={navigate} /> : null}
   </>));
   cleanup = () => {
@@ -89,6 +102,28 @@ describe("NotificationCenter sheet", () => {
     expect(controller.getEntries().every(entry => !entry.read)).toBe(true);
     expect(entries().every(entry => entry.hasAttribute("data-unread"))).toBe(true);
     expect(bell().getAttribute("aria-label")).toBe("Notifications, 2 unread");
+  });
+
+  it("exposes a custom toast duration and manual dismissal preference", () => {
+    const controller = createNotificationController();
+    const onPreferenceChange = vi.fn();
+    mount(controller, { toastDurationPreference: 8, onToastDurationPreferenceChange: onPreferenceChange });
+    openCenter();
+
+    const dismissal = document.querySelector<HTMLSelectElement>(".studio-notification-preferences select")!;
+    const seconds = document.querySelector<HTMLInputElement>(".studio-notification-preferences input")!;
+    expect(dismissal.value).toBe("custom");
+    expect(seconds.value).toBe("8");
+
+    flushSync(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(seconds, "5");
+      seconds.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(onPreferenceChange).toHaveBeenLastCalledWith(5);
+
+    dismissal.value = "manual";
+    flushSync(() => dismissal.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(onPreferenceChange).toHaveBeenLastCalledWith("manual");
   });
 
   it("does not render a blocking overlay", () => {

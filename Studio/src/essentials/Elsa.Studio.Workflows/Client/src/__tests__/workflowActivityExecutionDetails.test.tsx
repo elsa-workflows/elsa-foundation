@@ -249,6 +249,42 @@ function valueEvidence(overrides: Partial<ActivityExecutionInspectionValueSnapsh
 const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 setNotifications(notifications);
 describe("WorkflowActivityExecutionDetails", () => {
+  it("groups run data into accessible tabs while keeping activity identity visible", () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+    const tablist = container.querySelector<HTMLElement>('[role="tablist"][aria-label="Activity execution details"]')!;
+    const tabs = [...tablist.querySelectorAll<HTMLButtonElement>("[role=tab]")];
+    const panels = tabs.map(tab => document.getElementById(tab.getAttribute("aria-controls")!)!);
+
+    expect(tabs.map(tab => tab.textContent)).toEqual(["Overview", "Inputs", "Outputs", "Events"]);
+    expect(tabs.map(tab => tab.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false"]);
+    expect(panels.map(panel => panel.getAttribute("aria-labelledby"))).toEqual(tabs.map(tab => tab.id));
+    expect(panels.map(panel => panel.hidden)).toEqual([false, true, true, true]);
+    expect(container.querySelector(".wf-activity-overview")?.closest('[role="tabpanel"]')).toBeNull();
+
+    flushSync(() => tablist.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })));
+    expect(tabs[1]!.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tabs[1]);
+    expect(panels.map(panel => panel.hidden)).toEqual([true, false, true, true]);
+
+    flushSync(() => tablist.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true })));
+    expect(tabs[3]!.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tabs[3]);
+    expect(panels.map(panel => panel.hidden)).toEqual([true, true, true, false]);
+  });
+
+  it("shows the Bookmarks tab only when bookmarks exist or the activity is waiting", () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, bookmarkCount: 0, status: "Completed" }} activityCatalog={catalog} />);
+    expect(container.querySelector('[data-tab-id="bookmarks"]')).toBeNull();
+
+    rerender(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, bookmarkCount: 2, status: "Suspended" }} activityCatalog={catalog} />);
+    const bookmarksTab = container.querySelector('[data-tab-id="bookmarks"]');
+    expect(bookmarksTab).toBeTruthy();
+    expect(bookmarksTab?.textContent).toContain("Bookmarks");
+    expect(bookmarksTab?.textContent).toContain("2");
+  });
+
   it("uses projected incident counts and falls back only to available legacy IDs", () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
@@ -266,6 +302,39 @@ describe("WorkflowActivityExecutionDetails", () => {
     }
   });
 
+  it("does not repeat a known-zero incident count as an empty evidence section", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("No runtime outcomes were recorded for this execution."));
+    expect(metadataValue(container, "Incidents")).toBe("0");
+    expect(container.querySelector('[aria-label="Activity incidents"]')).toBeNull();
+    expect(container.querySelector(".wf-activity-outcomes")?.getAttribute("data-state")).toBe("empty");
+    expect(container.querySelector(".wf-activity-outcome-status")?.textContent).toBe("No runtime outcomes were recorded for this execution.");
+    expect(container.querySelector(".wf-activity-outcome-state")).toBeNull();
+  });
+
+  it("keeps unavailable incident details distinct from a recorded zero", async () => {
+    const unavailableInspection = { ...inspection([]), incidents: undefined } as unknown as ActivityExecutionInspection;
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(unavailableInspection);
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, incidentCount: null, incidentIds: undefined }} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Incident details are unavailable for this execution."));
+    expect(metadataValue(container, "Incidents")).toBe("Unavailable");
+  });
+
+  it("shows incident evidence when incidents were recorded", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue({ ...inspection([]), incidents: [incident] });
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, incidentCount: 1 }} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Input failed to evaluate."));
+    expect(container.querySelector('[aria-label="Activity incidents"]')).not.toBeNull();
+    expect(metadataValue(container, "Incidents")).toBe("1");
+  });
+
   it("prefers projected bookmark counts and uses legacy IDs only when the count is absent", () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
@@ -279,7 +348,7 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     for (const [summary, expected] of cases) {
       rerender(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, ...summary }} activityCatalog={catalog} />);
-      expect(metadataValue(container, "Bookmarks")).toBe(expected);
+      expect(metadataValue(container, "Current bookmarks")).toBe(expected);
     }
   });
 
@@ -296,6 +365,7 @@ describe("WorkflowActivityExecutionDetails", () => {
           activityType: activity.activityType,
           activityTypeVersion: activity.activityTypeVersion,
           structureKind: null,
+          structureDiagnostics: [],
           available: true,
           outputCaptures: [],
           authoredInputsAccess: "visible",
@@ -418,7 +488,9 @@ describe("WorkflowActivityExecutionDetails", () => {
     const outcomes = [...container.querySelectorAll<HTMLElement>(".wf-instance-section")]
       .find(section => section.querySelector("h4")?.textContent?.includes("Outcomes"));
     expect(outcomes?.querySelectorAll("[role=listitem]")).toHaveLength(2);
-    expect(outcomes?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("2");
+    expect(outcomes?.getAttribute("data-state")).toBe("recorded");
+    expect(outcomes?.querySelector(".wf-activity-outcome-state")).toBeNull();
+    expect(outcomes?.querySelector(".wf-runtime-evidence-count")).toBeNull();
     expect(outcomes?.textContent).toContain("Completed");
   });
 
@@ -605,7 +677,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
     await waitFor(() => expect(container.textContent).toContain("Additional permission is required"));
-    expect(container.textContent).toContain("Runtime value evidence is hidden by permissions.");
+    expect(container.textContent).toContain("Captured run data is hidden by permissions.");
     expect(container.textContent).toContain("Policy is set to Metadata.");
     expect(container.textContent).toContain("Input capture is off.");
     expect(container.textContent).not.toContain("INLINE_SECRET");
@@ -638,7 +710,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(container.textContent).not.toContain("STALE_OLD_ACTIVITY_VALUE");
-    expect(container.textContent).toContain("No declared inputs, pinned bindings, or runtime input evidence are available for this execution.");
+    expect(container.textContent).toContain("No declared inputs, pinned bindings, or recorded inputs are available for this execution.");
   });
 
   it("drops a resolved value after the same evidence is redacted by a refreshed host context", async () => {
@@ -648,7 +720,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       .mockResolvedValueOnce(inspection([valueEvidence({
         snapshot: { kind: "redacted", reason: "permission-changed" },
         accessState: "redacted",
-        captureReason: "Runtime value evidence is redacted."
+        captureReason: "Captured run data is redacted."
       })]));
 
     let payloadSignal: AbortSignal | undefined;
@@ -661,7 +733,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     await waitFor(() => expect(container.textContent).toContain("VALUE_BEFORE_PERMISSION_CHANGE"));
 
     rerender(<WorkflowActivityExecutionDetails context={refreshedContext} activity={activity} activityCatalog={catalog} />);
-    await waitFor(() => expect(container.textContent).toContain("Runtime value evidence is redacted."));
+    await waitFor(() => expect(container.textContent).toContain("Captured run data is redacted."));
 
     expect(payloadSignal?.aborted).toBe(true);
     expect(container.textContent).not.toContain("VALUE_BEFORE_PERMISSION_CHANGE");
@@ -744,10 +816,10 @@ describe("WorkflowActivityExecutionDetails", () => {
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
     await waitFor(() => expect([...container.querySelectorAll(".wf-input-inspection-content .wf-instance-note")].map(node => node.textContent).join(" ")).toContain("Metadata only"));
-    expect(container.querySelector(".wf-input-inspection-value")?.textContent).toContain("Runtime value evidence is metadata-only.");
+    expect(container.querySelector(".wf-input-inspection-value")?.textContent).toContain("Captured run data is metadata-only.");
   });
 
-  it("reports absent input evidence without claiming a completed execution did not evaluate it", async () => {
+  it("reports absent input data without claiming a completed execution did not evaluate it", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
     const declaredCatalog: ActivityCatalogItem[] = [{
       ...catalog[0]!, inputs: [{ referenceKey: "message-key", name: "Message", typeName: "System.String" }]
@@ -755,8 +827,96 @@ describe("WorkflowActivityExecutionDetails", () => {
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={declaredCatalog} />);
 
     await waitFor(() => expect(container.querySelector(".wf-input-inspection-value")?.textContent)
-      .toContain("No evaluation evidence recorded"));
+      .toContain("No evaluation data recorded"));
     expect(container.querySelector(".wf-input-inspection-value")?.textContent).not.toContain("Not evaluated");
+  });
+
+  it("shows authored source value as fallback when no runtime evaluation is recorded", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const executableNodeFacts: ExecutableGraphNodeFacts = {
+      executableNodeId: "node-1",
+      authoredActivityId: "write-line",
+      activityType: activity.activityType,
+      activityTypeVersion: activity.activityTypeVersion,
+      structureKind: null,
+      structureDiagnostics: [],
+      available: true,
+      outputCaptures: [],
+      authoredInputsAccess: "visible",
+      authoredInputs: [
+        {
+          executableNodeId: "node-1",
+          inputKey: "message-key",
+          expressionType: "Literal",
+          value: "rand-1",
+          isSensitive: false
+        }
+      ],
+      inputBindings: [],
+      presentation: { nodeId: "write-line", displayName: "Write Line", description: null }
+    };
+    const declaredCatalog: ActivityCatalogItem[] = [{
+      ...catalog[0]!, inputs: [{ referenceKey: "message-key", name: "Message", typeName: "System.String" }]
+    }];
+    const container = render(
+      <WorkflowActivityExecutionDetails
+        context={context}
+        activity={activity}
+        activityCatalog={declaredCatalog}
+        executableNodeFacts={executableNodeFacts}
+      />
+    );
+
+    await waitFor(() => expect(container.querySelector(".wf-input-inspection-authored-fallback")?.textContent).toContain("rand-1"));
+    expect(container.querySelector(".wf-input-inspection-authored-fallback")?.textContent).toContain("Authored value");
+    expect(container.querySelector(".wf-input-inspection-value")?.textContent).not.toContain("No evaluation data recorded");
+  });
+
+  it("shows authored portable expression source as fallback when no runtime evaluation is recorded", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const executableNodeFacts: ExecutableGraphNodeFacts = {
+      executableNodeId: "node-1",
+      authoredActivityId: "write-line",
+      activityType: activity.activityType,
+      activityTypeVersion: activity.activityTypeVersion,
+      structureKind: null,
+      structureDiagnostics: [],
+      available: true,
+      outputCaptures: [],
+      authoredInputsAccess: "visible",
+      authoredInputs: [
+        {
+          executableNodeId: "node-1",
+          inputKey: "message-key",
+          expressionType: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source: "'rand-1'",
+            resultType: { typeName: "System.String" },
+            parameters: {},
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          },
+          isSensitive: false
+        }
+      ],
+      inputBindings: [],
+      presentation: { nodeId: "write-line", displayName: "Write Line", description: null }
+    };
+    const declaredCatalog: ActivityCatalogItem[] = [{
+      ...catalog[0]!, inputs: [{ referenceKey: "message-key", name: "Message", typeName: "System.String" }]
+    }];
+    const container = render(
+      <WorkflowActivityExecutionDetails
+        context={context}
+        activity={activity}
+        activityCatalog={declaredCatalog}
+        executableNodeFacts={executableNodeFacts}
+      />
+    );
+
+    await waitFor(() => expect(container.querySelector(".wf-input-inspection-authored-fallback")?.textContent).toContain("'rand-1'"));
+    expect(container.querySelector(".wf-input-inspection-authored-fallback")?.textContent).toContain("Authored value");
   });
 
   it("keeps compact input details independently controlled for punctuation-containing keys", async () => {
@@ -802,6 +962,9 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={pairedCatalog} focusInputKey="a-b" />);
     await vi.waitFor(() => expect(document.activeElement).toBe(buttons[1]));
+    const selectedTab = container.querySelector('[role="tablist"][aria-label="Activity execution details"] [aria-selected="true"]');
+    expect(selectedTab?.getAttribute("data-tab-id")).toBe("inputs");
+    expect(selectedTab?.textContent).toContain("Inputs");
     expect(buttons[1]!.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(ids[1]!)?.hidden).toBe(false);
   });
@@ -829,7 +992,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(container.textContent).not.toContain("null");
   });
 
-  it("pairs runtime evidence with pinned authored source and structured compiled behavior", async () => {
+  it("pairs run data with pinned authored source and structured compiled behavior", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([
       {
         name: "Message",
@@ -855,6 +1018,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       activityType: activity.activityType,
       activityTypeVersion: activity.activityTypeVersion,
       structureKind: null,
+      structureDiagnostics: [],
       available: true,
       outputCaptures: [],
       authoredInputsAccess: "visible",
@@ -900,7 +1064,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       .toEqual(expect.arrayContaining(["Inputs", "Outputs"]));
   });
 
-  it("shows only the source of a canonical portable expression in runtime evidence", async () => {
+  it("shows only the source of a canonical portable expression in run data", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
     const definition = {
       language: "JavaScript",
@@ -923,6 +1087,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       activityType: activity.activityType,
       activityTypeVersion: activity.activityTypeVersion,
       structureKind: null,
+      structureDiagnostics: [],
       available: true,
       outputCaptures: [],
       authoredInputsAccess: "visible",
@@ -974,7 +1139,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(container.querySelector(".wf-activity-overview-type > span")?.textContent).toBe(`HttpEndpoint v${activity.activityTypeVersion}`);
   });
 
-  it("keeps authored source hidden when source access is denied while runtime evidence remains visible", async () => {
+  it("keeps authored source hidden when source access is denied while run data remains visible", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([{
       name: "Message",
       subject: "ActivityInput",
@@ -986,7 +1151,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       state: "captured",
       type: { typeName: "System.String" },
       capturedAt: "2026-07-09T10:00:01Z",
-      snapshot: { kind: "string", preview: "Allowed runtime evidence", length: 24, truncated: false },
+      snapshot: { kind: "string", preview: "Allowed run data", length: 24, truncated: false },
       captureReason: "Captured.",
       isSensitive: false,
       access: "visible",
@@ -1020,6 +1185,7 @@ describe("WorkflowActivityExecutionDetails", () => {
           activityType: activity.activityType,
           activityTypeVersion: activity.activityTypeVersion,
           structureKind: null,
+          structureDiagnostics: [],
           available: true,
           outputCaptures: [],
           authoredInputsAccess: "permissionHidden",
@@ -1041,7 +1207,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       />
     );
 
-    await waitFor(() => expect(container.textContent).toContain("Allowed runtime evidence"));
+    await waitFor(() => expect(container.textContent).toContain("Allowed run data"));
     expect(container.textContent).toContain("Authored source is hidden by source permissions.");
     expect(container.innerHTML).not.toContain(sourceCanary);
     expect(container.innerHTML).not.toContain(metadataCanary);
@@ -1072,6 +1238,7 @@ describe("WorkflowActivityExecutionDetails", () => {
             activityType: activity.activityType,
             activityTypeVersion: activity.activityTypeVersion,
             structureKind: null,
+            structureDiagnostics: [],
             available: true,
             outputCaptures: [],
             authoredInputsAccess: "visible",
@@ -1190,7 +1357,7 @@ describe("WorkflowActivityExecutionDetails", () => {
         activityCatalog={[{ ...catalog[0]!, inputs: [{ referenceKey: "token-key", name: "Token", typeName: "System.String", isSensitive: sensitivitySource === "declaration" }] }]}
         executableNodeFacts={{
           executableNodeId: "node-1", authoredActivityId: "write-line", activityType: activity.activityType, activityTypeVersion: activity.activityTypeVersion,
-          structureKind: null, available: true, outputCaptures: [], authoredInputsAccess: "visible",
+          structureKind: null, structureDiagnostics: [], available: true, outputCaptures: [], authoredInputsAccess: "visible",
           authoredInputs: [{ executableNodeId: "node-1", inputKey: "token-key", expressionType: "Literal", value: "PINNED_SECRET", isSensitive: sensitivitySource === "authored source" }],
           inputBindings: [{ inputKey: "token-key", inputName: "Token", source: "Literal", literal: "PINNED_SECRET", isSensitive: sensitivitySource === "compiled binding" }]
         }}
@@ -1256,7 +1423,7 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
-    await waitFor(() => expect(container.textContent).toContain("No declared inputs, pinned bindings, or runtime input evidence are available for this execution."));
+    await waitFor(() => expect(container.textContent).toContain("No declared inputs, pinned bindings, or recorded inputs are available for this execution."));
     expect(container.textContent).toContain("No runtime output snapshots were recorded for this execution.");
   });
 
@@ -1267,9 +1434,11 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
     const overview = container.querySelector<HTMLElement>(".wf-activity-overview")!;
+    const overviewTab = container.querySelector<HTMLButtonElement>('[role="tablist"][aria-label="Activity execution details"] [aria-selected="true"]')!;
+    const overviewPanel = document.getElementById(overviewTab.getAttribute("aria-controls")!)!;
 
     expect(overview.querySelector("h4")?.textContent).toBe("Write Line");
-    expect(overview.querySelectorAll(".wf-activity-summary-grid .wf-activity-meta-item")).toHaveLength(3);
+    expect(overviewPanel.querySelectorAll(".wf-activity-summary-grid .wf-activity-meta-item")).toHaveLength(3);
     const executionDetails = container.querySelector<HTMLElement>(".wf-activity-execution-details")!;
     expect(executionDetails.hasAttribute("open")).toBe(false);
     expect(executionDetails.querySelector("summary small")?.textContent).toBe("5 values");
@@ -1368,7 +1537,7 @@ describe("WorkflowActivityExecutionDetails", () => {
   });
 });
 
-it("rejects mismatched execution evidence before resolving any value payload", async () => {
+it("rejects mismatched run data before resolving any value payload", async () => {
   vi.mocked(getActivityExecutionInspection).mockResolvedValue({ ...inspection([valueEvidence({ payload: "FOREIGN_VALUE" })]), activityExecutionId: "foreign" });
   const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
   await waitFor(() => expect(container.textContent).toContain("identity did not match"));
@@ -1695,7 +1864,7 @@ describe("buildInstanceCanvas", () => {
     expect(navigated).toEqual([]);
   });
 
-  it("attaches runtime evidence overlays inside the descended canvas", () => {
+  it("attaches run data overlays inside the descended canvas", () => {
     const frames = enterForEachBody();
     const execution: ActivityExecutionStateSummary = { ...activity, executableNodeId: "wl-1", authoredActivityId: "wl-1" };
 
@@ -1801,4 +1970,17 @@ describe("buildInstanceCanvas", () => {
       domAttributes: { "aria-pressed": false }
     });
   });
+});
+
+
+it("keeps captured values unmounted while an activity journal is being inspected until Inputs is opened", async () => {
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({ name: "Private input preview", captureMode: "DiagnosticSnapshot", accessState: "visible", snapshot: { kind: "string", preview: "permitted preview", length: 17, truncated: false } })]));
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} initialView="events" />);
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity journal']")).toBeTruthy());
+  expect(container.textContent).not.toContain("Private input preview"); expect(container.textContent).not.toContain("permitted preview");
+  expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  const inputsTab = container.querySelector<HTMLButtonElement>('[data-tab-id="inputs"]');
+  flushSync(() => inputsTab!.click());
+  await vi.waitFor(() => expect(container.textContent).toContain("Private input preview"));
+  expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
 });

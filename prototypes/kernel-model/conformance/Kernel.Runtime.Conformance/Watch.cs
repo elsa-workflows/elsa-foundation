@@ -17,6 +17,16 @@ public sealed class Watcher
     private readonly Dictionary<(string, int), int> _generations = [];  // a node's successful activations of a scope so far
     private readonly List<string> _violations = [];
     private readonly List<string> _fenced = [];
+    private (string Node, int Scope)? _countPassesFor;
+    private int _countedPasses;
+
+    public void CountPasses(int scope, string node)
+    {
+        lock (_lock) (_countPassesFor, _countedPasses) = ((node, scope), 0);
+    }
+
+    public int CountedPasses { get { lock (_lock) return _countedPasses; } }
+
 
     /// <summary>Activations asked for while another node held the scope: a second activation at once.</summary>
     public int Second { get; private set; }
@@ -117,20 +127,71 @@ public sealed class Watcher
             if (_busy.TryGetValue((node, scope), out var now) && now == what) _busy.Remove((node, scope));
     }
 
-    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount
+    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount, INodeLeaseHost, IScopeSetRelease, IScopeSetGain
     {
+        public bool SupportsSetRelease => inner is IScopeSetRelease { SupportsSetRelease: true };
+
+        public async ValueTask ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default)
+        {
+            var releasing = activations.Cast<Watched>().Where(activation => activation.BeginRelease()).ToArray();
+            var cancelled = false;
+            try
+            {
+                await ((IScopeSetRelease)inner).ReleaseAsync(releasing.Select(activation => activation.Inner).ToArray(), cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                cancelled = true;
+                throw;
+            }
+            finally
+            {
+                foreach (var activation in releasing) activation.EndRelease(cancelled);
+            }
+        }
+
+        // K1b: the node lease is layer 2's too; the watcher passes it through, and watches what the node pass adopts as an activation.
+        public TimeSpan? NodeLease => (inner as INodeLeaseHost)?.NodeLease;
+        public ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default) =>
+            inner is INodeLeaseHost lease ? lease.HeartbeatAsync(window, cancellationToken) : ValueTask.FromResult<Cluster?>(null);
+        public ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default) =>
+            inner is INodeLeaseHost lease ? lease.PassAsync(cancellationToken) : ValueTask.FromResult<IReadOnlyCollection<int>>([]);
+
         // The start's count check is layer 2's: the watcher passes it through, so a mismatch refuses the node here too.
         public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) =>
             inner is IScopeCount counted ? counted.CheckScopesAsync(scopes, cancellationToken) : ValueTask.CompletedTask;
+        public IScopeHostRun? AttachRuntime() => inner.AttachRuntime();
 
         public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
+        {
+            BeginActivation(scope);
+            IScopeActivation? activation;
+            try { activation = await inner.ActivateAsync(scope, cancellationToken); }
+            finally { watcher.Leave(node, scope, "activated"); }
+            return Record(scope, activation);
+        }
+
+        public bool SupportsSetGain => inner is IScopeSetGain { SupportsSetGain: true };
+
+        public async ValueTask<IReadOnlyList<IScopeActivation>> ActivateAsync(IReadOnlyList<int> scopes, CancellationToken cancellationToken = default)
+        {
+            foreach (var scope in scopes) BeginActivation(scope);
+            IReadOnlyList<IScopeActivation> gained;
+            try { gained = await ((IScopeSetGain)inner).ActivateAsync(scopes, cancellationToken); }
+            finally { foreach (var scope in scopes) watcher.Leave(node, scope, "activated"); }
+            var byScope = gained.ToDictionary(a => a.Scope);
+            return scopes.Select(s => Record(s, byScope.GetValueOrDefault(s))).OfType<IScopeActivation>().ToArray();
+        }
+
+        private void BeginActivation(int scope)
         {
             lock (watcher._lock)
                 if (watcher.Live(scope).Any(w => w.Node != node)) watcher.Second++;
             watcher.Enter(node, scope, "activated");
-            IScopeActivation? activation;
-            try { activation = await inner.ActivateAsync(scope, cancellationToken); }
-            finally { watcher.Leave(node, scope, "activated"); }
+        }
+
+        private IScopeActivation? Record(int scope, IScopeActivation? activation)
+        {
             if (activation is null)
             {
                 lock (watcher._lock) watcher.Declined++;
@@ -164,21 +225,37 @@ public sealed class Watcher
             if (Disposed) lock (watcher._lock) watcher._violations.Add($"SEAM {node} ran a pass of scope {scope} after giving it up");
             watcher.Enter(node, scope, "ran a pass of");
             var held = inner.Active;
-            try { return await inner.RunAsync(cancellationToken); }
+            var completed = false;
+            try
+            {
+                var next = await inner.RunAsync(cancellationToken);
+                completed = true;
+                return next;
+            }
             finally
             {
                 watcher.Leave(node, scope, "ran a pass of");
                 lock (watcher._lock)
+                {
                     if (held && !inner.Active && !Disposed) watcher._fenced.Add(node);
+                    if (completed && watcher._countPassesFor == (node, Scope) && inner.Active) watcher._countedPasses++;
+                }
                 watcher.Overlap(scope);
             }
         }
 
         public async ValueTask DisposeAsync()
         {
+            if (!BeginRelease()) return;
+            try { await inner.DisposeAsync(); }
+            finally { EndRelease(); }
+        }
+
+        internal bool BeginRelease()
+        {
             lock (watcher._lock)
             {
-                if (Disposed) return;
+                if (Disposed) return false;
                 Disposed = true;
                 // Layer 2 hands a node the same activation again when it takes the scope again; giving up this one then
                 // would give up the new epoch.
@@ -189,8 +266,13 @@ public sealed class Watcher
                     watcher._violations.Add($"SEAM {node} gave scope {scope} up after it was killed: a crash gives nothing up");
             }
             watcher.Enter(node, scope, "gave up");
-            try { await inner.DisposeAsync(); }
-            finally { watcher.Leave(node, scope, "gave up"); }
+            return true;
+        }
+
+        internal void EndRelease(bool cancelled = false)
+        {
+            if (cancelled) lock (watcher._lock) Disposed = false;
+            watcher.Leave(node, scope, "gave up");
         }
     }
 }

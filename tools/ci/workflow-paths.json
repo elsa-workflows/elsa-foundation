@@ -1,4 +1,14 @@
 {
+  "package-evidence": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/packages.yml",
+    "tools/ci/workflow-paths.json",
+    "tools/ci/workflow_scope.py",
+    "tools/versioning/package-evidence/**",
+    "tools/versioning/Elsa.Versioning.Publisher/**",
+    "essentials/src/Caching/Core/**",
+    "essentials/src/Caching/Memory/**"
+  ],
   "studio": [
     "Studio/**",
     "extensions/*/studio/**",
@@ -33,7 +43,7 @@
     "tools/ux-acceptance/**",
     "tools/ci/studio_gate.py",
     "tools/ci/test_studio_gate.py",
-    "apps/Elsa.Workbench/**",
+    "apps/Elsa.Workbench.Host/**",
     "extensions/Agent/**",
     "extensions/Connections/**",
     "extensions/Secrets/**",
@@ -47,10 +57,10 @@
     "docs/contributing/backend-source-edit.md",
     "NuGet.config",
     "Directory.Packages.props",
-    "apps/Elsa.Workbench/Elsa.Workbench.csproj",
-    "apps/Elsa.Workbench/packages.lock.json",
-    "apps/Elsa.Workbench/appsettings*.json",
-    "apps/Elsa.Workbench/shells.json",
+    "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj",
+    "apps/Elsa.Workbench.Host/packages.lock.json",
+    "apps/Elsa.Workbench.Host/appsettings*.json",
+    "apps/Elsa.Workbench.Host/shells.json",
     "essentials/tests/Activities/Runtime/Tests/packages.lock.json",
     "e2e-tests/README.md",
     "e2e-tests/Invoke-PlatformSourceJourney.ps1",

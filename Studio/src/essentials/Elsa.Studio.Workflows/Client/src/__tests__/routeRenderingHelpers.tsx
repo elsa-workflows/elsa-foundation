@@ -45,7 +45,8 @@ export async function renderRegisteredRoute(
   followNavigation = false,
   capabilities = capabilityDocument(),
   historyState: unknown = {},
-  retained = false
+  retained = false,
+  wrapRoute?: (screen: React.ReactNode) => React.ReactNode
 ) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
@@ -92,7 +93,8 @@ export async function renderRegisteredRoute(
       window.dispatchEvent(new PopStateEvent("popstate"));
     };
     const Component = route.component;
-    return <Component navigate={navigate} />;
+    const screen = <Component navigate={navigate} />;
+    return wrapRoute ? wrapRoute(screen) : screen;
   }
 
   let visible = true;
@@ -170,7 +172,7 @@ export function testApi(): ElsaStudioModuleApi {
 function copyPlacementMetadata(nav: {
   placement?: string;
   parentId?: string;
-  childDisplay?: "views";
+  childDisplay?: "links" | "views";
   viewLabel?: string;
   requiresFeature?: string;
   requiresRole?: string;
@@ -205,11 +207,12 @@ function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: Re
         path: featureArea.nav.path,
         activePathPrefix: featureArea.ownedPaths[0],
         order: featureArea.nav.order ?? featureArea.order,
+        icon: featureArea.nav.icon,
         iconColor: featureArea.nav.iconColor,
         ...copyPlacementMetadata(featureArea.nav)
       });
       for (const [index, item] of (featureArea.nav.items ?? []).entries()) {
-        if (item.path === featureArea.nav.path && featureArea.nav.childDisplay !== "views") {
+        if (item.path === featureArea.nav.path && featureArea.nav.childDisplay !== "views" && featureArea.nav.childDisplay !== "links") {
           continue;
         }
         navigation.add({
@@ -219,6 +222,7 @@ function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: Re
           parentId: item.parentId ?? (item.placement ? undefined : parentId),
           activePathPrefix: item.path,
           order: item.order ?? (featureArea.order ?? 500) + index + 1,
+          icon: item.icon,
           iconColor: item.iconColor ?? featureArea.nav.iconColor,
           ...copyPlacementMetadata(item)
         });

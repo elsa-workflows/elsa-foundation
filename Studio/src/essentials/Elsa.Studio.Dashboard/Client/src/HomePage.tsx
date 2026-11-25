@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioButton, StudioDialog, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { House, Plus, RefreshCw } from "lucide-react";
 import {
@@ -9,7 +9,6 @@ import {
   type StudioDashboardWidgetContribution
 } from "@elsa-workflows/studio-sdk";
 import { homeLayoutPermissions } from "./hostControl";
-import { useHomeDialogFocus } from "./useHomeDialogFocus";
 import { HomeTaskGroup } from "./HomeTaskGroup";
 import {
   HomeLayoutStore,
@@ -55,9 +54,8 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   const [liveMessage, setLiveMessage] = useState("");
   const [moveFocus, setMoveFocus] = useState<{ id: string; label: string } | null>(null);
   const pageRef = useRef<HTMLElement>(null);
-  const pickerRef = useRef<HTMLElement>(null);
+  const pickerSearchRef = useRef<HTMLInputElement>(null);
   const closePicker = useCallback(() => { setPickerOpen(false); setPickerQuery(""); }, []);
-  useHomeDialogFocus(pickerRef, pickerOpen ? closePicker : null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [refreshIntervalMs, setRefreshIntervalMs] = useState(api.runtime.dashboard?.defaultRefreshIntervalMs ?? 300_000);
   const [active, setActive] = useState(!globalThis.document.hidden);
@@ -188,7 +186,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   return (
     <section ref={pageRef} className={`studio-page dashboard-page home-page${editing ? " home-page--editing" : ""}`}>
       <StudioPageHeader headingLevel={2} title="Home" description={editing ? "Add, remove and reorder widgets. Changes save as you go." : "What to know and do next."} actions={<>
-          <StudioField label="Refresh"><select value={refreshIntervalMs} onChange={event => setRefreshIntervalMs(Number(event.target.value))}>
+          <StudioField label="Refresh interval"><select value={refreshIntervalMs} onChange={event => setRefreshIntervalMs(Number(event.target.value))}>
             {([[0, "Off"], [60_000, "1 minute"], [300_000, "5 minutes"], [900_000, "15 minutes"], [1_800_000, "30 minutes"]] as const)
               .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></StudioField>
@@ -234,36 +232,22 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
           <div className="dashboard-empty">
             <House size={22} />
             <span>No Home widgets are visible.</span>
-            <button type="button" onClick={() => { setEditing(true); setPickerOpen(true); }}>Add widget</button>
+            <StudioButton type="button" onClick={() => { setEditing(true); setPickerOpen(true); }}>Add widget</StudioButton>
           </div>
         )}
         {editing ? (
-          <button type="button" className="home-add-slot" onClick={() => { setPickerOpen(true); setPickerQuery(""); }}>
+          <StudioButton type="button" className="home-add-slot" onClick={() => { setPickerOpen(true); setPickerQuery(""); }}>
             ＋ Add widget
-          </button>
+          </StudioButton>
         ) : null}
       </div>
       {pickerOpen ? (
-        <div className="dashboard-settings-backdrop">
-          <section
-            ref={pickerRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Add widget"
-            className="dashboard-settings-dialog"
-            tabIndex={-1}
-          >
-            <h4>Add widget</h4>
-            <label>
-              <span>Search</span>
-              <input aria-label="Search widgets" value={pickerQuery} onChange={event => setPickerQuery(event.target.value)} />
-            </label>
+        <StudioDialog open title="Add widget" onClose={closePicker} dismissOnOutsideClick={false} initialFocusRef={pickerSearchRef}>
+            <StudioField label="Search"><input ref={pickerSearchRef} aria-label="Search widgets" value={pickerQuery} onChange={event => setPickerQuery(event.target.value)} /></StudioField>
             <AddWidgetGroup title="Core" widgets={filteredAddable.filter(widget => widget.core)} hidden={hidden} onAdd={addWidget} />
             <AddWidgetGroup title="From modules" widgets={filteredAddable.filter(widget => !widget.core)} hidden={hidden} onAdd={addWidget} />
             {!filteredAddable.length ? <p>No widgets match.</p> : null}
-            <div><button type="button" onClick={closePicker}>Close</button></div>
-          </section>
-        </div>
+        </StudioDialog>
       ) : null}
     </section>
   );
@@ -296,10 +280,10 @@ function AddWidgetGroup({
                 : undefined;
           return (
             <li key={widget.id}>
-              <button type="button" onClick={() => onAdd(widget)}>
+              <StudioButton type="button" onClick={() => onAdd(widget)}>
                 {widget.title}
                 {reason ? <span> {reason}</span> : null}
-              </button>
+              </StudioButton>
             </li>
           );
         })}

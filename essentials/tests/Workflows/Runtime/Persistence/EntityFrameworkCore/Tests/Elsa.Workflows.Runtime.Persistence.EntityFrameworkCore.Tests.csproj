@@ -6,13 +6,15 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="../../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/runtime.sqlite.gz"
-          Link="HostingBaseline/runtime.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+          Link="HostingBaseline/runtime.sqlite.gz" CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('../../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/runtime.sqlite.gz')" />
     <PackageReference Include="CShells" />
     <PackageReference Include="CShells.AspNetCore" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Xunit.SkippableFact" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
@@ -84,5 +86,11 @@
     <Compile Include="..\..\..\Tests\ForwardingOutboxStore.cs" Link="ForwardingOutboxStore.cs" />
     <!-- #2230: the base of every activation-switch double, shared rather than copied. -->
     <Compile Include="..\..\..\Tests\Fixtures\ForwardingActivationSwitch.cs" Link="ForwardingActivationSwitch.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Fixtures/TimerHistoryRestartHost/TimerHistoryRestartHost.csproj" ReferenceOutputAssembly="false" />
+    <Compile Include="../Fixtures/TimerHistoryRestartHost/Protocol.cs" Link="TimerHistoryRestartProtocol.cs" />
+    <ProjectReference Include="../Fixtures/RuntimeHistoryRestartHost/RuntimeHistoryRestartHost.csproj" ReferenceOutputAssembly="false" />
+    <Compile Include="../Fixtures/RuntimeHistoryRestartHost/Protocol.cs" Link="RuntimeHistoryRestartProtocol.cs" />
   </ItemGroup>
 </Project>

@@ -15,6 +15,7 @@ public sealed record MongoStoreOptions
     /// fence when this store instance did not take the partition at this epoch itself.
     /// </summary>
     public bool FenceInBatch { get; init; }
+
 }
 
 /// <summary>
@@ -27,24 +28,29 @@ public sealed record MongoStoreOptions
 /// gets a larger key whoever owns the partition and whatever its clock says.
 /// </para>
 /// </summary>
-public sealed class MongoStore : IKernelStore
+public sealed partial class MongoStore : IKernelStore
 {
+    public Func<long>? FoundationClock => null;
+
     private static readonly TransactionOptions Transaction = new(ReadConcern.Snapshot, ReadPreference.Primary, WriteConcern.WMajority);
     private static readonly BsonDocument NowMs = new("$toLong", "$$NOW");
     private static readonly BsonDocument NowUs = new("$multiply", new BsonArray { NowMs, 1000L });
 
     private readonly IMongoClient _client;
     private readonly MongoStoreOptions _options;
-    private readonly IMongoCollection<BsonDocument> _partitions, _clocks, _instances, _messages, _subscriptions, _events, _journal, _nodes, _projections, _views;
+    private static readonly string[] DataCollections =
+        ["partitions", "clocks", "instances", "messages", "subscriptions", "events", "journal", "nodes", "projections", "views"];
+    private readonly IMongoCollection<BsonDocument> _meta, _partitions, _clocks, _instances, _messages, _subscriptions, _events, _journal, _nodes, _projections, _views;
     private readonly ConcurrentDictionary<(int Partition, long Epoch), long> _known = new();     // FenceInBatch: the clock at (partition, epoch)
 
     public MongoStore(IMongoClient client, string database, MongoStoreOptions? options = null)
     {
         _client = client;
         _options = options ?? new MongoStoreOptions();
-        // Every read outside a transaction is majority: it never sees a write that a failover could roll back.
+        // Reads use majority by default. The take reads leases from the primary, where a rolled-back renewal can only delay a take.
         var db = client.GetDatabase(database, new MongoDatabaseSettings { ReadConcern = ReadConcern.Majority, WriteConcern = WriteConcern.WMajority, ReadPreference = ReadPreference.Primary });
         Database = db;
+        _meta = db.GetCollection<BsonDocument>("meta");
         _partitions = db.GetCollection<BsonDocument>("partitions");
         _clocks = db.GetCollection<BsonDocument>("clocks");
         _instances = db.GetCollection<BsonDocument>("instances");
@@ -61,24 +67,34 @@ public sealed class MongoStore : IKernelStore
     public IMongoDatabase Database { get; }
 
     /// <summary>
-    /// The count the first open recorded, once every partition document of it exists; an open cut short between the record
-    /// and the last document refuses (definite) until <see cref="CreateAsync"/> runs again at that count. A database from
-    /// before the record gives its partition documents.
+    /// The recorded count after the partition, clock and projection rows are ready. Re-run
+    /// <see cref="CreateAsync"/> at the same count if initialization was interrupted. A counted host
+    /// always checks the marker, including when another process initialized the store.
     /// </summary>
     public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
     {
-        var rows = (int)await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-        if (await Database.GetCollection<BsonDocument>("meta").Find(new BsonDocument("_id", "partitions")).FirstOrDefaultAsync(cancellationToken) is not { } meta) return rows;
-        var count = meta["count"].ToInt32();
-        return rows == count ? count
-            : throw new StoreException(Failure.Definite, $"Initialization incomplete: {rows} of {count} partition documents exist. Re-run CreateAsync at the same count.");
+        var count = await RequireVersionsAsync(cancellationToken);
+        var required = Builders<BsonDocument>.Filter.Gte("_id", 0) & Builders<BsonDocument>.Filter.Lt("_id", count);
+        await RequireRows(_partitions, FilterDefinition<BsonDocument>.Empty);
+        await RequireRows(_clocks, required);
+        await RequireRows(_projections, required);
+        return count;
+
+        async Task RequireRows(IMongoCollection<BsonDocument> collection, FilterDefinition<BsonDocument> filter)
+        {
+            var rows = await collection.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
+            if (rows != count)
+                throw new StoreException(Failure.Definite,
+                    $"Initialization incomplete: {rows} of {count} {collection.CollectionNamespace.CollectionName} documents exist. Re-run CreateAsync at the same count.");
+        }
     }
 
     /// <summary>Collections, indexes and the partition documents. Collections are created here, not inside a transaction.</summary>
     public async Task CreateAsync(int partitions = Defaults.ServerPartitions)
     {
         var existing = await (await Database.ListCollectionNamesAsync()).ToListAsync();
-        foreach (var name in new[] { "meta", "partitions", "clocks", "instances", "messages", "subscriptions", "events", "journal", "nodes", "projections", "views" })
+        await OpenVersionsAsync(existing, partitions);
+        foreach (var name in DataCollections)
             if (!existing.Contains(name)) await Database.CreateCollectionAsync(name);
         await _messages.Indexes.CreateManyAsync([
             new CreateIndexModel<BsonDocument>(new BsonDocument { { "partition", 1 }, { "done", 1 }, { "seq", 1 }, { "_id", 1 } }, new CreateIndexOptions { Name = "poll" }),
@@ -91,23 +107,11 @@ public sealed class MongoStore : IKernelStore
         await _journal.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { { "partition", 1 }, { "instance", 1 } }));
         await _events.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument("key", 1)));
         await _journal.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { { "partition", 1 }, { "position", 1 } }, new CreateIndexOptions { Unique = true }));
-        // The count is fixed when the database is created (K1 slice 7): another count would address partitions with no
-        // document, or leave some unserved. Nothing is migrated: recreate the database. The first open records the count
-        // before it writes a partition document, one at a time and outside a transaction, so an open cut short is
-        // finished by the next open at the same count, and refused at another.
-        var meta = Database.GetCollection<BsonDocument>("meta");
-        var rows = await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty);
-        if (await meta.Find(new BsonDocument("_id", "partitions")).FirstOrDefaultAsync() is null && rows > 0 && rows != partitions)
-            throw new StoreException(Failure.Definite, $"The database has {rows} partitions and was opened with {partitions}. The count is fixed at creation: recreate the database.");
-        var recorded = await meta.FindOneAndUpdateAsync(new BsonDocument("_id", "partitions"), new BsonDocument("$setOnInsert", new BsonDocument("count", partitions)),
-            new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After });
-        if (recorded["count"].ToInt32() != partitions)
-            throw new StoreException(Failure.Definite, $"The database has {recorded["count"].ToInt32()} partitions and was opened with {partitions}. The count is fixed at creation: recreate the database.");
         for (var p = 0; p < partitions; p++)
         {
             await _partitions.UpdateOneAsync(new BsonDocument("_id", p), new BsonDocument("$setOnInsert", new BsonDocument
             {
-                { "owner", BsonNull.Value }, { "epoch", 0L }, { "leaseUntil", 0L }, { "position", 0L }, { "clock", 0L }, { "now", 0L }, { "died", false },
+                { "owner", BsonNull.Value }, { "epoch", 0L }, { "position", 0L }, { "clock", 0L }, { "now", 0L }, { "died", false },
             }), new UpdateOptions { IsUpsert = true });
             await _clocks.UpdateOneAsync(new BsonDocument("_id", p), new BsonDocument("$setOnInsert", new BsonDocument("clock", 0L)), new UpdateOptions { IsUpsert = true });
             await _projections.UpdateOneAsync(new BsonDocument("_id", p), new BsonDocument("$setOnInsert", new BsonDocument("position", 0L)), new UpdateOptions { IsUpsert = true });
@@ -116,27 +120,7 @@ public sealed class MongoStore : IKernelStore
 
     // ---- ownership ---------------------------------------------------------------------------------------------------
 
-    /// <summary>The partition documents a take may take: free, already the node's, or with an expired lease.</summary>
-    private static BsonDocument Takeable(BsonValue id, string node) => new()
-    {
-        { "_id", id },
-        { "$or", new BsonArray { new BsonDocument("owner", BsonNull.Value), new BsonDocument("owner", node), new BsonDocument("$expr", new BsonDocument("$lt", new BsonArray { "$leaseUntil", NowMs })) } },
-    };
-
-    private static UpdateDefinition<BsonDocument> TakeUpdate(string node, TimeSpan lease) => Builders<BsonDocument>.Update.Pipeline(new BsonDocument[]
-    {
-        new("$set", new BsonDocument
-        {
-            // Taken from another owner: only possible because its lease expired. That is a death.
-            { "died", new BsonDocument("$and", new BsonArray { new BsonDocument("$ne", new BsonArray { "$owner", BsonNull.Value }), new BsonDocument("$ne", new BsonArray { "$owner", new BsonDocument("$literal", node) }) }) },
-            { "owner", new BsonDocument("$literal", node) },
-            { "epoch", new BsonDocument("$add", new BsonArray { "$epoch", 1L }) },
-            { "now", NowMs },
-            { "leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, (long)lease.TotalMilliseconds }) },
-        }),
-    });
-
-    /// <summary>FenceInBatch: the clock of the partition at this epoch, as this store instance last saw it.</summary>
+    /// <summary>Remember the commit clock read by this take for its partition and epoch.</summary>
     private void Known(int partition, long epoch, long clock)
     {
         if (!_options.FenceInBatch) return;
@@ -144,46 +128,13 @@ public sealed class MongoStore : IKernelStore
         _known[(partition, epoch)] = clock;
     }
 
-    public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
-    {
-        using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
-        session.StartTransaction(Transaction);
-        var doc = await _partitions.FindOneAndUpdateAsync(session, Takeable(partition, node), TakeUpdate(node, lease), new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken);
-        if (doc is null)
-        {
-            await session.AbortTransactionAsync(cancellationToken);
-            return null;
-        }
-        var epoch = doc["epoch"].AsInt64;
-        // In the same transaction: one more attempt for every message the dead owner had on trial.
-        if (doc["died"].AsBoolean)
-            await _messages.UpdateManyAsync(session, new BsonDocument { { "partition", partition }, { "trial", epoch - 1 }, { "done", false } }, new BsonDocument("$inc", new BsonDocument("attempts", 1)), cancellationToken: cancellationToken);
-        await session.CommitTransactionAsync(cancellationToken);
-        Known(partition, epoch, doc["clock"].AsInt64);
-        return new Lease(epoch, doc["position"].AsInt64, doc["now"].AsInt64);
-    }
+    public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) =>
+        await NodeTakeAsync([partition], node, lease, cancellationToken) is { Taken: [var one] } set ? new Lease(one.Epoch, one.Position, set.Now) : null;
 
-    /// <summary>
-    /// A take of a set, in one transaction: one update takes each document exactly as the one-partition take decides it
-    /// (through the _id index, in ascending id), one read returns what the node now holds of the set, and one more update
-    /// counts the death of the partitions taken from a dead owner, only when there are any. A one-element set is today's take.
-    /// </summary>
     public async ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
     {
         var set = partitions.Distinct().Order().ToList();
-        if (set.Count <= 1)
-            return set.Count == 1 && await TakeAsync(set[0], node, lease, cancellationToken) is { } one ? new([one.For(set[0])], one.Now) : new([], 0);
-        using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
-        session.StartTransaction(Transaction);
-        var ids = new BsonDocument("$in", new BsonArray(set));
-        await _partitions.UpdateManyAsync(session, Takeable(ids, node), TakeUpdate(node, lease), cancellationToken: cancellationToken);
-        // Every document of the set the node holds now matched the take (it was its own), so each was taken by it just now.
-        var docs = await _partitions.Find(session, new BsonDocument { { "_id", ids }, { "owner", node } }).Sort(new BsonDocument("_id", 1)).ToListAsync(cancellationToken);
-        if (docs.Where(d => d["died"].AsBoolean).Select(d => new BsonDocument { { "partition", d["_id"] }, { "trial", d["epoch"].AsInt64 - 1 }, { "done", false } }).ToList() is { Count: > 0 } dead)
-            await _messages.UpdateManyAsync(session, new BsonDocument("$or", new BsonArray(dead)), new BsonDocument("$inc", new BsonDocument("attempts", 1)), cancellationToken: cancellationToken);
-        await session.CommitTransactionAsync(cancellationToken);
-        foreach (var d in docs) Known(d["_id"].AsInt32, d["epoch"].AsInt64, d["clock"].AsInt64);
-        return new([.. docs.Select(d => new PartitionFence(d["_id"].AsInt32, d["epoch"].AsInt64, d["position"].AsInt64))], docs.Count > 0 ? docs[0]["now"].AsInt64 : 0);
+        return set.Count == 0 ? new([], 0) : await NodeTakeAsync(set, node, lease, cancellationToken);
     }
 
     public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
@@ -205,24 +156,8 @@ public sealed class MongoStore : IKernelStore
         await _partitions.UpdateManyAsync(new BsonDocument("$or", new BsonArray(held)), new BsonDocument("$set", new BsonDocument("owner", BsonNull.Value)), cancellationToken: cancellationToken);
     }
 
-    /// <summary>The retake after a reset: one conditional update on owner and epoch. One more epoch, a renewed lease, the position kept, no death.</summary>
-    public async ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default)
-    {
-        var update = Builders<BsonDocument>.Update.Pipeline(new BsonDocument[]
-        {
-            new("$set", new BsonDocument
-            {
-                { "epoch", new BsonDocument("$add", new BsonArray { "$epoch", 1L }) },
-                { "now", NowMs },
-                { "leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, (long)lease.TotalMilliseconds }) },
-            }),
-        });
-        var doc = await _partitions.FindOneAndUpdateAsync(new BsonDocument { { "_id", partition }, { "owner", node }, { "epoch", epoch } }, update,
-            new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken);
-        if (doc is null) return null;
-        Known(partition, doc["epoch"].AsInt64, doc["clock"].AsInt64);
-        return new Lease(doc["epoch"].AsInt64, doc["position"].AsInt64, doc["now"].AsInt64);
-    }
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) =>
+        new(RetakeInTransactionAsync(partition, node, epoch, lease, countDeaths: false, cancellationToken));
 
     // ---- the commit -----------------------------------------------------------------------------------------------------
 
@@ -254,6 +189,7 @@ public sealed class MongoStore : IKernelStore
         CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         CommitClockFacts.RejectUnsupported(batch);
         if (batch.Window is not null) throw new NotSupportedException("MongoDB cannot enforce the requested commit window.");
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
         try
         {
@@ -262,7 +198,6 @@ public sealed class MongoStore : IKernelStore
             // in that partition. The one-partition form is the batch's partition and every send, as before.
             var (fences, owned) = (batch.Fenced, batch.Fences is not null);
             var sends = fences.ToDictionary(f => f.Partition, f => batch.Turns.Where(t => batch.PartitionOf(t) == f.Partition).Sum(t => t.Sent.Count));
-            var leaseMs = (long)batch.Lease.TotalMilliseconds;
             var models = new List<BulkWriteModel>();
             var checks = new List<Check>();
             var (clocks, known) = (new Dictionary<int, long>(), new Dictionary<int, long>());
@@ -288,7 +223,7 @@ public sealed class MongoStore : IKernelStore
                         new("$set", new BsonDocument
                         {
                             { "position", fence.Position + batch.PositionsIn(fence.Partition) }, { "clock", clock }, { "now", NowMs },
-                            { "leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, leaseMs }) },
+                            FenceWrite(),
                         }),
                     }), isUpsert: true));
                 }
@@ -307,7 +242,7 @@ public sealed class MongoStore : IKernelStore
                         {
                             { "position", fence.Position + batch.PositionsIn(fence.Partition) },
                             { "now", NowMs },
-                            { "leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, leaseMs }) },
+                            FenceWrite(),
                             { "clock", new BsonDocument("$add", new BsonArray { new BsonDocument("$max", new BsonArray { "$clock", NowUs }), (long)sends[fence.Partition] }) },
                         }),
                     ];
@@ -440,6 +375,13 @@ public sealed class MongoStore : IKernelStore
                     await session.AbortTransactionAsync(cancellationToken);
                     return new Committed(false, 0, []);
                 }
+            }
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(sentAt) > batch.Lease)
+            {
+                // The commit-step deadline (the node lease): past the lease since the batch was sent, the owner's guard has
+                // expired too; abort instead of committing.
+                await session.AbortTransactionAsync(cancellationToken);
+                return new Committed(false, 0, []);
             }
             await session.CommitTransactionAsync(cancellationToken);
             if (_options.FenceInBatch) foreach (var fence in fences) _known[(fence.Partition, fence.Epoch)] = clocks[fence.Partition];
@@ -669,6 +611,7 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default)
     {
+        await RequireVersionsAsync(cancellationToken);
         var docs = await _journal.Find(new BsonDocument { { "partition", partition }, { "position", new BsonDocument("$gt", after) } }, new FindOptions { BatchSize = Math.Min(take, 10_000) + 1 })
             .Sort(new BsonDocument("position", 1)).Limit(take).ToListAsync(cancellationToken);
         return docs.Select(d => new JournalRow(d["partition"].AsInt32, d["position"].AsInt64, d["instance"].AsString, d["revision"].AsInt64, d["entries"].AsString)).ToList();
@@ -676,6 +619,7 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
     {
+        await RequireVersionsAsync(cancellationToken);
         // A find may span multiple cursor batches. Keep them on the same committed snapshot.
         var docs = await _journal.WithReadConcern(ReadConcern.Snapshot).Find(new BsonDocument { { "partition", partition }, { "instance", instance }, { "position", new BsonDocument("$gt", after) } })
             .Sort(new BsonDocument("position", 1)).ToListAsync(cancellationToken);
@@ -684,6 +628,7 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)
     {
+        await RequireVersionsAsync(cancellationToken);
         var expired = new BsonDocument("$expr", new BsonDocument("$lt", new BsonArray { "$keepUntil", NowMs }));
         var messages = await _messages.DeleteManyAsync(new BsonDocument { { "done", true }, { "keepUntil", new BsonDocument("$ne", BsonNull.Value) }, { "$expr", expired["$expr"] } }, cancellationToken);
         var events = await _events.DeleteManyAsync(expired, cancellationToken);
@@ -698,11 +643,7 @@ public sealed class MongoStore : IKernelStore
         // against that same time.
         var beat = await _nodes.FindOneAndUpdateAsync(new BsonDocument("_id", node), Builders<BsonDocument>.Update.Pipeline(new BsonDocument[] { new("$set", new BsonDocument("seenAt", NowMs)) }),
             new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After }, cancellationToken);
-        var now = beat["seenAt"].AsInt64;
-        var nodes = await _nodes.CountDocumentsAsync(new BsonDocument("seenAt", new BsonDocument("$gte", now - (long)window.TotalMilliseconds)), cancellationToken: cancellationToken);
-        var free = await _partitions.Find(new BsonDocument("$or", new BsonArray { new BsonDocument("owner", BsonNull.Value), new BsonDocument("leaseUntil", new BsonDocument("$lt", now)) }))
-            .Project(new BsonDocument("_id", 1)).ToListAsync(cancellationToken);
-        return new Cluster((int)nodes, free.Select(d => d["_id"].AsInt32).Order().ToList(), now);
+        return await MembershipAsync(beat["seenAt"].AsInt64, window, cancellationToken);
     }
 
     /// <summary>A subscription of kind start, upserted by its id, so registering it twice keeps one.</summary>
@@ -714,6 +655,7 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
     {
+        await RequireVersionsAsync(cancellationToken);
         // The projector's position first, then the partition's: every position up to the second is committed.
         var projected = await _projections.Find(new BsonDocument("_id", partition)).SingleAsync(cancellationToken);
         var written = await _partitions.Find(new BsonDocument("_id", partition)).Project(new BsonDocument("position", 1)).SingleAsync(cancellationToken);
@@ -728,6 +670,7 @@ public sealed class MongoStore : IKernelStore
         try
         {
             session.StartTransaction(Transaction);
+            await RequireVersionsAsync(session, cancellationToken);
             var moved = await _projections.UpdateOneAsync(session, new BsonDocument { { "_id", partition }, { "position", from } }, new BsonDocument("$set", new BsonDocument("position", to)), cancellationToken: cancellationToken);
             if (moved.MatchedCount != 1)
             {
@@ -766,6 +709,7 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default)
     {
+        await RequireVersionsAsync(cancellationToken);
         if (instances.Count == 0) return [];
         var docs = await _views.Find(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(instances)))).ToListAsync(cancellationToken);
         return docs.Select(d => new ViewRow(d["_id"].AsString, d["revision"].AsInt64, d["commits"].AsInt32)).ToList();

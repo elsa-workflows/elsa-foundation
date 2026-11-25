@@ -8,22 +8,135 @@ import { NamedDashboardsRoute } from "../NamedDashboards";
 import { QueryControls } from "../QueryControls";
 import { ResultView } from "../ResultView";
 import { initialDefinition, serializeTiles, type DashboardResource, type DatasetDeclaration, type QueryResult } from "../types";
-import { stubApi, waitUntil } from "../../__tests__/testSupport";
+import { beginNamedDraft, stubApi, waitUntil } from "../../__tests__/testSupport";
 import { createDashboardAuthoringController } from "../authoring";
+import { QuestionWorkspace } from "../QuestionWorkspace";
 
 const dataset: DatasetDeclaration = { id: "acme.processing", ownerModuleId: "Acme.Processing", schemaRevision: "1", title: "Processing records", description: "Explicitly exposed processing records.", availability: "ready", fields: [{ id: "category", label: "Customer category", type: "string", filterOperators: ["eq", "ne", "in"], nullable: false, groupable: true, sortable: true, projectable: true, businessDimension: true }, { id: "duration", label: "Processing time", type: "decimal", filterOperators: ["gt"], nullable: true, groupable: false, sortable: true, projectable: true, aggregates: ["average"] }], metrics: [{ id: "processing.duration", revision: "1", label: "Average processing time", unit: "seconds", description: "Elapsed processing time for eligible records." }] };
 const question = (): DashboardResource => ({ id: "q1", kind: "question", name: "Processing by category", description: "", ownerId: "user-a", revision: "r1", capabilities: { canRead: true, canEdit: true, canCopy: true, canShare: true, canDelete: true }, definition: initialDefinition(dataset), definitionState: "available", tiles: [], createdAt: "2026-11-06T10:00:00Z", updatedAt: "2026-11-06T10:00:00Z" });
 const result = (): QueryResult => ({ outcome: "succeeded", columns: [{ id: "category", label: "Customer category", type: "string" }, { id: "value", label: "Failure rate", type: "decimal", unit: "%" }], rows: [{ key: "a", values: { category: { type: "string", value: "retail" }, value: { type: "decimal", value: "0" } } }, { key: "b", values: { category: { type: "string", value: "enterprise" }, value: { type: "decimal", value: null, nullReason: "noEligibleDenominator" } } }], coverage: { status: "unknown", description: "History collection cannot attest completeness." }, generatedAt: "2026-11-06T12:00:00Z" });
 const mounted: (() => void)[] = [];
 function render(content: React.ReactNode) { const container = document.createElement("div"); document.body.append(container); const root = createRoot(container); flushSync(() => root.render(content)); mounted.push(() => { flushSync(() => root.unmount()); container.remove(); }); return container; }
-function click(container: HTMLElement, text: string) { const button = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === text); expect(button).toBeDefined(); flushSync(() => button!.click()); }
+function click(container: HTMLElement, text: string) { const action = text === "Refresh results" || text === "Preview question" ? "Preview" : text; const button = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === action); expect(button).toBeDefined(); flushSync(() => button!.click()); }
 function changeLimit(container: HTMLElement, value: string) {
-  const input = [...container.querySelectorAll("label")].find(label => label.textContent === "Maximum result rows/groups")!.querySelector("input")!;
+  const build = container.querySelector<HTMLButtonElement>('.named-question-view-toolbar [data-tab-id="build"]');
+  if (build?.getAttribute("aria-selected") !== "true") flushSync(() => build?.click());
+  const sort = [...container.querySelectorAll<HTMLAnchorElement>(".named-query-section-nav a")].find(button => button.textContent?.startsWith("Sort"));
+  if (sort && sort.getAttribute("aria-current") !== "page") flushSync(() => sort.click());
+  const input = ([...container.querySelectorAll("label")].find(label => label.textContent === "Maximum result rows/groups")!.control as HTMLInputElement);
+  const disclosure = input.closest("details");
+  if (disclosure && !disclosure.open) flushSync(() => disclosure.querySelector("summary")!.click());
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
   flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
   return input;
 }
 afterEach(() => { mounted.splice(0).forEach(dispose => dispose()); vi.restoreAllMocks(); });
+
+describe("question query authoring hierarchy", () => {
+  it("keeps query options out of the way until a dataset is selected", () => {
+    const view = render(<QueryControls definition={initialDefinition()} datasets={[dataset]} disabled={false} onChange={vi.fn()} />);
+
+    expect(view.querySelector(".named-query-controls select")).not.toBeNull();
+    expect(view.textContent).toContain("Dataset");
+    expect(view.textContent).not.toContain("Query form");
+    expect(view.textContent).not.toContain("Group by");
+    expect(view.textContent).not.toContain("Metrics");
+    expect(view.querySelector(".named-query-section-nav")).toBeNull();
+    expect(view.querySelector(".named-query-section-panel")).toBeNull();
+  });
+
+  it("keeps core controls visible and exposes advanced query sections through a configured section navigator", () => {
+    const definition = initialDefinition(dataset);
+    definition.query.filters = { field: "category", operator: "eq", value: { type: "string", literal: "retail" } };
+    const view = render(<QueryControls definition={definition} datasets={[dataset]} disabled={false} onChange={vi.fn()} />);
+    const filterSection = view.querySelector<HTMLElement>('[data-query-path="query.filters"]');
+
+    expect(view.textContent).toContain("Query form");
+    expect(view.textContent).toContain("Group by");
+    expect(view.textContent).toContain("Metrics");
+    expect(filterSection).not.toBeNull();
+    expect(filterSection?.hidden).toBe(false);
+    expect(filterSection?.querySelector(".studio-advanced-section")).toBeNull();
+    expect(view.querySelector('.named-query-section-nav a[aria-current="page"]')?.textContent).toBe("Filters · 1");
+    expect(filterSection?.querySelector<HTMLInputElement>('input[value="retail"]')).not.toBeNull();
+  });
+
+  it("keeps section navigation available to read-only viewers while disabling query inputs", () => {
+    const view = render(<QueryControls definition={initialDefinition(dataset)} datasets={[dataset]} disabled onChange={vi.fn()} />);
+    const sort = [...view.querySelectorAll<HTMLAnchorElement>(".named-query-section-nav a")].find(item => item.textContent?.startsWith("Sort"))!;
+
+    expect(sort.closest("fieldset")?.disabled).toBe(true);
+    expect(sort.matches(":disabled")).toBe(false);
+    expect(view.querySelector<HTMLInputElement>('[data-query-path="query.sort.limit"]')?.matches(":disabled")).toBe(true);
+  });
+
+  it("opens the relevant optional section before focusing a validation problem", async () => {
+    const timedDataset: DatasetDeclaration = {
+      ...dataset,
+      fields: [...dataset.fields, { id: "createdAt", label: "Created at", type: "instant", filterOperators: [], nullable: false, groupable: false, projectable: false, sortable: false }],
+      time: { fields: ["createdAt"], windows: ["absolute"], buckets: ["day"], comparisonModes: ["previousPeriod"] }
+    };
+    const definition = initialDefinition(timedDataset);
+    definition.query.time = { field: "createdAt", from: "", to: "", timeZone: "UTC", weekStart: "monday" };
+    const view = render(<QueryControls definition={definition} datasets={[timedDataset]} disabled={false} onChange={vi.fn()} problems={[{ code: "required", path: "query.time.from", message: "Choose a start time." }]} validationAttempt={1} />);
+    const timeSection = view.querySelector<HTMLElement>('[data-query-path="query.time"]');
+    const start = ([...view.querySelectorAll("label")].find(item => item.textContent === "Start time (UTC, inclusive)")?.control as HTMLInputElement | null);
+
+    await waitUntil(() => timeSection?.hidden === false && document.activeElement === start);
+    expect(timeSection?.hidden).toBe(false);
+    expect(view.querySelector('.named-query-section-nav a[aria-current="page"]')?.textContent).toContain("Time");
+  });
+});
+
+describe("question authoring workspace", () => {
+  it("keeps metadata and result presentation in Properties while query sections stay in Build", async () => {
+    window.history.replaceState({}, "", "/questions/q1");
+    const api = stubApi();
+    api.backend.http.getJson = vi.fn(async (url: string) => url.includes("dashboard-datasets") ? { items: [dataset] } : question()) as typeof api.backend.http.getJson;
+    const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="detail" navigate={vi.fn()} /></AnonymousAuthProvider>);
+
+    await waitUntil(() => view.querySelector(".named-query-section-nav") !== null);
+    expect(view.querySelector('[data-tab-id="build"]')?.getAttribute("aria-selected")).toBe("true");
+    expect(view.querySelector('input[maxlength="200"]')).toBeNull();
+    expect(view.querySelector(".named-question-presentation")).toBeNull();
+    expect(view.textContent).toContain("Source filters");
+    expect(view.textContent).not.toContain("Result presentation");
+
+    click(view, "Properties");
+    expect(view.querySelector('input[maxlength="200"]')).not.toBeNull();
+    expect(view.querySelector(".named-question-presentation")).not.toBeNull();
+    for (const label of ["Name", "Description", "Visualization", "Horizontal axis", "Value columns", "Display label"]) {
+      expect([...view.querySelectorAll("label")].some(item => item.textContent?.startsWith(label))).toBe(true);
+    }
+  });
+
+  it("keeps view switching separate from explicit preview and preserves the draft across views", () => {
+    const preview = vi.fn();
+    const view = render(<QuestionWorkspace title="Failure rate" status="Personal draft · Not saved" previewDisabled={false} previewBusy={false} onPreview={preview} build={<p>Choose columns</p>} preview={<p>Authorized results</p>} properties={<label>Question name<input value="Failures" readOnly /></label>} />);
+
+    expect(view.querySelector('[data-tab-id="build"]')?.getAttribute("aria-selected")).toBe("true");
+    expect(view.textContent).toContain("Choose columns");
+    expect(view.querySelector('[aria-label="Question properties"]')).toBeNull();
+    flushSync(() => view.querySelector<HTMLButtonElement>('[role="tab"][data-tab-id="preview"]')!.click());
+    expect(view.textContent).toContain("Authorized results");
+    expect(preview).not.toHaveBeenCalled();
+    click(view, "Properties");
+    expect(view.querySelector('[aria-label="Question properties"] input')).not.toBeNull();
+    click(view, "Preview");
+    expect(preview).toHaveBeenCalledOnce();
+    flushSync(() => view.querySelector<HTMLButtonElement>('[role="tab"][data-tab-id="build"]')!.click());
+    expect(view.textContent).toContain("Choose columns");
+    expect(view.querySelector('[aria-label="Question properties"] input')).not.toBeNull();
+  });
+
+  it("returns validation to Build and opens and focuses the Properties field", async () => {
+    const view = render(<QuestionWorkspace title="Question" status="Saved question" previewDisabled={false} previewBusy={false} onPreview={vi.fn()} build={<p>Build form</p>} preview={<p>Results</p>} properties={<label data-query-path="visualization.x">Axis<input /><p role="alert">Choose an axis.</p></label>} problems={[{ code: "invalid", path: "visualization.x", message: "Choose an axis." }]} validationAttempt={1} />);
+
+    await waitUntil(() => view.querySelector('[data-tab-id="build"]')?.getAttribute("aria-selected") === "true" && document.activeElement === view.querySelector('[data-query-path="visualization.x"] input'));
+    expect(view.querySelector('[aria-label="Question properties"]')).not.toBeNull();
+    expect(view.querySelector('[aria-label="Question properties"]')?.textContent).toContain("Choose an axis.");
+  });
+});
 
 describe("native dashboard authorization and persistence boundary", () => {
   it("sends one quoted strong revision on every saved mutation, preview, execution and drill", async () => {
@@ -77,7 +190,8 @@ describe("native dashboard authorization and persistence boundary", () => {
     api.backend.http.putJson = put as typeof api.backend.http.putJson;
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="detail" authoring={authoring} navigate={vi.fn()} /></AnonymousAuthProvider>);
     await waitUntil(() => view.textContent?.includes("Metadata-only save preserves its query") === true);
-    const name = [...view.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
+    click(view, "Properties");
+    const name = ([...view.querySelectorAll("label")].find(label => label.textContent === "Name")!.control as HTMLInputElement);
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "Safe metadata update");
     flushSync(() => name.dispatchEvent(new Event("input", { bubbles: true })));
     click(view, "Save question"); await waitUntil(() => put.mock.calls.length === 1);
@@ -97,7 +211,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     let denied = false;
     api.backend.http.postJson = vi.fn(async () => { if (denied) throw Object.assign(new Error("Question is unavailable."), { status: 404 }); return result(); }) as typeof api.backend.http.postJson;
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="detail" navigate={vi.fn()} /></AnonymousAuthProvider>);
-    await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Refresh results"));
+    await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Preview"));
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("retail") === true);
     denied = true; click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("Question is unavailable.") === true);
     expect(view.textContent).not.toContain("retail"); expect(view.textContent).not.toContain("enterprise"); expect(view.textContent).not.toContain("Processing by category"); expect(view.querySelector(".named-query-controls")).toBeNull();
@@ -157,7 +271,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     const post = vi.fn(async (_url: string, _body: unknown, _init?: unknown) => { const value = result(); value.rows[0].drill = { token: "source-membership" }; return value; });
     api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="detail" navigate={vi.fn()} /></AnonymousAuthProvider>);
-    await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Refresh results"));
+    await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Preview"));
     changeLimit(view, "7"); click(view, "Preview question"); await waitUntil(() => view.textContent?.includes("retail") === true);
     expect(post.mock.calls[0][0]).toBe("https://backend.example/_elsa/studio/questions/q1/preview");
     expect(view.textContent).toContain("Save this question before investigating its changed definition");
@@ -175,8 +289,9 @@ describe("native dashboard authorization and persistence boundary", () => {
     });
     api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="create" authoring={authoring} navigate={vi.fn()} /></AnonymousAuthProvider>);
+    await beginNamedDraft("Source preview");
     await waitUntil(() => Boolean(view.querySelector(".named-query-controls option[value='acme.processing']")));
-    const selected = view.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
+    const selected = view.querySelector<HTMLSelectElement>(".named-query-controls [data-query-path='query.dataset'] select")!;
     flushSync(() => { selected.value = dataset.id; selected.dispatchEvent(new Event("change", { bubbles: true })); });
     click(view, "Preview question"); await waitUntil(() => view.textContent?.includes("retail") === true);
     expect(view.querySelector("tbody td:nth-child(2)")?.textContent).toBe("41");
@@ -202,7 +317,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     let complete!: (value: QueryResult) => void;
     api.backend.http.postJson = vi.fn(() => new Promise<QueryResult>(resolve => { complete = resolve; })) as typeof api.backend.http.postJson;
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="detail" navigate={vi.fn()} /></AnonymousAuthProvider>);
-    await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Refresh results"));
+    await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Preview"));
     click(view, "Refresh results"); await waitUntil(() => Boolean(complete)); click(view, "Cancel query"); complete(result());
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(view.textContent).not.toContain("retail"); expect(view.textContent).toContain("Query cancelled");
@@ -221,7 +336,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     await waitUntil(() => authoring.snapshots.size === 1);
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("retail") === true);
     click(view, "View matching records");
-    await waitUntil(() => view.textContent?.includes("The current matching records are unavailable") === true);
+    await waitUntil(() => document.body.textContent?.includes("The current matching records are unavailable") === true);
     expect(post.mock.calls[1][0]).toBe("https://backend.example/_elsa/studio/questions/q1/drill");
     expect(post.mock.calls[1][2]).toMatchObject({ headers: { "If-Match": '"r1"' } });
     expect(view.querySelectorAll(".named-result")).toHaveLength(0); expect(view.textContent).not.toContain("retail");
@@ -244,10 +359,11 @@ describe("native dashboard authorization and persistence boundary", () => {
       signal = (init as { signal: AbortSignal }).signal; return new Promise<QueryResult>(resolve => { complete = resolve; });
     }) as typeof api.backend.http.postJson;
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="detail" navigate={vi.fn()} /></AnonymousAuthProvider>);
-    await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Refresh results"));
+    await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Preview"));
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("retail") === true);
     click(view, mode === "preview" ? "Refresh results" : "View matching records"); await waitUntil(() => typeof complete === "function");
-    click(view, mode === "preview" ? "Cancel query" : "Close");
+    if (mode === "preview") click(view, "Cancel query");
+    else flushSync(() => document.querySelector<HTMLButtonElement>('[aria-label="Close Matching source records"]')!.click());
     expect(signal.aborted).toBe(true); expect(view.querySelectorAll(".named-result")).toHaveLength(0);
     expect(view.textContent).toContain(mode === "preview" ? "Query cancelled" : "Investigation cancelled");
     expect(view.textContent).toContain("Previous result values are withheld"); expect(view.querySelector(".named-query-controls")).not.toBeNull();
@@ -268,10 +384,10 @@ describe("native dashboard authorization and persistence boundary", () => {
       signal = (init as { signal: AbortSignal }).signal; return new Promise<QueryResult>(resolve => { complete = resolve; });
     }) as typeof api.backend.http.postJson;
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="detail" navigate={vi.fn()} /></AnonymousAuthProvider>);
-    await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Refresh results"));
+    await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Preview"));
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("retail") === true);
     click(view, "Refresh results"); await waitUntil(() => typeof complete === "function");
-    click(view, "View matching records"); await waitUntil(() => view.textContent?.includes("Current source disclosure could not be established") === true);
+    click(view, "View matching records"); await waitUntil(() => document.body.textContent?.includes("Current source disclosure could not be established") === true);
     expect(signal.aborted).toBe(true); expect(view.querySelectorAll(".named-result")).toHaveLength(0);
     complete(result()); await new Promise(resolve => setTimeout(resolve, 0));
     expect(view.querySelectorAll(".named-result")).toHaveLength(0); expect(view.textContent).not.toContain("retail");
@@ -283,14 +399,34 @@ describe("ordinary query editing and truthful results", () => {
   it("makes all query facets ordinary controls and exposes declared business dimensions without JSON authoring", () => {
     const view = render(<QueryControls definition={initialDefinition(dataset)} datasets={[dataset]} disabled={false} onChange={vi.fn()} />);
     expect(view.querySelector("textarea")).toBeNull();
-    for (const label of ["Dataset", "Query form", "Group by", "Metrics", "Source filters", "Time and comparison", "Result conditions", "Sort and limit", "Parameters and accepted defaults", "Presentation", "Customer category"]) expect(view.textContent).toContain(label);
+    for (const label of ["Dataset", "Query form", "Group by", "Metrics", "Source filters", "Time and comparison", "Result conditions", "Sort and limit", "Parameters and defaults", "Customer category"]) expect(view.textContent).toContain(label);
     expect(view.textContent).not.toContain("countDistinct");
   });
 
   it("distinguishes exact zero, no denominator, unknown coverage and an empty result", () => {
     const populated = render(<ResultView result={result()} visualization={{ kind: "table", y: [] }} />);
+    expect(populated.querySelector(".named-result-details")).not.toBeNull();
+    expect(populated.querySelector(".named-result-details button")?.getAttribute("aria-expanded")).toBe("false");
     expect(populated.querySelectorAll("tbody tr")).toHaveLength(2); expect(populated.textContent).toContain("No eligible denominator"); expect(populated.textContent).toContain("Coverage: unknown"); expect(populated.querySelector("tbody td:nth-child(2)")?.textContent).toBe("0");
+    const expanded = render(<ResultView result={result()} visualization={{ kind: "table", y: [] }} compactProvenance={false} />);
+    expect(expanded.querySelector(".named-result-details")).toBeNull();
     const empty = render(<ResultView result={{ ...result(), rows: [] }} visualization={{ kind: "table", y: [] }} />);
     expect(empty.textContent).toContain("empty result, not an observed zero");
+  });
+
+  it("keeps compact provenance collapsed by default while showing coverage and freshness warnings", () => {
+    const interpretation = "Current outcomes for the selected cohort.";
+    const detailed = { ...result(), interpretation, generatedAt: "2026-11-06T12:00:00Z", periods: [{ role: "current", from: "2026-11-01T00:00:00Z", to: "2026-11-07T00:00:00Z", timeZone: "UTC" }] };
+    const compact = render(<ResultView result={detailed} visualization={{ kind: "table", y: [] }} stale outdated />);
+    const details = compact.querySelector<HTMLDetailsElement>(".named-result-details")!;
+    const visible = [...compact.querySelector(".named-result-provenance")!.children].filter(child => child !== details).map(child => child.textContent).join(" ");
+    expect(details.querySelector("button")?.getAttribute("aria-expanded")).toBe("false"); expect(details.querySelector("button")?.textContent).toBe("Result details");
+    expect(visible).toContain("Coverage: unknown"); expect(visible).toContain("Stale result."); expect(visible).toContain("Stale result. Definition changed."); expect(visible).not.toContain(interpretation);
+    const content = details.querySelector(".named-result-details-content")!;
+    expect(content.textContent).toContain(interpretation); expect(content.textContent).toContain("History collection cannot attest completeness.");
+    expect(content.textContent).toContain("Last successful refresh:"); expect(content.querySelectorAll("time")).toHaveLength(3);
+
+    const denied = render(<ResultView result={{ ...detailed, outcome: "denied", message: "Access unavailable." }} visualization={{ kind: "table", y: [] }} compactProvenance />);
+    expect(denied.querySelector(".named-result-details")).toBeNull(); expect(denied.textContent).toContain("Access unavailable");
   });
 });

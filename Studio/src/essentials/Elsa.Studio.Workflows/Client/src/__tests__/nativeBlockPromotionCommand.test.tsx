@@ -24,7 +24,15 @@ function render(promotion: BlockPromotionHost | null = host) {
   flushSync(() => root.render(<NativeBlockCommands endpoint={{} as StudioEndpointContext} context={nativeContext} selectedNodeIds={selected} createPosition={{ x: 0, y: 0 }}
     validate={vi.fn()} apply={vi.fn()} open={vi.fn()} promotion={promotion ?? undefined} />));
 }
-const promote = () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Promote to reusable activity…");
+const promote = () => {
+  let item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "Promote to reusable activity…");
+  if (!item) {
+    const trigger = container.querySelector<HTMLButtonElement>(".wf-block-menu-trigger");
+    if (trigger && trigger.getAttribute("aria-expanded") !== "true") flushSync(() => trigger.click());
+    item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "Promote to reusable activity…");
+  }
+  return item;
+};
 
 it("offers promotion only where the owning resource can author reusable activities", () => {
   render(null);
@@ -44,7 +52,7 @@ it.each([
 ])("disables promotion for %s and says why", (_, change, reason) => {
   change(); render();
   expect(promote()!.disabled).toBe(true);
-  expect(promote()!.title).toBe(reason);
+  expect(document.getElementById(promote()!.getAttribute("aria-describedby")!)?.textContent).toBe(reason);
 });
 
 it.each([["loading", "Loading reusable activity authoring…"], ["failed", "Reusable activity authoring is unavailable on this server."]] as const)(
@@ -58,6 +66,6 @@ it("opens the review dialog for the selected block", async () => {
   render();
   expect(promote()!.disabled).toBe(false);
   flushSync(() => promote()!.click());
-  await vi.waitFor(() => expect(container.querySelector("[role=dialog]")?.getAttribute("aria-label")).toBe("Promote to reusable activity"));
-  expect(container.textContent).toContain("Proposed reusable activity");
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"] .studio-dialog-title')?.textContent).toBe("Promote to reusable activity"));
+  expect(document.body.textContent).toContain("Proposed reusable activity");
 });

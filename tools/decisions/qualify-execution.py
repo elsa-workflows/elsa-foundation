@@ -25,7 +25,7 @@ def run(output):
     try:
         if subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip():
             raise ValueError('Commit source before qualification; dirty output cannot certify a revision')
-        project = ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj'
+        project = ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
         owned.command(['dotnet', 'build', str(project), '-p:RestoreLockedMode=true', '-m:1', '/nr:false', '-v:q', '-nologo'], output / 'build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-decisions-execution-') as temporary:
             data = Path(temporary)
@@ -54,7 +54,7 @@ def run(output):
                         receipt = data / 'permissions' / name
                         if receipt.exists(): (output / name).write_bytes(receipt.read_bytes())
             report['stage'] = 'prepare'
-            with owned.host(host_directory, 'Elsa.Workbench.dll', url, '/health/ready', output / 'before-restart.log', env) as process:
+            with owned.host(host_directory, 'Elsa.Workbench.Host.dll', url, '/health/ready', output / 'before-restart.log', env) as process:
                 report['firstPid'] = process.pid
                 permission('provision')
                 owned.command(['node', str(ROOT / 'tools/decisions/qualify-execution.cjs')], output / 'prepare.log', env=dict(node_env, DECISIONS_PHASE='prepare'))
@@ -75,7 +75,7 @@ def run(output):
             shell_path.write_text(json.dumps(shells))
             report['disabledForRecovery'] = removed
             report['stage'] = 'recover'
-            with owned.host(host_directory, 'Elsa.Workbench.dll', url, '/health/ready', output / 'after-restart.log', env) as process:
+            with owned.host(host_directory, 'Elsa.Workbench.Host.dll', url, '/health/ready', output / 'after-restart.log', env) as process:
                 report['secondPid'] = process.pid
                 if report['firstPid'] == process.pid:
                     raise ValueError('The process was not restarted')

@@ -79,18 +79,18 @@ describe("execution attached to the editor canvas", () => {
     api.browse.mockImplementation(() => new Promise(resolve => { release = resolve; }));
     render(); await settle();
     expect(latest.loading).toBe(true);
-    expect(container.textContent).toContain("Loading execution evidence…");
+    expect(container.textContent).toContain("Loading run data…");
     release({ totalCount: 1, items: [{ execution: activity }] }); await settle();
     await vi.waitFor(() => expect(latest.loading).toBe(false));
-    expect(container.textContent).not.toContain("Loading execution evidence…");
+    expect(container.textContent).not.toContain("Loading run data…");
 
     click("Refresh execution"); await settle();
     expect(latest.loading).toBe(true);
     expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
-    expect(container.textContent).not.toContain("Loading execution evidence…");
+    expect(container.textContent).not.toContain("Loading run data…");
     release({ totalCount: 1, items: [{ execution: activity }] }); await settle();
     await vi.waitFor(() => expect(latest.loading).toBe(false));
-    expect(container.textContent).not.toContain("Loading execution evidence…");
+    expect(container.textContent).not.toContain("Loading run data…");
   });
 
   it("projects a verified unique occurrence without changing the document, selection or geometry", async () => {
@@ -122,7 +122,7 @@ describe("execution attached to the editor canvas", () => {
     expect(props.testRun!.snapshot).toBe(snapshot);
   });
 
-  it("preserves every selected canvas node when execution evidence is attached", async () => {
+  it("preserves every selected canvas node when run data is attached", async () => {
     render({ nodes: [nodes[0], { ...nodes[0], id: "another-node", selected: true }] });
     await settle();
     expect(latest.nodes.map(node => node.selected)).toEqual([true, true]);
@@ -182,7 +182,7 @@ describe("execution attached to the editor canvas", () => {
     api.browse.mockImplementation(() => new Promise(() => {}));
     const prepared = { contextIdentity: runtimeValueContextId(context), workflowExecutionId: "run-1", ancestorId: "body-4",
       selectedActivityExecutionId: chosen.activityExecutionId,
-      evidence: { activities: [chosen], observations: [], repeated: false, failed: false, denied: false } };
+      evidence: { activities: [chosen], observations: [], repeated: false, repeatedNodes: [], failed: false, denied: false } };
     render({ selectedExecution: chosen, ancestorId: "body-4", prepared });
     expect(latest.graph).toBe(graph);
     expect(latest.details).toBe(details);
@@ -270,13 +270,13 @@ describe("execution attached to the editor canvas", () => {
   it("offers a successful retry after unavailable runtime capabilities", async () => {
     api.instance.mockRejectedValueOnce(new ApiCapabilityUnavailableError(capabilityIds.runtime, "workflow-instance"));
     render(); await settle();
-    expect(container.textContent).toContain("Execution evidence is unavailable on this backend.");
+    expect(container.textContent).toContain("Run data is unavailable on this backend.");
     click("Refresh execution"); await settle();
     expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
     expect(container.textContent).not.toContain("unavailable on this backend");
   });
 
-  it("does not load runtime evidence for dispatch rejection or a legacy run without a snapshot", async () => {
+  it("does not load run data for dispatch rejection or a legacy run without a snapshot", async () => {
     render({ testRun: { ...run, snapshot: undefined, view: { ...run.view, workflowExecutionId: null, status: "Rejected" } } });
     await settle();
     expect(api.instance).not.toHaveBeenCalled();

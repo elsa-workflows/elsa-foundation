@@ -7,9 +7,9 @@ async function openCreate(page: import("@playwright/test").Page, scenario = "def
   await page.goto(`/connection-secrets.html?${query}`);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
   await expect(page.locator("html")).toHaveAttribute("data-theme-mode", mode);
-  const opener = page.locator(".studio-page-header").getByRole("button", { name: "Create connection", exact: true });
+  const opener = page.locator(".studio-page-header").getByRole("button", { name: "New connection", exact: true });
   await opener.click();
-  const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+  const dialog = page.getByRole("dialog", { name: "New connection", exact: true });
   await expect(dialog).toBeVisible();
   return { dialog, opener };
 }
@@ -17,8 +17,9 @@ async function openCreate(page: import("@playwright/test").Page, scenario = "def
 async function measureRenderedTextContrast(
   page: import("@playwright/test").Page,
   selector: string,
-  backgroundOwnerSelector = ".connections-modal"
+  backgroundOwnerSelector = ".connections-create-shell"
 ) {
+  await page.getByRole("dialog").evaluate(async element => { await Promise.all(element.getAnimations().map(animation => animation.finished)); });
   const screenshot = await page.screenshot({ fullPage: true, scale: "css" });
   return page.evaluate(async ({ selector, backgroundOwnerSelector, screenshotBase64 }) => {
     const target = document.querySelector<HTMLElement>(selector);
@@ -64,7 +65,7 @@ async function measureRenderedTextContrast(
       && y <= rect.bottom + window.scrollY + 4
     );
     let backgroundPoint: { x: number; y: number } | null = null;
-    if (backgroundOwnerSelector === ".connections-modal") {
+    if (backgroundOwnerSelector === ".connections-create-shell") {
       const x = Math.floor(ownerBounds.left + window.scrollX + 4);
       const y = Math.floor(ownerBounds.top + window.scrollY + 4);
       if (!overlapsText(x, y)) backgroundPoint = { x, y };
@@ -146,10 +147,10 @@ for (const mode of ["light", "dark"] as const) {
   test(`Connections picker error text contrast is at least 4.5:1 in Classic ${mode} mode`, async ({ page }) => {
     const { dialog } = await openCreate(page, "picker-503", mode);
     const alert = dialog.locator(".connection-secret-picker-status.error[role=alert]");
-    await expect(alert).toContainText("Existing Secrets could not be loaded.");
+    await expect(alert).toContainText("Existing secrets could not be loaded.");
     await expect(alert).not.toContainText("Fixture provider diagnostic");
-    const contrast = await measureRenderedTextContrast(page, ".connection-secret-picker-status.error[role=alert]", ".connections-modal");
-    expect(contrast.backgroundOwner).toBe(".connections-modal");
+    const contrast = await measureRenderedTextContrast(page, ".connection-secret-picker-status.error[role=alert]", ".connections-create-shell");
+    expect(contrast.backgroundOwner).toBe(".connections-create-shell");
     expectAccessibleTextContrast(contrast);
   });
 
@@ -158,18 +159,18 @@ for (const mode of ["light", "dark"] as const) {
     const expiresAt = fixtureTime.getTime() + 5000;
     await page.clock.install({ time: fixtureTime });
     const { dialog } = await openCreate(page, "expiring-secret", mode, expiresAt);
-    const select = dialog.getByLabel("Existing Secret for Token", { exact: true });
+    const select = dialog.getByLabel("Existing secret for Token", { exact: true });
     const option = select.getByRole("option", { name: /Customer API token/ });
     await expect(option).toHaveCount(1);
     await select.selectOption((await option.getAttribute("value"))!);
     await page.clock.fastForward(6000);
-    await dialog.getByRole("button", { name: "Refresh Secrets", exact: true }).click();
+    await dialog.getByRole("button", { name: "Refresh secrets", exact: true }).click();
 
     const alert = dialog.locator(".connection-credential-error[role=alert]");
     await expect(select).toHaveAttribute("aria-invalid", "true");
-    await expect(alert).toContainText("Select an available active text Secret");
-    const contrast = await measureRenderedTextContrast(page, ".connection-credential-error[role=alert]", ".connections-modal");
-    expect(contrast.backgroundOwner).toBe(".connections-modal");
+    await expect(alert).toContainText("Select an available active text secret");
+    const contrast = await measureRenderedTextContrast(page, ".connection-credential-error[role=alert]", ".connections-create-shell");
+    expect(contrast.backgroundOwner).toBe(".connections-create-shell");
     expectAccessibleTextContrast(contrast);
   });
 
@@ -177,7 +178,7 @@ for (const mode of ["light", "dark"] as const) {
     const { dialog } = await openCreate(page, "create-error", mode);
     await dialog.getByLabel("Name", { exact: true }).fill("customer.connection");
     await dialog.getByLabel("Base URL", { exact: true }).fill("https://api.example");
-    const select = dialog.getByLabel("Existing Secret for Token", { exact: true });
+    const select = dialog.getByLabel("Existing secret for Token", { exact: true });
     const option = select.getByRole("option", { name: /Customer API token/ });
     await expect(option).toHaveCount(1);
     await select.selectOption((await option.getAttribute("value"))!);
@@ -209,8 +210,8 @@ for (const viewport of [
     await dialog.getByLabel("Name", { exact: true }).fill("preserved.connection");
     await dialog.getByLabel("Base URL", { exact: true }).fill("https://api.example");
     await dialog.getByLabel("Extra setting 12", { exact: true }).fill("preserved setting");
-    await dialog.getByLabel("Search Secrets for Token", { exact: true }).fill("customer");
-    const select = dialog.getByLabel("Existing Secret for Token", { exact: true });
+    await dialog.getByLabel("Search secrets for Token", { exact: true }).fill("customer");
+    const select = dialog.getByLabel("Existing secret for Token", { exact: true });
     const option = select.getByRole("option", { name: /Customer API token/ });
     await expect(option).toHaveCount(1);
     await select.selectOption((await option.getAttribute("value"))!);
@@ -249,13 +250,13 @@ for (const viewport of [
 }
 
 for (const width of [320, 768, 1024, 1440]) {
-  test(`existing Secret creation stays usable at ${width}px`, async ({ page }) => {
+  test(`existing secret creation stays usable at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     const { dialog, opener } = await openCreate(page);
     await dialog.getByLabel("Name", { exact: true }).fill("customer-api");
     await dialog.getByLabel("Base URL", { exact: true }).fill("https://api.example");
-    await dialog.getByLabel("Search Secrets for Token", { exact: true }).fill("customer");
-    const select = dialog.getByLabel("Existing Secret for Token", { exact: true });
+    await dialog.getByLabel("Search secrets for Token", { exact: true }).fill("customer");
+    const select = dialog.getByLabel("Existing secret for Token", { exact: true });
     const option = select.getByRole("option", { name: /Customer API token/ });
     await expect(option).toHaveCount(1);
     await select.scrollIntoViewIfNeeded();

@@ -16,7 +16,8 @@ import {
   type StudioActivityPropertyEditorContext,
   type StudioExpressionEditorContribution,
   type StudioFeatureAreaContribution,
-  type StudioTestStimulusEditorContribution
+  type StudioTestStimulusEditorContribution,
+  type StudioUserTaskFieldControlContribution
 } from "../sdk";
 
 describe("studio registry", () => {
@@ -75,11 +76,14 @@ describe("studio registry", () => {
 
     expect(api.routes.slot.id).toBe(studioSlotIds.routes);
     expect(api.dashboardWidgets.slot.id).toBe(studioSlotIds.dashboardWidgets);
+    expect(api.dashboardRecordLinks?.slot.id).toBe(studioSlotIds.dashboardRecordLinks);
     expect(api.workflowDesigner.panels.slot.id).toBe(studioSlotIds.workflowDesignerPanels);
     expect(typeof api.workflowDesigner.registerActivityIcons).toBe("function");
     api.workflowDesigner.registerActivityIcons?.({});
     expect(api.propertyEditors.slot.id).toBe(studioSlotIds.propertyEditors);
     expect(api.workflowRunInputEditors?.slot.id).toBe(studioSlotIds.workflowRunInputEditors);
+    expect(api.triggerConfigurationEditors?.slot.id).toBe(studioSlotIds.triggerConfigurationEditors);
+    expect(api.triggerTypePresentations?.slot.id).toBe(studioSlotIds.triggerTypePresentations);
     expect(api.workflowTestStimulusEditors?.slot.id).toBe(studioSlotIds.workflowTestStimulusEditors);
     expect(api.workflowRunRelatedLinks?.slot.id).toBe("workflow.run.related-links");
     expect(api.weaver.promptStarters.slot.id).toBe(studioSlotIds.weaverPromptStarters);
@@ -87,6 +91,22 @@ describe("studio registry", () => {
     expect(api.weaver.toolContracts.slot.id).toBe(studioSlotIds.weaverToolContracts);
     expect(api.weaver.resultRenderers.slot.id).toBe(studioSlotIds.weaverResultRenderers);
     expect(api.weaver.promptActions.slot.id).toBe(studioSlotIds.weaverPromptActions);
+  });
+
+  it("exposes a host-policy-aware Slot for module-owned user-task field controls", () => {
+    const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") });
+    const control: StudioUserTaskFieldControlContribution = {
+      id: "example.rating/1",
+      label: "Rating",
+      valueKind: "number",
+      component: () => null,
+      createField: () => ({ key: "rating", label: "Rating", kind: "number", required: false, readOnly: false })
+    };
+
+    expect(api.userTaskFieldControls?.slot.id).toBe(studioSlotIds.userTaskFieldControls);
+    api.userTaskFieldControls?.add(control);
+    expect(api.userTaskFieldControls?.list()).toEqual([control]);
+    expect(api.userTaskFieldControls?.compose()[0].slot.owner.kind).toBe("host");
   });
 
   it("lets third-party modules register driver-specific Test Run stimulus editors", () => {

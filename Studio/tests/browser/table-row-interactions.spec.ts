@@ -32,6 +32,87 @@ async function feedback(page: Page, row: Locator, name: Locator | undefined, inf
 }
 
 for (const theme of ["light", "dark"]) {
+  test(`decision collection follows the shared table recipe in ${theme}`, async ({ page }) => {
+    await page.goto(`/row-interactions.html?view=decisions&theme=${theme}`);
+    const region = page.getByRole("region", { name: "Decisions table", exact: true });
+    const table = page.locator("table.decision-assets");
+    await expect(table).toHaveClass(/studio-table/);
+    await expect(table.getByRole("columnheader")).toHaveText(["Decision", "Status", "Updated", "Actions"]);
+    await expect(region).toHaveAttribute("tabindex", "0");
+    const styles = await page.evaluate(() => {
+      const root = getComputedStyle(document.documentElement);
+      const header = getComputedStyle(document.querySelector(".decision-assets thead th")!);
+      const rowHeader = getComputedStyle(document.querySelector(".decision-assets tbody th[scope='row']")!);
+      const cell = getComputedStyle(document.querySelector(".decision-assets tbody td")!);
+      return {
+        headerHeight: header.height,
+        expectedHeaderHeight: root.getPropertyValue("--studio-table-header-height").trim(),
+        headerFontSize: header.fontSize,
+        expectedHeaderFontSize: root.getPropertyValue("--studio-label-size").trim(),
+        rowHeaderColor: rowHeader.color,
+        cellColor: cell.color,
+        rowHeaderBackground: rowHeader.backgroundColor,
+        cellBackground: cell.backgroundColor
+      };
+    });
+    expect(styles.headerHeight).toBe(styles.expectedHeaderHeight);
+    expect(styles.headerFontSize).toBe(styles.expectedHeaderFontSize);
+    expect(styles.rowHeaderColor).toBe(styles.cellColor);
+    expect(styles.rowHeaderBackground).toBe(styles.cellBackground);
+    await page.setViewportSize({ width: 390, height: 900 });
+    expect(await region.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+    await region.focus();
+    await expect(region).toBeFocused();
+    await page.getByLabel("Search decisions").fill("no matching decision");
+    await expect(page.getByText("No matching decisions")).toBeVisible();
+  });
+
+  test(`collection search keeps a full-height caret in ${theme}`, async ({ page }, info) => {
+    for (const view of ["questions", "dashboards"]) {
+      await page.goto(`/row-interactions.html?view=${view}&theme=${theme}`);
+      const input = page.getByRole("searchbox", { name: `Search ${view}` });
+      const shell = input.locator("..");
+      await input.focus();
+      await expect(input).toBeFocused();
+
+      const geometry = await input.evaluate(element => {
+        const fontSize = Number.parseFloat(getComputedStyle(element).fontSize);
+        const inputStyle = getComputedStyle(element);
+        const shell = element.parentElement!;
+        const shellStyle = getComputedStyle(shell);
+        const rootStyle = getComputedStyle(document.documentElement);
+        return {
+          inputHeight: element.getBoundingClientRect().height,
+          fontSize,
+          expectedFontSize: Number.parseFloat(rootStyle.getPropertyValue("--studio-body-size")) + 2,
+          caretColor: inputStyle.caretColor,
+          textColor: inputStyle.color,
+          supportsCaretAnimation: CSS.supports("caret-animation", "manual"),
+          caretAnimation: inputStyle.getPropertyValue("caret-animation"),
+          shellHeight: shell.getBoundingClientRect().height,
+          expectedShellHeight: Number.parseFloat(rootStyle.getPropertyValue("--studio-control-height")),
+          outlineStyle: shellStyle.outlineStyle,
+          outlineWidth: shellStyle.outlineWidth
+        };
+      });
+      expect(geometry.inputHeight + 0.1).toBeGreaterThanOrEqual(geometry.fontSize * 1.4);
+      expect(geometry.fontSize).toBeGreaterThanOrEqual(geometry.expectedFontSize - 0.1);
+      expect(geometry.caretColor).toBe(geometry.textColor);
+      if (geometry.supportsCaretAnimation) expect(geometry.caretAnimation).toBe("manual");
+      expect(geometry.shellHeight).toBe(geometry.expectedShellHeight);
+      expect(geometry.outlineStyle).toBe("solid");
+      expect(geometry.outlineWidth).toBe("2px");
+      await info.attach(`${view}-search-caret-${theme}.png`, { body: await page.screenshot({ caret: "initial" }), contentType: "image/png" });
+
+      await page.setViewportSize({ width: 390, height: 900 });
+      await input.fill("Purchase approval");
+      await input.press("Enter");
+      await expect(input).toHaveValue("Purchase approval");
+      await expect(page.getByText("Purchase approval", { exact: true }).first()).toBeVisible();
+      expect(await shell.evaluate(element => element.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
+    }
+  });
+
   for (const view of ["connections", "decisions", "questions", "dashboards"]) {
     test(`${view} rows share feedback and activation in ${theme}`, async ({ page }, info) => {
       await page.goto(`/row-interactions.html?view=${view}&theme=${theme}`);
@@ -88,12 +169,12 @@ for (const theme of ["light", "dark"]) {
     await feedback(page, row, row.locator(".studio-row-link"), info, "task-");
     await row.press("Enter");
     await expect(page.getByRole("region", { name: /^Review purchase request/ })).toBeVisible();
-    await page.goto(`/user-tasks-ux.html?forms&populated-forms&theme=${theme}`);
+    await page.goto(`/user-tasks-ux.html?forms&backend=legacy&legacy-forms&theme=${theme}`);
     row = page.locator(".user-task-forms-table [data-studio-row-interactive]").first();
     await feedback(page, row, row.locator(".studio-row-link"), info, "form-");
     await row.locator("td").nth(1).click();
     await expect(page.getByRole("region", { name: "Published form", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Back to forms", exact: true }).click();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
     await expect(row.locator(".studio-row-link")).toBeFocused();
   });
 
@@ -113,8 +194,15 @@ for (const theme of ["light", "dark"]) {
     await page.addInitScript(theme => localStorage.setItem("elsa-studio-theme-mode", theme), theme);
     await page.route("**/authoring/capabilities", route => route.fulfill({ json: { capabilities: [] } }));
     await page.goto("/backendConnections.html");
+    const region = page.getByRole("region", { name: "Backends table", exact: true });
+    await expect(page.locator(".backends-list")).toHaveClass(/studio-table/);
+    await expect(region).toHaveAttribute("tabindex", "0");
     const row = page.locator(".backends-list [data-studio-row-interactive]").first();
     await feedback(page, row, row.locator(".studio-row-link"), info);
+    await page.setViewportSize({ width: 390, height: 900 });
+    expect(await region.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+    await region.focus();
+    await expect(region).toBeFocused();
     await row.press("Space");
     await expect(page.getByRole("tab", { name: "Connection", exact: true })).toBeVisible();
   });

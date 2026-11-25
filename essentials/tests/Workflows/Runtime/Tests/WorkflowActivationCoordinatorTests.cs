@@ -131,6 +131,33 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     [Fact]
+    public async Task Same_artifact_with_updated_activity_presentation_replaces_active_reference()
+    {
+        var first = await _harness.ActivateAsync("activation-1", "artifact-1");
+        _harness.ResetCalls();
+
+        var command = _harness.Command("activation-2", "artifact-1", expectedRevision: first.Slot.Revision);
+        command = command with
+        {
+            Reference = command.Reference with
+            {
+                ActivityPresentation = [new WorkflowExecutableActivityPresentationRecord("node-start", "Crony", "Renamed trigger")]
+            }
+        };
+
+        var updated = await _harness.Coordinator.ActivateAsync(command);
+
+        Assert.True(updated.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.Activated, updated.Outcome);
+        Assert.Equal("activation-1", updated.ReplacedActivationId);
+        Assert.Equal("activation-2", updated.Slot.ActiveActivationId);
+        var presentation = Assert.Single(updated.Reference!.ActivityPresentation);
+        Assert.Equal(("node-start", "Crony", "Renamed trigger"), (presentation.ExecutableNodeId, presentation.DisplayName, presentation.Description));
+        await _harness.AssertRetiredAsync("activation-1", WorkflowActivationCoordinator.ReplacedRetireReason);
+        await _harness.AssertLiveAsync("activation-2");
+    }
+
+    [Fact]
     public async Task Stale_slot_revision_cleans_candidate_state_and_returns_conflict()
     {
         var incumbent = await _harness.ActivateAsync("incumbent", "artifact-1");

@@ -1,7 +1,6 @@
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
-import { useDialogFocus, describeApiError, tryExtractValidationErrors, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { AdvancedSection, StudioField } from "@elsa-workflows/studio-ui";
+import { describeApiError, tryExtractValidationErrors, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { AdvancedSection, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { createConnection, updateConnection } from "./connectionsApi";
 import type {
   AuthSchemeDescriptor,
@@ -47,12 +46,13 @@ export function ConnectionCreateDialog({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [revealedSettings, setRevealedSettings] = useState<string[]>([]);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const dialogRef = useRef<HTMLElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const operationScope = useMemo(() => ({ context, active: false, generation: 0 }), [context]);
   const currentScopeRef = useRef(operationScope);
   const submittingRef = useRef(false);
-  const dialogTitleId = useId();
+  const formId = useId();
+  const firstField = useRef<HTMLElement | null>(null);
   const nameId = useId();
   const typeId = useId();
   const schemeId = useId();
@@ -143,11 +143,9 @@ export function ConnectionCreateDialog({
     && !invalidPlacement
     && validCredentials;
 
-  useDialogFocus(dialogRef, contextIsCurrent && !submitting ? onCancel : null);
-
   useEffect(() => {
     if (!error || submitting) return;
-    const invalid = dialogRef.current?.querySelector<HTMLElement>("[aria-invalid='true']");
+    const invalid = formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']");
     (invalid ?? errorRef.current)?.focus();
   }, [error, submitting]);
 
@@ -446,42 +444,15 @@ export function ConnectionCreateDialog({
   );
 
   return (
-    <div
-      className="connections-modal-backdrop"
-      onMouseDown={event => {
-        if (event.target === event.currentTarget && contextIsCurrent && !submitting) onCancel();
-      }}
-    >
-      <section
-        ref={dialogRef}
-        className="connections-modal connections-create-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={dialogTitleId}
-        aria-busy={submitting || undefined}
-        tabIndex={-1}
-      >
-        <form onSubmit={event => void submit(event)}>
-          <header className="connections-create-header">
-            <div>
-              <p className="connections-create-eyebrow">{isEdit ? "Edit" : "New"} connection</p>
-              <h2 id={dialogTitleId}>{isEdit ? "Edit connection" : "Create connection"}</h2>
-              <p className="connections-modal-help">{isEdit ? "Update settings and credentials for this connection. Secret values are never shown here." : "Choose a service and how it authenticates. Secret values are never shown here."}</p>
-            </div>
-            <button
-              type="button"
-              className="connections-create-close"
-              aria-label="Close create connection dialog"
-              title="Close"
-              disabled={!contextIsCurrent || submitting}
-              onClick={() => {
-                if (contextIsCurrent && !submitting) onCancel();
-              }}
-            >
-              <X size={16} aria-hidden />
-            </button>
-          </header>
-
+    <StudioDialog open title={isEdit ? "Edit connection" : "New connection"} closeLabel={isEdit ? "Close edit connection dialog" : "Close create connection dialog"}
+      className="connections-create-shell" initialFocusRef={firstField} dismissDisabled={!contextIsCurrent || submitting} onClose={onCancel}
+      description={isEdit ? "Update settings and credentials for this connection. Secret values are never shown here." : "Choose a service and how it authenticates. Secret values are never shown here."}
+      footer={<StudioDialogFooter onCancel={onCancel} cancelDisabled={submitting} confirmDisabled={!canSubmit || submitting}
+        confirmProps={{ form: formId }} confirmLabel={submitting ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save" : "Create")} />}>
+      <form id={formId} ref={element => {
+        formRef.current = element;
+        firstField.current = element?.querySelector<HTMLElement>("input:not(:disabled), select:not(:disabled)") ?? null;
+      }} aria-busy={submitting || undefined} onSubmit={event => void submit(event)}>
           <div className="connections-create-content">
             {error ? <p ref={errorRef} className="connections-create-error" role="alert" tabIndex={-1}>{error}</p> : null}
             <div className="connections-create-fields">
@@ -563,13 +534,8 @@ export function ConnectionCreateDialog({
             ) : null}
           </div>
 
-          <div className="connections-create-actions">
-            <button type="button" disabled={submitting} onClick={onCancel}>Cancel</button>
-            <button type="submit" disabled={!canSubmit || submitting}>{submitting ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create")}</button>
-          </div>
-        </form>
-      </section>
-    </div>
+      </form>
+    </StudioDialog>
   );
 }
 

@@ -4,6 +4,26 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 
 > Carries **no** `Elsa.*.Design.*` dependency (Elsa §E2.2). Runtime invocation consumes only the compiled `ActivityContract` and canonical bindings.
 
+## Saved-resume receiver observation owner (#3849, S10h)
+
+The existing `WorkflowResumeBookmarkSchedulerWorkHandler` invokes private `ActivityResumeHistoryObservations`
+when exact saved-recipient admission no longer matches. Through Core's existing `IRuntimeHistoryObservationWriter`,
+it records `DeliveryUnmatched` before acknowledgement, with a closed receiver missing/expired/ineligible reason.
+Actual pinned policy, selected source/capture/native checkpoint/observation pairing and unchanged scope are required;
+history grants no wait/claim authority. Required observation failure defers the native work, malformed history stays
+hard, and requested cancellation propagates. Earlier profiles without this kind and originally uncaptured runs keep
+their choices. Event time is the actual eligibility decision; another real invocation after an uncertain write has
+its own observation identity, without another business occurrence. No payload/exception message is persisted.
+
+Current Runtime owning-project controls cover:6 removed/replaced/expired versus capture choices;3 pre-write/ambiguous-write/
+false-ack native defer/re-entry cases; older vocabulary; missing Required source owner; requested cancellation; direct
+actual-handler scope drift; malformed data with nested IO;2 expired-replacement generation/owner cases;
+wrapped requested cancellation;2 unrelated/unrequested cancellation cases;hard-cause cancellation precedence. The prior15 native delivery/publication cases are affected
+and executed in the current Runtime owning suite. Supplied publisher/target/private state/schema and a controlled callback remain component inputs;
+no authored run, production authority, multiple recipients, physical provider/restart or composed UX is qualified.
+Only the exact saved-recipient admission-mismatch branch is covered here; other receiver no-op and claim-race
+diagnostics remain separate work. No new API/type contract, dependency, test friendship or public module is added.
+
 ---
 
 ## Implementable contributor interfaces
@@ -168,3 +188,40 @@ the typed unavailable signal; disposal failure follows the ordinary fault path w
 ### Collection child-slot input metadata *(Core — `Elsa.Activities.Runtime.Core`)*
 
 `ActivityChildSlotAttribute.ItemIdProperty` optionally names a stable collection-item identity and `ConditionProperty` names its structure-owned argument. CLR reconciliation carries both into optional `ActivityChildSlotDesignDescriptor` members. Studio uses stable identities for case rows, expression documents and child navigation while retaining the current index for immutable mutations. Omitted metadata preserves legacy slot behavior. Structure inputs activate through [`IRuntimeStructureInputConsumer`](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iruntimestructureinputconsumer-core--elsaworkflowsruntimecore), rather than CLR input properties.
+
+## Atomic saved-resume admission loss (#3849, S10i)
+
+The same private observation owner records `DeliveryUnmatched` with closed reason
+`receiver-admission-superseded` when the actual native consumption checkpoint throws
+`BookmarkResumeSupersededException` after the preliminary saved-recipient check. The handler retains
+that check's native workflow/capture choice and explicit access context through the claim attempt;
+observation preflight revalidates the original policy and selected pair, and access drift refuses acknowledgement.
+The event describes only the atomic rejection at its observed time. It infers no winner, expiry, consumption
+or callback. The rejected checkpoint contributes no committed history facts. Required recording failure
+leaves work owed; actual re-entry can instead observe a now-missing/ineligible wait under S10h.
+
+A terminal race plus failed recording remains queued while the normal drainer continues to forbid terminal
+activity execution. Workflows Runtime's existing terminal resumption purge now records the separate observed
+`terminal-resume-ineligible` decision before its existing targeted deletion. Required missing/unpaired/failed
+recording leaves the source item intact. No callback or consumption is authorized by that cleanup observation.
+
+Current Runtime owning-project controls cover: the original15 claim/race/positive/defer/drift cases plus16
+terminal cleanup controls (3 atomic-failure recovery,3 cleanup write/re-entry, original constructor, unpaired
+writer, old vocabulary, malformed data,2 cancellation identities, scope drift and3 bounded-walk/held-terminal fairness cases). A test-only consumption
+wrapper injects native changes immediately before the real service/committer/coherent memory predicate;
+it fabricates no superseded exception and validation handlers remain read-only. Cleanup controls instantiate
+the actual resumption service with actual native ports. Existing fixture/control defaults remain unchanged.
+Prior native component controls and the existing resumption suite are also exercised.
+One additive Runtime resumption constructor pairs the existing Core observation writer/reader; the old
+signature is retained. No new Core contract/schema/reference/dependency/friend/module/host is added.
+Other receiver branches and authored/provider/restart/authority/UX qualification remain open.
+
+A classified terminal history failure is returned as that execution's Faulted operational outcome, with a
+closed safe failure code and the original domain exception/cause passed to the logger. Other candidates,
+held-terminal processing and backlog-position settlement continue, preserving per-execution pump backoff.
+Partial deletion counts do not claim the failed run was fully purged, and its mailbox is not reaped.
+Requested cancellation and access drift still escape; no further work runs under a changed context.
+
+## Native compensation and child-control history
+
+`ActivityHistory` materializes native structural owner facts at the admitted continuation's actual return boundary. V5 compensation inputs stay before coalescing; v3/v4 retain their previous source envelope. `StructuralChildControlContribution` adds safe acceptance/application facts only when the final returned consumer decision commits the exact inbox/cursor contribution, including returned Fault and Cancel. Buffered acceptance creates no application; replayed acceptance creates no second receipt; a throw/disposal fault without committed inbox state creates neither fact. These use Core checkpoint/source contracts and do not add an execution or persistence boundary. See Runtime's [native owner contract](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#native-child-compensation-control-and-boundary-retry-history-3849).

@@ -24,10 +24,19 @@ beforeEach(() => {
 });
 afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
 function render() { flushSync(() => root.render(<NativeBlockCommands context={context} selectedNodeIds={selection} createPosition={{ x: 80, y: 100 }} validate={validate} apply={apply} open={open} />)); }
-function button(label: string) { const item = [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label); if (!item) throw new Error(label); return item; }
+function button(label: string) {
+  let item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === label);
+  if (!item) {
+    const trigger = globalThis.document.body.querySelector<HTMLButtonElement>(".wf-block-menu-trigger");
+    if (trigger && trigger.getAttribute("aria-expanded") !== "true") flushSync(() => trigger.click());
+    item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === label);
+  }
+  if (!item) throw new Error(label);
+  return item;
+}
 function click(label: string) { flushSync(() => button(label).click()); }
 function name(value: string) {
-  const input = container.querySelector<HTMLInputElement>("input")!;
+  const input = globalThis.document.body.querySelector<HTMLInputElement>("input")!;
   flushSync(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
 }
 async function preview() {
@@ -36,12 +45,12 @@ async function preview() {
   await vi.waitFor(() => expect(button("Apply change").disabled).toBe(false));
 }
 it("offers a real BPMN subprocess and validates/commits the whole resource once using canvas element selection", async () => {
-  expect(container.textContent).toContain("Create BPMN subprocess");
-  expect(container.textContent).not.toContain("Create Sequence block");
+  expect(button("Create BPMN subprocess")).toBeTruthy();
+  expect(globalThis.document.body.textContent).not.toContain("Create Sequence block");
   const original = structuredClone(context.document);
   await preview();
-  expect(container.querySelector(".wf-block-preview")?.textContent).toContain("BPMN subprocess");
-  expect(container.querySelector(".wf-block-preview")?.textContent).toContain("Change BPMN elements");
+  expect(globalThis.document.body.querySelector(".wf-block-preview")?.textContent).toContain("BPMN subprocess");
+  expect(globalThis.document.body.querySelector(".wf-block-preview")?.textContent).toContain("Change BPMN elements");
   expect(context.document).toEqual(original); expect(apply).not.toHaveBeenCalled();
   click("Apply change"); await vi.waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
   const [document, selected, current] = apply.mock.calls[0];
@@ -55,12 +64,12 @@ it("offers a real BPMN subprocess and validates/commits the whole resource once 
 it("keeps a stale BPMN proposal from committing after edit authority changes", async () => {
   await preview(); context = { ...context, canEdit: false }; render();
   expect(button("Apply change").disabled).toBe(true); expect(apply).not.toHaveBeenCalled();
-  expect(container.textContent).toContain("preview is stale");
+  expect(globalThis.document.body.textContent).toContain("preview is stale");
 });
 it("refuses a gateway selection before resource validation or mutation", async () => {
   (context.document.rootActivity.structure!.payload.elements as Record<string, unknown>[])[1].elementType = "exclusiveGateway";
   render(); const original = structuredClone(context.document);
   click("Extract block…"); name("Unsafe"); click("Preview change");
-  await vi.waitFor(() => expect(container.querySelector("[role=alert]")?.textContent).toContain("gateways"));
+  await vi.waitFor(() => expect(globalThis.document.body.querySelector("[role=alert]")?.textContent).toContain("gateways"));
   expect(validate).not.toHaveBeenCalled(); expect(apply).not.toHaveBeenCalled(); expect(context.document).toEqual(original);
 });

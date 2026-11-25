@@ -7,10 +7,10 @@
 Status: the design of the kernel model after round 4 stage A, which split the merged kernel into three layer projects
 and renamed step to turn and off-step work (run) to background job, at the owner's decisions of 12 November. Stage A
 changed no behaviour: every gate gives the numbers it gave before (FINDINGS section 24). Round 4's graph engine
-(FINDINGS section 26) puts the native Flowchart on main's Flowchart engine (`models/Graph`) and adds the graph
+(FINDINGS section 26) puts the native Flowchart on main's Flowchart engine ([Graph](../../essentials/src/Workflows/Runtime/Graph)) and adds the graph
 invariants G1 to G5 to the simulation; it changes no kernel behaviour and no round trip. Round 4's runtimes (FINDINGS
 section 27) add the built-in runtime on a clock (`RuntimeNode`), the Orleans adapter and the runtime conformance suite,
-and change layer 2 where the seam needed it: a pass renews an idle lease (R1), a new activation is woken (R4), and a
+and change layer 2 where the seam needed it: the historical R1 idle-lease contract, a new activation is woken (R4), and a
 job's body may run off the runtime's scheduler (R14); every gate of README's "The gates of a refactor", SQLite and
 PostgreSQL, gives main's numbers at the stack's final state (FINDINGS section 27). The source of design intent is
 draft 5 of the kernel sketch (three layers, partitions only, deployment profiles, persistence as an abstraction,
@@ -24,8 +24,8 @@ Words: a **turn** is one call of an instance's code with the messages that are d
 **background job** (job) is work a turn starts outside itself, whose result comes back as a message; a **pass** is the
 runtime's call into a partition, which runs the turns that are due and commits them in batches.
 
-The kernel is 2,290 lines in three projects: `src/Kernel.Runtime` 295, `src/Kernel.Durable` 1,714 (of which 254 are
-the in-memory store) and `src/Kernel.Workflows` 281 (2,240 at stage A; the runtimes of section 27 added the rest). Before the split, `src/Kernel` was 1,758; the difference is the
+The measured kernel was 2,290 lines in three projects: `Kernel.Runtime` 295, `Kernel.Durable` 1,714 (of which 254 are
+the in-memory store) and `Kernel.Workflows` 281 (2,240 at stage A; the runtimes of section 27 added the rest). Before the split, `src/Kernel` was 1,758; the difference is the
 seam's interfaces, `PartitionRuntime`, the durable half of a turn (`DurableTurn`) and their comments. Around it: the EF
 store and its four dialects, the MongoDB store, the store conformance suite, the deterministic simulation, and the
 native model.
@@ -46,9 +46,9 @@ native model.
 
 | Layer | Owns | Project and types |
 |---|---|---|
-| 1. Actor runtime | Placement of scopes on nodes, activation and deactivation, one pass at a time per scope, wake-ups between nodes. No guarantee about messages or state | `src/Kernel.Runtime`: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal (`IWakeSignal`, `InProcessWakeSignal`), membership (`IMembership`, `Cluster`), and `PartitionRuntime`, the built-in runtime (fair share from `node` heartbeats, activations, passes). Also `InstanceRef`, `Flaw` and `Defaults` |
-| 2. Durable actors | The durable inbox, a turn's state and messages committed atomically, the fence, timers, background jobs, events, poison, the journal, live output | `src/Kernel.Durable`: `Worker` (one partition's `IScopeActivation`), `DurableHost` (the `IScopeHost`), the seam to layer 3 (`IActorType`, `TurnInput`, `TurnOutcome`, `Delivery`, `DurableTurn`, `ITurnServices`), `IKernelStore` and `InMemoryStore`, `Projector`, `Requests` and `IReplyTransport`, messages and kinds |
-| 3. Actor types | What an actor does with its messages | `src/Kernel.Workflows`: `WorkflowInstance`, the one actor type (definition and version, status, parent and children, cancel of a tree, suspend, resume, terminate, rebind, delete, the history envelope), and the execution-model contract it runs (`IExecutionModel`, `ITurn`). Models: the simulation's toy models, `NativeModel` (its Flowchart runs on the graph engine of `models/Graph`, main's Flowchart engine) |
+| 1. Actor runtime | Placement of scopes on nodes, activation and deactivation, one pass at a time per scope, wake-ups between nodes. No guarantee about messages or state | `../../essentials/src/ActorFoundation/BuiltIn/Runtime`: the seam (`IActorRuntime`, `IScopeHost`, `IScopeActivation`), the wake signal (`IWakeSignal`, `InProcessWakeSignal`), membership (`IMembership`, `Cluster`), and `PartitionRuntime`, the built-in runtime (fair share from `node` heartbeats, activations, passes). Also `InstanceRef`, `Flaw` and `Defaults` |
+| 2. Durable actors | The durable inbox, a turn's state and messages committed atomically, the fence, timers, background jobs, events, poison, the journal, live output | [Built-in Durable](../../essentials/src/ActorFoundation/BuiltIn/Durable): `Worker` (one partition's `IScopeActivation`), `DurableHost` (the `IScopeHost`), the seam to layer 3 (`IActorType`, `TurnInput`, `TurnOutcome`, `Delivery`, `DurableTurn`, `ITurnServices`), `IKernelStore` and `InMemoryStore`, `Projector`, `Requests` and `IReplyTransport`, messages and kinds |
+| 3. Actor types | What an actor does with its messages | `../../essentials/tests/ActorFoundation/Legacy/Workflows`: `WorkflowInstance`, the one actor type (definition and version, status, parent and children, cancel of a tree, suspend, resume, terminate, rebind, delete, the history envelope), and the execution-model contract it runs (`IExecutionModel`, `ITurn`). Models: the simulation's toy models, `NativeModel` (its Flowchart runs on the graph engine of [Graph](../../essentials/src/Workflows/Runtime/Graph), main's Flowchart engine) |
 
 Dependencies point downward only: `Kernel.Workflows` references `Kernel.Durable`, which references `Kernel.Runtime`,
 which references nothing. Where a clean cut would have changed behaviour or round trips, the code keeps what it had and
@@ -102,10 +102,9 @@ public interface IWakeSignal                       // layer 1, pluggable; not du
   one of them commit.
 - **One pass at a time per scope.** `PartitionRuntime.PassAsync` calls `RunAsync` and never two at once for a scope.
   A pass reads the inbox if it was woken, loads what is missing, reads kept events, runs every turn that is ready in id
-  order and flushes; if no commit renewed the lease for a third of it, it beats (an empty fenced commit). It returns
-  zero while there is work, otherwise the sooner of the next timer it holds and the next beat (never zero), and null
-  once the scope is not held: a runtime that calls again when asked keeps an idle scope's lease. A cancelled token
-  stops it at a turn boundary, before its commit: a process that goes away.
+  order and flushes. The host heartbeats independently, renewing one node lease while the Worker's passes complete
+  within the lease window. A pass returns zero for more work, a positive delay for the next pass, or null after it
+  stands down. A cancelled token stops the pass at a turn boundary, before its commit.
 - **The wake signal is a hint; polling is the guarantee.** `WakeAsync` sends over the signal; a runtime that hears it
   for a scope it holds calls `WokenAsync`, and the next pass polls. A lost hint costs latency until the host's poll
   interval, when the host calls `WokenAsync(null)`. The built-in signal is a call within one process.
@@ -119,7 +118,7 @@ public interface IWakeSignal                       // layer 1, pluggable; not du
   partitions without balancing: they activate through `DurableHost` and run passes with `RunAsync` in their own loop
   (on purpose: FINDINGS section 27, L13). Two runtimes run on a clock of their own, and the runtime conformance suite
   runs them both:
-  - `RuntimeNode` (`runtime/Kernel.Runtime.Hosting`) is the built-in runtime of one node: one loop around a
+  - `RuntimeNode` (`../../essentials/src/ActorFoundation/BuiltIn/Hosting`) is the built-in runtime of one node: one loop around a
     `PartitionRuntime` that balances, runs a held scope's pass when the last one asked, at once on a hint, and wakes
     every held scope at the poll interval. The loop runs on a scheduler of the node's own that runs one task at a
     time, so a job's continuation never runs beside a pass (workers set `WorkerOptions.JobScheduler` so that a job's
@@ -168,7 +167,7 @@ run background jobs, read kept events, publish) is a message in that commit. A n
 
 ## Persistence
 
-The kernel depends on one storage contract, `IKernelStore` (`src/Kernel.Durable/Store.cs`), stated by what each operation
+The kernel depends on one storage contract, [`IKernelStore`](../../essentials/src/ActorFoundation/BuiltIn/Durable/Store.cs), stated by what each operation
 guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 65 semantic cases (57 before round 4),
 a concurrent stress test with injected connection failures and the provider's own connection killer, and the cost runs.
 
@@ -205,8 +204,8 @@ in the one bulk write.
 
 | Table | Row | Notes |
 |---|---|---|
-| `partition` | id, owner, epoch, lease_until, position, died | `position` counts journal rows written. `epoch` changes only when ownership is taken. Times are database time in milliseconds |
-| `node` | id, seen_at | A heartbeat per process start, for the fair share. Liveness only |
+| `partition` | id, owner, epoch, position, died | `position` counts journal rows written. `epoch` changes only when ownership is taken. Times are database time in milliseconds |
+| `node` | id, seen_at, lease_until | One lease per process start, renewed by the node heartbeat and by takes. The last heartbeat supplies the fair share |
 | `instance` | id, partition, model, definition, status, state, state_version, history, suspended, jobs, children, revision, parent, fault | `state` is opaque to the kernel. `jobs`: the background jobs in flight; `children`: the instances it started that have not finished. Layer 2's columns and layer 3's in one row (FINDINGS section 24) |
 | `message` | seq, id, partition, target, kind, payload, sender, reply_to, start, due, seen, trial, attempts, keep_until, done | The inbox. `seq` is the order key; `id` makes adding idempotent; `due` makes a timer; `start` creates the target; `reply_to` is a caller on some node |
 | `subscription` | key, instance, wait, partition, start | A wait of an instance, or with a start spec and no instance a definition an event starts |
@@ -221,7 +220,7 @@ subscriptions `(instance)` and journal `(partition, instance)` for terminate and
 ## The commit
 
 The owner of partition `p` at epoch `e`, which believes the position is `n`, commits `k` instance turns in one
-transaction: the fence `UPDATE partition SET position = n + j, lease_until = ... WHERE id = p AND epoch = e AND
+transaction: the fence `UPDATE partition SET position = n + j WHERE id = p AND epoch = e AND
 position = n` (`j` the journal rows written), checked before anything else is sent, or carried as concurrency tokens
 in the batch; the instance rows at their revisions (inserts, updates, deletes); consumed messages deleted, outside
 commands marked done, held messages taken off trial, polled messages marked seen or put on trial; sent messages
@@ -243,14 +242,14 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
 ## Ownership
 
 - **Take** (`PartitionRuntime.ActivateAsync` → `DurableHost` → `Worker.GainAsync`, or `Worker.TakeAsync` for a
-  worker of a fixed set) bumps the partition's epoch; a take from another owner can only succeed because its lease
-  expired. A gain keeps the rest of the set, its epochs, positions and memory. **Reset** after a refused fence or a
+  worker of a fixed set) bumps the partition's epoch. The take reads previous owners' node leases before renewing
+  the taker's lease and locking the partition rows. A missing or expired node record permits takeover. A gain keeps the rest of the set, its epochs, positions and memory. **Reset** after a refused fence or a
   lost answer retakes each partition the node still holds, one at a time at a new epoch (`IKernelStore.RetakeAsync`).
   The costs of each, scattered and contiguous, are PARTITIONS.md's "K1 costs".
 - **The lease is 10 s by default** (`Defaults.Lease`, the owner's of 12 November). A takeover waits for it, so
   failover takes about one lease. The simulation and the stress tests use short leases of their own.
 - **Leases decide who should write. The fence decides who can.**
-- **Fair share** (`PartitionRuntime.BalanceAsync`): a node beats, counts the nodes heard from, releases what is above its share and takes free
+- **Fair share** (`PartitionRuntime.BalanceAsync`): a node uses its last heartbeat’s membership, releases what is above its share and takes free
   partitions up to it. It gives up the highest first and asks for the lowest free first, so it moves the fewest and a
   node's set may be scattered (`Balancer.Plan`, K1). The number of partitions is fixed when the store is created:
   1,024 on every store by default (K1 slice 7); on SQLite one node owns them all as one set.
@@ -273,7 +272,7 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
   This is an observed-history hint: false does not prove that another owner did not execute it (F-N6, #4362).
 - **Side effects run at least once; the kernel makes none of them exactly once** (decision 1; round 5 C). A crash
   between an effect and its commit, a lost turn result, a redelivery or a takeover runs the activity again. What the
-  kernel gives the activity instead is a **stable effect key** (`EffectKey.For`, `src/Kernel.Workflows/EffectKey.cs`):
+  kernel gives the activity instead is a **stable effect key** (`EffectKey.For`, `../../essentials/tests/ActorFoundation/Legacy/Workflows/EffectKey.cs`):
   **`{instance origin}/{node}/{iteration path}/{attempt}`**, the owner's shape of 16 November, from committed facts
   only. The instance id is fixed at creation and the key never reads partitions or positions; the node is the activity's
   stable id in the definition; the iteration path is the iteration numbers of the repeating scopes that enclose the
@@ -356,7 +355,7 @@ like a suspended one (F14).
 
 ## The execution model contract
 
-Layer 3's (`src/Kernel.Workflows/Contracts.cs`). The workflow instance runs a model for everything it does not own
+Layer 3's (`../../essentials/tests/ActorFoundation/Legacy/Workflows/Contracts.cs`). The workflow instance runs a model for everything it does not own
 itself; what is durable in a turn (sends, jobs, holds, waits, live output) it hands to layer 2's `DurableTurn`.
 
 ```csharp
@@ -518,7 +517,7 @@ marked.
 |---|---|---|---|
 | 1 | No reads while a workflow runs | Memory per active instance; the whole state rewritten per commit | Bound on instances held; values by reference |
 | 2 | One writer per partition: no locks, many instances per commit | Failover takes about one lease; a hot partition has one writer; the partition count is fixed at creation | Partitions (1,024 virtual partitions: decided 16 November); lease (10 s: decided) |
-| 3 | An idle owner needs little traffic | A beat renews every owned partition's row about three times per lease, in one fenced commit per node (2 statements on PostgreSQL: the locking read and the update), plus one node beat; on PostgreSQL that is about 161 MB of WAL an hour on an idle four-node cluster at 1,024 (PARTITIONS.md, "K1 costs") | Lease; a node-level beat (D3, not built) |
+| 3 | An idle owner renews one node row | The heartbeat reads ownership and membership and runs about three times per lease. The prior partition-lease path wrote about 161 MB of PostgreSQL WAL an hour with four idle nodes and 1,024 partitions | Lease and heartbeat cadence. See PARTITIONS.md for the K1 baseline |
 | 4 | Batching under load | A commit waits for the one before it | Rows per flush |
 | 5 | Balanced mode: one commit per wait | Activities since the last commit run again after a crash; `Redelivered` reports observed delivery history, not every possible rerun | Persistence mode per workflow |
 | 6 | A background job does not block the instance | It can execute more than once | None: inherent |

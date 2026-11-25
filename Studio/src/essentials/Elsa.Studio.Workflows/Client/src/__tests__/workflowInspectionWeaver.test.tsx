@@ -8,6 +8,7 @@ import { registerWorkflowWeaver, type WorkflowWeaverController } from "../workfl
 import { useWorkflowInspectionContext } from "../workflow-editor/useWorkflowInspectionContext";
 import { WorkflowVersionHistory } from "../workflow-editor/WorkflowVersionHistory";
 import { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "../workflowWeaverContext";
+import type { WorkflowDefinitionVersionDetails } from "../workflowTypes";
 import { renderRegisteredRoute, response } from "./routeRenderingHelpers";
 import { waitForCondition } from "./workflowDefinitionTestHelpers";
 
@@ -36,6 +37,13 @@ async function click(element: HTMLElement) {
 function Inspected({ controller, identity, kind = "executable" }: { controller: WorkflowWeaverController; identity: Record<string, unknown> | null; kind?: "executable" | "run" }) {
   useWorkflowInspectionContext({ controller, clientId: "client-1", kind, identity });
   return null;
+}
+
+function versionDetails(id: string, version: string, name: string): WorkflowDefinitionVersionDetails {
+  return {
+    id, version, definition: { id: "d-1", name, description: "Saved workflow snapshot", createdAt: "2026-06-01T00:00:00Z", lastModifiedAt: "2026-06-01T00:00:00Z" },
+    state: { rootActivity: { nodeId: `root-${id}`, activityType: "Elsa.WriteLine" } } as never, layout: []
+  };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -166,13 +174,19 @@ describe("workflow version history context (spec 1193 FR-026)", () => {
     const explainAction: StudioAiPromptActionContribution = { id: "weaver.workflows.explain-version", label: "Explain version", placement: "selection",
       contextKind: "workflow-version", createPrompt: context => ({ message: "Explain", mode: "enqueue", attachments: [], context } as never) };
     const versions = [{ id: "v-1", version: "1.0.0", createdAt: "2026-06-01T00:00:00Z" }, { id: "v-2", version: "2.0.0", createdAt: "2026-06-02T00:00:00Z" }];
+    const loadVersion = vi.fn(async (id: string) => versionDetails(id, id === "v-2" ? "2.0.0" : "1.0.0", `Policy ${id}`));
     const host = mount();
-    host.render(<WorkflowVersionHistory definitionId="d-1" versions={versions} weaver={{ ai: weaverRegistry, controller, explainAction }} />);
+    host.render(<WorkflowVersionHistory definitionId="d-1" versions={versions} latestVersionId="v-2" workingDraft workingDraftSourceVersion="1.0.0" loadVersion={loadVersion} weaver={{ ai: weaverRegistry, controller, explainAction }} />);
     expect(await collect(weaverRegistry, "workflows.version-history")).toEqual([]);
     expect(host.container.textContent).not.toContain("Explain version");
+    expect(host.container.textContent).toContain("Working draft");
 
     const select = host.container.querySelector<HTMLButtonElement>('button[aria-label="Select version 2.0.0"]')!;
     await click(select);
+    await vi.waitFor(() => expect(host.container.textContent).toContain("Policy v-2"));
+    expect(loadVersion).toHaveBeenCalledWith("v-2");
+    expect(host.container.textContent).toContain("Saved workflow snapshot");
+    expect(host.container.querySelector("details")?.open).toBe(false);
     expect(select.getAttribute("aria-pressed")).toBe("true");
     const [attachment] = await collect(weaverRegistry, "workflows.version-history");
     expect(attachment).toMatchObject({ id: "workflows.version:v-2", contentType: "workflows.version",
@@ -190,11 +204,30 @@ describe("workflow version history context (spec 1193 FR-026)", () => {
 
   it("lists versions without selection when no Weaver state is composed", () => {
     const host = mount();
-    host.render(<WorkflowVersionHistory definitionId="d-1" versions={[{ id: "v-1", version: "1.0.0", createdAt: "2026-06-01T00:00:00Z" }]} />);
-    expect(host.container.textContent).toContain("v1.0.0");
-    expect(host.container.querySelector("button")).toBeNull();
-    host.render(<WorkflowVersionHistory definitionId="d-1" versions={[]} />);
+    host.render(<WorkflowVersionHistory definitionId="d-1" versions={[{ id: "v-1", version: "1.0.0", createdAt: "2026-06-01T00:00:00Z" }]} loadVersion={async id => versionDetails(id, "1.0.0", "Read-only policy")} />);
+    expect(host.container.textContent).toContain("Version 1.0.0");
+    expect(host.container.querySelector<HTMLButtonElement>('button[aria-label="Select version 1.0.0"]')).not.toBeNull();
+    expect(host.container.textContent).toContain("Latest saved");
+    host.render(<WorkflowVersionHistory definitionId="d-1" versions={[]} loadVersion={async id => versionDetails(id, "1.0.0", "Empty workflow")} />);
     expect(host.container.textContent).toContain("No published versions yet.");
+    host.unmount();
+  });
+
+  it("keeps the active version snapshot when an earlier request resolves later", async () => {
+    const versions = [{ id: "v-1", version: "1.0.0", createdAt: "2026-06-01T00:00:00Z" }, { id: "v-2", version: "2.0.0", createdAt: "2026-06-02T00:00:00Z" }];
+    const pending = new Map<string, (value: WorkflowDefinitionVersionDetails) => void>();
+    const loadVersion = vi.fn((id: string) => new Promise<WorkflowDefinitionVersionDetails>(resolve => pending.set(id, resolve)));
+    const host = mount();
+    host.render(<WorkflowVersionHistory definitionId="d-1" versions={versions} latestVersionId="v-2" loadVersion={loadVersion} />);
+
+    await click(host.container.querySelector<HTMLButtonElement>('button[aria-label="Select version 1.0.0"]')!);
+    await click(host.container.querySelector<HTMLButtonElement>('button[aria-label="Select version 2.0.0"]')!);
+    pending.get("v-2")!(versionDetails("v-2", "2.0.0", "Selected version"));
+    await vi.waitFor(() => expect(host.container.textContent).toContain("Selected version"));
+    pending.get("v-1")!(versionDetails("v-1", "1.0.0", "Stale version"));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(host.container.textContent).toContain("Selected version");
+    expect(host.container.textContent).not.toContain("Stale version");
     host.unmount();
   });
 });

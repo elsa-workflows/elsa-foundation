@@ -1,13 +1,17 @@
 import React, { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { StudioButton } from "../forms/Button";
+import { StudioIconButton } from "@elsa-workflows/studio-ui";
 import { StudioDialogFooter } from "../layout/DialogFooter";
+import { StudioCollectionFooter } from "../layout/Page";
 import { StudioSearchInput } from "../forms/SearchInput";
 import { StudioActionNotice } from "../feedback/ActionNotice";
+import { StatusChip } from "../feedback/StatusChip";
 import { StatusPill } from "../feedback/StatusPill";
 import { StudioListContainer, StudioListRow } from "../list/ListRow";
+import { StudioVersionHistory } from "../layout/VersionHistory";
 import { StudioSparkline, StudioStatTile } from "../stat/StatTile";
 import { CopyableIdentifier } from "../identity/CopyableIdentifier";
 
@@ -51,6 +55,136 @@ describe("StudioButton", () => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(clicks).toBe(1);
   });
+
+  it("renders danger without a workaround class and respects native disabled behavior", () => {
+    const onDelete = vi.fn();
+    const host = mount(<>
+      <StudioButton variant="danger" onClick={onDelete}>Delete draft</StudioButton>
+      <StudioButton variant="danger" onClick={onDelete} disabled>Delete published version</StudioButton>
+    </>);
+    const [enabled, disabled] = host.querySelectorAll("button");
+
+    expect(enabled.dataset.variant).toBe("danger");
+    expect(enabled.className).toBe("studio-button");
+    expect(disabled.dataset.variant).toBe("danger");
+    expect(disabled.disabled).toBe(true);
+    disabled.click();
+    expect(onDelete).not.toHaveBeenCalled();
+    enabled.click();
+    expect(onDelete).toHaveBeenCalledOnce();
+  });
+});
+
+describe("StudioCollectionFooter", () => {
+  it("keeps caller content and native footer props without opting into any controls", () => {
+    const host = mount(<StudioCollectionFooter className="custom-footer" aria-label="Results">
+      12 loaded workflows <a href="/workflows">Browse workflows</a>
+    </StudioCollectionFooter>);
+    const footer = host.querySelector('footer[aria-label="Results"]')!;
+
+    expect(footer.classList.contains("custom-footer")).toBe(true);
+    expect(footer.firstChild?.textContent).toBe("12 loaded workflows ");
+    expect(footer.querySelector(":scope > a")?.textContent).toBe("Browse workflows");
+    expect(footer.querySelector("select, button")).toBeNull();
+  });
+
+  it("labels the controlled page-size select and reports a numeric selection", () => {
+    const onChange = vi.fn();
+    function Collection() {
+      const [value, setValue] = useState(25);
+      return <StudioCollectionFooter summary={<span aria-live="polite">Showing {value} workflows</span>}
+        pageSize={{ label: "Rows per page", value, sizes: [10, 25, 50], onChange: size => { onChange(size); setValue(size); } }}>
+        <button type="button">Next</button>
+      </StudioCollectionFooter>;
+    }
+    const host = mount(<Collection />);
+    const select = host.querySelector("select")!;
+    const summary = host.querySelector('footer > [aria-live="polite"]');
+
+    expect(summary?.textContent).toBe("Showing 25 workflows");
+    expect(select.labels?.[0]?.textContent).toBe("Rows per page");
+    expect(select.closest(".studio-form-field")).not.toBeNull();
+    expect(Array.from(select.options, option => option.value)).toEqual(["10", "25", "50"]);
+    expect(select.value).toBe("25");
+    expect(Array.from(host.querySelectorAll("footer :is(select, button)"))).toEqual([select, host.querySelector("button")]);
+
+    flushSync(() => {
+      select.value = "50";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onChange.mock.calls).toEqual([[50]]);
+    expect(select.value).toBe("50");
+    expect(summary?.textContent).toBe("Showing 50 workflows");
+  });
+
+  it("loads only when ready, then disables the action while busy or exhausted", () => {
+    const load = vi.fn();
+    function Collection() {
+      const [busy, setBusy] = useState(false);
+      const [hasMore, setHasMore] = useState(true);
+      return <form>
+        <StudioCollectionFooter loadMore={{ hasMore, busy, onLoadMore: () => { load(); setBusy(true); } }} />
+        <button type="button" onClick={() => { setBusy(false); setHasMore(false); }}>Finish loading</button>
+      </form>;
+    }
+    const host = mount(<Collection />);
+    const button = host.querySelector<HTMLButtonElement>("footer button")!;
+
+    expect(button.type).toBe("button");
+    expect(button.textContent).toBe("Load more");
+    expect(button.disabled).toBe(false);
+    flushSync(() => button.click());
+    expect(button.textContent).toBe("Loading…");
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.disabled).toBe(true);
+    button.click();
+
+    flushSync(() => host.querySelector<HTMLButtonElement>("form > button")!.click());
+    expect(button.textContent).toBe("Load more");
+    expect(button.getAttribute("aria-busy")).toBeNull();
+    expect(button.disabled).toBe(true);
+    button.click();
+    expect(load).toHaveBeenCalledOnce();
+  });
+});
+
+describe("StudioIconButton", () => {
+  it("requires an aria-label and renders only the icon with a matching default title", () => {
+    expectTypeOf<React.ComponentProps<typeof StudioIconButton>>().toMatchTypeOf<{ "aria-label": string }>();
+    const host = mount(<StudioIconButton aria-label="Edit feed"><svg aria-hidden="true" /></StudioIconButton>);
+    const button = host.querySelector("button")!;
+
+    expect(button.className).toBe("studio-icon-button");
+    expect(button.dataset.variant).toBe("default");
+    expect(button.type).toBe("button");
+    expect(button.getAttribute("aria-label")).toBe("Edit feed");
+    expect(button.title).toBe("Edit feed");
+    expect(button.childNodes).toHaveLength(1);
+    expect(button.firstElementChild?.localName).toBe("svg");
+  });
+
+  it("forwards a ref and native props while supporting an explicit title and danger variant", () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    const onClick = vi.fn();
+    const host = mount(<>
+      <StudioIconButton ref={ref} aria-label="Delete feed" title="Delete from Studio" variant="danger"
+        type="submit" form="feed-form" className="row-action" onClick={onClick}><svg /></StudioIconButton>
+      <StudioIconButton aria-label="Delete another feed" onClick={onClick} disabled><svg /></StudioIconButton>
+    </>);
+    const [enabled, disabled] = host.querySelectorAll("button");
+
+    expect(ref.current).toBe(enabled);
+    expect(enabled.className).toBe("studio-icon-button row-action");
+    expect(enabled.dataset.variant).toBe("danger");
+    expect(enabled.title).toBe("Delete from Studio");
+    expect(enabled.type).toBe("submit");
+    expect(enabled.getAttribute("form")).toBe("feed-form");
+    expect(disabled.disabled).toBe(true);
+    disabled.click();
+    expect(onClick).not.toHaveBeenCalled();
+    enabled.click();
+    expect(onClick).toHaveBeenCalledOnce();
+  });
 });
 
 describe("CopyableIdentifier", () => {
@@ -69,6 +203,22 @@ describe("CopyableIdentifier", () => {
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(value));
     await vi.waitFor(() =>
       expect(host.querySelector("[role='status']")?.textContent).toBe("Node ID copied"));
+  });
+
+  it("supports an externally rendered label without changing copy semantics", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const value = "definition-version-0123456789abcdef";
+    const host = mount(<CopyableIdentifier label="Definition version ID" value={value} labelPlacement="external" />);
+
+    expect(host.querySelector(".studio-copyable-identifier")?.getAttribute("data-label-placement")).toBe("external");
+    expect(host.querySelector(".studio-copyable-identifier__label")).toBeNull();
+    expect(host.querySelector(".studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe(`Definition version ID: ${value}`);
+    host.querySelector<HTMLButtonElement>("button")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(value));
+    await vi.waitFor(() =>
+      expect(host.querySelector("[role='status']")?.textContent).toBe("Definition version ID copied"));
   });
 
   it("announces a local failure when clipboard and fallback copying are unavailable", async () => {
@@ -154,6 +304,39 @@ describe("StudioListRow", () => {
     row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     row.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
     expect(activations).toBe(3);
+  });
+});
+
+describe("StudioVersionHistory", () => {
+  it("renders selectable versions, their status, and a separate selected detail panel", () => {
+    const onSelect = vi.fn();
+    const host = mount(
+      <StudioVersionHistory
+        label="Workflow versions"
+        items={[
+          { id: "v1", ariaLabel: "Select version 1.0.0", title: "Version 1.0.0", subtitle: "June 1", status: <StatusChip>Saved</StatusChip> },
+          { id: "v2", ariaLabel: "Select version 2.0.0", title: "Version 2.0.0", subtitle: "June 2", status: <StatusChip tone="success">Latest</StatusChip> }
+        ]}
+        selectedId="v2"
+        onSelect={onSelect}
+        detail={<p>Immutable snapshot details</p>}
+      />
+    );
+
+    const selected = host.querySelector<HTMLButtonElement>('button[aria-label="Select version 2.0.0"]')!;
+    expect(selected.getAttribute("aria-pressed")).toBe("true");
+    expect(selected.textContent).toContain("Latest");
+    expect(host.querySelector('[aria-label="Workflow versions preview"]')?.textContent).toContain("Immutable snapshot details");
+    host.querySelector<HTMLButtonElement>('button[aria-label="Select version 1.0.0"]')!.click();
+    expect(onSelect).toHaveBeenCalledWith("v1");
+  });
+
+  it("shows an empty message and a selection hint without inventing a selected version", () => {
+    const host = mount(<StudioVersionHistory label="Form versions" items={[]} selectedId={null} onSelect={vi.fn()} emptyState="No published form versions." />);
+
+    expect(host.textContent).toContain("No published form versions.");
+    expect(host.textContent).toContain("Choose a version to inspect.");
+    expect(host.querySelector("button")).toBeNull();
   });
 });
 

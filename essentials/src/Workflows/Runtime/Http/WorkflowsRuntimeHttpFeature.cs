@@ -1,6 +1,7 @@
 ﻿using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Http.Core.Contracts;
+using Elsa.Events.Core.Extensions;
 using Elsa.Primitives.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -46,6 +47,10 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        // AuthenticationBasedHttpEndpointAuthorizationHandler needs IAuthorizationService. Hosts that enable
+        // this feature without FoundationIdentityAbstractions still have to resolve that handler when the
+        // standalone HTTP trigger middleware is constructed.
+        services.AddAuthorization();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IIngressReservationPolicy, HttpIngressReservationPolicy>());
         RegisterFaultHandler(services);
         RegisterAuthorizationHandler(services);
@@ -55,6 +60,7 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
         // observer): a singleton owning a SemaphoreSlim(1,1) that opens a fresh scope per refresh, so a stale read
         // can never clobber a newer swap and drop a live route. TryAdd — a host may override.
         services.TryAddSingleton<IHttpEndpointRouteTableSynchronizer, HttpEndpointRouteTableSynchronizer>();
+        services.AddEventHandler<StandaloneTriggerResourceCommitted, StandaloneTriggerRouteObserver>();
 
         // Rebuild the route table from the durable trigger index at startup, so a fresh host (or a restart)
         // has every published HTTP endpoint's route before the middleware runs.

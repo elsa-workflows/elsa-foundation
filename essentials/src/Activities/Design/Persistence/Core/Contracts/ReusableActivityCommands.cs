@@ -83,6 +83,32 @@ public interface IUpdateActivityDefinitionPresentationCommand
         CancellationToken cancellationToken = default);
 }
 
+public sealed record ArchiveActivityDefinitionRequest(
+    string DefinitionId,
+    string? DefinitionTenantId,
+    string? TenantId,
+    DateTimeOffset ArchivedAt);
+
+public interface IArchiveActivityDefinitionCommand
+{
+    Task ExecuteAsync(
+        ArchiveActivityDefinitionRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record RestoreActivityDefinitionRequest(
+    string DefinitionId,
+    string? DefinitionTenantId,
+    string? TenantId,
+    DateTimeOffset RestoredAt);
+
+public interface IRestoreActivityDefinitionCommand
+{
+    Task ExecuteAsync(
+        RestoreActivityDefinitionRequest request,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed record CreateActivityDraftRequest(
     ActivityDefinitionDraft Draft,
     ActivityDefinitionDraftLayout Layout,

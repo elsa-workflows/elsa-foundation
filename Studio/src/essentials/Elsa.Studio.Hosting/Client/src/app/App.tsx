@@ -1,4 +1,5 @@
-import { StudioPageHeader } from "./ui";
+import { StudioShellBreadcrumbTarget } from "@elsa-workflows/studio-ui";
+import { TechnicalDetails, StudioAlert, StudioButton, StudioIconButton, StudioPageHeader, StudioResultState } from "./ui";
 import { getStudioBranding } from "./runtime";
 import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -24,7 +25,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PlayCircle,
-  RefreshCw,
   Search,
   Server,
   Shield,
@@ -45,7 +45,7 @@ import type {
   StudioFeatureAreaContribution,
   StudioContributionAvailability
 } from "../sdk";
-import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isStudioWorkspaceTabClick, openStudioWorkspaceTab, qualifyStudioBackendPath, requestStudioNavigation, studioBackendCapabilitiesChangedEvent, useAuthContext } from "@elsa-workflows/studio-sdk";
+import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isStudioWorkspaceTabClick, openStudioWorkspaceTab, qualifyStudioBackendPath, reviewStudioNavigation, settleStudioNavigationReview, studioBackendCapabilitiesChangedEvent, useAuthContext } from "@elsa-workflows/studio-sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
@@ -61,14 +61,16 @@ import { defaultThemeStoreCapabilities, getThemeStoreCapabilities, type ThemeSto
 import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
 import { getHealthErrorMessage } from "./hooks/useHostHealth";
+import { dialogs } from "./dialogs";
 import { DialogHost } from "./ui/dialog/DialogHost";
 import { NotificationCenter } from "./ui/feedback/NotificationCenter";
 import { ToastHost } from "./ui/feedback/ToastHost";
 import { notificationController, notificationStorage } from "./notifications";
+import { readToastDurationPreference, saveToastDurationPreference, type ToastDurationPreference } from "./toastDurationPreference";
 import { useNotificationScope } from "./useNotificationScope";
 import { SkeletonRows } from "./ui/feedback/FeedbackStates";
 import { registerBuiltInSettingEditors } from "./ui/shared";
-import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
+import { StudioTabs, StudioTabPanel, tabElementIds } from "./ui/layout/Tabs";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ThemeBuilderPage } from "./modules/ThemeBuilderPage";
@@ -100,7 +102,7 @@ import {
   isSettingsSurfacePath,
   resolveSettingsSection
 } from "./settings/settingsSections";
-import { isDashboardPath, isNavigationItemActive } from "./navigation/active";
+import { isNavigationItemActive } from "./navigation/active";
 import elsaLogo from "../assets/images/icon.png";
 import { WeaverSurface } from "./weaver";
 import "./styles.css";
@@ -139,12 +141,12 @@ type DiagnosticsWidgetBoundaryState = {
 // (The HostHealthRegistry/HostHealthEntry types that #192 added here alongside this map now live in
 // hooks/useHostHealth.ts after the #189 Query migration, so they are intentionally not re-added.)
 const navIconColors = {
-  dashboard: "#0ea5e9",
-  weather: "#14b8a6",
-  diagnostics: "#10b981",
-  modules: "#8b5cf6",
-  feeds: "#f59e0b",
-  themes: "#0f766e"
+  dashboard: "var(--studio-nav-icon-blue)",
+  weather: "var(--studio-nav-icon-teal)",
+  diagnostics: "var(--studio-success-fg)",
+  modules: "var(--studio-nav-icon-violet)",
+  feeds: "var(--studio-nav-icon-amber)",
+  themes: "var(--studio-nav-icon-teal)"
 } as const;
 
 const builtInNavigation: StudioNavigationContribution[] = [
@@ -199,6 +201,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
   const [themeCapabilities, setThemeCapabilities] = useState<ThemeStoreCapabilities>(defaultThemeStoreCapabilities);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [toastDurationPreference, setToastDurationPreference] = useState<ToastDurationPreference>(() => readToastDurationPreference());
   useNotificationScope(backendSession, notificationController, notificationStorage);
   const [weaverSessions, setWeaverSessions] = useState<WeaverSessionIndicatorSession[]>([]);
   const [incomingPrompt, setIncomingPrompt] = useState<(StudioWeaverPromptRequest & { id: string }) | null>(null);
@@ -245,6 +248,11 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
     if (incomingPromptRef.current?.id === id) incomingPromptRef.current = null;
     setIncomingPrompt(current => current?.id === id ? null : current);
   }, []);
+
+  const updateToastDurationPreference = (preference: ToastDurationPreference) => {
+    setToastDurationPreference(preference);
+    saveToastDurationPreference(preference);
+  };
 
   // Probe the Weaver provider once so provider-gated affordances (e.g. the workflow "Risks" action) can be
   // disabled before the user opens the Weaver dock. "unavailable"/"disabled" mean the provider can deliver
@@ -378,7 +386,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authManager, backendBaseUrl, backendSession, connections, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl, modules]);
 
-  const routes = useMemo(() => api?.routes.compose({includeUnavailable:true}).map(({contribution,availability}) => ({...contribution,availability})) ?? [], [api, state]);
+  const routes = useMemo(() => api?.routes.compose({includeUnavailable:true}).map(({contribution,availability}) => ({...contribution,availability})) ?? [], [api]);
   const enabledFeatures = useMemo(() => {
     const features = new Set<string>();
     for (const module of manifestQuery.data?.modules ?? []) {
@@ -391,15 +399,15 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   }, [manifestQuery.data]);
   const navigation = useMemo(
     () => getStudioNavigation(api?.navigation.list() ?? [], { includeThemeBuilder: themeCapabilities.managementEnabled }),
-    [api, state, themeCapabilities.managementEnabled]
+    [api, themeCapabilities.managementEnabled]
   );
   const panels = useMemo(
     () => (api?.panels.list() ?? []).sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
-    [api, state]
+    [api]
   );
   const featureAreas = useMemo(
     () => (api?.featureAreas.list() ?? []).sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
-    [api, state]
+    [api]
   );
   const access = useShellNavigationAccess(enabledFeatures);
   const settingsGroups = getSettingsSectionGroups(navigation, access);
@@ -475,7 +483,13 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
             <DevDisclosurePage />
           </Suspense>
         ) : null}
-        {!screenSettingsSurface && RouteComponent ? route.availability.state === "available" ? <RouteComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{route.availability.reason ?? "This route is unavailable."}</div> : null}
+        {!screenSettingsSurface && RouteComponent ? route.availability.state === "available" ? <RouteComponent navigate={navigateTo} /> : <section className="studio-page">
+          <StudioPageHeader headingLevel={2} title={route.label} />
+          <StudioResultState title="Page unavailable" description={route.availability.source === "runtime"
+            ? "This page is unavailable on the selected backend." : route.availability.reason}>
+            {route.availability.source === "runtime" && route.availability.reason ? <TechnicalDetails>{route.availability.reason}</TechnicalDetails> : null}
+          </StudioResultState>
+        </section> : null}
         {!screenSettingsSurface && !RouteComponent && !builtIn ? (
           <div className="empty-state" role="status">
             {area
@@ -514,8 +528,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
   const settingsSection = settingsSurface ? resolveSettingsSection(path, settingsGroups) : undefined;
   const pageTitle = settingsSection?.label
-    ?? navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
-    ?? activeRoute?.label
+    ?? screenLabel(path, activeRoute, navigation)
     ?? owningFeatureArea?.title
     ?? (settingsSurface ? "Settings" : "Studio");
   const tabViews: WorkspaceTabView[] = workspace.state.tabs.map(tab => {
@@ -543,11 +556,11 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         backendAction={(api?.shell?.list().some(slot=>slot.placement==="connection") ?? modules.some(item=>item.instance.shell?.some(slot=>slot.placement==="connection"))) ? <ShellContributions api={api} modules={modules} placement="connection" navigate={navigateTo}/> : undefined}
         enabledFeatures={enabledFeatures}
         assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.weaver",contractVersion:"1"}]).state === "available" ? <WeaverLauncher open={assistantOpen} sessions={weaverSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
-        notificationAction={<NotificationCenter navigate={navigateTo} />}
+        notificationAction={<NotificationCenter navigate={navigateTo} toastDurationPreference={toastDurationPreference} onToastDurationPreferenceChange={updateToastDurationPreference} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}
         contentRef={contentRef}
-        toastHost={<ToastHost navigate={navigateTo} />}
+        toastHost={<ToastHost navigate={navigateTo} durationPreference={toastDurationPreference} />}
         tabStrip={
           <WorkspaceTabStrip
             baseId={workspaceBaseId}
@@ -602,11 +615,16 @@ export function describeScreen(
     return { title: route.label, detail: value ? value.length > 10 ? `${value.slice(0, 8)}…` : value : undefined };
   }
   return {
-    title: navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
-      ?? route?.label
+    title: screenLabel(path, route, navigation)
       ?? findFeatureAreaForPath(featureAreas, path)?.title
       ?? (path === "/" ? "Home" : "Studio")
   };
+}
+
+function screenLabel(path: string, route: { path: string; label: string } | undefined, navigation: StudioNavigationContribution[]) {
+  const active = navigation.find(item => isNavigationItemActive(item, path, navigation));
+  if (route?.path === path && active?.path !== path) return route.label;
+  return active?.label ?? route?.label;
 }
 
 /** Shell rendering must survive a malformed restored address; fall back to the raw segment. */
@@ -743,6 +761,7 @@ export function ShellFrame({
     return () => media.removeEventListener("change", update);
   }, []);
   const [groupChoices, setGroupChoices] = useState(() => readNavigationGroups());
+  const [breadcrumbTarget, setBreadcrumbTarget] = useState<HTMLDivElement | null>(null);
   const topbarRef = useRef<HTMLElement>(null);
   useShellHeaderBottom(topbarRef);
   // The top navigation mode turns the sidebar into a menubar and moves backend status into a
@@ -835,7 +854,7 @@ export function ShellFrame({
               <small>{branding.subtitle}</small>
             </span>
           </a>
-          <button
+          <StudioIconButton
             type="button"
             className="sidebar-collapse-toggle"
             aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
@@ -844,7 +863,7 @@ export function ShellFrame({
             onClick={toggleNavCollapsed}
           >
             {navCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          </button>
+          </StudioIconButton>
         </div>
 
         <label className="sidebar-search">
@@ -961,6 +980,7 @@ export function ShellFrame({
       <div className="main-frame">
         <header ref={topbarRef} className="topbar">
           <div>
+            <div ref={setBreadcrumbTarget} className="studio-shell-breadcrumb-outlet" />
             <span className="breadcrumb">Studio / {title}</span>
             <h1>{title}</h1>
           </div>
@@ -978,7 +998,9 @@ export function ShellFrame({
           </div>
         </header>
         {tabStrip}
-        <main className="content" ref={contentRef}>{children}</main>
+        <main className="content" ref={contentRef}>
+          <StudioShellBreadcrumbTarget.Provider value={breadcrumbTarget}>{children}</StudioShellBreadcrumbTarget.Provider>
+        </main>
       </div>
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
       {toastHost}
@@ -1009,14 +1031,6 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const activePanelIndex = panels.indexOf(activePanel);
   const ActivePanelComponent = activePanel.component;
   const tabsBaseId = useId();
-  const panelKeyDown = useTablistKeyboard(
-    panels.map(panel => panel.id),
-    activePanel.id,
-    id => {
-      setActivePanelId(id);
-      setCollapsed(false);
-    }
-  );
 
   useEffect(() => {
     if (activePanelId && !panels.some(panel => panel.id === activePanelId)) {
@@ -1171,33 +1185,20 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
         />
       ) : null}
       <div className="bottom-panel-tabs">
-        <div className="bottom-panel-tab-list" role="tablist" aria-label="Bottom panels" onKeyDown={panelKeyDown}>
-          {panels.map((panel, index) => {
-            const isActive = panel.id === activePanel.id;
-            const ids = tabElementIds(tabsBaseId, index);
-            return (
-              <button
-                key={panel.id}
-                id={ids.tabId}
-                data-tab-id={panel.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={ids.panelId}
-                tabIndex={isActive ? 0 : -1}
-                className={isActive ? "active" : ""}
-                onClick={() => {
-                  setActivePanelId(panel.id);
-                  setCollapsed(false);
-                }}
-              >
-                {panel.title}
-              </button>
-            );
-          })}
-        </div>
+        <StudioTabs
+          className="bottom-panel-tab-list"
+          ariaLabel="Bottom panels"
+          baseId={tabsBaseId}
+          compact
+          tabs={panels.map(panel => ({ id: panel.id, label: panel.title }))}
+          activeTab={activePanel.id}
+          onSelect={id => {
+            setActivePanelId(id);
+            setCollapsed(false);
+          }}
+        />
         <div className="bottom-panel-actions" aria-label="Bottom panel controls">
-          <button
+          <StudioIconButton
             type="button"
             className="bottom-panel-action-button"
             aria-label={collapsed ? "Expand bottom panel" : "Collapse bottom panel"}
@@ -1205,8 +1206,8 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
             onClick={toggleCollapsed}
           >
             {collapsed ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </button>
-          <button
+          </StudioIconButton>
+          <StudioIconButton
             type="button"
             className="bottom-panel-action-button"
             aria-label={maximized ? "Restore bottom panel" : "Maximize bottom panel"}
@@ -1214,9 +1215,12 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
             onClick={toggleMaximized}
           >
             {maximized ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          </button>
+          </StudioIconButton>
         </div>
       </div>
+      {panels.map((panel, index) => panel.id === activePanel.id ? null : (
+        <StudioTabPanel key={panel.id} baseId={tabsBaseId} index={index} hidden>{null}</StudioTabPanel>
+      ))}
       <div
         className="bottom-panel-content"
         role="tabpanel"
@@ -1269,11 +1273,15 @@ export function Diagnostics({
                     onNavigate(destination.path);
                   }}
                 >
+                  <DiagnosticPreview kind={getDiagnosticPreviewKind(destination)} />
                   <span className="diagnostics-task-content">
                     <span className="diagnostics-task-title">{destination.label}</span>
                     <span className="diagnostics-task-description">{describeDiagnosticDestination(destination)}</span>
+                    <span className="diagnostics-task-action">
+                      Open tool
+                      <ChevronRight size={15} aria-hidden="true" />
+                    </span>
                   </span>
-                  <ChevronRight size={16} aria-hidden="true" />
                 </a>
               </li>
             ))}
@@ -1341,6 +1349,100 @@ function describeDiagnosticDestination(item: StudioNavigationContribution) {
     return "Review runtime evidence capture policy settings.";
   }
   return "Open this destination.";
+}
+
+type DiagnosticPreviewKind = "telemetry" | "logs" | "console" | "runtime-evidence" | "generic";
+
+function getDiagnosticPreviewKind(item: StudioNavigationContribution): DiagnosticPreviewKind {
+  if (item.id === "open-telemetry" && item.path === "/diagnostics/open-telemetry") return "telemetry";
+  if (item.id === "structured-logs" && item.path === "/diagnostics/structured-logs") return "logs";
+  if (item.id === "console" && item.path === "/diagnostics/console") return "console";
+  if (item.id === "workflows-runtime-diagnostics" && item.path === "/workflows/runtime-diagnostics") return "runtime-evidence";
+  return "generic";
+}
+
+function DiagnosticPreview({ kind }: { kind: DiagnosticPreviewKind }) {
+  return (
+    <span className="diagnostics-task-preview" data-preview={kind} aria-hidden="true">
+      <svg viewBox="0 0 320 144" focusable="false">
+        <rect className="diagnostics-preview-canvas" width="320" height="144" rx="8" />
+        <rect className="diagnostics-preview-toolbar" width="320" height="28" rx="8" />
+        <path className="diagnostics-preview-toolbar-edge" d="M0 27.5h320" />
+        <circle className="diagnostics-preview-dot" cx="14" cy="14" r="3" />
+        <circle className="diagnostics-preview-dot" cx="25" cy="14" r="3" />
+        <circle className="diagnostics-preview-dot" cx="36" cy="14" r="3" />
+        {kind === "telemetry" ? (
+          <>
+            <rect className="diagnostics-preview-panel" x="14" y="40" width="181" height="88" rx="6" />
+            <path className="diagnostics-preview-grid-line" d="M27 63h155M27 84h155M27 105h155" />
+            <path className="diagnostics-preview-accent-line" d="m28 96 24-19 22 9 23-26 20 18 24-9 22 12 20-21" />
+            <circle className="diagnostics-preview-accent" cx="97" cy="60" r="3" />
+            <rect className="diagnostics-preview-panel" x="207" y="40" width="99" height="39" rx="6" />
+            <rect className="diagnostics-preview-muted" x="219" y="51" width="34" height="5" rx="2.5" />
+            <rect className="diagnostics-preview-accent" x="219" y="63" width="55" height="7" rx="3.5" />
+            <rect className="diagnostics-preview-panel" x="207" y="87" width="99" height="41" rx="6" />
+            <rect className="diagnostics-preview-muted" x="219" y="98" width="46" height="5" rx="2.5" />
+            <rect className="diagnostics-preview-soft" x="219" y="110" width="71" height="7" rx="3.5" />
+          </>
+        ) : null}
+        {kind === "logs" ? (
+          <>
+            <rect className="diagnostics-preview-panel" x="14" y="40" width="292" height="88" rx="6" />
+            <rect className="diagnostics-preview-accent" x="26" y="52" width="34" height="8" rx="4" />
+            <rect className="diagnostics-preview-muted" x="67" y="54" width="54" height="4" rx="2" />
+            <rect className="diagnostics-preview-muted" x="132" y="54" width="149" height="4" rx="2" />
+            <rect className="diagnostics-preview-soft" x="26" y="70" width="34" height="8" rx="4" />
+            <rect className="diagnostics-preview-muted" x="67" y="72" width="42" height="4" rx="2" />
+            <rect className="diagnostics-preview-muted" x="120" y="72" width="161" height="4" rx="2" />
+            <rect className="diagnostics-preview-positive" x="26" y="88" width="34" height="8" rx="4" />
+            <rect className="diagnostics-preview-muted" x="67" y="90" width="49" height="4" rx="2" />
+            <rect className="diagnostics-preview-muted" x="127" y="90" width="154" height="4" rx="2" />
+            <rect className="diagnostics-preview-muted" x="26" y="108" width="34" height="8" rx="4" />
+            <rect className="diagnostics-preview-muted" x="67" y="110" width="59" height="4" rx="2" />
+            <rect className="diagnostics-preview-muted" x="137" y="110" width="144" height="4" rx="2" />
+          </>
+        ) : null}
+        {kind === "console" ? (
+          <>
+            <rect className="diagnostics-preview-panel" x="14" y="40" width="292" height="88" rx="6" />
+            <text className="diagnostics-preview-prompt" x="27" y="63">$</text>
+            <rect className="diagnostics-preview-accent" x="43" y="55" width="102" height="6" rx="3" />
+            <rect className="diagnostics-preview-muted" x="27" y="72" width="169" height="5" rx="2.5" />
+            <rect className="diagnostics-preview-muted" x="27" y="83" width="221" height="5" rx="2.5" />
+            <text className="diagnostics-preview-prompt" x="27" y="108">$</text>
+            <rect className="diagnostics-preview-accent" x="43" y="100" width="126" height="6" rx="3" />
+            <rect className="diagnostics-preview-muted" x="27" y="116" width="193" height="5" rx="2.5" />
+          </>
+        ) : null}
+        {kind === "runtime-evidence" ? (
+          <>
+            <rect className="diagnostics-preview-panel" x="14" y="40" width="292" height="88" rx="6" />
+            <path className="diagnostics-preview-accent-line" d="M53 59 74 67v18c0 12-9 20-21 25-12-5-21-13-21-25V67z" />
+            <path className="diagnostics-preview-check" d="m43 82 7 7 13-15" />
+            <rect className="diagnostics-preview-muted" x="91" y="56" width="94" height="5" rx="2.5" />
+            <rect className="diagnostics-preview-accent" x="91" y="67" width="153" height="7" rx="3.5" />
+            <rect className="diagnostics-preview-muted" x="91" y="84" width="119" height="5" rx="2.5" />
+            <rect className="diagnostics-preview-soft" x="91" y="95" width="185" height="7" rx="3.5" />
+            <rect className="diagnostics-preview-muted" x="91" y="112" width="82" height="5" rx="2.5" />
+          </>
+        ) : null}
+        {kind === "generic" ? (
+          <>
+            <rect className="diagnostics-preview-panel" x="14" y="40" width="184" height="88" rx="6" />
+            <rect className="diagnostics-preview-muted" x="27" y="52" width="72" height="5" rx="2.5" />
+            <rect className="diagnostics-preview-accent" x="27" y="65" width="88" height="7" rx="3.5" />
+            <rect className="diagnostics-preview-soft" x="27" y="81" width="157" height="7" rx="3.5" />
+            <rect className="diagnostics-preview-muted" x="27" y="97" width="141" height="5" rx="2.5" />
+            <rect className="diagnostics-preview-muted" x="27" y="110" width="113" height="5" rx="2.5" />
+            <rect className="diagnostics-preview-panel" x="210" y="40" width="96" height="88" rx="6" />
+            <circle className="diagnostics-preview-soft" cx="258" cy="77" r="23" />
+            <path className="diagnostics-preview-accent-line" d="M246 77h24m-12-12v24" />
+            <rect className="diagnostics-preview-muted" x="229" y="111" width="58" height="5" rx="2.5" />
+          </>
+        ) : null}
+      </svg>
+    </span>
+  );
 }
 
 function DiagnosticsWidgetHost({ widget }: { widget: StudioDiagnosticsWidgetContribution }) {
@@ -1608,7 +1710,7 @@ function getDefaultNavIconColor(id: string) {
   if (id.includes("modules")) return navIconColors.modules;
   if (id.includes("theme")) return navIconColors.themes;
   if (id.includes("feeds")) return navIconColors.feeds;
-  return "var(--primary)";
+  return "var(--studio-accent)";
 }
 
 export { isDashboardPath, isExactSegmentPrefix, isNavigationItemActive } from "./navigation/active";
@@ -1618,7 +1720,7 @@ export function getStudioNavigation(moduleNavigation: StudioNavigationContributi
     appearanceNavigation,
     ...(options.includeThemeBuilder ? [themeBuilderNavigation] : []),
     ...builtInNavigation,
-    ...(moduleNavigation.some(item => item.parentId === "library") ? [{ id: "library", label: "Library", path: "/library", placement: "build" as const, childDisplay: "views" as const, order: 35 }] : [])
+    ...(moduleNavigation.some(item => item.parentId === "library") ? [{ id: "library", label: "Library", path: "/library", placement: "build" as const, childDisplay: "links" as const, order: 35 }] : [])
   ];
   return [...hostNavigation, ...moduleNavigation]
     .filter((item, index, items) => items.findIndex(candidate => candidate.id === item.id) === index)
@@ -1768,7 +1870,7 @@ function BackendApplication({authManager}:{authManager:AuthProviderManager|null}
   let owned:typeof boot=null;
   const abort=new AbortController();
   const configuration=getStudioRuntimeConfig();
-  void initializeStudioModules(manifestQuery.data.modules,{host:hostContext,identity:hostIdentity,authManager,configuration:configuration as Readonly<Record<string,unknown>>,signal:abort.signal},manifestQuery.data)
+  void initializeStudioModules(manifestQuery.data.modules,{host:hostContext,identity:hostIdentity,dialogs,authManager,configuration:configuration as Readonly<Record<string,unknown>>,signal:abort.signal},manifestQuery.data)
    .then(result=>{
     if(abort.signal.aborted){for(const {instance} of [...result.instances].reverse())disposeStudioModuleInstance(instance);return;}
     const connection=result.instances.find(item=>item.instance.connection)?.instance.connection
@@ -1788,7 +1890,27 @@ function BackendApplication({authManager}:{authManager:AuthProviderManager|null}
   const reset=watchStudioModuleChanges({canReload:()=>!boot?.connection.getSnapshot().active?.pendingWrites,resetDocument:path=>window.location.assign(path),onPending:()=>setResetPending(true)});
   return ()=>reset.dispose();
  },[boot]);
- return <>{resetPending?<div role="status" className="backend-connection-notice">Studio modules changed. Finish or reset the current draft, then <button type="button" onClick={()=>{if(!boot?.connection.getSnapshot().active?.pendingWrites && requestStudioNavigation(currentRelativeLocation(),"/"))window.location.assign("/");}}>Reload Studio</button>.</div>:null}{boot?<ConnectionApplication authManager={authManager} connections={boot.connection} modules={boot.modules} manifest={boot.manifest}/>:<ThemeProvider storeContext={hostContext}><div role="status">{error ?? (manifestQuery.isError ? String(manifestQuery.error) : "Loading Studio modules…")}</div></ThemeProvider>}</>;
+ function reloadAfterDraft() {
+   const origin = currentRelativeLocation();
+   if (boot?.connection.getSnapshot().active?.pendingWrites) return;
+   settleStudioNavigationReview(reviewStudioNavigation(origin, "/"), allowed => {
+     if (allowed && currentRelativeLocation() === origin && !boot?.connection.getSnapshot().active?.pendingWrites) window.location.assign("/");
+   });
+ }
+
+ const startupError = error ?? (manifestQuery.isError ? String(manifestQuery.error) : null);
+ return <>
+   {resetPending ? <StudioAlert tone="info">
+     Studio modules changed. Finish or reset the current draft, then reload Studio.
+     <StudioButton onClick={reloadAfterDraft}>Reload Studio</StudioButton>
+   </StudioAlert> : null}
+   {boot ? <ConnectionApplication authManager={authManager} connections={boot.connection} modules={boot.modules} manifest={boot.manifest} /> :
+     <ThemeProvider storeContext={hostContext}>
+       {startupError ? <StudioResultState tone="danger" title="Studio modules could not load" description={startupError}
+         actions={<StudioButton onClick={() => window.location.reload()}>Reload Studio</StudioButton>} /> :
+         <SkeletonRows rows={3} label="Loading Studio modules" />}
+     </ThemeProvider>}
+ </>;
 }
 
 function ConnectionApplication({authManager,connections,modules,manifest}:{authManager:AuthProviderManager|null;connections:StudioConnectionController;modules:StudioLoadedModule[];manifest:StudioModulesResponse}) {
@@ -1802,9 +1924,22 @@ function ConnectionApplication({authManager,connections,modules,manifest}:{authM
   const stopRestore=reloadConnectionOnPageRestore(connections);
   return()=>{mounted=false;stopRestore();};
  },[connections]);
- const navigate=(path:string)=>window.location.assign(path);
+ const navigate=async(path:string)=>{
+  const from=currentRelativeLocation();
+  const session=connections.getSnapshot().active;
+  if(await reviewStudioNavigation(from,path) && from===currentRelativeLocation() && session===connections.getSnapshot().active && !session?.pendingWrites)window.location.assign(path);
+ };
  if(!snapshot.active || !initialized || snapshot.loading || initializationError)return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[]} panels={[]} path="/" title="Connection" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} onNavigate={navigate} accountAction={<UserMenu/>} backendAction={<ShellContributions modules={modules} placement="connection" navigate={navigate}/>}>
- {(!initialized || snapshot.loading) && !initializationError?<SkeletonRows rows={3} label="Connecting to backend"/>:<><div role="status">{initializationError ?? snapshot.error}</div><button type="button" onClick={()=>window.location.assign("/")}>Return Home</button><ShellContributions modules={modules} placement="notice" navigate={navigate}/><ShellContributions modules={modules} placement="recovery" navigate={navigate}/></>}
+ {(!initialized || snapshot.loading) && !initializationError ? <SkeletonRows rows={3} label="Connecting to backend" /> : <>
+   <StudioResultState
+     tone={initializationError || snapshot.error ? "danger" : "neutral"}
+     title={initializationError || snapshot.error ? "Backend connection failed" : "Choose a backend connection"}
+     description={initializationError ?? snapshot.error}
+     actions={<StudioButton onClick={() => window.location.assign("/")}>Return Home</StudioButton>}
+   />
+   <ShellContributions modules={modules} placement="notice" navigate={navigate} />
+   <ShellContributions modules={modules} placement="recovery" navigate={navigate} />
+ </>}
  </ShellFrame></ThemeProvider>;
  const content=<SelectedBackendApplication authManager={authManager} backendSession={snapshot.active} connections={connections} modules={modules} manifest={manifest}/>;
  return <HostAuthContext.Provider value={hostAuth}>{snapshot.active.manager===authManager ? content : snapshot.active.manager?<AuthProvider manager={snapshot.active.manager}>{content}</AuthProvider>:<AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</HostAuthContext.Provider>;

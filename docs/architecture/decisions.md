@@ -101,6 +101,7 @@ Decisions are by Sipke Schoorstra, the owner, for [program #4229](https://github
 | 17 Nov | Kernel schema changes that a running version cannot read use a coordinated stop, and each release's notes state its rollback floor. | Owner card ([plan, schema compatibility](../program-goals/clean-slate-kernel.md#kernel-schema-and-protocol-compatibility-proposed)) |
 | 16 Nov | The BPMN prototype stream is parked until after release 1. | [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229) program state |
 | 16 Nov | #2531's M5 qualification and the budgets of 32 SQLite commands and 16 PostgreSQL round trips (ten WriteLines, Balanced) move to gate 3. | [#4229 comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6917342686) |
+| 23 Nov | MongoDB-specific implementation and qualification are on hold, including the MongoDB part of K4. Keep the prototype and its evidence, and continue relational K4 work behind the provider-neutral storage contract. | [Owner direction on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7108927599) |
 
 ## The seven design-now answers (16–17 November)
 
@@ -134,7 +135,7 @@ recommendations, and that card also accepted the migration addressing fallback. 
 | Simple cases | The defined simple-case boundary is release 1's scope. | Migration 3 |
 | ADR 0049 | Widened: release 1 migrates running and suspended instances at a turn boundary; ADR 0049 is superseded. | Migration 4 |
 | Source definitions | Kept while any instance, ticket or history refers to them. | Migration 5 |
-| Addressing fallback | Id-only only for rows without a creation, until creation headers are persisted; dispatch is creation-qualified wherever the provider and row allow, fallback outcomes are shown to the operator, and the reused-caller-key risk is documented. The fallback never extends to deletion. | [Migration](migrating-running-instances.md#plans-and-bulk-migration), the id-only fallback |
+| Addressing fallback | Id-only only for rows without a creation, until creation headers are persisted; dispatch is creation-qualified wherever the provider and row allow, fallback outcomes are shown to the operator, and the reused-caller-key risk is documented. The fallback never extends to deletion. Moot under the foundation contract (FC-15): an exact ref names the life, so no id-only fallback arises (the id-only fallback bullet was removed with exact refs). | [Migration](migrating-running-instances.md#plans-and-bulk-migration), the id-only fallback |
 | Standalone Jobs | 1.x, with the remote worker protocol; workflow background jobs ship in release 1; the first-use lookup card is settled in the 1.x spike. | [Job workers](job-workers.md#decisions-owner-1617-november-2026) 1 |
 | Heartbeats | In memory over the runtime's transport, with a durable fallback. | Job workers 2 |
 | Gateway keys | `{worker}/{request id}` with a `keep_until`. | Job workers 3 |
@@ -301,6 +302,83 @@ Minors are corrected here, and its condition NL-C1 is tracked in the plan's
 | 19 Nov | The commit fence is unchanged except that it renews no lease. A batch with no journal rows still checks and locks every touched row at its epoch and position: the owned SQL sends the unchanged update, and the EF reference path marks `Position` modified even when unchanged. On MongoDB the fence writes each touched partition document (it increments `fenced`), so a concurrent take conflicts with the commit. | Coordinator design choice; [ownership and fencing](ownership-and-fencing.md#the-commit-fence) |
 | 19 Nov | The local lease guard keeps its rules with one deadline per process: the latest send time plus the lease over the successful heartbeats and takes whose reply arrived before their own send time plus the lease, using the monotonic time just before each was sent. A late reply restarts nothing and never moves the deadline earlier. The rule applies within the current generation: a reply that arrives after a guard expiry belongs to the reset generation, which the generation latch drops, and a fresh take starts new ownership. An expired process stands down every partition it holds ([LEASE.md](../../prototypes/kernel-model/LEASE.md)). | Coordinator design choice |
 | 19 Nov | Release and the operator's forced take keep their rules. A host renews its node record only while each of its Workers that holds a partition has completed a pass within the last lease (a Worker that never held a partition, or released its partitions, is live; one that stood down because its guard expired keeps those partitions pending: they count as held for the gate, the reconciliation never releases them, and it retakes them at new epochs counting a death for each one's previous-epoch trial messages, a gain or set take that includes one being its retake; or, while its passes do not complete, its lease expires and another process's take counts them. A pending entry ends when its retake lands or is refused, or an answer lists the partition at another owner or epoch; a pass completes without the pending partitions before the heartbeat and the retake, and the host keeps passing a Worker whose only partitions are pending), so a Worker whose commit, poll or load hangs loses its lease and the takeover counts the death the trial protocol needs, as the per-partition beat did (Astra review NL-M2). A host that withholds its heartbeat takes nothing: no gain, retake after a reset or activation; every host wakes each Worker for a pass at least once per poll interval, on a loop apart from the balancing round. A heartbeat carries a timeout of a third of the lease, and a take's plain node read and its own-record write together carry one such timeout (the take's `LeaseUntil` being the time taken in that write), enforced by the server on PostgreSQL and MongoDB and by the client's timer on SQL Server and MySQL (K4 qualifies it), so the lease expires within two and a third leases of the last completed pass, and the takeover follows within one lock bound and one balancing round. The store rolls back instead of committing once the lease has passed since its batch was sent; the server ends a gone client's transaction, and a host's watchdog closes the connection of an owner-path store call that outlasts twice the lease, ending the process only when the connection cannot be closed (the application's policy in the Embedded profile; the SQL Server bound); a batch's command timeout is at most the lease; a take waits at most its lock timeout, no longer than the lease, then rolls back and retries (K4 qualifies these per provider). A looping turn body runs off the pass and stays with the forced take or a model-level timeout, as before. | Coordinator design choice; [observability](observability.md) |
+
+## StateMachine on the kernel (19 November)
+
+The owner reviewed the closed StateMachine program's decisions OD1 to OD49
+([#3815](https://github.com/elsa-workflows/elsa-foundation/issues/3815)) against the kernel and answered four
+questions. [StateMachine on the kernel](statemachine-on-the-kernel.md) gives each decision's disposition and K7's
+invariants S1 to S4, a coordinator design under these answers.
+
+| Date | Rule | Source |
+|---|---|---|
+| 19 Nov | A StateMachine uses the kernel inbox only. It keeps no inbox, receipts, capacity or retention of its own. Capacity is the foundation's inbox bound (`InboxFull` at ingress, an internal send never refused); a repeat id answers `Duplicate` whatever its content; events are evaluated in delivery order, with held events in their place and one sender's order guaranteed; the turn that ends or cancels a machine records its held events as not processed. | Owner card; [StateMachine on the kernel](statemachine-on-the-kernel.md#owner-decisions-19-november), answer 1 |
+| 19 Nov | A machine's business events are kernel events. Each machine invocation subscribes once per trigger key for its life, with a `wait` that names the invocation; senders publish to the key, which carries the correlation. | Owner card; answer 2 |
+| 19 Nov | Under that card: kernel subscriptions are per machine invocation and key (a key is subscribed when the invocation starts, or in the commit that first arms a trigger on it, and stays for the machine's life), and trigger arming is per visit in the machine's committed state. Machines subscribe without `keep` by default, and an author may opt in; a Park removes the subscriptions and a recover re-arms them (FC-7, FC-10). | Coordinator design choice under the card; [StateMachine on the kernel](statemachine-on-the-kernel.md#owner-decisions-19-november), answer 2 |
+| 19 Nov | Release 1 has StateMachine's full surface: hierarchy and parallel regions (K7); in Studio the chart designer with the transition inspector and the hierarchy outline, and the run view of the active configuration and pending phases with linked history (K10). History states stay deferred. | Owner card; answer 3; [program plan](../program-goals/clean-slate-kernel.md#milestones) K7 and K10 |
+| 19 Nov | Release 1's saga-style StateMachine example uses ordinary activities and explicit compensating states and transitions, with no Saga type. Native compensation on the kernel is a separate scope decision. | Owner card; answer 4 |
+
+## Owner decisions (20 November)
+
+The owner took five cards on 20 November, each on the recommended option. Three settle conditions of the
+[gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) table (NL-C1, FC-C2, FC-C3), whose
+status stays Open until their evidence lands; two settle findings of the Elsa 4 Architect's re-check on #4229
+([comment](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7026689348)). None changes the
+contract's count of 38 types and 167 members.
+
+| Date | Rule | Source |
+|---|---|---|
+| 20 Nov | NL-C1: the take's transaction runs at read committed on every engine. On each engine NL-9's locking-read mutation must deadlock and the ordered take must not: SQL Server with the take at REPEATABLE READ, with and without RCSI; MySQL at REPEATABLE READ with the node read as a subquery of the update, a locking read there; PostgreSQL with the node read taken `FOR SHARE`. K1b slice 6 builds the evidence. This replaces the coordinator's narrowing of 19 November in the K1b README. | Owner card; [plan, gate 2 conditions](../program-goals/clean-slate-kernel.md#gate-2-conditions) NL-C1 |
+| 20 Nov | A pending partition the host gives up moves only through its counting retake, then is released at the returned epoch. On a hand-over it stays pending, marked given up, until the next answer's retake; on a full release (dispose) the counting retake runs at once, and a partition that cannot be retaken stays pending and given up while the host keeps passing that Worker until its pending set is empty. | Owner card; [ownership and fencing](ownership-and-fencing.md#the-nodes-heartbeat), NL-10 |
+| 20 Nov | FC-C2: a request to `Event(key)` answered "no waiter" published nothing. No wait consumes it, now or later, and keeping waits never see it, so a retry is safe. A caller who wants the event kept uses `SendAsync(Event(key))` with `KeepFor`. | Owner card; [the foundation contract](foundation-contract.md#ingress-iingress), FC-6 |
+| 20 Nov | FC-C3: a turn may send `Terminate` to its own registered children only; the commit checks only the parent's child registry. A `Terminate` that reaches a child that has already ended is the ordinary delivery to an ended actor and changes nothing (FC-9). | Owner card; [the foundation contract](foundation-contract.md#what-a-foundation-adapter-must-supply), FC-9 |
+| 20 Nov | Ambient: a request fanned out to an event key gives `Ambient` only to a waiter whose turn runs on the node that took the request. Waiters elsewhere get none, and the first live output still answers (FC-14). | Owner card; [the foundation contract](foundation-contract.md#ingress-iingress), `RequestOptions`, FC-6 and FC-14 |
+
+### Coordinator design choices under these cards (20 November)
+
+| Date | Rule | Source |
+|---|---|---|
+| 20 Nov | A migration plan dispatches through ingress (under FC-C3). The plan actor's turn only records each batch and its progress in its state (the instances, the target, the batch number); it selects the next batch only after the previous one is dispatched, so it holds at most one undispatched batch, and drops a batch's instance list once it is dispatched. The plan runner sends each `Migrate` with `SendAsync(scope, Ref(ref), id, Kinds.Migrate, payload)` under the operator's `BoundScope`, to the exact ref the batch recorded, with a deterministic id from the plan id, batch and instance, so a retried batch is deduplicated (FC-16); a send to a deleted life is dropped (FC-15). `Migrate` is a closed `Kinds` command the actor type executes in its turn (FC-9); `OperatorCommand` stays for the foundation's own resolutions. The runner is layer 3's operator service, built at K11; it runs once per plan from the plan actor's committed batches, sends the plan a "batch dispatched" message deduplicated by batch number (FC-16) when a batch's sends are done, and after a restart resends, with the same ids, the batch whose dispatch has not completed, which FC-16 deduplicates. Each instance's own turn sends its result to the plan actor as an ordinary message. | Coordinator design choice under FC-C3; [migrating running instances](migrating-running-instances.md#plans-and-bulk-migration) |
+| 20 Nov | A migration plan's state keeps counts only, as the migration page's cost argument requires, and those counts are progress only: after a repeat beyond the deduplication window they may overcount. Completion and the final totals are judged from the plan-outcomes read model, which records one outcome per instance by exact ref; "not at source" never overwrites a decisive one. Each instance's state records the id of the last plan whose `Migrate` it answered, which stops a repeat from the same plan in the ordinary case. The projector records each batch's instances from the plan's batch journal entries (the plan runs at `Full` history), so the read model holds the selected set after the plan drops each batch's instance list. A plan's run ends when the read model shows every selected instance with an outcome of any kind, "not at source" included (a decisive outcome is never overwritten): the plan runner, outside any turn, reads the read model and sends the plan a "complete" message, deduplicated by plan id, since a turn reads no read models. It also ends at the plan's deadline, or when an operator closes it; instances that never answered are reported as "no answer". | Coordinator design choice; [migrating running instances](migrating-running-instances.md#plans-and-bulk-migration) |
+| 20 Nov | A start subscription on the key counts as a live waiter for `RequestAsync(Event(key))`: the actor it starts is reached like any other waiter, and the first live output of any waiter, the started one included, answers (FC-14). "No waiter" means no live wait and no start subscription matched, and then nothing was published. `SendAsync` and `RequestAsync` to `Event(key)` stay symmetric. | Coordinator design choice under the FC-C2 card; [the foundation contract](foundation-contract.md#ingress-iingress), FC-6 |
+| 20 Nov | Under the pending give-up card: a refused retake means another owner holds the partition, so the pending entry ends and nothing is released; a retake that fails, or whose answer is lost, leaves the partition pending and given up. The card's "the host keeps passing that Worker until its pending set is empty" holds while the process lives. A dispose does not wait for it, and if the process ends with a partition still pending, the node lease lapses and the next taker counts the deaths (NL-6). | Coordinator reading of the pending give-up card; [ownership and fencing](ownership-and-fencing.md#the-nodes-heartbeat) |
+
+## Owner decision on the terminal header (21 November)
+
+Every actor's opaque `TypeData` is limited to 16 KiB in UTF-8 at creation and when replaced. Every live
+checkpoint reserves room for the full permitted `TypeData` and label set beside the state-only
+`TerminalGrowth` declared by the actor type. The owner accepted this in the K2 terminal-envelope decision
+card. [Foundation contract, FC-17](foundation-contract.md#what-a-foundation-adapter-must-supply)
+states the rule. [#4971](https://github.com/elsa-workflows/elsa-foundation/pull/4971) carries the in-memory witness,
+with provider encoding qualified at K4.
+
+## Owner decisions for K2 acceptance (21 November)
+
+| Rule | Source |
+|---|---|
+| FC-1 serializes each actor's turns within an owner. An already-running stale turn can overlap its successor. All durable outcomes are fenced. | [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7069577972), [foundation contract](foundation-contract.md#what-a-foundation-adapter-must-supply) |
+| K2 qualifies the in-memory clauses of FC-1 to FC-18 assigned to it in the plan. The existing milestones keep each remaining clause and its explicit acceptance evidence. The full adapter qualification still includes all clauses and the contract workloads. | [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7069577972), [K2 evidence](../program-goals/clean-slate-kernel.md#k2-foundation-contract-evidence) |
+| Release 1 requires cooperative cancellation for bounded in-process progress. A recovered job must physically exit before it yields poison trial isolation to eligible termination. A yield leaves the job logically pending without recording a process death. | [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7069577972), [job workers](job-workers.md#what-is-built) |
+
+## Owner decision on broadcast ordering (22 November)
+
+Each wait receives broadcasts in the order their match pages commit. Two overlapping broadcasts can reach
+different waits in different orders. A publication receipt acknowledges acceptance. Direct messages retain
+FIFO from one sender to one target. [Owner decision on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7080391053)
+
+## Owner decisions on recovery ordering (23 November)
+
+A finite Park deadline makes expiry eligible. The first resolution to open in a fenced commit owns the Park. Recovery may open after the deadline and recalls the outstanding expiry in that same commit.
+
+A job restarted at Open becomes eligible after recovery completes. The D-2(a) case follows its completion, reuse of the same job key at a higher generation, and recovery from a later Park. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091685100)
+
+## Owner decisions on the release 1 activities and labels (25 November)
+
+The four palette intrinsics besides Set Variable run on the kernel: Set Output, Set Correlation Id, Set Instance Name and Finish. A model sets its own labels through `ITurn.SetLabel`; the workflow actor gives a model two of the header's four, and keeps the state version in its type data only. Backwards compatibility is not a concern before GA. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7153124235)
+
+## Owner decisions on definitions on the kernel (25 November)
+
+A kernel host replaces `IWorkflowActivationCoordinator` with a kernel coordinator that maps the compiled executable to a Native workflow and serves it. Designer expressions, JavaScript and Liquid, run as one host-evaluated binding kind through the portable expression evaluator. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7153650829); [Designer definitions on the kernel](definitions-on-the-kernel.md)
 
 ## Process
 

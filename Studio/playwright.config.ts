@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const browserPort = Number(process.env.STUDIO_BROWSER_PORT ?? 4179);
+const browserUrl = `http://127.0.0.1:${process.env.STUDIO_BROWSER_PORT ?? 4179}`;
 
 export default defineConfig({
   testDir: "./tests/browser",
@@ -11,7 +11,7 @@ export default defineConfig({
   fullyParallel: true,
   reporter: "line",
   use: {
-    baseURL: `http://127.0.0.1:${browserPort}`,
+    baseURL: browserUrl,
     trace: "retain-on-failure"
   },
   projects: [
@@ -19,7 +19,7 @@ export default defineConfig({
   ],
   webServer: {
     command: "pnpm exec vite --config tests/browser/vite.config.ts",
-    url: `http://127.0.0.1:${browserPort}`,
+    url: browserUrl,
     reuseExistingServer: !process.env.CI,
     stdout: "pipe",
     stderr: "pipe"

@@ -62,7 +62,8 @@ public sealed record PublishReport(PublishPlan Plan, IReadOnlyList<PackageOutcom
 /// feed with the same fingerprints, and records them, with nobody intervening.
 /// </para>
 /// </remarks>
-public sealed class PackagePublisher(IPackageFeed feed, IPublishState state, TextWriter log)
+public sealed class PackagePublisher(IPackageFeed feed, IPublishState state, TextWriter log,
+    Func<PackedPackage, PackageOutcomeKind, CancellationToken, Task>? verifyDestination = null, DateTimeOffset? deadline = null)
 {
     private const int VersionsShownPerPackage = 5;
 
@@ -79,16 +80,45 @@ public sealed class PackagePublisher(IPackageFeed feed, IPublishState state, Tex
             throw new PublishRefusedException($"A {plan.Mode.Name()} plan pushes nothing.");
 
         var packages = Match(computation, PackProperties.LabelFor(computation, PrereleaseLabel.MainBranch), packagesDirectory);
+        // The hosted deadline starts in the first step of the publish job and leaves a write-back reserve.
+        // Use a separate token for feed work so an elapsed deadline still allows writing the verified prefix.
+        using var feedBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (deadline is { } end)
+        {
+            var remaining = end - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                feedBudget.Cancel();
+            else
+                feedBudget.CancelAfter(remaining);
+        }
         if (plan.Mode == PublishMode.Bootstrap)
-            await RequireBootstrapPreconditionsAsync(plan, computation, record, packages, cancellationToken);
+            await RequireBootstrapPreconditionsAsync(plan, computation, record, packages, feedBudget.Token);
 
         var outcomes = new List<PackageOutcome>();
         string? failure = null;
         foreach (var (computed, packed) in PushOrder(packages))
         {
-            var outcome = failure is null
-                ? await PushAsync(computed, packed, cancellationToken)
-                : new PackageOutcome(computed.PackageId, packed.Version, PackageOutcomeKind.NotAttempted, "not pushed: the publish stopped at an earlier failure");
+            cancellationToken.ThrowIfCancellationRequested();
+            if (feedBudget.IsCancellationRequested)
+                failure ??= "The publish deadline was reached. Remaining packages will be retried.";
+            var outcome = new PackageOutcome(computed.PackageId, packed.Version, PackageOutcomeKind.NotAttempted, "not pushed: the publish stopped before this package");
+            if (failure is null)
+            {
+                try
+                {
+                    outcome = await PushAsync(computed, packed, feedBudget.Token);
+                    if (outcome.Recorded && verifyDestination is not null)
+                        await verifyDestination(packed, outcome.Kind, feedBudget.Token);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    outcome = outcome with { Kind = PackageOutcomeKind.Failed, Detail = "Public feed work reached the publish deadline." };
+                }
+                catch (FeedException exception)
+                {
+                    outcome = outcome with { Kind = PackageOutcomeKind.Failed, Detail = exception.Message };
+                }
+            }
             outcomes.Add(outcome);
             log.WriteLine($"{outcome.PackageId} {outcome.Version}: {outcome.Kind}. {outcome.Detail}");
             if (outcome.Kind is PackageOutcomeKind.Collision or PackageOutcomeKind.Failed)
@@ -107,10 +137,12 @@ public sealed class PackagePublisher(IPackageFeed feed, IPublishState state, Tex
         }
         catch (InvalidOperationException exception)
         {
+            var recovery = plan.Mode == PublishMode.Bootstrap
+                ? "Check the remote publish-state. If its first write did not land, main is still a dry run; follow first-bootstrap recovery in tools/versioning/README.md."
+                : "The next run from main finds them on the feed with the same input fingerprints and verifies them before recording (spec 150 FR-018).";
             return new PublishReport(plan, outcomes, null,
                 (failure is null ? string.Empty : failure + " ") +
-                $"The write-back failed, so {recorded.Length} package(s) are on the feed but not recorded: {exception.Message} The next run from main " +
-                "finds them on the feed with the same input fingerprints and records them (spec 150 FR-018).");
+                $"The write-back failed, so {recorded.Length} package(s) were pushed but their record is unconfirmed: {exception.Message} {recovery}");
         }
     }
 
@@ -232,6 +264,7 @@ public sealed class PackagePublisher(IPackageFeed feed, IPublishState state, Tex
         }
         catch (FeedException exception)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return Outcome(PackageOutcomeKind.Collision,
                 $"the feed already holds {packed.Version}, and its input fingerprint cannot be read ({exception.Message}), so nothing shows it was built from " +
                 $"these inputs, {computed.Fingerprint}. The feed's copy is kept (spec 150 FR-018); settle the record with the repair workflow (FR-019).");

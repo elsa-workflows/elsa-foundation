@@ -3,10 +3,14 @@ import type { StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/s
 import type { ActivityInputContract } from "../activityDefinitionTypes";
 import type { ActivityDraftTestRunView } from "../api/publishing";
 import {
+  activityTestRunActivityUrl,
+  activityTestRunExecutableUrl,
+  activityTestRunWorkflowUrl,
   activityTestRunWorkbenchUrl,
   classifyActivityTestRun,
   isTerminalActivityTestRun,
-  parseActivityTestRunInputs
+  parseActivityTestRunInputs,
+  shortenActivityTestRunIdentifier
 } from "../activityDefinitionTestRuns";
 
 describe("Activity Definition Test Runs", () => {
@@ -76,7 +80,38 @@ describe("Activity Definition Test Runs", () => {
     expect(classifyActivityTestRun(accepted, true)).toBe("waiting");
   });
 
-  it("distinguishes expired evidence from an expired Source Reference with retained or active Runtime Evidence", () => {
+  it.each(["Running", "DispatchAccepted", "Pending"])(
+    "treats AcceptedButFaulted command dispatch as terminal when the run status is %s",
+    status => {
+      const run = view(status);
+      run.commandDispatchStatus = "AcceptedButFaulted";
+
+      const classified = classifyActivityTestRun(run);
+      expect(classified).toBe("faulted");
+      expect(isTerminalActivityTestRun(classified)).toBe(true);
+    });
+
+  it("matches AcceptedButFaulted dispatch status without regard to case", () => {
+    const run = view("Running");
+    run.commandDispatchStatus = "acceptedbutfaulted";
+
+    expect(classifyActivityTestRun(run)).toBe("faulted");
+  });
+
+  it.each([
+    ["Completed", "completed"],
+    ["Cancelled", "cancelled"],
+    ["ValidationRejected", "validation-rejected"],
+    ["DispatchRejected", "dispatch-rejected"],
+    ["Faulted", "faulted"]
+  ] as const)("keeps terminal run status %s authoritative over AcceptedButFaulted", (status, stage) => {
+    const run = view(status);
+    run.commandDispatchStatus = "AcceptedButFaulted";
+
+    expect(classifyActivityTestRun(run)).toBe(stage);
+  });
+
+  it("distinguishes expired evidence from an expired Source Reference with retained or active Run data", () => {
     const retained = view("Completed", {
       sourceReferenceExpired: true,
       sourceReferenceRetained: false,
@@ -93,6 +128,7 @@ describe("Activity Definition Test Runs", () => {
       sourceReferenceRetained: false,
       evidenceRetained: false
     });
+    expired.commandDispatchStatus = "AcceptedButFaulted";
 
     expect(classifyActivityTestRun(retained)).toBe("completed");
     expect(classifyActivityTestRun(active)).toBe("running");
@@ -106,6 +142,56 @@ describe("Activity Definition Test Runs", () => {
 
     expect(activityTestRunWorkbenchUrl(run))
       .toBe("/workflows/instances/workflow%2Fexecution?activityExecutionId=outer%20activity");
+  });
+
+  it("links recorded executions and retained executable references to their workbenches", () => {
+    const run = view("Completed");
+    run.workflowExecutionId = "workflow/execution";
+    run.outerActivityExecutionId = "outer activity";
+    run.artifactId = "wrapper/artifact";
+    run.sourceReferenceId = "source/reference";
+
+    expect(activityTestRunWorkflowUrl(run)).toBe("/workflows/instances/workflow%2Fexecution");
+    expect(activityTestRunActivityUrl(run)).toBe("/workflows/instances/workflow%2Fexecution?activityExecutionId=outer%20activity");
+    expect(activityTestRunExecutableUrl(run)).toBe("/workflows/executables/wrapper%2Fartifact?ref=source%2Freference");
+  });
+
+  it("keeps rejected, expired, and unretained reference identities from linking to unavailable records", () => {
+    const rejected = view("DispatchRejected");
+    rejected.artifactId = "rejected-artifact";
+    rejected.sourceReferenceId = "rejected-reference";
+    const expired = view("Completed", {
+      sourceReferenceExpired: true,
+      sourceReferenceRetained: false,
+      evidenceRetained: false
+    });
+    expired.artifactId = "expired-artifact";
+    expired.sourceReferenceId = "expired-reference";
+    const referenceExpiredButEvidenceRetained = view("Completed", {
+      sourceReferenceExpired: true,
+      sourceReferenceRetained: false,
+      evidenceRetained: true
+    });
+    referenceExpiredButEvidenceRetained.artifactId = "retained-evidence-artifact";
+    referenceExpiredButEvidenceRetained.sourceReferenceId = "expired-reference";
+    const sourceReferenceUnavailable = view("Completed");
+    sourceReferenceUnavailable.artifactId = "wrapper-without-reference";
+    sourceReferenceUnavailable.sourceReferenceId = null;
+
+    expect(activityTestRunWorkflowUrl(rejected)).toBeNull();
+    expect(activityTestRunExecutableUrl(rejected)).toBeNull();
+    expect(activityTestRunWorkflowUrl(expired)).toBeNull();
+    expect(activityTestRunExecutableUrl(expired)).toBeNull();
+    expect(activityTestRunExecutableUrl(referenceExpiredButEvidenceRetained)).toBeNull();
+    expect(activityTestRunExecutableUrl(sourceReferenceUnavailable)).toBeNull();
+  });
+
+  it("shortens long identities without changing the exact copy value", () => {
+    const identity = `activity-test-run-${"a".repeat(64)}`;
+
+    expect(shortenActivityTestRunIdentifier("short-id")).toBe("short-id");
+    expect(shortenActivityTestRunIdentifier(identity, 32)).toBe(`${identity.slice(0, 16)}…${identity.slice(-15)}`);
+    expect(identity).toBe(`activity-test-run-${"a".repeat(64)}`);
   });
 });
 

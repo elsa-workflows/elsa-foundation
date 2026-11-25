@@ -1,14 +1,16 @@
-.wf-execution-browser { padding: 0.75rem 1rem; border-bottom: 1px solid var(--studio-border); }
-.wf-execution-navigator { display: flex; gap: 0.25rem; align-items: center; }
+.wf-instance-section.wf-execution-node-header { padding: var(--studio-space-4) var(--studio-space-4) 0; }
+.wf-instance-section.wf-execution-node-header h4 { margin: 0; }
+.wf-execution-browser { display: grid; gap: var(--studio-space-3); padding: var(--studio-space-4); border-bottom: 1px solid var(--studio-border); }
+.wf-execution-navigator { display: flex; gap: var(--studio-space-2); align-items: center; }
 .wf-execution-navigator > button { display: inline-flex; gap: 0.5rem; align-items: center; justify-content: center; min-height: 2rem; padding: 0.4rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); color: var(--studio-text); }
-.wf-execution-navigator > button:nth-child(2) { flex: 1; min-width: 0; }
+.wf-execution-navigator > button:nth-child(2) { flex: 1; min-width: 0; padding-inline: var(--studio-space-3); }
 .wf-execution-choice-copy { display: flex; flex-direction: column; min-width: 0; flex: 1; text-align: left; }
 .wf-execution-context { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 .wf-execution-position { flex-shrink: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-variant-numeric: tabular-nums; }
 .wf-execution-browser button:focus-visible, .wf-execution-children button:focus-visible, .wf-execution-scope button:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 .wf-execution-browser button:disabled { opacity: 0.45; }
 .wf-execution-list { padding: 0; margin: 0; list-style: none; max-height: 19rem; overflow: auto; }
-.wf-execution-list-container { margin-top: 0.75rem; max-height: 24rem; overflow: auto; box-sizing: border-box; }
+.wf-execution-list-container { margin-top: 0; max-height: 24rem; overflow: auto; box-sizing: border-box; }
 .wf-execution-list-container .wf-execution-list { max-height: none; overflow: visible; }
 .wf-execution-row { border-bottom: 1px solid var(--studio-border); }
 .wf-execution-row > button:first-child { display: grid; gap: 0.4rem; width: 100%; padding: 0.65rem; text-align: left; border: 0; color: var(--studio-text); background: transparent; border-radius: var(--studio-radius); }
@@ -35,6 +37,7 @@
 .wf-execution-scope > button:hover, .wf-execution-children > button:hover, .wf-execution-paging button:not(:disabled):hover { background: var(--studio-accent-soft); }
 .wf-execution-paging button:disabled { cursor: default; opacity: 0.45; }
 .wf-execution-scope-occurrence { margin-left: auto; min-width: 13rem; max-width: 100%; }
+.wf-execution-scope-occurrence:empty { display: none; }
 .wf-execution-scope-occurrence .wf-execution-browser { padding: 0; border: 0; }
 .wf-execution-scope-occurrence .wf-execution-navigator button { border: 1px solid var(--studio-border); }
 @media (max-width: 600px) { .wf-execution-scope-occurrence { margin-left: 0; width: 100%; } }
@@ -43,8 +46,12 @@
 
 .wf-execution-scope-occurrence .wf-execution-list-container { margin-top: 0; }
 
-.wf-execution-transition { min-height: 2.5rem; padding: 0.4rem 1rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); box-sizing: border-box; }
-.wf-execution-transition button { margin-inline-start: 0.5rem; }
+.wf-execution-loading { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.wf-execution-loading-spinner { flex: 0 0 auto; animation: wf-execution-spin 1s linear infinite; }
+@keyframes wf-execution-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .wf-execution-loading-spinner { animation: none; } }
+.wf-execution-error { padding: 0.4rem 1rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.wf-execution-error button { margin-inline-start: 0.5rem; }
 
 .wf-execution-scope { gap: var(--studio-space-2); padding: var(--studio-space-3) var(--studio-space-4); }
 .wf-execution-scope > button { min-height: var(--studio-control-height); border: 1px solid var(--studio-border); border-radius: var(--studio-radius); padding: .45rem .75rem; font: inherit; }

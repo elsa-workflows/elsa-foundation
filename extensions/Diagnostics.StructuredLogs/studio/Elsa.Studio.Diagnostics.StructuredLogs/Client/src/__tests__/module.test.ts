@@ -173,7 +173,8 @@ describe("structured logs module", () => {
     expect(container.textContent).toContain("1 buffered while paused");
     expect(container.textContent).not.toContain("buffered streamed entry");
 
-    clickButton(container, "Resume");
+    expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe("Pause");
+    clickButton(container, "Pause");
     expect(container.querySelectorAll(".structured-log-row")).toHaveLength(2);
     expect(container.textContent).toContain("buffered streamed entry");
 
@@ -212,8 +213,10 @@ describe("structured logs module", () => {
 
     const { container, unmount } = await renderPanel();
 
-    expect(container.querySelector("button[disabled]")?.textContent).not.toBe("Download");
-    expect([...container.querySelectorAll("button")].some(button => button.textContent === "Download")).toBe(true);
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="More structured log actions"]')!;
+    flushSync(() => trigger.click());
+    const download = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(item => item.textContent === "Download");
+    expect(download?.disabled).toBe(false);
 
     await unmount();
   });
@@ -402,7 +405,8 @@ describe("structured logs module", () => {
     clickButton(container, "Pause");
     expect(container.querySelector(".structured-logs-empty")?.textContent).toBe(permissionMessage);
 
-    clickButton(container, "Resume");
+    expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe("Pause");
+    clickButton(container, "Pause");
     expect(container.querySelector(".structured-logs-empty")?.textContent).toBe(permissionMessage);
 
     await changeControlValue(container, "[aria-label='Minimum log level']", "Warning");

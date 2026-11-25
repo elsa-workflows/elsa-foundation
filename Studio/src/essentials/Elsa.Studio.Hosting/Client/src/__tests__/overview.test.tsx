@@ -50,6 +50,14 @@ describe("diagnostics", () => {
       ["Runtime evidence settings", "/workflows/runtime-diagnostics"]
     ];
     expect(links.map(link => link.getAttribute("href"))).toEqual(expectedEntries.map(([, path]) => path));
+    expect(links.map(link => link.querySelector(".diagnostics-task-preview")?.getAttribute("data-preview"))).toEqual([
+      "telemetry",
+      "logs",
+      "console",
+      "generic",
+      "runtime-evidence"
+    ]);
+    expect(links.every(link => link.querySelector(".diagnostics-task-preview")?.getAttribute("aria-hidden") === "true")).toBe(true);
     for (const [label, path] of expectedEntries) {
       expect(links.find(link => link.getAttribute("href") === path)?.textContent).toContain(label);
     }

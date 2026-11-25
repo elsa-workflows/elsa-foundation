@@ -14,8 +14,15 @@ public interface IUserTaskStore
     ValueTask<UserTaskPage> RecoverAsync(int limit, string? after, CancellationToken cancellationToken = default);
     ValueTask<UserTaskFormVersion?> FindFormAsync(string tenantId, string id, string version, CancellationToken cancellationToken = default);
     ValueTask<UserTaskFormPage> ListFormsAsync(string tenantId, int limit, string? after = null, CancellationToken cancellationToken = default);
+    ValueTask<UserTaskFormPage> ListFormVersionsAsync(string tenantId, string id, int limit, string? after = null, CancellationToken cancellationToken = default);
     /// <summary>Immutable insert. Existing identical versions may replay; differing content is a conflict.</summary>
     ValueTask<bool> TryCreateFormAsync(UserTaskFormVersion version, CancellationToken cancellationToken = default);
+    ValueTask<UserTaskFormDefinition?> FindFormDefinitionAsync(string tenantId, string id, CancellationToken cancellationToken = default);
+    ValueTask<UserTaskFormDefinitionPage> ListFormDefinitionsAsync(string tenantId, int limit, string? after = null, CancellationToken cancellationToken = default);
+    /// <summary>Conditionally advances the shared draft revision. A null form records a revision tombstone.</summary>
+    ValueTask<bool> TryWriteFormDraftAsync(UserTaskFormDraft draft, long expectedRevision, CancellationToken cancellationToken = default);
+    /// <summary>Publishes an immutable version and its revision tombstone atomically.</summary>
+    ValueTask<bool> TryPublishFormAsync(UserTaskFormVersion version, UserTaskFormDraft definitionState, long expectedRevision, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Replacement current identity/eligibility authority. Unsupported hosts refuse; inputs never grant authority.</summary>
@@ -32,6 +39,15 @@ public interface IUserTaskFormProvider
     string Provider { get; }
     void ValidateDefinition(UserTaskForm form);
     ValueTask<IReadOnlyDictionary<string, string>> ValidateResponseAsync(UserTaskForm form, JsonElement prefill, JsonElement response, bool requireFields, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Authoritative server validation for one versioned custom field control.</summary>
+public interface IUserTaskFieldControlValidator
+{
+    string Id { get; }
+    string ValueKind { get; }
+    IReadOnlyList<string> ValidateDefinition(UserTaskField field);
+    string? ValidateResponse(UserTaskField field, JsonElement value);
 }
 
 /// <summary>Activity-facing staging/result seam; no HTTP or Design dependency.</summary>
@@ -52,8 +68,15 @@ public interface IUserTaskOperations
     ValueTask<UserTaskRecord> ReassignAsync(string id, UserTaskAssignment request, CancellationToken cancellationToken = default);
     ValueTask<UserTaskRecord> CompleteAsync(string id, UserTaskCompletion request, CancellationToken cancellationToken = default);
     ValueTask<UserTaskFormPage> ListFormsAsync(int limit = 25, string? after = null, CancellationToken cancellationToken = default);
+    ValueTask<UserTaskFormPage> ListFormVersionsAsync(string id, int limit = 25, string? after = null, CancellationToken cancellationToken = default);
     ValueTask<UserTaskFormVersion> GetFormAsync(string id, string version, CancellationToken cancellationToken = default);
     ValueTask<UserTaskFormVersion> CreateFormAsync(UserTaskForm form, CancellationToken cancellationToken = default);
+    ValueTask<UserTaskFormDefinitionPage> ListFormDefinitionsAsync(int limit = 25, string? after = null, CancellationToken cancellationToken = default);
+    ValueTask<UserTaskFormDefinition> GetFormDefinitionAsync(string id, CancellationToken cancellationToken = default);
+    ValueTask<UserTaskFormDefinition> SaveFormDraftAsync(string id, UserTaskForm form, long revision, CancellationToken cancellationToken = default);
+    ValueTask<UserTaskFormDefinition> DiscardFormDraftAsync(string id, long revision, CancellationToken cancellationToken = default);
+    ValueTask<UserTaskFormDefinition> DeleteFormAsync(string id, long revision, CancellationToken cancellationToken = default);
+    ValueTask<UserTaskFormVersion> PublishFormAsync(string id, UserTaskForm form, long revision, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Provider qualification for retaining canonical completion evidence until the selected task journal acknowledges it.</summary>

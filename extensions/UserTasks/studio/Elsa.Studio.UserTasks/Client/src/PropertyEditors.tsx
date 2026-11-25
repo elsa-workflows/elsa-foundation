@@ -1,9 +1,9 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { Trash2 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import type { ElsaStudioModuleApi, StudioActivityPropertyEditorProps } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
-import { forms, targets, message, type FormVersion } from "./taskApi";
+import type { ElsaStudioModuleApi, StudioActivityPropertyEditorGroupInput, StudioActivityPropertyEditorGroupProps, StudioActivityPropertyEditorProps } from "@elsa-workflows/studio-sdk";
+import { StudioAlert, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { forms, targets, message, type FormVersion, type TaskTargets } from "./taskApi";
 export function ActionsEditor({ value, disabled, onChange, onValidationChange }: StudioActivityPropertyEditorProps) {
   let literal: unknown = value;
   if (typeof literal === "string") { try { literal = JSON.parse(literal); } catch { literal = null; } }
@@ -13,37 +13,263 @@ export function ActionsEditor({ value, disabled, onChange, onValidationChange }:
   return <div className="user-task-property-editor">{items.map((item, index) => <div className="user-task-action-row" key={index}><StudioField label={<>Action {index + 1}</>}><input className="studio-input" disabled={disabled} value={item} onChange={event => onChange(items.map((entry, i) => i === index ? event.target.value : entry))} /></StudioField>
     <StudioButton variant="ghost" aria-label={`Remove action ${index + 1}`} title={`Remove action ${index + 1}`} disabled={disabled} onClick={() => onChange(items.filter((_, i) => i !== index))}><RemoveIcon /></StudioButton></div>)}
     <StudioButton disabled={disabled || items.length >= 20} onClick={() => onChange([...items, ""])}>Add action</StudioButton>
-    {invalid ? <p role="alert">Enter unique, nonempty action names without surrounding spaces.</p> : null}</div>;
+    {invalid ? <StudioAlert tone="danger">{items.includes("Unmatched") ? "Unmatched is reserved. Choose another action name." : "Enter unique, nonempty action names without surrounding spaces."}</StudioAlert> : null}</div>;
 }
 export function AssignmentEditor({ api, group, value, disabled, onChange, context, onValidationChange }: StudioActivityPropertyEditorProps & { api: ElsaStudioModuleApi; group: boolean }) {
   const assignment = context.inputValues;
   const canValidate = assignment && Object.hasOwn(assignment, "AssigneeId") && Object.hasOwn(assignment, "GroupId");
   const hasUser = typeof assignment?.AssigneeId === "string" && Boolean(assignment.AssigneeId.trim());
   const hasGroup = typeof assignment?.GroupId === "string" && Boolean(assignment.GroupId.trim());
+  const inputKey = group ? "GroupId" : "AssigneeId";
+  const siblingKey = group ? "AssigneeId" : "GroupId";
   const invalid = Boolean(canValidate && hasUser === hasGroup);
   useEffect(() => { onValidationChange?.(invalid); return () => onValidationChange?.(false); }, [invalid, onValidationChange]);
   const [items, setItems] = useState<{ id: string; name: string }[]>([]); const [error, setError] = useState("");
   const [skip, setSkip] = useState(0); const [more, setMore] = useState(false); const [loading, setLoading] = useState(false);
-  const busy = useRef(false); const generation = useRef(0);
+  const busy = useRef(false); const requestScope = useRef<{ active: boolean }>({ active: false });
   const load = useCallback(async (offset: number, append: boolean) => {
-    if (busy.current) return; busy.current = true; setLoading(true); const current = generation.current;
+    const scope = requestScope.current;
+    if (busy.current || !scope.active) return; busy.current = true; setLoading(true);
     try {
-      const page = await targets(api, offset); if (current !== generation.current) return;
+      const page = await targets(api, offset); if (!scope.active || scope !== requestScope.current) return;
       const next = group ? page.groups : page.users;
       setItems(previous => append ? [...previous, ...next] : next); setMore(group ? page.moreGroups : page.moreUsers);
       setSkip(offset + 100); setError("");
-    } catch (failure) { if (current === generation.current) setError(message(failure)); }
-    finally { if (current === generation.current) { busy.current = false; setLoading(false); } }
+    } catch (failure) { if (scope.active && scope === requestScope.current) setError(message(failure)); }
+    finally { if (scope.active && scope === requestScope.current) { busy.current = false; setLoading(false); } }
   }, [api, group]);
   useEffect(() => {
-    ++generation.current; busy.current = false; setItems([]); setMore(false); setSkip(0); void load(0, false);
-    return () => { ++generation.current; busy.current = false; };
+    const scope = { active: true };
+    requestScope.current = scope;
+    busy.current = false; setItems([]); setMore(false); setSkip(0); void load(0, false);
+    return () => { scope.active = false; busy.current = false; };
   }, [load]);
-  return <div className="user-task-property-editor"><StudioField label={group ? "Task group" : "Task assignee"}><select className="studio-input" aria-invalid={invalid} disabled={disabled} aria-label={group ? "Task group" : "Task assignee"} value={typeof value === "string" ? value : ""} onChange={event => onChange(event.target.value || null)}>
+  return <div className="user-task-property-editor user-task-assignment">
+    {group ? <div className="user-task-assignment-or"><span>or</span></div> : null}
+    <StudioField label={group ? "Task group" : "Task assignee"}><select className="studio-input" aria-invalid={invalid} disabled={disabled} aria-label={group ? "Task group" : "Task assignee"} value={typeof value === "string" ? value : ""} onChange={event => {
+      const selected = event.target.value || null;
+      if (selected && context.setLiteralInputs && assignment && Object.hasOwn(assignment, siblingKey)) {
+        context.setLiteralInputs({ [inputKey]: selected, [siblingKey]: null });
+        return;
+      }
+      onChange(selected);
+    }}>
     <option value="">None</option>{value && !items.some(item => item.id === value) ? <option value={String(value)}>{String(value)}</option> : null}{items.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></StudioField>
-    {invalid && !group && <p role="alert">{hasUser ? "Choose either an assignee or a group; clear the other assignment." : "Select an assignee or a group for this task."}</p>}
-    {more ? <StudioButton disabled={disabled || loading} onClick={() => void load(skip, true)}>More choices</StudioButton> : null}{error ? <p role="alert">{error}</p> : null}</div>;
+    {!group && !context.setLiteralInputs ? <p role="status">If both assignment choices are set, clear one before continuing.</p> : null}
+    {invalid && !group && <StudioAlert tone="danger">{hasUser ? "Choose either an assignee or a group; clear the other assignment." : "Select an assignee or a group for this task."}</StudioAlert>}
+    {more ? <StudioButton disabled={disabled || loading} onClick={() => void load(skip, true)}>More choices</StudioButton> : null}{error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}</div>;
 }
+
+type AssignmentInputKey = "AssigneeId" | "GroupId";
+type AssignmentKind = "person" | "group";
+
+export function AssignmentGroupEditor({
+  api,
+  inputs,
+  context,
+  disabled,
+  renderExpressionEditor,
+  onChange,
+  onValidationChange
+}: StudioActivityPropertyEditorGroupProps & { api: ElsaStudioModuleApi }) {
+  const person = inputs.find(input => assignmentInputKey(input) === "AssigneeId");
+  const group = inputs.find(input => assignmentInputKey(input) === "GroupId");
+  const hasPerson = isAssignmentInputSet(person);
+  const hasGroup = isAssignmentInputSet(group);
+  const conflict = hasPerson && hasGroup;
+  const invalid = conflict || (!hasPerson && !hasGroup);
+  const activeExpressionKey = person?.syntax !== "Literal" && group?.syntax === "Literal"
+    ? "AssigneeId"
+    : group?.syntax !== "Literal" && person?.syntax === "Literal"
+      ? "GroupId"
+      : null;
+  const fixedKey = hasPerson && person?.syntax === "Literal"
+    ? "AssigneeId"
+    : hasGroup && group?.syntax === "Literal"
+      ? "GroupId"
+      : null;
+  const [mode, setMode] = useState<"fixed" | "expression" | null>(null);
+  const [expressionTargetKey, setExpressionTargetKey] = useState<AssignmentInputKey | null>(null);
+  const [notice, setNotice] = useState("");
+  const expressionMode = mode === "expression" || (mode !== "fixed" && activeExpressionKey !== null);
+  const expressionKey = expressionTargetKey ?? activeExpressionKey ?? fixedKey ?? "AssigneeId";
+  const expressionInput = expressionKey === "AssigneeId" ? person : group;
+  const selectedFixedValue = fixedKey === "AssigneeId" && typeof person?.value === "string"
+    ? `person:${person.value}`
+    : fixedKey === "GroupId" && typeof group?.value === "string"
+      ? `group:${group.value}`
+      : "";
+  const [items, setItems] = useState<Pick<TaskTargets, "users" | "groups">>({ users: [], groups: [] });
+  const [error, setError] = useState("");
+  const [skip, setSkip] = useState(0);
+  const [moreUsers, setMoreUsers] = useState(false);
+  const [moreGroups, setMoreGroups] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const busy = useRef(false);
+  const requestScope = useRef<{ active: boolean }>({ active: false });
+
+  useEffect(() => {
+    onValidationChange?.(invalid);
+    return () => onValidationChange?.(false);
+  }, [invalid, onValidationChange]);
+
+  const load = useCallback(async (offset: number, append: boolean) => {
+    const scope = requestScope.current;
+    if (busy.current || !scope.active) return;
+    busy.current = true;
+    setLoading(true);
+    try {
+      const page = await targets(api, offset);
+      if (!scope.active || scope !== requestScope.current) return;
+      setItems(previous => ({
+        users: mergeTargets(previous.users, page.users, append),
+        groups: mergeTargets(previous.groups, page.groups, append)
+      }));
+      setMoreUsers(page.moreUsers);
+      setMoreGroups(page.moreGroups);
+      setSkip(offset + 100);
+      setError("");
+    } catch (failure) {
+      if (scope.active && scope === requestScope.current) setError(message(failure));
+    } finally {
+      if (scope.active && scope === requestScope.current) {
+        busy.current = false;
+        setLoading(false);
+      }
+    }
+  }, [api]);
+
+  useEffect(() => {
+    const scope = { active: true };
+    requestScope.current = scope;
+    busy.current = false;
+    setItems({ users: [], groups: [] });
+    setMoreUsers(false);
+    setMoreGroups(false);
+    setSkip(0);
+    void load(0, false);
+    return () => {
+      scope.active = false;
+      busy.current = false;
+    };
+  }, [load]);
+
+  const setAssignment = (key: AssignmentInputKey, value: string | null) => {
+    const siblingKey = key === "AssigneeId" ? "GroupId" : "AssigneeId";
+    const sibling = siblingKey === "AssigneeId" ? person : group;
+    if (value && isAssignmentInputSet(sibling) && !context.setLiteralInputs) {
+      setNotice("This host cannot be changed safely while another assignment is set.");
+      return;
+    }
+    setNotice("");
+    setMode(null);
+    setExpressionTargetKey(null);
+    if (value && context.setLiteralInputs) context.setLiteralInputs({ [key]: value, [siblingKey]: null });
+    else onChange(key, value);
+  };
+
+  const clearAssignment = () => {
+    setNotice("");
+    setMode(null);
+    setExpressionTargetKey(null);
+    if (context.setLiteralInputs) context.setLiteralInputs({ AssigneeId: null, GroupId: null });
+    else if (activeExpressionKey) onChange(activeExpressionKey, null);
+    else if (fixedKey) onChange(fixedKey, null);
+  };
+
+  const keepAssignment = (key: AssignmentInputKey) => {
+    const siblingKey = key === "AssigneeId" ? "GroupId" : "AssigneeId";
+    setNotice("");
+    setMode(null);
+    setExpressionTargetKey(null);
+    if (context.setLiteralInputs) context.setLiteralInputs({ [siblingKey]: null });
+    else onChange(siblingKey, null);
+  };
+
+  const selected = fixedKey === "AssigneeId"
+    ? !items.users.some(item => item.id === person?.value)
+    : fixedKey === "GroupId"
+      ? !items.groups.some(item => item.id === group?.value)
+      : false;
+
+  return <div className="user-task-property-editor user-task-assignment">
+    {conflict ? <>
+      <StudioAlert tone="danger">Both assignment choices are set. Keep one assignment to resolve this conflict.</StudioAlert>
+      <div className="user-task-assignment-recovery">
+        <StudioButton disabled={disabled} onClick={() => keepAssignment("AssigneeId")}>Keep person assignment</StudioButton>
+        <StudioButton disabled={disabled} onClick={() => keepAssignment("GroupId")}>Keep group assignment</StudioButton>
+      </div>
+    </> : expressionMode ? <>
+      <StudioField label="Expression returns">
+        <select className="studio-input" aria-label="Expression returns" disabled={disabled} value={expressionKey} onChange={event => {
+          setExpressionTargetKey(event.target.value as AssignmentInputKey);
+          setNotice("");
+        }}>
+          <option value="AssigneeId">Person ID</option>
+          <option value="GroupId">Group ID</option>
+        </select>
+      </StudioField>
+      {expressionInput?.descriptor.isWrapped === false
+        ? <p role="status">Expressions are not available for this assignment input.</p>
+        : <div className="user-task-assignment-expression">{renderExpressionEditor(expressionKey)}</div>}
+      <StudioButton disabled={disabled} onClick={() => {
+        setMode(activeExpressionKey ? "fixed" : null);
+        setExpressionTargetKey(null);
+      }}>{activeExpressionKey ? "Use a fixed person or group" : "Cancel expression setup"}</StudioButton>
+    </> : <>
+      <StudioField label="Assign to">
+        <select className="studio-input" aria-label="Assign to" aria-invalid={invalid} disabled={disabled || conflict} value={selectedFixedValue} onChange={event => {
+          const value = event.target.value;
+          if (!value) {
+            clearAssignment();
+            return;
+          }
+          const kind: AssignmentKind = value.startsWith("person:") ? "person" : "group";
+          const key = kind === "person" ? "AssigneeId" : "GroupId";
+          setAssignment(key, value.slice(kind.length + 1));
+        }}>
+          <option value="">No assignment</option>
+          <optgroup label="People">
+            {selected && selectedFixedValue.startsWith("person:") ? <option value={selectedFixedValue}>Unavailable person · {String(person?.value)}</option> : null}
+            {items.users.map(item => <option key={item.id} value={`person:${item.id}`}>{item.name} · Person</option>)}
+          </optgroup>
+          <optgroup label="Groups">
+            {selected && selectedFixedValue.startsWith("group:") ? <option value={selectedFixedValue}>Unavailable group · {String(group?.value)}</option> : null}
+            {items.groups.map(item => <option key={item.id} value={`group:${item.id}`}>{item.name} · Group</option>)}
+          </optgroup>
+        </select>
+      </StudioField>
+      <div className="user-task-assignment-actions">
+        <StudioButton disabled={disabled || !inputs.every(input => input.descriptor.isWrapped !== false)} onClick={() => {
+          setExpressionTargetKey(fixedKey ?? activeExpressionKey ?? "AssigneeId");
+          setMode("expression");
+          setNotice("");
+        }}>Use an expression</StudioButton>
+        <StudioButton disabled={disabled || (!hasPerson && !hasGroup)} onClick={clearAssignment}>Clear assignment</StudioButton>
+      </div>
+      {activeExpressionKey ? <p role="status">The current assignment uses a {activeExpressionKey === "AssigneeId" ? "Person" : "Group"} ID expression ({(activeExpressionKey === "AssigneeId" ? person : group)?.syntax}).</p> : null}
+    </>}
+    {invalid && !conflict ? <StudioAlert tone="danger">Select a person or a group for this task.</StudioAlert> : null}
+    {notice ? <p role="status">{notice}</p> : null}
+    {moreUsers || moreGroups ? <StudioButton disabled={disabled || loading} onClick={() => void load(skip, true)}>More choices</StudioButton> : null}
+    {error ? <StudioAlert tone="danger"><p>{error}</p><StudioButton disabled={disabled || loading} onClick={() => void load(0, false)}>Retry loading people and groups</StudioButton></StudioAlert> : null}
+    {loading && !error ? <p role="status">Loading people and groups…</p> : null}
+  </div>;
+}
+
+function assignmentInputKey(input: StudioActivityPropertyEditorGroupInput) {
+  return input.descriptor.referenceKey?.trim() || input.descriptor.name;
+}
+
+function isAssignmentInputSet(input: StudioActivityPropertyEditorGroupInput | undefined) {
+  return !!input && (input.syntax !== "Literal" || (typeof input.value === "string" && input.value.trim().length > 0));
+}
+
+function mergeTargets<T extends { id: string }>(current: T[], next: T[], append: boolean) {
+  const values = append ? [...current, ...next] : next;
+  return [...new Map(values.map(item => [item.id, item])).values()];
+}
+
 function RemoveIcon() {
   return <Trash2 size={18} aria-hidden="true" />;
 }
@@ -93,8 +319,8 @@ export function FormEditor({ api, value, disabled, onChange, context, descriptor
       <a className="studio-button" data-variant="secondary" data-size="sm" href={qualifyStudioBackendPath("/user-tasks/forms")}>Manage forms</a>
       {!context.setLiteralInputs && <p role="status">Choose a published version below to finish selecting this form.</p>}
     </>}
-    {error && <div role="alert"><p>{error}</p><StudioButton disabled={disabled} onClick={() => setReload(value => value + 1)}>Retry loading forms</StudioButton></div>}
-    {invalid && <p role="alert">The selected {versionMode ? "version" : "form"} is unavailable. Choose a published form and version.</p>}
+    {error && <StudioAlert tone="danger"><p>{error}</p><StudioButton disabled={disabled} onClick={() => setReload(value => value + 1)}>Retry loading forms</StudioButton></StudioAlert>}
+    {invalid && <StudioAlert tone="danger">The selected {versionMode ? "version" : "form"} is unavailable. Choose a published form and version.</StudioAlert>}
   </div>;
 }
 

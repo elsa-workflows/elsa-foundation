@@ -56,12 +56,15 @@ public sealed class LoginPresentationTests
     [Theory]
     [InlineData("field-guide")]
     [InlineData("parcel-room")]
-    public async Task Illustrated_login_keeps_real_csrf_protected_cookie_signin(string theme)
+    [InlineData("orbital")]
+    public async Task Configured_login_keeps_real_csrf_protected_cookie_signin(string theme)
     {
         await using var fixture = await TokenEndpointFixture.StartAsync(services =>
             services.Configure<LoginPageOptions>(options =>
             {
-                options.Layout = options.Palette = options.Artwork = theme;
+                options.Layout = theme;
+                if (theme != "orbital")
+                    options.Palette = options.Artwork = theme;
             }));
         using var client = fixture.Client;
         await LoginTestHelper.LoginAsync(client);
@@ -69,15 +72,31 @@ public sealed class LoginPresentationTests
     }
 
     [Fact]
-    public async Task Default_login_uses_pocket_orchestra_with_the_existing_form_first_layout()
+    public async Task Default_login_uses_the_orbital_glass_panel_and_bundled_Elsa_logo()
     {
         await using var fixture = await TokenEndpointFixture.StartAsync();
         var html = await fixture.Client.GetStringAsync("/_elsa/identity/login");
-        Assert.Contains("data-layout=\"parcel-room\"", html);
-        Assert.Contains("data-palette=\"pocket-orchestra\"", html);
-        Assert.Contains("src=\"/_elsa/identity/login-assets/pocket-orchestra.jpg\"", html);
-        var response = await fixture.Client.GetAsync("/_elsa/identity/login-assets/pocket-orchestra.jpg");
+        Assert.Contains("data-layout=\"orbital\"", html);
+        Assert.Contains("name=\"color-scheme\" content=\"dark\"", html);
+        Assert.Contains("class=\"card\"", html);
+        Assert.Contains("src=\"/_elsa/identity/login-assets/elsa-logo.png\"", html);
+        Assert.DoesNotContain("pocket-orchestra.jpg", html);
+        var response = await fixture.Client.GetAsync("/_elsa/identity/login-assets/elsa-logo.png");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task Configuration_can_explicitly_select_orbital()
+    {
+        await using var fixture = await TokenEndpointFixture.StartAsync(services =>
+            services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Identity:Login:Layout"] = "orbital" }).Build()));
+        var html = await fixture.Client.GetStringAsync("/_elsa/identity/login");
+
+        Assert.Contains("data-layout=\"orbital\"", html);
+        Assert.Contains("name=\"__csrf\"", html);
+        Assert.Contains("action=\"/_elsa/identity/login\"", html);
     }
 
     [Theory]
@@ -97,7 +116,11 @@ public sealed class LoginPresentationTests
     {
         await using var fixture = await TokenEndpointFixture.StartAsync(services =>
             services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
-                new Dictionary<string, string?> { ["Identity:Login:Artwork"] = artwork }).Build()),
+                new Dictionary<string, string?>
+                {
+                    ["Identity:Login:Layout"] = "parcel-room",
+                    ["Identity:Login:Artwork"] = artwork
+                }).Build()),
             routePrefix: "/tenant-a");
         var imageUrl = $"/tenant-a/_elsa/identity/login-assets/{artwork}.jpg";
         var html = await fixture.Client.GetStringAsync("/tenant-a/_elsa/identity/login");
@@ -115,10 +138,11 @@ public sealed class LoginPresentationTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task Shell_login_form_and_builtin_artwork_keep_the_request_path_base(bool proxyPathBase)
+    public async Task Shell_login_form_and_bundled_logo_keep_the_request_path_base(bool proxyPathBase)
     {
         await using var fixture = await TokenEndpointFixture.StartAsync(pathBase:proxyPathBase ? "/tenant-a" : null,routePrefix:proxyPathBase ? null : "/tenant-a");
         var html = await fixture.Client.GetStringAsync("/tenant-a/_elsa/identity/login?returnUrl=/studio");
+        Assert.Contains("data-layout=\"orbital\"", html);
         Assert.Contains("action=\"/tenant-a/_elsa/identity/login\"",html);
         Assert.Contains("/tenant-a/_elsa/identity/login-assets/",html);
         Assert.Contains("src=\"/tenant-a/_elsa/identity/login-assets/elsa-logo.png\"",html);

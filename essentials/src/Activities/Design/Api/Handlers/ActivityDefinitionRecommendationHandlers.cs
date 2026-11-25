@@ -92,6 +92,8 @@ public sealed class ActivityDefinitionRecommendationService(
             throw new ActivityAuthoringException(409, "activity.definition.stale-head", "Activity definition head is stale", "The activity definition head changed after review.", innerException: inner);
         if (!StringComparer.Ordinal.Equals(authoring.RecommendedVersionId, command.ExpectedRecommendedVersionId))
             throw new ActivityAuthoringException(409, "activity.definition.stale-recommendation", "Activity definition recommendation is stale", "The activity definition recommendation changed after review.", innerException: inner);
+        if (authoring.ArchivedAt is not null)
+            throw new ActivityAuthoringException(409, "activity.definition.archived", "Activity definition is archived", "Archived Activity Definitions cannot receive a new recommendation.", innerException: inner);
     }
 
     private static ActivityAuthoringException Invalid(string message) =>

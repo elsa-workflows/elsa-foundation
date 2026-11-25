@@ -60,9 +60,12 @@ public static class JobSummary
             text.Append("Nothing was affected, so nothing was pushed.\n\n");
         }
 
-        text.Append(report.RecordCommit is { } commit
-            ? $"Recorded on `{GitPublishState.DefaultBranch}` as `{commit}`.\n\n"
-            : "Nothing was recorded.\n\n");
+        if (report.RecordCommit is { } commit)
+            text.Append($"Recorded on `{GitPublishState.DefaultBranch}` as `{commit}`.\n\n");
+        else if (report.Packages.Any(package => package.Recorded))
+            text.Append($"Write-back unconfirmed. Check remote `{GitPublishState.DefaultBranch}` before recovery.\n\n");
+        else
+            text.Append("Nothing was recorded.\n\n");
 
         return (report.Failure is { } failure ? text.Append($"**Failure:** {Cell(failure)}\n\n") : text).ToString();
     }

@@ -45,13 +45,13 @@ Expect Node 22 or later, a .NET 10.0 SDK at `10.0.300` or a later compatible fea
 Keep Workbench and Studio in separate terminals. From the repository root, build the focused backend project:
 
 ```bash
-dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
 ```
 
 Start the HTTP launch profile in one terminal and leave it running:
 
 ```bash
-dotnet run --no-build --project Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
+dotnet run --no-build --project apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --launch-profile http
 ```
 
 This Development/SQLite profile listens at `http://localhost:5095`. In a second terminal, check readiness:

@@ -583,7 +583,8 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
             [nameof(Event.CanStartWorkflow)] = Literal(holdContract.Inputs[nameof(Event.CanStartWorkflow)], false),
             [nameof(Event.CorrelationId)] = Literal(holdContract.Inputs[nameof(Event.CorrelationId)], "")
         };
-        var hold = Node(HoldNodeId, typeof(Event), holdContract, holdBindings);
+        var hold = Node(HoldNodeId, typeof(Event), holdContract,
+            ClrActivityContractTestBuilder.CompleteInputBindings(holdContract, holdBindings));
         var fork = Node<JoinPassActivity>(ForkNodeId);
         var join = Node<JoinPassActivity>(JoinNodeId);
         var flowchartContract = ClrActivityContractTestBuilder.BuildContract(typeof(FlowchartActivity));

@@ -21,6 +21,14 @@ Raw output of every run is under `.out/` (not committed).
 
 ## Setup
 
+The table records the software versions used for the historical runs below. Current builds of the
+relational provider use the [repository's central package versions](../../Directory.Packages.props).
+
+The current SQL Server fixture uses SQL authentication. With SqlClient 7, an application using
+Microsoft Entra connection-string authentication modes needs the version-matched Azure extension.
+Qualify that mode separately when integrating the SQL Server provider into an application.
+[Microsoft SqlClient connection-string guidance](https://learn.microsoft.com/en-us/sql/connect/ado-net/connection-string-syntax?view=sql-server-ver17)
+
 | Engine | Image | Provider | Driver |
 |---|---|---|---|
 | PostgreSQL 17 | `postgres:17` | Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 | Npgsql 10.0.3 |
@@ -34,9 +42,65 @@ nuget.org on 12 November 2026.
 ```
 dotnet build ef/Kernel.Ef.Run -c Release
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x stress|cost|probe|block|definite|deadlock <engine> "<connection>" [key=value ...]
-dotnet build ef/Kernel.Ef.Conformance -c Release
-dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite|postgres|sqlserver|mysql ["<server>"] [--fence-in-batch|--checked-fence] [--m5] [--rcsi-off] [--rc] <suite command>   # "<server>" for the server engines only; no fence flag: the engine's default (FINDINGS 25.1); suite command: semantic, semantic-broken, stress, stress-broken, cost
+dotnet build ../../essentials/tests/ActorFoundation/Store/EntityFramework -c Release
+dotnet ../../essentials/tests/ActorFoundation/Store/EntityFramework/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite|postgres|sqlserver|mysql ["<server>"] [--fence-in-batch|--checked-fence] [--m5] [--rcsi-off] [--rc] <suite command>   # "<server>" for the server engines only; no fence flag: the engine's default (FINDINGS 25.1); suite command: semantic, semantic-broken, stress, stress-broken, cost
 ```
+
+### Watchdog cancellation under a database lock
+
+Run from `prototypes/kernel-model` against a disposable database server.
+
+```bash
+dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x watchdog <postgres|sqlserver|mysql> "<connection>" commit=owned fence=batch disposable=1
+```
+
+The fixture drops and recreates its database, and the
+MySQL setup also creates and grants privileges to its fixture account at server scope.
+The server reports the blocked worker commit. The fixture advances the watchdog's local clock to
+its cancellation threshold while the competing transaction still holds the lock. PostgreSQL and
+SQL Server must return an interrupted or unknown outcome within the grace period. The MySQL worker
+runs in a disposable process. Its result distinguishes a call that ended without escalation from a
+process exit triggered by the watchdog while the call was still blocked.
+The fixture records the operation's outcome and subsequent store state. It does not inspect sockets.
+A later owner starts at the unchanged journal position and commits one checkpoint and journal row.
+Repeat with `commit=ef` or `fence=checked` to exercise the other paths.
+
+For PostgreSQL with TLS, create a disposable database and use a connection with `SSL Mode=VerifyFull`.
+The server certificate must match the host name and chain to a trusted root. Run:
+
+```bash
+dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x watchdog postgres "$PG" stage=owned-fence commit=owned fence=batch disposable=1
+```
+
+This stage verifies TLS before resetting the database and again on the waiting worker's session.
+The worker reaches a real PostgreSQL lock wait after writing its batch and before committing.
+The waiting command has no command, statement or lock timeout and must report cancellation on
+the watchdog token. A second transaction verifies the worker holds the partition row, then verifies the lock is
+available after cancellation while the independent blocker is still held. The rollback leaves
+the same journal position for a successor. The stage tests command cancellation and physical
+lock release under verified TLS.
+
+### PostgreSQL process exit while holding a fence
+
+Use a fresh disposable database for each run. Supply a direct loopback TCP connection on an explicit
+port with `SSL Mode=VerifyFull`, as above.
+
+```bash
+dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x watchdog postgres "$PG" stage=owner-exit disconnect-check=on commit=owned fence=batch disposable=1
+```
+
+A separate worker process waits on PostgreSQL's advisory lock inside its fenced transaction. The
+coordinator confirms that session uses TLS and holds the partition row, then stops the worker
+process. With `disconnect-check=on`, the worker sets PostgreSQL's `client_connection_check_interval`
+to 100 ms for that transaction. The fence must become available within three seconds while the
+competing transaction still holds its advisory lock. `disconnect-check=off` runs the control with
+the server setting disabled. The fence remains held throughout the same three-second observation
+window and beyond the fixture's two-second lease. When the competing transaction ends, the old transaction rolls back and a later
+owner commits once at the unchanged journal position in either run. Both fence modes and writers
+use the same procedure.
+
+This covers process exit with TCP disconnect visible to PostgreSQL. K12 still measures a network
+path that stops delivering traffic and the resulting end-to-end takeover time.
 
 `EngineRun.cs` lists the options. The stress test is the one of FINDINGS section 4: three nodes, two partitions (four
 in the runs marked "no kills"), six workers on 150 ms leases, stalls of 150 to 500 ms, a busy worker session killed
@@ -44,6 +108,21 @@ every 20 to 60 ms (`pg_terminate_backend`, `KILL`, `KILL CONNECTION`; SQLite has
 that retries. Its end-state properties are the ones FINDINGS section 4 lists. Do not run the conformance suite on an
 engine while a stress test runs there: the stress test kills the suite's `kernel-worker` sessions too (two suite runs
 were discarded for that).
+
+### SQLite owner process loss
+
+From `prototypes/kernel-model`, run these commands on a POSIX host:
+
+```bash
+ef/Kernel.Ef.Run/run-sqlite-process-loss.py checked /tmp/kernel-sqlite-loss-checked
+ef/Kernel.Ef.Run/run-sqlite-process-loss.py batch /tmp/kernel-sqlite-loss-batch
+```
+
+Each run creates a temporary WAL database and starts the 5,000-input producer in a separate process.
+The fixture waits for the first worker process to advance both partition journals, ends that worker
+abruptly, and verifies that a new process takes both partitions at later epochs and advances both
+journals again. It checks the regular stress invariants and runs SQLite's integrity check after all
+workers exit. The output directory keeps each process's log.
 
 ## Results on the merged kernel (`a4f7c49b65` merged, fixes applied). Run
 
@@ -110,10 +189,47 @@ from the row, so the check always passes).
 
 The test can fail on every engine. On MySQL and SQLite before the merge it failed narrowly (1 and 7 violations).
 
+### PostgreSQL public root admission in the Core Preview
+
+On a dedicated preview database, `PostgresRootAdmission` installs a persistent reference issuer for the
+existing virtual partitions. A generated start writes a tenant-scoped operation receipt, its exact
+creation binding and one inbox row in one transaction. An independent client can resolve the reference
+and read the pending creator after the writer exits. Receipt expiry permits a new life, and each
+earlier reference continues to name its original creation.
+
+Run `../../essentials/tests/ActorFoundation/Store/EntityFramework` with `postgres "<server connection>" root-admission` for the concurrent
+admission, rollback, expiry, tenant and physical inbox cases. The preview uses ordinary PostgreSQL
+text for a representable input and a reversible envelope for text containing NUL or unpaired UTF-16
+units. It refuses an encoded row above the storage budget before its transaction commits.
+
+The first generated-root Running checkpoint now consumes the exact creator, stores revision 1
+in `Instances` and appends its journal in the existing fenced PostgreSQL commit. That transaction
+checks the tenant, reference and partition, then locks the pending creator and compares its
+stored input, start specification and deadline exactly. The database clock must have reached the
+creator's due time. The birth fingerprint remains compatible with earlier admissions. Its qualified
+point read returns the creation, nullable state, model version, type data and labels. Ordinary
+readers refuse the qualified state format. The preview protects this first checkpoint from legacy
+updates and deletes. Run `postgres "<server connection>" root-checkpoint` with either commit and
+fence mode to exercise the stored transition and its refusal cases.
+
+Public actor execution with emitted effects and later revisions remains ahead. The legacy Worker
+refuses any poll containing a public creator, so use this ingress only in its dedicated database.
+The existing Native workflow restart demonstration uses the prototype adapter.
+
+The `root-direct-send` case covers ordinary sends before and after the first checkpoint. The receipt is scoped to
+one exact actor life and the public operation id. It can expire while an earlier delivery stays pending. Every allowed
+reuse gets a new physical occurrence, with the original operation, due presence, kind and payload available to a
+fresh scoped reader. The public runner and its later fenced checkpoints are separate increments.
+
+The `root-turn` case runs both commit writers and fence modes on PostgreSQL. A Running generated root can commit
+one or more ready direct inputs in sequence, its next qualified checkpoint and a journal row. Finishing records the
+terminal revision and database time. A refused checkpoint rolls back every consumed input and the journal row.
+This increment covers ordinary direct inputs and checkpoint-only actor turns.
+
 ### The store conformance suite. Run
 
-`conformance/Kernel.Store.Conformance` (merged from `6097f0174b`), 46 semantic cases, against the merged store with
-the fixes. The runner `ef/Kernel.Ef.Conformance` now takes SQL Server and MySQL.
+`../../essentials/tests/ActorFoundation/Store/Conformance` (merged from `6097f0174b`), 46 semantic cases, against the merged store with
+the fixes. The runner `../../essentials/tests/ActorFoundation/Store/EntityFramework` now takes SQL Server and MySQL.
 
 | Store | Required | Reference |
 |---|---|---|
@@ -196,7 +312,8 @@ once 8 and 7, 1,000 at once 51 and 50 (E7); MySQL 100 at once 11 and 10 (E7).
 
 ### E2. SqlClient does not open a connection in invariant-globalization mode. Reasoned, not re-run
 
-`InvariantGlobalization` is false in `Kernel.Ef.Run.csproj` and now `Kernel.Ef.Conformance.csproj`.
+`InvariantGlobalization` is false in `Kernel.Ef.Run.csproj` and the
+[Actor Foundation conformance project](../../essentials/tests/ActorFoundation/Store/EntityFramework/Elsa.ActorFoundation.Store.EntityFramework.csproj).
 
 ### E3. Connector/NET sends `SET TRANSACTION ISOLATION LEVEL` before every BEGIN. Run
 

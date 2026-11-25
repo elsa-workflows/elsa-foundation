@@ -12,7 +12,7 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const moduleNavigation: StudioNavigationContribution[] = [
   { id: "home", label: "Home", path: "/dashboard", order: 10, placement: "main" },
-  { id: "workflows", label: "Workflows", path: "/workflows/definitions", order: 20, placement: "build", childDisplay: "views" },
+  { id: "workflows", label: "Workflows", path: "/workflows/definitions", order: 20, placement: "build", childDisplay: "links" },
   { id: "definitions", label: "Definitions", path: "/workflows/definitions", order: 10, parentId: "workflows" },
   { id: "workflows-executables", label: "Executables", path: "/workflows/executables", order: 20, parentId: "workflows" },
   { id: "agents", label: "Agents", path: "/agents", order: 25, placement: "build" },
@@ -25,7 +25,7 @@ const moduleNavigation: StudioNavigationContribution[] = [
   { id: "console", label: "Console", path: "/diagnostics/console", parentId: "diagnostics", order: 10 },
   { id: "structured-logs", label: "Structured logs", path: "/diagnostics/structured-logs", parentId: "diagnostics", order: 20 },
   { id: "open-telemetry", label: "OpenTelemetry", path: "/diagnostics/open-telemetry", parentId: "diagnostics", order: 30 },
-  { id: "workflows-runtime-diagnostics", label: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", placement: "runtime" },
+  { id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", placement: "runtime" },
   { id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability", placement: "authoring" },
   { id: "feature-management", label: "Features", path: "/features", placement: "admin" }
 ];

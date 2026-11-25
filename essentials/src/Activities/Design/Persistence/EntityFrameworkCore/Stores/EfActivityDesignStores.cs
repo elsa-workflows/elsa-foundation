@@ -56,6 +56,8 @@ public sealed partial class EfActivityDesignStores(
     IRefreshActivityDefinitionVersionCommand,
     ICreateActivityDraftCommand,
     IUpdateActivityDefinitionPresentationCommand,
+    IArchiveActivityDefinitionCommand,
+    IRestoreActivityDefinitionCommand,
     IUpdateActivityDraftPresentationCommand,
     IStoreActivityDraftValidationCommand,
     IChangeActivityVersionLifecycleCommand,
@@ -294,6 +296,16 @@ public sealed partial class EfActivityDesignStores(
         var snapshot = await ResolveSnapshotAsync(query.SnapshotSequence, cancellationToken);
         var rows = Access(db.ActivityDefinitionManagementProjections.AsNoTracking()).Where(x => x.ValidFromSequence <= snapshot.Sequence && x.ValidToSequenceExclusive > snapshot.Sequence);
         rows = ApplyVisibility(rows, query.TenantId);
+        var archivedDefinitions = Access(db.ActivityDefinitionAuthoringStates.AsNoTracking()).Where(x => x.ArchivedAt != null);
+        rows = query.ArchivedOnly
+            ? rows.Where(x => x.ArchivedAt != null && archivedDefinitions.Any(authoring =>
+                authoring.DefinitionId == x.DefinitionId && authoring.TenantId == x.TenantId &&
+                EF.Property<string>(authoring, "TenantScopeKey") == EF.Property<string>(x, "TenantScopeKey") &&
+                EF.Property<string>(authoring, "DefinitionIdIdentityHash") == EF.Property<string>(x, "ResourceIdIdentityHash")))
+            : rows.Where(x => !archivedDefinitions.Any(authoring =>
+                authoring.DefinitionId == x.DefinitionId && authoring.TenantId == x.TenantId &&
+                EF.Property<string>(authoring, "TenantScopeKey") == EF.Property<string>(x, "TenantScopeKey") &&
+                EF.Property<string>(authoring, "DefinitionIdIdentityHash") == EF.Property<string>(x, "ResourceIdIdentityHash")));
         if (!string.IsNullOrWhiteSpace(query.Search)) rows = rows.Where(x => x.SearchText.Contains(query.Search.Trim().ToUpperInvariant()));
         if (query.Authority is { } authority) rows = rows.Where(x => x.ContentAuthorityKind == authority);
         if (!string.IsNullOrWhiteSpace(query.ProviderKey))
@@ -825,11 +837,80 @@ public sealed partial class EfActivityDesignStores(
         var authoring = await ByReference(Access(db.ActivityDefinitionAuthoringStates), nameof(ActivityDefinitionAuthoringState.DefinitionId), row.Id).SingleOrDefaultAsync(cancellationToken);
         if (authoring is null) throw new InvalidOperationException("Activity authoring state was not found.");
         EnsureDesignAuthoring(authoring, row.Id, row.TenantId);
+        await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition is archived or changed.", cancellationToken);
         if (projections is not null)
             await projections.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(request.LastModifiedAt, [new EfActivityManagementDefinitionChange(row, authoring)], [], []), cancellationToken);
         else await SaveAsync(cancellationToken);
         await tx.CommitAsync(cancellationToken);
         return row;
+    }
+
+    public async Task ExecuteAsync(ArchiveActivityDefinitionRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.DefinitionId);
+        if (request.ArchivedAt == default) throw new ArgumentException("ArchivedAt is required.", nameof(request));
+        EnsureTenant(request.TenantId);
+        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+        var authoring = await ByReference(Access(db.ActivityDefinitionAuthoringStates), nameof(ActivityDefinitionAuthoringState.DefinitionId), request.DefinitionId)
+            .SingleOrDefaultAsync(x => x.TenantId == request.DefinitionTenantId, cancellationToken)
+            ?? throw new InvalidOperationException("Activity authoring state was not found.");
+        if (authoring.ContentAuthority.Kind != ActivityContentAuthorityKind.Design)
+            throw new InvalidOperationException("Only Design-owned Activity Definitions can be archived.");
+        if (authoring.ArchivedAt is not null)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            return;
+        }
+
+        var definition = await ById(Access(db.ActivityDefinitions), request.DefinitionId)
+            .SingleOrDefaultAsync(x => x.TenantId == request.DefinitionTenantId, cancellationToken)
+            ?? throw new InvalidOperationException("Activity definition was not found.");
+        await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition changed before it could be archived.", cancellationToken);
+        authoring.ArchivedAt = request.ArchivedAt;
+        authoring.LastModifiedAt = request.ArchivedAt;
+        definition.LastModifiedAt = request.ArchivedAt;
+        if (projections is not null)
+            await projections.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(
+                request.ArchivedAt,
+                [new EfActivityManagementDefinitionChange(definition, authoring)],
+                [], []), cancellationToken);
+        else await SaveAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+    }
+
+    public async Task ExecuteAsync(RestoreActivityDefinitionRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.DefinitionId);
+        if (request.RestoredAt == default) throw new ArgumentException("RestoredAt is required.", nameof(request));
+        EnsureTenant(request.TenantId);
+        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+        var authoring = await ByReference(Access(db.ActivityDefinitionAuthoringStates), nameof(ActivityDefinitionAuthoringState.DefinitionId), request.DefinitionId)
+            .SingleOrDefaultAsync(x => x.TenantId == request.DefinitionTenantId, cancellationToken)
+            ?? throw new InvalidOperationException("Activity authoring state was not found.");
+        if (authoring.ContentAuthority.Kind != ActivityContentAuthorityKind.Design)
+            throw new InvalidOperationException("Only Design-owned Activity Definitions can be restored.");
+        if (authoring.ArchivedAt is null)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            return;
+        }
+
+        var definition = await ById(Access(db.ActivityDefinitions), request.DefinitionId)
+            .SingleOrDefaultAsync(x => x.TenantId == request.DefinitionTenantId, cancellationToken)
+            ?? throw new InvalidOperationException("Activity definition was not found.");
+        await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition changed before it could be restored.", cancellationToken);
+        authoring.ArchivedAt = null;
+        authoring.LastModifiedAt = request.RestoredAt;
+        definition.LastModifiedAt = request.RestoredAt;
+        if (projections is not null)
+            await projections.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(
+                request.RestoredAt,
+                [new EfActivityManagementDefinitionChange(definition, authoring)],
+                [], []), cancellationToken);
+        else await SaveAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
     }
 
     public async Task<ActivityDefinitionDraft> ExecuteAsync(UpdateActivityDraftPresentationRequest request, CancellationToken cancellationToken = default)
@@ -846,6 +927,7 @@ public sealed partial class EfActivityDesignStores(
         EnsureTenant(row.TenantId);
         var authoring = await ByReference(Access(db.ActivityDefinitionAuthoringStates), nameof(ActivityDefinitionAuthoringState.DefinitionId), row.DefinitionId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity authoring state was not found.");
         EnsureDesignAuthoring(authoring, row.DefinitionId, row.TenantId);
+        await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition is archived or changed.", cancellationToken);
         if (row.Status != ActivityDefinitionDraftStatus.Active || row.Revision != request.ExpectedRevision) throw new DbUpdateConcurrencyException("Activity draft revision is stale or inactive.");
         var layout = await ByReference(Access(db.ActivityDefinitionDraftLayouts), nameof(ActivityDefinitionDraftLayout.DraftId), request.DraftId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity draft layout was not found.");
         if (layout.Revision != row.Revision) throw new DbUpdateConcurrencyException("Activity draft and layout revisions are inconsistent.");
@@ -869,8 +951,9 @@ public sealed partial class EfActivityDesignStores(
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
         var draft = await ById(Access(db.ActivityDefinitionDrafts), validation.DraftId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity draft was not found.");
         if (draft.TenantId != validation.TenantId) throw new InvalidOperationException("Activity draft validation ownership does not match its draft.");
-        var authoring = await ByReference(Access(db.ActivityDefinitionAuthoringStates).AsNoTracking(), nameof(ActivityDefinitionAuthoringState.DefinitionId), draft.DefinitionId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity authoring state was not found.");
+        var authoring = await ByReference(Access(db.ActivityDefinitionAuthoringStates), nameof(ActivityDefinitionAuthoringState.DefinitionId), draft.DefinitionId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity authoring state was not found.");
         EnsureDesignAuthoring(authoring, draft.DefinitionId, draft.TenantId);
+        await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition is archived or changed.", cancellationToken);
         if (draft.Status != ActivityDefinitionDraftStatus.Active || draft.Revision != validation.Revision) throw new DbUpdateConcurrencyException("Activity draft validation is stale or inactive.");
         await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionDrafts, draft, "Activity draft validation is stale or inactive.", cancellationToken);
         var existingValidation = await ById(Access(db.ActivityDraftValidations), validation.Id).SingleOrDefaultAsync(cancellationToken);
@@ -947,6 +1030,7 @@ public sealed partial class EfActivityDesignStores(
         EnsureTenant(request.TenantId);
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
         var row = await ByReference(Access(db.ActivityDefinitionAuthoringStates), nameof(ActivityDefinitionAuthoringState.DefinitionId), request.DefinitionId).SingleOrDefaultAsync(x => x.TenantId == request.TenantId, cancellationToken) ?? throw new InvalidOperationException("Activity authoring state was not found.");
+        EnsureDesignAuthoring(row, request.DefinitionId, request.TenantId);
         if (row.HeadVersionId != request.ExpectedDefinitionHeadVersionId) throw new DbUpdateConcurrencyException("Activity definition head is stale.");
         if (row.RecommendedVersionId != request.ExpectedRecommendedVersionId) throw new DbUpdateConcurrencyException("Activity recommendation is stale.");
         if (request.ExpectedRecommendedVersionLifecycle is { } expected && row.RecommendedVersionId is { } recommended)
@@ -1229,6 +1313,7 @@ public sealed partial class EfActivityDesignStores(
         await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionDrafts, source, "Activity draft revision is stale or inactive.", cancellationToken);
         var authoring = await ByReference(Access(db.ActivityDefinitionAuthoringStates), nameof(ActivityDefinitionAuthoringState.DefinitionId), source.DefinitionId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity authoring state was not found.");
         EnsureDesignAuthoring(authoring, source.DefinitionId, source.TenantId);
+        await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition is archived or changed.", cancellationToken);
         if (authoring.DefinitionId != request.ConflictCopy.DefinitionId || authoring.TenantId != request.ConflictCopy.TenantId || source.SourceVersionId != request.ConflictCopy.SourceVersionId)
             throw new ArgumentException("The conflict copy must preserve source draft definition, tenant, and lineage.", nameof(request));
         if (await ById(Access(db.ActivityDefinitionDrafts), request.ConflictCopy.Id).AnyAsync(cancellationToken) || await ByReference(Access(db.ActivityDefinitionDraftLayouts), nameof(ActivityDefinitionDraftLayout.DraftId), request.ConflictCopy.Id).AnyAsync(cancellationToken))
@@ -1253,6 +1338,7 @@ public sealed partial class EfActivityDesignStores(
         EnsureTenant(draft.TenantId);
         var authoring = await ByReference(Access(db.ActivityDefinitionAuthoringStates), nameof(ActivityDefinitionAuthoringState.DefinitionId), draft.DefinitionId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity authoring state was not found.");
         EnsureDesignAuthoring(authoring, draft.DefinitionId, draft.TenantId);
+        await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition is archived or changed.", cancellationToken);
         if (draft.Status != ActivityDefinitionDraftStatus.Active || draft.Revision != request.ExpectedRevision) throw new DbUpdateConcurrencyException("Activity draft revision is stale.");
         var layout = await ByReference(Access(db.ActivityDefinitionDraftLayouts), nameof(ActivityDefinitionDraftLayout.DraftId), request.DraftId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity draft layout was not found.");
         if (layout.Revision != draft.Revision) throw new DbUpdateConcurrencyException("Activity draft and layout revisions are inconsistent.");
@@ -1284,6 +1370,7 @@ public sealed partial class EfActivityDesignStores(
         var draft = await ById(Access(db.ActivityDefinitionDrafts), request.DraftId).SingleOrDefaultAsync(x => x.TenantId == request.TenantId, cancellationToken) ?? throw new InvalidOperationException("Activity draft was not found.");
         var authoring = await ByReference(Access(db.ActivityDefinitionAuthoringStates), nameof(ActivityDefinitionAuthoringState.DefinitionId), draft.DefinitionId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity authoring state was not found.");
         EnsureDesignAuthoring(authoring, draft.DefinitionId, draft.TenantId);
+        await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition is archived or changed.", cancellationToken);
         if (draft.Status != ActivityDefinitionDraftStatus.Active || draft.Revision != request.ExpectedRevision || draft.State.Provider.ProviderKey != request.ExpectedProviderKey || draft.State.Provider.SchemaVersion != request.ExpectedProviderSchemaVersion || !StringComparer.Ordinal.Equals(ActivityProviderManifestFingerprint.Compute(draft.State.Provider), request.ExpectedManifestFingerprint))
             throw new DbUpdateConcurrencyException("Activity contract proposal is stale.");
         var layout = await ByReference(Access(db.ActivityDefinitionDraftLayouts), nameof(ActivityDefinitionDraftLayout.DraftId), request.DraftId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity draft layout was not found.");
@@ -1307,6 +1394,7 @@ public sealed partial class EfActivityDesignStores(
         EnsureTenant(draft.TenantId);
         var authoring = await ByReference(Access(db.ActivityDefinitionAuthoringStates), nameof(ActivityDefinitionAuthoringState.DefinitionId), draft.DefinitionId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity authoring state was not found.");
         EnsureDesignAuthoring(authoring, draft.DefinitionId, draft.TenantId);
+        await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition is archived or changed.", cancellationToken);
         if (draft.Status != ActivityDefinitionDraftStatus.Active || draft.Revision != request.ExpectedRevision) throw new DbUpdateConcurrencyException("Activity draft is stale or inactive.");
         var layout = await ByReference(Access(db.ActivityDefinitionDraftLayouts), nameof(ActivityDefinitionDraftLayout.DraftId), request.DraftId).SingleOrDefaultAsync(cancellationToken) ?? throw new InvalidOperationException("Activity draft layout was not found.");
         if (layout.Revision != draft.Revision) throw new DbUpdateConcurrencyException("Activity draft and layout revisions are inconsistent.");
@@ -1324,7 +1412,7 @@ public sealed partial class EfActivityDesignStores(
     {
         EnsureReadTenant(tenantId);
         ValidatePage(offset, limit);
-        var states = Access(db.ActivityDefinitionAuthoringStates.AsNoTracking()).Where(x => x.RecommendedVersionId != null && (x.TenantId == null || tenantId != null && x.TenantId == tenantId));
+        var states = Access(db.ActivityDefinitionAuthoringStates.AsNoTracking()).Where(x => x.ArchivedAt == null && x.RecommendedVersionId != null && (x.TenantId == null || tenantId != null && x.TenantId == tenantId));
         var total = await states.CountAsync(cancellationToken);
         var rows = await WithPhysicalIdentityTie(states.OrderBy(x => x.DefinitionId)).Skip(offset).Take(limit).ToListAsync(cancellationToken);
         var definitionIds = rows.Select(x => x.DefinitionId).Distinct(StringComparer.Ordinal).ToArray();
@@ -1697,6 +1785,8 @@ public sealed partial class EfActivityDesignStores(
             throw new InvalidOperationException("Activity authoring state ownership does not match the requested definition.");
         if (authoring.ContentAuthority.Kind != ActivityContentAuthorityKind.Design)
             throw new InvalidOperationException($"Activity definition '{definitionId}' is owned by provider source '{authoring.ContentAuthority.AuthorityKey}'.");
+        if (authoring.ArchivedAt is not null)
+            throw new InvalidOperationException($"Activity definition '{definitionId}' is archived.");
     }
 
     private IQueryable<T> Access<T>(IQueryable<T> query) where T : Elsa.Primitives.Entities.TenantEntity =>

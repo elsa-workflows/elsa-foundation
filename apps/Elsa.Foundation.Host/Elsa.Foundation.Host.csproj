@@ -6,23 +6,24 @@
   </PropertyGroup>
 
   <!--
-    The whole point of this host: it compiles in no Elsa feature implementation. It is pure plumbing —
-    Nuplane (the package feed + runtime assembly loader) and CShells (shell activation, routing,
+    The whole point of this host: it compiles in no Elsa feature implementation. It composes Nuplane
+    (the package feed + runtime assembly loader) and CShells (shell activation, routing,
     per-shell middleware). Every actual feature — activities, HTTP, persistence, and the Tasks
     feature that runs startup/background/recurring tasks — arrives as a package through the Nuplane
     feed and is discovered by CShells through CShells.Nuplane. Versions are centrally managed
-    in the repository-root Directory.Packages.props. The shared Elsa.Api.AspNetCore reference below only
-    publishes the typed host endpoint metadata contract; it does not bring an Elsa feature into this host.
+    in the repository-root Directory.Packages.props. Elsa.Modularity.Api supplies the reusable, opt-in
+    host module-management endpoints; it does not bring a shell feature implementation into this host.
   -->
   <ItemGroup>
-    <!-- Shared typed endpoint ownership/security metadata; this host still compiles no Elsa feature implementation. -->
+    <!-- Shared typed endpoint ownership/security metadata and reusable host module-management endpoints. -->
     <ProjectReference Include="../../essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj" />
+    <ProjectReference Include="../../essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj" />
 
     <!-- CShells: AddCShellsAspNetCore, MapShells, per-shell IMiddlewareShellFeature (auto re-composed per
          generation on reload — hot, no restart). Brings CShells.Abstractions + CShells.AspNetCore.Abstractions
          transitively; those are the interfaces feed features implement against this host's CShells runtime. -->
     <PackageReference Include="CShells.AspNetCore" />
-    <PackageReference Include="CShells.Nuplane" />
 
     <!-- CShells.FastEndpoints: the FastEndpoints runtime seam for CShells. Carries the built-in
          "FastEndpoints" [ShellFeature] that scans a shell's feature assemblies for FastEndpoints
@@ -32,10 +33,6 @@
          Brings FastEndpoints 7.2.0 and depends on CShells.AspNetCore (already referenced above). -->
     <PackageReference Include="CShells.FastEndpoints" />
 
-    <!-- Nuplane: package feed + runtime assembly loading. CShells.Nuplane bridges the loaded package catalog to feature discovery. -->
-    <PackageReference Include="Nuplane" />
-    <PackageReference Include="Nuplane.Loading" />
-    <PackageReference Include="Nuplane.Sources.Directory" />
 
     <!-- Optional extra #1 only: backs the module-management reconcile endpoint (INuplaneAdminOperations).
          Compiled in, but the endpoints are mapped only when Elsa:ModuleManagement:Enabled is true at

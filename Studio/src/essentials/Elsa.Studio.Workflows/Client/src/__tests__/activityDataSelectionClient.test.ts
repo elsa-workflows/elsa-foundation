@@ -1,6 +1,8 @@
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import { bpmnStructureKind } from "../bpmn/bpmnTypes";
+import { flowchartStructureKind } from "../flowchartStartNode";
 import {
   hasWorkflowActivityDataSelection,
   readActivityDataContextResult,
@@ -247,9 +249,72 @@ describe("activity data source client", () => {
     const result = readActivityDataContextResult({ ...supportedResponse("rev-1"), state: "stale", code: "activity-data.base-changed" }, "rev-1");
     expect(result).toMatchObject({ state: "stale", code: "activity-data.base-changed", baseRevision: "base-1", sources: [], target: null });
   });
+
+  it("only accepts literal true for JSON-string conversion eligibility", () => {
+    const response = supportedResponse("rev-1");
+    const bindingConversion = {
+      sourceType: { alias: "Customer", collectionKind: "Single" },
+      targetType: { alias: "String", collectionKind: "Single" },
+      operation: null,
+      rejection: "No automatic conversion is available."
+    };
+    expect(readActivityDataContextResult({ ...response, analysis: { ...response.analysis,
+      bindingConversion: { ...bindingConversion, canSerializeJsonString: true } } }, "rev-1")
+      .bindingConversion?.canSerializeJsonString).toBe(true);
+    expect(readActivityDataContextResult({ ...response, analysis: { ...response.analysis,
+      bindingConversion: { ...bindingConversion, canSerializeJsonString: "true" } } }, "rev-1")
+      .bindingConversion?.canSerializeJsonString).toBe(false);
+  });
 });
 
 describe("a chosen activity output on the wire", () => {
+  it("keeps the activity id, not its BPMN element id, through save and reopen", async () => {
+    const bindingValue = { producerNodeId: "producer-activity", projectionKey: "$result", isOptional: false };
+    const producer: ActivityNode = { nodeId: "producer-activity", activityVersionId: "get-customer-v1", inputs: [], outputs: [] };
+    const consumer: ActivityNode = {
+      nodeId: "consumer-activity", activityVersionId: "invoice-v1", inputs: [], outputs: [],
+      customerId: { typeName: "System.String", expression: { type: "ActivityResult", value: bindingValue } }
+    };
+    const process: ActivityNode = {
+      nodeId: "bpmn-process", activityVersionId: "bpmn@1", inputs: [], outputs: [],
+      structure: { kind: bpmnStructureKind, schemaVersion: "1.0.0", payload: {
+        elements: [
+          { elementId: "producer-element", elementType: "task", childNodeId: producer.nodeId },
+          { elementId: "consumer-element", elementType: "task", childNodeId: consumer.nodeId }
+        ],
+        sequenceFlows: [{ flowId: "linear-flow", sourceRef: "producer-element", targetRef: "consumer-element" }],
+        activities: [producer, consumer]
+      } }
+    };
+    const authored: WorkflowDefinitionState = {
+      variables: [], inputs: [], outputs: [],
+      rootActivity: {
+        nodeId: "workflow-root", activityVersionId: "sequence", inputs: [], outputs: [],
+        structure: { kind: flowchartStructureKind, schemaVersion: "1.0.0", payload: { activities: [process], startNodeId: process.nodeId } }
+      }
+    };
+
+    const wire = canonicalizeStateForWire(authored);
+    const wireProcess = (wire.rootActivity!.structure!.payload as { activities: ActivityNode[] }).activities[0]!;
+    const wireConsumer = (wireProcess.structure!.payload as { activities: ActivityNode[] }).activities[1]!;
+    expect(wireConsumer.inputs).toEqual([{ referenceKey: "customerId", value: { expressionType: "ActivityResult", value: bindingValue } }]);
+
+    const reopened = expandStateFromWire(JSON.parse(JSON.stringify(wire)));
+    const reopenedProcess = (reopened.rootActivity!.structure!.payload as { activities: ActivityNode[] }).activities[0]!;
+    const reopenedConsumer = (reopenedProcess.structure!.payload as { activities: ActivityNode[] }).activities[1]!;
+    expect((reopenedConsumer.customerId as { expression: unknown }).expression)
+      .toEqual({ type: "ActivityResult", value: bindingValue });
+    expect(JSON.stringify(canonicalizeStateForWire(reopened))).toBe(JSON.stringify(wire));
+
+    const putJson = vi.fn(async (_path: string, body: { state: WorkflowDefinitionState; layout: [] }) => ({
+      id: "draft-1", definitionId: "definition-1", state: body.state, layout: body.layout, validationErrors: [], authoringRevision: "base-2"
+    }));
+    await updateDraft(context(vi.fn(), capabilityDocument, putJson), {
+      id: "draft-1", definitionId: "definition-1", state: authored, layout: [], validationErrors: []
+    });
+    expect(putJson.mock.calls[0]![1].state).toEqual(wire);
+  });
+
   it("survives save, Code Apply and reopen as the same object, legacy scope included", async () => {
     const legacy = { producerNodeId: "get-customer", projectionKey: "$result", producerScopeId: "scope:root", isOptional: false };
     const authored: WorkflowDefinitionState = JSON.parse(JSON.stringify(state));

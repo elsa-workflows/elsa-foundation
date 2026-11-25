@@ -1,9 +1,9 @@
-import { StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
-import React, { useEffect, useMemo, useState } from "react";
+import { studioRowInteraction, StudioField, StudioPageHeader, StudioResizeHandle, StudioTabPanel, StudioTabs, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioRouteComponentProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
 
-type OTelSignalTab = "overview" | "traces";
+const signalTabs = [{ id: "overview", label: "Overview" }, { id: "traces", label: "Traces" }];
 type OTelLoadStatus = "idle" | "loading" | "ready" | "empty" | "unavailable" | "unauthorized" | "failed" | "missing";
 type SpanStatus = "Unset" | "Ok" | "Error";
 type ResourceStatus = "Unknown" | "Active" | "Stale";
@@ -187,7 +187,7 @@ export function register(api: ElsaStudioModuleApi) {
     path: "/diagnostics/open-telemetry",
     activePathPrefix: "/diagnostics/open-telemetry",
     order: 880,
-    iconColor: "#22c55e",
+    iconColor: "var(--studio-success-fg)",
     parentId: "diagnostics"
   });
 
@@ -219,6 +219,7 @@ export function OpenTelemetryPanel() {
 }
 
 export function OpenTelemetryPage({ navigate }: { navigate?: StudioRouteComponentProps["navigate"] } = {}) {
+  const tabsId = useId();
   const state = useOpenTelemetry();
   const selectedTrace = state.selectedTrace;
   const selectedSpan = selectedTrace?.spans.find(span => span.spanId === state.selectedSpanId) ?? selectedTrace?.spans[0] ?? null;
@@ -239,22 +240,20 @@ export function OpenTelemetryPage({ navigate }: { navigate?: StudioRouteComponen
         >Browse Diagnostics</a>
       </aside>
 
-      <div className="otel-tabs" role="tablist" aria-label="OpenTelemetry signals">
-        {(["overview", "traces"] as OTelSignalTab[]).map(tab => (
-          <button type="button" role="tab" aria-selected={state.activeTab === tab} className={state.activeTab === tab ? "active" : ""} onClick={() => state.setActiveTab(tab)} key={tab}>
-            {getSignalTabLabel(tab)}
-          </button>
-        ))}
-      </div>
-
-      {state.activeTab === "overview" ? <OverviewPanel state={state} /> : null}
-      {state.activeTab === "traces" ? <TracesPanel state={state} selectedTrace={selectedTrace} selectedSpan={selectedSpan} /> : null}
+      <StudioTabs tabs={signalTabs} activeTab={state.activeTab} onSelect={state.setActiveTab} ariaLabel="OpenTelemetry signals" baseId={tabsId} />
+      {signalTabs.map((tab, index) => (
+        <StudioTabPanel baseId={tabsId} index={index} hidden={state.activeTab !== tab.id} className="otel-signal-panel" key={tab.id}>
+          {state.activeTab === tab.id && (tab.id === "overview"
+            ? <OverviewPanel state={state} />
+            : <TracesPanel state={state} selectedTrace={selectedTrace} selectedSpan={selectedSpan} />)}
+        </StudioTabPanel>
+      ))}
     </section>
   );
 }
 
 function useOpenTelemetry() {
-  const [activeTab, setActiveTab] = useState<OTelSignalTab>("traces");
+  const [activeTab, setActiveTab] = useState("traces");
   const [filters, setFilters] = useState<OTelFilters>(defaultFilters);
   const [storageRead, setStorageRead] = useState<OTelRead<OTelStorageDiagnostics>>({ status: "loading", data: null, message: "Loading stored data." });
   const [resourcesRead, setResourcesRead] = useState<OTelRead<OTelResourceCollection>>({ status: "loading", data: null, message: "Loading resource metadata." });
@@ -447,9 +446,9 @@ function OverviewPanel({ state }: { state: OTelState }) {
               <strong>{resource.serviceName || "Unknown"}</strong>
               {resource.id ? <span>Resource ID: {resource.id}</span> : null}
               <span>Resource status: {resource.status}</span>
-              {[resource.serviceInstanceId ? `Instance: ${resource.serviceInstanceId}` : null,
-                resource.telemetrySdkLanguage ? `Telemetry SDK language: ${resource.telemetrySdkLanguage}` : null,
-                resource.lastSeen ? `Last seen: ${formatDateTime(resource.lastSeen)}` : null].filter(Boolean).map(value => <span key={value}>{value}</span>)}
+              {resource.serviceInstanceId && <span>Instance: {resource.serviceInstanceId}</span>}
+              {resource.telemetrySdkLanguage && <span>Telemetry SDK language: {resource.telemetrySdkLanguage}</span>}
+              {resource.lastSeen && <span>Last seen: <StudioTimestamp value={resource.lastSeen} format="date-time" /></span>}
             </div>
           ))}
         </div>
@@ -459,37 +458,140 @@ function OverviewPanel({ state }: { state: OTelState }) {
 }
 
 function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState; selectedTrace: OTelTraceDetail | null; selectedSpan: OTelSpan | null }) {
+  const instanceId = useId();
+  const traceListId = `otel-trace-list-${instanceId}`;
+  const traceDetailId = `otel-trace-detail-${instanceId}`;
+  const spanInspectorId = `otel-span-inspector-${instanceId}`;
+  const tracesLayoutRef = useRef<HTMLDivElement>(null);
+  const traceDetailBodyRef = useRef<HTMLDivElement>(null);
+  const activeResize = useRef<{ split: "width" | "height"; pointerId: number; bounds: DOMRect } | null>(null);
+  const [isStacked, setIsStacked] = useState(false);
+  const [traceListRatio, setTraceListRatio] = useState(45);
+  const [waterfallRatio, setWaterfallRatio] = useState(56);
+
+  useEffect(() => {
+    const layout = tracesLayoutRef.current;
+    if (!layout) return;
+
+    const updateLayout = (width: number) => setIsStacked(width <= 900);
+    updateLayout(layout.getBoundingClientRect().width);
+    if (typeof ResizeObserver === "undefined") {
+      const update = () => updateLayout(layout.getBoundingClientRect().width);
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+
+    const observer = new ResizeObserver(entries => updateLayout(entries[0]?.contentRect.width ?? layout.getBoundingClientRect().width));
+    observer.observe(layout);
+    return () => observer.disconnect();
+  }, []);
+
+  function beginResize(split: "width" | "height", event: React.PointerEvent<HTMLDivElement>) {
+    const container = split === "width" ? tracesLayoutRef.current : traceDetailBodyRef.current;
+    if (!container) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    activeResize.current = { split, pointerId: event.pointerId, bounds: container.getBoundingClientRect() };
+  }
+
+  function moveResize(split: "width" | "height", event: React.PointerEvent<HTMLDivElement>) {
+    const active = activeResize.current;
+    if (!active || active.split !== split || active.pointerId !== event.pointerId) return;
+
+    const isWidth = split === "width";
+    const extent = isWidth ? active.bounds.width - 10 : active.bounds.height - 10;
+    const position = isWidth
+      ? event.clientX - active.bounds.left - 5
+      : event.clientY - active.bounds.top - 5;
+    const nextRatio = Math.round((position / Math.max(1, extent)) * 100);
+    if (isWidth) setTraceListRatio(Math.min(70, Math.max(30, nextRatio)));
+    else setWaterfallRatio(Math.min(75, Math.max(25, nextRatio)));
+  }
+
+  function endResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (activeResize.current?.pointerId === event.pointerId) activeResize.current = null;
+  }
+
+  function resizeByKeyboard(split: "width" | "height", event: React.KeyboardEvent<HTMLDivElement>) {
+    const isWidth = split === "width";
+    const minimum = isWidth ? 30 : 25;
+    const maximum = isWidth ? 70 : 75;
+    const current = isWidth ? traceListRatio : waterfallRatio;
+    const increase = isWidth ? event.key === "ArrowRight" : event.key === "ArrowDown";
+    const decrease = isWidth ? event.key === "ArrowLeft" : event.key === "ArrowUp";
+    if (!increase && !decrease && event.key !== "Home" && event.key !== "End") return;
+
+    event.preventDefault();
+    const next = event.key === "Home" ? minimum : event.key === "End" ? maximum : current + (increase ? 2 : -2);
+    if (isWidth) setTraceListRatio(Math.min(maximum, Math.max(minimum, next)));
+    else setWaterfallRatio(Math.min(maximum, Math.max(minimum, next)));
+  }
+
   return (
-    <div className="otel-traces-layout">
-      <section className="otel-trace-list">
+    <div className={isStacked ? "otel-traces-layout is-stacked" : "otel-traces-layout"} ref={tracesLayoutRef}
+      style={isStacked ? undefined : { gridTemplateColumns: `minmax(0, ${traceListRatio}fr) 10px minmax(0, ${100 - traceListRatio}fr)` }}>
+      <section className="otel-trace-list" id={traceListId}>
         <TraceToolbar state={state} />
         <div className="otel-trace-table" role="table" aria-label="Trace summaries">
           <div className="otel-trace-row header" role="row">
-            <span>Start</span><span>Service</span><span>Trace</span><span>Duration</span><span>Spans</span><span>Status</span>
+            <span role="columnheader">Start</span><span role="columnheader">Service</span><span role="columnheader">Trace</span><span role="columnheader">Duration</span><span role="columnheader">Spans</span><span role="columnheader">Status</span>
           </div>
           {state.traces.length === 0 ? <div className="otel-empty">{state.message}</div> : null}
           {state.traces.map(trace => {
             const serviceNames = getServiceNames(trace.resourceIds, state.resourcesById);
             return (
-              <button type="button" role="row" className={trace.traceId === state.selectedTraceId ? "otel-trace-row selected" : "otel-trace-row"} onClick={() => state.setSelectedTraceId(trace.traceId)} key={trace.traceId}>
-                <time title={trace.startTime}>{formatTime(trace.startTime)}</time>
-                <span title={serviceNames.join(", ")}>{serviceNames.join(", ")}</span>
-                <strong title={trace.name ?? trace.traceId}>{trace.name ?? trace.traceId}{trace.name ? <small>{trace.traceId}</small> : null}</strong>
-                <span>{formatDuration(trace.durationMs)}</span>
-                <span>{trace.spanCount}</span>
-                <StatusChip status={trace.status} />
-              </button>
+              <div role="row" aria-selected={trace.traceId === state.selectedTraceId} className={trace.traceId === state.selectedTraceId ? "otel-trace-row selected" : "otel-trace-row"} {...studioRowInteraction<HTMLDivElement>(() => state.setSelectedTraceId(trace.traceId))} key={trace.traceId}>
+                <span role="cell"><StudioTimestamp value={trace.startTime} format="time" /></span>
+                <span role="cell" title={serviceNames.join(", ")}>{serviceNames.join(", ")}</span>
+                <strong role="cell" title={trace.name ?? trace.traceId}>{trace.name ?? trace.traceId}{trace.name ? <small>{trace.traceId}</small> : null}</strong>
+                <span role="cell">{formatDuration(trace.durationMs)}</span>
+                <span role="cell">{trace.spanCount}<span className="otel-compact-span-label" aria-hidden="true"> {trace.spanCount === 1 ? "span" : "spans"}</span></span>
+                <span role="cell"><StatusChip status={trace.status} /></span>
+              </div>
             );
           })}
         </div>
       </section>
 
-      <section className="otel-trace-detail">
+      {!isStacked ? <StudioResizeHandle
+        orientation="vertical"
+        label="Resize trace details panel"
+        controls={traceDetailId}
+        value={traceListRatio}
+        min={30}
+        max={70}
+        onPointerDown={event => beginResize("width", event)}
+        onPointerMove={event => moveResize("width", event)}
+        onPointerUp={endResize}
+        onPointerCancel={endResize}
+        onLostPointerCapture={endResize}
+        onKeyDown={event => resizeByKeyboard("width", event)}
+      /> : null}
+
+      <section className="otel-trace-detail" id={traceDetailId}>
         {selectedTrace ? (
           <>
             <TraceDetailHeader trace={selectedTrace} onCopy={state.copyTrace} onDownload={state.downloadTrace} />
-            <TraceWaterfall trace={selectedTrace} selectedSpanId={state.selectedSpanId} onSelectSpan={state.setSelectedSpanId} />
-            {selectedSpan ? <SpanInspector span={selectedSpan} /> : null}
+            <div className={selectedSpan ? "otel-trace-detail-body has-span-details" : "otel-trace-detail-body"} ref={traceDetailBodyRef}
+              style={selectedSpan ? { gridTemplateRows: `minmax(0, ${waterfallRatio}fr) 10px minmax(0, ${100 - waterfallRatio}fr)` } : undefined}>
+              <TraceWaterfall trace={selectedTrace} selectedSpanId={state.selectedSpanId} onSelectSpan={state.setSelectedSpanId} />
+              {selectedSpan ? <>
+                <StudioResizeHandle
+                  orientation="horizontal"
+                  label="Resize span details"
+                  controls={spanInspectorId}
+                  value={waterfallRatio}
+                  min={25}
+                  max={75}
+                  onPointerDown={event => beginResize("height", event)}
+                  onPointerMove={event => moveResize("height", event)}
+                  onPointerUp={endResize}
+                  onPointerCancel={endResize}
+                  onLostPointerCapture={endResize}
+                  onKeyDown={event => resizeByKeyboard("height", event)}
+                />
+                <SpanInspector span={selectedSpan} id={spanInspectorId} />
+              </> : null}
+            </div>
           </>
         ) : <div className="otel-empty">{state.detailMessage}</div>}
       </section>
@@ -523,10 +625,10 @@ function TraceDetailHeader({ trace, onCopy, onDownload }: { trace: OTelTraceDeta
   return (
     <header className="otel-trace-detail-header">
       <div>
-        <span>{serviceNames.join(", ")} · {formatDuration(trace.durationMs)} · {trace.spanCount} spans · {trace.status}</span>
+        <span>{serviceNames.join(", ")} · {formatDuration(trace.durationMs)} · {trace.spanCount} {trace.spanCount === 1 ? "span" : "spans"} · {trace.status}</span>
         <h3>{trace.name ?? trace.traceId}</h3>
         <p>{trace.traceId}</p>
-        <time dateTime={trace.startTime}>{formatDateTime(trace.startTime)}</time>
+        <StudioTimestamp value={trace.startTime} format="date-time" />
       </div>
       <div>
         <button type="button" onClick={() => void onCopy()}>Copy JSON</button>
@@ -560,9 +662,9 @@ function TraceWaterfall({ trace, selectedSpanId, onSelectSpan }: { trace: OTelTr
   );
 }
 
-function SpanInspector({ span }: { span: OTelSpan }) {
+function SpanInspector({ span, id }: { span: OTelSpan; id: string }) {
   return (
-    <aside className="otel-span-inspector" aria-label="Span details">
+    <aside className="otel-span-inspector" id={id} aria-label="Span details">
       <header>
         <span>{span.kind} · {span.status}</span>
         <h3>{span.name}</h3>
@@ -571,7 +673,7 @@ function SpanInspector({ span }: { span: OTelSpan }) {
         <DetailRow name="Span ID" value={span.spanId} />
         <DetailRow name="Parent" value={span.parentSpanId} />
         <DetailRow name="Service" value={span.serviceName} />
-        <DetailRow name="Started" value={formatDateTime(span.startTime)} />
+        <DetailRow name="Started" value={<StudioTimestamp value={span.startTime} format="date-time" />} />
         <DetailRow name="Duration" value={formatDuration(span.durationMs)} />
         <DetailRow name="Status description" value={span.statusDescription} />
       </dl>
@@ -591,7 +693,7 @@ function StatusChip({ status }: { status: SpanStatus }) {
   return <span className="otel-status-chip" data-status={status.toLowerCase()}>{status}</span>;
 }
 
-function DetailRow({ name, value }: { name: string; value?: string | null }) {
+function DetailRow({ name, value }: { name: string; value?: React.ReactNode }) {
   if (!value) return null;
   return <><dt>{name}</dt><dd>{value}</dd></>;
 }
@@ -776,19 +878,9 @@ function formatDuration(durationMs: number) {
   return `${Math.round(durationMs * 10) / 10}ms`;
 }
 
-function formatTime(timestamp: string) {
-  return new Date(timestamp).toLocaleTimeString();
-}
 
-function formatDateTime(timestamp: string) {
-  return new Date(timestamp).toLocaleString();
-}
 
 function formatValue(value: unknown) {
   if (value == null) return "";
   return typeof value === "object" ? JSON.stringify(value) : String(value);
-}
-
-function getSignalTabLabel(tab: OTelSignalTab) {
-  return tab === "overview" ? "Overview" : "Traces";
 }

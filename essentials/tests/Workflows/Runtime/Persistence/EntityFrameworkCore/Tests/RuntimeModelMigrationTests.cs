@@ -11,10 +11,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class RuntimeModelMigrationTests
 {
-    [Fact]
+    [SkippableFact]
     public async Task Additive_model_tables_upgrade_an_actual_legacy_store_without_changing_any_legacy_rows()
     {
         var fixture = Path.Combine(AppContext.BaseDirectory, "HostingBaseline", "runtime.sqlite.gz");
+        Skip.IfNot(File.Exists(fixture), "The captured hosting-baseline store is not in this checkout.");
         Assert.Equal("3fcd6e38a968d05026a2c57a188f5d5c9d6fdbc313afd9ce19c82ad3e2b21416",
             Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(fixture))));
         var directory = Directory.CreateTempSubdirectory("elsa-model-schema-upgrade-");
@@ -51,8 +52,15 @@ public sealed partial class RuntimeModelMigrationTests
                 Assert.Contains(table, after.Keys);
             var upgradedHistory = await History(connection);
             Assert.Equal(history, upgradedHistory.Take(history.Length));
-            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt", "StandaloneTriggers", "RunHistoryTimeline"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
-            Assert.Equal(history.Length + 6, upgradedHistory.Length);
+            Assert.Equal(["ModelExecutionState", "ModelMaterialKind", "UserTasks", "OutboxClaimDeliveredAt", "StandaloneTriggers", "RunHistoryTimeline", "TimerHistoryOwnership"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
+            Assert.Equal(history.Length + 7, upgradedHistory.Length);
+            await using (var absentTimerHistory = connection.CreateCommand())
+            {
+                absentTimerHistory.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeOperationalStateEfModule.DurableTimerTableName}\" WHERE HistoryRevision != 0 OR HistoryPending != 0 OR HistoryRetired != 0";
+                Assert.Equal(0L, (long)(await absentTimerHistory.ExecuteScalarAsync())!);
+                absentTimerHistory.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeOperationalStateEfModule.ExecutionLivenessTableName}\" WHERE TimerHistoryOwnerJson IS NOT NULL";
+                Assert.Equal(0L, (long)(await absentTimerHistory.ExecuteScalarAsync())!);
+            }
             // Adding storage cannot invent capture or first-occurrence evidence for saved legacy runs.
             foreach (var table in new[] { RuntimeHistoryProjectionSchema.HeadTable, RuntimeHistoryProjectionSchema.EventTable,
                 RuntimeHistoryProjectionSchema.BookmarkTable, RuntimeHistoryProjectionSchema.BookmarkCountTable, RuntimeHistoryProjectionSchema.ActivityTable,
@@ -113,7 +121,9 @@ public sealed partial class RuntimeModelMigrationTests
                 // Compare every original column; the newly added columns are verified separately above.
                 var columns = Enumerable.Range(0, reader.FieldCount).Where(i =>
                     (table != RuntimeArtifactEfModule.WorkflowExecutableTableName || reader.GetName(i) != "IsModelMaterial") &&
-                    (table != RuntimePostCommitOutboxEfModule.TableName || reader.GetName(i) is not ("ClaimDeliveredAtUtcTicks" or "SourceId" or "SourceKeyHash" or "SourceKind" or "TriggerIdHash")))
+                    (table != RuntimePostCommitOutboxEfModule.TableName || reader.GetName(i) is not ("ClaimDeliveredAtUtcTicks" or "SourceId" or "SourceKeyHash" or "SourceKind" or "TriggerIdHash")) &&
+                    (table != RuntimeOperationalStateEfModule.DurableTimerTableName || reader.GetName(i) is not ("HistoryRevision" or "HistoryPending" or "HistoryRetired")) &&
+                    (table != RuntimeOperationalStateEfModule.ExecutionLivenessTableName || reader.GetName(i) != "TimerHistoryOwnerJson"))
                     .OrderBy(reader.GetName, StringComparer.Ordinal).ToArray();
                 // SQLite rebuilds can change physical column ordinals. Bind every exact value to its original
                 // column name so reordered columns neither fabricate a mismatch nor hide swapped data.

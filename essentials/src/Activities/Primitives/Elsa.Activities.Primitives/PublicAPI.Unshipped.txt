@@ -188,3 +188,6 @@ Elsa.Activities.Primitives.StandaloneTriggers.StandaloneEventTriggerAuthoringFea
 static Elsa.Activities.Primitives.StandaloneTriggers.EventIngressRegistrationExtensions.AddStandaloneEventIngress<TSource>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Primitives.Models.ValueTypeDescriptor! payloadSchema, string! sourceFamily = "Elsa.Event.External") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 Elsa.Activities.Primitives.StandaloneTriggers.EventIngressRegistrationExtensions
 virtual Elsa.Activities.Primitives.StandaloneTriggers.StandaloneEventTriggerAuthoringFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+
+Elsa.Activities.Primitives.Activities.Event.ExpiresAt.get -> System.DateTimeOffset?
+Elsa.Activities.Primitives.Activities.Event.ExpiresAt.set -> void

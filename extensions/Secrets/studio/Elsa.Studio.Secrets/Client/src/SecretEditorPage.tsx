@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft } from "lucide-react";
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceTitle, useStudioWorkspaceWhenActive, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
-import { CreateSecretForm } from "./SecretDialogs";
+import { StudioShellBreadcrumbs, StudioAlert, StudioButton, StudioDialog, StudioDialogFooter, SkeletonRows, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
+import { CreateSecretDialog } from "./SecretDialogs";
 import { SecretDetail } from "./SecretDetail";
 import { createSecret, getSecret, getSecretDescriptors, updateSecret } from "./secretsApi";
 import type { SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
@@ -26,7 +25,7 @@ export function SecretEditorPage({ api, name, navigate }: { api: ElsaStudioModul
   const lifetime = useRef(0);
   const whenActive = useStudioWorkspaceWhenActive();
   const data = loaded?.scope === scope ? loaded : undefined;
-  useStudioWorkspaceTitle(name ? data?.secret?.displayName || data?.secret?.name || "Edit secret" : "Create secret");
+  useStudioWorkspaceTitle(name ? data?.secret?.displayName || data?.secret?.name || "Edit secret" : "New secret");
   useLayoutEffect(() => { const generation = lifetime; mounted.current = true; return () => { mounted.current = false; generation.current++; }; }, []);
   useEffect(() => {
     if (identity.current.scope !== scope || identity.current.name !== name) {
@@ -75,13 +74,21 @@ export function SecretEditorPage({ api, name, navigate }: { api: ElsaStudioModul
   }, []);
   useEffect(() => { if (!formState.dirty && !formState.busy) notifyStudioNavigationGuardReleased(); }, [formState]);
   const accepted = (title: string, origin: number) => { if (origin === lifetime.current && mounted.current && workspace?.isActive() !== false) api.notifications?.notify({ level: "success", title }); phase.current.accepted = true; phase.current.dirty = false; notifyStudioNavigationGuardReleased(); };
-  return <StudioPage role="region" className="secrets-shell secrets-editor-page" aria-label={name ? "Edit secret" : "Create secret"}>
-    <StudioPageHeader title={name ? "Edit secret" : "Create secret"} actions={<StudioButton variant="ghost" disabled={formState.busy} onClick={() => void leave()}><ArrowLeft size={16} aria-hidden />Back to secrets</StudioButton>} />
+  if (!name) {
+    if (!data) return <StudioDialog open title="New secret" onClose={() => void leave()} dismissOnOutsideClick={false}
+      footer={<StudioDialogFooter onCancel={() => void leave()} />}>
+      {loading ? <SkeletonRows rows={3} label="Loading secret editor" /> : <StudioAlert tone="danger">{error}<StudioButton onClick={() => setRevision(value => value + 1)}>Retry secret options</StudioButton></StudioAlert>}
+    </StudioDialog>;
+    return <CreateSecretDialog notice={error ? <StudioAlert tone="danger">{error}</StudioAlert> : undefined} descriptors={data.descriptors} scopeCatalogLoading={loading} scopeCatalogError={Boolean(error)} onRetryScopeCatalog={() => setRevision(value => value + 1)} onStateChange={onStateChange}
+        onSave={async request => { const origin = lifetime.current; phase.current.busy = true; try { const created = await createSecret(api.backend, request); if (current()) { accepted("Secret created.", origin); route(secretPath(browse, undefined, undefined, created.name, location.href)); } } finally { if (currentScope.current === scope) phase.current.busy = false; } }} onCancel={() => { if (current() && !phase.current.accepted) void leave(); }} />;
+  }
+  return <StudioPage role="region" className="secrets-shell secrets-editor-page" aria-label="Edit secret">
+    <StudioShellBreadcrumbs items={[{ label: "Secrets", onClick: () => void leave(), disabled: formState.busy }]} current="Edit secret" />
+    <StudioPageHeader title="Edit secret" />
     {error ? <StudioAlert tone="danger">{error}<StudioButton disabled={loading} onClick={() => setRevision(value => value + 1)}>Retry secret options</StudioButton></StudioAlert> : null}
-    {!data ? loading ? <p role="status">Loading secret editor…</p> : <StudioResultState title="Secret editor unavailable" description={error} />
-      : name && data.secret ? <SecretDetail notifications={api.notifications} copyScope={scope} key={data.secret.id} secret={data.secret} descriptors={data.descriptors} presentation="page" onStateChange={onStateChange}
+    {!data ? loading ? <SkeletonRows rows={3} label="Loading secret editor" /> : <StudioResultState title="Secret editor unavailable" description={error} />
+      : data.secret ? <SecretDetail notifications={api.notifications} copyScope={scope} key={data.secret.id} secret={data.secret} descriptors={data.descriptors} presentation="page" onStateChange={onStateChange}
         onSave={async (key, request) => { const origin = lifetime.current; phase.current.busy = true; try { await updateSecret(api.backend, key, request); if (current()) accepted("Secret metadata updated.", origin); } finally { if (currentScope.current === scope) phase.current.busy = false; } }} onClose={() => { if (current()) void leave(); }} />
-      : <CreateSecretForm descriptors={data.descriptors} scopeCatalogLoading={loading} scopeCatalogError={Boolean(error)} onRetryScopeCatalog={() => setRevision(value => value + 1)} onStateChange={onStateChange}
-        onSave={async request => { const origin = lifetime.current; phase.current.busy = true; try { const created = await createSecret(api.backend, request); if (current()) { accepted("Secret created.", origin); route(secretPath(browse, undefined, undefined, created.name, location.href)); } } finally { if (currentScope.current === scope) phase.current.busy = false; } }} onCancel={() => { if (current() && !phase.current.accepted) void leave(); }} />}
+      : null}
   </StudioPage>;
 }

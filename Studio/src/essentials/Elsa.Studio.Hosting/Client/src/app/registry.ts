@@ -71,6 +71,7 @@ export function createStudioRegistry(
     routes,
     dashboardWidgets,
     homeWidgets: dashboardWidgets,
+    dashboardRecordLinks: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["dashboardRecordLinks"]>>>({ slot: studioSlots.dashboardRecordLinks, hostPolicy }),
     diagnosticsWidgets: createContributionRegistry<StudioDiagnosticsWidgetContribution>({ slot: studioSlots.diagnosticsWidgets,hostPolicy }),
     panels: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["panels"]>>>({ slot: studioSlots.panels,hostPolicy }),
     toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions,hostPolicy }),
@@ -78,7 +79,10 @@ export function createStudioRegistry(
     propertyEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["propertyEditors"]>>>({ slot: studioSlots.propertyEditors,hostPolicy }),
     expressionEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["expressionEditors"]>>>({ slot: studioSlots.expressionEditors,hostPolicy }),
     userTaskForms: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["userTaskForms"]>>>({ slot: studioSlots.userTaskForms, hostPolicy }),
+    userTaskFieldControls: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["userTaskFieldControls"]>>>({ slot: studioSlots.userTaskFieldControls, hostPolicy }),
     workflowRunInputEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunInputEditors"]>>>({ slot: studioSlots.workflowRunInputEditors,hostPolicy }),
+    triggerConfigurationEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["triggerConfigurationEditors"]>>>({ slot: studioSlots.triggerConfigurationEditors,hostPolicy }),
+    triggerTypePresentations: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["triggerTypePresentations"]>>>({ slot: studioSlots.triggerTypePresentations,hostPolicy }),
     workflowTestStimulusEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowTestStimulusEditors"]>>>({ slot: studioSlots.workflowTestStimulusEditors,hostPolicy }),
     workflowRunRelatedLinks: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunRelatedLinks"]>>>({ slot: studioSlots.workflowRunRelatedLinks,hostPolicy }),
     incidentRootCauseProviders: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["incidentRootCauseProviders"]>>>({ slot: studioSlots.incidentRootCauseProviders,hostPolicy }),
@@ -139,7 +143,7 @@ function createNavigationContributions(featureArea: StudioFeatureAreaContributio
   }
 
   const children = featureArea.nav.items
-    .filter(item => item.path !== parent.path || parent.childDisplay === "views")
+    .filter(item => item.path !== parent.path || parent.childDisplay === "views" || parent.childDisplay === "links")
     .map((item, index) => {
       const contribution = {
         id: item.id ?? `${featureArea.id}-${slug(item.title)}`,

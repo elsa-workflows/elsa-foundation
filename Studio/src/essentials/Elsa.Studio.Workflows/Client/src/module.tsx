@@ -1,4 +1,5 @@
 import { lazy, type ReactNode } from "react";
+import { Zap } from "lucide-react";
 import { authSessionEndedEvent, evaluateBackendRequirements, qualifyStudioBackendPath, type ElsaStudioModuleApi, type StudioRouteWorkspaceOptions } from "@elsa-workflows/studio-sdk";
 import { setDialogs } from "./workflow-editor/dialogs";
 import { setNotifications } from "./workflow-editor/notifications";
@@ -18,6 +19,8 @@ import {
 } from "./workflowTestStimulusEditors";
 import { registerWorkflowWeaver } from "./workflowWeaver";
 import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
+import { workflowDashboardRecordLinks } from "./dashboardRecordLinks";
+import type { WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
 
 const WorkflowTagsRoute = lazy(() => import("./workflow-editor/WorkflowTagsPage").then(module => ({ default: module.WorkflowTagsRoute })));
 const WorkflowViewsRoute = lazy(() => import("./workflow-editor/WorkflowViewsPage").then(module => ({ default: module.WorkflowViewsRoute })));
@@ -33,6 +36,8 @@ const ActivityUpgradeWorkbenchPage = lazy(() => import("./ActivityUpgradeWorkben
 const Elsa3ReusableImportPage = lazy(() => import("./Elsa3ReusableImportPage").then(module => ({ default: module.Elsa3ReusableImportPage })));
 const ActivityAvailabilityPage = lazy(() => import("./ActivityAvailabilityPage").then(module => ({ default: module.ActivityAvailabilityPage })));
 const RuntimeDiagnosticsSettingsPage = lazy(() => import("./RuntimeDiagnosticsSettingsPage").then(module => ({ default: module.RuntimeDiagnosticsSettingsPage })));
+const StandaloneTriggersRoute = lazy(() => import("./standalone-triggers/TriggersRoute").then(module => ({ default: module.TriggersRoute })));
+const StandaloneWorkflowTriggersPanel = lazy(() => import("./standalone-triggers/Subscriptions").then(module => ({ default: module.WorkflowTriggersPanel })));
 
 // register() has no host-provided teardown to unregister this listener, and it can run more than once
 // (module reloads, tests). Keeping the handler as a stable module-level reference makes repeat
@@ -95,6 +100,9 @@ export function register(api: ElsaStudioModuleApi) {
   api.workflowTestStimulusEditors?.add(httpWorkflowTestStimulusEditor);
   api.workflowTestStimulusEditors?.add(eventWorkflowTestStimulusEditor);
   api.workflowTestStimulusEditors?.add(schedulingWorkflowTestStimulusEditor);
+  for (const link of workflowDashboardRecordLinks) {
+    api.dashboardRecordLinks?.add(link);
+  }
   api.activityEditors.add({...activityGraphImplementationEditorContribution, requiresBackend:[{id:"elsa.api.activity-design",contractVersion:"1"}]});
   api.activityEditors.add({...activityGraphSchema2ImplementationEditorContribution, requiresBackend:[{id:"elsa.api.activity-design",contractVersion:"1"}]});
   latestModuleApi = api;
@@ -106,6 +114,11 @@ export function register(api: ElsaStudioModuleApi) {
   const incidentRootCauseProviders = () => api.incidentRootCauseProviders?.list() ?? [];
   const deferred = (label: string, content: ReactNode) =>
     <WorkflowLazyBoundary label={label}>{content}</WorkflowLazyBoundary>;
+  api.workflowDesigner.panels.add({
+    id: "workflows.standalone-triggers", title: "Triggers", side: "right", order: 15,
+    supportedResourceKinds: ["workflow-definition"],
+    component: ({ context }) => deferred("workflow triggers", <StandaloneWorkflowTriggersPanel api={api} context={context as WorkflowDesignerPanelContext} />)
+  });
   api.featureAreas.add({
     id: "workflows",
     title: "Workflows",
@@ -118,26 +131,35 @@ export function register(api: ElsaStudioModuleApi) {
     nav: {
       title: "Workflows",
       path: "/workflows/definitions",
-      iconColor: "#0ea5e9",
+      iconColor: "var(--studio-nav-icon-blue)",
       placement: "build",
-      childDisplay: "views",
+      childDisplay: "links",
       order: 20,
       items: [
-        { id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}], title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9", placement: "build", parentId: "workflows", order: 10 },
+        { id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}], title: "Definitions", path: "/workflows/definitions", iconColor: "var(--studio-nav-icon-blue)", placement: "build", parentId: "workflows", order: 10 },
         ...(api.backendSession ? [
           { id: "workflows-bpmn-processes", requiresBackend: [{id:"elsa.api.bpmn-catalog",contractVersion:"1",relations:["bpmn-publications"]}], title: "BPMN processes", path: "/workflows/bpmn", placement: "build" as const, parentId: "workflows", order: 25 },
           { id: "workflows-bpmn-runs", requiresBackend: [{id:"elsa.api.bpmn-catalog",contractVersion:"1",relations:["bpmn-executions"]}], title: "BPMN runs", path: "/workflows/bpmn/runs", placement: "operate" as const, order: 35 }
         ] : []),
-        { id: "workflows-runs", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9", placement: "operate", order: 30 },
-        { id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Executables", path: "/workflows/executables", iconColor: "#d97706", placement: "build", parentId: "workflows", order: 20 },
-        { id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#8b5cf6", placement: "build", parentId: "library", order: 20 },
-        { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "#0ea5e9", placement: "build", parentId: "library", order: 25 },
-        { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "runtime", order: 40 },
-        { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0d9488", placement: "authoring", order: 50 }
+        { id: "workflows-runs", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Runs", path: "/workflows/instances", iconColor: "var(--studio-nav-icon-blue)", placement: "operate", order: 30 },
+        { id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Executables", path: "/workflows/executables", iconColor: "var(--studio-nav-icon-amber)", placement: "build", parentId: "workflows", order: 20 },
+        { id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "var(--studio-nav-icon-violet)", placement: "build", parentId: "library", order: 20 },
+        { id: "workflows-activity-upgrades", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity upgrades", path: "/workflows/activity-definitions/upgrades", placement: "build", parentId: "library", order: 30 },
+        { id: "workflows-elsa3-import", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Import from Elsa 3", path: "/workflows/activity-definitions/import-elsa3", placement: "build", parentId: "library", order: 35 },
+        { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "var(--studio-nav-icon-blue)", placement: "build", parentId: "library", order: 25 },
+        { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "var(--studio-nav-icon-blue)", placement: "runtime", order: 40 },
+        { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "var(--studio-nav-icon-teal)", placement: "authoring", order: 50 },
+        { id: "workflows-triggers", requiresBackend: [{id:"elsa.api.standalone-triggers",contractVersion:"1"}], title: "Triggers", path: "/workflows/triggers", icon: Zap, iconColor: "var(--studio-nav-icon-amber)", placement: "operate", order: 35 }
       ]
     },
     routes: [
-      ...([ ["list", "/workflows/tags", "Workflow tags"], ["create", "/workflows/tags/new", "Create workflow tag"], ["edit", "/workflows/tags/:tagId", "Edit workflow tag"] ] as const).map(([view, path, label]) => ({
+      ...([ ["list", "/workflows/triggers", "Triggers"], ["create", "/workflows/triggers/new", "Create trigger"], ["delivery", "/workflows/triggers/deliveries/:deliveryId", "Trigger delivery"], ["details", "/workflows/triggers/:triggerId", "Trigger details"] ] as const).map(([view, path, label]) => ({
+        id: `workflows-triggers-${view}`, path, label,
+        requiresBackend: [{ id: "elsa.api.standalone-triggers", contractVersion: "1", relations: [view === "delivery" ? "delivery" : "triggers"] }],
+        workspace: { resourceKey: (location: URL) => view === "details" || view === "delivery" ? `standalone-trigger-${view}:${location.pathname.split("/").at(-1)}` : null },
+        component: ({ navigate }: { navigate(path: string): void }) => deferred("standalone triggers", <StandaloneTriggersRoute api={api} view={view} navigate={navigate} />)
+      })),
+      ...([ ["list", "/workflows/tags", "Workflow tags"], ["create", "/workflows/tags/new", "New workflow tag"], ["edit", "/workflows/tags/:tagId", "Edit workflow tag"] ] as const).map(([view, path, label]) => ({
         id: `workflows-tags-${view}`,
         requiresBackend: [{ id: "elsa.api.workflow-design", contractVersion: "1", relations: ["workflow-tags", "workflow-tag"] }],
         path, label,
@@ -164,23 +186,24 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-elsa3-import", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions/import-elsa3",
-        label: "Elsa 3 import",
-        component: ({ navigate }) => deferred("Elsa 3 import", <Elsa3ReusableImportPage context={api.backend} navigate={navigate} />)
+        label: "Import from Elsa 3",
+        component: ({ navigate }) => deferred("Import from Elsa 3", <Elsa3ReusableImportPage context={api.backend} navigate={navigate} />)
       },
       {
         id: "workflows-activity-upgrades", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions/upgrades",
-        label: "Activity Definition upgrades",
+        label: "Activity definition upgrades",
         workspace: workspaceResource("activity-upgrade-plan", "plan"),
-        component: ({ navigate }) => deferred("Activity Definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
+        component: ({ navigate }) => deferred("Activity definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
       },
-      {
-        id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
-        path: "/workflows/activity-definitions",
-        label: "Activity Definitions",
+      ...[
+        { id: "workflows-activity-definitions", path: "/workflows/activity-definitions", label: "Activity definitions" },
+        { id: "agent-activity-definition", path: "/agents/definitions", label: "Agent" }
+      ].map(({ id, path, label }) => ({
+        id, path, label, requiresBackend: [{ id: "elsa.api.activity-design", contractVersion: "1" }],
         workspace: activityDefinitionWorkspace,
-        component: ({ navigate }) => deferred("activity definitions", <ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list() })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
-      },
+        component: ({ navigate }: { navigate(path: string): void }) => deferred(label, <ActivityDefinitionsPage agentWorkspace={path === "/agents/definitions"} context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list() })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
+      })),
       {
         id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}],
         path: "/workflows/definitions",
@@ -192,7 +215,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}],
         path: "/workflows/executables",
         label: "Workflow executables",
-        component: () => deferred("workflow executables", <WorkflowExecutablesPage canBrowseDefinitions={evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.workflow-design",contractVersion:"1"}]).state === "available"} context={api.backend} ai={api.weaver} runInputEditors={runInputEditors()} />)
+        component: () => deferred("workflow executables", <WorkflowExecutablesPage canBrowseDefinitions={evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.workflow-design",contractVersion:"1"}]).state === "available"} canManagePublications={operationAvailability().publishing.state === "available"} context={api.backend} ai={api.weaver} runInputEditors={runInputEditors()} />)
       },
       {
         id: "workflows-executable-inspector", requiresBackend:[{id:"elsa.api.runtime",contractVersion:"1"}],
@@ -221,8 +244,8 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}],
         path: "/workflows/runtime-diagnostics",
-        label: "Runtime evidence settings",
-        component: () => deferred("Runtime evidence settings", <RuntimeDiagnosticsSettingsPage context={api.backend} />)
+        label: "Runtime diagnostics",
+        component: () => deferred("Runtime diagnostics", <RuntimeDiagnosticsSettingsPage context={api.backend} />)
       }
     ]
   });

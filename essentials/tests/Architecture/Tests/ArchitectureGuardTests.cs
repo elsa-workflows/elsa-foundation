@@ -306,7 +306,7 @@ public sealed partial class ArchitectureGuardTests
     [Fact]
     public void Server_Dockerfile_restores_ReadyToRun_packages_before_no_restore_publish()
     {
-        var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "apps", "Elsa.Workbench", "Dockerfile"));
+        var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "apps", "Elsa.Workbench.Host", "Dockerfile"));
         var restoreStart = dockerfile.IndexOf("    && dotnet restore ", StringComparison.Ordinal);
         var publishStart = dockerfile.IndexOf("    && dotnet publish ", StringComparison.Ordinal);
 
@@ -596,14 +596,18 @@ public sealed partial class ArchitectureGuardTests
 
     private static string ExpectedProjectPath(ProjectInfo project, IReadOnlySet<string> projectDirectories)
     {
-        if (project.Name == "Elsa.Workbench")
-            return "apps/Elsa.Workbench/Elsa.Workbench.csproj";
+        if (project.Name == "Elsa.Workbench.Host")
+            return "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj";
 
         // Deployable host app, like Elsa.Workbench: it lives under apps/, not the essentials/src/<domain>/
         // tree, so its name (which collides with the Elsa.Foundation identity domain) does not dictate its
         // path.
         if (project.Name == "Elsa.Foundation.Host")
             return "apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
+
+        // The workflow-essentials host, beside Elsa.Foundation.Host for the same reason.
+        if (project.Name == "Elsa.Essentials.Host")
+            return "apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj";
 
         if (RelocatedTestProjects.TryGetValue(project.Name, out var relocated))
             return relocated;
@@ -657,12 +661,12 @@ public sealed partial class ArchitectureGuardTests
 
     private static string ExpectedSolutionFolder(ProjectInfo project, HashSet<string> projectDirectories)
     {
-        if (project.Name == "Elsa.Workbench")
+        if (project.Name == "Elsa.Workbench.Host")
             return "/apps/";
 
         // Deployable host app under apps/ (see ExpectedProjectPath): grouped directly beneath the Apps
         // solution folder, alongside Elsa.Workbench.
-        if (project.Name == "Elsa.Foundation.Host")
+        if (project.Name is "Elsa.Foundation.Host" or "Elsa.Essentials.Host")
             return "/apps/";
 
         var directory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');

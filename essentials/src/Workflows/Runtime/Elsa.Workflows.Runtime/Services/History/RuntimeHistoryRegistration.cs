@@ -27,6 +27,8 @@ internal static class RuntimeHistoryRegistration
         RuntimeHistorySourceFactKind.IncidentSuppressed, RuntimeHistorySourceFactKind.IncidentDecisionApplied,
         RuntimeHistorySourceFactKind.ControlApplied]);
 
+    internal static readonly RuntimeHistorySourceSupport BoundaryRetrySources = new([RuntimeHistorySourceFactKind.ActivityRetryScheduled]);
+
     internal static readonly RuntimeHistorySourceSupport AlterationSources = new([
         RuntimeHistorySourceFactKind.ActivityRetryScheduled, RuntimeHistorySourceFactKind.AlterationApplied]);
 
@@ -38,9 +40,11 @@ internal static class RuntimeHistoryRegistration
         services.TryAdd(ServiceDescriptor.Scoped(typeof(IRuntimeHistoryObservationWriter), ObservationFactory));
         services.TryAddScoped<IRuntimeHistorySourceExtension, DefaultRuntimeHistorySourceExtension>();
         services.TryAddScoped<RuntimeHistoryCaptureCapabilities>();
+        services.TryAddScoped<NativeChildHistoryTransport>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, RuntimeHistoryCapture>());
         if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, CoreSources))) services.AddSingleton(CoreSources);
         if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, AlterationSources))) services.AddSingleton(AlterationSources);
+        if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, BoundaryRetrySources))) services.AddSingleton(BoundaryRetrySources);
     }
 
     internal static (RuntimeHistoryCapturePolicy? Policy, bool? Enabled) ResolveAdmission(IServiceProvider provider, string workflowExecutionId)
@@ -65,9 +69,10 @@ internal static class RuntimeHistoryRegistration
                 throw Unavailable("The selected history providers cannot acknowledge one scoped native checkpoint.");
             var availability = provider.GetRequiredService<RuntimeHistoryCaptureCapabilities>();
             var kinds = provider.GetServices<RuntimeHistorySourceSupport>().Where(availability.SourceOwner)
-                .SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName);
-            var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true,
-                RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).Concat(RuntimeHistoryDeliveryObservations.Kinds).Concat(kinds).ToArray());
+                .SelectMany(RuntimeHistoryCaptureCapabilities.Kinds);
+            var policy = new RuntimeHistoryCapturePolicy("runtime-history-v5", 5, true,
+                RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).Concat(RuntimeHistoryDeliveryObservations.Kinds).Concat(kinds)
+                    .Where(kind => kind != nameof(RuntimeHistorySourceFactKind.TimerCancellationRequested)).ToArray());
             if (!provider.GetServices<IRuntimeCheckpointCommitEnricher>().OfType<IRuntimeHistoryCaptureSupport>().Any(capture => capture.CanCapture(policy)))
                 throw Unavailable("The selected actual source/value/capture chain cannot supply this admission profile.");
             return policy;

@@ -117,6 +117,7 @@ for (const style of styles) {
     await open(page, style, "drift", "dark");
     await page.goto("/workspace-appearance.html?composition=sequence&host=instance&run-canvas=unique");
     await expect(page.getByRole("region", { name: "Workflow run canvas", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/workflows\/instances\/editor-execution\?/);
     await page.getByRole("button", { name: "1. Notify buyer", exact: true }).click();
     await expect(page.getByRole("tab", { name: "Activity", exact: true })).toHaveAttribute("aria-selected", "true");
     const details = page.getByRole("complementary", { name: "Run details panel", exact: true });
@@ -274,3 +275,92 @@ for (const style of styles) for (const mode of ["dark", "dim"]) {
     expect(violations).toEqual([]);
   });
 }
+
+test("Space Light keeps Linen workflow navigation readable beneath its starfield", async ({ page }, testInfo) => {
+  await open(page, "linen", "space", "light");
+
+  const sidebar = page.locator(".sidebar");
+  const normal = sidebar.locator(".nav-section a:not(.active)").first();
+  const active = sidebar.locator(".nav-section a.active").first();
+  await expect(page.getByRole("list", { name: "Sequence steps" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Review & publish", exact: true })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-sidebar-backdrop", "starfield");
+  await expect(normal).toBeVisible();
+  await expect(active).toHaveAttribute("aria-current", "page");
+
+  const colors = await sidebar.evaluate(element => {
+    const resolve = (property: "background-color" | "color", token: string) => {
+      const probe = document.createElement("span");
+      probe.style.setProperty(property, `var(${token})`);
+      document.body.append(probe);
+      const value = getComputedStyle(probe).getPropertyValue(property);
+      probe.remove();
+      return value;
+    };
+    const style = getComputedStyle(element);
+    const normalLink = element.querySelector(".nav-section a:not(.active)")!;
+    const activeLink = element.querySelector(".nav-section a.active")!;
+    return {
+      background: style.backgroundColor,
+      expectedBackground: resolve("background-color", "--studio-nav-bg"),
+      image: style.backgroundImage,
+      normalForeground: getComputedStyle(normalLink).color,
+      expectedNormalForeground: resolve("color", "--studio-nav-text"),
+      activeBackground: getComputedStyle(activeLink).backgroundColor,
+      expectedActiveBackground: resolve("background-color", "--studio-nav-active"),
+      activeForeground: getComputedStyle(activeLink).color,
+      expectedActiveForeground: resolve("color", "--studio-nav-active-text")
+    };
+  });
+  expect(colors.background).toBe(colors.expectedBackground);
+  expect(colors.image).toContain("radial-gradient");
+  expect(colors.normalForeground).toBe(colors.expectedNormalForeground);
+  expect(colors.activeBackground).toBe(colors.expectedActiveBackground);
+  expect(colors.activeForeground).toBe(colors.expectedActiveForeground);
+
+  await page.addScriptTag({ content: axe.source });
+  const contrastViolations = [];
+  for (const link of [normal, active]) contrastViolations.push(await link.evaluate(async element => {
+    const result = await (window as Window & { axe: { run: (root: Element, options: object) => Promise<{ violations: Array<{ id: string }> }> } }).axe.run(element, { runOnly: ["color-contrast"] });
+    return result.violations.map(violation => violation.id);
+  }));
+  expect(contrastViolations).toEqual([[], []]);
+
+  await page.screenshot({ path: testInfo.outputPath("linen-space-light-sequence-sidebar.png"), fullPage: true, animations: "disabled" });
+});
+
+test("workspace styles draw a single focus indicator on the sidebar search wrapper", async ({ page }) => {
+  for (const style of ["quiet", "linen"] as const) {
+    await open(page, style, "classic", "dark", "appearance");
+    const search = page.getByRole("searchbox", { name: "Search Studio", exact: true });
+    const wrapper = page.locator("label.sidebar-search");
+    const unfocusedBorder = await wrapper.evaluate(element => getComputedStyle(element).borderTopColor);
+    await search.focus();
+    await wrapper.evaluate(async element => {
+      await Promise.allSettled(element.getAnimations({ subtree: true }).map(animation => animation.finished));
+    });
+    const focused = await search.evaluate(element => {
+      const input = getComputedStyle(element);
+      const container = getComputedStyle(element.closest(".sidebar-search")!);
+      return {
+        inputBorderWidth: input.borderTopWidth,
+        inputOutlineStyle: input.outlineStyle,
+        inputBoxShadow: input.boxShadow,
+        wrapperBorderWidth: container.borderTopWidth,
+        wrapperBorderColor: container.borderTopColor,
+        wrapperBoxShadow: container.boxShadow
+      };
+    });
+    expect(focused.inputBorderWidth).toBe("0px");
+    expect(focused.inputOutlineStyle).toBe("none");
+    expect(focused.inputBoxShadow).toBe("none");
+    if (style === "linen") {
+      expect(focused.wrapperBorderWidth).toBe("1px");
+      expect(focused.wrapperBorderColor).not.toBe(unfocusedBorder);
+      expect(focused.wrapperBoxShadow).toBe("none");
+    } else {
+      expect(focused.wrapperBorderWidth).toBe("0px");
+      expect(focused.wrapperBoxShadow).toContain("inset");
+    }
+  }
+});

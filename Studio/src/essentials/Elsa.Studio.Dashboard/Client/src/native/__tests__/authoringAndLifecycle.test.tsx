@@ -10,7 +10,7 @@ import { QueryControls } from "../QueryControls";
 import { NativeDialog, QuestionPickerDialog, ShareDialog } from "../ResourceDialogs";
 import { ResultView } from "../ResultView";
 import { initialDefinition, type DashboardResource, type DatasetDeclaration, type QueryResult, type QuestionDefinition } from "../types";
-import { stubApi, waitUntil } from "../../__tests__/testSupport";
+import { selectResourceAction, stubApi, waitUntil } from "../../__tests__/testSupport";
 
 const dataset: DatasetDeclaration = { id: "acme", ownerModuleId: "Acme", schemaRevision: "1", title: "Processing", description: "Declared business data", fields: [{ id: "category", label: "Category", type: "string", filterOperators: ["eq", "isNull"], groupable: true, projectable: true, sortable: false, nullable: true }], metrics: [{ id: "duration", revision: "1", label: "Duration", unit: "s", description: "Elapsed duration" }] };
 const resource = (id = "q1"): DashboardResource => ({ id, kind: "question", revision: "r1", name: `Question ${id}`, description: "", ownerId: "owner", capabilities: { canRead: true, canEdit: true, canShare: true, canCopy: true, canDelete: true }, definition: initialDefinition(dataset), definitionState: "available", createdAt: "2026-11-06T12:00:00Z", updatedAt: "2026-11-06T12:00:00Z" });
@@ -19,9 +19,18 @@ function render(children: React.ReactNode) {
   const container = document.createElement("div"); document.body.append(container); const root = createRoot(container);
   flushSync(() => root.render(children));
   const dispose = () => { flushSync(() => root.unmount()); container.remove(); };
-  disposers.push(dispose); return { container, dispose };
+  disposers.push(dispose); return { container: document.body, dispose };
 }
-function button(container: HTMLElement, text: string) { const target = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === text); expect(target).toBeDefined(); flushSync(() => target!.click()); }
+function button(container: HTMLElement, text: string) {
+  const action = text === "Preview question" || text === "Refresh results" ? "Preview" : text;
+  const findTarget = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === action);
+  let target = findTarget();
+  if (!target && container.querySelector('[aria-label="More question actions"]')) {
+    flushSync(() => container.querySelector<HTMLButtonElement>('[aria-label="More question actions"]')!.click());
+    target = findTarget();
+  }
+  expect(target).toBeDefined(); flushSync(() => target!.click());
+}
 function inputValue(input: HTMLInputElement, value: string) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true }))); }
 afterEach(() => { disposers.splice(0).forEach(dispose => { try { dispose(); } catch { /* An explicitly closed surface was already unmounted. */ } }); vi.restoreAllMocks(); });
 
@@ -40,6 +49,8 @@ describe("native authoring proposal binding", () => {
     expect(outcome.outcome).toBe("applied");
     await waitUntil(() => [...container.querySelectorAll("button")].some(item => item.textContent === "Undo applied proposal"));
     expect(post.mock.calls).toHaveLength(1); expect(put).not.toHaveBeenCalled();
+    const parameters = [...container.querySelectorAll<HTMLAnchorElement>(".named-query-section-nav a")].find(item => item.textContent?.startsWith("Parameters"))!;
+    flushSync(() => parameters.click());
     expect(container.querySelector<HTMLInputElement>('input[value="retail"]')).not.toBeNull();
     button(container, "Undo applied proposal");
     await waitUntil(() => [...controller.snapshots.values()][0].definition.query.groupBy.length === 0);
@@ -58,7 +69,8 @@ describe("native authoring proposal binding", () => {
     const snapshot = [...controller.snapshots.values()][0];
     const pending = controller.useProposal(snapshot.generationId, { ...snapshot, definition: { ...snapshot.definition, query: { ...snapshot.definition.query, groupBy: ["category"] } } });
     await waitUntil(() => typeof finish === "function");
-    const name = [...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
+    button(container, "Properties");
+    const name = ([...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.control as HTMLInputElement);
     inputValue(name, "User changed the draft");
     finish({ isValid: true, problems: [] });
     expect((await pending).outcome).toBe("refused");
@@ -81,12 +93,14 @@ describe("private draft recovery", () => {
     const session = { status: "authenticated" as const, subject: "viewer", tenantId: "tenant", roles: [], permissions: ["studio/questions:create"] };
     const manager = { getSession: () => session, initialize: async () => session, getCapabilities: async () => ({ ownershipMode: "foundation-owned" as const, providers: [] }), login: async () => undefined, logout: async () => undefined, handleCallback: async () => session, getAccessToken: async () => null, refresh: async () => session };
     const { container } = render(<AuthProvider manager={manager}><NamedDashboardsRoute api={api} kind="question" view="detail" navigate={navigate} /></AuthProvider>);
-    await waitUntil(() => Boolean(container.querySelector('input[value="Question q1"]')));
-    const name = [...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
+    await waitUntil(() => [...container.querySelectorAll("button")].some(item => item.textContent?.trim() === "Properties"));
+    button(container, "Properties");
+    await waitUntil(() => [...container.querySelectorAll("label")].some(label => label.textContent === "Name"));
+    const name = ([...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.control as HTMLInputElement);
     inputValue(name, "My unsaved refinement");
-    button(container, "Save draft as new question"); await waitUntil(() => container.textContent?.includes("Connection lost after create attempt") === true);
+    selectResourceAction(container, "More question actions", "Save draft as new question"); await waitUntil(() => container.textContent?.includes("Connection lost after create attempt") === true);
     expect(name.value).toBe("My unsaved refinement");
-    button(container, "Save draft as new question"); await waitUntil(() => navigate.mock.calls.length > 0);
+    selectResourceAction(container, "More question actions", "Save draft as new question"); await waitUntil(() => navigate.mock.calls.length > 0);
     const creates = post.mock.calls.filter(call => call[0].endsWith("/questions"));
     const first = creates[0][1] as { operationKey: string; definition: QuestionDefinition };
     const second = creates[1][1] as { operationKey: string; definition: QuestionDefinition };
@@ -103,7 +117,7 @@ describe("closed dialogs and bounded paging", () => {
     let finish!: (value: DashboardResource) => void;
     const share = vi.spyOn(api, "share").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
     const accepted = vi.fn(); const view = render(<ShareDialog api={api} resource={resource()} onClose={vi.fn()} onSaved={accepted} />);
-    await waitUntil(() => view.container.textContent?.includes("Save audience") === true);
+    await waitUntil(() => [...view.container.querySelectorAll("button")].some(item => item.textContent === "Save audience" && !item.disabled));
     button(view.container, "Save audience"); expect(share).toHaveBeenCalledOnce(); view.dispose(); finish(resource());
     await new Promise(resolve => setTimeout(resolve, 0)); expect(accepted).not.toHaveBeenCalled();
   });
@@ -132,11 +146,11 @@ describe("closed dialogs and bounded paging", () => {
   it("contains keyboard focus, closes with Escape and returns focus to its opener", async () => {
     const opener = document.createElement("button"); document.body.append(opener); opener.focus();
     const closed = vi.fn(); const view = render(<NativeDialog title="Keyboard witness" onClose={closed}><input aria-label="A field" /><button type="button">Last action</button></NativeDialog>);
-    await waitUntil(() => view.container.querySelector("button") === document.activeElement);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    await waitUntil(() => view.container.querySelector("[role=dialog] button") === document.activeElement);
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
     expect(document.activeElement?.textContent).toBe("Last action");
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); expect(closed).toHaveBeenCalledOnce();
-    view.dispose(); expect(document.activeElement).toBe(opener); opener.remove();
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); expect(closed).toHaveBeenCalledOnce();
+    view.dispose(); await waitUntil(() => document.activeElement === opener); opener.remove();
   });
 });
 
@@ -145,11 +159,12 @@ describe("declared editing bounds and chart semantics", () => {
     let latest: QuestionDefinition = initialDefinition(dataset);
     function Editor() { const [definition, setDefinition] = useState(latest); return <QueryControls definition={definition} datasets={[dataset]} disabled={false} onChange={value => { latest = value; setDefinition(value); }} />; }
     const { container } = render(<Editor />);
-    const filters = [...container.querySelectorAll("fieldset")].find(fieldset => fieldset.querySelector(":scope > legend")?.textContent === "Source filters")!;
+    const filters = container.querySelector<HTMLElement>('.named-query-controls [data-query-path="query.filters"]')!;
+    expect(filters.hidden).toBe(false);
     button(filters, "Add condition group");
     expect(filters.querySelectorAll("button").length).toBeGreaterThan(0);
     expect([...filters.querySelectorAll("button")].filter(item => item.textContent === "Add condition group")).toHaveLength(1);
-    const operator = [...filters.querySelectorAll("label")].find(label => label.textContent?.startsWith("Operator"))!.querySelector("select")!;
+    const operator = ([...filters.querySelectorAll("label")].find(label => label.textContent?.startsWith("Operator"))!.control as HTMLSelectElement);
     flushSync(() => { operator.value = "isNull"; operator.dispatchEvent(new Event("change", { bubbles: true })); });
     expect(latest.query.filters?.all?.[0].all?.[0]).toEqual({ field: "category", operator: "isNull", value: undefined, values: undefined });
   });

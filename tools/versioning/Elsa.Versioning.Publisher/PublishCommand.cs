@@ -7,7 +7,7 @@ namespace Elsa.Versioning.Publisher;
 /// <param name="Commit">The commit being built.</param>
 /// <param name="PlanDirectory">The pack job's plan output, with the packed packages in its <see cref="PlanFiles.Packages"/> directory.</param>
 /// <param name="Summary">The step's <c>GITHUB_STEP_SUMMARY</c> file, or null.</param>
-public sealed record PublishOptions(string Repository, string Ref, string Commit, string PlanDirectory, string? Summary);
+public sealed record PublishOptions(string Repository, string Ref, string Commit, string PlanDirectory, string? Summary, string? EvidenceFeed = null, DateTimeOffset? EvidenceDeadline = null);
 
 /// <summary>
 /// The publish job: re-establishes, right before pushing, everything the pack job's plan assumed, then hands the
@@ -50,12 +50,59 @@ public static class PublishCommand
             throw new InvalidOperationException(
                 $"Recomputing {commit} against {GitPublishState.DefaultBranch} {tip ?? "(none)"} gives other versions than the pack job's {PlanFiles.Computation}. Nothing was pushed.");
 
-        var report = await new PackagePublisher(feed, state, log).PublishAsync(
+        string? verifier = null;
+        if (options.EvidenceFeed is not null)
+        {
+            var root = GitProcess.Run(options.Repository, ["rev-parse", "--show-toplevel"]);
+            verifier = Path.Combine(root.Text, "tools", "versioning", "package-evidence", "verify.py");
+            if (root.ExitCode != 0 || !File.Exists(verifier))
+                throw new PublishRefusedException("The public package verifier is missing from the checkout root. Nothing was pushed.");
+        }
+        var report = await new PackagePublisher(feed, state, log,
+            options.EvidenceFeed is { } feedUrl ? (packed, kind, token) => VerifyDestinationAsync(verifier!, feedUrl, packed, kind, log, token) : null,
+            options.EvidenceDeadline).PublishAsync(
             plan, computation, record, Path.Join(options.PlanDirectory, PlanFiles.Packages), cancellationToken);
 
         if (options.Summary is { } summary)
             await File.AppendAllTextAsync(summary, JobSummary.Publish(report), cancellationToken);
 
         return report;
+    }
+
+    private static async Task VerifyDestinationAsync(string verifier, string feedUrl, PackedPackage package,
+        PackageOutcomeKind kind, TextWriter log, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMinutes(3));
+        var start = new System.Diagnostics.ProcessStartInfo("python3") { UseShellExecute = false, RedirectStandardOutput = true };
+        start.ArgumentList.Add(verifier);
+        start.ArgumentList.Add(package.Path);
+        start.ArgumentList.Add("--destination");
+        start.ArgumentList.Add(kind == PackageOutcomeKind.AlreadyPublished ? "recovered" : "pushed");
+        start.ArgumentList.Add("--feed");
+        start.ArgumentList.Add(feedUrl);
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(start) ?? throw new FeedException("Could not start public package verification.");
+            var output = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new FeedException("Public verification timed out. Earlier verified packages will be recorded.");
+            }
+            await log.WriteAsync(await output);
+            if (process.ExitCode != 0)
+                throw new FeedException("The public package failed digest or original-producer verification; it was not recorded.");
+        }
+        catch (System.ComponentModel.Win32Exception exception)
+        {
+            throw new FeedException("Could not start public package verification.", exception);
+        }
     }
 }

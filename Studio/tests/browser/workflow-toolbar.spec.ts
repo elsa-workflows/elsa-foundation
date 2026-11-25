@@ -14,8 +14,8 @@ for (const width of [320, 768, 1024, 1440]) {
     const title = toolbar.locator("strong[title]");
     const badge = toolbar.getByText("Draft", { exact: true });
     const titleRow = toolbar.locator(".wf-editor-title");
-    const definitions = toolbar.getByRole("button", { name: "Definitions", exact: true });
-    const breadcrumbChevron = toolbar.locator(".wf-editor-identity > svg");
+    const definitions = toolbar.getByRole("link", { name: "Definitions", exact: true });
+    const breadcrumbChevron = toolbar.locator(".studio-breadcrumb-separator");
     const save = toolbar.getByRole("button", { name: "Save", exact: true });
     const canvasTools = toolbar.locator(".wf-canvas-tools");
     const initialTitle = await title.boundingBox();
@@ -180,7 +180,7 @@ for (const theme of ["light", "dark"]) {
       await page.goto(`/?mode=workflow-toolbar&theme=${theme}`);
       const toolbar = page.locator(".wf-editor-toolbar");
       const primary = toolbar.getByRole("button", { name: "Review & publish", exact: true });
-      const actions = [toolbar.locator(".wf-save-button"), primary, toolbar.locator(".wf-run-button")];
+      const actions = [toolbar.locator(".wf-save-button"), primary, toolbar.getByRole("button", { name: "Test Run", exact: true })];
       const initial = await Promise.all(actions.map(action => action.boundingBox()));
       expect(initial.every(Boolean)).toBe(true);
       const observations = [];

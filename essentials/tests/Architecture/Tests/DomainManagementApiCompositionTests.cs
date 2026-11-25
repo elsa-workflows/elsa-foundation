@@ -95,6 +95,8 @@ public sealed class DomainManagementApiCompositionTests
         new("/design/activities/definitions", "GET"),
         new("/design/activities/definitions/{definitionId}", "GET"),
         new("/design/activities/definitions/{definitionId}", "PATCH"),
+        new("/design/activities/definitions/{definitionId}", "DELETE"),
+        new("/design/activities/definitions/{definitionId}/restore", "POST"),
         new("/design/activities/definitions/{definitionId}/recommendation", "PUT"),
         new("/design/activities/definitions/picker", "GET"),
         new("/design/activities/definitions/{definitionId}/drafts", "GET"),
@@ -118,6 +120,7 @@ public sealed class DomainManagementApiCompositionTests
         new("/design/activities/versions/{versionId}/retire", "POST"),
         new("/design/activities/versions/{versionId}/restore", "POST"),
         new("/design/activities/versions/{versionId}/revoke", "POST"),
+        new("/design/activities/versions/{versionId}/candidate-validation", "POST"),
         new("/design/activities/upgrade-plans", "POST"),
         new("/design/activities/upgrade-plans/{planId}", "GET"),
         new("/design/activities/upgrade-plans/{planId}/apply", "POST"),
@@ -135,6 +138,7 @@ public sealed class DomainManagementApiCompositionTests
         new("/publishing/workflows/preflight", "POST"),
         new("/publishing/workflows/{definitionId}/slots/{slotName}", "DELETE"),
         new("/publishing/workflows/{definitionId}/slots/{slotName}/restore", "POST"),
+        new("/publishing/workflows/{definitionId}/slots/{slotName}/unpublish/{expectedRevision}", "POST"),
         new("/publishing/publications/{publicationId}", "GET"),
         new("/publishing/workflows/{definitionId}/policy", "GET"),
         new("/publishing/workflows/{definitionId}/policy", "PUT"),
@@ -154,7 +158,9 @@ public sealed class DomainManagementApiCompositionTests
         new("/publishing/activity-drafts/{draftId}/test-runs", "POST"),
         new("/publishing/activity-test-runs/{testRunId}", "GET"),
         new("/publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}", "GET"),
-        new("/publishing/activity-test-runs/{testRunId}/cancel", "POST")
+        new("/publishing/activity-test-runs/{testRunId}/cancel", "POST"),
+        new("/publishing/activity-versions/{versionId}/test-runs", "POST"),
+        new("/publishing/activity-versions/{versionId}/test-runs/idempotency/{idempotencyKey}", "GET")
     ];
 
     [Fact]
@@ -164,7 +170,7 @@ public sealed class DomainManagementApiCompositionTests
 
         Assert.DoesNotContain(
             typeof(DomainManagementApiCompositionTests).Assembly.GetReferencedAssemblies(),
-            reference => string.Equals(reference.Name, "Elsa.Workbench", StringComparison.Ordinal));
+            reference => string.Equals(reference.Name, "Elsa.Workbench.Host", StringComparison.Ordinal));
 
         await host.AssertJourneyAsync(HttpMethod.Get, "/design/workflows/definitions");
         await host.AssertJourneyAsync(HttpMethod.Get, "/design/activities/catalog");
@@ -224,7 +230,7 @@ public sealed class DomainManagementApiCompositionTests
         var publishingIdentities = publishing.SelectMany(entry => entry.Identities).ToArray();
 
         // Retain the reviewed legacy inventory; classify the context and candidate operations explicitly.
-        Assert.Equal(38, ExpectedActivitiesDesignRoutes.Length);
+        Assert.Equal(41, ExpectedActivitiesDesignRoutes.Length);
         var expectedActivities = ExpectedActivitiesDesignRoutes.Append(ActivityDataContextRoute).Append(ActivityCandidateValidationRoute).ToArray();
         Assert.Equal(expectedActivities.Length, activities.Length);
         Assert.Equal(expectedActivities.Length, identities.Length);
@@ -426,7 +432,7 @@ public sealed class DomainManagementApiCompositionTests
     }
 
     private static string StockServerConfigurationPath =>
-        Path.Combine(RepoRoot, "apps", "Elsa.Workbench", "shells.json");
+        Path.Combine(RepoRoot, "apps", "Elsa.Workbench.Host", "shells.json");
 
     [ShellFeature(name: "ApiCapabilities")]
     public sealed class ApiCapabilitiesDependencyFeature : IShellFeature

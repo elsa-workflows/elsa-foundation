@@ -13,7 +13,8 @@ public enum ValueConversionMode
     None,
     Json,
     Xml,
-    Profile
+    Profile,
+    JsonString
 }
 
 /// <summary>The conversion operation resolved and pinned by publication.</summary>
@@ -100,9 +101,9 @@ public sealed record ValueConversionPlan
             throw new ArgumentOutOfRangeException(nameof(operation));
         if (mode == ValueConversionMode.None && operation != ValueConversionOperation.Identity)
             throw new ArgumentException("The None conversion mode only permits the identity operation.", nameof(operation));
-        if ((mode is ValueConversionMode.Json or ValueConversionMode.Xml or ValueConversionMode.Profile) &&
+        if ((mode is ValueConversionMode.Json or ValueConversionMode.JsonString or ValueConversionMode.Xml or ValueConversionMode.Profile) &&
             operation != ValueConversionOperation.Profile)
-            throw new ArgumentException("Explicit JSON, XML, and named-profile modes require a profile operation.", nameof(operation));
+            throw new ArgumentException("Explicit JSON, JSON-string, XML, and named-profile modes require a profile operation.", nameof(operation));
         if (operation == ValueConversionOperation.Profile && profile is null)
             throw new ArgumentException("A profile conversion operation requires a pinned profile identity.", nameof(profile));
         if (operation != ValueConversionOperation.Profile && profile is not null)

@@ -21,7 +21,9 @@ These pages describe the clean-slate execution kernel's approved design. They ar
 11. [Observability and operator actions](observability.md) — **Approved design**: trace context on every message, stable metric names, inspect, retry and discard of parked work, and the read models operators use.
 12. [Tenancy](tenancy.md) — **Approved design**: where the kernel takes the tenant from, tenant-qualified names, and the uniqueness and authorization rule of every ingress, match, read and administrative operation.
 13. [The foundation contract](foundation-contract.md) — **Approved design, with conditions** (19 November, at `2825b0ed1`): the contract between a foundation (what layers 1 and 2 provide) and layer 3, in plain domain words; its vocabulary, the built-in foundation's mapping, the leak inventory and conformance cases FC-1 to FC-18.
-14. [Decision register](decisions.md) — **Approved design**: every owner decision that binds the kernel, by topic, with its date and source.
+14. [StateMachine on the kernel](statemachine-on-the-kernel.md) — **Owner decisions** (19 November): #3815's decisions OD1 to OD49 on the kernel, the four owner answers, and K7's invariants S1 to S4.
+15. [Designer definitions on the kernel](definitions-on-the-kernel.md) — **Owner decisions** (25 November): K10's definitions-to-kernel path; a kernel activation coordinator, the executable mapper and host-evaluated JavaScript and Liquid bindings.
+16. [Decision register](decisions.md) — **Approved design**: every owner decision that binds the kernel, by topic, with its date and source.
 
 The walkthrough's data cards link to the storage reference. Its ownership chapter links to the fencing explanation. These references explain the contract; experiment reports carry implementation status and measured results.
 

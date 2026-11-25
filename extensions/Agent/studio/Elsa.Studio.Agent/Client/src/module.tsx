@@ -1,6 +1,7 @@
 import { Bot } from "lucide-react";
 import React from "react";
-import type { ElsaStudioModuleApi, StudioActivityDefinitionImplementationEditorContribution, StudioIncidentRootCauseProviderContribution, StudioIncidentStateSummary } from "@elsa-workflows/studio-sdk";
+import { flushSync } from "react-dom";
+import { evaluateBackendRequirements, type ElsaStudioModuleApi, type StudioActivityDefinitionImplementationEditorContribution, type StudioIncidentRootCauseProviderContribution, type StudioIncidentStateSummary } from "@elsa-workflows/studio-sdk";
 import { AgentsPage } from "./AgentsPage";
 import { HumanReviewPage } from "./HumanReviewPage";
 import { AgentEditor } from "./AgentEditor";
@@ -9,6 +10,8 @@ import { AgentInvocationPage, invocationPath } from "./AgentInvocationPage";
 import { agentProviderKey } from "./agentsApi";
 import { continuitySchemaVersion, initialAgentManifest } from "./agentManifest";
 import "./styles.css";
+
+const AgentWorkspace = React.lazy(() => import("./AgentWorkspace").then(module => ({ default: module.AgentWorkspace })));
 
 const activityDesign = [{ id: "elsa.api.activity-design", contractVersion: "1" }];
 const agentAuthoring = [...activityDesign, { id: "elsa.api.agent", contractVersion: "1" }];
@@ -42,8 +45,8 @@ export const agentEditorContributions: StudioActivityDefinitionImplementationEdi
     let target = field ? editorElement.querySelector<HTMLElement>(`[data-agent-field="${field}"]`) : null;
     if (!target && location.jsonPointer === "/settings") target = editorElement.querySelector<HTMLElement>("[data-agent-field='model-group']");
     if (!target) return { kind: "unsupported", announcement: "Return to Designer and review the agent settings described by this issue." };
-    const disclosure = target.closest<HTMLDetailsElement>("details");
-    if (disclosure) disclosure.open = true;
+    const trigger = target.closest(".studio-disclosure-fold")?.querySelector<HTMLButtonElement>(":scope > button[aria-expanded='false']");
+    if (trigger) flushSync(() => trigger.click());
     if (target.matches(":disabled")) {
       target = target.closest<HTMLElement>(".studio-field") ?? target.parentElement ?? target;
       target.tabIndex = -1;
@@ -69,6 +72,24 @@ export function register(api: ElsaStudioModuleApi) {
       { id: "agents", path: "/agents", label: "Agents", requiresBackend: activityDesign,
         component: ({ navigate }) => <AgentsPage context={api.backend} navigate={navigate} /> }
     ]
+  });
+  for (const [view, path, label] of [
+    ["current", "/agents/workspace/:definitionId", "Agent workspace"],
+    ["draft", "/agents/workspace/:definitionId/drafts/:draftId", "Agent draft"],
+    ["version", "/agents/workspace/:definitionId/versions/:versionId", "Agent version"]
+  ] as const) api.routes.add({
+    id: `agent-workspace-${view}`,
+    requiresBackend: agentAuthoring,
+    path,
+    label,
+    component: ({ navigate }) => <React.Suspense fallback={<div role="status">Loading Agent workspace…</div>}><AgentWorkspace
+      context={api.backend}
+      navigate={navigate}
+      activityEditors={api.activityEditors.list()}
+      identity={api.runtime.identity}
+      recoverySettings={api.runtime.activityDefinitions?.localRecovery}
+      testRunAvailable={evaluateBackendRequirements(api.backendSession, playground).state === "available"}
+    /></React.Suspense>
   });
   for (const contribution of agentEditorContributions) api.activityEditors.add(contribution);
   api.routes.add({
@@ -100,7 +121,7 @@ export function register(api: ElsaStudioModuleApi) {
     requiresBackend: [{ id: "elsa.api.agent-reviews", contractVersion: "1" }],
     path: "/agents/reviews/:workflowExecutionId/:activityExecutionId",
     label: "Review",
-    component: () => <HumanReviewPage context={api.backend} />
+    component: ({ navigate }) => <HumanReviewPage context={api.backend} navigate={navigate} />
   });
   // Provide tailored root cause guidance for agent model turn failures.
   const agentIncidentProvider: StudioIncidentRootCauseProviderContribution = {

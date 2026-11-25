@@ -21,6 +21,11 @@
   ],
   "projects": [
     {
+      "project": "essentials/tests/Workflows/Runtime/Graph/Tests/Elsa.Workflows.Runtime.Graph.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
       "project": "essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
       "tier": "integration",
       "medianMinutes": 49.4,
@@ -289,6 +294,11 @@
       "medianMinutes": 0.13
     },
     {
+      "project": "essentials/tests/Foundation/Hosting/Tests/Elsa.Foundation.Hosting.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
       "project": "essentials/tests/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.33
@@ -339,12 +349,6 @@
       "project": "essentials/tests/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.01
-    },
-    {
-      "project": "essentials/tests/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj",
-      "tier": "integration",
-      "trait": "testcontainers",
-      "medianMinutes": null
     },
     {
       "project": "essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj",
@@ -851,6 +855,7 @@
         {
           "name": "cluster-foundation-host",
           "classes": [
+            "Elsa.Cluster.EntityFrameworkCore.Tests.EssentialsHostBootTests",
             "Elsa.Cluster.EntityFrameworkCore.Tests.FoundationHostBootTests",
             "Elsa.Cluster.EntityFrameworkCore.Tests.FoundationHostClusterBootTests",
             "Elsa.Cluster.EntityFrameworkCore.Tests.FoundationHostDataProtectionBootTests",
@@ -1009,11 +1014,13 @@
           "essentials/tests/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj",
           "essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
           "essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj",
+          "essentials/tests/Workflows/Runtime/Graph/Tests/Elsa.Workflows.Runtime.Graph.Tests.csproj",
           "essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
           "essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj",
           "essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
           "essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj",
           "essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj",
+          "essentials/tests/Foundation/Hosting/Tests/Elsa.Foundation.Hosting.Tests.csproj",
           "essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
           "essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
           "extensions/Weaver/tests/Dashboard/Tests/Elsa.Weaver.Dashboard.Tests.csproj",
@@ -1096,7 +1103,6 @@
           "rules",
           "runtime-distributed",
           "transaction-topology",
-          "workbench-openiddict",
           "connections",
           "agent-journal"
         ]
@@ -1173,11 +1179,6 @@
       "require": "ELSA_COMPENSATION_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
-      "suite": "workbench-openiddict",
-      "project": "essentials/tests/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj",
-      "require": "ELSA_WORKBENCH_OPENIDDICT_REQUIRE_NATIVE_PROVIDERS"
-    },
-    {
       "suite": "cluster-membership",
       "project": "essentials/tests/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_CLUSTER_MEMBERSHIP_EF_REQUIRE_NATIVE_PROVIDERS"
@@ -1205,7 +1206,7 @@
     {
       "suite": "identity",
       "project": "essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj",
-      "require": ""
+      "require": "ELSA_OPENIDDICT_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
       "suite": "opentelemetry",

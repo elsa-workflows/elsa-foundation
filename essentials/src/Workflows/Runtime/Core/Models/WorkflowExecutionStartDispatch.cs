@@ -5,6 +5,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class WorkflowExecutionStartDispatchRequest
 {
+    /// <summary>In-process native child history responsibility; never serialized and never start authority.</summary>
+    [JsonIgnore]
+    public PostCommitDeliveryContext? ChildHistorySource { get; init; }
+
     public WorkflowExecutionStartDispatchRequest(
         string artifactId,
         string requestedBy,
@@ -507,6 +511,10 @@ public sealed record WorkflowExecutableSourceSelection
 
 public sealed class WorkflowExecutionStartCommandPayload
 {
+    /// <summary>Known diagnostic origin from the verified native start source; never executable admission authority.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeHistoryCapturePolicy? HistoryCapturePolicy { get; init; }
 

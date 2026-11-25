@@ -37,11 +37,12 @@ public sealed class BpmnAuthoredDirectPublisherTests
     [InlineData(true)]
     public async Task Authored_explicit_null_defaults_are_refused_before_lossy_projection_or_publication(bool immutableSource)
     {
+        // An explicit-null default is a literal JSON null with its syntax; a null without one denotes no default (#4903).
         var fixture = new Fixture();
         fixture.Version.State = fixture.Version.State with
         {
             Inputs = [new("value", "value", new("String"), null, "Value", null, false,
-                DefaultValue: JsonSerializer.SerializeToElement<string?>(null), IsRequired: true)]
+                DefaultValue: JsonSerializer.SerializeToElement<string?>(null), DefaultSyntax: "Literal", IsRequired: true)]
         };
         if (immutableSource) fixture.Version.StateSource = JsonSerializer.Serialize(fixture.Version.State, Web);
         var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
@@ -378,6 +379,30 @@ public sealed class BpmnAuthoredDirectPublisherTests
         executable = new WorkflowExecutableIdentity("worker-artifact", "worker-definition", "worker-version", "1.0.0", new string('a', 64)),
         businessErrorCode = "etl-business-failure", faultPolicy = new { formatVersion = 1, disposition = "HoldForRetry", maxAttempts = 3 }
     }, Web)!.AsObject();
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Published_optional_input_contract_preserves_authored_nullability(bool nullable, bool immutableSource)
+    {
+        var fixture = new Fixture();
+        fixture.Version.State = fixture.Version.State with
+        {
+            Inputs = [new("value", "value", new("String"), null, "Value", null, nullable,
+                DefaultValue: JsonSerializer.SerializeToElement("fallback"), DefaultSyntax: "Literal", IsRequired: false)]
+        };
+        if (immutableSource) fixture.Version.StateSource = JsonSerializer.Serialize(fixture.Version.State, Web);
+        var before = JsonSerializer.Serialize(fixture.Version.State, Web);
+        await fixture.Publish();
+        var retained = JsonSerializer.Deserialize<WorkflowExecutableInputContract>(JsonSerializer.Serialize(fixture.InputContract, Web), Web)!;
+        var declared = Assert.Single(retained.Inputs);
+        Assert.Equal(nullable, declared.IsNullable);
+        Assert.False(declared.IsRequired);
+        Assert.Equal("fallback", declared.DefaultValue!.Value.GetString());
+        Assert.Equal(before, JsonSerializer.Serialize(fixture.Version.State, Web));
+    }
 
     [Fact]
     public async Task Declared_model_inputs_and_version_two_worker_mapping_are_projected_without_native_bindings()

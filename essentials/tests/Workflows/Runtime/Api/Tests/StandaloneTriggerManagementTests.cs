@@ -14,6 +14,24 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 
 public sealed partial class StandaloneTriggerManagementTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Subscription_editor_actions_use_exact_resource_rights_without_null_resource_rights(bool canAuthorize)
+    {
+        var fixture = new Fixture(new RuntimeCapability(true, true));
+        fixture.Access.GlobalRights = false;
+        fixture.Access.CanGrant = canAuthorize;
+        var actor = await fixture.Access.ActorAsync(default);
+        Assert.False(actor.CanManage); Assert.False(actor.CanOperate); Assert.False(actor.CanAuthorize);
+        var view = await fixture.Management.ReadAsync("trigger-a", default);
+        Assert.True(view.Actions.Single(action => action.Action == "AddSubscription").Allowed);
+        Assert.True(view.Actions.Single(action => action.Action == "OperateSubscriptions").Allowed);
+        Assert.Equal(canAuthorize, view.Actions.Single(action => action.Action == "AuthorizeSubscriptions").Allowed);
+        // No subscriber is eligible yet; this cannot stand in for the permission to edit a subscription.
+        Assert.False(view.Actions.Single(action => action.Action == "EnableTrigger").Allowed);
+    }
+
     [Fact]
     public async Task Target_changed_during_prepare_refuses_the_reviewed_change_before_calling_the_committer()
     {
@@ -350,6 +368,7 @@ public sealed partial class StandaloneTriggerManagementTests
         internal readonly FakeStore Store = new();
         internal readonly FakeDiscovery Discovery = new();
         internal readonly Clock Clock = new();
+        internal readonly Publisher Events = new();
         internal AuthoringTriggerCommitter Committer { get; }
         internal TriggerManagement Management { get; }
         internal Fixture(ITriggerManagementCommitter? runtime = null, IRecurringTriggerScheduleStore? schedules = null,
@@ -358,7 +377,7 @@ public sealed partial class StandaloneTriggerManagementTests
             IWorkflowTriggerBindingStore? bindings = null)
         {
             Committer = new(Store);
-            Management = new(Store, runtime ?? Committer, Access, new Catalog(), Discovery, new Mapper(), new Publisher(), new EphemeralDataProtectionProvider(), Clock,
+            Management = new(Store, runtime ?? Committer, Access, new Catalog(), Discovery, new Mapper(), Events, new EphemeralDataProtectionProvider(), Clock,
                 schedules: schedules, reservations: reservations, reservationPlanners: planners,
                 expressionHandlers: expressionHandlers, expressionEvaluator: expressionEvaluator, reservationPolicies: policies, triggerBindings: bindings);
         }
@@ -369,13 +388,13 @@ public sealed partial class StandaloneTriggerManagementTests
     {
         public string Subject { get; set; } = "operator";
         public TriggerScope Scope { get; } = new(new("tenant-a"), "tenant-a");
-        internal bool TargetRead = true, TargetExecute = true, CanGrant = true;
-        public ValueTask<bool> HasAsync(string permission, object? resource, CancellationToken cancellationToken) => ValueTask.FromResult(permission switch
+        internal bool TargetRead = true, TargetExecute = true, CanGrant = true, GlobalRights = true, ReadResources = true;
+        public ValueTask<bool> HasAsync(string permission, object? resource, CancellationToken cancellationToken) => ValueTask.FromResult(resource is null && !GlobalRights ? false : permission switch
         { "workflows/runtime:read" => TargetRead, "workflows/runtime:execute" => TargetExecute, TriggerPermissions.Authorize => CanGrant, _ => true });
         public async ValueTask RequireAsync(string permission, object? resource, CancellationToken cancellationToken, bool mask = false)
         { if (!await HasAsync(permission, resource, cancellationToken)) throw new TriggerOperationException(mask ? "missing" : "forbidden", "Denied"); }
-        public ValueTask<bool> CanReadAsync(object? resource, CancellationToken cancellationToken) => ValueTask.FromResult(true);
-        public ValueTask<TriggerActor> ActorAsync(CancellationToken cancellationToken) => ValueTask.FromResult(new TriggerActor(Subject, true, true, true, CanGrant, false, false, false));
+        public ValueTask<bool> CanReadAsync(object? resource, CancellationToken cancellationToken) => ValueTask.FromResult(ReadResources);
+        public ValueTask<TriggerActor> ActorAsync(CancellationToken cancellationToken) => ValueTask.FromResult(new TriggerActor(Subject, GlobalRights, GlobalRights, GlobalRights, GlobalRights && CanGrant, false, false, false));
     }
     private sealed class Catalog : IStandaloneTriggerTypeCatalog
     {
@@ -388,7 +407,19 @@ public sealed partial class StandaloneTriggerManagementTests
         public WorkflowExecutableInputValidation ValidateMappings(WorkflowExecutableInputContract contract, IReadOnlyList<TriggerInputMapping> mappings) => WorkflowExecutableInputValidation.Success([]);
     }
     private sealed class Publisher : IInlineEventPublisher
-    { public Task Publish(IEvent value, CancellationToken cancellationToken = default) => Task.CompletedTask; }
+    {
+        internal readonly List<StandaloneTriggerResourceCommitted> Committed = [];
+        internal Action<StandaloneTriggerResourceCommitted>? ObserveCommit;
+        public Task Publish(IEvent value, CancellationToken cancellationToken = default)
+        {
+            if (value is StandaloneTriggerResourceCommitted committed)
+            {
+                Committed.Add(committed);
+                ObserveCommit?.Invoke(committed);
+            }
+            return Task.CompletedTask;
+        }
+    }
     private sealed class FakeDiscovery : IStandaloneTriggerTargetDiscovery
     {
         internal string ContractRevision = "contract-v1";

@@ -2,9 +2,7 @@ using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Host.Health;
-using Elsa.Foundation.Host.ModuleManagement;
-using Elsa.Foundation.Host.Shells;
+using Elsa.Foundation.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -27,12 +25,12 @@ public sealed class FoundationHostEndpointTests
         builder.Services.AddSingleton<ShellActivationTracker>();
         using var app = builder.Build();
 
-        app.MapHostHealth();
+        app.MapFoundationHealth("Elsa.Foundation.Host");
         app.MapModuleManagementApi(new ModuleManagementOptions
         {
             Enabled = true,
             ApiKey = "expected-key"
-        });
+        }, "Elsa.Foundation.Host");
 
         await app.StartAsync();
         var manifest = new EndpointManifestBuilder(app.Services.GetServices<EndpointDataSource>()).Build();
@@ -103,7 +101,7 @@ public sealed class FoundationHostEndpointTests
         builder.Services.AddSingleton<IRuntimeFeatureCatalog>(_ => null!);
         builder.Services.AddSingleton<INuplaneAdminOperations>(operations ?? new FakeNuplaneAdminOperations());
         var app = builder.Build();
-        app.MapModuleManagementApi(new ModuleManagementOptions { Enabled = true, ApiKey = apiKey });
+        app.MapModuleManagementApi(new ModuleManagementOptions { Enabled = true, ApiKey = apiKey }, "Elsa.Foundation.Host");
         await app.StartAsync();
         return app;
     }

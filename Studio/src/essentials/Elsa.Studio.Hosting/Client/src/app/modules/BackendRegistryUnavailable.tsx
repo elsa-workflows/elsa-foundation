@@ -1,13 +1,13 @@
 import React from "react";
 import { Boxes, ShieldAlert } from "lucide-react";
-import { EmptyState, StudioAlert } from "../ui";
+import { EmptyState, StudioAlert, TechnicalDetails } from "../ui";
 import { labelForBackendRegistryStatus, type BackendRegistryUnavailableKind, type HostModel } from "./moduleManagementApi";
 
 // The explicit backend-management-unavailable state shared by the module-management and package-feeds Server tabs
 // (#246, ADR 0037). Rendered instead of the registry surface when the Studio management bridge reports the backend
 // registry is unconfigured/unreachable/unauthorized/degraded — or when the bridge itself is unreachable ("unknown").
-// It names the real state and reason rather than blanking the page or leaking a raw fetch error, and it never affects
-// the Studio host tab, which reads its own registry directly and keeps working when the backend is down.
+// It names the real state and recovery path rather than blanking the page; optional setup appears as one neutral message.
+// It never affects the Studio host tab, which reads its own registry directly and keeps working when the backend is down.
 export function BackendRegistryUnavailable({
   host,
   status,
@@ -33,15 +33,26 @@ export function BackendRegistryUnavailable({
     );
   }
 
+  if (status === "unconfigured") {
+    return (
+      <>
+        <EmptyState icon={<Boxes size={22} />}>
+          {host.label} module management is not connected. Ask your administrator to connect this server to Studio to view its modules and package feeds.
+        </EmptyState>
+        <TechnicalDetails label="Administrator setup">
+          Set <code>Studio:BackendServerBaseUrl</code> (or <code>Studio:BackendBaseUrl</code> for a shared URL) and <code>Studio:BackendModuleManagementApiKey</code> on the Studio host.
+        </TechnicalDetails>
+      </>
+    );
+  }
+
   return (
     <>
-      <StudioAlert tone={status === "unconfigured" ? "warning" : "danger"}>
+      <StudioAlert tone="danger">
         {host.label} module registry is unavailable — {labelForBackendRegistryStatus(status)}. {detail}
       </StudioAlert>
       <EmptyState icon={<Boxes size={22} />}>
-        {status === "unconfigured"
-          ? <>Privileged host management is optional, but required to manage {host.label} modules. Set <code>Studio:BackendServerBaseUrl</code> (or <code>Studio:BackendBaseUrl</code> for a shared URL) and <code>Studio:BackendModuleManagementApiKey</code> on the Studio host to enable it.</>
-          : <>The {host.label} module registry could not be loaded. It is served through Studio's privileged host-management integration.</>}
+        The {host.label} module registry could not be loaded. It is served through Studio's privileged host-management integration.
       </EmptyState>
     </>
   );

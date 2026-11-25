@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
-import { FlaskConical, Play, RefreshCw, Square } from "lucide-react";
+import { FlaskConical, Play, Square } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StatusChip, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
-import { activityDefinitionPath } from "./AgentsPage";
+import { StatusChip, StudioAlert, StudioButton, StudioRadioGroup, StudioPage, SkeletonRows, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
+import { activityDefinitionPath } from "./agentWorkspaceRoutes";
 import { InvocationEvidenceDetails } from "./InvocationEvidence";
 import { invocationPath } from "./AgentInvocationPage";
 import {
@@ -39,13 +39,18 @@ export function playgroundPath(draftId: string) {
  * Runs the exact saved revision of one agent draft through the production agent runtime. Each run is a generic
  * draft Test Run; this page adds the agent's own evidence: model, turn state, usage, conversation and accepted output.
  */
-export function AgentPlayground({ context, draftId: given, navigate, pollInterval = pollIntervalMs }:
-  { context: StudioEndpointContext; draftId?: string | null; navigate?(path: string): void; pollInterval?: number }) {
+export function AgentPlayground({ context, draftId: given, navigate, pollInterval = pollIntervalMs, embedded = false, expectedRevision, currentRevision, canRun = true, onClose }:
+  { context: StudioEndpointContext; draftId?: string | null; navigate?(path: string): void; pollInterval?: number; embedded?: boolean; expectedRevision?: number; currentRevision?: number; canRun?: boolean; onClose?(): void }) {
   const draftId = given ?? readPlaygroundDraftId(window.location.pathname);
-  return <Playground key={draftId ?? ""} context={context} draftId={draftId} navigate={navigate} pollInterval={pollInterval} />;
+  const playground = <Playground key={`${draftId ?? ""}:${expectedRevision ?? "latest"}`} context={context} draftId={draftId} navigate={navigate} pollInterval={pollInterval}
+    embedded={embedded} expectedRevision={expectedRevision} currentRevision={currentRevision} canRun={canRun} onClose={onClose} />;
+  // Embedded Test Runs live inside the Agent workspace, which owns the page breadcrumbs.
+  if (embedded) return playground;
+  return <><StudioShellBreadcrumbs items={navigate ? [{ label: "Agents", onClick: () => navigate("/agents") }] : [{ href: "/agents", label: "Agents" }]} current="Agent playground" />
+    {playground}</>;
 }
 
-function Playground({ context, draftId, navigate, pollInterval }: { context: StudioEndpointContext; draftId: string | null; navigate?(path: string): void; pollInterval: number }) {
+function Playground({ context, draftId, navigate, pollInterval, embedded, expectedRevision, currentRevision, canRun, onClose }: { context: StudioEndpointContext; draftId: string | null; navigate?(path: string): void; pollInterval: number; embedded: boolean; expectedRevision?: number; currentRevision?: number; canRun: boolean; onClose?(): void }) {
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -104,14 +109,15 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
     return () => { abort.abort(); clearTimeout(timer); };
   }, [context, run, pollInterval]);
 
-  if (load.kind === "loading") return <StudioPage aria-busy="true"><p>Loading agent draft…</p></StudioPage>;
+  if (load.kind === "loading") return embedded ? <section className="agent-playground agent-playground--embedded" aria-busy="true"><SkeletonRows label="Loading saved Agent revision" /></section> : <StudioPage aria-busy="true"><SkeletonRows label="Loading agent draft" /></StudioPage>;
   if (load.kind === "missing")
-    return <StudioPage data-testid="playground-missing"><StudioResultState title="Agent draft not found" description="No visible agent draft matches this link. It may have been published, discarded or belong to another tenant." /></StudioPage>;
+    return embedded ? <section className="agent-playground agent-playground--embedded" data-testid="playground-missing"><StudioResultState title="Agent draft not found" description="No visible agent draft matches this link. It may have been published, discarded or belong to another tenant." /></section> : <StudioPage data-testid="playground-missing"><StudioResultState title="Agent draft not found" description="No visible agent draft matches this link. It may have been published, discarded or belong to another tenant." /></StudioPage>;
   if (load.kind === "denied")
-    return <StudioPage data-testid="playground-denied"><StudioResultState tone="danger" title="Not permitted" description="Testing an agent needs permission to read its draft and to manage draft Test Runs." /></StudioPage>;
+    return embedded ? <section className="agent-playground agent-playground--embedded" data-testid="playground-denied"><StudioResultState tone="danger" title="Not permitted" description="Testing an agent needs permission to read its draft and to manage draft Test Runs." /></section> : <StudioPage data-testid="playground-denied"><StudioResultState tone="danger" title="Not permitted" description="Testing an agent needs permission to read its draft and to manage draft Test Runs." /></StudioPage>;
   if (load.kind === "error")
-    return <StudioPage><StudioResultState tone="danger" title="Agent draft unavailable" description={load.message}
-      actions={<StudioButton onClick={() => void loadDraft()}>Retry</StudioButton>} /></StudioPage>;
+    return embedded ? <section className="agent-playground agent-playground--embedded"><StudioResultState tone="danger" title="Agent draft unavailable" description={load.message} actions={<StudioButton onClick={() => void loadDraft()}>Retry</StudioButton>} /></section>
+      : <StudioPage><StudioResultState tone="danger" title="Agent draft unavailable" description={load.message}
+        actions={<StudioButton onClick={() => void loadDraft()}>Retry</StudioButton>} /></StudioPage>;
 
   const draft = load.draft;
   const inputs = businessInputs(draft);
@@ -119,11 +125,13 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
   // A run whose status is no longer refreshed does not hold the page: the author can reload or start another run.
   const active = run !== null && !(run.evidence && isTerminal(run.evidence.status)) && run.refusal === null && run.failures < maximumPollFailures;
   const continuation = conversations.revision === draft.revision ? conversations.items.find(item => item.conversationId === selected) ?? null : null;
+  const revisionMismatch = expectedRevision !== undefined && (draft.revision !== expectedRevision || currentRevision !== undefined && currentRevision !== expectedRevision);
+  const dispatchBlocked = embedded && (!canRun || revisionMismatch);
 
   const start = async () => {
     const parsed = parseInputs(inputs, values);
     setErrors(parsed.errors);
-    if (Object.keys(parsed.errors).length > 0 || active || starting) return;
+    if (Object.keys(parsed.errors).length > 0 || active || starting || dispatchBlocked) return;
     // Retrying the same submission reuses its idempotency key, so a lost response never starts a second run.
     const signature = JSON.stringify({ revision: draft.revision, values: parsed.values, continuation });
     const current = attempt.current?.signature === signature ? attempt.current : { key: newIdempotencyKey(), signature };
@@ -169,20 +177,26 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
   };
 
   return (
-    <StudioPage className="agent-playground">
-      <StudioPageHeader
+    <PlaygroundSurface embedded={embedded}>
+      {embedded ? <header className="agent-playground__embedded-header">
+        <div><h2>Test Run</h2><p>Saved revision {expectedRevision ?? draft.revision} · unsaved changes are not included</p></div>
+        <StudioButton onClick={onClose}>Close Test Run</StudioButton>
+      </header> : <StudioPageHeader
         icon={<FlaskConical aria-hidden="true" size={18} />}
-        eyebrow="Agent playground"
+        compact
         title={`Draft revision ${draft.revision}`}
         description="Runs the saved revision on the production agent runtime. Unsaved editor changes are not included."
+        refresh={{ id: "agent-draft", label: "Reload draft", disabled: active, onRefresh: loadDraft }}
         actions={<>
           {navigate ? <StudioButton onClick={() => navigate(activityDefinitionPath(draft.definitionId, draft.draftId))}>Edit draft</StudioButton> : null}
-          <StudioButton aria-label="Reload draft" disabled={active} onClick={() => void loadDraft()}><RefreshCw aria-hidden="true" size={14} /> Reload draft</StudioButton>
-        </>} />
+        </>} />}
+
+      {revisionMismatch ? <StudioAlert tone="warning">The editor is now on a different saved revision. This Test Run remains pinned to revision {expectedRevision}; close it and reopen Test Run after saving to test the newer revision.</StudioAlert> : null}
+      {embedded && !revisionMismatch && !canRun ? <StudioAlert tone="info">Save or resolve the current editor changes before starting a Test Run. The run will use only the exact saved revision shown here.</StudioAlert> : null}
 
       <form className="agent-playground__form" aria-label="Run" onSubmit={event => { event.preventDefault(); void start(); }}>
         {inputs.map(input => (
-          <InputField key={input.referenceKey} input={input} value={values[input.referenceKey] ?? ""} error={errors[input.referenceKey]} disabled={active || starting}
+          <InputField key={input.referenceKey} input={input} value={values[input.referenceKey] ?? ""} error={errors[input.referenceKey]} disabled={active || starting || dispatchBlocked}
             onChange={value => {
               setValues(current => ({ ...current, [input.referenceKey]: value }));
               // An edited field's earlier complaint no longer describes it; the next run validates again.
@@ -190,20 +204,18 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
             }} />
         ))}
         {continuity ? (
-          <fieldset className="agent-playground__conversation" disabled={active || starting}>
+          <fieldset className="agent-playground__conversation" disabled={active || starting || dispatchBlocked}>
             <legend>Conversation</legend>
-            <label><input type="radio" name="conversation" checked={continuation === null} onChange={() => setSelected(null)} /> Fresh conversation</label>
-            {conversations.items.map(item => (
-              <label key={item.conversationId}>
-                <input type="radio" name="conversation" checked={continuation?.conversationId === item.conversationId}
-                  onChange={() => setSelected(item.conversationId)} /> Continue conversation at revision {item.revision}
-              </label>
-            ))}
+            <StudioRadioGroup label="Conversation" value={continuation?.conversationId ?? ""}
+              onChange={id => setSelected(id || null)} options={[
+                { value: "", label: "Fresh conversation" },
+                ...conversations.items.map(item => ({ value: item.conversationId, label: `Continue conversation at revision ${item.revision}` }))
+              ]} />
             {conversations.items.length === 0 ? <p className="agent-playground__hint">Conversations accepted by runs of this revision can be continued here.</p> : null}
           </fieldset>
         ) : null}
         <div className="agent-playground__actions">
-          <StudioButton type="submit" variant="primary" disabled={active || starting}><Play aria-hidden="true" size={14} /> {starting ? "Starting…" : "Run"}</StudioButton>
+          <StudioButton type="submit" variant="primary" disabled={active || starting || dispatchBlocked}><Play aria-hidden="true" size={14} /> {starting ? "Starting…" : "Run"}</StudioButton>
           {active ? <StudioButton disabled={run?.stopping} onClick={() => void stop()}><Square aria-hidden="true" size={14} /> {run?.stopping ? "Stopping…" : "Stop"}</StudioButton> : null}
         </div>
         {startError ? <StudioAlert tone="danger">{startError}</StudioAlert> : null}
@@ -213,8 +225,12 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
       <p role="status" className="agent-playground__announce" data-testid="playground-announce">{run ? announcement(run) : ""}</p>
       {run ? <RunEvidence run={run} revision={draft.revision} onContinue={reference => setSelected(reference.conversationId)}
         onRetry={() => setRun(current => current && { ...current, failures: 0 })} /> : null}
-    </StudioPage>
+    </PlaygroundSurface>
   );
+}
+
+function PlaygroundSurface({ embedded, children }: { embedded: boolean; children: React.ReactNode }) {
+  return embedded ? <section className="agent-playground agent-playground--embedded">{children}</section> : <StudioPage className="agent-playground">{children}</StudioPage>;
 }
 
 function InputField({ input, value, error, disabled, onChange }: { input: PlaygroundInput; value: string; error?: string; disabled: boolean; onChange(value: string): void }) {

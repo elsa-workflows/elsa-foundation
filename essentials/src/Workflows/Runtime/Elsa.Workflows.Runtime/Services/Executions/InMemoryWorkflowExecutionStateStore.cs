@@ -40,6 +40,18 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
         _cursorScope = cursorScope;
     }
 
+    /// <summary>
+    /// Inserts a state directly into the store without checkpoint or liveness validation.
+    /// Used for read-only filtering scenarios where states are copied from a primary store
+    /// into a temporary store for authorization filtering.
+    /// </summary>
+    internal void Insert(WorkflowExecutionState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
+        Save(state.WorkflowExecutionId, state);
+    }
+
     public async ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -159,7 +171,8 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
         WorkflowExecutionDeletionCandidate candidate,
         bool concurrencyTokenIsValid,
         Action cleanup,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Func<bool>? canCleanup = null)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(cleanup);
@@ -185,6 +198,8 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
                     return WorkflowExecutionDeletionResult.NotTerminal;
                 if (await HasControlDependenciesAsync(current, token))
                     return WorkflowExecutionDeletionResult.DependencyRetained;
+
+                if (canCleanup?.Invoke() == false) return WorkflowExecutionDeletionResult.Unsupported;
 
                 return await livenessStore.ExecuteWorkflowDeletionAtomicAsync(
                     current.WorkflowExecutionId,
@@ -252,6 +267,7 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
         {
             // Both deletion entry points own the same gate as checkpoints and independent observations.
             // Native execution IDs are process-global; its one indexed captured owner supplies the scope.
+            _checkpointState.TimerSources.DeleteForWorkflowExecution(workflowExecutionId);
             if (_checkpointState.HistoryRunOwners.TryGetValue(workflowExecutionId, out var historyOwner))
                 _checkpointState.DeleteHistoryForRun(historyOwner.Scope, workflowExecutionId);
             return Remove(workflowExecutionId);

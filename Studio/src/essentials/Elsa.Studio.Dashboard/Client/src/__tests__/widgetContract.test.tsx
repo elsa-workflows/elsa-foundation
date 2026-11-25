@@ -1,4 +1,5 @@
 import React from "react";
+import { ChartColumn } from "lucide-react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -31,7 +32,8 @@ describe("dashboard widget contract", () => {
     register(api);
     expect(api.navigation.list().map(item => item.path)).toEqual(["/dashboard", "/dashboards", "/questions"]);
     expect(api.navigation.list().map(item => item.label)).toEqual(["Home", "Dashboards", "Questions"]);
-    expect(api.routes.list().map(item => item.path)).toEqual(["/", "/dashboard", "/overview", "/dashboards", "/dashboards/new", "/dashboards/:resourceId", "/questions", "/questions/new", "/questions/:resourceId"]);
+    expect(api.navigation.list().find(item => item.id === "questions")?.icon).toBe(ChartColumn);
+    expect(api.routes.list().map(item => item.path)).toEqual(["/", "/dashboard", "/overview", "/dashboards", "/dashboards/new", "/dashboards/:resourceId/edit", "/dashboards/:resourceId", "/questions", "/questions/new", "/questions/:resourceId"]);
     expect(api.routes.list().filter(item => item.id.startsWith("saved-")).every(item =>
       item.requiresBackend?.some(requirement => requirement.id === "elsa.api.studio-dashboard" && requirement.contractVersion === "1"))).toBe(true);
     expect(api.homeWidgets.list().map(item => item.id)).toEqual([

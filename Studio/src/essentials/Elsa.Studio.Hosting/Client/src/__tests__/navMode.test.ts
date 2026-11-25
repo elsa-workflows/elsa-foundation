@@ -7,8 +7,12 @@ import { studioThemeLayouts } from "../sdk/themeLayout";
 import { read, ruleBody } from "./themeTestUtils";
 
 const stylesCss = read("../app/styles.css");
-const mobileShellCss = stylesCss.match(/@media \(max-width: 1024px\) \{([\s\S]*?)^\}/m)?.[1] ?? "";
-const phoneShellCss = stylesCss.match(/@media \(max-width: 640px\) \{([\s\S]*?)^\}/m)?.[1] ?? "";
+const responsiveCss = (width: number) =>
+  [...stylesCss.matchAll(new RegExp(`^@media \\(max-width: ${width}px\\) \\{([\\s\\S]*?)^\\}`, "gm"))]
+    .map(match => match[1]).join("\n");
+const responsiveRuleBody = (css: string, selector: string) => ruleBody(css, `\n  ${selector}`);
+const mobileShellCss = responsiveCss(1024);
+const phoneShellCss = responsiveCss(640);
 const layoutsCss = read("../app/themes/layouts.css").replace(/\/\*[\s\S]*?\*\//g, "");
 // The desktop media block closes at the first column-zero brace; the status bar rules follow it.
 const desktopEnd = layoutsCss.indexOf("\n}\n");
@@ -84,24 +88,25 @@ describe("navigation mode stylesheet", () => {
 
 
   it("keeps narrow-screen navigation in a compact, horizontally reachable strip", () => {
-    expect(ruleBody(mobileShellCss, ".sidebar")).toMatch(/flex-direction:\s*row;/);
-    expect(ruleBody(mobileShellCss, ".sidebar")).toMatch(/overflow-x:\s*auto;/);
-    expect(ruleBody(mobileShellCss, ".sidebar-collapse-toggle")).toMatch(/display:\s*none;/);
-    expect(ruleBody(mobileShellCss, 'html[data-nav-mode="top"] .sidebar-footer')).toMatch(/display:\s*none;/);
-    expect(ruleBody(mobileShellCss, ".nav-section")).toMatch(/display:\s*flex;/);
-    expect(ruleBody(mobileShellCss, ".nav-item-group")).toMatch(/display:\s*flex;/);
-    expect(ruleBody(mobileShellCss, ".nav-children")).toMatch(/display:\s*flex;/);
-    expect(ruleBody(mobileShellCss, ".nav-heading")).toMatch(/display:\s*none;/);
-    expect(ruleBody(phoneShellCss, ".sidebar")).toMatch(/flex-direction:\s*row;/);
+    expect(responsiveRuleBody(mobileShellCss, ".sidebar")).toMatch(/flex-direction:\s*row;/);
+    expect(responsiveRuleBody(mobileShellCss, ".sidebar")).toMatch(/overflow-x:\s*auto;/);
+    expect(responsiveRuleBody(mobileShellCss, ".sidebar-collapse-toggle")).toMatch(/display:\s*none;/);
+    expect(responsiveRuleBody(mobileShellCss, 'html[data-nav-mode="top"] .sidebar-footer')).toMatch(/display:\s*none;/);
+    expect(responsiveRuleBody(mobileShellCss, ".nav-section")).toMatch(/display:\s*flex;/);
+    expect(responsiveRuleBody(mobileShellCss, ".nav-item-group")).toMatch(/display:\s*flex;/);
+    expect(responsiveRuleBody(mobileShellCss, ".nav-children")).toMatch(/display:\s*flex;/);
+    expect(responsiveRuleBody(mobileShellCss, ".nav-heading")).toMatch(/display:\s*none;/);
+    expect(responsiveRuleBody(phoneShellCss, ".sidebar")).toMatch(/flex-direction:\s*row;/);
     expect(ruleBody(stylesCss, ".sidebar-collapsed .sidebar-search")).toMatch(/display:\s*none;/);
   });
 
   it("moves left-nav account access to the top bar on narrow screens", () => {
     expect(ruleBody(stylesCss, ".topbar-actions .user-menu")).toMatch(/display:\s*none;/);
     expect(ruleBody(stylesCss, 'html[data-nav-mode="top"] .topbar-actions .user-menu')).toMatch(/display:\s*flex;/);
-    expect(ruleBody(mobileShellCss, ".sidebar-account")).toMatch(/display:\s*none;/);
-    expect(ruleBody(mobileShellCss, 'html[data-nav-mode="left"] .sidebar-footer')).toMatch(/display:\s*none;/);
-    expect(ruleBody(mobileShellCss, 'html[data-nav-mode="left"] .topbar-actions .user-menu')).toMatch(/display:\s*flex;/);
+    expect(responsiveRuleBody(mobileShellCss, ".sidebar-account")).toMatch(/display:\s*none;/);
+    // Only account controls are hidden here; the footer also owns backend switching.
+    // The composed access journey exercises that connection control at narrow widths.
+    expect(responsiveRuleBody(mobileShellCss, 'html[data-nav-mode="left"] .topbar-actions .user-menu')).toMatch(/display:\s*flex;/);
   });
 
   it("keeps left-rail hierarchy and environment details quiet and token-based", () => {

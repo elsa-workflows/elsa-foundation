@@ -121,6 +121,17 @@ public sealed class UserTaskOperationsTests
     }
 
     [Fact]
+    public async Task Blank_group_assignment_is_visible_in_mine_and_not_in_queue()
+    {
+        var store = Store();
+        await store.TryWriteAsync(Task() with { AssigneeId = "alice", GroupId = "" }, null);
+        var operations = Operations(store, Actor("alice"));
+
+        Assert.Equal("task", Assert.Single((await operations.ListAsync("mine")).Items).Id);
+        Assert.Empty((await operations.ListAsync("queue")).Items);
+    }
+
+    [Fact]
     public void Basic_forms_enforce_types_choices_casing_required_waiver_and_read_only_values()
     {
         var forms = new BasicUserTaskForms();
@@ -164,6 +175,134 @@ public sealed class UserTaskOperationsTests
     }
 
     [Fact]
+    public async Task Form_drafts_reopen_publish_atomically_and_start_a_new_revision_after_publication()
+    {
+        var store = Store(); var operations = FormOperations(store, Actor("admin") with { CanReadForms = true, CanManageForms = true });
+        var incomplete = new UserTaskForm("purchase", "1", "", UserTaskProtocol.BasicForms, []);
+        var firstDraft = await operations.SaveFormDraftAsync("purchase", incomplete, 0);
+        Assert.Equal(1, firstDraft.Revision); Assert.NotNull(firstDraft.Draft); Assert.Null(firstDraft.LatestPublished);
+        Assert.Empty((await store.ListFormsAsync("tenant", 25)).Items);
+
+        var reopened = await operations.GetFormDefinitionAsync("purchase");
+        Assert.Equal(firstDraft.Draft!.Form!.Name, reopened.Draft!.Form!.Name);
+        Assert.Equal(firstDraft.Draft.Revision, reopened.Draft.Revision);
+        var published = await operations.PublishFormAsync("purchase", incomplete with { Name = "Purchase request" }, reopened.Revision);
+        Assert.Equal("1", published.Form.Version);
+        Assert.Null((await operations.GetFormDefinitionAsync("purchase")).Draft);
+        Assert.Equal(2, (await operations.GetFormDefinitionAsync("purchase")).Revision);
+
+        var secondDraft = await operations.SaveFormDraftAsync("purchase", published.Form with { Name = "Purchase request v2" }, 2);
+        Assert.Equal(3, secondDraft.Revision); Assert.Equal("1", secondDraft.LatestPublished!.Form.Version);
+        var secondPublication = await operations.PublishFormAsync("purchase", secondDraft.Draft!.Form!, secondDraft.Revision);
+        Assert.Equal("2", secondPublication.Form.Version);
+        Assert.Equal("Purchase request", (await store.FindFormAsync("tenant", "purchase", "1"))!.Form.Name);
+        Assert.Equal(2, (await store.ListFormVersionsAsync("tenant", "purchase", 25)).Items.Count);
+    }
+
+    [Fact]
+    public async Task Form_draft_discard_and_stale_collaborators_cannot_recreate_old_revisions()
+    {
+        var store = Store(); var operations = FormOperations(store, Actor("admin") with { CanReadForms = true, CanManageForms = true });
+        var form = new UserTaskForm("purchase", "1", "Purchase", UserTaskProtocol.BasicForms, []);
+        var saved = await operations.SaveFormDraftAsync("purchase", form, 0);
+        foreach (var action in new Func<Task>[] {
+            () => operations.SaveFormDraftAsync("purchase", form with { Name = "Stale" }, 0).AsTask(),
+            () => operations.PublishFormAsync("purchase", form, 0).AsTask(),
+            () => operations.DiscardFormDraftAsync("purchase", 0).AsTask()
+        })
+            Assert.Equal("conflict", (await Assert.ThrowsAsync<UserTaskException>(action)).Code);
+
+        var discarded = await operations.DiscardFormDraftAsync("purchase", saved.Revision);
+        Assert.Null(discarded.Draft); Assert.Equal(2, discarded.Revision);
+        Assert.Equal("conflict", (await Assert.ThrowsAsync<UserTaskException>(() => operations.SaveFormDraftAsync("purchase", form, 1).AsTask())).Code);
+        var replacement = await operations.SaveFormDraftAsync("purchase", form, discarded.Revision);
+        Assert.Equal(3, replacement.Revision);
+    }
+
+    [Fact]
+    public async Task Form_deletion_is_permission_and_revision_gated_and_retains_published_versions()
+    {
+        var store = Store();
+        var manager = FormOperations(store, Actor("admin") with { CanReadForms = true, CanManageForms = true });
+        var form = new UserTaskForm("purchase", "1", "Purchase", UserTaskProtocol.BasicForms, []);
+        Assert.True(await store.TryCreateFormAsync(new("tenant", form, Now, "admin")));
+
+        var reader = FormOperations(store, Actor("reader") with { CanReadForms = true });
+        Assert.Equal("forbidden", (await Assert.ThrowsAsync<UserTaskException>(() => reader.DeleteFormAsync("purchase", 0).AsTask())).Code);
+        Assert.Equal("conflict", (await Assert.ThrowsAsync<UserTaskException>(() => manager.DeleteFormAsync("purchase", 1).AsTask())).Code);
+
+        var deleted = await manager.DeleteFormAsync("purchase", 0);
+        Assert.True(deleted.Deleted);
+        Assert.Null(deleted.Draft);
+        Assert.Equal(1, deleted.Revision);
+        Assert.Empty((await manager.ListFormDefinitionsAsync()).Items);
+        Assert.Empty((await manager.ListFormsAsync()).Items);
+        Assert.Empty((await manager.ListFormVersionsAsync("purchase")).Items);
+        Assert.False(await store.TryCreateFormAsync(new("tenant", form with { Version = "2" }, Now, "stale")));
+        Assert.Equal("missing", (await Assert.ThrowsAsync<UserTaskException>(() => manager.GetFormDefinitionAsync("purchase").AsTask())).Code);
+        var retained = (await manager.GetFormAsync("purchase", "1")).Form;
+        Assert.Equal(form.Id, retained.Id); Assert.Equal(form.Version, retained.Version); Assert.Equal(form.Name, retained.Name);
+        Assert.Equal("conflict", (await Assert.ThrowsAsync<UserTaskException>(() => manager.SaveFormDraftAsync("purchase", form, 1).AsTask())).Code);
+        Assert.Equal("conflict", (await Assert.ThrowsAsync<UserTaskException>(() => manager.CreateFormAsync(form with { Version = "2" }).AsTask())).Code);
+    }
+
+    [Fact]
+    public async Task Form_definitions_are_tenant_scoped_and_discarded_draft_only_forms_leave_no_list_entry()
+    {
+        var store = Store(); var manager = Actor("admin") with { CanReadForms = true, CanManageForms = true };
+        var operations = FormOperations(store, manager);
+        var saved = await operations.SaveFormDraftAsync("private-form", new("private-form", "1", "Private", UserTaskProtocol.BasicForms, []), 0);
+        var otherTenant = FormOperations(store, manager with { TenantId = "other" });
+        Assert.Empty((await otherTenant.ListFormDefinitionsAsync()).Items);
+        Assert.Equal("missing", (await Assert.ThrowsAsync<UserTaskException>(() => otherTenant.GetFormDefinitionAsync("private-form").AsTask())).Code);
+
+        var discarded = await operations.DiscardFormDraftAsync("private-form", saved.Revision);
+        Assert.Equal(2, discarded.Revision);
+        Assert.Empty((await operations.ListFormDefinitionsAsync()).Items);
+        Assert.Equal("missing", (await Assert.ThrowsAsync<UserTaskException>(() => operations.GetFormDefinitionAsync("private-form").AsTask())).Code);
+        Assert.Equal(2, (await store.FindFormDefinitionAsync("tenant", "private-form"))!.Revision);
+    }
+
+    [Fact]
+    public async Task Drafts_can_preserve_unknown_controls_but_reject_unsafe_configuration_json()
+    {
+        var operations = FormOperations(Store(), Actor("admin") with { CanReadForms = true, CanManageForms = true });
+        var unknown = new UserTaskForm("unknown-control", "1", "Unknown control", UserTaskProtocol.BasicForms,
+            [new("rating", "Rating", "number") { ControlId = "example.rating/1", Configuration = Json("{\"maximum\":5}") }]);
+        var saved = await operations.SaveFormDraftAsync(unknown.Id, unknown, 0);
+        Assert.Equal(unknown.Id, saved.Draft!.Form!.Id);
+        Assert.Equal("example.rating/1", saved.Draft.Form.Fields[0].ControlId);
+        Assert.Equal(5, saved.Draft.Form.Fields[0].Configuration?.GetProperty("maximum").GetInt32());
+
+        var oversized = unknown with
+        {
+            Id = "oversized-control",
+            Fields = [unknown.Fields[0] with { Configuration = JsonSerializer.SerializeToElement(new { payload = new string('x', 17_000) }) }]
+        };
+        var oversizedFailure = await Assert.ThrowsAsync<UserTaskException>(() => operations.SaveFormDraftAsync(oversized.Id, oversized, 0).AsTask());
+        Assert.Equal("validation", oversizedFailure.Code);
+
+        var nested = "0";
+        for (var index = 0; index < 18; index++) nested = $"{{\"value\":{nested}}}";
+        var nestedForm = unknown with { Id = "deep-control", Fields = [unknown.Fields[0] with { Configuration = Json(nested) }] };
+        var nestedFailure = await Assert.ThrowsAsync<UserTaskException>(() => operations.SaveFormDraftAsync(nestedForm.Id, nestedForm, 0).AsTask());
+        Assert.Equal("validation", nestedFailure.Code);
+    }
+
+    [Fact]
+    public async Task Publishing_after_a_legacy_nonnumeric_version_allocates_the_first_numeric_version()
+    {
+        var store = Store();
+        var legacy = new UserTaskFormVersion("tenant", new("legacy", "published", "Legacy", UserTaskProtocol.BasicForms, []), Now, "author");
+        Assert.True(await store.TryCreateFormAsync(legacy));
+        var operations = FormOperations(store, Actor("admin") with { CanReadForms = true, CanManageForms = true });
+        var publication = await operations.PublishFormAsync("legacy", legacy.Form with { Name = "Updated legacy form" }, 0);
+        Assert.Equal("1", publication.Form.Version);
+        Assert.Equal("published", (await store.FindFormAsync("tenant", "legacy", "published"))!.Form.Version);
+        Assert.Equal(2, (await store.ListFormVersionsAsync("tenant", "legacy", 25)).Items.Count);
+    }
+
+    [Fact]
     public async Task Resource_denied_scan_positions_are_encrypted_and_bound_to_the_actor_and_query()
     {
         var store = Store();
@@ -196,6 +335,63 @@ public sealed class UserTaskOperationsTests
             var missing = new UserTaskOperations(store, new ActorAccess(Actor("alice") with { CanManageForms = true }), providers, TimeProvider.System, new Runtime(), new(TimeProvider.System), new Accessor());
             Assert.Equal("unavailable", (await Assert.ThrowsAsync<UserTaskException>(() => missing.CreateFormAsync(form).AsTask())).Code);
         }
+    }
+
+    [Fact]
+    public async Task Must_be_true_is_distinct_from_required_and_optional_actions_can_leave_it_unanswered()
+    {
+        var mustConfirm = new UserTaskForm("confirm", "1", "Confirm", UserTaskProtocol.BasicForms,
+            [new("accepted", "Accept terms", "boolean", Required: true) { Presentation = new("radio"), MustBeTrue = true }]);
+        var store = Store();
+        await store.TryWriteAsync(Task() with { AssigneeId = "alice", GroupId = null, Actions = ["Approve", "Skip"], OptionalFormActions = ["Skip"], Form = mustConfirm }, null);
+        var operations = Operations(store, Actor("alice"));
+        var refusal = await Assert.ThrowsAsync<UserTaskException>(() => operations.CompleteAsync("task", new(1, "declined", "Approve", Json("{\"accepted\":false}"))).AsTask());
+        Assert.Equal("validation", refusal.Code);
+        var skipped = await operations.CompleteAsync("task", new(1, "skip", "Skip", Json("{}")));
+        Assert.Equal(UserTaskStatus.CompletionPending, skipped.Status);
+        Assert.Empty(skipped.Decision!.Response.Data.EnumerateObject());
+
+        var requiredOnly = mustConfirm with { Id = "required-only", Fields = [new("answer", "Answer", "boolean", Required: true)] };
+        var falseStore = Store();
+        await falseStore.TryWriteAsync(Task() with { AssigneeId = "alice", GroupId = null, Form = requiredOnly }, null);
+        var acceptedFalse = await Operations(falseStore, Actor("alice")).CompleteAsync("task", new(1, "explicit-no", "Approve", Json("{\"answer\":false}")));
+        Assert.Equal(JsonValueKind.False, acceptedFalse.Decision!.Response.Data.GetProperty("answer").ValueKind);
+    }
+
+    [Fact]
+    public void Basic_form_provider_rejects_unsupported_presentation_and_constraint_combinations()
+    {
+        var forms = new BasicUserTaskForms();
+        var form = new UserTaskForm("f", "1", "F", forms.Provider, [new("choice", "Choice", "choice", Choices: ["A"]) { Presentation = new("checkbox") }]);
+        Assert.Equal("validation", Assert.Throws<UserTaskException>(() => forms.ValidateDefinition(form)).Code);
+        form = form with { Fields = [new("note", "Note", "text") { Presentation = new("dropdown") }] };
+        Assert.Equal("validation", Assert.Throws<UserTaskException>(() => forms.ValidateDefinition(form)).Code);
+        form = form with { Fields = [new("answer", "Answer", "boolean") { MustBeTrue = true, Presentation = new("checkbox", TrueLabel: " ") }] };
+        Assert.Equal("validation", Assert.Throws<UserTaskException>(() => forms.ValidateDefinition(form)).Code);
+    }
+
+    [Fact]
+    public async Task Custom_field_validator_is_invoked_for_task_completion_and_rejects_invalid_values()
+    {
+        var form = new UserTaskForm("rating-form", "1", "Rating", UserTaskProtocol.BasicForms,
+            [new UserTaskField("rating", "Rating", "number", Required: true)
+            {
+                ControlId = "example.rating/1",
+                Configuration = Json("{\"maximum\":5}")
+            }]);
+        var store = Store();
+        await store.TryWriteAsync(Task() with { AssigneeId = "alice", GroupId = null, Form = form }, null);
+        var forms = new BasicUserTaskForms([new RatingFieldControlValidator()]);
+        var operations = new UserTaskOperations(store, new ActorAccess(Actor("alice")), [forms], TimeProvider.System,
+            new Runtime(), new UserTaskCursorCodec(TimeProvider.System), new Accessor());
+
+        var failure = await Assert.ThrowsAsync<UserTaskException>(() => operations.CompleteAsync("task", new(1, "invalid-rating", "Approve", Json("{\"rating\":6}"))).AsTask());
+        Assert.Equal("validation", failure.Code);
+        Assert.Equal(1, (await store.FindAsync("tenant", "task"))!.Revision);
+
+        var completed = await operations.CompleteAsync("task", new(1, "valid-rating", "Approve", Json("{\"rating\":4}")));
+        Assert.Equal(UserTaskStatus.CompletionPending, completed.Status);
+        Assert.Equal(4, completed.Decision!.Response.Data.GetProperty("rating").GetInt32());
     }
 
     [Fact]
@@ -267,9 +463,21 @@ public sealed class UserTaskOperationsTests
         }
     }
 
+    private sealed class RatingFieldControlValidator : IUserTaskFieldControlValidator
+    {
+        public string Id => "example.rating/1";
+        public string ValueKind => "number";
+        public IReadOnlyList<string> ValidateDefinition(UserTaskField field) => field.Configuration is { } configuration &&
+            configuration.ValueKind == JsonValueKind.Object && configuration.TryGetProperty("maximum", out var maximum) && maximum.TryGetInt32(out var value) && value == 5
+                ? [] : ["A maximum of 5 is required."];
+        public string? ValidateResponse(UserTaskField field, JsonElement value) => value.TryGetInt32(out var rating) && rating is >= 1 and <= 5
+            ? null : "Rating must be between 1 and 5.";
+    }
+
     private static MemoryUserTaskStore Store() => new(new(), new Accessor());
     private static UserTaskActor Actor(string user) => new("tenant", user, new HashSet<string> { "finance" }, true, true, false, false);
     private static UserTaskOperations Operations(IUserTaskStore store, UserTaskActor actor) => new(store, new ActorAccess(actor), [new BasicUserTaskForms()], TimeProvider.System, new Runtime(), new UserTaskCursorCodec(TimeProvider.System), new Accessor());
+    private static UserTaskOperations FormOperations(IUserTaskStore store, UserTaskActor actor) => Operations(store, actor);
     private static JsonElement Json(string value) => JsonDocument.Parse(value).RootElement.Clone();
     private static UserTaskRecord Task() => new("task", "tenant", "execution", "invocation", "node", "operation", "Purchase", null, null, "finance", null,
         ["Approve", "Reject"], [], null, Json("{}"), UserTaskStatus.Open, 1, Now, Now, [new("created", "workflow", Now)]);

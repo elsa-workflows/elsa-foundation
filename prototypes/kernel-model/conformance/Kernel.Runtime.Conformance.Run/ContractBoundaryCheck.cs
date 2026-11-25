@@ -1,0 +1,108 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using Kernel.Foundation.Contracts;
+using Kernel.Model.Contracts;
+using Kernel.Store.Conformance;
+using Kernel.WorkflowActor;
+
+internal static class ContractBoundaryCheck
+{
+    private static readonly string[] ImplementationWords =
+        ["Partition", "Epoch", "Fence", "Lease", "Position", "NodeRecord", "KernelStore", "TenantColumn", "Sql", "SQL"];
+
+    public static int Run()
+    {
+        var foundation = typeof(ActorRef).Assembly;
+        var model = typeof(EffectKey).Assembly;
+        var faults = new List<string>();
+        Check(foundation, faults);
+        Check(model, faults, foundation);
+        Check(typeof(WorkflowActor).Assembly, faults, foundation, model);
+        CheckScope(typeof(IIngress), faults);
+        CheckScope(typeof(IActorReads), faults);
+        CheckModelTenant(faults);
+        if (typeof(BoundScope).GetConstructors().Length != 0 || typeof(BoundScope).GetProperty(nameof(BoundScope.Tenant))?.CanWrite != false)
+            faults.Add("BoundScope must have no public constructor or tenant setter");
+        var issuers = foundation.GetCustomAttributes<InternalsVisibleToAttribute>().Select(a => a.AssemblyName).ToHashSet(StringComparer.Ordinal);
+        if (!issuers.SetEquals(["Elsa.ActorFoundation.Hosting", "Elsa.ActorFoundation.TestSupport"]))
+            faults.Add("The set of assemblies authorized to construct BoundScope changed");
+        BoundScopeChecks.Check(faults);
+        foreach (var fault in faults)
+            Console.Error.WriteLine(fault);
+        if (faults.Count == 0)
+            Console.WriteLine("ok the contract packages expose no implementation names or references");
+        return faults.Count == 0 ? 0 : 1;
+    }
+
+    private static void CheckScope(Type contract, List<string> faults)
+    {
+        foreach (var method in contract.GetInterfaces().Prepend(contract).SelectMany(t => t.GetMethods()))
+        {
+            var parameters = method.GetParameters();
+            if (parameters.Length == 0 || parameters[0].ParameterType != typeof(BoundScope)
+                || parameters.Any(p => p.ParameterType == typeof(string) && string.Equals(p.Name, "tenant", StringComparison.OrdinalIgnoreCase)))
+                faults.Add($"{contract.Name}.{method.Name} must use a bound scope as its only tenant source");
+        }
+    }
+
+    private static void CheckModelTenant(List<string> faults)
+    {
+        if (typeof(ITurn).GetProperty(nameof(ITurn.Instance))?.CanWrite != false ||
+            typeof(InstanceInfo).GetProperty(nameof(InstanceInfo.Tenant))?.CanWrite != false)
+            faults.Add("A model must see the tenant through a read-only instance");
+
+        foreach (var contract in new[] { typeof(IActorTurn), typeof(ITurn) })
+        {
+            foreach (var method in contract.GetMethods().Where(method => method.Name == nameof(ITurn.Send)))
+            {
+                var parameters = method.GetParameters();
+                if (parameters is not [{ ParameterType: var target }, ..] || target != typeof(ActorRef) ||
+                    parameters.Any(parameter => string.Equals(parameter.Name, "tenant", StringComparison.OrdinalIgnoreCase)))
+                    faults.Add($"{contract.Name}.{method.Name} must address an exact ref without an explicit tenant");
+            }
+        }
+    }
+
+    private static void Check(Assembly assembly, List<string> faults, params Assembly[] allowedContracts)
+    {
+        var allowed = allowedContracts.Select(contract => contract.GetName().Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var reference in assembly.GetReferencedAssemblies())
+            if (reference.Name is { } name && !allowed.Contains(name) && name is not ("System" or "netstandard") && !name.StartsWith("System.", StringComparison.Ordinal))
+                faults.Add($"{assembly.GetName().Name} references {name}");
+
+        foreach (var type in assembly.GetExportedTypes())
+        {
+            CheckName(type.Name, type.FullName!, faults);
+            const BindingFlags publicMembers = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+            foreach (var member in type.GetMembers(publicMembers))
+            {
+                CheckName(member.Name, $"{type.FullName}.{member.Name}", faults);
+                foreach (var signature in Signature(member))
+                    CheckType(signature, $"{type.FullName}.{member.Name} signature", faults);
+            }
+        }
+    }
+
+    private static IEnumerable<Type> Signature(MemberInfo member) => member switch
+    {
+        MethodInfo method => method.GetParameters().Select(p => p.ParameterType).Append(method.ReturnType),
+        ConstructorInfo constructor => constructor.GetParameters().Select(p => p.ParameterType),
+        PropertyInfo property => [property.PropertyType],
+        FieldInfo field => [field.FieldType],
+        EventInfo { EventHandlerType: { } handler } => [handler],
+        _ => [],
+    };
+
+    private static void CheckType(Type type, string location, List<string> faults)
+    {
+        CheckName(type.Name, location, faults);
+        if (type.GetElementType() is { } element) CheckType(element, location, faults);
+        foreach (var argument in type.GenericTypeArguments) CheckType(argument, location, faults);
+    }
+
+    private static void CheckName(string name, string location, List<string> faults)
+    {
+        if (name == "Q" || ImplementationWords.Any(word => name.Contains(word, StringComparison.Ordinal)))
+            faults.Add($"{location} exposes implementation vocabulary ({name})");
+    }
+}

@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Bot, Plus, RefreshCw } from "lucide-react";
 import { StudioHttpError, useOptionalAuthContext, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
-  SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioDataGrid,
-  StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, type StudioDataGridColumn
+  SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioDataGrid,
+  StudioDialog, StudioDialogFooter, StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTimestamp, type StudioDataGridColumn
 } from "@elsa-workflows/studio-ui";
 import {
-  createAgent, getAgentAuthoring, listActiveAgentDrafts, listAgents, agentProviderKey, type AgentRow, type AgentAuthoring
+  createAgent, getAgentAuthoring, listAgents, agentProviderKey, type AgentRow, type AgentAuthoring
 } from "./agentsApi";
+import { agentRowPath, agentWorkspaceDraftPath, publishedVersion } from "./agentWorkspaceRoutes";
+export { activityDefinitionPath, activityDefinitionVersionPath, agentRowPath, agentWorkspaceDraftPath } from "./agentWorkspaceRoutes";
 import { continuitySchemaVersion, initialAgentManifest } from "./agentManifest";
 
 const pageSize = 25;
@@ -35,37 +37,10 @@ function restartReason(error: unknown): Restart {
   return error.status === 400 && problem.errorCode === "activity.management.cursor-invalid" ? "changed" : null;
 }
 
-/** The row's resource, resolved explicitly: its published version, else its only active draft, else the definition to choose from. */
-export function agentRowPath(row: AgentRow, drafts: string[] | null) {
-  const published = publishedVersion(row);
-  if (published) return activityDefinitionVersionPath(row.definition.definitionId, published.versionId);
-  if (drafts?.length === 1) return activityDefinitionPath(row.definition.definitionId, drafts[0]);
-  // Several drafts, or a lookup that could not answer: the definition's drafts, where the author chooses explicitly.
-  return `/workflows/activity-definitions?${new URLSearchParams({ definition: row.definition.definitionId, section: "drafts" }).toString()}`;
-}
-
-function publishedVersion(row: AgentRow) {
-  // The server matches a definition by its draft, head or recommended provider. Only a matching version is the agent's
-  // publication: the recommendation first, then the head, with its actual lifecycle.
-  const { head, recommendation } = row.lifecycle;
-  return [recommendation, head].find(version => version?.providerKey === agentProviderKey) ?? null;
-}
-
-export function activityDefinitionVersionPath(definitionId: string, versionId: string) {
-  return `/workflows/activity-definitions?${new URLSearchParams({ definition: definitionId, version: versionId }).toString()}`;
-}
-
-/** Where the generic activity editor opens one definition, or one of its drafts. */
-export function activityDefinitionPath(definitionId: string, draftId?: string) {
-  const parameters = new URLSearchParams({ definition: definitionId });
-  if (draftId) { parameters.set("section", "editor"); parameters.set("draft", draftId); }
-  return `/workflows/activity-definitions?${parameters.toString()}`;
-}
-
 /**
  * The module-owned Agents collection over the generic activity definitions API. The server filters by the agent
  * provider, searches, counts and pages; nothing is filtered after paging. Editing, publication and history open the
- * generic activity editor, which stays the authority for revisions and permissions.
+ * Agent workspace, which uses the generic activity editor for revisions and permissions.
  */
 export function AgentsPage({ context, navigate }: { context: StudioEndpointContext; navigate(path: string): void }) {
   const [search, setSearch] = useState("");
@@ -80,8 +55,6 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
   const focusAfterLoad = useRef(0);
   const retryRef = useRef<HTMLButtonElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
-  const opening = useRef<AbortController | null>(null);
-  useEffect(() => () => opening.current?.abort(), []);
   const sequence = useRef(0);
   const session = useOptionalAuthContext()?.session;
   const mayCreate = session?.status !== "authenticated" || createPermissions.some(permission => session.permissions.includes(permission));
@@ -119,18 +92,7 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
   }, [collection]);
   const reload = () => { focusAfterLoad.current = sequence.current + 1; void loadFirst(); };
 
-  // Only the latest activation navigates; a slower lookup for an earlier row, or one outliving the page, is dropped.
-  const open = async (row: AgentRow) => {
-    opening.current?.abort();
-    if (publishedVersion(row)) { opening.current = null; navigate(agentRowPath(row, null)); return; }
-    const abort = opening.current = new AbortController();
-    let drafts: string[] | null = null;
-    try { drafts = await listActiveAgentDrafts(context, row.definition.definitionId, abort.signal); }
-    catch { drafts = null; }
-    if (abort.signal.aborted) return;
-    opening.current = null;
-    navigate(agentRowPath(row, drafts));
-  };
+  const open = (row: AgentRow) => navigate(agentRowPath(row));
 
   useEffect(() => {
     const abort = new AbortController();
@@ -160,12 +122,6 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
   };
 
   const canCreate = mayCreate && authoring !== "loading" && authoring !== null;
-  if (creating && canCreate) return <StudioPage className="agent-agents-page" data-testid="agents-page">
-    <CreateAgentForm context={context} authoring={authoring}
-      onCancel={() => { restoreFocus.current = true; setCreating(false); }}
-      onCreated={(definitionId, draftId) => navigate(activityDefinitionPath(definitionId, draftId))} />
-  </StudioPage>;
-
   const columns: StudioDataGridColumn<AgentRow>[] = [
     { id: "name", header: "Agent", render: row => (
       <span className="agent-row-name">
@@ -173,9 +129,10 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
         {row.definition.description ? <small>{row.definition.description}</small> : null}
       </span>
     ) },
-    { id: "status", header: "Status", render: row => <AgentStatus row={row} /> },
+    { id: "latest", header: "Latest version", render: row => <AgentLatestVersion row={row} /> },
+    { id: "published", header: "Published version", render: row => <AgentPublishedVersion row={row} /> },
     { id: "authority", header: "Defined in", render: row => <AgentAuthority row={row} /> },
-    { id: "updated", header: "Updated", render: row => <time dateTime={row.updatedAt}>{formatDate(row.updatedAt)}</time> }
+    { id: "updated", header: "Updated", render: row => <StudioTimestamp value={row.updatedAt} fallback="Unavailable" invalidFallback="Unavailable" /> }
   ];
 
   return (
@@ -184,7 +141,8 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
         title="Agents"
         icon={<Bot aria-hidden="true" />}
         description="Agents you define here or in configuration. Each one is a reusable activity with typed inputs and results that workflows and BPMN processes can use."
-        actions={<>{canCreate ? <StudioButton ref={newAgentRef} variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> New agent</StudioButton> : null}<StudioButton onClick={reload} disabled={collection.kind === "loading"}><RefreshCw aria-hidden="true" /> Refresh</StudioButton></>} />
+        refresh={{ id: "agents", label: "Refresh agents", refreshing: collection.kind === "loading", disabled: creating, autoRefresh: true, onRefresh: loadFirst }}
+        actions={canCreate ? <StudioButton ref={newAgentRef} variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> New agent</StudioButton> : null} />
 
       <StudioCollectionToolbar>
         <StudioSearchInput aria-label="Search agents" placeholder="Search agents" value={search} onChange={event => setSearch(event.target.value)} />
@@ -198,14 +156,12 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
       ) : null}
       {collection.kind === "ready" ? (
         <>
-          {collection.items.length === 0 ? <div className="studio-table-container">
-            <StudioResultState headingLevel={3} icon={<Bot aria-hidden="true" />}
+          {collection.items.length === 0 ? <StudioCollectionEmptyState headingLevel={3} icon={<Bot aria-hidden="true" />}
               title={query ? "No matching agents" : "No agents yet"}
               description={query ? "Try a different name or clear your search." : canCreate ? "Create an agent to use it in workflows." : "Agents will appear here when available."}
-              actions={query ? <StudioButton onClick={() => setSearch("")}>Clear search</StudioButton> : canCreate ? <StudioButton variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> Create agent</StudioButton> : undefined} />
-          </div> : <StudioDataGrid columns={columns} items={collection.items} getKey={row => row.definition.definitionId}
+              actions={query ? <StudioButton onClick={() => setSearch("")}>Clear search</StudioButton> : canCreate ? <StudioButton variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> Create agent</StudioButton> : undefined} /> : <StudioDataGrid columns={columns} items={collection.items} getKey={row => row.definition.definitionId}
             onSelect={row => void open(row)}
-            gridColumns="minmax(12rem, 2fr) minmax(9rem, 1fr) minmax(8rem, 1fr) minmax(7rem, auto)" />}
+            gridColumns="minmax(12rem, 2fr) minmax(7rem, 1fr) minmax(7rem, 1fr) minmax(8rem, 1fr) minmax(7rem, auto)" />}
           <StudioCollectionFooter>
           <p ref={countRef} tabIndex={-1} className="agent-collection-count" role="status">{collection.totalCount === 1 ? "1 agent" : `${collection.totalCount.toLocaleString()} agents`}</p>
           {collection.continuation || collection.moreFailed || collection.restart ? (
@@ -222,27 +178,35 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
           </StudioCollectionFooter>
         </>
       ) : null}
+      {creating && canCreate ? <CreateAgentForm context={context} authoring={authoring}
+        onCancel={() => { restoreFocus.current = true; setCreating(false); }}
+        onCreated={(definitionId, draftId) => { setCreating(false); navigate(agentWorkspaceDraftPath(definitionId, draftId)); }} /> : null}
     </StudioPage>
   );
 }
 
-function AgentStatus({ row }: { row: AgentRow }) {
-  const { head, recommendation, draftCount, versionCount } = row.lifecycle;
-  const published = publishedVersion(row);
-  // Another provider's recommendation or latest version is disclosed by role, without its provider key.
-  const others = [
-    recommendation && recommendation.providerKey !== agentProviderKey ? "recommended" : null,
-    head && head.providerKey !== agentProviderKey && head.versionId !== recommendation?.versionId ? "latest" : null
-  ].filter(Boolean);
-  // The server counts drafts and versions of every kind, so the counts are labelled as the definition's.
-  const counts = [draftCount > 0 ? (draftCount === 1 ? "1 draft" : `${draftCount} drafts`) : null, versionCount > 0 ? (versionCount === 1 ? "1 version" : `${versionCount} versions`) : null].filter(Boolean);
+function AgentLatestVersion({ row }: { row: AgentRow }) {
+  const { head, draftCount } = row.lifecycle;
+  const latest = head?.providerKey === agentProviderKey ? head
+    : row.lifecycle.recommendation?.providerKey === agentProviderKey ? row.lifecycle.recommendation : null;
+  const latestIsAnotherActivity = head && head.providerKey !== agentProviderKey;
   return (
-    <span className="agent-row-status">
+    <span className="agent-row-version">
+      {latest ? <>{latest.version}{!isEnumValue(latest.lifecycle, "Active") ? <StatusChip tone="warning">{latest.lifecycle.toLowerCase()}</StatusChip> : null}</>
+        : <span>{head ? "No Agent version" : "No version yet"}</span>}
+      {latestIsAnotherActivity ? <small>Latest version belongs to another kind of activity</small> : null}
+      {draftCount > 0 ? <small>{draftCount === 1 ? "1 draft" : `${draftCount} drafts`} in this definition</small> : null}
+    </span>
+  );
+}
+
+function AgentPublishedVersion({ row }: { row: AgentRow }) {
+  const published = publishedVersion(row);
+  return (
+    <span className="agent-row-version">
       {!published ? <StatusChip tone="warning">Not published</StatusChip>
         : isEnumValue(published.lifecycle, "Active") ? <StatusChip tone="success">Published {published.version}</StatusChip>
         : <StatusChip tone="warning">{published.version} {published.lifecycle.toLowerCase()}</StatusChip>}
-      {others.length > 0 ? <small>Its {others.join(" and ")} version{others.length > 1 ? "s are" : " is"} another kind of activity</small> : null}
-      {counts.length > 0 ? <small>{counts.join(" · ")} of any kind in this definition</small> : null}
     </span>
   );
 }
@@ -271,7 +235,6 @@ function CreateAgentForm({ context, authoring, onCancel, onCreated }: {
   const [error, setError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { nameRef.current?.focus(); }, []);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
 
   const submit = async (event: React.FormEvent) => {
@@ -292,26 +255,17 @@ function CreateAgentForm({ context, authoring, onCancel, onCreated }: {
   };
 
   return (
-    <form className="agent-create-form" aria-labelledby={`${nameId}-title`} onSubmit={submit}
-      onKeyDown={event => { if (event.key === "Escape" && !submitting) onCancel(); }}>
-      <StudioPageHeader title="New agent" titleId={`${nameId}-title`}
-        description="Give it a name and a purpose. Choose its model, instructions, inputs and results in the editor next." />
+    <StudioDialog open title="New agent" description="Give it a name and a purpose. Choose its model, instructions, inputs and results in the editor next."
+      initialFocusRef={nameRef} dismissDisabled={submitting} onClose={onCancel} onSubmit={submit}
+      footer={<StudioDialogFooter onCancel={onCancel} cancelDisabled={submitting}
+        confirmLabel={submitting ? "Creating…" : "Create"} confirmDisabled={!name.trim() || submitting} />}>
       <StudioField label="Name">
         <input ref={nameRef} id={nameId} value={name} required maxLength={200} disabled={submitting} onChange={event => setName(event.target.value)} />
       </StudioField>
-      <StudioField label="Purpose" description="Optional. Shown wherever the agent is picked.">
+      <StudioField label="Purpose" description="Shown wherever the agent is picked.">
         <textarea value={purpose} rows={2} maxLength={2000} disabled={submitting} onChange={event => setPurpose(event.target.value)} />
       </StudioField>
       {error ? <div ref={errorRef} tabIndex={-1}><StudioAlert tone="danger">{error}</StudioAlert></div> : null}
-      <div className="agent-create-actions">
-        <StudioButton type="submit" variant="primary" disabled={!name.trim() || submitting}>{submitting ? "Creating…" : "Create and edit"}</StudioButton>
-        <StudioButton disabled={submitting} onClick={onCancel}>Cancel</StudioButton>
-      </div>
-    </form>
+    </StudioDialog>
   );
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
