@@ -701,17 +701,21 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     {
         foreach (var scope in VisibleScopes(frame))
             if (scope.TryGetValue(name, out var value)) return value;
-        return _s.Variables.GetValueOrDefault(name);
+        // A GraphActivity's body sees only what its boundary declares, as the old core's closed graph scope does.
+        return BodyScope(frame) is not null ? null : _s.Variables.GetValueOrDefault(name);
     }
 
     internal JsonNode? Result(string node) => _s.Results.GetValueOrDefault(node);
 
-    /// <summary>A write goes to the nearest scope that declares the variable, else to the workflow's.</summary>
+    /// <summary>
+    /// A write goes to the nearest scope that declares the variable, else to the workflow's; inside a GraphActivity's body,
+    /// else to the body's own variables, so that nothing outside the boundary changes.
+    /// </summary>
     private void Assign(Frame frame, string name, JsonNode? value)
     {
         foreach (var scope in VisibleScopes(frame))
             if (scope.ContainsKey(name)) { scope[name] = value; return; }
-        _s.Variables[name] = value;
+        (BodyScope(frame) ?? _s.Variables)[name] = value;
     }
 }
 

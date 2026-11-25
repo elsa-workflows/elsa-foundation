@@ -59,13 +59,49 @@ internal static class GraphChecks
 
         // A Complete inside a loop ends the boundary, not only the loop; a nested boundary is its own.
         yield return Workflow("graph-nested", Sequence("root",
-                GraphActivity("outer", new GraphBoundary { CompleteOutcomes = new Dictionary<string, string> { ["stop"] = "Stopped" } }, Sequence("outer-body",
+                GraphActivity("outer", new GraphBoundary
+                {
+                    CompleteOutcomes = new Dictionary<string, string> { ["stop"] = "Stopped" },
+                    Variables = [new("between", Literal("no")), new("count", Literal(0))],
+                    Outputs = [new("between", Var("between")), new("count", Var("count"))],
+                }, Sequence("outer-body",
                     GraphActivity("inner", new GraphBoundary { CompleteOutcomes = new Dictionary<string, string> { ["leave"] = "Left" } },
                         While("loop", true, Complete("leave", "leave"))).Capture("inner"),
                     Set("between", "between", "ran"),
-                    ForEach("each", Expr("[1, 2, 3]"), Sequence("pass", Set("count", "count", Expr("count + 1")), Complete("stop", "stop"))))),
+                    ForEach("each", Expr("[1, 2, 3]"), Sequence("pass", Set("count", "count", Expr("count + 1")), Complete("stop", "stop"))))).Capture("between", "between").Capture("count", "count"),
                 Set("out", "output", Expr("between + ' ' + count")), Hold()),
             ("between", "no"), ("count", 0), ("output", null), ("inner", null));
+
+        // The body is closed off: it reads nothing it does not declare, its writes of undeclared names stay inside, and a
+        // nested boundary sees nothing of the one around it.
+        yield return Workflow("graph-closed", Sequence("root",
+                GraphActivity("g", new GraphBoundary
+                {
+                    Variables = [new("seen"), new("local", Literal("mine")), new("deep")],
+                    Outputs = [new("seen", Var("seen")), new("deep", Var("deep")), new("kept", Var("secret"))],
+                }, Sequence("body",
+                    Set("read", "seen", Expr("'' + secret")),
+                    Set("write", "secret", "inner"),
+                    GraphActivity("inner", new GraphBoundary { Outputs = [new("local", Var("local"))] }, Set("noop", "x", 1)).Capture("deep", "local"))).Capture("result"),
+                Set("out", "output", Expr("secret + ' ' + result.seen + ' ' + result.kept + ' ' + result.deep")), Hold()),
+            ("secret", "outer"), ("result", null), ("output", null));
+
+        // A Complete that is the whole body; two in racing branches, the first to run winning; and a nested boundary whose
+        // body still waits, ended with the outer one.
+        yield return Workflow("graph-edges", Sequence("root",
+                GraphActivity("whole", Approval, Complete("only", "reject")),
+                GraphActivity("race", Approval, Parallel("par", null, Complete("first", "approve"), Complete("second", "reject"))),
+                GraphActivity("outer", new GraphBoundary { CompleteOutcomes = new Dictionary<string, string> { ["done"] = "Done" } },
+                    Parallel("par2", null,
+                        GraphActivity("inner", new GraphBoundary { Variables = [new("v", Literal(1))] }, Delay("wait", 60_000)),
+                        Complete("done", "done"))),
+                Flowchart("routes",
+                    [Node<SetVariable>("mark", ("Name", "r"), ("Value", "x")), GraphActivity("again-whole", Approval, Complete("only2", "reject")),
+                        GraphActivity("again-race", Approval, Parallel("par3", null, Complete("first2", "approve"), Complete("second2", "reject"))),
+                        Set("rej", "whole", "Rejected"), Set("app", "race", "Approved")],
+                    [new("mark", "again-whole"), new("again-whole", "rej", "Rejected"), new("rej", "again-race"), new("again-race", "app", "Approved")]),
+                Set("out", "output", Expr("whole + ' ' + race")), Hold()),
+            ("whole", null), ("race", null), ("r", null), ("output", null));
 
         // Faults, each read through a waiting parent.
         yield return Workflow("graph-no-exit", GraphActivity("g", Approval, Set("s", "steps", 1)));
@@ -94,6 +130,10 @@ internal static class GraphChecks
               Refused(() => Workflow("stray", Node<Sequence>("seq").Declaring(Approval))) &&
               Refused(() => Workflow("clash", GraphActivity("g", new GraphBoundary { Inputs = [new("x")], Variables = [new("x")] }, Set("a", "x", 1)))),
             "a GraphActivity without a declaration, with other than one body, or with an input and a variable of one name, and a declaration on another node, are refused");
+        check(Refused(() => Workflow("typo", GraphActivity("g", Pricing, Set("s", "x", 1), ("amout", 5)))) &&
+              Refused(() => Workflow("blank-key", GraphActivity("g", new GraphBoundary { CompleteOutcomes = new Dictionary<string, string> { [" "] = "X" } }, Set("s", "x", 1)))) &&
+              Refused(() => Workflow("captured", GraphActivity("g", Approval, Complete("c", "approve").Capture("x")))),
+            "an input bound under a name the boundary does not declare, a blank outcome key, and a capture on a Complete are refused");
 
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
         {
@@ -121,6 +161,12 @@ internal static class GraphChecks
             var nested = await Run("graph-nested");
             check(Output(nested) == "ran 1" && nested?.Variables["inner"] is null,
                 $"{mode}: a Complete in a loop ends its own boundary, the nested one, and the outer one goes on ('{Output(nested)}')");
+            var closed = Output(await Run("graph-closed"));
+            check(closed == "outer  inner ",
+                $"{mode}: the body reads nothing undeclared, its write of an undeclared name stays in its own variables, and a nested boundary sees nothing of the outer one ('{closed}')");
+            var edges = await Run("graph-edges");
+            check(Output(edges) == "Rejected Approved" && edges?.Waits.Values.Select(w => w.Key).SequenceEqual(["event:never"]) == true && edges.Frames.Count == 2,
+                $"{mode}: a Complete as the whole body, the first of two racing ones, and a nested boundary that waits ended with the outer one ('{Output(edges)}')");
 
             async Task<DispatchResult?> Child(string workflow) => Values.To<DispatchResult>((await Run("graph-parent-" + workflow))?.Variables.GetValueOrDefault("result"));
             string? Code(DispatchResult? result) => Values.To<ActivityFault>(result?.Output)?.Code;

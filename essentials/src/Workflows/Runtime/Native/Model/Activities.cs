@@ -146,7 +146,8 @@ public sealed record GraphState(string Scope);
 
 /// <summary>
 /// The old core's GraphActivity, a placed reusable activity: its body (its one child) runs in a scope that declares its
-/// inputs and, within that, its local variables. It completes with an outcome its mappings give the body's outcome, or
+/// inputs and, within that, its local variables, and sees nothing outside it, as the old core's closed graph scope: a read
+/// of an undeclared name is null and a write of one stays in the body's variables. Its input bindings are read where it is placed. It completes with an outcome its mappings give the body's outcome, or
 /// with the one a Complete in its body names, which ends the rest of the body. Its result is its outputs, read in that
 /// scope as it completes. A nested GraphActivity is its own boundary.
 /// </summary>
@@ -166,7 +167,7 @@ public sealed class GraphActivity : CompositeActivity, IExitBoundary
         {
             // A bound input is supplied, also when it evaluates to null, as the old core tells a supplied null from absence.
             if (context.Node.Inputs.TryGetValue(input.Name, out var binding)) inputs[input.Name] = context.Evaluate(binding);
-            else if (input.Default is { } fallback) inputs[input.Name] = context.Evaluate(fallback);
+            else if (input.Default is { } fallback) inputs[input.Name] = context.EvaluateOver(fallback, inputs);     // sees the inputs given so far, nothing outside
             else if (input.Required)
             {
                 context.Fault(new ActivityFault(InputRequiredFaultCode, $"Required input '{input.Name}' of GraphActivity '{context.Node.Id}' has no value."));
@@ -175,7 +176,7 @@ public sealed class GraphActivity : CompositeActivity, IExitBoundary
             else inputs[input.Name] = null;
         }
         var inputScope = context.CreateLexicalScope(inputs);
-        var variables = graph.Variables.ToDictionary(v => v.Name, v => v.Value is { } value ? context.EvaluateInScope(value, inputScope) : null, StringComparer.Ordinal);
+        var variables = graph.Variables.ToDictionary(v => v.Name, v => v.Value is { } value ? context.EvaluateInScope(value, inputScope, closed: true) : null, StringComparer.Ordinal);
         var scope = context.CreateLexicalScope(variables, inputScope);
         context.SetState(new GraphState(scope));
         context.ScheduleInScope(context.Children[0], scope);
@@ -211,7 +212,7 @@ public sealed class GraphActivity : CompositeActivity, IExitBoundary
         {
             var scope = context.ReadState<GraphState>()!.Scope;
             outputs = [];
-            foreach (var output in graph.Outputs) outputs[output.Name] = context.EvaluateInScope(output.Value, scope);
+            foreach (var output in graph.Outputs) outputs[output.Name] = context.EvaluateInScope(output.Value, scope, closed: true);
         }
         context.Complete(outcome, outputs);
     }
@@ -227,14 +228,18 @@ public sealed class GraphActivity : CompositeActivity, IExitBoundary
                 throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' needs unique, non-empty input and variable names ('{name}').");
         if (graph.Outputs.Select(o => o.Name).Distinct(StringComparer.Ordinal).Count() != graph.Outputs.Count || graph.Outputs.Any(o => string.IsNullOrEmpty(o.Name)))
             throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' needs unique, non-empty output names.");
-        if (graph.OutcomeMappings.Values.Concat(graph.CompleteOutcomes.Values).Any(string.IsNullOrEmpty))
-            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' maps to an empty outcome.");
+        if (graph.OutcomeMappings.Concat(graph.CompleteOutcomes).Any(p => string.IsNullOrWhiteSpace(p.Key) || string.IsNullOrEmpty(p.Value)))
+            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' maps from a blank outcome or key, or to an empty outcome.");
+        // An input bound under a name the boundary does not declare is a mistake, as the old core refuses unknown input keys.
+        if (node.Inputs.Keys.FirstOrDefault(key => !graph.Inputs.Any(i => string.Equals(i.Name, key, StringComparison.OrdinalIgnoreCase))) is { } unknown)
+            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' binds '{unknown}', which it does not declare as an input.");
     }
 
     /// <summary>A Complete needs an enclosing GraphActivity, and a literal outcome must be one that boundary declares.</summary>
     internal static void ValidateExit(Node complete, Node? boundary, string workflow)
     {
         if (boundary is null) throw new InvalidOperationException($"Complete '{complete.Id}' in '{workflow}' has no enclosing GraphActivity.");
+        if (complete.Captures.Count != 0) throw new InvalidOperationException($"Complete '{complete.Id}' in '{workflow}' has no result to capture.");
         if (complete.Inputs.GetValueOrDefault("Outcome") is LiteralBinding { Value: JsonValue literal } && literal.TryGetValue<string>(out var key) &&
             !string.IsNullOrWhiteSpace(key) && boundary.Graph?.CompleteOutcomes.ContainsKey(key) != true)
             throw new InvalidOperationException($"Complete '{complete.Id}' in '{workflow}' names outcome '{key}', which GraphActivity '{boundary.Id}' does not declare.");
