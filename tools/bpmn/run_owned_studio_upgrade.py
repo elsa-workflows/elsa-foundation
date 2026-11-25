@@ -51,7 +51,7 @@ def free_port():
 def compose_host_roots(backend_root, studio_root, backend_url, studio_url, *, direct_human):
     """Copy current host configuration into owned roots; returns the unsaved shells document and default features."""
     backend_source = REPO / "apps/Elsa.Workbench.Host"
-    studio_source = REPO / "Studio/src/apps/Elsa.Studio.Web"
+    studio_source = REPO / "Studio/src/apps/Elsa.Studio.Workbench.Host"
     for source, target in ((backend_source, backend_root), (studio_source, studio_root)):
         for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
             shutil.copyfile(source / name, target / name)

@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <!-- Deployable host, not a NuGet library: exclude it from `dotnet pack` over the solution. -->
     <IsPackable>false</IsPackable>
+    <!-- The project is named for its folder; the code uses the Elsa.Studio.Workbench namespace. -->
+    <RootNamespace>Elsa.Studio.Workbench</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

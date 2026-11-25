@@ -1,10 +1,10 @@
-# Running Elsa.Studio.Web in Docker
+# Running Elsa.Studio.Workbench.Host in Docker
 
-`Studio/src/apps/Elsa.Studio.Web` ships with a production `Dockerfile` that produces a self-contained
+`Studio/src/apps/Elsa.Studio.Workbench.Host` ships with a production `Dockerfile` that produces a self-contained
 container image of the Studio host. Point it at an Elsa Server backend at runtime via
 environment variables and, optionally, a mounted `shells.json`.
 
-The Dockerfile lives at `Studio/src/apps/Elsa.Studio.Web/Dockerfile`, but the **build context must be
+The Dockerfile lives at `Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile`, but the **build context must be
 the repository root** because the build depends on repo-root configuration
 (`Studio/Directory.Build.props`, `Studio/Directory.Packages.props`, `Studio/NuGet.config`),
 and the optional Studio modules beside their Foundation capabilities.
@@ -90,7 +90,7 @@ From the repository root:
 ```bash
 pnpm --dir Studio install --frozen-lockfile
 pnpm --dir Studio build
-docker build -f Studio/src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+docker build -f Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local .
 ```
 
 The image is a two-stage build: `mcr.microsoft.com/dotnet/sdk:10.0` publishes the app and
@@ -178,7 +178,7 @@ watches `/app/packages`, the runtime user owns `/app` so it can write there.
 ```yaml
 services:
   studio:
-    image: elsa-studio-web:local   # build: { context: ., dockerfile: Studio/src/apps/Elsa.Studio.Web/Dockerfile }
+    image: elsa-studio-web:local   # build: { context: ., dockerfile: Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile }
     ports:
       - "8080:8080"
     environment:

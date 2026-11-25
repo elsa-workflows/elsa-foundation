@@ -788,8 +788,8 @@ class OrchestrationTests(unittest.TestCase):
             for relative in (
                 'apps/Elsa.Workbench.Host/appsettings.json',
                 'apps/Elsa.Workbench.Host/shells.json',
-                'Studio/src/apps/Elsa.Studio.Web/appsettings.json',
-                'Studio/src/apps/Elsa.Studio.Web/shells.json',
+                'Studio/src/apps/Elsa.Studio.Workbench.Host/appsettings.json',
+                'Studio/src/apps/Elsa.Studio.Workbench.Host/shells.json',
                 'e2e-tests/activity-data-selection/fixtures/fixture.targets',
                 'e2e-tests/activity-data-selection/fixtures/CustomerFixture.cs',
             ):
@@ -950,7 +950,7 @@ class OrchestrationTests(unittest.TestCase):
             with patch.object(acceptance, 'prepare_host', prepare), patch.object(acceptance, 'host', failing_host):
                 with self.assertRaisesRegex(RuntimeError, 'Unsupported host readiness failed'), ExitStack() as stack:
                     acceptance.playback_profiles(stack, data, acceptance.ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj',
-                        acceptance.ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj', data, {}, processes, pids, profiles)
+                        acceptance.ROOT / 'Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj', data, {}, processes, pids, profiles)
             expected = {f'playback-{name}-{kind}' for name in ('disabled', 'uncaptured') for kind in ('backend', 'studio')}
             self.assertEqual(expected, set(pids))
             self.assertEqual(expected, set(processes))
@@ -1160,7 +1160,7 @@ class SourcePairTests(unittest.TestCase):
             self.assertEqual(studio / "Studio", calls[1][1])
             self.assertEqual(studio / "Studio", calls[2][1])
             self.assertIn("tests/browser/playwright.outlined-fields.config.ts", calls[2][0])
-            self.assertIn(str(studio / "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj"), calls[3][0])
+            self.assertIn(str(studio / "Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj"), calls[3][0])
             report = json.loads((output / "report.json").read_text())
             self.assertEqual("backend-head", report["sourceSha"])
             self.assertEqual("frontend-head", report["studioSourceSha"])

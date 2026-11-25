@@ -58,11 +58,11 @@ def baseline(p):
 
 def actual_reference_web(p):
     published = p.root / "reference-web-published"
-    check((published / "Elsa.Studio.Web.dll").exists(), "An actual published reference Web distribution is required")
+    check((published / "Elsa.Studio.Workbench.Host.dll").exists(), "An actual published reference Web distribution is required")
     env = profile_environment(p.root, "reference")
     env.update(Studio__Auth__Enabled="false", Studio__HostId="composition-reference-web", Studio__BackendBaseUrl="",
                Studio__BackendServerBaseUrl="", Themes__StoreFile="state/themes.json", Themes__AssetsDirectory="state/materials")
-    with server(p.dotnet, published, env, p.root / "actual-reference-web-server.log", assembly="Elsa.Studio.Web.dll", ready=False) as base:
+    with server(p.dotnet, published, env, p.root / "actual-reference-web-server.log", assembly="Elsa.Studio.Workbench.Host.dll", ready=False) as base:
         modules = get_json(base, "/_elsa/studio/modules")
         check(len(modules["modules"]) >= 14, "Reference distribution module set is incomplete")
         output = p.root / "actual-reference-web-browser.json"

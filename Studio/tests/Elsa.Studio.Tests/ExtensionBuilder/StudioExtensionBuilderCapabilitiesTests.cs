@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Elsa.Studio.ExtensionBuilder;
-using Elsa.Studio.Web;
+using Elsa.Studio.Workbench;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using static Elsa.Studio.Tests.RecordingBackend;

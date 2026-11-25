@@ -1,7 +1,7 @@
 using System.Reflection;
 using CShells.DependencyInjection;
 using CShells.Features;
-using Elsa.Studio.Web;
+using Elsa.Studio.Workbench;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Builder;
 using Elsa.Modularity.Core.Contracts;
@@ -85,7 +85,7 @@ public sealed class WebHostShellFeatureDiscoveryTests : IAsyncLifetime
     // follows its ProjectReferences rather than the typeof(...) entries in StudioFeatureAssemblies that it is checked against.
     private static Assembly[] LoadWebHostProjectAssemblies()
     {
-        using var stream = File.OpenRead(Path.Join(AppContext.BaseDirectory, "Elsa.Studio.Web.deps.json"));
+        using var stream = File.OpenRead(Path.Join(AppContext.BaseDirectory, "Elsa.Studio.Workbench.Host.deps.json"));
         using var reader = new DependencyContextJsonReader();
         var context = reader.Read(stream);
         return context.RuntimeLibraries

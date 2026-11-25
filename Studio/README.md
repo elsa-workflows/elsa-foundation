@@ -1,6 +1,6 @@
 # Elsa Foundation Studio
 
-Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The standard browser source and prebuilt `/studio` assets belong to `src/essentials/Elsa.Studio.Hosting`; `src/apps/Elsa.Studio.Web` is the distribution composition root. Package consumers use Hosting without copying frontend source or running a frontend build. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
+Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The standard browser source and prebuilt `/studio` assets belong to `src/essentials/Elsa.Studio.Hosting`; `src/apps/Elsa.Studio.Workbench.Host` is the distribution composition root. Package consumers use Hosting without copying frontend source or running a frontend build. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
 
 For a runnable package-only starting point, supported optional capabilities and migration from copied Web infrastructure, see [custom Studio hosting](docs/custom-hosting.md).
 
@@ -18,7 +18,7 @@ The host is composed from independently enabled Studio capabilities:
 
 - `Elsa.Studio.Core` defines manifests, diagnostics, and the manifest collection event.
 - `Elsa.Studio.Api` exposes `GET /_elsa/studio/modules`.
-- `Elsa.Studio.Hosting` serves the prebuilt root-mounted browser; `Elsa.Studio.Web` selects the distribution modules and optional capabilities.
+- `Elsa.Studio.Hosting` serves the prebuilt root-mounted browser; `Elsa.Studio.Workbench.Host` selects the distribution modules and optional capabilities.
 - `Elsa.Studio.Dashboard` owns `/dashboard`, the Dashboard Widget slot, host-owned frames, loading, refresh, layout, and scoped preferences.
 - `Elsa.Studio.Attention` contributes the ordinary wide/full Attention widget.
 - `Elsa.Studio.Workflows.Dashboard` contributes workflow portfolio and run-health widgets.
@@ -72,12 +72,12 @@ Features ship in:
 | `WeatherForecastSample` | `Elsa.Studio.Samples.WeatherForecast` | `IWebShellFeature` |
 | `ExtensionBuilderStudio` | `Elsa.Studio.ExtensionBuilder` | `IWebShellFeature` (opt-in, not in the default `shells.json`) |
 
-The host discovers in-box features only in the assemblies listed in `StudioFeatureAssemblies` (in `Elsa.Studio.Web`), plus installed Nuplane packages. CShells stops scanning host assemblies once that list is registered, so every new in-box feature needs its assembly added there, opt-in features such as `ExtensionBuilderStudio` included. Otherwise CShells skips the feature with a startup warning when `shells.json` enables it, and Feature Management cannot enable it. `WeatherForecastSample` is the exception: the host does not reference it, and it activates once its package (`artifacts/packages/Elsa.Studio.Samples.WeatherForecast.*.nupkg`) is installed into the `packages` feed. Until then, the startup warning for it is expected.
+The host discovers in-box features only in the assemblies listed in `StudioFeatureAssemblies` (in `Elsa.Studio.Workbench.Host`), plus installed Nuplane packages. CShells stops scanning host assemblies once that list is registered, so every new in-box feature needs its assembly added there, opt-in features such as `ExtensionBuilderStudio` included. Otherwise CShells skips the feature with a startup warning when `shells.json` enables it, and Feature Management cannot enable it. `WeatherForecastSample` is the exception: the host does not reference it, and it activates once its package (`artifacts/packages/Elsa.Studio.Samples.WeatherForecast.*.nupkg`) is installed into the `packages` feed. Until then, the startup warning for it is expected.
 
 ### Opting into Extension Builder
 
 Extension Builder is not enabled by default: a default Studio has no Extension Builder navigation item, route or
-bridge endpoints. To enable it, add its feature key to the Default shell in `src/apps/Elsa.Studio.Web/shells.json`
+bridge endpoints. To enable it, add its feature key to the Default shell in `src/apps/Elsa.Studio.Workbench.Host/shells.json`
 (or the mounted copy in a deployment):
 
 ```json
@@ -139,7 +139,7 @@ dotnet test Elsa.Studio.slnx
 
 ```bash
 cd Studio
-dotnet run --project src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj
+dotnet run --project src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj
 ```
 
 Open:
@@ -202,13 +202,13 @@ Preview builds (`4.0.0-preview.<n>`) publish to the elsa-4 feedz.io npm feed on 
 
 ## Docker
 
-`Elsa.Studio.Web` can be built and run as a container image. Build from the repository root
+`Elsa.Studio.Workbench.Host` can be built and run as a container image. Build from the repository root
 (the build context must be the repo root):
 
 ```bash
 pnpm --dir Studio install --frozen-lockfile
 pnpm --dir Studio build
-docker build -f Studio/src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+docker build -f Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile -t elsa-studio-web:local .
 docker run --rm -p 8080:8080 \
   -e Studio__BackendBaseUrl=https://your-elsa-server:443 \
   elsa-studio-web:local

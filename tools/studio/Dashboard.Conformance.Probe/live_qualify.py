@@ -160,7 +160,7 @@ def build_options(output, hook):
 
 def build(output, project, hook, seeded, native):
     options = build_options(output, hook)
-    studio = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
+    studio = ROOT / 'Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
     for label, target in [('backend', project), ('studio', studio)]:
         command(native, ['dotnet', 'restore', str(target), *options], output / f'{label}-restore.log', cwd=ROOT, env=native.clean_environment())
     changed = [Path(path).name for path, digest in seeded.items() if sha(Path(path)) != digest]
@@ -569,9 +569,9 @@ def execute_live(output, options, native, report):
         data = Path(temporary)
         backend, studio = data / 'backend', data / 'studio'
         copy_runtime(output / 'artifacts/bin' / HOST_NAME / 'debug', backend)
-        copy_runtime(output / 'artifacts/bin/Elsa.Studio.Web/debug', studio)
+        copy_runtime(output / 'artifacts/bin/Elsa.Studio.Workbench.Host/debug', studio)
         backend_source = ROOT / 'apps/Elsa.Workbench.Host'
-        studio_source = ROOT / 'Studio/src/apps/Elsa.Studio.Web'
+        studio_source = ROOT / 'Studio/src/apps/Elsa.Studio.Workbench.Host'
         for target, source in [(backend, backend_source), (studio, studio_source)]:
             for name in ('appsettings.json', 'shells.json'):
                 shutil.copy2(source / name, target / name)
@@ -608,7 +608,7 @@ def execute_live(output, options, native, report):
                     raise LiveUnavailable('Actual provider unavailable; no automatic retry')
                 if options.model not in preflight['declaredModels']:
                     raise ValueError('Requested pinned model is absent from actual provider diagnostics; no turn attempted')
-            with native.host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
+            with native.host(studio, 'Elsa.Studio.Workbench.Host.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
                              studio_env) as first_studio:
                 report['stage'] = 'actual-live-journeys'
                 journey_env = dict(browser_env, UX_DASHBOARD_NATIVE_EDGES='1') if edges else dict(browser_env, UX_DASHBOARD_UNSUPPORTED='1') if unsupported else browser_env
@@ -639,7 +639,7 @@ def execute_live(output, options, native, report):
             restart_env.pop(name, None)
         report['stage'] = 'native-real-host-restart'
         with native.host(backend, 'Elsa.Workbench.Host.dll', backend_url, '/__qualification/ready', output / 'backend-restart.log', restart_env) as second_backend:
-            with native.host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio-restart.log', studio_env) as second_studio:
+            with native.host(studio, 'Elsa.Studio.Workbench.Host.dll', studio_url, '/studio-runtime.js', output / 'studio-restart.log', studio_env) as second_studio:
                 command(native, browser_command, output / 'restart-journey.log', cwd=ROOT / 'Studio',
                         env=dict(browser_env, UX_DASHBOARD_RESTART='1'))
         lifetimes.append({'phase': 'provider-disabled-restart', 'backendPid': second_backend.pid, 'studioPid': second_studio.pid,

@@ -255,7 +255,7 @@ def prepare_host(project, destination):
 
 class OwnedBackend:
     """A file mailbox controls only this runner's process and private feature configuration."""
-    def __init__(self, directory, url, output, env, setup_dll=None, scope_peer=None, studio_dll="Elsa.Studio.Web.dll"):
+    def __init__(self, directory, url, output, env, setup_dll=None, scope_peer=None, studio_dll="Elsa.Studio.Workbench.Host.dll"):
         self.directory, self.url, self.output, self.env = directory, url, output, env
         self.original = (directory / 'shells.json').read_text()
         self.mailbox = directory.parent / 'host-control'
@@ -824,7 +824,7 @@ def run(output, suite='standalone-triggers', journey=None, studio_shape='coordin
         backend_project = ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj'
         if studio_shape not in {'application', 'coordinated-sdk'}:
             raise ValueError('Unknown owned Studio composition')
-        application_project = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
+        application_project = ROOT / 'Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
         studio_project = application_project if studio_shape == 'application' else ROOT / 'tools/ux-acceptance/StudioConsumer/Acme.TriggerStudioConsumer.csproj'
         studio_dll = studio_project.stem + '.dll'
         report['studioConsumer'] = {'project': str(studio_project.relative_to(ROOT)), 'assembly': studio_dll,

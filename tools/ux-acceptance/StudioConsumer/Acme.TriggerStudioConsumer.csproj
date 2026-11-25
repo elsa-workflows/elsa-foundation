@@ -29,6 +29,6 @@
     <ProjectReference Include="../../../extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Elsa.Studio.Identity.ExternalAuthentication.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="../../../Studio/src/apps/Elsa.Studio.Web/nuplane-management.json" Link="nuplane-management.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../Studio/src/apps/Elsa.Studio.Workbench.Host/nuplane-management.json" Link="nuplane-management.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

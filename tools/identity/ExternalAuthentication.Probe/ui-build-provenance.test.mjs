@@ -4,7 +4,7 @@ import { assertBuildReceipt } from "./ui-build-provenance.mjs";
 
 const identity = { sourceSha: "1".repeat(40), tree: "2".repeat(40) };
 const outputs = [
-  { file: "studio/bin/Elsa.Studio.Web.dll", sha256: "3".repeat(64) },
+  { file: "studio/bin/Elsa.Studio.Workbench.Host.dll", sha256: "3".repeat(64) },
   { file: "external-module/studio/modules/external-authentication/module.js", sha256: "4".repeat(64) }
 ];
 const executable = path => ({ path, realPath: path, sha256: "5".repeat(64) });

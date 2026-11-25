@@ -83,7 +83,7 @@ private Workbench root and its HTTP fixture logs for diagnosis.
 
 `Test-FiniteFileEtlStudio.ps1` runs the opt-in browser journey in
 `Studio/tests/live/etl-journey.spec.ts`. Build the Workbench with ETL enabled and build
-`Studio/src/apps/Elsa.Studio.Web` with the ETL Studio module before running:
+`Studio/src/apps/Elsa.Studio.Workbench.Host` with the ETL Studio module before running:
 
 ```powershell
 pwsh ./e2e-tests/etl/Test-FiniteFileEtlStudio.ps1

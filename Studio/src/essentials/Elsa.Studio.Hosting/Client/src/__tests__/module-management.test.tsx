@@ -1018,13 +1018,13 @@ async function clickInspectorTab(container: Element, text: string) {
 
 function studioRegistry() {
   return {
-    host: { id: "studio", displayName: "Studio", runtime: "Elsa.Studio.Web", contentRootPath: "/studio" },
+    host: { id: "studio", displayName: "Studio", runtime: "Elsa.Studio.Workbench.Host", contentRootPath: "/studio" },
     generatedAt: new Date().toISOString(),
     modules: [{
       id: "Elsa.Studio.FeatureManagement",
       displayName: "Feature management",
       surface: "Studio",
-      runtime: "Elsa.Studio.Web",
+      runtime: "Elsa.Studio.Workbench.Host",
       sourceKind: "static-web-asset",
       scope: "full-stack",
       version: "1.0.1",

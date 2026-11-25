@@ -912,7 +912,7 @@ def playback_profiles(stack, data, backend_project, studio_project, output, env,
         backend_process = stack.enter_context(host(backend, 'Elsa.Workbench.Host.dll', backend_url, '/__qualification/ready', output / f'playback-{name}-backend.log', env))
         owned_processes[f'playback-{name}-backend'] = backend_process
         owned_pids[f'playback-{name}-backend'] = backend_process.pid
-        studio_process = stack.enter_context(host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / f'playback-{name}-studio.log',
+        studio_process = stack.enter_context(host(studio, 'Elsa.Studio.Workbench.Host.dll', studio_url, '/studio-runtime.js', output / f'playback-{name}-studio.log',
                                  dict(env, Studio__BackendBaseUrl=backend_url)))
         owned_processes[f'playback-{name}-studio'] = studio_process
         owned_pids[f'playback-{name}-studio'] = studio_process.pid
@@ -1101,7 +1101,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         if not (supplies_pr_head(ROOT, sha, head) or supplies_pr_head(studio_root, studio_sha, head)):
             raise ValueError('The claimed PR head supplied neither observed source tree nor a verified CI merge parent')
-        studio_project = studio_root / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
+        studio_project = studio_root / 'Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
         backend_command = ['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:1', '-nr:false', '-v:q', '-nologo']
         if selected & (DATA_JOURNEYS | PROOF_TYPE_JOURNEYS):
             fixture = ROOT / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
@@ -1229,7 +1229,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                         backend_process = owned.enter_context(host(item['backend'], 'Elsa.Workbench.Host.dll', item['backendUrl'], '/__qualification/ready' if item['name'] == 'combined' else '/health/ready', output / f"{item['prefix']}backend.log", backend_env))
                     owned_processes[f'{prefix}backend'] = backend_process
                     report['ownedPids'][f'{prefix}backend'] = backend_process.pid
-                    studio_process = owned.enter_context(host(item['studio'], 'Elsa.Studio.Web.dll', item['studioUrl'], '/studio-runtime.js', output / f"{item['prefix']}studio.log",
+                    studio_process = owned.enter_context(host(item['studio'], 'Elsa.Studio.Workbench.Host.dll', item['studioUrl'], '/studio-runtime.js', output / f"{item['prefix']}studio.log",
                                              dict(env, Studio__BackendBaseUrl=item['backendUrl'])))
                     owned_processes[f'{prefix}studio'] = studio_process
                     report['ownedPids'][f'{prefix}studio'] = studio_process.pid

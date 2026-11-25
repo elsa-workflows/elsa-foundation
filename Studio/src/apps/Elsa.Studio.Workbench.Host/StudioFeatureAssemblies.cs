@@ -22,7 +22,7 @@ using Elsa.Studio.Workflows.Dashboard;
 
 using Elsa.Studio.Backends;
 
-namespace Elsa.Studio.Web;
+namespace Elsa.Studio.Workbench;
 
 internal static class StudioFeatureAssemblies
 {

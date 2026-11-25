@@ -57,7 +57,7 @@ const log = openSync(join(root, "studio.log"), "w", 0o600);
 const environment = { ...process.env, ASPNETCORE_ENVIRONMENT: "Development", DOTNET_ENVIRONMENT: "Development" };
 // Prevent ambient Studio/shell selections from retargeting this owned host.
 for (const key of Object.keys(environment)) if (/^(Studio__|CShells__|ASPNETCORE_URLS)/i.test(key)) delete environment[key];
-const host = spawn(buildProvenance.toolchain.dotnet.launcher.path, [join(repo, "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0/Elsa.Studio.Web.dll"),
+const host = spawn(buildProvenance.toolchain.dotnet.launcher.path, [join(repo, "Studio/src/apps/Elsa.Studio.Workbench.Host/bin/Debug/net10.0/Elsa.Studio.Workbench.Host.dll"),
   "--contentRoot", content, "--urls", studioUrl], { cwd: content, env: environment, stdio: ["ignore", log, log] });
 try {
   const deadline = Date.now() + 90_000;
