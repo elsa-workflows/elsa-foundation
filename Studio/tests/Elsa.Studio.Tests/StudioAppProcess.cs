@@ -168,16 +168,17 @@ public abstract class StudioAppProcess(string name, IReadOnlyDictionary<string, 
     }
 
     /// <summary>
-    /// A fresh content root. The shipped apps enroll their package store there, and Nuplane qualifies ext4 on Linux, so on a
-    /// runner the root goes on the workspace volume instead of an image-dependent <c>/tmp</c> mount, as for the native-store
-    /// administration fixture.
+    /// A fresh content root. The shipped apps enroll their package store there, and Nuplane qualifies ext4 on Linux, so on Linux
+    /// the root goes on the runner's workspace volume, or beside the test assembly, instead of an image-dependent <c>/tmp</c>
+    /// mount, as for the native-store administration fixture.
     /// </summary>
     private string CreateContentRoot()
     {
+        if (!OperatingSystem.IsLinux())
+            return Directory.CreateTempSubdirectory($"{Name.ToLowerInvariant()}-").FullName;
         var workspace = Environment.GetEnvironmentVariable("RUNNER_TEMP");
-        return OperatingSystem.IsLinux() && !string.IsNullOrWhiteSpace(workspace)
-            ? Directory.CreateDirectory(Path.Join(workspace, $"{Name.ToLowerInvariant()}-{Guid.NewGuid():N}")).FullName
-            : Directory.CreateTempSubdirectory($"{Name.ToLowerInvariant()}-").FullName;
+        if (string.IsNullOrWhiteSpace(workspace)) workspace = AppContext.BaseDirectory;
+        return Directory.CreateDirectory(Path.Join(workspace, $"{Name.ToLowerInvariant()}-{Guid.NewGuid():N}")).FullName;
     }
 
     private void Append(string? line)

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Nuplane.Admin;
 using Nuplane.Builder;
 using Nuplane.Feeds.Configuration;
+using Nuplane.Store.State;
 
 namespace Elsa.Studio.Hosting.Distribution;
 
@@ -48,6 +49,7 @@ internal static class PackageStoreEnrollment
 internal sealed class PackageStoreEnrollmentStartup(
     INuplanePackageStoreMaintenanceOperations maintenance,
     IOptions<FeedResolutionOptions> feeds,
+    IOptions<StoreRegistryOptions> stores,
     ILogger<PackageStoreEnrollmentStartup> logger) : IHostedLifecycleService
 {
     // A second process that shares the content root can lose the enrollment race. Nuplane's root and member locks never wait,
@@ -63,7 +65,7 @@ internal sealed class PackageStoreEnrollmentStartup(
         Directory.CreateDirectory(root);
 
         PackageStoreEnrollmentPreviewResult preview = null!;
-        var refusal = "";
+        PackageStoreEnrollmentResult? refused = null;
         for (var attempt = 1; attempt <= SettleAttempts; attempt++)
         {
             preview = await maintenance.PreviewEnrollmentAsync(PackageStoreEnrollment.RootLabel, cancellationToken);
@@ -73,7 +75,7 @@ internal sealed class PackageStoreEnrollmentStartup(
                 return;
             }
 
-            if (preview.Membership == "Unenrolled" && attempt == 1)
+            if (preview.Membership == "Unenrolled" && refused is null)
             {
                 if (HoldsFiles(root))
                     throw new StudioHostingException(
@@ -90,21 +92,44 @@ internal sealed class PackageStoreEnrollmentStartup(
                     return;
                 }
 
-                refusal = $" Enrollment answered {enrolled.Status ?? "unknown"}: {string.Join("; ", enrolled.Diagnostics.Select(diagnostic => $"{diagnostic.Code}: {diagnostic.Message}"))}.";
+                refused = enrolled;
             }
 
             await Task.Delay(SettleDelay, cancellationToken);
         }
 
-        var remedy = preview.Membership == "Incomplete"
-            ? "An interrupted enrollment needs Nuplane's enrollment recovery while every process that uses the store is stopped"
-            // A filesystem without the identity and naming operations Nuplane needs is refused before any membership can be
-            // read. Nuplane 0.0.13 qualifies ext4 only on Linux and refuses a store inside a Linux container.
-            : "Nuplane coordinates a package store only on a filesystem its native admission supports, such as ext4 on a Linux " +
-              "machine, and refuses it inside a Linux container. Run the app on a supported filesystem";
-        throw new StudioHostingException(
-            $"The Studio package store at '{root}' is not enrolled (membership: {preview.Membership ?? "unknown"}).{refusal} " +
-            $"{string.Join("; ", preview.Diagnostics)} {remedy}, or set {PackageStoreEnrollment.SwitchKey} to false.");
+        throw new StudioHostingException(Diagnose(root, preview, refused));
+    }
+
+    /// <summary>What stopped startup once the store settled in a state other than Complete, and what the operator can do.</summary>
+    private string Diagnose(string root, PackageStoreEnrollmentPreviewResult preview, PackageStoreEnrollmentResult? refused)
+    {
+        var observed = string.Join("; ", preview.Diagnostics);
+        var off = $"Or set {PackageStoreEnrollment.SwitchKey} to false to run without serving installed add-ons' browser assets.";
+        if (preview.Membership == "Incomplete")
+        {
+            // Nuplane's RecoverEnrollmentAsync resumes an interrupted enrollment, but only under an operator's assertion that
+            // every client is stopped, which this process cannot make for others. A store with no installs loses nothing.
+            var state = stores.Value.StateFilePath;
+            return HoldsFiles(root)
+                ? $"The Studio package store at '{root}' has an interrupted enrollment and holds installed packages. {observed} " +
+                  "Stop every process that uses the store and resume the enrollment with Nuplane.Admin's RecoverEnrollmentAsync " +
+                  $"(INuplanePackageStoreMaintenanceOperations). {off}"
+                : $"The Studio package store at '{root}' has an interrupted enrollment and holds no installed packages. {observed} " +
+                  $"Stop the app, delete '{root}' and the state file '{state}' (by default the whole .nuplane folder under the " +
+                  $"content root), and start it again to enroll a fresh store. {off}";
+        }
+
+        if (refused is not null)
+            return $"Nuplane refused to enroll the fresh Studio package store at '{root}': {refused.Status ?? "unknown"}, " +
+                   $"{string.Join("; ", refused.Diagnostics.Select(diagnostic => $"{diagnostic.Code}: {diagnostic.Message}"))}. {observed} {off}";
+
+        // An unreadable membership is either transient, another process holding the store's non-waiting locks for longer than
+        // this start waited, or lasting, a filesystem without the identity and naming operations Nuplane needs.
+        return $"Nuplane could not read the membership of the Studio package store at '{root}' within {(SettleDelay * SettleAttempts).TotalSeconds:0} seconds. " +
+               $"{observed} If another process is using the store, start this one again once that process is idle. If the " +
+               "diagnostic names a filesystem operation, the store is on a filesystem Nuplane's native admission does not " +
+               $"support; Nuplane 0.0.13 qualifies ext4 on Linux. {off}";
     }
 
     /// <summary>

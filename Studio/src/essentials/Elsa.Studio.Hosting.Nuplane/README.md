@@ -20,8 +20,8 @@ take the admitted path. No automatic enrollment, local prune algorithm or arbitr
 This package never enrolls a store itself. The shipped Studio apps opt in one level up: `Elsa.Studio.Hosting.Distribution`
 composes the coordinated store and enrolls a fresh one when `Studio:Hosting:Nuplane:EnrollPackageStore` is `true` (see its
 [README](../Elsa.Studio.Hosting.Distribution/README.md#package-store-enrollment)). A host that composes this package directly
-keeps the behaviour described here. While a reconciliation cycle holds an enrolled store's non-waiting root lock, catalog
-reads retry for up to five seconds before they fail.
+keeps the behaviour described here. While a reconciliation cycle holds an enrolled store's non-waiting root lock, the Features
+catalog and apply routes answer `503` with `Retry-After`, as the module registry does.
 
 ## Compose a host
 

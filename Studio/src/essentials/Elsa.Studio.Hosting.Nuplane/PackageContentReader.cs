@@ -16,29 +16,12 @@ internal sealed class PackageContentReader(INuplaneAdminOperations admin, IPacka
     private readonly SemaphoreSlim _requests = new(32, 32);
     // Our catalog lookups and content admissions must not race each other for the non-waiting native root lock.
     private readonly SemaphoreSlim _reads = new(1, 1);
-    // An enrolled store's reconciliation cycle holds the root lock, and a catalog read meanwhile is refused as busy. The
-    // catalog of an unenrolled store takes no lock, so only an enrolled store waits here, for at most this long.
-    internal static readonly TimeSpan BusyRetryDelay = TimeSpan.FromMilliseconds(100);
-    internal const int BusyRetryAttempts = 50;
 
     public async Task<ActivePackagesSnapshot> GetPackagesAsync(CancellationToken cancellationToken)
     {
         await _reads.WaitAsync(cancellationToken);
-        try { return await ReadPackagesAsync(cancellationToken); }
+        try { return await admin.GetPackagesAsync(cancellationToken); }
         finally { _reads.Release(); }
-    }
-
-    private async Task<ActivePackagesSnapshot> ReadPackagesAsync(CancellationToken cancellationToken)
-    {
-        for (var attempt = 1; ; attempt++)
-        {
-            try { return await admin.GetPackagesAsync(cancellationToken); }
-            catch (PackageStoreAdmissionException error) when (attempt < BusyRetryAttempts)
-            {
-                logger.LogDebug(new EventId(1004, "PackageCatalogBusy"), "The package catalog is unavailable ({Reason}); reading it again.", error.Reason);
-                await Task.Delay(BusyRetryDelay, cancellationToken);
-            }
-        }
     }
 
     public async Task<IAsyncDisposable?> TryAcquireResponseAsync(CancellationToken cancellationToken)
@@ -67,7 +50,7 @@ internal sealed class PackageContentReader(INuplaneAdminOperations admin, IPacka
             // RCL URLs name an assembly, which need not have its owning NuGet package's ID.
             // Both catalog queries precede admission: another query under root ownership would refuse the busy root.
             var owners = await AssemblyOwnersAsync(packageOrAssembly, cancellationToken);
-            var packages = await ReadPackagesAsync(cancellationToken);
+            var packages = await admin.GetPackagesAsync(cancellationToken);
             if (owners.Any(owner => !packages.Packages.Any(package => SameOwner(package, owner))))
             {
                 _reads.Release();

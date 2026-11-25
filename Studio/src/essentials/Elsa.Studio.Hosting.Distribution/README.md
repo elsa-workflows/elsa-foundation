@@ -59,11 +59,15 @@ content root:
 - On every later start the enrollment is reused. A start that finds the store enrolled changes nothing.
 - A store that holds files but is not enrolled stops startup with a diagnostic, because another process may still use it. Empty
   the directory, or enroll it with Nuplane's enrollment protocol while every process that uses it is stopped (see the
-  [Nuplane addon README](../Elsa.Studio.Hosting.Nuplane/README.md)). An interrupted enrollment also stops startup and needs
-  Nuplane's enrollment recovery.
+  [Nuplane addon README](../Elsa.Studio.Hosting.Nuplane/README.md)).
+- An interrupted enrollment stops startup. If the store holds no installed packages, the diagnostic says to delete it and its
+  state file (by default `.nuplane`) and start again; otherwise, to resume it with Nuplane.Admin's `RecoverEnrollmentAsync` while
+  every process that uses the store is stopped. A store whose membership Nuplane cannot read, because another process holds its
+  locks or the filesystem lacks support, stops startup after five seconds with Nuplane's diagnostic.
 - Two processes that share a content root take Nuplane's root and member locks, which never wait. If both start on a fresh store,
   one enrolls it and the other reads the enrollment once it is published. While one process reconciles, the other's package
-  reads wait briefly or are refused; neither interleaves writes.
+  reads are refused, and the module registry and the Features catalog answer `503` with `Retry-After`; neither interleaves
+  writes.
 
 The content root must be writable where the store lives, and the store must be on a filesystem Nuplane's native admission
 supports. Nuplane 0.0.13 qualifies ext4 on Linux and refuses a store inside a Linux container, even on an ext4 mount; there the

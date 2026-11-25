@@ -144,11 +144,24 @@ internal static class EtlAddOn
         return Assert.Single(Directory.GetFiles(output, ModuleId + ".*.nupkg"));
     }
 
+    /// <summary>
+    /// The catalog as the Features page reads it. While a reconciliation cycle holds the enrolled store, the catalog answers
+    /// 503 with Retry-After, and the read waits that long and asks again.
+    /// </summary>
     private static async Task<JsonObject> CatalogAsync(StudioAppProcess host)
     {
-        using var response = await host.Client.GetAsync("/modularity/features");
-        response.EnsureSuccessStatusCode();
-        return JsonNode.Parse(await response.Content.ReadAsStringAsync())!.AsObject();
+        var deadline = DateTimeOffset.UtcNow + SettleTimeout;
+        while (true)
+        {
+            using var response = await host.Client.GetAsync("/modularity/features");
+            if (response.StatusCode == HttpStatusCode.ServiceUnavailable && response.Headers.RetryAfter?.Delta is { } delay && DateTimeOffset.UtcNow < deadline)
+            {
+                await Task.Delay(delay);
+                continue;
+            }
+            Assert.True(response.IsSuccessStatusCode, $"/modularity/features answered {response.StatusCode}: {await response.Content.ReadAsStringAsync()}{host.OutputSection}");
+            return JsonNode.Parse(await response.Content.ReadAsStringAsync())!.AsObject();
+        }
     }
 
     private static async Task<JsonObject> ModulesAsync(StudioAppProcess host)
