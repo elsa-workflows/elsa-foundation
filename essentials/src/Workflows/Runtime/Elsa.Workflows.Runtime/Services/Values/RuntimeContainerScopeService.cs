@@ -106,9 +106,10 @@ public sealed class RuntimeContainerScopeService(
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
                     : RuntimeInputBindingStateProjection.ProjectBoundaryVariableNames(durableValues, boundary.InvocationId))
             {
-                RootVariableTypes = durableValues is null
-                    ? new Dictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor>(StringComparer.Ordinal)
-                    : RuntimeInputBindingStateProjection.ProjectBoundaryVariableTypes(durableValues, boundary.InvocationId)
+                // Projected on first use: only a step's write into a body variable reads the declared types.
+                RootVariableTypesFactory = durableValues is null
+                    ? null
+                    : () => RuntimeInputBindingStateProjection.ProjectBoundaryVariableTypes(durableValues, boundary.InvocationId)
             };
     }
 
@@ -601,6 +602,22 @@ public sealed class RuntimeVisibleVariableFrames
     /// Reference key → declared type of a closed scope's root variables (spec 1241), which a step's write is checked
     /// against; the frame itself holds them as <c>Any</c>. Empty for the workflow root.
     /// </summary>
-    public IReadOnlyDictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor> RootVariableTypes { get; init; } =
-        new Dictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor>(StringComparer.Ordinal);
+    public IReadOnlyDictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor> RootVariableTypes
+    {
+        get => _rootVariableTypes.Value;
+        init => _rootVariableTypes = new(value);
+    }
+
+    /// <summary>Computes <see cref="RootVariableTypes"/> when it is first read.</summary>
+    internal Func<IReadOnlyDictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor>>? RootVariableTypesFactory
+    {
+        init
+        {
+            if (value is not null)
+                _rootVariableTypes = new(value);
+        }
+    }
+
+    private Lazy<IReadOnlyDictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor>> _rootVariableTypes =
+        new(new Dictionary<string, Elsa.Primitives.Models.ValueTypeDescriptor>(StringComparer.Ordinal));
 }
