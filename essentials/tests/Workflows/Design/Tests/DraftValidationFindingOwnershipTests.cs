@@ -39,6 +39,36 @@ public sealed class DraftValidationFindingOwnershipTests
         Assert.Contains(admission.Findings, error => error.Path == "consumer/inputs/value" && error.Type == "Variable/UnresolvableReference");
     }
 
+    /// <summary>
+    /// A node with no arguments carries an empty list. A draft whose node omits its <c>inputs</c> list, or carries
+    /// <c>"outputs": null</c>, is refused at that node, by the validation gate and by data selection, instead of throwing.
+    /// </summary>
+    [Fact]
+    public async Task Draft_validation_refuses_a_missing_or_null_argument_list_instead_of_throwing()
+    {
+        var catalog = new StubActivityCatalog().Add("test", []).Add("sequence");
+        using var root = ActivityDataSelectionTestSupport.Provider(catalog);
+        using var scope = root.CreateScope();
+        var state = System.Text.Json.JsonSerializer.Deserialize<WorkflowDefinitionState>("""
+            {"variables":[],"inputs":[],"outputs":[],"rootActivity":{"nodeId":"root","activityVersionId":"sequence","outputs":[],
+             "structure":{"kind":"elsa.sequence.structure","schemaVersion":"1.0.0","payload":{"variables":[],"activities":[
+               {"nodeId":"child","activityVersionId":"test","inputs":[],"outputs":null}]}}}}
+            """, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        var validating = new DraftValidating(new Draft(state));
+
+        await scope.ServiceProvider.GetRequiredService<IInlineEventPublisher>().Publish(validating, CancellationToken.None);
+
+        Assert.Equal(["child/outputs", "root/inputs"],
+            validating.Errors.Where(error => error.Type == "Graph/MalformedArgumentList").Select(error => error.Path).Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(validating.Errors, error => error.Type != "Graph/MalformedArgumentList");
+
+        // Data selection reads the same draft state directly and refuses it the same way.
+        var analysis = await scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>()
+            .AnalyzeAsync(new("WorkflowDefinition", "draft", "revision", state.RootActivity, [], [], []));
+        Assert.Equal(["child/outputs", "root/inputs"],
+            analysis.Findings.Where(error => error.Type == "Graph/MalformedArgumentList").Select(error => error.Path).Order(StringComparer.Ordinal));
+    }
+
     private sealed class Draft(WorkflowDefinitionState state) : IWorkflowDefinitionDraft
     {
         public string Id => "draft";

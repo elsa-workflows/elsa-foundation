@@ -2,6 +2,8 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Validations.Internal;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Design.Validations.Handlers;
 
@@ -11,10 +13,21 @@ namespace Elsa.Workflows.Design.Validations.Handlers;
 /// Draft, and aggregates the returned errors onto the event. Replaces the former one-event-handler
 /// -per-validator sprawl; features now contribute by registering an <see cref="IDraftValidator"/>.
 /// </summary>
-public sealed class ExecuteValidations(IEnumerable<IDraftValidator> validators) : IEventHandler<DraftValidating>
+public sealed class ExecuteValidations(IEnumerable<IDraftValidator> validators, ActivityTreeWalker activityTreeWalker,
+    IOptions<WorkflowDesignValidatorOptions> options) : IEventHandler<DraftValidating>
 {
     public async Task Handle(DraftValidating domainEvent, CancellationToken cancellationToken)
     {
+        // Every validator reads node argument lists; a missing or null one is refused at its node and nothing else runs.
+        var malformed = activityTreeWalker.Walk(domainEvent.Draft.State.RootActivity, options.Value.MaxRecursionDepth)
+            .SelectMany(ActivityArgumentLists.Refusals).ToArray();
+        if (malformed.Length > 0)
+        {
+            foreach (var error in malformed)
+                domainEvent.Errors.Add(error);
+            return;
+        }
+
         var findings = new List<ValidationError>();
         foreach (var validator in validators)
         {
