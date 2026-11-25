@@ -79,8 +79,8 @@ The optional scoped Publishing implementation resolves a selected whole activity
 - **Contract:** `AnalyzeAsync(root, rootVariables)` checks the step writes of a body that is not a workflow draft, as
   workflow draft validation checks a draft's (spec 1241 FR-009): variable references that are unbound, undeclared, not a
   variable or of another type (`ValueFlow/VariableReference`), a step write that overlaps the node's own capture
-  (`ValueFlow/StepWriteOverlapsCapture`, a warning), and a script body's refused literal write
-  (`Scripts/RefusedVariableWrite`). It returns the step writers (`StepVariableWriteFacts`) the concurrent-write rule
+  (`ValueFlow/StepWriteOverlapsCapture`, a warning), a script body's refused literal write
+  (`Scripts/RefusedVariableWrite`) and its write by a computed name (`Scripts/ComputedVariableWrite`, a warning). It returns the step writers (`StepVariableWriteFacts`) the concurrent-write rule
   counts. The default delegates to the same checks `ValueFlowValidator` runs.
 - **Consumer:** `GraphActivityProvider` (Activities.Graph.Design), in a reusable activity's draft validation and
   compilation, through its service scope factory; only a provider built directly without one checks the body's captures only. It leaves the workflow-state findings (`VF-STATE-*`) to placement.

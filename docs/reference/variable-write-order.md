@@ -53,7 +53,9 @@ the warning says. A step that writes a variable in its body and also captures an
 `activity.graph.unordered-variable-write`, a step write that overlaps the node's own capture is
 `activity.graph.step-write-overlaps-capture` (a warning), a variable reference that is unbound, undeclared, not a
 variable or of another type is `activity.graph.variable-reference` (an error), and a script's literal write to a name
-the body does not declare, or to a loop item or index, is `activity.graph.script-write` (an error).
+the body does not declare, or to a loop item or index, is `activity.graph.script-write` (an error). A script that writes
+by a computed name gets `activity.graph.script-computed-write` (a warning), as a workflow script gets
+`Scripts/ComputedVariableWrite`.
 
 ## Which writes count as unordered
 

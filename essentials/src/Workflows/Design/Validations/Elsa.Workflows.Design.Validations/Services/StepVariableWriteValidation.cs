@@ -119,9 +119,17 @@ internal static class StepVariableWriteValidation
                     // Spec 1241 FR-009: a graph body has no script read validator of its own, so its refused literal writes
                     // are reported here, as a workflow's script read validator reports them.
                     if (reportRefusedScriptWrites)
+                    {
                         foreach (var (write, code) in plan.RefusedLiteralWrites())
                             errors.Add(new ValidationError($"{node.NodeId}/inputs/{scriptInput}", Core.Contracts.StepVariableWriteRules.RefusedScriptWrite,
                                 ScriptVariableReadDiagnostics.DescribeLiteralWriteRefusal(code, scriptInput, node.NodeId, script, write)));
+                        if (plan.HasComputedWrite)
+                            errors.Add(new ValidationError($"{node.NodeId}/inputs/{scriptInput}", Core.Contracts.StepVariableWriteRules.ComputedScriptWrite,
+                                ScriptVariableReadDiagnostics.DescribeComputedWrite(scriptInput, node.NodeId))
+                            {
+                                Severity = ValidationSeverities.Warning
+                            });
+                    }
 
                     if (plan.WorkflowState.HasInvalidLiteralCall)
                         errors.Add(new ValidationError(node.NodeId, "VF-STATE-001",

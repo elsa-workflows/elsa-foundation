@@ -86,6 +86,23 @@ public sealed partial class StepVariableWriteValidationTests
         Assert.Contains(workflow, item => item.Type == StepVariableWriteRules.RefusedScriptWrite && item.Message == refused.Message);
     }
 
+    [Fact]
+    public async Task The_analyzer_warns_about_a_computed_script_write_as_the_script_validator_does()
+    {
+        // SC-004: a body script that writes by a computed name gets the workflow's warning.
+        var root = Sequence("root", Script("script", "const name = 'total'; variables[name] = 1; return 1;"));
+
+        var analysis = await AnalyzeAsync(root);
+
+        var computed = Assert.Single(analysis.Findings, item => item.Type == StepVariableWriteRules.ComputedScriptWrite);
+        Assert.Equal(ValidationSeverities.Warning, computed.Severity);
+        using var services = Services();
+        using var scope = services.CreateScope();
+        var scriptValidator = scope.ServiceProvider.GetServices<IDraftValidator>().OfType<ScriptVariableReadValidator>().Single();
+        var workflow = await scriptValidator.Validate(new StubDraft(new WorkflowDefinitionState(Variables, root, [], [], null)), CancellationToken.None);
+        Assert.Contains(workflow, item => item.Type == StepVariableWriteRules.ComputedScriptWrite && item.Message == computed.Message);
+    }
+
     private static ActivityNode Body(string body) => body switch
     {
         "unbound" => Sequence("root", new ActivityNode("writer", WriterVersion, [], [])),

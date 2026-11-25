@@ -300,6 +300,7 @@ public sealed class GraphBodyStepWriteTests
             allowAcceptedButFaulted: true);
 
         Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-js").Status);
+        Assert.Contains("does not match its type 'Int32'", run.State("node-js").Fault!.Message, StringComparison.Ordinal);
         Assert.Equal(100, (await TotalRowAsync(harness, run)).InlineValue!.Value.GetInt32());
     }
 

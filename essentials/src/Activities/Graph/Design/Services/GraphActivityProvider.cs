@@ -79,6 +79,7 @@ public sealed class GraphActivityProvider(
     private const string StepVariableReferenceCode = "activity.graph.variable-reference";
     private const string StepScriptWriteCode = "activity.graph.script-write";
     private const string StepWriteOverlapsCaptureCode = "activity.graph.step-write-overlaps-capture";
+    private const string StepScriptComputedWriteCode = "activity.graph.script-computed-write";
     private static readonly JsonSerializerOptions NodeSerializerOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
@@ -134,7 +135,9 @@ public sealed class GraphActivityProvider(
         new(StepScriptWriteCode, "A script writes a variable it cannot write.",
             "Declare the variable on this activity or an enclosing container, or write another variable. A loop's item and index are read-only."),
         new(StepWriteOverlapsCaptureCode, "A step writes a variable that its own output capture also writes; the capture wins.",
-            "Write the variable in one place: in the step, or through the output capture.")
+            "Write the variable in one place: in the step, or through the output capture."),
+        new(StepScriptComputedWriteCode, "A script writes variables by a computed name, so it may write any variable of this activity.",
+            "Write variables by a literal name (variables.total = …) to keep the write set exact; a name that is not declared faults the step.")
     ];
 
     public string ProviderKey => Key;
@@ -1852,6 +1855,7 @@ public sealed class GraphActivityProvider(
                 StepVariableWriteRules.VariableReference => (StepVariableReferenceCode, ActivityDiagnosticSeverity.Error),
                 StepVariableWriteRules.RefusedScriptWrite => (StepScriptWriteCode, ActivityDiagnosticSeverity.Error),
                 StepVariableWriteRules.StepWriteOverlapsCapture => (StepWriteOverlapsCaptureCode, ActivityDiagnosticSeverity.Warning),
+                StepVariableWriteRules.ComputedScriptWrite => (StepScriptComputedWriteCode, ActivityDiagnosticSeverity.Warning),
                 // Workflow-state findings (VF-STATE-*) are out of this check's scope (spec 1241): a workflow that places
                 // the body refuses them (ActivityTemplatePlacer, VF-STATE-002).
                 _ => (null, ActivityDiagnosticSeverity.Warning)

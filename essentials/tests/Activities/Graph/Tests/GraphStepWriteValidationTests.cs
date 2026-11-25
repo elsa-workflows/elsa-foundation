@@ -39,7 +39,9 @@ public sealed partial class GraphActivityProviderTests
                 new ValidationError("first/inputs/Balance", StepVariableWriteRules.VariableReference, "Input 'Balance' of node 'first' is a variable reference and must be bound to a declared variable."),
                 new ValidationError("second/outputs/result", StepVariableWriteRules.StepWriteOverlapsCapture, "Node 'second' may write variable 'running-total' in its step and also captures output 'result' into it.")
                     { Severity = ValidationSeverities.Warning },
-                new ValidationError("second/inputs/script", StepVariableWriteRules.RefusedScriptWrite, "VF-WRITE-002: the script writes an undeclared variable.")
+                new ValidationError("second/inputs/script", StepVariableWriteRules.RefusedScriptWrite, "VF-WRITE-002: the script writes an undeclared variable."),
+                new ValidationError("second/inputs/script", StepVariableWriteRules.ComputedScriptWrite, "VF-WRITE-005: the script writes variables by a computed name.")
+                    { Severity = ValidationSeverities.Warning }
             ]);
         var provider = StepWriteProvider(analyzer);
         var manifest = TotalManifest(Parallel);
@@ -57,6 +59,7 @@ public sealed partial class GraphActivityProviderTests
             Assert.Equal(ActivityDiagnosticSeverity.Error, script.Severity);
             var overlap = Assert.Single(diagnostics, x => x.Code == "activity.graph.step-write-overlaps-capture");
             Assert.Equal(ActivityDiagnosticSeverity.Warning, overlap.Severity);
+            Assert.Equal(ActivityDiagnosticSeverity.Warning, Assert.Single(diagnostics, x => x.Code == "activity.graph.script-computed-write").Severity);
             // US3 AS1, AS2: the step writers are counted; a node that may write any visible variable says so.
             var unordered = Assert.Single(diagnostics, x => x.Code == "activity.graph.unordered-variable-write");
             Assert.Contains("'first', 'second'", unordered.Message, StringComparison.Ordinal);
