@@ -132,6 +132,9 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.http.core": {
+        "type": "Project"
+      },
       "elsa.pipelines.core": {
         "type": "Project",
         "dependencies": {
@@ -193,12 +196,25 @@
       "elsa.workflows.runtime.graph": {
         "type": "Project"
       },
+      "elsa.workflows.runtime.http": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Http.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.kernelhost": {
         "type": "Project",
         "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Native.Model": "[4.0.0-dev, )",
-          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )"
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )"
         }
       },
       "elsa.workflows.runtime.native.activities": {

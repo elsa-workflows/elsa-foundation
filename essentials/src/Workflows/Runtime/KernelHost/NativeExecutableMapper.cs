@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Native = Kernel.Native;
 
@@ -16,6 +17,18 @@ namespace Elsa.Workflows.Runtime.KernelHost;
 /// </summary>
 public static class NativeExecutableMapper
 {
+    /// <summary>
+    /// The Native workflow of a stored artifact, by its id (the workflow id), or null when <paramref name="executables"/> holds
+    /// none: what a kernel host's <see cref="Native.NativeExecutionOptions.ResolveWorkflow"/> loads, so an instance started on
+    /// a version no slot serves after a restart still runs it.
+    /// </summary>
+    /// <exception cref="NativeMappingRefusedException">The artifact holds an activity or a binding this host does not run.</exception>
+    public static async ValueTask<Native.Workflow?> MapStoredAsync(IWorkflowExecutableStore executables, string artifactId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(executables);
+        return await executables.FindAsync(artifactId, cancellationToken) is { } executable ? Map(executable) : null;
+    }
+
     /// <summary>The Native workflow for <paramref name="executable"/>, or a refusal naming the node (and input) it cannot map.</summary>
     /// <exception cref="NativeMappingRefusedException">The executable holds an activity or a binding this host does not run.</exception>
     public static Native.Workflow Map(WorkflowExecutable executable)

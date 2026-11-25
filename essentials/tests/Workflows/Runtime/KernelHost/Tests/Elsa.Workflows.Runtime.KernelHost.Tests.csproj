@@ -16,5 +16,7 @@
     <ProjectReference Include="../../../../../src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
     <!-- The in-memory slot authority, switch, projection stores and executable store the coordinator checks run on. -->
     <ProjectReference Include="../../../../../src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
+    <!-- The old core's HTTP route-table observer, which the kernel feature leaves out of a shell. -->
+    <ProjectReference Include="../../../../../src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
   </ItemGroup>
 </Project>

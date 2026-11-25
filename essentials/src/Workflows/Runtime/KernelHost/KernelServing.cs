@@ -27,14 +27,20 @@ public sealed class KernelServing
     public const string DefaultSlotName = "default";
 
     private readonly Func<string, string?>? _cronError;
+    private readonly string? _schedulesUnavailable;
     private readonly Lock _lock = new();
     private readonly SemaphoreSlim _turn = new(1, 1);
     private ServingState _state;
 
     /// <param name="cronError">The host's check of a cron expression (<see cref="NativeSchedules"/>): null when it reads.</param>
-    public KernelServing(Func<string, string?>? cronError = null)
+    /// <param name="schedulesUnavailable">
+    /// Set by a host that runs no schedule actor: why. A workflow with a Timer or Cron start trigger is then refused at the
+    /// serving check, with this reason, before anything is minted.
+    /// </param>
+    public KernelServing(Func<string, string?>? cronError = null, string? schedulesUnavailable = null)
     {
         _cronError = cronError;
+        _schedulesUnavailable = schedulesUnavailable;
         _state = Build(new Dictionary<string, KernelServedSlot>(StringComparer.Ordinal));
     }
 
@@ -49,13 +55,16 @@ public sealed class KernelServing
     public KernelServedSlot? Find(string slotId) => _state.Slots.GetValueOrDefault(slotId);
 
     /// <summary>
-    /// The workflow that serves a definition now, for a Dispatch that names it (<see cref="NativeExecutionOptions.ServedWorkflow"/>):
-    /// its default slot's, else the one slot's that serves it; null when no slot, or several others, serve it.
+    /// What serves a definition now, for a Dispatch that names it (<see cref="NativeExecutionOptions.ServedWorkflow"/>): its
+    /// default slot's workflow, else the one slot's that serves it; none when no slot serves it; several when other slots do
+    /// and none is the default.
     /// </summary>
-    public string? ServedWorkflow(string definition)
+    public ServedDefinition ServedWorkflow(string definition)
     {
         var serving = _state.Slots.Values.Where(slot => slot.DefinitionId == definition).ToArray();
-        return (serving.FirstOrDefault(slot => slot.SlotName == DefaultSlotName) ?? (serving.Length == 1 ? serving[0] : null))?.Workflow.Id;
+        if (serving.Length == 0) return ServedDefinition.None;
+        var reached = serving.FirstOrDefault(slot => slot.SlotName == DefaultSlotName) ?? (serving.Length == 1 ? serving[0] : null);
+        return reached is null ? ServedDefinition.SeveralServe : ServedDefinition.By(reached.Workflow.Id);
     }
 
     /// <summary>Runs one coordinator's change to what serves: its check, its slot move and its serving, while no other runs.</summary>
@@ -82,7 +91,8 @@ public sealed class KernelServing
     /// <summary>
     /// The serving state with <paramref name="slotId"/> serving <paramref name="served"/>, or nothing when it is null. Building it
     /// checks its routes and schedules: a route conflict (<see cref="HttpRouteConflictException"/>), a route template the model
-    /// refuses, or a recurring trigger it refuses (<see cref="NativeScheduleException"/>) throws, and nothing changes.
+    /// refuses, a recurring trigger it refuses (<see cref="NativeScheduleException"/>), or one on a host that runs no schedule
+    /// actor, throws, and nothing changes.
     /// </summary>
     internal KernelServingPlan Plan(string slotId, KernelServedSlot? served)
     {
@@ -90,7 +100,10 @@ public sealed class KernelServing
         var previous = slots.GetValueOrDefault(slotId);
         if (served is null) slots.Remove(slotId);
         else slots[slotId] = served;
-        return new(slotId, previous, served, Build(slots));
+        var state = Build(slots);
+        if (_schedulesUnavailable is { } reason && served is not null && state.Schedules.All.Any(schedule => schedule.Workflow == served.Workflow.Id))
+            throw new InvalidOperationException(reason);
+        return new(slotId, previous, served, state);
     }
 
     /// <summary>Serves <paramref name="plan"/>: its workflow joins the registry, and its slots, routes and schedules replace the current ones.</summary>

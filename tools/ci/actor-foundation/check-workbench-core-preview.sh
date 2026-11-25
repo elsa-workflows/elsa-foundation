@@ -6,9 +6,9 @@ case "$configuration" in
   *) echo "Choose Debug or Release." >&2; exit 2 ;;
 esac
 case "${PG_PREVIEW_PROFILE:-}" in
-  "") profiles=(ordinary jobs timed timeout takeover takeover-complete) ;;
-  ordinary|jobs|timed|timeout|takeover|takeover-complete) profiles=("$PG_PREVIEW_PROFILE") ;;
-  *) echo "Choose ordinary, jobs, timed, timeout, takeover or takeover-complete." >&2; exit 2 ;;
+  "") profiles=(ordinary jobs timed timeout takeover takeover-complete publications) ;;
+  ordinary|jobs|timed|timeout|takeover|takeover-complete|publications) profiles=("$PG_PREVIEW_PROFILE") ;;
+  *) echo "Choose ordinary, jobs, timed, timeout, takeover, takeover-complete or publications." >&2; exit 2 ;;
 esac
 root=$(git -c core.fsmonitor=false rev-parse --show-toplevel)
 cd "$root"

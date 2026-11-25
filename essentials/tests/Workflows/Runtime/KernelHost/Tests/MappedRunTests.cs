@@ -64,15 +64,79 @@ public sealed class MappedRunTests
     {
         var workflow = NativeExecutableMapper.Map(Executable(Node("dispatch", Types.Dispatch,
             [Literal("WorkflowDefinitionId", "invoicing", "String"), Literal("WaitForCompletion", wait, "Boolean")])));
-        var served = new Native.NativeExecutionOptions { ServedWorkflow = id => id == "invoicing" ? "invoicing-artifact-4" : null };
+        // A publish lands between any two reads: a second read would see version 5.
+        var reads = 0;
+        var served = new Native.NativeExecutionOptions
+        {
+            ServedWorkflow = id => id == "invoicing" ? Native.ServedDefinition.By(++reads == 1 ? "invoicing-artifact-4" : "invoicing-artifact-5") : Native.ServedDefinition.None,
+        };
 
         var resolved = await NativeTurn.StartAsync(workflow, served);
         var unresolved = await NativeTurn.StartAsync(workflow);
-        var unknown = await NativeTurn.StartAsync(workflow, new Native.NativeExecutionOptions { ServedWorkflow = _ => null });
 
+        // Read once, and that answer checked and started the child.
+        Assert.Equal(1, reads);
         var (start, detached) = Assert.Single(resolved.Children);
         Assert.Equal(("invoicing-artifact-4", !wait), (start.Workflow, detached));
+        // A host that serves no publications starts the id itself.
         Assert.Equal("invoicing", Assert.Single(unresolved.Children).Start.Workflow);
-        Assert.Equal("invoicing", Assert.Single(unknown.Children).Start.Workflow);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_dispatch_of_a_definition_the_host_does_not_publish_faults_before_a_child_starts(bool wait)
+    {
+        var workflow = NativeExecutableMapper.Map(Executable(Node("dispatch", Types.Dispatch,
+            [Literal("WorkflowDefinitionId", "invoicing", "String"), Literal("WaitForCompletion", wait, "Boolean")])));
+        var resolves = new List<string>();
+        var publishing = new Native.NativeExecutionOptions
+        {
+            ServedWorkflow = _ => Native.ServedDefinition.None,
+            // A stored artifact of that id exists: the Dispatch still does not reach it.
+            ResolveWorkflow = (id, _) =>
+            {
+                resolves.Add(id);
+                return ValueTask.FromResult<Native.Workflow?>(NativeExecutableMapper.Map(ExecutableOf(id, id, WriteLine("w", Literal("text", "stored")))));
+            },
+        };
+
+        var unknown = await NativeTurn.StartAsync(workflow, publishing);
+
+        Assert.Empty(unknown.Children);
+        Assert.Empty(resolves);
+        Assert.Equal(Contract.ActorStatus.Faulted, unknown.Status);
+        Assert.Equal(("dispatch.unpublished", "Dispatch Workflow names definition 'invoicing', which is not published on this host. Publish it, then run the workflow again."),
+            (unknown.Output?["Code"]?.GetValue<string>(), unknown.Output?["Message"]?.GetValue<string>()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_dispatch_of_a_definition_several_channels_serve_without_a_default_faults(bool wait)
+    {
+        var workflow = NativeExecutableMapper.Map(Executable(Node("dispatch", Types.Dispatch,
+            [Literal("WorkflowDefinitionId", "invoicing", "String"), Literal("WaitForCompletion", wait, "Boolean")])));
+
+        var turn = await NativeTurn.StartAsync(workflow, new Native.NativeExecutionOptions { ServedWorkflow = _ => Native.ServedDefinition.SeveralServe });
+
+        Assert.Empty(turn.Children);
+        Assert.Equal(Contract.ActorStatus.Faulted, turn.Status);
+        Assert.Equal(("dispatch.ambiguous", "Definition 'invoicing' is published in several channels and none is 'default'. Publish it to the default channel."),
+            (turn.Output?["Code"]?.GetValue<string>(), turn.Output?["Message"]?.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task A_dispatch_of_a_workflow_the_registry_holds_starts_it_on_a_publishing_host()
+    {
+        var workflow = NativeExecutableMapper.Map(Executable(Node("dispatch", Types.Dispatch,
+            [Literal("WorkflowDefinitionId", "helper", "String"), Literal("WaitForCompletion", true, "Boolean")])));
+        var helper = NativeExecutableMapper.Map(ExecutableOf("helper", "helper", WriteLine("w", Literal("text", "help"))));
+        var model = new Native.NativeExecutionModel(new Native.WorkflowRegistry().Add(workflow).Add(helper),
+            new Native.NativeExecutionOptions { ServedWorkflow = _ => Native.ServedDefinition.None });
+
+        var turn = await NativeTurn.StartAsync(model, workflow);
+
+        Assert.Equal("helper", Assert.Single(turn.Children).Start.Workflow);
     }
 }
