@@ -53,6 +53,8 @@ public static class RuntimeInputBindingStateProjection
         return result;
     }
 
+    private static readonly JsonSerializerOptions TypeReferenceJson = new(JsonSerializerDefaults.Web);
+
     /// <summary>
     /// Reference key → declared type of one closed scope's variables (spec 1241): a step's write into one of them is
     /// checked against it, as a write into a workflow variable is. A row that names no type reads as <c>Any</c>.
@@ -71,7 +73,7 @@ public static class RuntimeInputBindingStateProjection
             try
             {
                 type = durableValue.Type.Schema is { ValueKind: JsonValueKind.Object } schema
-                    ? schema.Deserialize<Elsa.Primitives.Models.TypeReference>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                    ? schema.Deserialize<Elsa.Primitives.Models.TypeReference>(TypeReferenceJson)
                     : null;
             }
             catch (JsonException)

@@ -151,7 +151,8 @@ A team migrating from Elsa 3 imports reusable workflows whose scripts set their 
 - A body nested in another body: a step writes its own nearest body's variables only, never the outer body's.
 - A loop inside a body: a write to a body variable from an iteration lands in the body's row; a loop item or index
   stays read-only.
-- A body variable never stored yet: it reads as null at version 0, and a write creates the row value at version 1.
+- A body variable is never unstored: the body seeds a row for every declared variable when it starts (its initial value, or
+  null, at version 0), so the first write produces version 1. A row that is missing anyway refuses the step's commit.
 - A body variable holding a sensitive value: the write keeps the destination's protection, and the history hides the
   value as it does for a frame.
 - A write whose value does not match the variable's type, or a transient variable written by a step that can suspend:
