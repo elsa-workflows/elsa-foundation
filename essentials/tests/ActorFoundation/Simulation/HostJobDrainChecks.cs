@@ -60,9 +60,14 @@ internal static class HostJobDrainChecks
             ("abandon-fault-after-kill", AbandonFaultAfterKillAsync),
             ("bound-expiry-fault", BoundExpiryFaultAsync),
             ("loss-in-both-drains", LossInBothDrainsAsync),
-            ("answer-put-back", AnswerPutBackAsync),
+            ("answer-put-back", () => AnswerPutBackAsync(newerAfterConsumption: false)),
             ("dispose-max-deadline", DisposeMaxDeadlineAsync),
             ("canceled-halt", CanceledHaltAsync),
+            ("kill-cancel-not-recorded", KillCancelNotRecordedAsync),
+            ("own-cancel-then-kill", OwnCancelThenKillAsync),
+            ("loop-errors-logged", LoopErrorsLoggedAsync),
+            ("answer-put-back-newest", () => AnswerPutBackAsync(newerAfterConsumption: true)),
+            ("dispose-deadline-boundary", DisposeDeadlineBoundaryAsync),
         ];
         // HOST_JOB_DRAIN_ONLY=name[,name]: run only these cases (fail-before witnesses run them one at a time).
         var only = Environment.GetEnvironmentVariable("HOST_JOB_DRAIN_ONLY")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -1814,15 +1819,15 @@ internal static class HostJobDrainChecks
 
     // A judgement takes a newer answer, one that names a loss, than the one a drain round read before; then a transient
     // store error interrupts it. The loss is reported, and the newer answer, not the older, waits for the next round.
-    private static async Task AnswerPutBackAsync()
+    private static async Task AnswerPutBackAsync(bool newerAfterConsumption)
     {
         var fixture = new Fixture(2, manualClock: true);
         var store = fixture.Store;
         var lease = fixture.Options.Lease;
         var window = TimeSpan.FromSeconds(3);
         Worker? worker = null;
-        Worker.HeartbeatSent? sentNew = null;
-        NodeBeat? answerNew = null;
+        Worker.HeartbeatSent? sentNew = null, sentNewest = null;
+        NodeBeat? answerNew = null, answerNewest = null;
         var deliverNewer = 0;
         var failOnce = 0;
         var options = fixture.Options with
@@ -1830,7 +1835,10 @@ internal static class HostJobDrainChecks
             BeforeDrainAnswer = () => { if (Interlocked.Exchange(ref deliverNewer, 0) == 1) worker!.HeartbeatAnswered(sentNew!, answerNew!); },
             AfterAnswerConsumed = () =>
             {
-                if (Interlocked.Exchange(ref failOnce, 0) == 1) throw new StoreException(Failure.Transient, "injected transient error while judging");
+                if (Interlocked.Exchange(ref failOnce, 0) != 1) return;
+                // An even newer answer arrives while the judgement runs: the put-back must keep it.
+                if (sentNewest is not null) worker!.HeartbeatAnswered(sentNewest, answerNewest!);
+                throw new StoreException(Failure.Transient, "injected transient error while judging");
             }
         };
         worker = new Worker("put-back", 0, store, new ActorAdapter(store, new JobProbe()), options);
@@ -1844,12 +1852,22 @@ internal static class HostJobDrainChecks
         (row.Owner, row.Epoch) = ("sibling", row.Epoch + 1);     // the newer answer omits partition 0: a loss
         sentNew = worker.BeforeHeartbeat();
         answerNew = await store.NodeHeartbeatAsync("put-back", lease, window);
+        if (newerAfterConsumption)
+        {
+            fixture.Advance(TimeSpan.FromSeconds(1));
+            sentNewest = worker.BeforeHeartbeat();
+            answerNewest = await store.NodeHeartbeatAsync("put-back", lease, window);
+        }
         (deliverNewer, failOnce) = (1, 1);
         var kept = await worker.KeepDrainLiveAsync(worker.DrainGeneration, ownedAtStart: true, CancellationToken.None);
         var pending = worker.PendingAnswerSentAt;
-        Console.WriteLine($"  put-back: kept {kept}, pending answer sent at {pending?.ToString() ?? "none"} (older {sentOld.At}, newer {sentNew.At})");
-        Check(!kept && pending == sentNew.At,
-            "a judgement interrupted by a transient error reports the loss its newer answer names, and puts back that answer, not the older one");
+        Console.WriteLine($"  put-back: kept {kept}, pending answer sent at {pending?.ToString() ?? "none"} (older {sentOld.At}, newer {sentNew.At}, newest {sentNewest?.At.ToString() ?? "none"})");
+        if (newerAfterConsumption)
+            Check(!kept && pending == sentNewest!.At,
+                "a judgement interrupted by a transient error keeps an answer newer than the one it took, and reports the loss it took");
+        else
+            Check(!kept && pending == sentNew.At,
+                "a judgement interrupted by a transient error reports the loss its newer answer names, and puts back that answer, not the older one");
     }
 
     // A dispose deadline past the longest timer delay is infinite, not an error at dispose.
@@ -1884,6 +1902,123 @@ internal static class HostJobDrainChecks
         await DisposeQuietlyAsync(node);
         Check(outcome is OperationCanceledException && node.LastError is OperationCanceledException && logged.Count == 1,
             $"a stop that ends cancelled without a kill is recorded and logged once ({outcome?.GetType().Name ?? "no error"}, recorded {node.LastError?.GetType().Name ?? "nothing"}, logged {logged.Count})");
+    }
+
+    // A cancellation the kill caused is no fault: nothing is recorded or reported.
+    private static async Task KillCancelNotRecordedAsync()
+    {
+        var fixture = new Fixture();
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var node = new RuntimeNode("kill-cancel", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, beforeRelease: async token => await Task.Delay(System.Threading.Timeout.Infinite, token), onFault: logged.Enqueue);
+        await node.StartAsync(fixture.Host(node, new JobProbe(), fixture.Store, ownedSet: true));
+        await WaitFor(() => fixture.Fence.Owner == node.Node);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        var outcome = await OutcomeAsync(node.StopAsync(deadline.Token).AsTask());
+        await Task.Delay(200);
+        await DisposeQuietlyAsync(node);
+        Check(outcome is null && logged.IsEmpty && node.LastError is null,
+            $"a cancellation the kill caused is not recorded (outcome {outcome?.GetType().Name ?? "none"}, logged {logged.Count}, recorded {node.LastError?.GetType().Name ?? "nothing"})");
+    }
+
+    // The turn drain throws its own cancellation, then a kill lands while the abandoned run's job drain waits: the drain's
+    // cancellation is recorded once, as thrown, with its own message.
+    private static async Task OwnCancelThenKillAsync()
+    {
+        var fixture = new Fixture();
+        var type = new JobProbe();
+        var own = new OperationCanceledException("the turn drain's own cancellation");
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var node = new RuntimeNode("own-cancel-kill", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, beforeRelease: async _ =>
+        {
+            await Task.Yield();
+            throw own;
+        }, onFault: logged.Enqueue);
+        await node.StartAsync(fixture.Host(node, type, fixture.Store, ownedSet: true));
+        await fixture.StartActorAsync(node);
+        await type.Entered.Task.WaitAsync(Timeout);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(800));     // lands while the job drain waits
+        Exception? outcome;
+        try { outcome = await OutcomeAsync(node.StopAsync(deadline.Token).AsTask()); }
+        finally { type.Finish.TrySetResult(); }
+        await Task.Delay(200);
+        await DisposeQuietlyAsync(node);
+        Check(logged.Count == 1 && ReferenceEquals(logged.First(), own) && ReferenceEquals(node.LastError, own),
+            $"a drain's own cancellation followed by a kill is recorded once, as thrown ({logged.Count} logged, {node.LastError?.Message ?? "nothing recorded"}; stop {outcome?.GetType().Name ?? "returned"})");
+    }
+
+    // Errors the loops survive reach the host's callback, once per distinct error: a crashed beside loop, and a pass that
+    // fails every time.
+    private static async Task LoopErrorsLoggedAsync()
+    {
+        var fixture = new Fixture();
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var host = new ThrowingHost();
+        var node = new RuntimeNode("loop-errors", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, beside: _ => Task.FromException(new InvalidOperationException("the beside loop crashed")), onFault: logged.Enqueue);
+        await node.StartAsync(host);
+        var clock = Stopwatch.StartNew();
+        while (Volatile.Read(ref host.Passes) < 4 && clock.Elapsed < Timeout) await Task.Delay(20);
+        await DisposeQuietlyAsync(node);
+        var passErrors = logged.Count(entry => entry.Message == ThrowingHost.Message);
+        var besideErrors = logged.Count(entry => entry.Message == "the beside loop crashed");
+        Check(host.Passes >= 4 && node.Errors >= host.Passes && passErrors == 1 && besideErrors == 1,
+            $"loop errors reach the callback once per distinct error ({host.Passes} failing passes, {node.Errors} counted, logged pass {passErrors}, beside {besideErrors})");
+    }
+
+    /// <summary>A host whose one scope's every pass throws.</summary>
+    private sealed class ThrowingHost : IScopeHost
+    {
+        internal const string Message = "a pass that fails every time";
+        internal int Passes;
+        public ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default) =>
+            new(new ThrowingScope(this, scope));
+
+        private sealed class ThrowingScope(ThrowingHost host, int scope) : IScopeActivation
+        {
+            public int Scope => scope;
+            public bool Active { get; private set; } = true;
+            public ValueTask WokenAsync(InstanceRef? actor, CancellationToken cancellationToken = default) => default;
+            public ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default)
+            {
+                Interlocked.Increment(ref host.Passes);
+                throw new InvalidOperationException(Message);
+            }
+            public ValueTask DisposeAsync()
+            {
+                Active = false;
+                return default;
+            }
+        }
+    }
+
+    // Deadlines at the edge of the timer's longest delay: the kill and the bound agree, and neither throws at dispose.
+    private static async Task DisposeDeadlineBoundaryAsync()
+    {
+        var longest = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
+        var results = new List<string>();
+        foreach (var deadline in new[] { longest - RuntimeNode.DisposeGrace, longest - RuntimeNode.DisposeGrace + TimeSpan.FromMilliseconds(1), longest })
+        {
+            var fixture = new Fixture();
+            var node = new RuntimeNode("dispose-boundary", fixture.Store, 1, new LoopOptions
+            {
+                BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100),
+                PollInterval = TimeSpan.FromMilliseconds(20), DisposeDeadline = deadline
+            });
+            await node.StartAsync(fixture.Host(node, new JobProbe(), fixture.Store, ownedSet: true));
+            await WaitFor(() => fixture.Fence.Owner == node.Node);
+            var outcome = await OutcomeAsync(node.DisposeAsync().AsTask());
+            results.Add(outcome is null && fixture.Fence.Owner is null ? "ok" : outcome?.GetType().Name ?? "kept");
+        }
+        Check(results.All(result => result == "ok"),
+            $"dispose deadlines at the timer limit (limit - grace, limit - grace + 1 ms, limit) stop and release ({string.Join(", ", results)})");
     }
 
     private static async Task<Exception?> OutcomeAsync(Task task)

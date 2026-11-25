@@ -107,7 +107,7 @@ internal static class PostgresPreviewLifetimeChecks
             Require((await ReadFenceAsync()).Owner is null, "the replacement also releases ownership through application shutdown");
         }
         // KERNEL_LIFETIME_PROBES=name[,name]: run only these deadline probes after the main flow (for fail-before witnesses).
-        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline"];
+        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault"];
         var only = Environment.GetEnvironmentVariable("KERNEL_LIFETIME_PROBES")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (only is { Length: 0 } || only?.FirstOrDefault(name => !probes.Contains(name, StringComparer.Ordinal)) is { } unknown)
             throw new InvalidOperationException($"KERNEL_LIFETIME_PROBES names no known probe ({string.Join(", ", probes)}).");
@@ -120,7 +120,25 @@ internal static class PostgresPreviewLifetimeChecks
         if (Probe("dispose-report")) await CheckDisposeReportsOnceAsync();
         if (Probe("dispose-joins")) await CheckJoinedDisposeKillsAsync();
         if (Probe("negative-deadline")) CheckNegativeDisposeDeadline();
+        if (Probe("shutdown-fault")) await CheckShutdownFaultAsync();
         return 0;
+
+        // A fault the shutdown raises outside the node is kept on LastError and logged once at Error.
+        async Task CheckShutdownFaultAsync()
+        {
+            var fault = new InvalidOperationException("injected shutdown fault outside the node");
+            var log = new RecordingLogger();
+            var service = new PostgresPreviewHostedService(Open, "shutdown-fault", new WaitingActor(false), Environment.FailFast,
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25) }, log) { AfterNodeStop = () => throw fault };
+            await service.StartAsync(token);
+            Exception? reported = null;
+            try { await service.StopAsync(token); }
+            catch (Exception error) when (!token.IsCancellationRequested) { reported = error; }
+            await Task.Delay(200, token);
+            var errors = log.Errors;
+            Require(ReferenceEquals(reported, fault) && ReferenceEquals(service.LastError, fault) && errors.Count == 1 && ReferenceEquals(errors[0], fault),
+                $"a shutdown fault outside the node is thrown by StopAsync, kept on LastError and logged once at Error ({errors.Count} Error entr{(errors.Count == 1 ? "y" : "ies")})");
+        }
 
         // A negative dispose deadline is refused when the hosted service is made.
         void CheckNegativeDisposeDeadline()
@@ -234,15 +252,17 @@ internal static class PostgresPreviewLifetimeChecks
                 name + "-start", Contract.Kinds.Start, cancellationToken: token);
             Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, $"the {name} probe admits an independent root");
             var held = new WaitingActor();
-            var prompt = new PostgresPreviewHostedService(Open, name, held, reason => escalation.TrySetResult(reason), loop);
+            var log = new RecordingLogger();
+            var prompt = new PostgresPreviewHostedService(Open, name, held, reason => escalation.TrySetResult(reason), loop, log);
             try
             {
                 await prompt.StartAsync(token);
                 await held.Entered.Task.WaitAsync(token);     // after an earlier probe's fence has run out, if it left one
                 await prompt.DisposeAsync().AsTask().WaitAsync(token);
                 await Task.Delay(TimeSpan.FromMilliseconds(500), token);
-                Require(!escalation.Task.IsCompleted && (await ReadFenceAsync()).Owner == name && !held.Release.Task.IsCompleted,
-                    "a dispose whose deadline kill ends the stop promptly does not run the process policy, and leaves the fence for expiry");
+                Require(!escalation.Task.IsCompleted && (await ReadFenceAsync()).Owner == name && !held.Release.Task.IsCompleted &&
+                    log.Warnings.Count == 1 && log.Warnings[0].Contains("lease expiry", StringComparison.Ordinal) && log.Errors.Count == 0 && prompt.LastError is null,
+                    $"a dispose whose deadline kill ends the stop promptly does not run the process policy, leaves the fence for expiry, and logs one Warning ({log.Warnings.Count} Warning, {log.Errors.Count} Error)");
             }
             finally { held.Release.TrySetResult(); }
         }
@@ -351,12 +371,16 @@ internal static class PostgresPreviewLifetimeChecks
     private sealed class RecordingLogger : ILogger<PostgresPreviewHostedService>
     {
         private readonly List<Exception?> _errors = [];
+        private readonly List<string> _warnings = [];
         internal IReadOnlyList<Exception?> Errors { get { lock (_errors) return [.. _errors]; } }
+        internal IReadOnlyList<string> Warnings { get { lock (_errors) return [.. _warnings]; } }
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
         public bool IsEnabled(LogLevel logLevel) => true;
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            if (logLevel == LogLevel.Error) lock (_errors) _errors.Add(exception);
+            lock (_errors)
+                if (logLevel == LogLevel.Error) _errors.Add(exception);
+                else if (logLevel == LogLevel.Warning) _warnings.Add(formatter(state, exception));
         }
     }
 
