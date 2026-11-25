@@ -225,6 +225,7 @@ internal static class PostgresRuntimeCluster
     {
         public TimeSpan? NodeLease => host.NodeLease;
         public ValueTask CheckScopesAsync(int count, CancellationToken token) => host.CheckScopesAsync(count, token);
+        public IScopeHostRun? AttachRuntime() => ((IScopeHost)host).AttachRuntime();
         public ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken token) => host.HeartbeatAsync(window, token);
         public ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken token) => host.PassAsync(token);
         public bool SupportsSetGain => ((IScopeSetGain)host).SupportsSetGain;

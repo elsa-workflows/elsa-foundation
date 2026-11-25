@@ -111,6 +111,6 @@ internal static class LabelChecks
         public JsonNode? Evaluate(HostExpression expression, IReadOnlyDictionary<string, JsonNode?> parameters, IReadOnlyDictionary<string, JsonNode?> variables) =>
             JsonValue.Create($"{parameters["c"]?.GetValue<string>()} {parameters["i"]?.GetValue<string>()?.Length > 0}");
 
-        public void Dispose() { }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

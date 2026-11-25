@@ -40,10 +40,19 @@ internal static class HostExpressionChecks
                     var other => throw new ArgumentException($"no program '{other}'"),
                 };
 
-            public void Dispose() => owner.Closed++;
+            public ValueTask DisposeAsync()
+            {
+                owner.Closed++;
+                return ValueTask.CompletedTask;
+            }
 
             private static double Number(JsonNode? node) => double.Parse(node!.ToJsonString(), System.Globalization.CultureInfo.InvariantCulture);
         }
+    }
+
+    private sealed class Unavailable : INativeExpressions
+    {
+        public INativeExpressionSession Open(CancellationToken cancellationToken) => throw new NativeExpressionsUnavailableException("the shell is reloading");
     }
 
     private static Node Hold() => Event("hold", "never");
@@ -93,6 +102,8 @@ internal static class HostExpressionChecks
             var evaluator = new Evaluator();
             var store = new InMemoryStore(1, () => Environment.TickCount64);
             var owner = new Owner("hx", 0, store, registry, new Network(), native: new NativeOptions { Expressions = evaluator });
+            var away = new Owner("hx-away", 0, new InMemoryStore(1, () => Environment.TickCount64), registry, new Network(), native: new NativeOptions { Expressions = new Unavailable() });
+            await away.StartAsync();
             var bare = new Owner("hx-bare", 0, new InMemoryStore(1, () => Environment.TickCount64), registry, new Network());
             await owner.StartAsync();
             await bare.StartAsync();
@@ -131,6 +142,11 @@ internal static class HostExpressionChecks
             var resumed = Fault(owner.State($"0/hx-parent-hx-fail-resume-{mode}"));
             check(resumed is { Code: "expression.failed" } && resumed.Message.Contains("Node 'wait', input 'EventName'", StringComparison.Ordinal) && resumed.Message.Contains("read at resume", StringComparison.Ordinal),
                 $"{mode}: one that throws when a waiting activity resumes faults that activity ({resumed?.Message})");
+            var unavailable = await Run(away, "hx-values");
+            var committed = unavailable is null ? "" : System.Text.Json.JsonSerializer.Serialize(unavailable);
+            check(away.Status($"0/hx-values-{mode}") == InstanceStatus.Faulted && unavailable?.Variables.GetValueOrDefault("sum") is null &&
+                  !committed.Contains("expression.failed", StringComparison.Ordinal),
+                $"{mode}: a host whose evaluator is unavailable abandons the turn, committing no activity fault ({away.Status($"0/hx-values-{mode}")})");
             var none = Fault(await Run(bare, "hx-parent-hx-fail"));
             check(none is { Code: "expression.failed" } && none.Message.Contains("composes no evaluator", StringComparison.Ordinal),
                 $"{mode}: on a host with no evaluator a host expression faults its activity ({none?.Message})");

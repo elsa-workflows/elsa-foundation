@@ -152,7 +152,14 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     public async ValueTask RunAsync()
     {
         try { await RunTurnAsync(); }
-        finally { CloseExpressions(); }
+        catch
+        {
+            // The turn's own failure is the one to report, not a session that also fails to close.
+            try { await CloseExpressionsAsync(); }
+            catch (Exception) { /* the turn already failed */ }
+            throw;
+        }
+        await CloseExpressionsAsync();
     }
 
     private async ValueTask RunTurnAsync()

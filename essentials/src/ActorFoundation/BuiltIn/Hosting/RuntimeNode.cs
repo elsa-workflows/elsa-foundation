@@ -6,6 +6,9 @@ namespace Kernel.Runtime.Hosting;
 /// <summary>When the loop of a <see cref="RuntimeNode"/> does what.</summary>
 public sealed record LoopOptions
 {
+    /// <summary>The clock (ms) the loop-error report window runs on; for witnesses. The node's own clock when null.</summary>
+    internal Func<long>? ErrorReportClock { get; init; }
+
     /// <summary>A round of the fair share: the membership heartbeat, and the partitions it gives up or asks for.</summary>
     public TimeSpan BalanceEvery { get; init; } = TimeSpan.FromSeconds(1);
 
@@ -20,6 +23,10 @@ public sealed record LoopOptions
 
     /// <summary>Every held scope reads its inbox at least this often: the guarantee behind a lost wake hint.</summary>
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>How long <see cref="RuntimeNode.DisposeAsync"/> lets the graceful stop drain before it becomes a kill, also
+    /// when the stop was started by another caller.</summary>
+    public TimeSpan DisposeDeadline { get; init; } = TimeSpan.FromSeconds(30);
 }
 
 /// <summary>
@@ -52,9 +59,18 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private readonly TaskScheduler _scheduler = new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private Task? _loop, _heartbeats, _halted;
-    private TimeSpan? _heartbeatEvery;
     private readonly Func<CancellationToken, Task>? _beside;
     private readonly Func<CancellationToken, Task>? _beforeRelease;
+    private readonly Action<Exception>? _onFault;
+    private readonly TimeSpan _disposeDeadline;
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Exception, object> _faults = [];     // each fault is recorded once
+    // Loop errors reported, by type and message: at most LoopErrorKeys, oldest evicted; a key is reported again once
+    // LoopErrorWindow has passed, with the count of repeats it suppressed.
+    private readonly Dictionary<(Type, string), (long ReportedAt, long Suppressed)> _loopErrors = [];
+    internal const int LoopErrorKeys = 64;
+    internal static readonly TimeSpan LoopErrorWindow = TimeSpan.FromMinutes(10);
+    private TimeoutException? _boundExpired;
+    private Exception? _ownCancellation;     // a drain's own cancellation, kept as thrown
     private readonly CancellationTokenSource _besideEnd = new();     // A1: cancelled at the end of the stop, or on a kill
     private Task? _besideRun;
     private readonly object _halting = new();
@@ -65,13 +81,20 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// owner-path call's connection at twice the lease and ends the process, by the host's policy, only when it cannot.</param>
     /// <param name="beforeRelease">Optional graceful drain after the last scheduler pass and before returning
     /// ownership. It may await work entered by a pass that has already returned.</param>
+    /// <param name="onFault">Called once for each fault the node records about its stop: the stop's own fault (also one
+    /// that ends cancelled without a kill), a dispose that returned at its bound, and a fault that lands after a kill; and
+    /// once for each distinct error its loops survive (the heartbeat, the beside loop, balancing, passes), whose repeats
+    /// are only counted (<see cref="Errors"/>). The host logs it; the fault is also on <see cref="LastError"/>. It runs
+    /// inline on the stop's path and must not block: hand slow work off.</param>
     public RuntimeNode(string node, IMembership membership, int partitions, LoopOptions? options = null, IWakeSignal? wake = null,
-        Func<CancellationToken, Task>? beside = null, Func<CancellationToken, Task>? beforeRelease = null)
+        Func<CancellationToken, Task>? beside = null, Func<CancellationToken, Task>? beforeRelease = null, Action<Exception>? onFault = null)
     {
         _beside = beside;
         _beforeRelease = beforeRelease;
+        _onFault = onFault;
         _heartbeatsExit = CancellationTokenSource.CreateLinkedTokenSource(_kill.Token);
         _options = options ?? new LoopOptions();
+        _disposeDeadline = ValidDisposeDeadline(_options.DisposeDeadline);     // fail fast: a refused deadline would leave dispose unable to stop
         _runtime = new PartitionRuntime(node, membership, partitions, _options.Window, wake);
         _due = new long[partitions];
         _oldestWaiting = new long?[partitions];
@@ -85,7 +108,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
 
     public async ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
     {
-        if (host is INodeLeaseHost { NodeLease: { } lease }) _heartbeatEvery = Cadence(lease, _options);
+        var heartbeatEvery = host is INodeLeaseHost { NodeLease: { } lease } ? Cadence(lease, _options) : (TimeSpan?)null;
         await _runtime.StartAsync(host, cancellationToken);
         _runtime.Wake.Listen(actor =>
         {
@@ -98,9 +121,15 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             if (_halted is null)     // a stop or kill that came first leaves the node unstarted
             {
                 _loop = Task.WhenAll(OnNode(LoopAsync), OnNode(BalanceLoopAsync));
-                if (_heartbeatEvery is { } every) _heartbeats = Task.Run(() => HeartbeatLoopAsync(every));
+                if (heartbeatEvery is { } every) _heartbeats = Task.Run(() => HeartbeatLoopAsync(every));
                 if (_beside is { } beside) _besideRun = Task.Run(() => Beside(beside));     // not in _loop: the stop must not wait on it
+                return;
             }
+        // A stop or kill that landed while the start validated its scopes found no host to release. The start has attached
+        // one since: end that run here, before any scope was taken, so the host is free for a later runtime. Joining a
+        // shutdown a kill abandoned reports a cancellation: ownership then runs out by lease, and the start returns.
+        try { await OnNode(() => _runtime.StopAsync(CancellationToken.None).AsTask()); }
+        catch (OperationCanceledException) { }
     }
 
     /// <summary>The heartbeat's cadence: at least three per lease and at most half the window apart, a second at most by default.</summary>
@@ -132,7 +161,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             catch (OperationCanceledException) when (exit.IsCancellationRequested) { break; }
             catch (Exception e)
             {
-                RecordError(e);    // the host counts a failed heartbeat as missed; anything else is a bug
+                RecordLoopError(e);    // the host counts a failed heartbeat as missed; anything else is a bug
             }
             try { await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, (long)every.TotalMilliseconds - (Now - started))), exit); }
             catch (OperationCanceledException) { break; }
@@ -145,7 +174,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         catch (OperationCanceledException) when (_besideEnd.IsCancellationRequested) { }
         catch (Exception e)
         {
-            RecordError(e);
+            RecordLoopError(e);
         }
     }
 
@@ -159,7 +188,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             catch (OperationCanceledException) when (kill.IsCancellationRequested) { break; }
             catch (Exception e)
             {
-                RecordError(e);
+                RecordLoopError(e);
             }
             Signal();       // a scope taken gets its first pass at once
             var ms = Math.Max(0, (long)_options.BalanceEvery.TotalMilliseconds - (Now - started));
@@ -174,20 +203,33 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     }
 
     /// <summary>
-    /// Leave the loop once the pass under way has ended (it is not cancelled, so its commit lands or is refused), then give
-    /// every scope up: whoever takes them next finds no death.
+    /// Finish the pass under way, end admitted off-turn work, then give every scope up: whoever takes them next finds no death.
+    /// The call that starts the stop sets its deadline: when <paramref name="cancellationToken"/> cancels, the stop becomes
+    /// a kill, also during the release, and what is still owned runs out by its lease. A stop that joins a stop under way
+    /// waits for it; its token ends only its own wait, with a cancellation, and never shortens the deadline the first
+    /// caller set. Only <see cref="KillAsync"/> and <see cref="DisposeAsync"/> (at <see cref="LoopOptions.DisposeDeadline"/>)
+    /// end it sooner. It throws the stop's fault; the fault is also recorded (<see cref="LastError"/>).
     /// </summary>
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
-        using (cancellationToken.Register(_kill.Cancel))      // a stop that may not wait any longer becomes a kill, also during the release
-            await HaltAsync();
+        CancellationTokenRegistration deadline = default;
+        Task halted;
+        bool first;
+        lock (_halting)
+        {
+            first = _halted is null;
+            if (first) deadline = cancellationToken.Register(_kill.Cancel);
+            halted = _halted ??= StartHalt();
+        }
+        // Its own outcome: the stop's fault, or a joined caller's own cancellation. A fault is recorded either way.
+        using (deadline) await halted.WaitAsync(first ? CancellationToken.None : cancellationToken);
     }
 
     /// <summary>
     /// A crash: the loop stops (a pass under way stops at a turn boundary, before its commit) and nothing more is given
     /// up, also when a stop is under way: a kill during a stop ends its release. A stop or dispose after a kill does
     /// nothing. Background jobs already under way run on, as in a process that lives on after it was declared dead;
-    /// their results are dropped with the worker's memory.
+    /// their results are dropped with the worker's memory. It throws the stop's fault, if any; the fault is also recorded.
     /// </summary>
     public async ValueTask KillAsync()
     {
@@ -195,12 +237,114 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         await HaltAsync();
     }
 
-    public ValueTask DisposeAsync() => StopAsync();
+    /// <summary>
+    /// A stop bounded by <see cref="LoopOptions.DisposeDeadline"/>: at the deadline it becomes a kill, whoever started the
+    /// stop, and what is still owned runs out by its lease. It never throws the stop's fault, which is recorded
+    /// (<see cref="LastError"/>) whoever waits for it; nor does it wait past the deadline plus <see cref="DisposeGrace"/>.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        using var deadline = new CancellationTokenSource(_disposeDeadline);
+        // The wait is bounded too: a pass stuck past the kill (a call that ignores cancellation) cannot hold the dispose.
+        // An infinite dispose deadline is an infinite bound.
+        using var bound = new CancellationTokenSource(WithGrace(_disposeDeadline, DisposeGrace));
+        var halted = HaltAsync();
+        using (deadline.Token.Register(_kill.Cancel))
+            try { await halted.WaitAsync(bound.Token); }
+            catch (Exception) { }     // a fault is recorded by the halt itself; the bound's cancellation is noted below
+        if (!halted.IsCompleted)     // one instance, so a second dispose of the same stuck node records and logs nothing new
+            RecordFault(Interlocked.CompareExchange(ref _boundExpired,
+                new TimeoutException($"The dispose returned {DisposeGrace.TotalSeconds:0.#} s after its deadline while the killed stop had not ended."), null) ?? _boundExpired);
+    }
+
+    // The longest delay a CancellationTokenSource accepts; a deadline beyond it is treated as infinite.
+    private static readonly TimeSpan LongestDelay = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
+
+    /// <summary>A deadline plus a grace, overflow-safe; an infinite deadline, or one past the longest delay, stays infinite.</summary>
+    internal static TimeSpan WithGrace(TimeSpan deadline, TimeSpan grace) =>
+        deadline == Timeout.InfiniteTimeSpan || deadline > LongestDelay - grace ? Timeout.InfiniteTimeSpan : deadline + grace;
+
+    /// <summary>
+    /// A dispose deadline is positive or infinite; anything else is refused when the node or its host is made. One whose
+    /// bound (the deadline plus <see cref="DisposeGrace"/>) passes the longest delay a timer accepts (about 49.7 days) is
+    /// treated as infinite, so the kill and the bound agree.
+    /// </summary>
+    public static TimeSpan ValidDisposeDeadline(TimeSpan deadline) =>
+        deadline == Timeout.InfiniteTimeSpan || deadline > LongestDelay - DisposeGrace ? Timeout.InfiniteTimeSpan
+        : deadline > TimeSpan.Zero ? deadline
+        : throw new ArgumentOutOfRangeException(nameof(deadline), deadline, "LoopOptions.DisposeDeadline must be positive or infinite.");
+
+    /// <summary>How long a dispose waits past its deadline for the killed stop to end before it returns.</summary>
+    public static readonly TimeSpan DisposeGrace = TimeSpan.FromSeconds(2);
 
     /// <summary>The first stop or kill leaves the loop and, unless killed, gives every scope up; every caller waits for it.</summary>
     private Task HaltAsync()
     {
-        lock (_halting) return _halted ??= HaltOnceAsync();
+        lock (_halting) return _halted ??= StartHalt();
+    }
+
+    // The halt records its own fault, exactly once, whoever waits for it and whether anyone does. A halt that ends
+    // cancelled though no kill asked for it (a drain that threw a cancellation of its own) is a fault too.
+    private Task StartHalt()
+    {
+        var halted = HaltOnceAsync();
+        _ = halted.ContinueWith(static (stopped, state) =>
+        {
+            var node = (RuntimeNode)state!;
+            if (stopped.IsFaulted) node.RecordFault(stopped.Exception!.InnerException ?? stopped.Exception);
+            else if (!node._kill.IsCancellationRequested)
+                node.RecordFault(Volatile.Read(ref node._ownCancellation) ??
+                    new OperationCanceledException("The node's stop ended cancelled although no kill or deadline asked for it."));
+        }, this, CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return halted;
+    }
+
+    // A drain or release that the kill stopped waiting for may still fault, or end with a cancellation of its own (one
+    // that is not the kill's): record either, as thrown, when it does.
+    private void RecordLater(Task work) =>
+        _ = work.ContinueWith(static (ended, state) =>
+        {
+            var node = (RuntimeNode)state!;
+            if (ended.IsFaulted) node.RecordFault(ended.Exception!.InnerException ?? ended.Exception);
+            else if (OwnCancellation(ended) is { } own && own.CancellationToken != node._kill.Token) node.KeepOwnCancellation(own);
+        }, this, CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+    private static OperationCanceledException? OwnCancellation(Task canceled)
+    {
+        try { canceled.GetAwaiter().GetResult(); }
+        catch (OperationCanceledException thrown) { return thrown; }
+        catch (Exception) { }
+        return null;
+    }
+
+    // A drain's or the runtime stop's own cancellation, no kill: kept as thrown and recorded at once.
+    private void KeepOwnCancellation(OperationCanceledException own)
+    {
+        Interlocked.CompareExchange(ref _ownCancellation, own, null);
+        RecordFault(own);
+    }
+
+    // A fault about the stop: recorded on LastError and reported to the host's callback, once per exception. An aggregate
+    // reports only its inner exceptions not reported yet.
+    private void RecordFault(Exception fault)
+    {
+        lock (_faults)
+            if (!_faults.TryAdd(fault, fault)) return;
+        RecordError(fault);
+        if (fault is AggregateException aggregate)
+        {
+            foreach (var inner in aggregate.InnerExceptions)
+                lock (_faults)
+                    if (_faults.TryAdd(inner, inner)) Report(inner);
+            return;
+        }
+        Report(fault);
+
+        void Report(Exception reported)
+        {
+            try { _onFault?.Invoke(reported); }
+            catch (Exception) { }     // a failing log must not hide the fault, which LastError keeps
+        }
     }
 
     private async Task HaltOnceAsync()     // A1: the watchdog guards the last pass and the releases, so it ends after them
@@ -213,33 +357,59 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     {
         _gone = true;
         _exit.Cancel();
-        if (_beforeRelease is null) _heartbeatsExit.Cancel();
 
+        // The node lease keeps renewing through both drains: the entered actor turns here, then the host's entered jobs
+        // inside the runtime's stop. Heartbeats end just before the first release, or at the deadline (the kill token).
         Exception? drainError = null;
         try
         {
             if (_loop is not null) await _loop;
             if (_beforeRelease is { } drain && !_kill.IsCancellationRequested)
             {
-                try { await OnNode(() => drain(_kill.Token)).WaitAsync(_kill.Token); }
-                catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
+                var draining = OnNode(() => drain(_kill.Token));
+                try { await draining.WaitAsync(_kill.Token); }
+                catch (OperationCanceledException) when (_kill.IsCancellationRequested) { RecordLater(draining); }
                 catch (Exception error) { drainError = error; }
+                // The drain's own cancellation, no kill: record it as thrown, now, whatever a later kill does to the stop.
+                if (drainError is OperationCanceledException own) KeepOwnCancellation(own);
+            }
+
+            // A kill during shutdown leaves remaining ownership to expire instead of returning it as clean. So does a
+            // turn drain that faulted with anything but a lost fence: entered work may still be inside. The runtime's stop
+            // still ends the entered jobs, as on the job drain's fault path, then abandons the run before any release.
+            if (!_kill.IsCancellationRequested)
+            {
+                var abandon = drainError is not null and not ScopeOwnershipLostException;
+                Func<Task> beforeRelease = abandon
+                    ? async () =>
+                    {
+                        await StopHeartbeatsAsync();
+                        ExceptionDispatchInfo.Throw(drainError!);
+                    }
+                    : StopHeartbeatsAsync;
+                var stopping = OnNode(() => _runtime.StopAsync(_kill.Token, beforeRelease).AsTask());
+                try { await stopping.WaitAsync(_kill.Token); }
+                catch (OperationCanceledException) when (_kill.IsCancellationRequested) { RecordLater(stopping); }
+                catch (Exception abandoned) when (abandon && ReferenceEquals(abandoned, drainError)) { }
+                // The job drain's or the release's own cancellation, no kill: keep it as thrown, whatever comes after.
+                catch (OperationCanceledException own) when (drainError is null)
+                {
+                    KeepOwnCancellation(own);
+                    throw;
+                }
+                // A fence lost in both drains is one loss.
+                catch (ScopeOwnershipLostException) when (drainError is ScopeOwnershipLostException) { ExceptionDispatchInfo.Throw(drainError); }
+                catch (Exception releaseError) when (drainError is not null) { throw new AggregateException(drainError, releaseError); }
             }
         }
-        finally
-        {
-            _heartbeatsExit.Cancel();
-            if (_heartbeats is not null) await _heartbeats;
-        }
-
-        // A kill during shutdown leaves remaining ownership to expire instead of returning it as clean.
-        if (!_kill.IsCancellationRequested)
-        {
-            try { await OnNode(() => _runtime.StopAsync(_kill.Token).AsTask()).WaitAsync(_kill.Token); }
-            catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
-            catch (Exception releaseError) when (drainError is not null) { throw new AggregateException(drainError, releaseError); }
-        }
+        finally { await StopHeartbeatsAsync(); }
         if (drainError is not null) ExceptionDispatchInfo.Throw(drainError);
+    }
+
+    private async Task StopHeartbeatsAsync()
+    {
+        _heartbeatsExit.Cancel();
+        if (_heartbeats is not null) await _heartbeats;
     }
 
     /// <summary>Run on the node's scheduler, one task at a time with the loop and what it started.</summary>
@@ -252,6 +422,29 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// <summary>What the loop caught that was not a cancellation: zero unless something is broken.</summary>
     public long Errors => Interlocked.Read(ref _errors);
     public Exception? LastError => Volatile.Read(ref _lastError);
+
+    // A loop survived an error: counted always, reported once per distinct error per window, so a repeating one does
+    // not flood; a report after the window carries the repeats it suppressed (Exception.Data["SuppressedRepeats"]).
+    internal void RecordLoopError(Exception error)
+    {
+        RecordError(error);
+        var now = _options.ErrorReportClock?.Invoke() ?? Now;
+        var key = (error.GetType(), error.Message);
+        lock (_loopErrors)
+        {
+            if (_loopErrors.TryGetValue(key, out var seen) && now - seen.ReportedAt < (long)LoopErrorWindow.TotalMilliseconds)
+            {
+                _loopErrors[key] = seen with { Suppressed = seen.Suppressed + 1 };
+                return;
+            }
+            if (seen.Suppressed > 0) error.Data["SuppressedRepeats"] = seen.Suppressed;
+            if (!_loopErrors.ContainsKey(key) && _loopErrors.Count >= LoopErrorKeys)
+                _loopErrors.Remove(_loopErrors.MinBy(entry => entry.Value.ReportedAt).Key);
+            _loopErrors[key] = (now, 0);
+        }
+        try { _onFault?.Invoke(error); }
+        catch (Exception) { }
+    }
 
     private void RecordError(Exception error)
     {
@@ -334,7 +527,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             catch (Exception e)
             {
                 // The kernel catches what its store throws; anything else is a bug the loop must survive and count.
-                RecordError(e);
+                RecordLoopError(e);
                 try { await Task.Delay(TimeSpan.FromMilliseconds(100), exit); }      // no spin on a bug that throws every time
                 catch (OperationCanceledException) { break; }
             }

@@ -90,6 +90,13 @@ public sealed record WorkerOptions
     public Action? OnExpiredJob { get; init; }
     /// <summary>Called inside the scheduler just before the job's generation/deadline check; for deterministic witnesses.</summary>
     public Action? BeforeScheduledJobCheck { get; init; }
+    internal Action? AfterJobPublication { get; init; }
+    /// <summary>Called at the start of each drain round, outside its retry; for fault witnesses.</summary>
+    internal Action? BeforeDrainRound { get; init; }
+    /// <summary>Called where a drain round judges the heartbeat answer, inside its retry; for transient-error witnesses.</summary>
+    internal Action? BeforeDrainAnswer { get; init; }
+    /// <summary>Called once a judgement has taken the recorded answer, before it acts on it; for put-back witnesses.</summary>
+    internal Action? AfterAnswerConsumed { get; init; }
 }
 
 /// <summary>
@@ -108,6 +115,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private sealed record JobPublication(Delivery Ticket, Slot Slot, CancellationToken Attempt, Message? Result, long At, long Order, bool SchedulerRejected = false);
     // Each ownership generation has its own handoff. A callback that outlives reset can only post to its old queue.
     private ConcurrentQueue<JobPublication> _jobPublications = new();
+    private readonly object _jobEntry = new();
+    private readonly HashSet<CancellationTokenSource> _enteredJobs = [];
+    private TaskCompletionSource? _jobsDrained;
+    private long _jobEntryEpoch; // A scheduler callback submitted before shutdown cannot enter after a host restart.
+    private TaskCompletionSource? _drainBeat; // set while the node's job drain keeps ownership: a heartbeat answer wakes it
     private readonly HashSet<Delivery> _schedulerRetries = [];
     private readonly ConcurrentQueue<(long Generation, Message Creator)> _inlineStarts = new();
     private int _jobsDeferredByCancellation;
@@ -167,6 +179,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly SortedDictionary<int, long> _pending = [];
     private long _lastPass, _takesStarted, _takeAt, _retakeAt;     // when the take, or the reset's retake, in flight started: for the gate
     private Answered? _answered;     // K1b: the last answer's stand-down side, for the next pass
+    private Answered? _takenAnswer;  // the answer the last judgement took, under _turnSync
+
+    /// <summary>When the recorded answer was sent; for witnesses of which answer a drain round left pending.</summary>
+    internal long? PendingAnswerSentAt { get { lock (_turnSync) return _answered?.Sent.At; } }
     private long _judgedAt = long.MinValue;     // CR-4: the send time of the last answer judged; anything older is refused
     private sealed record Answered(HeartbeatSent Sent, NodeBeat Answer, Func<int, bool>? Sibling);
     private int[] _gaining = [];
@@ -654,6 +670,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     public void HeartbeatAnswered(HeartbeatSent sent, NodeBeat answer, Func<int, bool>? sibling = null)
     {
+        try { Answer(sent, answer, sibling); }
+        finally { Volatile.Read(ref _drainBeat)?.TrySetResult(); }     // a job drain judges the answer and passes again
+    }
+
+    private void Answer(HeartbeatSent sent, NodeBeat answer, Func<int, bool>? sibling)
+    {
         lock (_turnSync)
         {
             if (sent.Generation != _generation && !Has(Flaw.ReleaseDuringTake)) return;
@@ -701,6 +723,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (_answered is not { } answered || _releasing || _retaking) return;
             (sent, answer, sibling) = answered;
             _answered = null;
+            _takenAnswer = answered;  // a drain round whose judgement fails puts this one back (KeepDrainLiveAsync)
             _judgedAt = Math.Max(_judgedAt, sent.At);
             if (sent.Generation != _generation && !Has(Flaw.ReleaseDuringTake)) return;     // MUTATION ReleaseDuringTake: also below
             var listed = answer.Owned.ToDictionary(o => o.Partition, o => o.Epoch);
@@ -713,6 +736,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             lost = Has(Flaw.HeartbeatIgnoresAnswer) ? [] : sent.Held.Where(f => (!listed.TryGetValue(f.Partition, out var epoch) || epoch != f.Epoch)
                 && _held.TryGetValue(f.Partition, out var held) && held.Epoch == f.Epoch).Select(f => f.Partition).ToHashSet();
         }
+        _options.AfterAnswerConsumed?.Invoke();
         // As a cooperative hand-over goes: drain, then drop when quiet, or reset and take the rest back. Its release of the
         // lost rows at their old epochs is a no-op, by the store's epoch guard: they moved to another epoch.
         if (lost.Count > 0) await LoseAsync(lost, cancellationToken);
@@ -2270,7 +2294,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         void RequireDrainFence()
         {
             if (_generation != generation || !LeaseUsable())
-                throw new InvalidOperationException("Ownership was lost while draining actor turns during shutdown.");
+                throw new ScopeOwnershipLostException("Ownership was lost while draining actor turns during shutdown.");
         }
     }
 
@@ -2357,6 +2381,124 @@ public sealed class Worker : IScopeActivation, ITurnServices
     internal void Started(string instance, IReadOnlyList<Message> inbox, long now) => _options.OnTurn?.Invoke(new InstanceRef(instance), inbox, now);
 
     // ---- background jobs -------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Close job entry and cancel the entered jobs. The task ends when they have exited; it never faults. The host keeps
+    /// this Worker live meanwhile (<see cref="KeepDrainLiveAsync"/>) until every Worker of the node has drained.
+    /// </summary>
+    internal Task CloseJobEntry()
+    {
+        CancellationTokenSource[] entered;
+        Task exited;
+        lock (_jobEntry)
+        {
+            if (_jobsDrained is null)
+            {
+                Interlocked.Increment(ref _jobEntryEpoch);
+                _jobsDrained = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+            if (_enteredJobs.Count == 0) _jobsDrained.TrySetResult();
+            entered = [.. _enteredJobs];
+            exited = _jobsDrained.Task;
+        }
+        // Use asynchronous cancellation so cleanup callbacks cannot hold up admission closure or a kill deadline.
+        return Task.WhenAll(entered.Select(CancelAsync).Append(exited));
+
+        static async Task CancelAsync(CancellationTokenSource source)
+        {
+            try { await source.CancelAsync().ConfigureAwait(false); }
+            // The owner may have committed a posted result and disposed this attempt before the publisher exited.
+            catch (ObjectDisposedException) { }
+            catch (AggregateException) { } // Activity cleanup cannot interrupt ownership or checkpoint bookkeeping.
+        }
+    }
+
+    /// <summary>The ownership generation a drain starts from: a reset during the drain moves it.</summary>
+    internal long DrainGeneration => Volatile.Read(ref _generation);
+
+    /// <summary>A heartbeat answer to this Worker wakes the drain that armed this.</summary>
+    internal Task ArmDrainBeat()
+    {
+        var beat = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Volatile.Write(ref _drainBeat, beat);
+        return beat.Task;
+    }
+
+    internal void DisarmDrainBeat() => Volatile.Write(ref _drainBeat, null);
+
+    /// <summary>
+    /// One round of a drain's wait, which counts as this Worker's pass: the last heartbeat answer is judged, and while the
+    /// fence it holds (if any) is usable the pass gate stays open, so the node lease keeps renewing. A pending-only Worker
+    /// gets the pass too, and one that took partitions back after a reset keeps getting it. False when this Worker lost a
+    /// fence it held at the start (<paramref name="ownedAtStart"/>, <paramref name="generation"/>) or holds one that is no
+    /// longer usable. A store failure that may succeed when tried again (transient, unknown such as a broken connection or a
+    /// timeout, or an expired commit window) is recorded and retried at the next round, as a pass retries it, and counts
+    /// no pass. A definite store failure, a format error included, and any other error fault the drain.
+    /// </summary>
+    internal async Task<bool> KeepDrainLiveAsync(long generation, bool ownedAtStart, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _options.BeforeDrainRound?.Invoke();
+        lock (_turnSync) _takenAnswer = null;
+        try
+        {
+            _options.BeforeDrainAnswer?.Invoke();
+            if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
+        }
+        catch (StoreException error) when (error.Failure is Failure.Transient or Failure.Unknown or Failure.WindowExpired &&
+            !cancellationToken.IsCancellationRequested)
+        {
+            Interlocked.Increment(ref _drainStoreErrors);
+            Volatile.Write(ref _lastDrainStoreError, error);
+            // The failed judgement may have consumed an answer: the one it actually took, which can be newer than any
+            // read before. Put that one back for the next round unless a newer one has come since, and report a loss
+            // it names now, in case every drain ends this round.
+            Answered? consumed;
+            lock (_turnSync)
+            {
+                consumed = _takenAnswer;
+                _takenAnswer = null;
+                if (consumed is not null && _answered is null) _answered = consumed;
+            }
+            var namesLoss = consumed is not null && consumed.Sent.Held.Any(fence =>
+                !consumed.Answer.Owned.Any(owned => owned.Partition == fence.Partition && owned.Epoch == fence.Epoch));
+            return !(namesLoss || ownedAtStart && _generation != generation);
+        }
+        var usable = !Owns || LeaseUsable();
+        if (usable) Volatile.Write(ref _lastPass, _options.Monotonic());
+        return usable && !(ownedAtStart && _generation != generation);
+    }
+
+    private long _drainStoreErrors;
+    private StoreException? _lastDrainStoreError;
+
+    /// <summary>Store errors a drain round retried, and the last of them.</summary>
+    internal (long Count, StoreException? Last) DrainStoreErrors =>
+        (Interlocked.Read(ref _drainStoreErrors), Volatile.Read(ref _lastDrainStoreError));
+
+    internal void ReopenJobEntry()
+    {
+        lock (_jobEntry) _jobsDrained = null;
+    }
+
+    private bool EnterJob(CancellationTokenSource source, long entryEpoch)
+    {
+        lock (_jobEntry)
+        {
+            if (_jobsDrained is not null || entryEpoch != _jobEntryEpoch) return false;
+            _enteredJobs.Add(source);
+            return true;
+        }
+    }
+
+    private void ExitJob(CancellationTokenSource source)
+    {
+        lock (_jobEntry)
+        {
+            _enteredJobs.Remove(source);
+            if (_enteredJobs.Count == 0) _jobsDrained?.TrySetResult();
+        }
+    }
 
     private void PublishJobEligibility(Slot slot)
     {
@@ -2467,11 +2609,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private async Task DriveJob(Delivery ticket, JobTicket job, Slot slot)
     {
         var generation = _generation;
+        var entryEpoch = Volatile.Read(ref _jobEntryEpoch);
         var publications = _jobPublications;
         var original = ticket.Message;
         var creation = original.TargetCreation ?? 0;
         bool MayReturn() => JobMayRun(generation) && Volatile.Read(ref slot.ActiveCreation) == creation;
-        var token = ticket.Cancel!.Token;
+        var source = ticket.Cancel!;
+        var token = source.Token;
         bool entered = false;
         ValueTask<object?> Enter()
         {
@@ -2485,7 +2629,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     ticket.AwaitingJobMark || ticket.DeferredJobTrial || ticket.WithdrawingJob ||
                     job.Deadline is { } deadline && Now >= deadline || !_gate.Allows(this, ticket))
                     return ValueTask.FromResult<object?>(null);
-                // Admission happens on the executing thread. Once admitted, ordinary cancellation signals the body.
+                // This is the last check. The drain can close admission while a callback is paused in any earlier guard.
+                if (!EnterJob(source, entryEpoch)) return ValueTask.FromResult<object?>(null);
                 entered = true;
                 Volatile.Write(ref ticket.JobEntered, true);
                 if (ticket.JobEntries < int.MaxValue) ticket.JobEntries++;
@@ -2499,35 +2644,40 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         async Task ExecuteAndPublish(bool scheduled)
         {
-            var unbounded = Has(Flaw.UnboundedJobResult);
-            string? result = null, error = null;
             try
             {
-                if (scheduled) _options.BeforeScheduledJobCheck?.Invoke();
-                var value = await Enter().ConfigureAwait(false);
-                result = unbounded ? Json.Write(value) : JobResultEncoding.Value(value);
-            }
-            catch (JobResultEncoding.LimitExceeded) { error = JobResultEncoding.Error; }
-            catch (Exception e) { error = e.Message; }
-            if (!MayReturn() || token.IsCancellationRequested) return;
-            var outcome = new JobFinished(job.Key, result, error);
-            var completed = entered ? original with { Kind = Kinds.JobFinished,
-                Payload = unbounded ? Json.Write(outcome) : JobResultEncoding.Payload(outcome) } : null;
-            long? publicationTime = null;
-            if (completed is not null && job.Deadline is not null && _type.RootTimedJobPublicationClock is { } readClock)
-            {
-                try { publicationTime = await readClock(token).ConfigureAwait(false); }
-                catch (Exception) { return; } // Without an authoritative sample, leave the ticket for the deadline.
+                var unbounded = Has(Flaw.UnboundedJobResult);
+                string? result = null, error = null;
+                try
+                {
+                    if (scheduled) _options.BeforeScheduledJobCheck?.Invoke();
+                    var value = await Enter().ConfigureAwait(false);
+                    result = unbounded ? Json.Write(value) : JobResultEncoding.Value(value);
+                }
+                catch (JobResultEncoding.LimitExceeded) { error = JobResultEncoding.Error; }
+                catch (Exception e) { error = e.Message; }
                 if (!MayReturn() || token.IsCancellationRequested) return;
+                var outcome = new JobFinished(job.Key, result, error);
+                var completed = entered ? original with { Kind = Kinds.JobFinished,
+                    Payload = unbounded ? Json.Write(outcome) : JobResultEncoding.Payload(outcome) } : null;
+                long? publicationTime = null;
+                if (completed is not null && job.Deadline is not null && _type.RootTimedJobPublicationClock is { } readClock)
+                {
+                    try { publicationTime = await readClock(token).ConfigureAwait(false); }
+                    catch (Exception) { return; } // Without an authoritative sample, leave the ticket for the deadline.
+                    if (!MayReturn() || token.IsCancellationRequested) return;
+                }
+                // Timestamp and enqueue together so simultaneous callbacks retain their observation order. The owner
+                // may receive this after a command matures. Preserve an authoritative sample taken for this publication.
+                lock (publications)
+                {
+                    var at = publicationTime ?? Now;
+                    if (ticket.WithdrawingJob || ticket.JobDeadlineClosed || job.Deadline is { } deadline && at >= deadline) return;
+                    publications.Enqueue(new(ticket, slot, token, completed, at, Interlocked.Increment(ref _observed)));
+                }
+                if (completed is not null) _options.AfterJobPublication?.Invoke();
             }
-            // Timestamp and enqueue together so simultaneous callbacks retain their observation order. The owner
-            // may receive this after a command matures. Preserve an authoritative sample taken for this publication.
-            lock (publications)
-            {
-                var at = publicationTime ?? Now;
-                if (ticket.WithdrawingJob || ticket.JobDeadlineClosed || job.Deadline is { } deadline && at >= deadline) return;
-                publications.Enqueue(new(ticket, slot, token, completed, at, Interlocked.Increment(ref _observed)));
-            }
+            finally { if (entered) ExitJob(source); }
         }
         // Publish a synchronous body's outcome before this scheduled callback returns. An asynchronous
         // body completes its publication on its continuation, independently of the owner's next pass.
