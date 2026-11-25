@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "58a94687875b2efab0b49163684da3d798b1fee8",
+  "last_publish_commit": "8d03ee2fda79dd791640f9eb936ea2a542c575c0",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -1089,8 +1089,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Publishing",
-      "version": "4.0.67-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.68-preview",
+      "commit": "8d03ee2fda79dd791640f9eb936ea2a542c575c0"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Api",
@@ -1099,8 +1099,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Core",
-      "version": "4.0.33-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.34-preview",
+      "commit": "8d03ee2fda79dd791640f9eb936ea2a542c575c0"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
@@ -1164,8 +1164,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.97-preview",
-      "commit": "676d29fe5d3cfdf0a3209626d41da59be9665817"
+      "version": "4.0.98-preview",
+      "commit": "8d03ee2fda79dd791640f9eb936ea2a542c575c0"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
@@ -1199,8 +1199,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.KernelHost",
-      "version": "4.0.0-preview",
-      "commit": "7fd1672333aaf53d536443127490a92c52bf685f"
+      "version": "4.0.1-preview",
+      "commit": "8d03ee2fda79dd791640f9eb936ea2a542c575c0"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Activities",
@@ -1209,8 +1209,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Model",
-      "version": "4.0.9-preview",
-      "commit": "7fd1672333aaf53d536443127490a92c52bf685f"
+      "version": "4.0.10-preview",
+      "commit": "8d03ee2fda79dd791640f9eb936ea2a542c575c0"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
