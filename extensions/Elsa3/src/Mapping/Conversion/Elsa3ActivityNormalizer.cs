@@ -968,11 +968,13 @@ internal sealed partial class Elsa3ActivityNormalizer(
     /// <summary>
     /// Elsa 3 writes <c>{}</c> on save and sends no extra headers; Elsa 4 sends none when <c>Headers</c> is unbound, and
     /// cannot read the text <c>{}</c> as its header dictionary. A literal map is bound as an object, which publication
-    /// reads into the dictionary. An expression is carried as it is.
+    /// reads into the dictionary, and so is a static Object expression map. Any other expression is carried as it is, with
+    /// a warning that Elsa 4 needs an array per header (#5790).
     /// </summary>
     private static JsonElement? CheckHttpResponseHeaders(Elsa3RewriteContext context, string propertyName, JsonElement value)
     {
-        if (!Elsa3TypedValues.TryGetLiteral(value, out var literal))
+        // An Object expression is a static JSON map, read like a literal one.
+        if (!Elsa3TypedValues.TryGetLiteral(value, out var literal) && !TryGetObjectExpression(value, out literal))
         {
             // A header map the conversion cannot read: Elsa 4 does not turn a single string per header into an array,
             // as Elsa 3's HttpHeaders converter did (#5790).
@@ -994,6 +996,16 @@ internal sealed partial class Elsa3ActivityNormalizer(
             "Write the headers as a JSON object literal, such as {\"X-Header\": [\"value\"]}.",
             propertyName);
         return null;
+    }
+
+    private static bool TryGetObjectExpression(JsonElement value, out string? json)
+    {
+        json = null;
+        if (!Elsa3TypedValues.TryGetExpression(value, out var type, out var expressionValue) ||
+            !string.Equals(type, "Object", StringComparison.OrdinalIgnoreCase))
+            return false;
+        json = expressionValue.ValueKind == JsonValueKind.String ? expressionValue.GetString() : expressionValue.GetRawText();
+        return true;
     }
 
     private static bool TryMultiValueHeaders(string? literal, out string headers)
