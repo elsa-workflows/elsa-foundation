@@ -430,18 +430,19 @@ internal static class PostgresRootParkedOperatorChecks
             var clearingCapabilities = RootProfiles.Formats[StoreFormat.RootParkArrivals] | RootProfiles.Formats[StoreFormat.RootTerminalSelection] |
                 RootCapabilities.OperatorReplies;
             KernelDb OpenClearing() => KernelDb.ForUnshippedComposition(clearingOptions, ComposedClearing, clearingCapabilities);
-            EfStore? frozen = null, firstOwner = null;
+            EfStore? frozen = null;
             var pageChecked = false;
             var cleared = new List<long?>();
             var settled = new List<string>();
             var arrivals = new[] { "during-1", "during-2", "during-3" };
-            Set set = null!;
-            set = new Set("parked-clearing", OpenClearing, owned, inBatch, tenant, stop) { Write = Write };
-            await using var owned_ = set;
+            // The commit observer reads the large root, so it is assigned before the observer is installed.
+            Contract.ActorRef large = default;
+            await using var set = new Set("parked-clearing", OpenClearing, owned, inBatch, tenant, stop);
+            set.Write = Write;
             await set.InstallAsync(createTables: true);
             await set.OwnAsync();
             var bytes = await set.StartAsync("clearing-bytes");
-            var large = await set.StartAsync("clearing-large");
+            large = await set.StartAsync("clearing-large");
             var probed = await set.StartAsync("clearing-probe");
 
             // A Park within 170 rows that exceeds 4 MiB is cleared in pages by bytes.
@@ -483,7 +484,6 @@ internal static class PostgresRootParkedOperatorChecks
             Check(await set.OperateAsync(large, "clear-large", Contract.Kinds.Terminate, parkLarge, reply: true) &&
                     await set.OperateAsync(large, "clear-second", Contract.Kinds.Terminate, parkLarge, reply: true),
                 "two held Terminates with the Park selection are admitted for the Park of 402 kept rows");
-            firstOwner = null;
             await set.PassUntilAsync(() => set.StoodDown);
             Check(cleared is [170, 340] && pageChecked, $"the first owner opened the clearing and cleared one page before it stopped ({string.Join(", ", cleared)})");
 
@@ -574,7 +574,9 @@ internal static class PostgresRootParkedOperatorChecks
         {
             foreach (var (label, schema, format22) in new[] { ("format 22", Format22Schema, true), ("the composed recovery set", RecoverySchema, false) })
             {
+#pragma warning disable EF1003 // the schema name is one of this fixture's constants
                 await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + schema, stop);
+#pragma warning restore EF1003
                 var schemaConnection = new NpgsqlConnectionStringBuilder(connection) { SearchPath = schema }.ConnectionString;
                 var hold = new RaceHook(schemaConnection);
                 var schemaOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(schemaConnection).AddInterceptors(hold).Options;
@@ -918,7 +920,7 @@ internal static class PostgresRootParkedOperatorChecks
         }
 
         // Sees every commit an owner of the set writes, with that owner's store.
-        internal Func<EfStore, CommitBatch, CancellationToken, ValueTask<Committed>>? Write { get; init; }
+        internal Func<EfStore, CommitBatch, CancellationToken, ValueTask<Committed>>? Write { get; set; }
 
         internal async Task<IScopeActivation> OwnAsync()
         {
