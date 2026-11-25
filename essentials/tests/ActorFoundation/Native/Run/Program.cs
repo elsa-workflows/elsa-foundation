@@ -43,6 +43,7 @@ if (args is ["pg-http-owner-loss", var ownerFence and ("checked" or "in-batch"),
 if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batch"), var pause and ("before" or "after" or "resume"), var ownerRef])
     return await PostgresHttpOwnerLoss.RunOwnerAsync(workerFence, pause, new(ownerRef));
 if (args is ["pg-held-start"]) return await PostgresHeldStartChecks.RunAsync();
+if (args is ["pg-shipped-format"]) return await PostgresShippedFormatChecks.RunAsync();
 if (args is ["pg-held-reply-order", var orderCallers, var orderStarts] && int.TryParse(orderCallers, out var callerCount) &&
     int.TryParse(orderStarts, out var startCount))
     return await PostgresHeldStartChecks.RunOrderAsync(callerCount, startCount);
@@ -167,12 +168,20 @@ if (args is ["pg-root-park-inspection", var parkReadWriter and ("owned" or "ef")
     return await PostgresRootParkOpeningChecks.RunAsync(parkReadWriter == "owned", parkReadFence == "in-batch", inspection: true);
 if (args is ["pg-root-composition", var compositionWriter and ("owned" or "ef"), var compositionFence and ("checked" or "in-batch")])
     return await PostgresRootCompositionChecks.RunAsync(compositionWriter == "owned", compositionFence == "in-batch");
+if (args is ["pg-root-composition", var compositionWriterShipped and ("owned" or "ef"), var compositionFenceShipped and ("checked" or "in-batch"), "shipped"])
+    return await PostgresRootCompositionChecks.RunAsync(compositionWriterShipped == "owned", compositionFenceShipped == "in-batch", shippedSet: true);
 if (args is ["pg-root-composed-install", var installWriter and ("owned" or "ef"), var installFence and ("checked" or "in-batch")])
     return await PostgresRootComposedInstallChecks.RunAsync(installWriter == "owned", installFence == "in-batch");
+if (args is ["pg-root-composed-install", var installWriterShipped and ("owned" or "ef"), var installFenceShipped and ("checked" or "in-batch"), "shipped"])
+    return await PostgresRootComposedInstallChecks.RunAsync(installWriterShipped == "owned", installFenceShipped == "in-batch", shippedSet: true);
 if (args is ["pg-root-parked-operators", var parkedWriter and ("owned" or "ef"), var parkedFence and ("checked" or "in-batch")])
     return await PostgresRootParkedOperatorChecks.RunAsync(parkedWriter == "owned", parkedFence == "in-batch");
+if (args is ["pg-root-parked-operators", var parkedWriterShipped and ("owned" or "ef"), var parkedFenceShipped and ("checked" or "in-batch"), "shipped"])
+    return await PostgresRootParkedOperatorChecks.RunAsync(parkedWriterShipped == "owned", parkedFenceShipped == "in-batch", shippedSet: true);
 if (args is ["pg-root-state-family", var familyWriter and ("owned" or "ef"), var familyFence and ("checked" or "in-batch")])
     return await PostgresRootStateFamilyChecks.RunAsync(familyWriter == "owned", familyFence == "in-batch");
+if (args is ["pg-root-state-family", var familyWriterShipped and ("owned" or "ef"), var familyFenceShipped and ("checked" or "in-batch"), "shipped"])
+    return await PostgresRootStateFamilyChecks.RunAsync(familyWriterShipped == "owned", familyFenceShipped == "in-batch", shippedSet: true);
 if (args is ["pg-root-retention", var policyWriter and ("owned" or "ef"), var policyFence and ("in-batch" or "checked")])
     return await PostgresRootRetentionChecks.RunAsync(policyWriter == "owned", policyFence == "in-batch");
 if (args is ["pg-root-plan-selection", var planWriter and ("owned" or "ef"), var planFence and ("in-batch" or "checked")])

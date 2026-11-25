@@ -292,6 +292,11 @@ internal sealed partial class ActorAdapter
             result.Read<Durable.JobFinished>() is { Error: "timeout", Result: null };
         var terminated = input.Kind == Durable.Kinds.Terminate && IsRootControl(input) && previous is not null &&
             outcome.Row is { Status: Durable.InstanceStatus.Cancelled };
+        // A Terminate settles the root's outstanding timed jobs in its terminal commit: its cascade names only jobs and ends
+        // in one page, and the store removes the jobs' ticket and deadline rows there.
+        var settlesJobs = terminated && rootTimedJobSettlement && previous is { Jobs: not null } &&
+            outcome.Row is { Jobs: null, Cascade: null, Children: null } &&
+            outcome.FoundationCascade is { Entries.Children.IsEmpty: true, Entries.Jobs.IsEmpty: false, Input: null } && outcome.Sent.Count == 0;
         if (outcome.Row is not { } next ||
             next.Status is not (Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished) && !timedFault && !terminated ||
             !((rootTimedJobIssuance || rootTimedJobSettlement) && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, next.Id, next.Model)) &&
@@ -299,7 +304,7 @@ internal sealed partial class ActorAdapter
             outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
             outcome.Emitted.Count != 0 && (!rootHeldReplies || !outcome.Consumed.Exists(delivery => delivery.ReplyRoute is not null)) ||
-            outcome.FoundationCascade is not null || outcome.InMemory)
+            outcome.FoundationCascade is not null && !settlesJobs || outcome.InMemory)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();
 

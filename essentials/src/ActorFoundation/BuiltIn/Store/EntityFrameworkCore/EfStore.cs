@@ -130,8 +130,9 @@ public class KernelDb : DbContext
     private static KernelDb Profile(DbContextOptions<KernelDb> options, StoreFormat format) =>
         new(options, format, RootProfiles.CapabilitiesOf(format));
 
-    // A capability set that no shipped format carries, for database-backed composition guards only. Its format must be unshipped,
-    // so that its marker is refused by every shipped profile, and the set must hold every prerequisite of its members.
+    // A capability set under a format number no profile ships, for database-backed composition guards only: a qualification
+    // set, or the shipped format 24's set under a guard's own number. Its format must be unshipped, so that its marker is
+    // refused by every shipped profile, and the set must hold every prerequisite of its members.
     internal static KernelDb ForUnshippedComposition(DbContextOptions<KernelDb> options, StoreFormat format, RootCapabilities capabilities) =>
         RootProfiles.Formats.ContainsKey(format)
             ? throw new ArgumentOutOfRangeException(nameof(format), format, "A shipped format carries its own capabilities.")
@@ -165,6 +166,7 @@ public class KernelDb : DbContext
     internal bool RecordsRootParkRevision => UsesRootParkArrivals || UsesRootParkedOperators;
     internal bool ProjectsRootParkRevision => UsesRootParkInspection && (UsesRootParkRecovery || UsesRootParkedOperators);
     internal static KernelDb ForPostgresRootParkRecovery(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkRecovery);
+    internal static KernelDb ForPostgresRootShipped(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootShipped);
     internal static KernelDb ForPostgresRootParkArrivals(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkArrivals);
     internal static KernelDb ForPostgresRootParkInspection(DbContextOptions<KernelDb> options) => Profile(options, StoreFormat.RootParkInspection);
     internal bool RequiresPinnedRootNamespace => UsesRootRetirement || UsesRootParkOpening;

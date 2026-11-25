@@ -347,7 +347,10 @@ checks the installed format before registering an owner. Run one Workbench proce
 the preview database. Existing workflow and Studio endpoints still use their current runtime.
 
 Set `Elsa__CorePreview__Publications=true`, beside `Elsa__CorePreview__Enabled=true`, to run the default shell's
-publications on the kernel (K10). The one switch composes both sides. The host shares one `KernelServing` between the
+publications on the kernel (K10). The one switch composes both sides. It is the release profile: the preview database runs
+on the shipped format 24 (operators, Native jobs with timed settlement, held replies, Park opening and inspection, and
+workflow history), and `NativeJobs` and `TimedNativeJobs` stay off. A database created on an earlier preview format (2, 6
+or 18) is refused and recreated, not migrated. The host shares one `KernelServing` between the
 preview node, which runs the registry it serves into, and the default shell. The default shell enables the
 `WorkflowsRuntimeKernel` feature, which replaces its default activation coordinator and trigger extractor with the
 kernel's and leaves out the old core's HTTP route table; the Workbench logs once at startup that it composed the feature.

@@ -25,12 +25,13 @@ internal static class PostgresRootComposedInstallChecks
 
     private sealed record Header(string Model, string Definition, string TypeData, KeyValuePair<string, string>[] Labels, bool EscapedState);
 
-    internal static async Task<int> RunAsync(bool owned, bool inBatch)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool shippedSet = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        var capabilities = RootProfiles.Formats[StoreFormat.RootRetirement] | RootProfiles.Formats[StoreFormat.RootParkInspection];
+        var capabilities = shippedSet ? RootProfiles.Shipped
+            : RootProfiles.Formats[StoreFormat.RootRetirement] | RootProfiles.Formats[StoreFormat.RootParkInspection];
         KernelDb Open() => KernelDb.ForUnshippedComposition(options, Composed, capabilities);
         EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(120));
@@ -134,7 +135,7 @@ internal static class PostgresRootComposedInstallChecks
         async Task SuppressedHistoryDeleteRollsBack()
         {
             var store = Store();
-            await store.BindWorkerPartitionAsync(0, stop);
+            await ShippedComposition.BindWorkerPartitionAsync(store, Open, 0, stop);
             var lease = (await store.TakeAsync(0, "suppressed-history", Defaults.Lease, stop))!;
             var instance = new InstanceRow(finished.Actor.Id, finished.Model, finished.Definition, finished.Status, finished.State!, finished.Revision, null,
                 Creation: finished.Actor.Creation);
@@ -283,7 +284,7 @@ internal static class PostgresRootComposedInstallChecks
         async Task<IScopeActivation> Own(string node)
         {
             var store = Store();
-            var scope = (await store.BindWorkerPartitionAsync(0, stop)).Scope;
+            var scope = (await ShippedComposition.BindWorkerPartitionAsync(store, Open, 0, stop)).Scope;
             var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actorType);
             var host = new DurableHost([new Worker(node, 0, store, adapter, new WorkerOptions { Partitions = 1 })]);
             await host.HeartbeatAsync(Defaults.Lease, stop);

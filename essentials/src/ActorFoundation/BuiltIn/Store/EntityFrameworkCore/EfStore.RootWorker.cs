@@ -438,6 +438,9 @@ public sealed partial class EfStore
             turn.Subscribed, turn.Unsubscribed, turn.Journal, turn.Unsubscribe, turn.Held)
         {
             FoundationHeader = turn.FoundationHeader, FoundationRootOperator = turn.FoundationRootOperator, FoundationSelfRecalls = recalls,
+            // A Terminate's cascade of outstanding timed jobs alone, which its terminal commit settles.
+            FoundationCascade = turn is { FoundationRootOperator.Kind: Kinds.Terminate, FoundationCascade: { Entries.Children.IsEmpty: true, Input: null } jobs } &&
+                RootTimedJobSettlementEnabled ? jobs : null,
             FoundationRootJobCompletion = RootJobsEnabled ? turn.FoundationRootJobCompletion : null,
             FoundationValues = values
         };
@@ -477,29 +480,42 @@ public sealed partial class EfStore
             throw RootShape();
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, cancellationToken);
         if (current?.Revision != turn.Expected) return null;
+        // A Terminate of a root with outstanding timed jobs settles them: its cascade names exactly the root's jobs, and their
+        // ticket and deadline rows leave in its terminal commit.
+        IReadOnlyList<InboxKey> inputKeys = turn.Consumed;
+        string[]? settledJobs = null;
+        if (supported.FoundationCascade is { } cascade)
+        {
+            if (current.Jobs is null || !JobRegistry.Read(current.Jobs).SequenceEqual(cascade.Entries.Jobs)) throw RootShape();
+            await using var jobsDb = create();
+            settledJobs = [.. await jobsDb.Messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
+                m.InboxScope == RootTimedJobScope && !m.Done).Select(m => m.Id).ToListAsync(cancellationToken)];
+            if (settledJobs.Length == 0) throw RootShape();
+        }
         if (row.Model != current.Model || row.Definition != current.Definition || row.History != current.History ||
             change is null && (header.Header.TypeData != current.TypeData || header.Header.Labels.Count != current.Labels.Count ||
                 current.Labels.Any(pair => !header.Header.Labels.TryGetValue(pair.Key, out var value) || pair.Value != value))) throw RootShape();
-        if (RootTimedJobSettlementEnabled && (!RootTimedJobPreviewEnabled || turn.Consumed.Any(key => key.Scope == -1 || key.Scope > 0)))
+        if (settledJobs is null && RootTimedJobSettlementEnabled && (!RootTimedJobPreviewEnabled || turn.Consumed.Any(key => key.Scope == -1 || key.Scope > 0)))
             return await PrepareRootTimedTurnAsync(root, turn, row, state, current, fence, wires, cancellationToken);
         await using var db = create();
         await using var pinned = await BeginPinnedRootOperationAsync(db, cancellationToken);
-        var ids = turn.Done.Concat(turn.Consumed).Select(key => key.Scope > 0 ? StoredJobId(key) : key.Id).ToArray();
+        var ids = turn.Done.Concat(inputKeys).Select(key => key.Scope > 0 ? StoredJobId(key) : key.Id).ToArray();
         var messages = RootSelfIssuer is null ? db.Messages : db.Messages.FromSqlRaw("""SELECT * FROM "FoundationRootMessages" """);
         var records = await messages.AsNoTracking().Where(m => m.Target == root.Actor && m.Partition == root.Partition &&
             (m.InboxScope == InboxKey.FoundationOccurrenceScope || m.InboxScope == RootSelfScope || RootJobsEnabled && !RootTimedJobPreviewEnabled && m.InboxScope == RootJobScope) && m.EventMatch == null && ids.Contains(m.Id) && !m.Done).OrderBy(m => m.Seq).ToListAsync(cancellationToken);
         var inputs = records.Select(record => DecodeRootInput(db, record, root.Reference, RootSelfIssuer, RootJobsEnabled)).ToArray();
-        if (!SameInputs(inputs, turn.Done.Concat(turn.Consumed))) return null;
+        if (!SameInputs(inputs, turn.Done.Concat(inputKeys))) return null;
         if (turn.FoundationRootOperator is { } command)
         {
             if (inputs is not [var persisted] || persisted != command) return null;
             if (command.Kind == Kinds.Terminate)
             {
                 if (!db.UsesRootTermination || !terminated || row.Suspended != current.Suspended ||
-                    turn.Sent.Count != 0 || recalls is not null || current.Jobs is not null || row.Jobs is not null ||
+                    turn.Sent.Count != 0 || recalls is not null || (current.Jobs is not null) != (settledJobs is not null) || row.Jobs is not null ||
                     row.StateVersion != current.StateVersion || turn.Journal is null) throw RootShape();
                 return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
-                    row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, operatorTermination: true);
+                    row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal, operatorTermination: true,
+                    jobState: settledJobs is null ? null : new(null, current.NextJobGeneration), settledJobs: settledJobs);
             }
             if (!db.UsesRootOperatorProtocol || row.Status != InstanceStatus.Running ||
                 row.Suspended != (command.Kind == Kinds.Suspend) || row.StateVersion != current.StateVersion || state != current.State ||

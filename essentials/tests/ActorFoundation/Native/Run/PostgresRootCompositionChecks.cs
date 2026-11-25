@@ -17,12 +17,13 @@ internal static class PostgresRootCompositionChecks
     // The shape of the store's root header, so that the store decodes the seeded rows as its own.
     private sealed record Header(string Model, string Definition, string TypeData, KeyValuePair<string, string>[] Labels, bool EscapedState);
 
-    internal static async Task<int> RunAsync(bool owned, bool inBatch)
+    internal static async Task<int> RunAsync(bool owned, bool inBatch, bool shippedSet = false)
     {
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        var capabilities = RootProfiles.Formats[StoreFormat.RootTerminalSelection] | RootProfiles.Formats[StoreFormat.RootParkInspection];
+        var capabilities = shippedSet ? RootProfiles.Shipped
+            : RootProfiles.Formats[StoreFormat.RootTerminalSelection] | RootProfiles.Formats[StoreFormat.RootParkInspection];
         KernelDb Open() => KernelDb.ForUnshippedComposition(options, Composed, capabilities);
         var store = new EfStore(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
