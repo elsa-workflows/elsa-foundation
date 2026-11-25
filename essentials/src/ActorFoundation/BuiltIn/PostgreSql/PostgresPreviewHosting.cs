@@ -24,6 +24,18 @@ public static class PostgresPreviewHosting
     public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootShipped(options);
 
     /// <summary>
+    /// Whether a node on the format <paramref name="create"/> selects takes an actor's self-sends. A host gives the answer to
+    /// its model (for the Native model, <c>NativeExecutionOptions.SelfSends</c>), so that a model which continues a long
+    /// burst in a self-send on a format with them runs it in one turn on a format without them, the shipped format among them.
+    /// </summary>
+    public static bool TakesSelfSends(Func<KernelDb> create)
+    {
+        ArgumentNullException.ThrowIfNull(create);
+        using var db = create();
+        return db.UsesRootSelfProtocol;
+    }
+
+    /// <summary>
     /// Opens the Foundation's ingress and reads on an installed PostgreSQL Core Preview store, for the configured actor type.
     /// With <paramref name="requests"/> (<see cref="CreateRequests"/>), on a store with held replies (<c>ReplyProtocol</c>),
     /// its requests start a root or send to one and hold the caller; the node that owns the roots answers those callers when

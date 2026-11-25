@@ -44,6 +44,7 @@ if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batc
     return await PostgresHttpOwnerLoss.RunOwnerAsync(workerFence, pause, new(ownerRef));
 if (args is ["pg-held-start"]) return await PostgresHeldStartChecks.RunAsync();
 if (args is ["pg-shipped-format"]) return await PostgresShippedFormatChecks.RunAsync();
+if (args is ["pg-held-callers"]) return await PostgresHeldCallerChecks.RunAsync();
 if (args is ["pg-held-reply-order", var orderCallers, var orderStarts] && int.TryParse(orderCallers, out var callerCount) &&
     int.TryParse(orderStarts, out var startCount))
     return await PostgresHeldStartChecks.RunOrderAsync(callerCount, startCount);

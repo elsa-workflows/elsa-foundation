@@ -254,18 +254,30 @@ internal sealed partial class ActorAdapter
             result.Read<Durable.JobFinished>() is { Error: "timeout", Result: null };
         var terminated = input.Kind == Durable.Kinds.Terminate && IsRootControl(input) && previous is not null &&
             outcome.Row is { Status: Durable.InstanceStatus.Cancelled };
-        // A Terminate settles the root's outstanding timed jobs in its terminal commit: its cascade names only jobs and ends
-        // in one page, and the store removes the jobs' ticket and deadline rows there.
-        var settlesJobs = terminated && rootTimedJobSettlement && previous is { Jobs: not null } &&
+        // A profile whose state family ends Faulted roots (timed-job settlement) commits a model's Faulted end, as the
+        // in-memory reference does: its held callers are answered with that end (Worker.Release).
+        var faulted = rootTimedJobSettlement && !outcome.OpensPark && outcome.Row is { Status: Durable.InstanceStatus.Faulted };
+        // A Faulted end issues no job: a job its own turn started is dropped before the store sees it (its ticket and deadline
+        // were never sent), and so is the generation it took.
+        if (faulted && previous?.Jobs is null && outcome.Row is { } ended)
+        {
+            if (outcome.Sent.Count != 0 && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, ended.Id, ended.Model)) outcome.Sent.Clear();
+            if (outcome.Sent.Count == 0) outcome.Row = ended with { Jobs = null, NextJobGeneration = previous?.NextJobGeneration ?? 0 };
+        }
+        // A Terminate, or any end of the model's own, settles the root's outstanding timed jobs in its terminal commit: its
+        // cascade names only jobs and ends in one page, and the store removes the jobs' ticket and deadline rows there.
+        var finished = !outcome.OpensPark && outcome.Row is { Status: Durable.InstanceStatus.Finished };
+        var settlesJobs = (terminated || faulted || finished) && rootTimedJobSettlement && previous is { Jobs: not null } &&
             outcome.Row is { Jobs: null, Cascade: null, Children: null } &&
             outcome.FoundationCascade is { Entries.Children.IsEmpty: true, Entries.Jobs.IsEmpty: false, Input: null } && outcome.Sent.Count == 0;
         if (outcome.Row is not { } next ||
-            next.Status is not (Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished) && !timedFault && !terminated ||
+            next.Status is not (Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished) && !timedFault && !terminated && !faulted ||
             !((rootTimedJobIssuance || rootTimedJobSettlement) && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, next.Id, next.Model)) &&
                 outcome.Sent.Any(m => !SupportedSend(m, next)) ||
             outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
-            outcome.Emitted.Count != 0 && (!rootHeldReplies || !outcome.Consumed.Exists(delivery => delivery.ReplyRoute is not null)) ||
+            // Emitted output is live: the owner releases it to the callers it holds for the root, whichever turn consumed
+            // their delivery, and drops it when it holds none (Worker.Release), as the in-memory reference does.
             outcome.FoundationCascade is not null && !settlesJobs || outcome.InMemory)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();

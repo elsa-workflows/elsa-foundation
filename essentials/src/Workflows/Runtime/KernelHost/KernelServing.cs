@@ -27,20 +27,19 @@ public sealed class KernelServing
     public const string DefaultSlotName = "default";
 
     private readonly Func<string, string?>? _cronError;
-    private readonly string? _schedulesUnavailable;
     private readonly Lock _lock = new();
     private readonly SemaphoreSlim _turn = new(1, 1);
     private ServingState _state;
 
     /// <param name="cronError">The host's check of a cron expression (<see cref="NativeSchedules"/>): null when it reads.</param>
-    /// <param name="schedulesUnavailable">
-    /// Set by a host that runs no schedule actor: why. A workflow with a Timer or Cron start trigger is then refused at the
-    /// serving check, with this reason, before anything is minted.
+    /// <param name="capabilities">
+    /// What the host's foundation runs (<see cref="KernelHostCapabilities"/>); a workflow that needs what it lacks is refused
+    /// where it is mapped. All of it by default.
     /// </param>
-    public KernelServing(Func<string, string?>? cronError = null, string? schedulesUnavailable = null)
+    public KernelServing(Func<string, string?>? cronError = null, KernelHostCapabilities? capabilities = null)
     {
         _cronError = cronError;
-        _schedulesUnavailable = schedulesUnavailable;
+        Capabilities = capabilities ?? KernelHostCapabilities.All;
         _state = Build(new Dictionary<string, KernelServedSlot>(StringComparer.Ordinal));
     }
 
@@ -67,6 +66,28 @@ public sealed class KernelServing
         return reached is null ? ServedDefinition.SeveralServe : ServedDefinition.By(reached.Workflow.Id);
     }
 
+    /// <summary>What the host's foundation runs, which the coordinator maps executables against.</summary>
+    public KernelHostCapabilities Capabilities { get; }
+
+    /// <summary>
+    /// Serves a workflow the host defines itself, beside the publications: its routes join the route table, checked against
+    /// the serving set as a publication's are. It is not a publication, so nothing deactivates it; the host serves it again
+    /// after a restart.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Its routes or schedules conflict with what serves, or the host refuses it.</exception>
+    public async ValueTask ServeHostWorkflowAsync(Workflow workflow, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflow);
+        if (Capabilities.Refusal(workflow) is { } refused)
+            throw new InvalidOperationException($"Host workflow '{workflow.Id}', node '{refused.Node}': {refused.Reason}");
+        var slotId = "host:" + workflow.Id;
+        await RunAsync(() =>
+        {
+            Apply(Plan(slotId, new KernelServedSlot(slotId, workflow.Definition, "host", slotId, workflow, 0)));
+            return ValueTask.FromResult(true);
+        }, cancellationToken);
+    }
+
     /// <summary>Runs one coordinator's change to what serves: its check, its slot move and its serving, while no other runs.</summary>
     internal async ValueTask<T> RunAsync<T>(Func<ValueTask<T>> change, CancellationToken cancellationToken)
     {
@@ -91,8 +112,7 @@ public sealed class KernelServing
     /// <summary>
     /// The serving state with <paramref name="slotId"/> serving <paramref name="served"/>, or nothing when it is null. Building it
     /// checks its routes and schedules: a route conflict (<see cref="HttpRouteConflictException"/>), a route template the model
-    /// refuses, a recurring trigger it refuses (<see cref="NativeScheduleException"/>), or one on a host that runs no schedule
-    /// actor, throws, and nothing changes.
+    /// refuses, or a recurring trigger it refuses (<see cref="NativeScheduleException"/>), throws, and nothing changes.
     /// </summary>
     internal KernelServingPlan Plan(string slotId, KernelServedSlot? served)
     {
@@ -100,10 +120,7 @@ public sealed class KernelServing
         var previous = slots.GetValueOrDefault(slotId);
         if (served is null) slots.Remove(slotId);
         else slots[slotId] = served;
-        var state = Build(slots);
-        if (_schedulesUnavailable is { } reason && served is not null && state.Schedules.All.Any(schedule => schedule.Workflow == served.Workflow.Id))
-            throw new InvalidOperationException(reason);
-        return new(slotId, previous, served, state);
+        return new(slotId, previous, served, Build(slots));
     }
 
     /// <summary>Serves <paramref name="plan"/>: its workflow joins the registry, and its slots, routes and schedules replace the current ones.</summary>

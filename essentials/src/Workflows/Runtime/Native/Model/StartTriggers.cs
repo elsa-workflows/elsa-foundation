@@ -18,6 +18,13 @@ public static class NativeStartTriggers
     public static bool CanStart(Node node) =>
         !(node.Inputs.GetValueOrDefault(Input) is LiteralBinding { Value: JsonValue value } && value.GetValueKind() == JsonValueKind.False);
 
+    /// <summary>
+    /// The HTTP endpoints a run of <paramref name="workflow"/> can begin at: where a run begins, and allowed to start one. Every
+    /// other HttpEndpoint of the workflow is a wait.
+    /// </summary>
+    public static IEnumerable<Node> StartEndpoints(Workflow workflow) =>
+        HttpRoutes.StartsOf(workflow.Root).Where(node => node.Type == typeof(HttpEndpoint) && CanStart(node));
+
     /// <summary>The Events a run of <paramref name="workflow"/> can begin at, by their event: where a run begins, and allowed to start one.</summary>
     public static IEnumerable<Node> StartEvents(Workflow workflow) =>
         HttpRoutes.StartsOf(workflow.Root).Where(node => node.Type == typeof(Event) && CanStart(node));
