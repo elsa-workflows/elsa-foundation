@@ -23,6 +23,9 @@ Opt-in PostgreSQL node composition and Generic Host lifetime for the Built-in Ac
   `PostgresPreviewHosting.CreateRequests` makes them before the store is opened, and the host hands the same requests to
   `OpenFoundationAsync` for its edge. The earlier preview formats (2, 6, 18) stay for their qualification checks, and a
   database on one of them is recreated for format 24, not migrated.
+- Format 24 runs no self-sends, timers or child starts yet. Self-sends wait on S6's input-scope union with timed jobs,
+  and child workflows on PostgreSQL roots are their own slice. So a kernel host refuses Delay and Dispatch Workflow at
+  publish.
 
 The shipped format grows by composition. Each widening of its capability set takes a new protocol number, and a database
 installed with an older set is refused. Before GA a preview database is recreated; after GA a widening migrates, with a
