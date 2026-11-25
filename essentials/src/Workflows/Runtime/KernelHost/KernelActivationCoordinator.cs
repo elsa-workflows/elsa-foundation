@@ -325,8 +325,22 @@ public sealed class KernelActivationCoordinator(
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception exception)
         {
-            return new(false, WorkflowActivationOutcome.Failed, await CurrentSlotAsync(definitionId, command.SlotName), ReplacedActivationId: activationId,
-                Diagnostic: Truncate(SafeMessage(exception)), FailedStep: WorkflowActivationStep.SlotTransition);
+            // The switch may have committed before it threw. A slot that names no activation now was emptied by it, and the
+            // deactivation is finished as one that committed; one that names another was moved by another writer, whose
+            // activation is served here as it stands.
+            var current = await CurrentSlotAsync(definitionId, command.SlotName);
+            if (current.ActiveActivationId is null && current.Revision > slot.Revision)
+            {
+                logger?.LogWarning(exception, "The deactivation of definition {DefinitionId} slot {SlotName} committed before its answer was lost; it is finished",
+                    definitionId, command.SlotName);
+                transition = new WorkflowActivationTransition(true, current, activationId);
+            }
+            else
+            {
+                if (current.ActiveActivationId is { } other && other != activationId) await CheckServingAsync(current, CancellationToken.None);
+                return new(false, WorkflowActivationOutcome.Failed, current, ReplacedActivationId: activationId,
+                    Diagnostic: Truncate(SafeMessage(exception)), FailedStep: WorkflowActivationStep.SlotTransition);
+            }
         }
         if (!transition.Succeeded)
             return new(false, WorkflowActivationOutcome.Conflict, transition.Slot, ReplacedActivationId: activationId, Conflict: transition.Conflict,
@@ -382,11 +396,13 @@ public sealed class KernelActivationCoordinator(
             if (!restored.Succeeded)
                 throw new InvalidOperationException($"The deactivation slot transition could not be restored: {restored.Diagnostic}");
         });
-        if (restored is { Succeeded: true } && served is not null)
+        if (restored is { Succeeded: true })
         {
-            await CaptureAsync(failures, "Serving compensation", () =>
-                ServeAsync(serving.Plan(slot.SlotId, served), restored.Slot.Revision, CancellationToken.None));
-            await CaptureAsync(failures, "Observer compensation", () => NotifyObserversAsync(definitionId, served.Workflow.Id, CancellationToken.None));
+            if (served is not null)
+                await CaptureAsync(failures, "Serving compensation", () =>
+                    ServeAsync(serving.Plan(slot.SlotId, served), restored.Slot.Revision, CancellationToken.None));
+            await CaptureAsync(failures, "Observer compensation", () =>
+                NotifyObserversAsync(definitionId, served?.Workflow.Id ?? command.Executable.Identity.ArtifactId, CancellationToken.None));
         }
 
         var compensationFailure = failures.Count == 0 ? null : string.Join(" ", failures);
@@ -441,7 +457,14 @@ public sealed class KernelActivationCoordinator(
         {
             var slot = await authority.FindAsync(workflowDefinitionId, slotName, cancellationToken);
             if (slot?.ActiveActivationId is null)
-                return new(true, WorkflowActivationOutcome.AlreadyInactive, slot ?? EmptySlot(workflowDefinitionId, slotName));
+            {
+                var empty = slot ?? EmptySlot(workflowDefinitionId, slotName);
+                // A slot that serves nothing, while this host still serves something for it (a deactivation whose finish was
+                // lost), stops serving here: its routes go, and its schedules are stopped and their runs removed.
+                if (serving.Find(empty.SlotId) is not null)
+                    await ServeAsync(serving.Plan(empty.SlotId, null), empty.Revision, cancellationToken);
+                return new(true, WorkflowActivationOutcome.AlreadyInactive, empty);
+            }
             var (current, unserved) = await CheckServingAsync(slot, cancellationToken);
             return unserved ?? new(true, current.ActiveActivationId is null ? WorkflowActivationOutcome.AlreadyInactive : WorkflowActivationOutcome.AlreadyActive, current);
         }, cancellationToken);
@@ -545,6 +568,10 @@ public sealed class KernelActivationCoordinator(
     /// activation, deactivation and repair: with no bindings, since a kernel host serves no old-core triggers, and a refresh
     /// required, which Studio's workflow library acts on.
     /// </summary>
+    /// <remarks>
+    /// Observers are told inside <see cref="KernelServing.RunAsync{T}"/>, whose lock is not reentrant: an observer must not
+    /// call back into a coordinator, or it waits on itself.
+    /// </remarks>
     private async ValueTask NotifyObserversAsync(string definitionId, string artifactId, CancellationToken cancellationToken)
     {
         foreach (var observer in _observers)

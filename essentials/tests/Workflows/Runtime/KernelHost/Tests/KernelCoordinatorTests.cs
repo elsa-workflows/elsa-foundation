@@ -87,6 +87,25 @@ public sealed class KernelCoordinatorTests
             inner.TryRepairAsync(slot, alsoServing, cancellationToken);
     }
 
+    /// <summary>A switch whose deactivation commits and then loses its answer, as a provider that drops its connection while committing does.</summary>
+    private sealed class LosesDeactivationAnswer(IWorkflowActivationSwitch inner) : IWorkflowActivationSwitch
+    {
+        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) =>
+            inner.TryActivateAsync(request, cancellationToken);
+        public ValueTask<bool> TryRevertAsync(WorkflowActivationRevert revert, CancellationToken cancellationToken = default) => inner.TryRevertAsync(revert, cancellationToken);
+
+        public async ValueTask<WorkflowActivationTransition> TryDeactivateAsync(WorkflowDeactivationSlotRequest request, IReadOnlyCollection<string> alsoServing,
+            CancellationToken cancellationToken = default)
+        {
+            await inner.TryDeactivateAsync(request, alsoServing, cancellationToken);
+            throw new TimeoutException("The connection dropped after the commit.");
+        }
+
+        public ValueTask<bool> TryDiscardAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default) => inner.TryDiscardAsync(reference, cancellationToken);
+        public ValueTask<bool> TryRepairAsync(WorkflowActivationSlot slot, IReadOnlyCollection<string> alsoServing, CancellationToken cancellationToken = default) =>
+            inner.TryRepairAsync(slot, alsoServing, cancellationToken);
+    }
+
     /// <summary>One host's stores, and a coordinator over them; <see cref="Restart"/> keeps the stores and starts a new host.</summary>
     private sealed class Host
     {
@@ -406,6 +425,46 @@ public sealed class KernelCoordinatorTests
 
         Assert.Equal(WorkflowActivationOutcome.Deactivated, result.Outcome);
         Assert.Equal([$"stop schedule:ticks:tick {result.Slot.Revision}", "unregister schedule-start:ticks:tick"], host.Schedules.Calls);
+    }
+
+    [Fact]
+    public async Task A_deactivation_whose_answer_is_lost_is_finished_as_one_that_committed()
+    {
+        var host = new Host();
+        await host.ActivateAsync(Orders("orders@1"), "orders-1");
+        await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
+        host.Schedules.Calls.Clear();
+        host.Observer.Refreshes.Clear();
+        host.Coordinator = host.NewCoordinator(new LosesDeactivationAnswer(host.Switch));
+
+        var ticks = await host.DeactivateAsync(Ticks("ticks@1"));
+        var orders = await host.DeactivateAsync(Orders("orders@1"));
+
+        Assert.Equal(WorkflowActivationOutcome.Deactivated, ticks.Outcome);
+        Assert.Null(ticks.Slot.ActiveActivationId);
+        Assert.Equal([$"stop schedule:ticks:tick {ticks.Slot.Revision}", "unregister schedule-start:ticks:tick"], host.Schedules.Calls);
+        Assert.Equal(WorkflowActivationOutcome.Deactivated, orders.Outcome);
+        Assert.False(host.Serving.Routes.TryStart("POST", "orders", out _));
+        Assert.Empty(host.Serving.Slots);
+        Assert.Equal(["ticks ticks@1 True 0", "orders orders@1 True 0"], host.Observer.Refreshes);
+    }
+
+    [Fact]
+    public async Task Ensure_serving_an_empty_slot_drops_what_this_host_still_serves_for_it()
+    {
+        var host = new Host();
+        var ticks = await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
+        host.Schedules.Calls.Clear();
+        // The slot is emptied past this host, as a deactivation whose finish was lost leaves it.
+        var emptied = await host.Switch.TryDeactivateAsync(new("ticks", KernelServing.DefaultSlotName, WorkflowActivationSource.Publishing, ticks.Slot.Revision,
+            host.Clock.GetUtcNow()), []);
+        Assert.True(emptied.Succeeded);
+
+        var result = await host.Coordinator.EnsureServingAsync("ticks", KernelServing.DefaultSlotName);
+
+        Assert.Equal(WorkflowActivationOutcome.AlreadyInactive, result.Outcome);
+        Assert.Empty(host.Serving.Slots);
+        Assert.Equal([$"stop schedule:ticks:tick {emptied.Slot.Revision}", "unregister schedule-start:ticks:tick"], host.Schedules.Calls);
     }
 
     [Fact]
