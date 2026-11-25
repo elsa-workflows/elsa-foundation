@@ -25,6 +25,8 @@ public sealed partial class EfStore
 
     // S5b-3a: a Terminate-then-delete of a parked root clears the Park's last kept rows, ends it Cancelled and retires it in
     // one commit: the Park mark, the open clearing (if any) and the kept set must be the ones the command was decided on.
+    // S5b-3b: a Delete that names the Park retires it the same way, still Faulted; both write the terminal mark the
+    // retirement marker's residue check reads.
     private sealed record ParkedRetirement(FoundationParkMark Mark, string KeptDigest, string? Clearing, long Cleared, int Count);
 
     private sealed record RootRetirement(WorkerRoot Root, RootImage Current, Message Command, long Position = 0, ParkedRetirement? Park = null)
@@ -55,7 +57,8 @@ public sealed partial class EfStore
                         AND NOT m."Done" AND (m."InboxScope" <> {occurrence} OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL))
                 FOR UPDATE OF i
                 """).ToListAsync(token);
-            if (rows.Count != 1 || Park is { } parked && (!db.UsesRootParkedOperators || !db.UsesRootTerminateThenDelete ||
+            var thenDelete = Command.Operator?.RootThenDelete == true;
+            if (rows.Count != 1 || Park is { } parked && (!db.UsesRootParkedOperators || thenDelete && !db.UsesRootTerminateThenDelete ||
                     !await ClearParkedAsync(parked))) return false;
             // A parked root without Park arrivals, or one being cleared, receives only its operator rows.
             if (!await SettleRootInputsAsync(db, Root.Reference, Current.Actor, [Command.InboxKey], [Command], null,
@@ -63,7 +66,7 @@ public sealed partial class EfStore
                 return false;
 
             var revision = checked(Current.Revision + 1);
-            var status = ending ? InstanceStatus.Cancelled : Current.Status;
+            var status = running || Park is not null && thenDelete ? InstanceStatus.Cancelled : Current.Status;
             var terminalRevision = ending ? revision : Current.TerminalRevision;
             FormattableString retire = $"""
                 WITH terminal AS MATERIALIZED (
@@ -166,8 +169,10 @@ public sealed partial class EfStore
         var command = turn.FoundationRootOperator;
         var termination = command is { Kind: Kinds.Terminate, Operator.RootThenDelete: true };
         var stamp = command?.Operator?.QualifiedTerminal;
+        // S5b-3b: a Delete names the root's terminal mark, or the Park of a parked root.
         if (turn.Row is not { Retired: true } marker || command is null ||
-            (termination ? command.Operator!.DeleteTarget != root.Reference || stamp is not null : command.Kind != Kinds.Delete || stamp is null) ||
+            (termination ? command.Operator!.DeleteTarget != root.Reference || stamp is not null
+                : command.Kind != Kinds.Delete || (stamp is null) == (command.Operator?.RootParkMark is null)) ||
             command.Target.Id != root.Actor || command.TargetCreation != 1 || !root.Owns(command.InboxKey) ||
             !turn.Unsubscribe || turn.Journal != """["delete"]""" || turn.Done is not [var key] || key != command.InboxKey ||
             turn.Consumed.Count != 0 || turn.Sent.Count != 0 || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 ||
@@ -180,14 +185,15 @@ public sealed partial class EfStore
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, token);
         if (command.Operator!.RootParkFacts is { } facts)
         {
-            // A Terminate-then-delete that names the parked root's Park, whose kept rows fit this commit.
-            if (!termination || !db.UsesRootParkedOperators || command.Operator is not { RootParkMark: { } mark, RootParkWindow: >= 0 } ||
+            // A Terminate-then-delete, or a Delete, that names the parked root's Park, whose kept rows fit this commit.
+            if (stamp is not null || !db.UsesRootParkedOperators || command.Operator is not { RootParkMark: { } mark, RootParkWindow: >= 0 } ||
                 facts.Mark != mark || facts.Outstanding || facts.Residue && !command.Operator.RootParkClear || !facts.FitsPage || facts.Clearing != (command.Operator.RootParkClear ? command.Id : null) ||
                 command.Operator.RootParkClear && command.ReplyTo is not null)
                 throw RootShape();
             if (current is not { Status: InstanceStatus.Faulted, TerminalRevision: null, TerminalAt: null } || current.Revision != turn.Expected)
                 return null;
-            if (marker != CreationProtocol.Retire(WorkerRow(root, current) with { Status = InstanceStatus.Cancelled })) throw RootShape();
+            if (marker != CreationProtocol.Retire(WorkerRow(root, current) with { Status = termination ? InstanceStatus.Cancelled : current.Status }))
+                throw RootShape();
             return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal), new RootRetirement(root, current,
                 WithoutParkFacts(command)!, Park: new(mark, facts.KeptDigest, facts.Clearing, facts.Cleared, facts.Arrived + facts.Consumed)));
         }

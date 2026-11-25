@@ -231,7 +231,8 @@ public sealed partial class EfStore
             .Replace("/*root-parked-terminated-journal*/", db.UsesRootParkedOperators ? ParkedTerminatedJournal(db) : "", StringComparison.Ordinal)
             .Replace("/*root-parked-terminate*/", db.UsesRootParkedOperators ? ParkedTerminateCheckpoint(db) : "false", StringComparison.Ordinal)
             // S5b-3a: a Terminate-then-delete retires a parked root, Cancelled with its terminal mark and its Park cleared.
-            .Replace("/*root-parked-retirement*/", db.UsesRootParkedOperators && db.UsesRootTerminateThenDelete ? ParkedRetirementCheckpoint : "false",
+            // S5b-3b: a Delete retires it still Faulted, under its terminal mark.
+            .Replace("/*root-parked-retirement*/", db.UsesRootParkedOperators && db.UsesRootRetirement ? ParkedRetirementCheckpoint(db) : "false",
                 StringComparison.Ordinal)
             // S5b-2: a refusal leaves an open clearing as it is, and no keep or other write moves a root whose Park is being cleared.
             .Replace("/*parked-clearing-continues*/", db.UsesRootParkedOperators ? ParkedClearingPinned + ParkedClearingKeeps : "", StringComparison.Ordinal)

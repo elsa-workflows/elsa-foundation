@@ -101,7 +101,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
             { EndedDuringParkRecovery: true, Status: not Durable.InstanceStatus.Running, ParkRecovery: null, ParkDiscarded: false };
 
     private bool CanKeepRootParkArrival(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        roots?.KeepsParkArrivals == true && row.Status == Durable.InstanceStatus.Faulted && delivery.Durable &&
+        // S5b-3b: a root a protected Delete ended stays Faulted under its terminal mark and keeps nothing more.
+        roots?.KeepsParkArrivals == true && row is { Status: Durable.InstanceStatus.Faulted, FoundationDispatchHeader.Terminal: null } && delivery.Durable &&
         delivery.Message.Target.Id == row.Id && CapturesParkArrival(delivery) && delivery.Message is
         { InboxScope: Durable.InboxKey.FoundationOccurrenceScope, TargetCreation: 1, EventMatch: null, ActorAuthored: false,
             Sender: null, Operator: null, StorageId: not null, ReplyTo: null };

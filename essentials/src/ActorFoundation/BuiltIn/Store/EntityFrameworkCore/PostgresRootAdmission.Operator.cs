@@ -20,7 +20,7 @@ internal sealed partial class PostgresRootAdmission
         public FoundationTerminalStamp? Terminal { get; init; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public FoundationParkMark? Park { get; init; }
-        // A recover, and a Terminate that names a parked root's Park, carry the ordinary admission window, which they give
+        // A recover, and a Terminate or Delete that names a parked root's Park, carry the ordinary admission window, which they give
         // each kept row they restore or clear.
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public long? Window { get; init; }
@@ -100,7 +100,11 @@ internal sealed partial class PostgresRootAdmission
                 if (deletion)
                 {
                     terminal = PostgresRootSelection.OpenTerminal(cursor, selection, tenant, reference);
-                    if (terminal is not { Revision: > 0 }) return null;
+                    // S5b-3b: in a parked-operator set a Delete may name the root's Park instead of its terminal mark.
+                    if (terminal is null && !retentionDelete && db.UsesRootParkedOperators &&
+                        PostgresRootSelection.OpenPark(cursor, selection, tenant, reference) is { Revision: > 0, At: > 0 } parkedDelete)
+                        park = parkedDelete;
+                    else if (terminal is not { Revision: > 0 }) return null;
                 }
                 else if (recover)
                 {
@@ -137,7 +141,7 @@ internal sealed partial class PostgresRootAdmission
             // Lock the selected checkpoint before reading its receipt. If the command already
             // ended this actor, the receipt committed before the owner could consume it.
             var exactTerminal = terminal is not null && await LocksRootDeleteSelectionAsync(db, address, tenant, reference, terminal, token);
-            // S5b-2: a Terminate is refused while its Park is being cleared.
+            // S5b-2: a Terminate, or a Delete, that names the Park is refused while its Park is being cleared.
             var exactPark = park is not null && await LocksRootParkSelectionAsync(db, address, tenant, reference, park, token) &&
                 (recover || !await ClearsRootParkAsync(db, address, token));
             var selectedStatus = selected && !deletion && park is null
@@ -159,7 +163,7 @@ internal sealed partial class PostgresRootAdmission
             // by the owner, which answers a held caller.
             var parked = selectedStatus == InstanceStatus.Faulted && db.UsesRootParkedOperators && kind == Kinds.Terminate &&
                 await LocksParkedRootAsync(db, address, tenant, reference, token);
-            var eligible = deletion ? exactTerminal : park is not null ? exactPark
+            var eligible = terminal is not null ? exactTerminal : park is not null ? exactPark
                 : !parked && (thenDelete ? selectedStatus is InstanceStatus.Running or InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled
                     : selectedStatus == InstanceStatus.Running);
             if (!eligible)
@@ -254,11 +258,11 @@ internal sealed partial class PostgresRootAdmission
                 AND "FoundationParkClearing" IS NOT NULL) AS "Value"
             """).SingleAsync(token);
 
-    // The next control of an open clearing: the Terminate's operation and Park mark under a fresh occurrence.
-    internal static (string Id, string Header) ClearControl(string reference, string operation, FoundationParkMark park, long window,
-        bool thenDelete) =>
+    // The next control of an open clearing: the Terminate's, or the Delete's, kind, operation and Park mark under a fresh occurrence.
+    internal static (string Id, string Header) ClearControl(string reference, string operation, string kind, FoundationParkMark park,
+        long window, bool thenDelete) =>
         ($"{OperatorOccurrencePrefix}{reference}/{FoundationRootCreator.OperationDigest(operation)}/{Guid.NewGuid():N}",
-            (thenDelete ? TerminateThenDeletePrefix : OperatorPrefix) + DurableKeyJson.Write(new StoredOperator(reference, operation, 1, Kinds.Terminate, false)
+            (thenDelete ? TerminateThenDeletePrefix : OperatorPrefix) + DurableKeyJson.Write(new StoredOperator(reference, operation, 1, kind, false)
                 { Park = park, Window = window, Clear = true }));
 
     // A parked root in a composed Park set, whose running selection admission refuses. A Park keeps the row's Suspended
@@ -430,14 +434,14 @@ internal sealed partial class PostgresRootAdmission
         catch (JsonException error) { throw new StoreException(Failure.Definite, "Invalid stored operator framing.", error); }
         if (header is null) throw new StoreException(Failure.Definite, "Invalid stored operator framing.");
         if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != kind ||
-            (kind == Kinds.Delete ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
+            (kind == Kinds.Delete && !(parkedTerminate && header.Park is not null) ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
             (kind == Kinds.Recover ? header.Park is not { Revision: > 0, At: > 0 } || header.Window is not >= 0 || due != 0 || header.ExplicitZeroDue ||
                 held || thenDelete || retentionDelete
-            : kind == Kinds.Terminate && parkedTerminate && header.Park is not null
+            : kind is (Kinds.Terminate or Kinds.Delete) && parkedTerminate && header.Park is not null
                 ? header.Park is not { Revision: > 0, At: > 0 } || header.Window is not >= 0 || thenDelete && !terminateThenDelete || retentionDelete ||
                     header.Clear is false || header.Clear == true && (held || header.ExplicitZeroDue || due != 0)
             : header.Park is not null || header.Window is not null) ||
-            header.Clear is not null && (kind != Kinds.Terminate || header.Park is null || !parkedTerminate) ||
+            header.Clear is not null && (kind is not (Kinds.Terminate or Kinds.Delete) || header.Park is null || !parkedTerminate) ||
             thenDelete && (!terminateThenDelete || kind != Kinds.Terminate) ||
             retentionDelete && (!retentionDeletes || kind != Kinds.Delete || held) ||
             header.ExplicitZeroDue && due != 0 || !MatchesDirectOccurrence(reference, header.Operation, occurrence[OperatorOccurrencePrefix.Length..], retentionDelete))

@@ -3391,7 +3391,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationHeader = unit.FoundationHeader,
             FoundationRootOperator = unit.Consumed is [var qualified] && qualified.Message.Operator is { } command &&
                 (command.RootHeldReply || unit.Row?.FoundationDispatchHeader is not null ||
-                    unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true })
+                    unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null })
                     ? qualified.Message : null,
             FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
                 unit.Consumed is [{ IsWorkerJobCompletion: true, Original: { } original } completed] &&
@@ -3600,7 +3600,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 RemoveSlot(Canonical(item.Message.Target.Id));
         }
         if (unit.Delete && unit.Slot is { } retired && unit.Consumed is
-            [{ Message.Operator: { QualifiedTerminal: not null } or { RootThenDelete: true } }])
+            [{ Message.Operator: { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null } }])
         {
             // The root retirement write settles every occurrence, including ones read ahead of this command.
             foreach (var item in retired.Inbox.ToArray()) Forget(item);
