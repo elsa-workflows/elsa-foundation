@@ -2423,8 +2423,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// fence it holds (if any) is usable the pass gate stays open, so the node lease keeps renewing. A pending-only Worker
     /// gets the pass too, and one that took partitions back after a reset keeps getting it. False when this Worker lost a
     /// fence it held at the start (<paramref name="ownedAtStart"/>, <paramref name="generation"/>) or holds one that is no
-    /// longer usable. A transient store error while judging the answer is recorded and retried at the next round, as a pass
-    /// retries it, and counts no pass; any other error, a definite or unknown store failure included, faults the drain.
+    /// longer usable. A store failure that may succeed when tried again (transient, unknown such as a broken connection or a
+    /// timeout, or an expired commit window) is recorded and retried at the next round, as a pass retries it, and counts
+    /// no pass. A definite store failure, a format error included, and any other error fault the drain.
     /// </summary>
     internal async Task<bool> KeepDrainLiveAsync(long generation, bool ownedAtStart, CancellationToken cancellationToken)
     {
@@ -2435,7 +2436,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _options.BeforeDrainAnswer?.Invoke();
             if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
         }
-        catch (StoreException error) when (error.Failure == Failure.Transient && !cancellationToken.IsCancellationRequested)
+        catch (StoreException error) when (error.Failure is Failure.Transient or Failure.Unknown or Failure.WindowExpired &&
+            !cancellationToken.IsCancellationRequested)
         {
             Interlocked.Increment(ref _drainStoreErrors);
             Volatile.Write(ref _lastDrainStoreError, error);

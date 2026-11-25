@@ -289,8 +289,9 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
                 List<Task> wakes = [all];
                 for (var i = 0; i < workers.Count; i++)
                 {
-                    // A Worker whose own drain ended, also with a lost fence, still gets the pass while its guard is usable
-                    // or it holds nothing: one that lapsed would close the gate for every other Worker of the host.
+                    // A Worker whose own drain ended, also with a fault (a lost fence or any other), still gets the pass while
+                    // its guard is usable or it holds nothing: one that lapsed would close the gate for every other Worker.
+                    // A fault is reported once every drain has ended.
                     if (drainsKeepThemselves && !drains[i].IsCompleted) continue;
                     wakes.Add(workers[i].ArmDrainBeat());
                     if (!await workers[i].KeepDrainLiveAsync(generations[i], ownedAtStart[i], cancellationToken)) lost[i] = true;
@@ -301,6 +302,16 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
                 wait.Cancel();     // a beat or an exit woke the drain: drop this round's timer
                 cancellationToken.ThrowIfCancellationRequested();
             }
+        }
+        catch (Exception error) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The run will be abandoned: let every other Worker's drain end first, so what follows (the job drain judges
+            // answers) never runs beside a drain's flush. The deadline still bounds the wait.
+            try { await all.WaitAsync(cancellationToken); }
+            catch (Exception) { }
+            _ = all.ContinueWith(static drained => _ = drained.Exception, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(error);
         }
         catch
         {
