@@ -154,8 +154,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       current.revision++;
       current.state = createEntryState(latest, current);
       view.setState(current.state);
-      // A new state resets the scroll position; keep the caret of a field being edited in view.
-      if (view.hasFocus) view.dispatch({ scrollIntoView: true });
+      if (view.hasFocus) keepCaretInEditorView(view);
       void loadLanguageSupport(view, latest.document.language, current);
     } else if (latest.document.value !== view.state.doc.toString() && latest.document.value !== current.runtime.lastEmittedValue) {
       view.dispatch({
@@ -183,6 +182,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     // authoring context replaces the initial local-only providers so the visible document can
     // immediately acquire the newly available signature.
     view.dispatch({ selection: view.state.selection });
+    if (view.hasFocus) keepCaretInEditorView(view);
   }, [props.completionProvider, props.completions, props.hoverProvider, props.signatureProvider]);
 
   return (
@@ -195,6 +195,30 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       style={{ minHeight: props.minHeight }}
     />
   );
+}
+
+/**
+ * A refreshed state or a reclaimed compact view starts at scroll position 0, which can leave the caret of a long line
+ * out of view, and CodeMirror then hides the caret's popups. Scroll only the editor's own scroller sideways until the
+ * caret shows; unlike scrollIntoView this never moves the inspector or the page the author may have scrolled.
+ */
+function keepCaretInEditorView(view: EditorView) {
+  view.requestMeasure({
+    read: current => {
+      try {
+        const caret = current.coordsAtPos(current.state.selection.main.head);
+        return caret && { caret, box: current.scrollDOM.getBoundingClientRect() };
+      } catch {
+        return null; // Environments without layout (jsdom) cannot measure; nothing to correct.
+      }
+    },
+    write: (measured, current) => {
+      if (!measured) return;
+      const { caret, box } = measured, margin = 8;
+      if (caret.right > box.right) current.scrollDOM.scrollLeft += caret.right - box.right + margin;
+      else if (caret.left < box.left) current.scrollDOM.scrollLeft -= box.left - caret.left + margin;
+    }
+  });
 }
 
 function claimCompactView(entry: CodeMirrorSessionEntry, profile: StudioCodeEditorEngineProps["profile"], container: HTMLElement) {
