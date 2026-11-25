@@ -18,7 +18,7 @@ public abstract class StudioAppProcess(string name, IReadOnlyDictionary<string, 
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(30);
 
     private readonly StringBuilder _output = new();
-    private readonly TaskCompletionSource<Uri> _listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource<Uri> _listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Process? _process;
     private string? _contentRoot;
     private string? _scratch;
@@ -27,7 +27,7 @@ public abstract class StudioAppProcess(string name, IReadOnlyDictionary<string, 
     public string Name { get; } = name;
 
     /// <summary>The client every request to the app goes through; its base address is the app's listening URL.</summary>
-    public HttpClient Client { get; } = new();
+    public HttpClient Client { get; private set; } = new();
 
     /// <summary>The app's own content root, holding its copied configuration and the <c>packages</c> feed.</summary>
     public string ContentRoot => _contentRoot ?? throw new InvalidOperationException($"{Name} has not started.");
@@ -60,16 +60,38 @@ public abstract class StudioAppProcess(string name, IReadOnlyDictionary<string, 
         if (!File.Exists(assembly))
             throw new FileNotFoundException($"Build {Name} ({Configuration}) before running these tests.", assembly);
 
-        _contentRoot = Directory.CreateTempSubdirectory($"{Name.ToLowerInvariant()}-").FullName;
+        _contentRoot = CreateContentRoot();
         foreach (var file in new[] { "appsettings.json", "appsettings.Development.json", "shells.json", "nuplane-management.json" })
             File.Copy(Path.Join(SourceDirectory, file), Path.Join(_contentRoot, file));
         Directory.CreateDirectory(Path.Join(_contentRoot, "packages"));
+        PrepareContentRoot(_contentRoot);
+        await StartAsync(assembly);
+    }
 
+    /// <summary>Stops the app and starts it again over the same content root, as an operator's restart does.</summary>
+    public async Task RestartAsync()
+    {
+        await StopAsync();
+        _process?.Dispose();
+        // The app listens on a new port, and a client's base address is fixed once it has sent a request.
+        Client.Dispose();
+        Client = new();
+        _listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        await StartAsync(Path.Join(OutputDirectory, Name + ".dll"));
+    }
+
+    /// <summary>Runs once the content root holds the app's configuration and its empty feed, before the first start.</summary>
+    protected virtual void PrepareContentRoot(string contentRoot)
+    {
+    }
+
+    private async Task StartAsync(string assembly)
+    {
         // Kestrel reserves its own ephemeral port: picking a free one and releasing it races other test processes.
         var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
-            [assembly, "--contentRoot", _contentRoot, "--urls", "http://127.0.0.1:0"])
+            [assembly, "--contentRoot", ContentRoot, "--urls", "http://127.0.0.1:0"])
         {
-            WorkingDirectory = _contentRoot,
+            WorkingDirectory = ContentRoot,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false
@@ -116,6 +138,22 @@ public abstract class StudioAppProcess(string name, IReadOnlyDictionary<string, 
         Client.Dispose();
         try
         {
+            await StopAsync();
+        }
+        finally
+        {
+            _process?.Dispose();
+            if (_contentRoot is not null)
+                TryDelete(_contentRoot);
+            if (_scratch is not null)
+                TryDelete(_scratch);
+        }
+    }
+
+    private async Task StopAsync()
+    {
+        try
+        {
             if (_process is { HasExited: false })
             {
                 _process.Kill(entireProcessTree: true);
@@ -127,14 +165,19 @@ public abstract class StudioAppProcess(string name, IReadOnlyDictionary<string, 
         {
             // Exited between the check and the kill, or would not die in time: nothing left here to act on.
         }
-        finally
-        {
-            _process?.Dispose();
-            if (_contentRoot is not null)
-                TryDelete(_contentRoot);
-            if (_scratch is not null)
-                TryDelete(_scratch);
-        }
+    }
+
+    /// <summary>
+    /// A fresh content root. The shipped apps enroll their package store there, and Nuplane qualifies ext4 on Linux, so on a
+    /// runner the root goes on the workspace volume instead of an image-dependent <c>/tmp</c> mount, as for the native-store
+    /// administration fixture.
+    /// </summary>
+    private string CreateContentRoot()
+    {
+        var workspace = Environment.GetEnvironmentVariable("RUNNER_TEMP");
+        return OperatingSystem.IsLinux() && !string.IsNullOrWhiteSpace(workspace)
+            ? Directory.CreateDirectory(Path.Join(workspace, $"{Name.ToLowerInvariant()}-{Guid.NewGuid():N}")).FullName
+            : Directory.CreateTempSubdirectory($"{Name.ToLowerInvariant()}-").FullName;
     }
 
     private void Append(string? line)

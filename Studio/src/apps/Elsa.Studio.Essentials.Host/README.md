@@ -50,9 +50,11 @@ watcher and a one-minute poll. Add a module in one of two ways:
 - Copy its `.nupkg` into `packages`. The watcher reconciles it within seconds. Then enable its feature on the Features page.
 
 No rebuild or restart is needed. `EssentialsStudioAddOnTests` in `Studio/tests/Elsa.Studio.Tests` proves this path with the ETL
-module: the package loads, its feature enables and the module is listed. One gap remains: the app's package store is not an
-enrolled coordinated store, so Nuplane refuses to serve an installed module's browser assets and its screens do not load yet
-(#5778).
+module: the package loads, its feature enables, the module is listed and its `module.js` and styles answer `200`. The browser
+files are served because `appsettings.json` turns on `Studio:Hosting:Nuplane:EnrollPackageStore`, which enrolls the app's fresh
+package store under `.nuplane/` on first start. A `.nuplane/packages` folder left with files by an earlier, unenrolled run stops
+startup; delete `.nuplane` to start fresh. See
+[package-store enrollment](../../essentials/Elsa.Studio.Hosting.Distribution/README.md#package-store-enrollment).
 
 ## Run it
 

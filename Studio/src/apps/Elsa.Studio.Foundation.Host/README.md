@@ -38,6 +38,10 @@ module in one of two ways:
 - Upload its `.nupkg` on the Modules page (`/modules`), then enable its feature on the Features page (`/features`).
 - Copy its `.nupkg` into `packages`. The watcher reconciles it within seconds. Then enable its feature on the Features page.
 
+The browser loads an add-on's screens from its installed package. `appsettings.json` turns on
+`Studio:Hosting:Nuplane:EnrollPackageStore`, so the app enrolls its fresh package store under `.nuplane/` on first start and
+serves those files; see [package-store enrollment](../../essentials/Elsa.Studio.Hosting.Distribution/README.md#package-store-enrollment).
+
 The server side of a module is a separate add-on on the paired server host. Install both: the Studio module shows its screens
 once the backend advertises the capability it requires.
 

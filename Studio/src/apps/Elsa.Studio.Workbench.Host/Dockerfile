@@ -96,6 +96,12 @@ COPY --from=build /app/publish ./
 # with a volume mount.
 RUN mkdir -p /app/packages && chown -R $APP_UID:$APP_UID /app
 
+# appsettings.json turns on package-store enrollment, which serves installed add-ons'
+# browser files (#5778). Nuplane 0.0.13 coordinates a store only on ext4 on Linux and
+# refuses it inside a container, even with the content root on an ext4 mount, so the image
+# turns enrollment off. Add-ons still install and load; their browser files answer 503.
+ENV Studio__Hosting__Nuplane__EnrollPackageStore=false
+
 # Run as the non-root user provided by the base image.
 USER $APP_UID
 
