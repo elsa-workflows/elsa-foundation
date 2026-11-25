@@ -961,7 +961,7 @@ internal static class PostgresRootParkedOperatorChecks
             EfStore? frozen = null;
             var pageSeen = false;
             var during = new Dictionary<string, (Contract.ActorRef Root, string Park, string[] Arrivals)>();
-            Contract.ActorRef large = default;
+            Contract.ActorRef large = default, keptLarge = default;
             var opened = new Dictionary<string, Action>();
             var retries = new List<(string Entry, Set.ClearingRow Clearing, int Kept, long Delay, bool Admitted)>();
             string? parkUnreadableShared = null;
@@ -973,7 +973,7 @@ internal static class PostgresRootParkedOperatorChecks
             var one = await set.StartAsync("del-one");
             large = await set.StartAsync("del-large");
             var kept = await set.StartAsync("del-kept");
-            var keptLarge = await set.StartAsync("del-kept-large");
+            keptLarge = await set.StartAsync("del-kept-large");
             var mid = await set.StartAsync("del-mid");
             var stale = await set.StartAsync("del-stale");
             var residue = await set.StartAsync("del-residue");
