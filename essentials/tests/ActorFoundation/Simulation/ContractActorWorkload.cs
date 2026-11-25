@@ -308,7 +308,7 @@ internal static partial class ContractActorWorkload
                 state.Tokens.Add(add.Token);
                 if (StateVersion >= 2) state.Count++;
                 var ordinal = StateVersion >= 2 ? state.Count : state.Tokens.Count;
-                turn.Record(new CounterEntry(add.Token, message.Id, message.Sender?.Id, ordinal, turn.Instance.Definition));
+                turn.Record(new CounterEntry(add.Token, message.Id, message.Sender?.Id, ordinal, turn.Instance.Workflow));
                 if (add.ForwardTo is not { } target) continue;
                 var next = new Forward(target, add.Token + ">");
                 state.Forwarded.Add(next);

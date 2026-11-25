@@ -43,7 +43,7 @@ public sealed partial class WorkflowActor
             result = new(MigrationPlanOutcome.Refused, "InvalidRequest");
         else if (turn.Header.Status != ActorStatus.Running)
             result = new(MigrationPlanOutcome.Refused, "Ended");
-        else if (workflow.Definition != request.From || request.Model is { } expectedModel && workflow.Model != expectedModel)
+        else if (workflow.Workflow != request.From || request.Model is { } expectedModel && workflow.Model != expectedModel)
             result = new(MigrationPlanOutcome.NotAtSource);
         else if (turn.State is null || workflow.Ephemeral)
             result = new(MigrationPlanOutcome.Refused, "UnavailableCheckpoint");
@@ -58,7 +58,7 @@ public sealed partial class WorkflowActor
                 result = new(MigrationPlanOutcome.Refused, finding);
             else
             {
-                next = next with { Definition = request.To, Version = model.StateVersion };
+                next = next with { Workflow = request.To, Version = model.StateVersion };
                 result = new(MigrationPlanOutcome.Migrated);
             }
         }
@@ -88,7 +88,7 @@ public sealed partial class WorkflowActor
         {
             Migration = result.Outcome,
             result.Finding,
-            From = workflow.Definition,
+            From = workflow.Workflow,
             Target = result.Outcome == MigrationPlanOutcome.Migrated ? request.To : null,
             Plan = request.Plan.Id
         });

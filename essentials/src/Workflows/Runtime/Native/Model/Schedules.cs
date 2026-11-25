@@ -14,7 +14,7 @@ public sealed record NativeSchedule(string Workflow, string Node, string Kind, s
     public const string Interval = "interval";
     public const string Cron = "cron";
 
-    /// <summary>The definition the workflow is a version of (<see cref="Native.Workflow.DefinitionId"/>); the workflow itself unless set.</summary>
+    /// <summary>The definition the workflow is a version of (<see cref="Native.Workflow.Definition"/>); the workflow itself unless set.</summary>
     public string Definition { get => _definition ?? Workflow; init => _definition = value; }
     private readonly string? _definition;
 
@@ -26,7 +26,7 @@ public sealed record NativeSchedule(string Workflow, string Node, string Kind, s
 
     /// <summary>The run each occurrence starts: the workflow, begun at its trigger, under its definition.</summary>
     public Models.WorkflowStart Start(string mode = Modes.Balanced) =>
-        NativeExecutionModel.Start(Workflow, mode, triggerNode: Node, trigger: JsonValue.Create(Key), definitionId: Definition);
+        NativeExecutionModel.Start(Workflow, mode, triggerNode: Node, trigger: JsonValue.Create(Key), definition: Definition);
 }
 
 /// <summary>A recurring start trigger the model does not accept.</summary>
@@ -43,7 +43,10 @@ public sealed class NativeSchedules
 {
     private readonly List<NativeSchedule> _schedules = [];
 
-    /// <param name="registry">The registered definitions.</param>
+    /// <param name="registry">
+    /// The workflows that serve: one version per scheduled definition (release 1 serves one slot of each), not every
+    /// workflow instances still run, or a republished definition's two versions would both claim its schedule.
+    /// </param>
     /// <param name="cronError">The host's check of a cron expression: null when it reads, else why not. Without one, every expression is refused.</param>
     public NativeSchedules(WorkflowRegistry registry, Func<string, string?>? cronError = null)
     {
@@ -59,14 +62,14 @@ public sealed class NativeSchedules
                     var interval = Literal(workflow, node, "Interval");
                     if (!ScheduleIntervals.TryParse(interval, out _))
                         throw new NativeScheduleException($"Workflow '{workflow.Id}', Timer '{node.Id}': '{interval}' is no ISO 8601 duration or time span of at least {ScheduleIntervals.MinInterval.TotalSeconds:0} second.");
-                    _schedules.Add(new(workflow.Id, node.Id, NativeSchedule.Interval, interval.Trim()) { Definition = workflow.DefinitionId });
+                    _schedules.Add(new(workflow.Id, node.Id, NativeSchedule.Interval, interval.Trim()) { Definition = workflow.Definition });
                 }
                 else if (node.Type == typeof(Cron))
                 {
                     var expression = Literal(workflow, node, "Expression");
                     if ((cronError is null ? "the host reads no cron expressions" : cronError(expression)) is { } error)
                         throw new NativeScheduleException($"Workflow '{workflow.Id}', Cron '{node.Id}': '{expression}' is refused: {error}.");
-                    _schedules.Add(new(workflow.Id, node.Id, NativeSchedule.Cron, expression.Trim()) { Definition = workflow.DefinitionId });
+                    _schedules.Add(new(workflow.Id, node.Id, NativeSchedule.Cron, expression.Trim()) { Definition = workflow.Definition });
                 }
             }
         }

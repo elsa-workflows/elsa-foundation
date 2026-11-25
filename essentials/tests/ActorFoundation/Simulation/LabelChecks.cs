@@ -106,7 +106,7 @@ internal static class LabelChecks
         await driver.PassAll(6);
         var invoices = await driver.Reads.ListAsync(scope, new Contract.ActorQuery(Type: PublicWorkflow.ActorType,
             Labels: new Dictionary<string, string> { ["definition"] = "invoices" }));
-        check(invoices.Items is [var invoice] && invoice.Header.TypeData.Contains("\"Definition\":\"invoices@3\"", StringComparison.Ordinal) &&
+        check(invoices.Items is [var invoice] && invoice.Header.TypeData.Contains("\"Workflow\":\"invoices@3\"", StringComparison.Ordinal) &&
               (await Header(invoicing)).Labels.GetValueOrDefault("definition") == "invoicing",
             $"a child started on a published version carries its definition as the definition label and the version in its type data ({invoices.Items.Count})");
 

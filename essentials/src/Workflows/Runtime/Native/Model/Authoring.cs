@@ -127,9 +127,11 @@ public sealed class Node(string id, Type type)
 
 public sealed class Workflow
 {
-    public Workflow(string id, Node root, IReadOnlyDictionary<string, JsonNode?>? variables = null)
+    /// <param name="definition">The definition this workflow is a version of (<see cref="Definition"/>); the workflow itself when null.</param>
+    public Workflow(string id, Node root, IReadOnlyDictionary<string, JsonNode?>? variables = null, string? definition = null)
     {
-        (Id, Root, Variables) = (id, root, variables ?? new Dictionary<string, JsonNode?>());
+        if (definition is not null && string.IsNullOrWhiteSpace(definition)) throw new ArgumentException("A definition cannot be blank.", nameof(definition));
+        (Id, Root, Variables, Definition) = (id, root, variables ?? new Dictionary<string, JsonNode?>(), definition ?? id);
         void Index(Node node, Node? parent)
         {
             if (!Nodes.TryAdd(node.Id, node)) throw new InvalidOperationException($"Node id '{node.Id}' is used twice in '{id}'.");
@@ -168,8 +170,7 @@ public sealed class Workflow
     /// The definition this workflow is a version of, which instance reads and schedules key on: the workflow itself unless
     /// set. Two artifacts of one definition share it.
     /// </summary>
-    public string DefinitionId { get => _definitionId ?? Id; init => _definitionId = string.IsNullOrWhiteSpace(value) ? throw new ArgumentException("A definition id cannot be blank.", nameof(value)) : value; }
-    private readonly string? _definitionId;
+    public string Definition { get; }
 
     public Node Root { get; }
     public IReadOnlyDictionary<string, JsonNode?> Variables { get; }

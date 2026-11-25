@@ -62,7 +62,7 @@ internal static class ScheduleChecks
         static Workflow Orders(string version) => VersionOf("orders", Workflow(version, Sequence("root", Timer("t", "PT1M"), Set("o", "output", version))));
         var versioned = new NativeSchedules(new WorkflowRegistry().Add(Orders("orders@2")));
         check(versioned.All is [{ Key: "schedule:orders:t", StartKey: "schedule-start:orders:t", Workflow: "orders@2" } ordersSchedule] &&
-              ordersSchedule.Start() is { Definition: "orders@2", DefinitionId: "orders" } &&
+              ordersSchedule.Start() is { Workflow: "orders@2", Definition: "orders" } &&
               Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Orders("orders@1")).Add(Orders("orders@2")))),
             $"a schedule is keyed by its definition and starts the version it was built from, and two versions of one definition with one schedule are refused ({string.Join(", ", versioned.All.Select(s => s.Key))})");
         check(Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule(RecurringSchedule.Interval, "soon"), "s")) &&
@@ -99,7 +99,7 @@ internal static class ScheduleChecks
         }
         async Task<(int Finished, int Running)> Runs(string workflow)
         {
-            var runs = (await List(PublicWorkflow.ActorType)).Where(v => JsonNode.Parse(v.Header.TypeData)?["Definition"]?.GetValue<string>() == workflow).ToList();
+            var runs = (await List(PublicWorkflow.ActorType)).Where(v => JsonNode.Parse(v.Header.TypeData)?["Workflow"]?.GetValue<string>() == workflow).ToList();
             return (runs.Count(r => r.Header.Status == Contract.ActorStatus.Finished), runs.Count(r => r.Header.Status == Contract.ActorStatus.Running));
         }
         // The driver's lease is 50 ms, so a jump of the clock is an owner change: a new owner takes every partition and

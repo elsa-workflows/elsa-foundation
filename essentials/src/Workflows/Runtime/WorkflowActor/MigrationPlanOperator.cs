@@ -63,7 +63,7 @@ internal sealed class MigrationPlanOperator(IIngress ingress, IActorReads reads,
         private async Task<bool> SelectAsync(MigrationPlanProgress progress, string executionModel, CancellationToken cancellationToken)
         {
             var query = new ActorQuery(WorkflowActor.ActorType, ActorStatus.Running,
-                new Dictionary<string, string> { ["definition"] = progress.DefinitionId });
+                new Dictionary<string, string> { ["definition"] = progress.Definition });
             var page = await reads.ListAsync(scope, query, progress.Cursor, cancellationToken);
             if (page.Next is { } next && (next == progress.Cursor || next.Value is not { Length: > 0 and <= 1_024 }))
                 throw new InvalidOperationException("The instance list must return an advancing, bounded cursor.");

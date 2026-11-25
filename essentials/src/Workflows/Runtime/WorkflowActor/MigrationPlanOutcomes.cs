@@ -19,7 +19,7 @@ internal abstract record MigrationPlanJournal(string Kind)
     private const string ClosedKind = "migration-plan.closed.v1";
 
     internal sealed record Created(string From, string To, long Deadline, string? Model = null,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? DefinitionId = null)
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Definition = null)
         : MigrationPlanJournal(CreatedKind);
     internal sealed record Selected(ActorRef[] Actors, long Number = 0, PageToken? After = null, bool AllSelected = false)
         : MigrationPlanJournal(SelectedKind);

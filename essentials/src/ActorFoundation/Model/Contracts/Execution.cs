@@ -2,18 +2,18 @@ using Kernel.Foundation.Contracts;
 
 namespace Kernel.Model.Contracts;
 
-/// <param name="Definition">The workflow the model runs: on a publishing host, the published artifact.</param>
-/// <param name="DefinitionId">
+/// <param name="Workflow">The workflow the model runs: on a publishing host, the published artifact.</param>
+/// <param name="Definition">
 /// The definition that workflow is a version of, which instance reads select by (the <c>definition</c> label), when it is
 /// not the workflow itself.
 /// </param>
 public sealed record WorkflowStart(
     string Model,
-    string Definition,
+    string Workflow,
     string? Input = null,
     bool Ephemeral = false,
     History History = History.Full,
-    string? DefinitionId = null);
+    string? Definition = null);
 
 /// <summary>The workflow model and its versioned state format.</summary>
 public interface IExecutionModel

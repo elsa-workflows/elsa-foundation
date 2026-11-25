@@ -16,8 +16,8 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     public string Type => ActorType;
 
     public static StartSpec Start(WorkflowStart start) =>
-        new(ActorType, JsonSerializer.Serialize(new WorkflowHeader(start.Model, start.Definition, null,
-            Ephemeral: start.Ephemeral, History: start.History, DefinitionId: start.DefinitionId == start.Definition ? null : start.DefinitionId)),
+        new(ActorType, JsonSerializer.Serialize(new WorkflowHeader(start.Model, start.Workflow, null,
+            Ephemeral: start.Ephemeral, History: start.History, Definition: start.Definition == start.Workflow ? null : start.Definition)),
             start.Input, start.Ephemeral, start.History);
 
     public bool Withholds(ActorHeader header)
@@ -139,14 +139,14 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
 
     internal static bool IsMigrationPlan(ActorView? view, ActorRef plan, bool requireRunning = false) =>
         view?.Header is { } header && header.Ref == plan && TryReadWorkflow(header) is
-        { Model: MigrationPlanModel.ModelKey, Definition: MigrationPlanModel.ModelKey, Version: > 0 and <= MigrationPlanModel.PlanVersion,
+        { Model: MigrationPlanModel.ModelKey, Workflow: MigrationPlanModel.ModelKey, Version: > 0 and <= MigrationPlanModel.PlanVersion,
           History: History.Full, Ephemeral: false } workflow &&
         (!requireRunning || header.Status == ActorStatus.Running && !workflow.Suspended);
 
-    internal static bool CanSelectForMigration(ActorView view, string model, string definition) =>
+    internal static bool CanSelectForMigration(ActorView view, string model, string workflow) =>
         view.Header.Status == ActorStatus.Running && TryReadWorkflow(view.Header) is
-            { Definition: var current, Model: var currentModel, Version: not null, Ephemeral: false } &&
-        current == definition && currentModel == model;
+            { Workflow: var current, Model: var currentModel, Version: not null, Ephemeral: false } &&
+        current == workflow && currentModel == model;
 
     private static WorkflowHeader? TryReadWorkflow(ActorHeader header)
     {
@@ -161,7 +161,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         {
             var start = inbox.FirstOrDefault(message => message.Kind == Kinds.Start) ??
                 throw new InvalidOperationException("A workflow without state needs its start message.");
-            return model.CreateState(new WorkflowStart(workflow.Model, workflow.Definition, start.Payload, workflow.Ephemeral, workflow.History, workflow.DefinitionId));
+            return model.CreateState(new WorkflowStart(workflow.Model, workflow.Workflow, start.Payload, workflow.Ephemeral, workflow.History, workflow.Definition));
         }
         if (workflow.Version is not { } version || version > model.StateVersion)
             throw new InvalidOperationException("This model cannot read the stored state version.");
@@ -184,7 +184,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         IReadOnlyDictionary<string, string>? modelLabels = null)
     {
         if (previous == next && answeredPlan is null && modelLabels is null) return;
-        var labels = new Dictionary<string, string>(StringComparer.Ordinal) { ["definition"] = next.DefinitionId ?? next.Definition };
+        var labels = new Dictionary<string, string>(StringComparer.Ordinal) { ["definition"] = next.Definition ?? next.Workflow };
         answeredPlan ??= turn.Header.Labels.GetValueOrDefault(AnsweredPlanLabel);
         if (answeredPlan is not null) labels.Add(AnsweredPlanLabel, answeredPlan);
         // A model's labels are kept across the actor's own header writes.
@@ -193,17 +193,17 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
     }
 
     private static InstanceInfo Instance(ActorHeader header, WorkflowHeader workflow) =>
-        new(header.Ref, header.Tenant, workflow.Model, workflow.Definition, header.Parent);
+        new(header.Ref, header.Tenant, workflow.Model, workflow.Workflow, header.Parent);
 
     private static string? SerializeValue(object? value) => value is null ? null : JsonSerializer.Serialize(value, value.GetType());
 
     private static string JobArguments(string model, string? arguments) => JsonSerializer.Serialize(new WorkflowJobArguments(model, arguments));
 
-    /// <param name="Definition">The workflow the model runs; a migration rebinds it.</param>
-    /// <param name="DefinitionId">The definition it is a version of, when not itself: the <c>definition</c> label.</param>
-    private sealed record WorkflowHeader(string Model, string Definition, int? Version, bool Suspended = false,
+    /// <param name="Workflow">The workflow the model runs; a migration rebinds it.</param>
+    /// <param name="Definition">The definition it is a version of, when not itself: the <c>definition</c> label.</param>
+    private sealed record WorkflowHeader(string Model, string Workflow, int? Version, bool Suspended = false,
         string? SubStatus = null, bool Ephemeral = false, History History = History.Full,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? DefinitionId = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Definition = null);
 
     private sealed record WorkflowJobArguments(string Model, string? Arguments);
 
@@ -241,7 +241,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         public void Unsubscribe(string key, string wait) => turn.Unsubscribe(key, wait);
         public string Publish(string key, string? payload, TimeSpan keepFor) => turn.Publish(key, payload, keepFor);
         public void Record(object entry) => turn.Record(entry);
-        public void Rebind(string definition) => Workflow = Workflow with { Definition = definition };
+        public void Rebind(string workflow) => Workflow = Workflow with { Workflow = workflow };
 
         /// <summary>The model's labels, as the turn leaves them.</summary>
         public Dictionary<string, string> Labels { get; } = turn.Header.Labels.Where(p => !ActorLabel(p.Key)).ToDictionary(StringComparer.Ordinal);

@@ -106,8 +106,8 @@ internal static class MigrationPlanRunnerChecks
 
         // K10: two published versions of one definition. Instances carry the definition as their label and the version in
         // their type data; a plan selects by the label, then by the version, and a migration rebinds the version only.
-        var versioned = (await runtime.StartAsync(scope, "versioned", NativeExecutionModel.Start("orders@1", Modes.Balanced, definitionId: "orders"))).Actor!.Value;
-        var newer = (await runtime.StartAsync(scope, "already-newer", NativeExecutionModel.Start("orders@2", Modes.Balanced, definitionId: "orders"))).Actor!.Value;
+        var versioned = (await runtime.StartAsync(scope, "versioned", NativeExecutionModel.Start("orders@1", Modes.Balanced, definition: "orders"))).Actor!.Value;
+        var newer = (await runtime.StartAsync(scope, "already-newer", NativeExecutionModel.Start("orders@2", Modes.Balanced, definition: "orders"))).Actor!.Value;
         await Pump(successor);
         var byDefinition = (await service.StartAsync(scope, "by-definition", new("orders@1", "orders@2", expires, NativeExecutionModel.ModelKey, "orders"))).Actor!.Value;
         var definitionDriver = service.Open(scope, byDefinition);
@@ -122,7 +122,7 @@ internal static class MigrationPlanRunnerChecks
         var newerHeader = (await reads.GetAsync(scope, newer))!.Header;
         check(definitionResults is { Closed: true } && definitionResults.Results.Count == 1 &&
               definitionResults.Results.GetValueOrDefault(versioned) == MigrationPlanOutcome.Migrated &&
-              versionedHeader.Labels.GetValueOrDefault("definition") == "orders" && versionedHeader.TypeData.Contains("\"Definition\":\"orders@2\"", StringComparison.Ordinal) &&
+              versionedHeader.Labels.GetValueOrDefault("definition") == "orders" && versionedHeader.TypeData.Contains("\"Workflow\":\"orders@2\"", StringComparison.Ordinal) &&
               newerHeader.Labels.GetValueOrDefault("definition") == "orders",
             $"a plan selects one definition's instances on its source version, and the migration keeps the definition label and rebinds the version ({definitionResults?.Results.Count} selected; {versionedHeader.Labels.GetValueOrDefault("definition")}; {versionedHeader.TypeData})");
 

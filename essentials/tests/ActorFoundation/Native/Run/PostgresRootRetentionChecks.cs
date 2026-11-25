@@ -212,7 +212,7 @@ internal static class PostgresRootRetentionChecks
                 using var metadata = JsonDocument.Parse(current.TypeData);
                 var workflow = metadata.RootElement;
                 Check(workflow.GetProperty("Model").GetString() == NativeExecutionModel.ModelKey &&
-                    workflow.GetProperty("Definition").GetString() == Wait && !workflow.GetProperty("Ephemeral").GetBoolean() &&
+                    workflow.GetProperty("Workflow").GetString() == Wait && !workflow.GetProperty("Ephemeral").GetBoolean() &&
                     workflow.GetProperty("Version").GetInt32() == native.StateVersion && !current.Labels.ContainsKey("version"),
                     "the projected running header carries the model, definition, state version and persistence mode used by migration selection");
 

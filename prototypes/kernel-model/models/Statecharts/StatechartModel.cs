@@ -21,7 +21,7 @@ public sealed class StatechartModel : IExecutionModel
 
     public object CreateState(WorkflowStart start)
     {
-        if (!_charts.ContainsKey(start.Definition))
+        if (!_charts.ContainsKey(start.Workflow))
             throw new ArgumentException("The statechart definition is unavailable.", nameof(start));
         return new StatechartCheckpoint(null);
     }
@@ -31,7 +31,7 @@ public sealed class StatechartModel : IExecutionModel
 
     public ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken)
     {
-        var chart = _charts[turn.Instance.Definition];
+        var chart = _charts[turn.Instance.Workflow];
         var state = (StatechartCheckpoint)turn.State;
         foreach (var message in turn.Inbox)
         {
