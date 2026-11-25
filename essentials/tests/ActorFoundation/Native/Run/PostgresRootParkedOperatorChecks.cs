@@ -96,6 +96,7 @@ internal static class PostgresRootParkedOperatorChecks
         var running = await main.StartAsync("running");
         var planned = await main.StartAsync("planned");
         var deleted = await main.StartAsync("deleted");
+        var withheldDelete = await main.StartAsync("withheld-delete");
         probe.FailsOn.Add((lone.Id, Contract.Kinds.Terminate));
         probe.FailsOn.Add((suspendedTerminate.Id, Contract.Kinds.Terminate));
         probe.FailsOn.Add((suspendedResume.Id, Contract.Kinds.Resume));
@@ -212,6 +213,22 @@ internal static class PostgresRootParkedOperatorChecks
                 !probe.Saw(deleted, Contract.Kinds.Delete),
             "the Delete retired the parked root with the deletion marker as its only journal row and its kept input cleared");
         main.Answered("delete-parked", "deleted");
+
+        // Without Park arrivals the parked root withholds its inputs: one read ahead in the failing input's poll, due just
+        // after it, stays in the owner's slot. The Delete's retirement settles it, and the owner forgets it with the retired root.
+        var behindDue = (await main.ImageAsync(withheldDelete)).AsOf + 1_500;
+        Check(await main.SendAsync(withheldDelete, "withheld-behind", "ordinary", behindDue) && await main.SendAsync(withheldDelete, "fail-withheld-delete", "fail"),
+            "an input due shortly and a failing one are admitted together");
+        var withheldPark = await main.DriveAsync(withheldDelete, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+        while ((await main.ImageAsync(withheldDelete)).AsOf <= behindDue) await Task.Delay(100, stop);
+        var worker = (Worker)main.Owner;
+        Check(worker.InboxCountOf(withheldPark.Actor.Id) == 1, "the input polled with the failing one stays withheld in the owner's slot");
+        Check(await main.OperateAsync(withheldDelete, "delete-withheld", Contract.Kinds.Delete, await main.ParkSelectionAsync(withheldDelete, 2)),
+            "a Delete with the Park selection is admitted for the root with a withheld input");
+        await main.RetiredAsync(withheldDelete);
+        Check(worker.InboxCountOf(withheldPark.Actor.Id) == 0 && ReferenceEquals(main.Owner, worker) && !main.StoodDown &&
+                (await main.InputsOfAsync(withheldPark.Actor.Id)).All(row => row.Done && !row.Content) && !probe.Saw(withheldDelete, "ordinary"),
+            "the retirement settled the withheld input and no row stays in the retired root's slot");
 
         // Admission on a parked root: a Suspend, a Resume, a held running selection and a held Terminate and delete are refused.
         var parkEarly = await main.ParkSelectionAsync(early, 2);
@@ -943,6 +960,7 @@ internal static class PostgresRootParkedOperatorChecks
             var pageSeen = false;
             var during = new Dictionary<string, (Contract.ActorRef Root, string Park, string[] Arrivals)>();
             Contract.ActorRef large = default;
+            var opened = new Dictionary<string, Action>();
             await using var set = new Set("parked-delete", OpenDelete, owned, inBatch, tenant, stop);
             set.Write = Write;
             await set.InstallAsync(createTables: true);
@@ -952,6 +970,7 @@ internal static class PostgresRootParkedOperatorChecks
             large = await set.StartAsync("del-large");
             var kept = await set.StartAsync("del-kept");
             var keptLarge = await set.StartAsync("del-kept-large");
+            var mid = await set.StartAsync("del-mid");
             var stale = await set.StartAsync("del-stale");
             var residue = await set.StartAsync("del-residue");
             var probed = await set.StartAsync("del-probe");
@@ -1002,20 +1021,62 @@ internal static class PostgresRootParkedOperatorChecks
                 "the next owner cleared the rest and retired the root still Faulted; the arrivals were settled by the retirement, unseen by the actor");
             set.Answered("del-large", "started");
 
-            // Protected at the end of one page, on a Park that kept the root suspended: the Park resolves as a discard. The root
-            // stays Faulted and suspended under a new terminal mark, the held caller is answered "Protected", the ended root takes
-            // no input, and once protection ends a Delete with its terminal selection retires it.
+            // Protected at Open, on a Park that kept the root suspended: a Delete runs ProtectsDeletion at its Open, as the
+            // in-memory OpenParkDelete does. One page and paged, a protected root is refused as "protected" and one whose
+            // protection cannot be read as "unavailable"; the Park, its kept rows and the root stay as they were.
             Check(await set.OperateAsync(kept, "del-kept-suspend", Contract.Kinds.Suspend), "the Delete set admits a Suspend");
             var suspended = await set.DriveAsync(kept, image => image is { Revision: 2, Status: InstanceStatus.Running, Suspended: true });
             Check(await set.OperateAsync(kept, "del-kept-resume", Contract.Kinds.Resume), "the Delete set admits a Resume that fails");
-            await set.DriveAsync(kept, image => image is { Revision: 4, Status: InstanceStatus.Faulted, Suspended: true });
-            set.Probe.Protects.Add(kept.Id);
+            var keptPark = await set.DriveAsync(kept, image => image is { Revision: 4, Status: InstanceStatus.Faulted, Suspended: true });
             var parkKept = await set.ParkSelectionAsync(kept, 3);
+            set.Probe.Protects.Add(kept.Id);
             Check(await set.OperateAsync(kept, "del-kept", Contract.Kinds.Delete, parkKept, reply: true),
                 "a held Delete with the Park selection is admitted for the protected suspended root");
-            await set.DriveAsync(kept, image => image is { TerminalRevision: not null });
-            await set.DiscardedAsync(kept, "del-kept", cleared: 0, suspended: true, suspended.State);
+            await set.DriveAsync(kept, image => image is { Revision: 5 });
+            await set.SettledAsync(kept, "del-kept", suspended.State, suspended: true, reason: "protected");
             set.Answered("del-kept", "Protected");
+            set.Probe.Protects.Remove(kept.Id);
+            set.Probe.Unreadable.Add(kept.Id);
+            Check(await set.OperateAsync(kept, "del-kept-unreadable", Contract.Kinds.Delete, parkKept, reply: true),
+                "a held Delete is admitted for the root whose protection cannot be read");
+            await set.DriveAsync(kept, image => image is { Revision: 6 });
+            await set.SettledAsync(kept, "del-kept-unreadable", suspended.State, suspended: true, reason: "unavailable");
+            set.Answered("del-kept-unreadable", "ProtectionUnavailable");
+            set.Probe.Unreadable.Remove(kept.Id);
+            // The same Park made larger than a page: 171 kept rows.
+            await KeepCopiesAsync(kept, keptPark, "g", 171);
+            set.Probe.Protects.Add(kept.Id);
+            Check(await set.OperateAsync(kept, "del-kept-paged", Contract.Kinds.Delete, parkKept, reply: true),
+                "a held Delete is admitted for the protected Park of 171 kept rows");
+            await set.DriveAsync(kept, image => image is { Revision: 7 });
+            await set.SettledAsync(kept, "del-kept-paged", suspended.State, suspended: true, reason: "protected");
+            set.Answered("del-kept-paged", "Protected");
+            set.Probe.Protects.Remove(kept.Id);
+            set.Probe.Unreadable.Add(kept.Id);
+            Check(await set.OperateAsync(kept, "del-kept-paged-unreadable", Contract.Kinds.Delete, parkKept, reply: true),
+                "a held Delete is admitted for the large Park whose protection cannot be read");
+            await set.DriveAsync(kept, image => image is { Revision: 8 });
+            await set.SettledAsync(kept, "del-kept-paged-unreadable", suspended.State, suspended: true, reason: "unavailable");
+            set.Answered("del-kept-paged-unreadable", "ProtectionUnavailable");
+            set.Probe.Unreadable.Remove(kept.Id);
+            Check((await set.InputsAsync(kept)).Count(row => row.KeptBy == (short)ParkKeepReason.Arrived && row.Content) == 171 &&
+                    await set.ClearingAsync(kept) == new Set.ClearingRow(null, null),
+                "the refused Deletes left the 171 kept rows with their content and opened no clearing");
+
+            // Protection that appears during the clearing resolves the Park as a discard at its last page: the root stays
+            // Faulted and suspended under a new terminal mark, the held caller was answered "started" at Open only, the ended
+            // root refuses later inputs and its spent Park selection, and once protection ends a Delete with its terminal
+            // selection retires it.
+            opened["del-kept-mid"] = () => set.Probe.Protects.Add(kept.Id);
+            Check(await set.OperateAsync(kept, "del-kept-mid", Contract.Kinds.Delete, parkKept, reply: true),
+                "a held Delete is admitted for the suspended Park while it is not protected");
+            await set.DriveAsync(kept, image => image is { TerminalRevision: not null });
+            await set.DiscardedAsync(kept, "del-kept-mid", cleared: 171, suspended: true, suspended.State);
+            Check(Outcomes(await set.Cold.ReadJournalOfAsync(0, keptPark.Actor.Id, 0, stop))[^2..] is
+                    ["""{"Outcome":"clearing","Operation":"del-kept-mid","Cleared":170}""",
+                     """{"Outcome":"protected","Disposition":"discarded","Operation":"del-kept-mid","Cleared":171}"""],
+                "the clearing opened unprotected and its last page, protected by then, discarded the Park");
+            set.Answered("del-kept-mid", "started");
             Check(!await set.SendAsync(kept, "del-kept-late", "ordinary") && !await set.OperateAsync(kept, "del-kept-again", Contract.Kinds.Delete, parkKept) &&
                     !set.OpensPark(kept, await set.SelectionAsync(kept)),
                 "the discarded root refuses a later input and its spent Park selection, and its view no longer seals a Park");
@@ -1024,29 +1085,53 @@ internal static class PostgresRootParkedOperatorChecks
                 "a Delete with its terminal selection is admitted for the discarded root once protection ends");
             await set.RetiredAsync(kept);
 
-            // Protected at the last page of a clearing: the held caller is answered "started" at Open only, and the arrivals
-            // admitted during the clearing settle after the end on the root that ended Faulted, with no stand-down. The Park
-            // keeps 170 arrivals and the fault input: a Delete charges both kinds, so 171 rows take two pages.
-            set.Probe.Protects.Add(keptLarge.Id);
-            var keptLargePark = await ParkLargeAsync(keptLarge, "f", copied: 169);
-            var parkKeptLarge = await set.ParkSelectionAsync(keptLarge, 2);
-            during["del-kept-large"] = (keptLarge, parkKeptLarge, ["del-kept-during-1", "del-kept-during-2"]);
-            Check(await set.OperateAsync(keptLarge, "del-kept-large", Contract.Kinds.Delete, parkKeptLarge, reply: true),
-                "a held Delete is admitted for the protected Park of 171 kept rows");
-            var keptOwner = set.Owner;
-            await set.DriveAsync(keptLarge, image => image is { TerminalRevision: not null });
-            await set.SettledInputsAsync(keptLarge);
-            await set.DiscardedAsync(keptLarge, "del-kept-large", cleared: 171);
-            var keptInputs = await set.InputsAsync(keptLarge);
-            Check(Outcomes(await set.Cold.ReadJournalOfAsync(0, keptLargePark.Actor.Id, 0, stop)) is
-                        ["""{"Outcome":"clearing","Operation":"del-kept-large","Cleared":170}""",
-                         """{"Outcome":"protected","Disposition":"discarded","Operation":"del-kept-large","Cleared":171}"""] &&
-                    ReferenceEquals(set.Owner, keptOwner) && !set.StoodDown && keptInputs.All(row => row.Done && row.KeptBy is null) &&
-                    keptInputs.Count(row => during["del-kept-large"].Arrivals.Any(op => row.Id.Contains("/" + FoundationRootCreator.OperationDigest(op) + "/"))) == 2 &&
-                    !set.Probe.Saw(keptLarge, "ordinary"),
-                "the clearing protected at its last page ends Faulted and kept, journalled as a discard with the total, and the arrivals settle as Ended");
+            // The same with arrivals admitted during the clearing: they settle as Ended after the discard, with no stand-down.
+            var midPark = await ParkLargeAsync(mid, "h", copied: 169);
+            var parkMid = await set.ParkSelectionAsync(mid, 2);
+            during["del-mid"] = (mid, parkMid, ["del-mid-during-1", "del-mid-during-2"]);
+            opened["del-mid"] = () => set.Probe.Protects.Add(mid.Id);
+            Check(await set.OperateAsync(mid, "del-mid", Contract.Kinds.Delete, parkMid, reply: true),
+                "a held Delete is admitted for the Park of 171 kept rows while it is not protected");
+            var midOwner = set.Owner;
+            await set.DriveAsync(mid, image => image is { TerminalRevision: not null });
+            await set.SettledInputsAsync(mid);
+            await set.DiscardedAsync(mid, "del-mid", cleared: 171);
+            var midInputs = await set.InputsAsync(mid);
+            Check(Outcomes(await set.Cold.ReadJournalOfAsync(0, midPark.Actor.Id, 0, stop)) is
+                        ["""{"Outcome":"clearing","Operation":"del-mid","Cleared":170}""",
+                         """{"Outcome":"protected","Disposition":"discarded","Operation":"del-mid","Cleared":171}"""] &&
+                    ReferenceEquals(set.Owner, midOwner) && !set.StoodDown && midInputs.All(row => row.Done && row.KeptBy is null) &&
+                    midInputs.Count(row => during["del-mid"].Arrivals.Any(op => row.Id.Contains("/" + FoundationRootCreator.OperationDigest(op) + "/"))) == 2 &&
+                    !set.Probe.Saw(mid, "ordinary"),
+                "the discard counts the 171 rows, and the arrivals settle as Ended on the root that ended Faulted");
+            set.Answered("del-mid", "started");
+            set.Probe.Protects.Remove(mid.Id);
+
+            // Protection that cannot be read at the last page neither deletes nor discards. The control's refusal fails closed:
+            // the owner stands down with the clearing open and the control pending, and the next owner, able to read the
+            // protection again, ends the Delete.
+            var unreadablePark = await ParkLargeAsync(keptLarge, "f", copied: 169);
+            var parkUnreadable = await set.ParkSelectionAsync(keptLarge, 2);
+            during["del-kept-large"] = (keptLarge, parkUnreadable, ["del-kept-during-1", "del-kept-during-2"]);
+            opened["del-kept-large"] = () => set.Probe.Unreadable.Add(keptLarge.Id);
+            Check(await set.OperateAsync(keptLarge, "del-kept-large", Contract.Kinds.Delete, parkUnreadable, reply: true),
+                "a held Delete is admitted for the Park of 171 kept rows while its protection can be read");
+            await set.PassUntilAsync(() => set.StoodDown);
+            var stalled = await set.InputsAsync(keptLarge);
+            Check(await set.ImageAsync(keptLarge) is { Status: InstanceStatus.Faulted, TerminalRevision: null } &&
+                    await set.ClearingAsync(keptLarge) == new Set.ClearingRow("del-kept-large", 170) &&
+                    Outcomes(await set.Cold.ReadJournalOfAsync(0, unreadablePark.Actor.Id, 0, stop)) is
+                        ["""{"Outcome":"clearing","Operation":"del-kept-large","Cleared":170}"""] &&
+                    stalled.Count(row => row.Kind == Contract.Kinds.Delete && !row.Done) == 1 &&
+                    stalled.Count(row => row.KeptBy is not null) == 1,
+                "the owner stood down at the last page: the clearing is open at 170, the control is pending and one row is still kept");
+            set.Probe.Unreadable.Remove(keptLarge.Id);
+            await set.RetakeAsync();
+            await set.RetiredAsync(keptLarge);
+            Check(await RetiredFaultedAsync(unreadablePark.Actor.Id) &&
+                    (await set.InputsOfAsync(unreadablePark.Actor.Id)).All(row => row.Done && row.KeptBy is null && !row.Content),
+                "the next owner ran the control again and retired the root once its protection could be read");
             set.Answered("del-kept-large", "started");
-            set.Probe.Protects.Remove(keptLarge.Id);
 
             // A Park selection the owner finds stale is refused there as "selection", and the held caller answered once.
             Check(await set.SendAsync(stale, "del-stale-fail", "fail"), "the Delete set admits a failing input for the stale root");
@@ -1112,16 +1197,24 @@ internal static class PostgresRootParkedOperatorChecks
                 var park = await set.DriveAsync(root, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
                 Check(await set.SendAsync(root, prefix + "-copy", "ordinary"), $"the Delete set admits an arrival to copy for the {prefix} Park");
                 await set.SettledInputsAsync(root);
+                await KeepCopiesAsync(root, park, prefix, copied);
+                return park;
+            }
+
+            // Raw SQL keeps the given number of arrivals on a parked root, copied from its own kept arrival, or from another
+            // root's direct input when it has none (a Park that kept the root suspended was opened by an operator command).
+            async Task KeepCopiesAsync(Contract.ActorRef root, EfStore.RootImage park, string prefix, int copied)
+            {
                 var copies = Enumerable.Range(1, copied).Select(n => $"{root.Id}/{FoundationRootCreator.OperationDigest($"{prefix}{n:D3}")}/{Guid.NewGuid():N}").ToArray();
                 await using var write = OpenDelete();
                 Check(await write.Database.ExecuteSqlInterpolatedAsync($$"""
                     INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Payload", "Due", "KeepUntil",
                         "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
-                    SELECT m."InboxScope", d.id, m."Partition", m."Target", m."Kind", m."Start", '{}', m."Due", m."KeepUntil", true, 0, 0, 0, 0, 1
-                    FROM "Messages" m, unnest({{copies}}::text[]) WITH ORDINALITY d(id, n)
-                    WHERE m."Target" = {{park.Actor.Id}} AND m."FoundationKeptBy" = 1 ORDER BY d.n
+                    SELECT m."InboxScope", d.id, {{new InstanceRef(park.Actor.Id).Partition}}, {{park.Actor.Id}}, m."Kind", m."Start", '{}', m."Due", m."KeepUntil", true, 0, 0, 0, 0, 1
+                    FROM (SELECT * FROM "Messages" WHERE "InboxScope" = -4 AND "Kind" = 'ordinary'
+                        ORDER BY ("Target" = {{park.Actor.Id}} AND "FoundationKeptBy" = 1) DESC, "Seq" LIMIT 1) m, unnest({{copies}}::text[]) WITH ORDINALITY d(id, n)
+                    ORDER BY d.n
                     """, stop) == copied, $"raw SQL keeps {copied} more arrivals for the {prefix} Park");
-                return park;
             }
 
             // The retired row kept the Faulted status, under a terminal mark at its revision, with its Park cleared.
@@ -1139,7 +1232,15 @@ internal static class PostgresRootParkedOperatorChecks
                 if (ReferenceEquals(store, frozen)) return new Committed(false, 0, []);
                 var turn = batch.Turns.SingleOrDefault(turn => turn.FoundationRootOperator?.Id is { } id && during.ContainsKey(id));
                 var committed = await store.CommitAsync(batch, token);
-                if (!committed.Landed || turn is null) return committed;
+                if (!committed.Landed) return committed;
+                if (batch.Turns.FirstOrDefault(turn => turn.FoundationRootOperator?.Id is { } id && opened.ContainsKey(id) &&
+                        turn.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true) is { } open)
+                {
+                    // The protection changes after the Open, before the next page.
+                    opened[open.FoundationRootOperator!.Id]();
+                    opened.Remove(open.FoundationRootOperator.Id);
+                }
+                if (turn is null) return committed;
                 var operation = turn.FoundationRootOperator!.Id;
                 var (root, park, arrivals) = during[operation];
                 if (turn.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true)
@@ -1920,7 +2021,10 @@ internal static class PostgresRootParkedOperatorChecks
         public bool Withholds(Contract.ActorHeader header) => false;
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public HashSet<string> Protects { get; } = [];
-        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => Protects.Contains(header.Ref.Id);
+        // A root whose protection cannot be read: ProtectsDeletion throws, which the adapter answers as ProtectionUnavailable.
+        public HashSet<string> Unreadable { get; } = [];
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) =>
+            Unreadable.Contains(header.Ref.Id) ? throw new InvalidOperationException("The fixture's protection cannot be read.") : Protects.Contains(header.Ref.Id);
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
 
