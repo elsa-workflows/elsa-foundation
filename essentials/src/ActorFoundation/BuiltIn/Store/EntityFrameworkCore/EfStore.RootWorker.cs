@@ -384,8 +384,11 @@ public sealed partial class EfStore
             (turn.Row.Status == InstanceStatus.Faulted || turn.FoundationRootOperator.Operator?.RootParkMark is not null))
         {
             await using var profile = create();
+            // S5b-2: an Open ("clearing" entry) or a page (no entry) of a clearing, or the end of the Park, clears kept rows.
             if (profile.UsesRootParkedOperators)
-                return turn.Row.Status == InstanceStatus.Cancelled ? await PrepareRootParkedTerminateAsync(root, turn, cancellationToken)
+                return turn.Row.Status == InstanceStatus.Cancelled || turn.FoundationRootOperator.Operator?.RootParkFacts is not null &&
+                    (turn.Journal is null || turn.Journal.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal))
+                    ? await PrepareRootParkedTerminateAsync(root, turn, cancellationToken)
                     : await PrepareRootParkedRefusalAsync(root, turn, cancellationToken);
         }
         if (turn.OpensPark || turn.FoundationKept is { Count: > 0 })

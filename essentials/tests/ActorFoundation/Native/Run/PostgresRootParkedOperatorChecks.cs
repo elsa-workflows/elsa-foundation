@@ -30,9 +30,16 @@ internal static class PostgresRootParkedOperatorChecks
     private const string ArrivalsSchema = "parked_arrivals";
     private const string Format22Schema = "parked_format22";
     private const string RecoverySchema = "parked_recovery";
+    private const string ClearingSchema = "parked_clearing";
+    private static readonly StoreFormat ComposedClearing = StoreFormat.Current with { MessageProtocol = 90 };
     private const string Fault = "deliberate actor failure";
     private const string ProbeRefusal = """{"Outcome":"refused","Operation":"probe","Reason":"parked"}""";
     private const string ProbeTerminated = """{"Outcome":"terminated","Operation":"probe","Cleared":0}""";
+    private const string ProbeClearing = """{"Outcome":"clearing","Operation":"probe","Cleared":1}""";
+
+    // The operator outcome entries of a root's journal, in order.
+    private static string[] Outcomes(IEnumerable<JournalRow> journal) =>
+        [.. journal.Select(row => row.Entries).Where(entry => entry.StartsWith("{\"Outcome\":", StringComparison.Ordinal))];
 
     // The checkpoint, journal and refusal-outcome triggers. A probe that fails any other way is the probe's own error.
     private static readonly string[] TriggerMessages =
@@ -58,11 +65,11 @@ internal static class PostgresRootParkedOperatorChecks
         // The ingress turns the owner's refusal into the caller's error; a held caller of a parked root reads "parked".
         Check(PostgresRootIngress.RefusalError("Parked") == "parked" && PostgresRootIngress.RefusalError("Protected") == "protected" &&
                 PostgresRootIngress.RefusalError("ParkOutstanding") == "park outstanding" &&
-                PostgresRootIngress.RefusalError("ParkPageLimit") == "park page limit" &&
+                PostgresRootIngress.RefusalError("ResolutionOpen") == "resolution open" &&
                 PostgresRootIngress.RefusalError("ProtectionUnavailable") == "protection unavailable" &&
                 PostgresRootIngress.RefusalError("StaleSelection") == "stale selection" &&
                 PostgresRootIngress.RefusalError("TargetMismatch") == "target" && PostgresRootIngress.RefusalError("Ended") == "missing",
-            "the ingress reports a held command refused on a parked root as \"parked\", \"park outstanding\" or \"park page limit\"");
+            "the ingress reports a held command refused on a parked root as \"parked\", \"park outstanding\" or \"resolution open\"");
         Check(RootProfiles.MissingPrerequisites(capabilities) == RootCapabilities.None && db.UsesRootParkedOperators &&
                 !db.UsesRootParkArrivals && db.UsesRootTerminalSelection && db.UsesRootOperatorReplies && db.UsesRootTerminateThenDelete,
             "the closed composed set carries Park opening and inspection with the format 17 operator chain");
@@ -263,6 +270,7 @@ internal static class PostgresRootParkedOperatorChecks
         await RecoverNeverMeetsSuspendedPark();
         await ArrivalsSet();
         await RereadAcrossFormats();
+        await ClearingSet();
         await JobsInspection();
         return 0;
 
@@ -411,11 +419,262 @@ internal static class PostgresRootParkedOperatorChecks
         // commit, the owner stands down and the next owner recovers the root. In a composed set with recovery and parked
         // operators, a Consumed keep (an arrival at its attempt limit re-parks the root) marks the Recover unseen, so the same
         // owner reads it again and recovers the root. The hook only delays the poll's Park facts read until the input is due.
+        // S5b-2: a Park larger than one page is cleared in pages under its Terminate. Open clears the first page and journals
+        // "clearing"; each store control clears the next page; the page that leaves nothing kept ends the root. While the
+        // clearing is open nothing is kept: arrivals stay pending in Seq order and settle as Ended after the end.
+        async Task ClearingSet()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + ClearingSchema, stop);
+            var clearingConnection = new NpgsqlConnectionStringBuilder(connection) { SearchPath = ClearingSchema }.ConnectionString;
+            var clearingHold = new RaceHook(clearingConnection);
+            var clearingOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(clearingConnection).AddInterceptors(clearingHold).Options;
+            var clearingCapabilities = RootProfiles.Formats[StoreFormat.RootParkArrivals] | RootProfiles.Formats[StoreFormat.RootTerminalSelection] |
+                RootCapabilities.OperatorReplies;
+            KernelDb OpenClearing() => KernelDb.ForUnshippedComposition(clearingOptions, ComposedClearing, clearingCapabilities);
+            EfStore? frozen = null;
+            var pageChecked = false;
+            var cleared = new List<long?>();
+            var settled = new List<string>();
+            var arrivals = new[] { "during-1", "during-2", "during-3" };
+            // The commit observer reads the large root, so it is assigned before the observer is installed.
+            Contract.ActorRef large = default;
+            (string Actor, long Due)? holdAfterOpen = null;
+            await using var set = new Set("parked-clearing", OpenClearing, owned, inBatch, tenant, stop);
+            set.Write = Write;
+            await set.InstallAsync(createTables: true);
+            await set.OwnAsync();
+            var bytes = await set.StartAsync("clearing-bytes");
+            large = await set.StartAsync("clearing-large");
+            var probed = await set.StartAsync("clearing-probe");
+            var between = await set.StartAsync("clearing-between");
+            var ahead = await set.StartAsync("clearing-ahead");
+
+            // A Park within 170 rows that exceeds 4 MiB is cleared in pages by bytes.
+            Check(await set.SendAsync(bytes, "bytes-fail", "fail"), "the clearing set admits a failing input");
+            var bytesPark = await set.DriveAsync(bytes, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            foreach (var index in Enumerable.Range(0, 5)) Check(await set.SendAsync(bytes, $"bytes-{index}", "ordinary"), $"the clearing set admits arrival {index}");
+            await set.SettledInputsAsync(bytes);
+            await using (var write = OpenClearing())
+                Check(await write.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Payload" = '"' || repeat('x', 1200000) || '"'
+                    WHERE "Target" = {bytesPark.Actor.Id} AND "InboxScope" = -4 AND "FoundationKeptBy" = 1
+                    """, stop) == 5, "five kept arrivals of 1.2 MB each make the Park larger than 4 MiB in six rows");
+            Check(await set.TerminateAsync(bytes, "bytes-terminate", await set.ParkSelectionAsync(bytes, 2)), "a Terminate is admitted for the Park sized by bytes");
+            await set.DriveAsync(bytes, image => image is { Status: InstanceStatus.Cancelled });
+            Check(Outcomes(await set.Cold.ReadJournalOfAsync(0, bytesPark.Actor.Id, 0, stop)) is
+                    ["""{"Outcome":"clearing","Operation":"bytes-terminate","Cleared":4}""", """{"Outcome":"terminated","Operation":"bytes-terminate","Cleared":6}"""],
+                "the Park larger than 4 MiB opens with a page of four rows and ends with the last two");
+            await set.TerminatedAsync(bytes, "bytes-terminate", cleared: 6);
+
+            var parkedProbe = await ParkProbeAsync();
+
+            // 402 kept rows: one failing input, one arrival and 400 copies of it under their own operations.
+            Check(await set.SendAsync(large, "large-fail", "fail"), "the clearing set admits a failing input for the large Park");
+            var largePark = await set.DriveAsync(large, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.SendAsync(large, "a1", "ordinary"), "the clearing set admits an arrival for the large Park");
+            await set.SettledInputsAsync(large);
+            var ops = Enumerable.Range(1, 400).Select(n => $"c{n:D3}").ToArray();
+            var ids = ops.Select(op => $"{large.Id}/{FoundationRootCreator.OperationDigest(op)}/{Guid.NewGuid():N}").ToArray();
+            await using (var write = OpenClearing())
+                Check(await write.Database.ExecuteSqlInterpolatedAsync($$"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Payload", "Due", "KeepUntil",
+                        "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
+                    SELECT m."InboxScope", d.id, m."Partition", m."Target", m."Kind", replace(m."Start", '"a1"', '"' || d.op || '"'),
+                        '{"n":' || d.n || '}', m."Due", m."KeepUntil", true, 0, 0, 0, 0, 1
+                    FROM "Messages" m, unnest({{ids}}::text[], {{ops}}::text[]) WITH ORDINALITY d(id, op, n)
+                    WHERE m."Target" = {{largePark.Actor.Id}} AND m."FoundationKeptBy" = 1 ORDER BY d.n
+                    """, stop) == 400, "raw SQL keeps 400 more arrivals, each under its own operation");
+            var parkLarge = await set.ParkSelectionAsync(large, 2);
+            Check(await set.OperateAsync(large, "clear-large", Contract.Kinds.Terminate, parkLarge, reply: true) &&
+                    await set.OperateAsync(large, "clear-second", Contract.Kinds.Terminate, parkLarge, reply: true),
+                "two held Terminates with the Park selection are admitted for the Park of 402 kept rows");
+            await set.PassUntilAsync(() => set.StoodDown);
+            Check(cleared is [170, 340] && pageChecked, $"the first owner opened the clearing and cleared one page before it stopped ({string.Join(", ", cleared)})");
+
+            // Mid-clearing: the arrivals are pending and unkept, a third Terminate is refused at admission, the view still names the
+            // Park and seals no terminal selection, and the checkpoint trigger takes only the clearing's own writes.
+            var mid = await set.ImageAsync(large);
+            var midInputs = await set.InputsAsync(large);
+            Check(midInputs.Count(row => row.KeptBy is not null) == 62 && midInputs.Where(row => row.Id.Contains("/" + FoundationRootCreator.OperationDigest("during-1") + "/") ||
+                    row.Id.Contains("/" + FoundationRootCreator.OperationDigest("during-2") + "/") || row.Id.Contains("/" + FoundationRootCreator.OperationDigest("during-3") + "/"))
+                    .ToArray() is [{ Done: false, KeptBy: null }, { Done: false, KeptBy: null }, { Done: false, KeptBy: null }] during &&
+                    during.Select(row => row.Seq).SequenceEqual(during.Select(row => row.Seq).Order()),
+                "mid-clearing 62 rows stay kept and the three arrivals are pending and unkept, in Seq order");
+            Check(!await set.TerminateAsync(large, "clear-third", parkLarge), "admission refuses a Terminate while the Park is being cleared");
+            var midSelection = await set.SelectionAsync(large);
+            Check(mid is { Status: InstanceStatus.Faulted, TerminalRevision: null } && set.OpensPark(large, midSelection) && !set.OpensTerminal(large, midSelection),
+                "mid-clearing the root stays Faulted and the view seals its Park selection, with no terminal selection");
+            Check(await set.TriggerProbeAsync(mid, null, Raw(mid, """ "FoundationParkCleared" = "FoundationParkCleared" + 1 """)) &&
+                    !await set.TriggerProbeAsync(mid, """["x"]""", Raw(mid, """ "FoundationParkCleared" = "FoundationParkCleared" + 1 """)) &&
+                    !await set.TriggerProbeAsync(mid, null, Raw(mid, """ "FoundationParkCleared" = "FoundationParkCleared" - 1 """)) &&
+                    !await set.TriggerProbeAsync(mid, null, Raw(mid, """ "FoundationParkClearing" = 'other', "FoundationParkCleared" = "FoundationParkCleared" + 1 """)) &&
+                    !await set.TriggerProbeAsync(mid, null, Raw(mid, """ "FoundationParkCleared" = "FoundationParkCleared" + 1, "State" = "State" || ' ' """)) &&
+                    !await set.TriggerProbeAsync(mid, null, Continue(mid)) &&
+                    await set.TriggerProbeAsync(mid, ProbeRefusal, Continue(mid)) &&
+                    !await set.TriggerProbeAsync(mid, ProbeRefusal, Raw(mid, """ "FoundationParkCleared" = "FoundationParkCleared" + 1 """)),
+                "mid-clearing the trigger takes a page write alone, and a refusal that moves only the revision, and nothing else");
+            Check(await set.TriggerProbeAsync(parkedProbe, ProbeClearing, Raw(parkedProbe, """ "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1 """)) &&
+                    !await set.TriggerProbeAsync(parkedProbe, null, Raw(parkedProbe, """ "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1 """)) &&
+                    !await set.TriggerProbeAsync(parkedProbe, ProbeClearing, Raw(parkedProbe, """ "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1, "Suspended" = NOT "Suspended" """)) &&
+                    !await set.TriggerProbeAsync(parkedProbe, ProbeClearing, Continue(parkedProbe)),
+                "an Open passes only beside its clearing entry with the row kept, and a clearing entry needs the clearing it opens");
+            Check(!await set.TriggerProbeEntriesAsync(parkedProbe, [ProbeRefusal, ProbeClearing],
+                    Raw(parkedProbe, """ "FoundationParkClearing" = 'probe', "FoundationParkCleared" = 1 """)),
+                "an Open beside a refused entry at the same revision is refused: a refusal pins the clearing's columns");
+
+            // A new owner continues from the durable state and ends the root.
+            await set.RetakeAsync();
+            await set.DriveAsync(large, image => image is { Status: InstanceStatus.Cancelled });
+            await set.SettledInputsAsync(large);
+            await set.TerminatedAsync(large, "clear-large", cleared: 402);
+            var journal = Outcomes(await set.Cold.ReadJournalOfAsync(0, largePark.Actor.Id, 0, stop));
+            Check(journal is ["""{"Outcome":"clearing","Operation":"clear-large","Cleared":170}""",
+                    """{"Outcome":"refused","Operation":"clear-second","Reason":"clearing"}""",
+                    """{"Outcome":"terminated","Operation":"clear-large","Cleared":402}"""],
+                $"the journal records the Open, the second Terminate's refusal and the end with the total ({string.Join(" | ", journal)})");
+            var after = await set.InputsAsync(large);
+            var duringIds = arrivals.Select(op => after.Single(row => row.Id.Contains("/" + FoundationRootCreator.OperationDigest(op) + "/")).Id).ToArray();
+            var clearedRows = after.Where(row => row.Kind != Contract.Kinds.Terminate && !duringIds.Contains(row.Id)).ToArray();
+            Check(after.All(row => row.Done && row.KeptBy is null) && clearedRows.Length == 402 && clearedRows.All(row => !row.Content),
+                "every kept row is cleared once and the 402 rows match Cleared");
+            Check(settled.Where(duringIds.Contains).SequenceEqual(duringIds) && settled.Count(duringIds.Contains) == 3 &&
+                    settled.IndexOf(duringIds[0]) > settled.IndexOf(after.Last(row => row.Kind == Contract.Kinds.Terminate).Id) &&
+                    !set.Probe.Saw(large, "ordinary"),
+                "the arrivals settle once each after the end, unseen by the actor, in Seq order and outside Cleared");
+            set.Answered("clear-large", "started");
+            set.Answered("clear-second", "ResolutionOpen");
+
+            // An arrival between two Terminates, all admitted before Open, stays withheld, and the second Terminate is refused
+            // with the operator rows as its settled prefix, so the same owner ends the root and answers it once.
+            Check(await set.SendAsync(between, "between-fail", "fail"), "the clearing set admits a failing input for the root with an arrival between");
+            var betweenPark = await set.DriveAsync(between, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.SendAsync(between, "b1", "ordinary"), "the clearing set admits an arrival to copy");
+            await set.SettledInputsAsync(between);
+            var copies = Enumerable.Range(1, 200).Select(n => $"b{n:D3}").ToArray();
+            var copyIds = copies.Select(op => $"{between.Id}/{FoundationRootCreator.OperationDigest(op)}/{Guid.NewGuid():N}").ToArray();
+            await using (var write = OpenClearing())
+                Check(await write.Database.ExecuteSqlInterpolatedAsync($$"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Payload", "Due", "KeepUntil",
+                        "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
+                    SELECT m."InboxScope", d.id, m."Partition", m."Target", m."Kind", m."Start", '{}', m."Due", m."KeepUntil", true, 0, 0, 0, 0, 1
+                    FROM "Messages" m, unnest({{copyIds}}::text[]) WITH ORDINALITY d(id, n)
+                    WHERE m."Target" = {{betweenPark.Actor.Id}} AND m."FoundationKeptBy" = 1 ORDER BY d.n
+                    """, stop) == 200, "raw SQL keeps 200 more arrivals for the root with an arrival between");
+            var parkBetween = await set.ParkSelectionAsync(between, 2);
+            Check(await set.TerminateAsync(between, "between-first", parkBetween) && await set.SendAsync(between, "between-arrival", "ordinary") &&
+                    await set.OperateAsync(between, "between-second", Contract.Kinds.Terminate, parkBetween, reply: true),
+                "a Terminate, an arrival and a held Terminate are admitted in that order before Open");
+            var betweenOwner = set.Owner;
+            await set.DriveAsync(between, image => image is { Status: InstanceStatus.Cancelled });
+            await set.SettledInputsAsync(between);
+            Check(Outcomes(await set.Cold.ReadJournalOfAsync(0, betweenPark.Actor.Id, 0, stop)) is
+                    ["""{"Outcome":"clearing","Operation":"between-first","Cleared":170}""",
+                     """{"Outcome":"refused","Operation":"between-second","Reason":"clearing"}""",
+                     """{"Outcome":"terminated","Operation":"between-first","Cleared":202}"""] &&
+                    ReferenceEquals(set.Owner, betweenOwner) && !set.StoodDown && !set.Probe.Saw(between, "ordinary"),
+                "the same owner refused the second Terminate past the withheld arrival and ended the root, which kept the arrival out of Cleared");
+            set.Answered("between-second", "ResolutionOpen");
+
+            // An input due shortly is read ahead with the Terminate before Open and comes due mid-clearing. The owner drops its
+            // copy at Open, so it is never kept: it stays pending with no stand-down and settles as Ended after the end.
+            Check(await set.SendAsync(ahead, "ahead-fail", "fail"), "the clearing set admits a failing input for the read-ahead root");
+            var aheadPark = await set.DriveAsync(ahead, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.SendAsync(ahead, "c1", "ordinary"), "the clearing set admits an arrival to copy for the read-ahead root");
+            await set.SettledInputsAsync(ahead);
+            var aheadCopies = Enumerable.Range(1, 200).Select(n => $"{ahead.Id}/{FoundationRootCreator.OperationDigest($"a{n:D3}")}/{Guid.NewGuid():N}").ToArray();
+            await using (var write = OpenClearing())
+                Check(await write.Database.ExecuteSqlInterpolatedAsync($$"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Payload", "Due", "KeepUntil",
+                        "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
+                    SELECT m."InboxScope", d.id, m."Partition", m."Target", m."Kind", m."Start", '{}', m."Due", m."KeepUntil", true, 0, 0, 0, 0, 1
+                    FROM "Messages" m, unnest({{aheadCopies}}::text[]) WITH ORDINALITY d(id, n)
+                    WHERE m."Target" = {{aheadPark.Actor.Id}} AND m."FoundationKeptBy" = 1 ORDER BY d.n
+                    """, stop) == 200, "raw SQL keeps 200 more arrivals for the read-ahead root");
+            var aheadDue = (await set.ImageAsync(ahead)).AsOf + 1_500;
+            Check(await set.SendAsync(ahead, "ahead-input", "ordinary", aheadDue) &&
+                    await set.TerminateAsync(ahead, "ahead-terminate", await set.ParkSelectionAsync(ahead, 2)),
+                "an input due shortly and a Terminate with the Park selection behind it are admitted");
+            holdAfterOpen = (aheadPark.Actor.Id, aheadDue);
+            var aheadOwner = set.Owner;
+            await set.DriveAsync(ahead, image => image is { Status: InstanceStatus.Cancelled });
+            await set.SettledInputsAsync(ahead);
+            var aheadInput = (await set.InputsAsync(ahead)).Single(row => row.Id.Contains("/" + FoundationRootCreator.OperationDigest("ahead-input") + "/"));
+            Check(clearingHold.Held == 1 && ReferenceEquals(set.Owner, aheadOwner) && !set.StoodDown &&
+                    aheadInput is { Done: true, KeptBy: null } && !set.Probe.Saw(ahead, "ordinary") &&
+                    Outcomes(await set.Cold.ReadJournalOfAsync(0, aheadPark.Actor.Id, 0, stop)) is [_, """{"Outcome":"terminated","Operation":"ahead-terminate","Cleared":202}"""],
+                "the input read ahead and due mid-clearing was never kept, the owner did not stand down, and it settled after the end outside Cleared");
+
+            // A clearing control's header names a Park; one that names none is refused at decode.
+            var decoded = PostgresRootAdmission.DecodeOperator(ControlRow(true), between.Id, true, true, true, operatorReplies: true, parkedTerminate: true);
+            Check(decoded.Operator is { RootParkClear: true, RootParkMark: not null }, "a clearing control's header decodes as a control that names its Park");
+            try
+            {
+                PostgresRootAdmission.DecodeOperator(ControlRow(false), between.Id, true, true, true, operatorReplies: true, parkedTerminate: true);
+                throw new InvalidOperationException("A clearing control without a Park decoded.");
+            }
+            catch (StoreException error) when (error.Message == "The operator occurrence differs from its bound reference and operation.")
+            {
+                Check(true, "a clearing control header without a Park is refused at decode");
+            }
+            return;
+
+            MessageEntity ControlRow(bool park)
+            {
+                var occurrence = $"operator/{between.Id}/{FoundationRootCreator.OperationDigest("control")}/{Guid.NewGuid():N}";
+                var header = "!kernel-operator/1:" + DurableKeyJson.Write(new
+                {
+                    Reference = between.Id, Operation = "control", Creation = 1L, Kind = Contract.Kinds.Terminate, ExplicitZeroDue = false,
+                    Park = park ? new FoundationParkMark(2, 1) : null, Window = park ? 1000L : (long?)null, Clear = true
+                });
+                return new MessageEntity { InboxScope = -4, Id = occurrence, Target = "fixture", Kind = Contract.Kinds.Terminate, Start = header, Due = 0, KeepUntil = 1 };
+            }
+
+            async Task<EfStore.RootImage> ParkProbeAsync()
+            {
+                Check(await set.SendAsync(probed, "probe-fail", "fail"), "the clearing set admits a failing input for the probe root");
+                return await set.DriveAsync(probed, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            }
+
+            async ValueTask<Committed> Write(EfStore store, CommitBatch batch, CancellationToken token)
+            {
+                if (ReferenceEquals(store, frozen)) return new Committed(false, 0, []);
+                var clear = batch.Turns.SingleOrDefault(turn => turn.FoundationRootOperator?.Id == "clear-large");
+                var page = clear is { Journal: null } && clear.FoundationRootOperator!.Operator!.RootParkClear;
+                if (page && !pageChecked)
+                    Check(!(await store.CommitAsync(batch with { Epoch = batch.Epoch - 1 }, token)).Landed, "a page under a stale epoch is refused");
+                var committed = await store.CommitAsync(batch, token);
+                if (!committed.Landed) return committed;
+                foreach (var turn in batch.Turns) settled.AddRange(turn.Done.Select(key => key.Id));
+                if (clear is not null && clear.Row?.Status == InstanceStatus.Faulted) cleared.Add((await set.ClearingAsync(large)).Cleared);
+                if (holdAfterOpen is { } hold && batch.Turns.Any(turn => turn.FoundationRootOperator?.Id == "ahead-terminate" &&
+                        turn.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true))
+                {
+                    // The next page's Park facts wait until the read-ahead input is due, so it comes due mid-clearing.
+                    clearingHold.Hold(hold.Actor, hold.Due);
+                    holdAfterOpen = null;
+                }
+                if (clear is { Journal: { } entry } && entry.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal))
+                    foreach (var arrival in arrivals) Check(await set.SendAsync(large, arrival, "ordinary"), $"the clearing root admits {arrival} after Open");
+                if (page && !pageChecked)
+                {
+                    pageChecked = true;
+                    var before = await set.ClearingAsync(large);
+                    Check(!(await store.CommitAsync(batch, token)).Landed && await set.ClearingAsync(large) == before,
+                        "the page replayed after it committed is refused and changes nothing");
+                    // After this page the owner dies: none of its commits lands, and the next control waits in the inbox.
+                    frozen = store;
+                }
+                return committed;
+            }
+        }
+
         async Task RereadAcrossFormats()
         {
             foreach (var (label, schema, format22) in new[] { ("format 22", Format22Schema, true), ("the composed recovery set", RecoverySchema, false) })
             {
+#pragma warning disable EF1003 // the schema name is one of this fixture's constants
                 await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + schema, stop);
+#pragma warning restore EF1003
                 var schemaConnection = new NpgsqlConnectionStringBuilder(connection) { SearchPath = schema }.ConnectionString;
                 var hold = new RaceHook(schemaConnection);
                 var schemaOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(schemaConnection).AddInterceptors(hold).Options;
@@ -477,7 +736,6 @@ internal static class PostgresRootParkedOperatorChecks
             var asleep = await set.StartAsync("arrivals-suspended");
             var holding = await set.StartAsync("arrivals-held");
             var awake = await set.StartAsync("arrivals-running");
-            var large = await set.StartAsync("arrivals-large");
             var raceKeep = await set.StartAsync("arrivals-race-keep");
             var raceMark = await set.StartAsync("arrivals-race-mark");
             var raceChildren = await set.StartAsync("arrivals-race-children");
@@ -586,22 +844,6 @@ internal static class PostgresRootParkedOperatorChecks
                 "the owner that kept the arrival read the held Terminate again and ended the root, with no stand-down and no retake");
             set.Answered("together-terminate", "terminated");
 
-            // A Park larger than one page is refused with a recorded reason, and keeps every row.
-            Check(await set.SendAsync(large, "arrivals-large-fail", "fail"), "the arrivals set admits a failing input for the large Park");
-            await set.DriveAsync(large, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
-            for (var index = 0; index < InMemoryStore.ParkPageLimit; index++)
-                if (!await set.SendAsync(large, $"arrivals-large-{index}", "ordinary"))
-                    throw new InvalidOperationException($"The arrivals set refused arrival {index} for the large Park.");
-            await set.SettledInputsAsync(large);
-            Check(await set.OperateAsync(large, "arrivals-large-terminate", Contract.Kinds.Terminate, await set.ParkSelectionAsync(large, 2), reply: true),
-                $"the arrivals set admits a held Terminate with the Park selection for a Park of {InMemoryStore.ParkPageLimit + 1} kept rows");
-            var largeImage = await set.ImageAsync(large);
-            await set.DriveAsync(large, image => image!.Revision == largeImage.Revision + 1);
-            await set.SettledAsync(large, "arrivals-large-terminate", reason: "page");
-            set.Answered("arrivals-large-terminate", "ParkPageLimit");
-            Check((await set.InputsAsync(large)).Count(row => row.KeptBy is not null) == InMemoryStore.ParkPageLimit + 1,
-                "the refused Terminate leaves every kept row of the large Park kept");
-
             Check(await set.SendAsync(holding, "arrivals-held-fail", "fail") &&
                     await set.OperateAsync(holding, "arrivals-held-terminate", Contract.Kinds.Terminate, set.Selections[holding], reply: true),
                 "the arrivals set admits a failing input and a held Terminate behind it");
@@ -695,6 +937,8 @@ internal static class PostgresRootParkedOperatorChecks
         "\"Suspended\" = false, \"FoundationParkAt\" = " + parkAt + ", \"FoundationParkRevision\" = NULL, " +
         "\"FoundationTerminalRevision\" = \"Revision\" + 1, \"FoundationTerminalAt\" = 1, \"State\" = " + state + " WHERE \"Id\" = {0}", root.Actor.Id);
 
+    private static FormattableString Raw(EfStore.RootImage root, string change) => Change(root, change);
+
     private static FormattableString Change(EfStore.RootImage root, string change) => FormattableStringFactory.Create(
         "UPDATE \"Instances\" SET \"Revision\" = \"Revision\" + 1, \"FoundationWriteRevision\" = \"Revision\" + 1, " + change +
         " WHERE \"Id\" = {0}", root.Actor.Id);
@@ -773,13 +1017,24 @@ internal static class PostgresRootParkedOperatorChecks
                     : new PostgresRootIngress(Admission, Probe.Type, authorizeRecover: (_, _) => true);
         }
 
+        // Sees every commit an owner of the set writes, with that owner's store.
+        internal Func<EfStore, CommitBatch, CancellationToken, ValueTask<Committed>>? Write { get; set; }
+
         internal async Task<IScopeActivation> OwnAsync()
         {
             var store = Store();
             var scope = (await store.BindWorkerPartitionAsync(0, stop)).Scope;
             var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), Probe);
+            IKernelStore kernel = store;
+            if (Write is { } write)
+            {
+                var observed = System.Reflection.DispatchProxy.Create<IKernelStore, PostgresRootParkOpeningChecks.ObservedCommit>();
+                var proxy = (PostgresRootParkOpeningChecks.ObservedCommit)(object)observed;
+                (proxy.Store, proxy.Write) = (store, (batch, token) => write(store, batch, token));
+                kernel = observed;
+            }
             // One heartbeat covers the whole fixture: the default ten-second lease can lapse on a loaded machine.
-            var host = new DurableHost([new Worker(name, 0, store, adapter,
+            var host = new DurableHost([new Worker(name, 0, kernel, adapter,
                 new WorkerOptions { Partitions = 1, Lease = FixtureLease, Transport = _replies })]);
             await host.HeartbeatAsync(FixtureLease, stop);
             return _owner = await host.ActivateAsync(0, stop) ?? throw new InvalidOperationException("The fixture owner could not take its partition.");
@@ -885,6 +1140,19 @@ internal static class PostgresRootParkedOperatorChecks
         }
 
         internal async Task<string> SelectionAsync(Contract.ActorRef root) => (await _reads.GetAsync(tenant, root, stop))!.Selection!;
+        internal bool OpensPark(Contract.ActorRef root, string selection) => PostgresRootSelection.OpenPark(_cursor, selection, tenant.Tenant, root.Id) is not null;
+        internal bool OpensTerminal(Contract.ActorRef root, string selection) => PostgresRootSelection.OpenTerminal(_cursor, selection, tenant.Tenant, root.Id) is not null;
+
+        internal sealed record ClearingRow(string? Clearing, long? Cleared);
+        // The root's open clearing: the Terminate's operation and the rows cleared so far.
+        internal async Task<ClearingRow> ClearingAsync(Contract.ActorRef root)
+        {
+            await using var read = open();
+            var actor = (await ImageAsync(root)).Actor.Id;
+            return await read.Database.SqlQuery<ClearingRow>($"""
+                SELECT "FoundationParkClearing" AS "Clearing", "FoundationParkCleared" AS "Cleared" FROM "Instances" WHERE "Id" = {actor}
+                """).SingleAsync(stop);
+        }
 
         // Drives the owner until the root is retired: no checkpoint, no list row.
         internal async Task RetiredAsync(Contract.ActorRef root)
@@ -984,13 +1252,17 @@ internal static class PostgresRootParkedOperatorChecks
 
         // One raw journal entry at the next revision, then one write, in a transaction that is always rolled back after its
         // deferred checks run. True when all pass the triggers; false when one of them refuses.
-        internal async Task<bool> TriggerProbeAsync(EfStore.RootImage root, string? entries, FormattableString? write)
+        internal Task<bool> TriggerProbeAsync(EfStore.RootImage root, string? entries, FormattableString? write) =>
+            TriggerProbeEntriesAsync(root, entries is null ? [] : [entries], write);
+
+        // Several raw entries at the next revision, then one write, always rolled back.
+        internal async Task<bool> TriggerProbeEntriesAsync(EfStore.RootImage root, string[] entries, FormattableString? write)
         {
             await using var db = open();
             await using var transaction = await db.Database.BeginTransactionAsync(stop);
             try
             {
-                if (entries is not null) await InsertEntryAsync(db, root, entries);
+                foreach (var entry in entries) await InsertEntryAsync(db, root, entry);
                 if (write is not null && await db.Database.ExecuteSqlInterpolatedAsync(write, stop) != 1)
                     throw new InvalidOperationException("The trigger probe did not write exactly the root row.");
                 await db.Database.ExecuteSqlRawAsync("SET CONSTRAINTS ALL IMMEDIATE", stop);
