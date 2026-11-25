@@ -222,6 +222,10 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
             File.SetLastWriteTimeUtc(producer, DateTime.UtcNow.AddMinutes(-2));
             File.SetLastWriteTimeUtc(binary, DateTime.UtcNow.AddMinutes(-1));
             RestoreFixture(project);
+            // Exact compiler-selected references must exist, so the referenced producer is built first.
+            var (built, buildOutput) = ChildProcess.Dotnet(["build", producerProject, "--no-restore", "-nologo", "-v:q", "-nr:false", "-p:Configuration=" + Configuration],
+                workingDirectory: root, timeout: TimeSpan.FromMinutes(5));
+            Assert.True(built == 0, buildOutput);
             var closed = new EvaluatedHashInputs(Configuration).Read(project);
             Assert.Contains(producerProject, closed);
             Assert.Contains(producer, closed);
@@ -345,6 +349,9 @@ public sealed class ShippingHashAssembliesTests(ITestOutputHelper output)
         var target = Path.GetFullPath(root);
         var workspace = Path.GetFullPath(Path.Join(RepoPaths.RepoRoot, ".agent-prefs")) + Path.DirectorySeparatorChar;
         Assert.StartsWith(workspace, target, StringComparison.Ordinal);
-        Directory.Delete(target, recursive: true);
+        // Windows keeps an image loaded into the test process locked; the fixture tree is left for later cleanup then.
+        try { Directory.Delete(target, recursive: true); }
+        catch (UnauthorizedAccessException) when (OperatingSystem.IsWindows()) { }
+        catch (IOException) when (OperatingSystem.IsWindows()) { }
     }
 }

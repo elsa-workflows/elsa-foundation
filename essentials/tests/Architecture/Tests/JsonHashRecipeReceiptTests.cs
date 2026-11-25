@@ -462,7 +462,10 @@ public sealed class JsonHashRecipeReceiptTests
             var expected = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())) + Path.DirectorySeparatorChar;
             var target = Path.GetFullPath(Root);
             Assert.StartsWith(expected, target, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-            Directory.Delete(target, recursive: true);
+            // Windows keeps an image loaded into the test process locked; the temp tree is left for the OS then.
+            try { Directory.Delete(target, recursive: true); }
+            catch (UnauthorizedAccessException) when (OperatingSystem.IsWindows()) { }
+            catch (IOException) when (OperatingSystem.IsWindows()) { }
         }
     }
 }
