@@ -151,6 +151,14 @@ internal sealed partial class ActorAdapter
         public void CancelJob(string key)
         {
             if (_turn.JobGeneration(key) is not { } generation) return;
+            if (_inMemory is null)
+            {
+                // A root provider: a job this turn started goes with its ticket and deadline, which were never sent. An earlier
+                // one stays registered: the root's end settles it in its terminal commit, or its result lands where nothing
+                // waits for it any more.
+                if (_turn.StartedThisTurn(key)) _turn.CancelJob(key, null, null);
+                return;
+            }
             var ticketKey = Durable.InboxKey.Ticket(_row.Id, key, _row.Creation, generation);
             var ticket = Store.FoundationJob(_row.Id, _row.Creation, key, generation).Ticket;
             if (ticket is null && _input.VolatileMessage(ticketKey) is { Kind: Durable.Kinds.Job } local)
@@ -222,8 +230,11 @@ internal sealed partial class ActorAdapter
             var ended = wasRunning && _status != Contract.ActorStatus.Running;
             var outcome = _turn.Outcome((Durable.InstanceStatus)_status);
             outcome.FoundationValues = _values;
+            // A root provider settles a Faulted end's outstanding jobs the way it settles a Terminate's: in a jobs-only cascade
+            // its terminal commit discharges.
             var cascades = outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Terminate) ||
-                ended && _status == Contract.ActorStatus.Cancelled;
+                ended && _status == Contract.ActorStatus.Cancelled ||
+                ended && _status == Contract.ActorStatus.Faulted && _inMemory is null && _turn.Jobs() is not null;
 
             outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
             for (var i = 0; i < outcome.Replied.Count; i++)

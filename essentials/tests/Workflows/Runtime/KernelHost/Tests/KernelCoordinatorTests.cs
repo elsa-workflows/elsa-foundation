@@ -122,33 +122,28 @@ public sealed class KernelCoordinatorTests
         public KernelActivationCoordinator Coordinator = null!;
         public RecordingObserver Observer = null!;
         private readonly ActivationChannelOptions? _channels;
-        private readonly string? _schedulesUnavailable;
+        private KernelHostCapabilities _capabilities;
 
-        /// <param name="schedulesUnavailable">Set, the host runs no schedule actor, and its serving refuses a Timer or Cron with this reason.</param>
-        private bool _timers;
-        private readonly bool _children;
-
-        public Host(ActivationChannelOptions? channels = null, string? schedulesUnavailable = null, bool timers = true, bool children = true)
+        /// <param name="capabilities">What the host's foundation runs; a workflow that needs more is refused where it is mapped.</param>
+        public Host(ActivationChannelOptions? channels = null, KernelHostCapabilities? capabilities = null)
         {
             _channels = channels;
-            _schedulesUnavailable = schedulesUnavailable;
-            (_timers, _children) = (timers, children);
+            _capabilities = capabilities ?? KernelHostCapabilities.All;
             References = new(Executables, Clock);
             Switch = new(Authority, References, Clock, Bindings, RecurringSchedules);
             Restart();
         }
 
-        /// <summary>A restart onto a host whose foundation runs timers, or none.</summary>
-        public void Restart(bool timers)
+        /// <summary>A restart onto a host whose foundation runs <paramref name="capabilities"/>.</summary>
+        public void Restart(KernelHostCapabilities capabilities)
         {
-            _timers = timers;
+            _capabilities = capabilities;
             Restart();
         }
 
         public void Restart()
         {
-            Serving = new KernelServing(expression => expression == "0 * * * * *" ? null : "not a cron expression this host reads", _schedulesUnavailable,
-                _timers, _children);
+            Serving = new KernelServing(expression => expression == "0 * * * * *" ? null : "not a cron expression this host reads", _capabilities);
             Schedules = new RecordingSchedules();
             Observer = new RecordingObserver();
             Coordinator = NewCoordinator(Switch);
@@ -552,18 +547,17 @@ public sealed class KernelCoordinatorTests
     }
 
     [Fact]
-    public async Task A_host_without_schedule_actors_refuses_a_timer_at_the_serving_check_with_its_reason()
+    public async Task A_host_without_schedule_actors_refuses_a_timer_where_it_maps_it()
     {
-        const string reason = "Timer and Cron triggers don't run on this host yet. Remove the Timer.";
-        var host = new Host(schedulesUnavailable: reason);
-        host.Coordinator = host.NewCoordinator(host.Switch, new UnavailableScheduleActors(reason));
+        var host = new Host(capabilities: new(Schedules: false));
+        host.Coordinator = host.NewCoordinator(host.Switch, new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
 
         var timer = await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
         var http = await host.ActivateAsync(Orders("orders@1"), "orders-1");
 
         // Refused before anything is minted: no reference, and the slot never moved.
-        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.ServingCheck), (timer.Outcome, timer.FailedStep));
-        Assert.Equal(reason, timer.Diagnostic);
+        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.Mapping), (timer.Outcome, timer.FailedStep));
+        Assert.Equal($"{NativeMappingRefusedException.ActivityUnsupported}: Node 'tick': {KernelHostCapabilities.SchedulesUnavailable}", timer.Diagnostic);
         Assert.Null(timer.Slot.ActiveActivationId);
         Assert.Null(await host.ReferenceAsync("ticks-1"));
         Assert.Null(host.Serving.ServedWorkflow("ticks").Workflow);
@@ -649,7 +643,7 @@ public sealed class KernelCoordinatorTests
     }
 
     private static WorkflowExecutable Pauses(string artifact) => ExecutableOf(artifact, "pauses", Sequence("root",
-        Node("pause", Types.Delay, [Literal("Duration", "00:00:05", "TimeSpan")]),
+        Node("pause", Types.Delay, [Literal("Duration", "00:00:05", "TimeSpan")], displayName: "Wait a moment"),
         WriteLine("after", Literal("text", "after"))));
 
     private static WorkflowExecutable Dispatches(string artifact, bool wait) => ExecutableOf(artifact, "dispatches", Sequence("root",
@@ -658,12 +652,14 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_host_without_timers_refuses_a_delay_where_it_maps_it()
     {
-        var host = new Host(timers: false);
+        var host = new Host(capabilities: new(Timers: false));
 
         var refused = await host.ActivateAsync(Pauses("pauses@1"), "pauses-1");
 
+        // The refusal names the node by its display name, as every mapping refusal does.
         Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.Mapping), (refused.Outcome, refused.FailedStep));
-        Assert.Equal($"{NativeMappingRefusedException.ActivityUnsupported}: Node 'pause': {KernelServing.DelayUnavailable}", refused.Diagnostic);
+        Assert.Equal($"{NativeMappingRefusedException.ActivityUnsupported}: Node 'Wait a moment' (pause): {KernelHostCapabilities.DelayUnavailable}",
+            refused.Diagnostic);
         Assert.Null(refused.Slot.ActiveActivationId);
         Assert.Null(await host.ReferenceAsync("pauses-1"));
         Assert.False(host.Serving.Registry.Contains("pauses@1"));
@@ -674,12 +670,12 @@ public sealed class KernelCoordinatorTests
     [InlineData(false)]
     public async Task A_host_without_child_workflows_refuses_a_dispatch_waited_or_not(bool wait)
     {
-        var host = new Host(children: false);
+        var host = new Host(capabilities: new(Children: false));
 
         var refused = await host.ActivateAsync(Dispatches("dispatches@1", wait), "dispatches-1");
 
         Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.Mapping), (refused.Outcome, refused.FailedStep));
-        Assert.Equal($"{NativeMappingRefusedException.ActivityUnsupported}: Node 'call': {KernelServing.DispatchUnavailable}", refused.Diagnostic);
+        Assert.Equal($"{NativeMappingRefusedException.ActivityUnsupported}: Node 'call': {KernelHostCapabilities.DispatchUnavailable}", refused.Diagnostic);
         Assert.Null(refused.Slot.ActiveActivationId);
     }
 
@@ -698,12 +694,12 @@ public sealed class KernelCoordinatorTests
         var host = new Host();
         await host.ActivateAsync(Pauses("pauses@1"), "pauses-1");
 
-        host.Restart(timers: false);
+        host.Restart(new KernelHostCapabilities(Timers: false));
         var served = Assert.Single(await host.Coordinator.ServeActiveSlotsAsync());
 
         Assert.False(served.Succeeded);
         Assert.Equal(WorkflowActivationStep.Mapping, served.FailedStep);
-        Assert.Contains(KernelServing.DelayUnavailable, served.Diagnostic, StringComparison.Ordinal);
+        Assert.Contains(KernelHostCapabilities.DelayUnavailable, served.Diagnostic, StringComparison.Ordinal);
         Assert.False(host.Serving.Registry.Contains("pauses@1"));
     }
 }

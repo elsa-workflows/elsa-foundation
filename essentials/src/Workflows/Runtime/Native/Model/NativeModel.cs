@@ -61,6 +61,13 @@ public class NativeExecutionOptions
 {
     public NativeFlaw Flaws { get; init; }
     public int MaxActivitiesPerTurn { get; init; } = 1000;
+
+    /// <summary>
+    /// Whether a Balanced or Ephemeral burst that reaches <see cref="MaxActivitiesPerTurn"/> continues in the next turn, through
+    /// a self-send. A host whose foundation takes no self-sends sets it off: the burst runs on to its next wait or end, and the
+    /// turn is bounded by the state and history size limits instead (an oversized turn faults with its reason).
+    /// </summary>
+    public bool SplitsBursts { get; init; } = true;
     public AdmissionFlaw AdmissionFlaws { get; init; }
     public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
     /// <summary>The host's outbound HTTP for SendHttpRequest's job; without it the activity faults.</summary>
@@ -303,7 +310,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
         while (!_checkpointRequested && _s.Agenda.Exists(w => !w.Gone) && _status == Contract.ActorStatus.Running)
         {
             // Durable: a boundary after every activity. Balanced and Ephemeral: one turn until all waits or ends (capped).
-            if ((Durable && _executed > 0) || _executed >= options.MaxActivitiesPerTurn)
+            if ((Durable && _executed > 0) || options.SplitsBursts && _executed >= options.MaxActivitiesPerTurn)
             {
                 turn.SendToSelf(NativeKinds.Continue);
                 return;

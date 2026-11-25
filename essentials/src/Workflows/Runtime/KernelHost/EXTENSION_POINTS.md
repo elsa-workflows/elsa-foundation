@@ -46,8 +46,8 @@ cannot do this itself, since runtime projects take no design reference.
 - **Usage:** how `KernelActivationCoordinator` reaches the kernel's schedule actors for a served Timer or Cron.
 - **Implementations:** `IngressScheduleActors`, on a host whose foundation hosts the schedule actor, through its
   ingress. `UnavailableScheduleActors`, on a host that runs none: setting a schedule or registering a run throws its
-  reason, and stopping and unregistering do nothing. Such a host gives its `KernelServing` the same reason, so a Timer
-  or Cron is refused at the serving check first.
+  reason, and stopping and unregistering do nothing. Such a host also says `Schedules: false` in its
+  `KernelHostCapabilities`, so a Timer or Cron is refused where it is mapped first.
 
 ## Host-composed state and seams consumed
 
@@ -55,5 +55,8 @@ cannot do this itself, since runtime projects take no design reference.
   `HttpRoutes` and `NativeSchedules` built over it. A host passes `ServedWorkflow` as
   `NativeExecutionOptions.ServedWorkflow`, and `NativeExecutableMapper.MapStoredAsync` over its executable store as
   `NativeExecutionOptions.ResolveWorkflow`, so an instance started on a version no slot serves after a restart still runs.
+- `KernelHostCapabilities` is a value the host gives its `KernelServing`, not a contract: what its foundation runs
+  (schedules, timers, child workflows, self-sends). The coordinator maps with it, so a node that needs more is refused
+  as `definition_unsupported`.
 - The coordinator notifies the shell's `IWorkflowTriggerIndexObserver` set (Studio's workflow library among them) when
   what a definition serves changes.

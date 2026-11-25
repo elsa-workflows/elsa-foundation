@@ -161,7 +161,8 @@ internal static class PostgresRootTimedJobSettlement
         var applyingFence = third.Fences.Single();
         Check(applyingFence.Epoch > settling.Epoch, "Result application must start with a cold take.");
         // A Faulted end over an applied result commits on a family that ends Faulted roots, whatever the result was, as the
-        // in-memory reference ends a model's fault: only a Park over a recorded timeout stays refused here.
+        // in-memory reference ends a model's fault: only a Park over a recorded timeout stays refused here. pg-held-callers
+        // commits a Faulted end over a successful result end to end.
         if (unhandled)
         {
             var waiting = (await thirdStore.LoadAsync([before.Id], stop)).Single();

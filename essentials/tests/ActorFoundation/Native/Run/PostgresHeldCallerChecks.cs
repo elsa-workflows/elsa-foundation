@@ -48,12 +48,29 @@ internal static class PostgresHeldCallerChecks
                 Wf.Http("send", "https://partner.example/ok",
                     headers: Binding.Literal(new JsonObject { ["Authorization"] = "Bearer not-through-a-connection" })),
                 Wf.Respond("unreached", "unreached"))))
+            // A fault in the turn that applies a successful job result.
+            .Add(Wf.Workflow("fault-after-job", Wf.Sequence("main",
+                Wf.Http("send", "https://partner.example/ok", expectedStatusCodes: [200]),
+                Wf.Fault("boom", Binding.Literal("deliberate"), Binding.Literal("a fault after a successful job")))))
             .Add(Wf.Workflow("faults", Wf.Sequence("main", Wf.Fault("boom", Binding.Literal("deliberate"), Binding.Literal("a deliberate fault")))))
-            .Add(Wf.Workflow("quick", Wf.Sequence("main", Wf.WriteLine("done", "done"))));
+            .Add(Wf.Workflow("quick", Wf.Sequence("main", Wf.WriteLine("done", "done"))))
+            // A fault in the same first turn that issues a job.
+            .Add(Wf.Workflow("fault-beside-issue", Wf.Parallel("both", null,
+                Wf.Http("send", "https://partner.example/stuck", timeout: TimeSpan.FromSeconds(60)),
+                Wf.Fault("boom", Binding.Literal("deliberate"), Binding.Literal("a fault beside a job")))))
+            // A fault in a later turn while a timed job runs.
+            .Add(Wf.Workflow("fault-beside-job", Wf.Parallel("both", null,
+                Wf.Http("send", "https://partner.example/stuck", timeout: TimeSpan.FromSeconds(60)),
+                Wf.Sequence("then", Wf.Node<PostgresHeldDirectChecks.ApprovalSignal>("approve"),
+                    Wf.Fault("boom", Binding.Literal("deliberate"), Binding.Literal("a fault beside a running job"))))))
+            // More activities than one turn's cap, on a host that does not split a burst.
+            .Add(Wf.Workflow("many", Wf.Sequence("main",
+                Wf.ForEach("each", Binding.Literal(new JsonArray([.. Enumerable.Range(0, 1_200).Select(i => (JsonNode?)i)])),
+                    Wf.Set("step", "last", Binding.Literal(1))))));
         var routes = new HttpRoutes(registry);
         var partner = new Partner();
         var actor = new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry,
-            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = new HttpClient(partner) } })]);
+            new NativeExecutionOptions { Http = new NativeHttpOptions { Client = new HttpClient(partner) }, SplitsBursts = false })]);
         var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, WorkflowActor.WorkflowActor.ActorType,
             PostgresPreviewHosting.CreateRequests(Open, Node, WorkflowActor.WorkflowActor.ActorType), cancellationToken: stop);
         var clock = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
@@ -99,6 +116,13 @@ internal static class PostgresHeldCallerChecks
             Require(await SettledAsync(await RootOfAsync("refused", "refused-1")) is { Status: InstanceStatus.Faulted },
                 "the faulted root commits Faulted");
 
+            // A Faulted end over a successful job result commits too, with the job settled.
+            var afterJob = await RequestAsync(new Contract.Target.Start(Start("fault-after-job")), "after-job-1", Contract.Kinds.Start, null, RequestTimeout);
+            var afterJobImage = await SettledAsync(await RootOfAsync("fault-after-job", "after-job-1"));
+            Require(afterJob is { Error: null, Status: Contract.ActorStatus.Faulted } &&
+                    afterJobImage is { Status: InstanceStatus.Faulted, Jobs: null } && await PendingAsync(afterJobImage.Actor.Id) == 0,
+                $"a fault in the turn that applies a successful job result commits Faulted with nothing pending ({Describe(afterJob)})");
+
             // (e) A plain fault at birth commits, and the node goes on with later roots.
             var faults = await RequestAsync(new Contract.Target.Start(Start("faults")), "faults-1", Contract.Kinds.Start, null, RequestTimeout);
             var faultedRoot = await RootOfAsync("faults", "faults-1");
@@ -109,6 +133,53 @@ internal static class PostgresHeldCallerChecks
             var later = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("quick")), "quick-1", Contract.Kinds.Start,
                 cancellationToken: stop)).Actor!.Value;
             Require(await SettledAsync(later) is { Status: InstanceStatus.Finished }, "the node goes on to finish a later root");
+
+            // (f) A fault in the first turn beside the job it issues: no job is registered, and the root commits Faulted.
+            var besideIssue = await RequestAsync(new Contract.Target.Start(Start("fault-beside-issue")), "beside-issue-1", Contract.Kinds.Start, null, RequestTimeout);
+            var issued = await RootOfAsync("fault-beside-issue", "beside-issue-1");
+            var issuedImage = await SettledAsync(issued);
+            Require(besideIssue is { Status: Contract.ActorStatus.Faulted } && issuedImage is { Status: InstanceStatus.Faulted, Jobs: null } &&
+                    await PendingAsync(issuedImage.Actor.Id) == 0,
+                $"a fault in the turn that issues a job commits Faulted with no job and nothing pending ({Describe(besideIssue)}, {issuedImage?.Status})");
+
+            // (g) A later turn faults while a timed job runs: the job's rows go in the Faulted commit, and a Delete works.
+            partner.Reset();
+            var besideJob = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("fault-beside-job")), "beside-job-1", Contract.Kinds.Start,
+                cancellationToken: stop)).Actor!.Value;
+            var runningJob = await RunningAsync(besideJob);
+            while (partner.Calls("/stuck") == 0) await Task.Delay(20, stop);
+            var jobFrame = Json.Read<NativeState>((await RunningAsync(besideJob)).State!).Frames.Values.Single(f => f.Node == "approve").Id;
+            await foundation.SendAsync(scope, new Contract.Target.Ref(besideJob), "approve-beside", CompositeSignal.Kind,
+                Json.Write(new CompositeSignal(jobFrame, "approve", "Ada")), cancellationToken: stop);
+            var faultedBeside = await SettledAsync(besideJob);
+            Require(faultedBeside is { Status: InstanceStatus.Faulted, Jobs: null } && await PendingAsync(runningJob.Actor.Id) == 0,
+                $"a fault while a timed job runs commits Faulted with the job settled and nothing pending ({faultedBeside?.Status}, {await PendingAsync(runningJob.Actor.Id)} pending)");
+            // The running job stops with the end, and its own input then settles nothing at the ended root.
+            for (var attempt = 0; partner.Stopped == 0; attempt++)
+            {
+                if (attempt == 250) throw new InvalidOperationException("The faulted root's running job was not stopped.");
+                await Task.Delay(20, stop);
+            }
+            Require(await PendingAsync(runningJob.Actor.Id) == 0 && service.LastError is null,
+                "the running job stops with the Faulted end and its late input settles nothing");
+            var operators = await store.OpenSelectedRootIngressAsync(WorkflowActor.WorkflowActor.ActorType, TimeSpan.FromHours(1),
+                (bound, _) => ReferenceEquals(bound, scope), stop, (bound, _) => ReferenceEquals(bound, scope));
+            var selection = (await foundation.GetAsync(scope, besideJob, stop))!.Selection;
+            Require((await operators.SendAsync(scope, new Contract.Target.Ref(besideJob), "delete-beside", Contract.Kinds.Delete,
+                    System.Text.Json.JsonSerializer.Serialize(new Contract.OperatorCommand(selection)), cancellationToken: stop)).Outcome ==
+                Contract.AdmissionOutcome.Accepted, "a selected Delete of that faulted root is admitted");
+            for (var attempt = 0; await store.ReadFirstRootAsync(scope.Tenant, besideJob.Id, stop) is not null; attempt++)
+            {
+                if (attempt == 250) throw new InvalidOperationException("The faulted root was not retired.");
+                await Task.Delay(20, stop);
+            }
+            Require(true, "the Delete retires it");
+
+            // (h) A ForEach over 1,200 items finishes on a host that does not split a burst at the activity cap.
+            var many = (await foundation.SendAsync(scope, new Contract.Target.Start(Start("many")), "many-1", Contract.Kinds.Start,
+                cancellationToken: stop)).Actor!.Value;
+            Require(await SettledAsync(many) is { Status: InstanceStatus.Finished },
+                "a ForEach over 1,200 items finishes in one burst on a host without self-sends");
 
             Require(!escalated.Task.IsCompleted && service.LastError is null, "the node ran every case without a fault of its own");
         }
@@ -131,6 +202,14 @@ internal static class PostgresHeldCallerChecks
                 : Start(workflow);
             return (await foundation.SendAsync(scope, new Contract.Target.Start(spec), id, Contract.Kinds.Start, cancellationToken: stop)) is
                 { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: { } root } ? root : throw new InvalidOperationException($"'{id}' started no root.");
+        }
+
+        async Task<int> PendingAsync(string actorId)
+        {
+            await using var db = Open();
+            return await db.Database.SqlQuery<int>($"""
+                SELECT count(*)::integer AS "Value" FROM "Messages" WHERE "Target" = {actorId} AND NOT "Done"
+                """).SingleAsync(stop);
         }
 
         async Task<EfStore.RootImage?> SettledAsync(Contract.ActorRef root)
@@ -168,11 +247,22 @@ internal static class PostgresHeldCallerChecks
 
         internal int Calls(string path) => calls.GetValueOrDefault(path);
 
+        private int stopped;
+
+        internal int Stopped => Volatile.Read(ref stopped);
+
+        internal void Reset() => calls.Clear();
+
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var path = request.RequestUri!.AbsolutePath;
             calls.AddOrUpdate(path, 1, (_, count) => count + 1);
             if (path == "/slow") await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
+            if (path == "/stuck")
+            {
+                try { await Task.Delay(Timeout.Infinite, cancellationToken); }
+                catch (OperationCanceledException) { Interlocked.Increment(ref stopped); throw; }
+            }
             return path is "/ok" or "/slow"
                 ? new(HttpStatusCode.OK) { Content = new StringContent("""{"ok":true}""", Encoding.UTF8, "application/json") }
                 : new(HttpStatusCode.NotFound);

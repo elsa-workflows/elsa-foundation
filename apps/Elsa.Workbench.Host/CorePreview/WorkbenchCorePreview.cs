@@ -21,10 +21,6 @@ internal static class WorkbenchCorePreview
     /// </summary>
     internal const string PublicationsKey = "Elsa:CorePreview:Publications";
 
-    /// <summary>Why a Timer or Cron publish is refused on the Core Preview, whose PostgreSQL foundation hosts no schedule actor yet.</summary>
-    internal const string SchedulesUnavailable =
-        "Timer and Cron triggers don't run on this host yet. Remove the Timer or Cron, or start the workflow from an HTTP endpoint, an event or a Dispatch.";
-
     internal static bool ServesPublications(IConfiguration configuration) =>
         configuration.GetValue<bool>("Elsa:CorePreview:Enabled") && configuration.GetValue<bool>(PublicationsKey);
 
@@ -81,14 +77,14 @@ internal static class WorkbenchCorePreview
         if (publications && (nativeJobs || timedJobs))
             throw new InvalidOperationException(
                 "With Elsa:CorePreview:Publications on, the Core Preview runs on the shipped format, which carries Native jobs: leave NativeJobs and TimedNativeJobs off.");
-        // Its foundation hosts no schedule actor yet, so serving refuses a Timer or Cron before anything is minted.
-        // Format 24 runs no self-sends and no child workflows yet, so serving refuses a Delay and a Dispatch Workflow where it
-        // maps them.
-        var serving = publications ? new KernelServing(CronosCalendar.Error, SchedulesUnavailable, timers: false, children: false) : null;
+        // Format 24 runs no schedule actor, timers, self-sends or child workflows yet: serving refuses a Timer, Cron, Delay and
+        // Dispatch Workflow where it maps them, and a burst runs on to its next wait.
+        var capabilities = new KernelHostCapabilities(Schedules: false, Timers: false, Children: false, SelfSends: false);
+        var serving = publications ? new KernelServing(CronosCalendar.Error, capabilities) : null;
         if (serving is not null)
         {
             services.AddSingleton(serving);
-            services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(SchedulesUnavailable));
+            services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(KernelHostCapabilities.SchedulesUnavailable));
             KernelToolbox.Register(services);
         }
         var workflows = (serving?.Registry ?? new WorkflowRegistry()).Add(DirectApprovalWorkflow.Build());
@@ -136,6 +132,8 @@ internal static class WorkbenchCorePreview
                 Expressions = expressions,
                 // A Dispatch names a definition; the child starts the version the definition serves.
                 ServedWorkflow = serving is null ? null : serving.ServedWorkflow,
+                // Without self-sends a turn cannot continue in the next: it runs on to its next wait.
+                SplitsBursts = serving is null || serving.Capabilities.SelfSends,
                 // An instance started on a version no slot serves since the restart runs it from the default shell's artifacts.
                 ResolveWorkflow = serving is null ? null : (workflow, token) => ResolveWorkflowAsync(shells, shellName, workflow, token),
             });

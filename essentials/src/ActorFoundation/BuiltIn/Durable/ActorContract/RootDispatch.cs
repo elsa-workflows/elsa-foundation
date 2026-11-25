@@ -254,14 +254,21 @@ internal sealed partial class ActorAdapter
             result.Read<Durable.JobFinished>() is { Error: "timeout", Result: null };
         var terminated = input.Kind == Durable.Kinds.Terminate && IsRootControl(input) && previous is not null &&
             outcome.Row is { Status: Durable.InstanceStatus.Cancelled };
-        // A Terminate settles the root's outstanding timed jobs in its terminal commit: its cascade names only jobs and ends
-        // in one page, and the store removes the jobs' ticket and deadline rows there.
-        var settlesJobs = terminated && rootTimedJobSettlement && previous is { Jobs: not null } &&
-            outcome.Row is { Jobs: null, Cascade: null, Children: null } &&
-            outcome.FoundationCascade is { Entries.Children.IsEmpty: true, Entries.Jobs.IsEmpty: false, Input: null } && outcome.Sent.Count == 0;
         // A profile whose state family ends Faulted roots (timed-job settlement) commits a model's Faulted end, as the
         // in-memory reference does: its held callers are answered with that end (Worker.Release).
         var faulted = rootTimedJobSettlement && !outcome.OpensPark && outcome.Row is { Status: Durable.InstanceStatus.Faulted };
+        // A Faulted end issues no job: a job its own turn started is dropped before the store sees it (its ticket and deadline
+        // were never sent), and so is the generation it took.
+        if (faulted && previous?.Jobs is null && outcome.Row is { } ended)
+        {
+            if (outcome.Sent.Count != 0 && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, ended.Id, ended.Model)) outcome.Sent.Clear();
+            if (outcome.Sent.Count == 0) outcome.Row = ended with { Jobs = null, NextJobGeneration = previous?.NextJobGeneration ?? 0 };
+        }
+        // A Terminate, or a Faulted end, settles the root's outstanding timed jobs in its terminal commit: its cascade names
+        // only jobs and ends in one page, and the store removes the jobs' ticket and deadline rows there.
+        var settlesJobs = (terminated || faulted) && rootTimedJobSettlement && previous is { Jobs: not null } &&
+            outcome.Row is { Jobs: null, Cascade: null, Children: null } &&
+            outcome.FoundationCascade is { Entries.Children.IsEmpty: true, Entries.Jobs.IsEmpty: false, Input: null } && outcome.Sent.Count == 0;
         if (outcome.Row is not { } next ||
             next.Status is not (Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished) && !timedFault && !terminated && !faulted ||
             !((rootTimedJobIssuance || rootTimedJobSettlement) && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, next.Id, next.Model)) &&

@@ -83,8 +83,7 @@ public sealed class KernelActivationCoordinator(
         Workflow workflow;
         try
         {
-            workflow = NativeExecutableMapper.Map(command.Executable);
-            serving.RequireRunnable(workflow);
+            workflow = NativeExecutableMapper.Map(command.Executable, serving.Capabilities);
         }
         catch (NativeMappingRefusedException refused)
         {
@@ -434,9 +433,8 @@ public sealed class KernelActivationCoordinator(
         }
         try
         {
-            var mapped = NativeExecutableMapper.Map(executable);
-            serving.RequireRunnable(mapped);
-            return new(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activationId, mapped, slot.Revision);
+            return new(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activationId,
+                NativeExecutableMapper.Map(executable, serving.Capabilities), slot.Revision);
         }
         catch (NativeMappingRefusedException) { return null; }
     }
@@ -543,8 +541,7 @@ public sealed class KernelActivationCoordinator(
             Workflow workflow;
             try
             {
-                workflow = NativeExecutableMapper.Map(executable);
-                serving.RequireRunnable(workflow);
+                workflow = NativeExecutableMapper.Map(executable, serving.Capabilities);
             }
             catch (NativeMappingRefusedException refused)
             {

@@ -27,39 +27,19 @@ public sealed class KernelServing
     public const string DefaultSlotName = "default";
 
     private readonly Func<string, string?>? _cronError;
-    private readonly string? _schedulesUnavailable;
-    private readonly bool _timers;
-    private readonly bool _children;
-
-    /// <summary>Why a Delay is refused on a host whose foundation runs no timers.</summary>
-    public const string DelayUnavailable =
-        "Delay doesn't run on this host yet. Remove it, or wait for an event or an HTTP request instead.";
-
-    /// <summary>Why a Dispatch Workflow is refused on a host whose foundation runs no child workflows.</summary>
-    public const string DispatchUnavailable =
-        "Dispatch Workflow doesn't run on this host yet. Remove it, or start the other workflow from an HTTP endpoint or an event.";
     private readonly Lock _lock = new();
     private readonly SemaphoreSlim _turn = new(1, 1);
     private ServingState _state;
 
     /// <param name="cronError">The host's check of a cron expression (<see cref="NativeSchedules"/>): null when it reads.</param>
-    /// <param name="schedulesUnavailable">
-    /// Set by a host that runs no schedule actor: why. A workflow with a Timer or Cron start trigger is then refused at the
-    /// serving check, with this reason, before anything is minted.
+    /// <param name="capabilities">
+    /// What the host's foundation runs (<see cref="KernelHostCapabilities"/>); a workflow that needs what it lacks is refused
+    /// where it is mapped. All of it by default.
     /// </param>
-    /// <param name="timers">
-    /// Whether the host's foundation runs timers (self-sends with a due time). Without them a workflow with a Delay is refused
-    /// where it is mapped, with <see cref="DelayUnavailable"/>.
-    /// </param>
-    /// <param name="children">
-    /// Whether the host's foundation runs child workflows. Without them a workflow with a Dispatch Workflow, waited or not,
-    /// is refused where it is mapped, with <see cref="DispatchUnavailable"/>.
-    /// </param>
-    public KernelServing(Func<string, string?>? cronError = null, string? schedulesUnavailable = null, bool timers = true, bool children = true)
+    public KernelServing(Func<string, string?>? cronError = null, KernelHostCapabilities? capabilities = null)
     {
         _cronError = cronError;
-        _schedulesUnavailable = schedulesUnavailable;
-        (_timers, _children) = (timers, children);
+        Capabilities = capabilities ?? KernelHostCapabilities.All;
         _state = Build(new Dictionary<string, KernelServedSlot>(StringComparer.Ordinal));
     }
 
@@ -86,19 +66,8 @@ public sealed class KernelServing
         return reached is null ? ServedDefinition.SeveralServe : ServedDefinition.By(reached.Workflow.Id);
     }
 
-    /// <summary>
-    /// Refuses a mapped workflow whose activities the host's foundation does not run, as the mapper refuses one it cannot map:
-    /// a Delay without timers, a Dispatch Workflow without child workflows. The refusal names the first such node.
-    /// </summary>
-    /// <exception cref="NativeMappingRefusedException">The workflow holds an activity this host's foundation does not run.</exception>
-    internal void RequireRunnable(Workflow workflow)
-    {
-        foreach (var node in workflow.Nodes.Values.OrderBy(node => node.Id, StringComparer.Ordinal))
-        {
-            if (!_timers && node.Type == typeof(Delay)) throw NativeMappingRefusedException.Activity(node.Id, DelayUnavailable);
-            if (!_children && node.Type == typeof(DispatchWorkflow)) throw NativeMappingRefusedException.Activity(node.Id, DispatchUnavailable);
-        }
-    }
+    /// <summary>What the host's foundation runs, which the coordinator maps executables against.</summary>
+    public KernelHostCapabilities Capabilities { get; }
 
     /// <summary>Runs one coordinator's change to what serves: its check, its slot move and its serving, while no other runs.</summary>
     internal async ValueTask<T> RunAsync<T>(Func<ValueTask<T>> change, CancellationToken cancellationToken)
@@ -124,8 +93,7 @@ public sealed class KernelServing
     /// <summary>
     /// The serving state with <paramref name="slotId"/> serving <paramref name="served"/>, or nothing when it is null. Building it
     /// checks its routes and schedules: a route conflict (<see cref="HttpRouteConflictException"/>), a route template the model
-    /// refuses, a recurring trigger it refuses (<see cref="NativeScheduleException"/>), or one on a host that runs no schedule
-    /// actor, throws, and nothing changes.
+    /// refuses, or a recurring trigger it refuses (<see cref="NativeScheduleException"/>), throws, and nothing changes.
     /// </summary>
     internal KernelServingPlan Plan(string slotId, KernelServedSlot? served)
     {
@@ -133,10 +101,7 @@ public sealed class KernelServing
         var previous = slots.GetValueOrDefault(slotId);
         if (served is null) slots.Remove(slotId);
         else slots[slotId] = served;
-        var state = Build(slots);
-        if (_schedulesUnavailable is { } reason && served is not null && state.Schedules.All.Any(schedule => schedule.Workflow == served.Workflow.Id))
-            throw new InvalidOperationException(reason);
-        return new(slotId, previous, served, state);
+        return new(slotId, previous, served, Build(slots));
     }
 
     /// <summary>Serves <paramref name="plan"/>: its workflow joins the registry, and its slots, routes and schedules replace the current ones.</summary>

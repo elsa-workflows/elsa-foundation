@@ -226,12 +226,15 @@ public sealed partial class EfStore
     }
 
     private sealed record TerminalRootInputs(WorkerRoot Root, IReadOnlyList<InboxKey> Keys, FoundationSelfIssuer? Issue,
-        Message? HeldOperator) : QualifiedRootCheckpoint(0)
+        Message? HeldOperator, string[] SettledJobs) : QualifiedRootCheckpoint(0)
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
             var terminal = await LockQualifiedTerminalAsync(db, Root, cancellationToken);
-            return terminal.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys,
+            if (terminal.Count != 1) return false;
+            if (SettledJobs.Length > 0 && await db.Messages.AnyAsync(m => m.Target == Root.Actor && m.Partition == Root.Partition &&
+                    m.InboxScope == RootTimedJobScope && SettledJobs.Contains(m.Id) && !m.Done, cancellationToken)) return false;
+            return await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys,
                 HeldOperator is null ? null : [HeldOperator], Issue, false, cancellationToken);
         }
     }
@@ -408,8 +411,12 @@ public sealed partial class EfStore
                 turn.Unsubscribed, null, Held: turn.Held) { FoundationRootOperator = held };
             if (turn != ended || turn.Done.Count + turn.Consumed.Count == 0 || turn.Sent.Count != 0 ||
                 turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 } ||
-                !InputsMatch(root, turn)) throw RootShape();
-            return new(null, new TerminalRootInputs(root, [.. turn.Done, .. turn.Consumed], RootSelfIssuer, WithoutParkFacts(held)));
+                !InputsMatch(root, turn, jobs: RootTimedJobSettlementEnabled)) throw RootShape();
+            // A job that was running when its root ended (a Terminate or a Faulted end settled it) finishes where nothing waits
+            // for it: its ticket and deadline rows left with the end, so the job's own input settles nothing.
+            var settled = turn.Consumed.Where(key => key.Scope > 0).Select(StoredJobId).ToArray();
+            return new(null, new TerminalRootInputs(root, [.. turn.Done, .. turn.Consumed.Where(key => key.Scope <= 0)], RootSelfIssuer,
+                WithoutParkFacts(held), settled));
         }
         var row = turn.Row;
         var recalls = turn.FoundationSelfRecalls;
@@ -435,9 +442,9 @@ public sealed partial class EfStore
             turn.Subscribed, turn.Unsubscribed, turn.Journal, turn.Unsubscribe, turn.Held)
         {
             FoundationHeader = turn.FoundationHeader, FoundationRootOperator = turn.FoundationRootOperator, FoundationSelfRecalls = recalls,
-            // A Terminate's cascade of outstanding timed jobs alone, which its terminal commit settles.
-            FoundationCascade = turn is { FoundationRootOperator.Kind: Kinds.Terminate, FoundationCascade: { Entries.Children.IsEmpty: true, Input: null } jobs } &&
-                RootTimedJobSettlementEnabled ? jobs : null,
+            // A Terminate's, or a Faulted end's, cascade of outstanding timed jobs alone, which its terminal commit settles.
+            FoundationCascade = turn is { FoundationCascade: { Entries.Children.IsEmpty: true, Input: null } jobs } &&
+                (terminated || timedFault && turn.FoundationRootOperator is null) && RootTimedJobSettlementEnabled ? jobs : null,
             FoundationRootJobCompletion = RootJobsEnabled ? turn.FoundationRootJobCompletion : null,
             FoundationValues = values
         };
@@ -477,8 +484,8 @@ public sealed partial class EfStore
             throw RootShape();
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, cancellationToken);
         if (current?.Revision != turn.Expected) return null;
-        // A Terminate of a root with outstanding timed jobs settles them: its cascade names exactly the root's jobs, and their
-        // ticket and deadline rows leave in its terminal commit.
+        // A Terminate or a Faulted end of a root with outstanding timed jobs settles them: its cascade names exactly the root's
+        // jobs, and their ticket and deadline rows leave in its terminal commit.
         IReadOnlyList<InboxKey> inputKeys = turn.Consumed;
         string[]? settledJobs = null;
         if (supported.FoundationCascade is { } cascade)
@@ -521,6 +528,14 @@ public sealed partial class EfStore
                 row.StateVersion, header.Header.TypeData, header.Header.Labels, null, operatorSuspension: row.Suspended, terminalGrowth: header.TerminalGrowth);
         }
         if (row.Suspended != current.Suspended || inputs.Any(input => input.Operator is not null)) throw RootShape();
+        if (settledJobs is not null)
+        {
+            if (!timedFault || turn.Sent.Count != 0 || recalls is not null || row.Jobs is not null || turn.FoundationRootJobCompletion is not null ||
+                values is not null || inputs.Any(input => input.Kind == Kinds.Job)) throw RootShape();
+            return PrepareRootTurn(root.Tenant, root.Reference, current, inputs, fence, row.Status, state,
+                row.StateVersion, header.Header.TypeData, header.Header.Labels, turn.Journal,
+                jobState: new(null, current.NextJobGeneration), terminalGrowth: header.TerminalGrowth, settledJobs: settledJobs);
+        }
         if (RootTimedJobPreviewEnabled)
             RequireRootTimedIssuance(turn, row);
         if (RootJobsEnabled) ValidateRootJobChange(current, row, inputs, turn.Sent, turn.FoundationRootJobCompletion, RootTimedJobs);
