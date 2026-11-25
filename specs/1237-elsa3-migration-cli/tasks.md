@@ -77,7 +77,8 @@
 
   Every literal, script body, variable default and setting value carries the sentinel `SENTINEL-1237`, except
   identities that the report may name (FR-019): definition ids and names, including the dispatch target's id, type
-  names and function names.
+  names, function names and member names (input, output, variable and property names, and literal keys that name a
+  target member or input).
 - [ ] T003 [P] Build the fixture feature project in `MTests/Fixtures/AcmeFeature/`. It registers the custom
   activity under its Elsa 3 type name, `acme.`-prefixed JavaScript host functions for the undeclared function and for `getConfig`, and a variable type
   alias. The test project references it, and a test-only host folder (the host's committed files plus a

@@ -370,8 +370,9 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   rule. A converter message that embeds such text is changed at the converter. For a code the converter does not own
   (an Elsa 4 publication or compilation code), the report carries the code, its path and a fixed text from the code
   table, never the Elsa 4 message, which may quote script source. Identities are allowed: definition ids and names,
-  including the id of a referenced definition such as a dispatch target, type names, function names and setting keys.
-  Redaction is the only mode.
+  including the id of a referenced definition such as a dispatch target, type names, function names, setting keys,
+  and member names: input, output, variable and property names, including a literal key that names a target member
+  or a dispatch target's input, because JSON paths carry them anyway. Redaction is the only mode.
 - **FR-020**: `report.json` MUST carry an integer `schemaVersion`, starting at 1, and conform to the schema this
   specification publishes. Removing a field, or changing its meaning, increments the version. Adding a field does not.
 - **FR-021**: `report.html` MUST be a single self-contained file that renders exactly the data in `report.json`, with
