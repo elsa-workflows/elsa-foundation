@@ -83,6 +83,7 @@ public sealed class Workflow
             if (node.JobTimeout is { } timeout && (!node.Background || timeout < TimeSpan.Zero))
                 throw new ArgumentException($"Node '{node.Id}' requires a nonnegative timeout on a background activity.");
             if (node.Type == typeof(Switch)) Switch.Validate(node, id);
+            else if (node.Cases.Count != 0) throw new InvalidOperationException($"Node '{node.Id}' in '{id}' has cases and is no Switch.");
             if (parent is not null) Parents[node.Id] = parent;
             foreach (var child in node.Children) Index(child, node);
         }

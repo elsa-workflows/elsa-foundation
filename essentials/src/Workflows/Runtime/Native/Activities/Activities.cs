@@ -18,14 +18,21 @@ public sealed class WriteLine : Activity
     }
 }
 
-/// <summary>The old core's WriteLines: each line on its own, in order, where <see cref="WriteLine"/> writes. Null or empty writes nothing.</summary>
+/// <summary>
+/// The old core's WriteLines: each line on its own, in order, where <see cref="WriteLine"/> writes. Null or empty writes
+/// nothing. A line is a string, or a number or Boolean written as its JSON text; anything else faults.
+/// </summary>
 public sealed class WriteLines : Activity
 {
-    [Input] public List<string>? Lines { get; set; }
+    [Input] public JsonNode? Lines { get; set; }
 
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
     {
-        foreach (var line in Lines ?? []) WriteLine.Out?.WriteLine(line);
+        if (Lines is null) return new(Complete());
+        if (Lines is not JsonArray lines || lines.Any(line => line is not JsonValue))
+            return new(Fault("writelines.lines.invalid", "WriteLines takes a list of strings, numbers or Booleans."));
+        var text = lines.Select(line => line!.GetValueKind() == System.Text.Json.JsonValueKind.String ? line.GetValue<string>() : line.ToJsonString()).ToList();
+        foreach (var line in text) WriteLine.Out?.WriteLine(line);
         return new(Complete());
     }
 }
@@ -43,7 +50,7 @@ public sealed class Break : Activity
 
 /// <summary>
 /// The old core's Fault: a deliberate fault with the authored code and message, blank ones taking the defaults, and the
-/// optional category and fault type recorded with it.
+/// optional category and fault type recorded with it as authored.
 /// </summary>
 public sealed class Fault : Activity
 {
@@ -58,12 +65,11 @@ public sealed class Fault : Activity
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) =>
         new(new Transition(TransitionKind.Fault, Fault: new ActivityFault(Coalesce(Code, DefaultCode), Coalesce(Message, DefaultMessage))
         {
-            Category = Blank(Category),
-            FaultType = Blank(FaultType),
+            Category = Category,
+            FaultType = FaultType,
         }));
 
-    private static string Coalesce(string? value, string fallback) => Blank(value) ?? fallback;
-    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string Coalesce(string? value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 }
 
 /// <summary>A variable write is an engine intrinsic: the interpreter applies it, as Elsa 4's Set intrinsic.</summary>

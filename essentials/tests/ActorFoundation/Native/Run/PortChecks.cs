@@ -38,19 +38,34 @@ internal static class PortChecks
                 Set("out", "output", Expr("a + ' ' + b + ' ' + c + ' ' + d")), Hold()),
             ("tier", "gold"), ("a", null), ("b", null), ("c", null), ("d", null), ("output", null));
         yield return Workflow("port-switch-invalid", Switch("sw", null, (Case("bad", Expr("'yes'")), Set("s", "a", 1))), ("a", null));
+        yield return Workflow("port-switch-null", Switch("sw", null, (Case("missing", Var("nowhere")), Set("s", "a", 1))), ("a", null));
+        yield return Workflow("port-switch-number", Switch("sw", Literal(2), (Case("2"), Set("s", "a", 1))), ("a", null));
+        // An empty label is a label: the old core allows it, and an empty Value matches it.
+        yield return Workflow("port-switch-blank", Sequence("root", Switch("sw", Literal(""), (Case(""), Set("s", "output", "blank"))), Hold()), ("output", null));
 
         // For: half-open and closed ranges, a negative step, a step away from the end, and Break through an If.
         yield return Workflow("port-for", Sequence("root",
-                For("up", 0, 5, Set("s1", "up", Expr("up + CurrentIndex"))),
-                For("closed", 1, 3, Set("s2", "closed", Expr("closed + CurrentIndex")), endInclusive: true),
-                For("down", 6, 0, Set("s3", "down", Expr("down + CurrentIndex")), step: -2),
+                For("up", 0, 5, Set("s1", "up", Expr("up + Index"))),
+                For("closed", 1, 3, Set("s2", "closed", Expr("closed + Index")), endInclusive: true),
+                For("down", 6, 0, Set("s3", "down", Expr("down + Index")), step: -2),
                 For("away", 0, 5, Set("s4", "away", 99), step: -1),
-                For("broken", 0, 10, Sequence("body", If("stop", Expr("CurrentIndex == 2"), Break("brk")), Set("s5", "broken", Expr("broken + CurrentIndex")))),
-                Set("out", "output", Expr("up + ' ' + closed + ' ' + down + ' ' + away + ' ' + broken")), Hold()),
-            ("up", 0), ("closed", 0), ("down", 0), ("away", 0), ("broken", 0), ("output", null));
+                For("pinned", 0, Var("n"), Set("s6", "n", Expr("n + 1"))),
+                For("downto", 3, 1, Set("s7", "downto", Expr("downto + Index")), step: -1, endInclusive: true),
+                For("broken", 0, 10, Sequence("body", If("stop", Expr("Index == 2"), Break("brk")), Set("s5", "broken", Expr("broken + Index")))),
+                Set("out", "output", Expr("up + ' ' + closed + ' ' + down + ' ' + away + ' ' + n + ' ' + downto + ' ' + broken")), Hold()),
+            ("up", 0), ("closed", 0), ("down", 0), ("away", 0), ("n", 3), ("downto", 0), ("broken", 0), ("output", null));
         yield return Workflow("port-for-zero", For("zero", 0, 5, Set("s", "a", 1), step: 0), ("a", null));
         // Each pass of a For is its own activation: an outbound effect in the body gets a key per index.
-        yield return Workflow("port-for-effects", For("each", 0, 3, Email("mail", "ops@example.com", Expr("'pass ' + CurrentIndex"), "body")));
+        yield return Workflow("port-for-effects", For("each", 0, 3, Email("mail", "ops@example.com", Expr("'pass ' + Index"), "body")));
+        yield return Workflow("port-do-effects", Do("each", Expr("count < 3"), Sequence("body", Set("inc", "count", Expr("count + 1")), Email("mail", "ops@example.com", "pass", "body"))), ("count", 0));
+
+        // Bodies that wait, so that each loop and the Switch resume from committed state in later turns.
+        yield return Workflow("port-suspend", Sequence("root",
+                For("for", 0, 2, Sequence("fb", Delay("fd", 5), Set("fs", "f", Expr("f + Index")))),
+                Do("do", Expr("d < 2"), Sequence("db", Delay("dd", 5), Set("ds", "d", Expr("d + 1")))),
+                Switch("sw", Var("tier"), (Case("gold"), Sequence("sb", Delay("sd", 5), Set("ss", "s", "gold")))),
+                Set("out", "output", Expr("f + ' ' + d + ' ' + s")), Hold()),
+            ("f", 0), ("d", 0), ("s", null), ("tier", "gold"), ("output", null));
 
         // Do: the body runs once before the condition is read, then while it holds; Break ends it without reading it.
         yield return Workflow("port-do", Sequence("root",
@@ -68,13 +83,18 @@ internal static class PortChecks
                 While("loop", true, Flowchart("flow",
                     [Set("inc", "n", Expr("n + 1")), If("decide", Expr("n == 3")), Break("brk2")],
                     [new("inc", "decide"), new("decide", "brk2", "True")])),
-                Set("out", "output", Expr("seen + ' ' + n")), Hold()),
-            ("seen", 0), ("n", 0), ("output", null));
+                // An If in a Flowchart whose branch breaks ends the Flowchart, and the loop, on Break.
+                While("loop2", true, Flowchart("flow2",
+                    [Set("inc2", "m", Expr("m + 1")), If("decide2", Expr("m == 2"), Break("brk3"))],
+                    [new("inc2", "decide2")])),
+                Set("out", "output", Expr("seen + ' ' + n + ' ' + m")), Hold()),
+            ("seen", 0), ("n", 0), ("m", 0), ("output", null));
 
-        foreach (var child in new[] { "port-switch-invalid", "port-for-zero", "port-fault", "port-fault-default" })
+        foreach (var child in new[] { "port-switch-invalid", "port-switch-null", "port-switch-number", "port-for-zero", "port-lines-invalid", "port-fault", "port-fault-default" })
             yield return Workflow("port-parent-" + child, Sequence("root", Dispatch("child", child, wait: true).Capture("result"), Hold()), ("result", null));
 
-        yield return Workflow("port-lines", Sequence("root", WriteLines("lines", Expr("['one', 'two']")), WriteLines("none", Literal(null))));
+        yield return Workflow("port-lines", Sequence("root", WriteLines("lines", Expr("['one', 2, true]")), WriteLines("none", Literal(null))));
+        yield return Workflow("port-lines-invalid", WriteLines("lines", Expr("[['nested']]")));
         yield return Workflow("port-fault", Fault("f", "order.rejected", "The order was rejected.", "business", "Validation"));
         yield return Workflow("port-fault-default", Fault("f", " ", null));
     }
@@ -89,10 +109,10 @@ internal static class PortChecks
         foreach (var workflow in Workflows()) registry.Add(workflow);
 
         check(Refused(() => Workflow("dupe", Switch("sw", null, (Case("a"), null), (Case("a"), null)))) &&
-              Refused(() => Workflow("blank", Switch("sw", null, (Case(""), null)))) &&
+              Refused(() => Workflow("cases", Node<Sequence>("seq").Also(n => n.Cases.Add(Case("a"))))) &&
               Refused(() => Workflow("stray", Node<Switch>("sw").With(Set("s", "a", 1).In("Case:missing")))) &&
               Refused(() => Workflow("twice", Node<Switch>("sw").With(Set("s1", "a", 1).In("Default"), Set("s2", "a", 2).In("Default")))),
-            "a Switch with a repeated or empty label, or a branch outside a case's slot or twice in one, is refused when it is registered");
+            "a Switch with a repeated label or a branch outside a case's slot or twice in one, and cases on another node, are refused when it is registered");
 
         var original = WriteLine.Out;
         var lines = new StringWriter();
@@ -121,20 +141,34 @@ internal static class PortChecks
                 check(value == "gold default gold default",
                     $"{mode}: a case without a condition matches Value; no match runs the default or completes with Default; an empty case completes with its label ('{value}')");
                 var loops = Output(await Run("port-for"));
-                check(loops == "10 6 12 0 1", $"{mode}: For walks [0,5), [1,3], 6 down by 2, nothing for a step away from the end, and stops on Break ('{loops}')");
+                check(loops == "10 6 12 0 6 6 1",
+                    $"{mode}: For walks [0,5), [1,3], 6 down by 2, nothing for a step away from the end, a range pinned at the start, [3,1] down by 1, and stops on Break ('{loops}')");
                 var passes = Output(await Run("port-do"));
                 check(passes == "1 3 2", $"{mode}: Do runs once on a false condition, repeats while it holds, and stops on Break ('{passes}')");
                 var broken = Output(await Run("port-break"));
-                check(broken == "1 3", $"{mode}: Break ends ForEach through a Switch and While through a Flowchart ('{broken}')");
+                check(broken == "1 3 2", $"{mode}: Break ends ForEach through a Switch, and While through a Flowchart, from a node and from an If's branch ('{broken}')");
+                var blankLabel = Output(await Run("port-switch-blank"));
+                check(blankLabel == "blank", $"{mode}: an empty label is a label, and an empty Value matches it ('{blankLabel}')");
 
                 await Run("port-for-effects");
                 var mails = outbound.Where(o => o.Effect is EmailSendEffect && o.Instance.Ref.Id == $"0/port-for-effects-{mode}").ToList();
                 var keys = mails.Select(m => EffectKey.For(m.Instance, m.Node, m.IterationPath, m.Attempt)).Distinct().Count();
                 check(mails.Count == 3 && keys == 3, $"{mode}: each For pass is its own activation, with its own effect key ({mails.Count} mails, {keys} keys)");
+                await Run("port-do-effects");
+                var doMails = outbound.Where(o => o.Effect is EmailSendEffect && o.Instance.Ref.Id == $"0/port-do-effects-{mode}").ToList();
+                var doKeys = doMails.Select(m => EffectKey.For(m.Instance, m.Node, m.IterationPath, m.Attempt)).Distinct().Count();
+                check(doMails.Count == 3 && doKeys == 3, $"{mode}: each Do pass is its own activation, with its own effect key ({doMails.Count} mails, {doKeys} keys)");
+
+                var suspendId = $"port-suspend-{mode}";
+                owner.Worker.Post(new Message($"{suspendId}#start", InstanceRef.In(0, suspendId), Kinds.Start, Start: NativeModel.Spec("port-suspend", mode)), fresh: true);
+                await owner.PumpAsync(poll: true, keepPolling: true, until: () => Output(owner.State($"0/{suspendId}")) is not null);
+                var resumed = Output(owner.State($"0/{suspendId}"));
+                check(resumed == "1 2 gold", $"{mode}: For, Do and Switch go on from committed state when their bodies wait across turns ('{resumed}')");
 
                 lines.GetStringBuilder().Clear();
                 await Run("port-lines");
-                check(lines.ToString() == $"one{Environment.NewLine}two{Environment.NewLine}", $"{mode}: WriteLines writes each line in order and nothing for none");
+                check(lines.ToString() == string.Join("", new[] { "one", "2", "true" }.Select(l => l + Environment.NewLine)),
+                    $"{mode}: WriteLines writes each line in order, a number or Boolean as its JSON text, and nothing for none");
 
                 // A parent that waits for the child reads its terminal status and the fault it ended with.
                 async Task<DispatchResult?> Child(string workflow)
@@ -147,6 +181,13 @@ internal static class PortChecks
                 var invalid = await Child("port-switch-invalid");
                 check(invalid?.Status == "Faulted" && FaultOf(invalid)?.Code == "switch.condition.invalid",
                     $"{mode}: a reached condition that is not a Boolean faults the Switch ({invalid?.Status} {FaultOf(invalid)?.Code})");
+                var nullCondition = await Child("port-switch-null");
+                check(nullCondition?.Status == "Faulted" && FaultOf(nullCondition)?.Code == "switch.condition.invalid",
+                    $"{mode}: a condition that evaluates to null faults, as on the old core ({FaultOf(nullCondition)?.Code})");
+                var number = await Child("port-switch-number");
+                check(number?.Status == "Faulted" && FaultOf(number)?.Code == "switch.value.invalid", $"{mode}: a Value that is not a string faults the Switch ({FaultOf(number)?.Code})");
+                var badLines = await Child("port-lines-invalid");
+                check(badLines?.Status == "Faulted" && FaultOf(badLines)?.Code == "writelines.lines.invalid", $"{mode}: a line that is not a scalar faults WriteLines ({FaultOf(badLines)?.Code})");
                 var zero = await Child("port-for-zero");
                 check(zero?.Status == "Faulted" && FaultOf(zero)?.Code == "for.step.invalid", $"{mode}: a zero step faults the For ({zero?.Status} {FaultOf(zero)?.Code})");
                 var authored = await Child("port-fault");
@@ -162,6 +203,12 @@ internal static class PortChecks
         {
             WriteLine.Out = original;
         }
+    }
+
+    private static Node Also(this Node node, Action<Node> change)
+    {
+        change(node);
+        return node;
     }
 
     private static bool Refused(Action register)
