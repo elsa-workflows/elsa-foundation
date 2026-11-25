@@ -27,6 +27,8 @@ K10's definitions-to-kernel path in the [program plan](../program-goals/clean-sl
   - The publication preflight (`WorkflowPublicationPreflightReader`, a sealed class) extracts the old core's triggers
     through `IWorkflowTriggerBindingExtractor` and compares them with the old trigger index. A kernel host replaces
     that extractor with one that reports no old-core triggers, so the preflight checks only the slot and its policy.
+    A test run (`StartWorkflowTestRunRequestHandler`) reads the same extractor, so on a kernel host it sees no
+    old-core triggers either; test runs on the kernel are outside this path.
     The kernel's own route and schedule checks run in the coordinator (step 2 below). The handler's short-cut for an
     unchanged republish still answers from the slot.
 - **Publication slots.** ADR 0043's slots, kept by [ADR 0099](../adr/0099-clean-slate-execution-kernel.md), stay
@@ -114,13 +116,14 @@ sequenceDiagram
 - **Instance reads by definition.** The workflow actor's `definition` label holds the definition id, which Studio's
   instance lists filter on, and the artifact id moves into the workflow header's type data, where the actor finds the
   workflow to run. The header's four labels stay as they are: definition, the answered migration plan, and a model's
-  two.
+  two. A migration plan selects its instances by the `definition` label and then by the artifact in their type data,
+  and a migration's `Rebind` changes the artifact in the type data, not the label.
 
 ## Mapping rules
 
-**Activity types** resolve through `NativeActivityCatalog.Resolve`, which takes the catalog key, the declared key a
-compiled node carries, and the intrinsic keys. A compiled intrinsic node carries `elsa.intrinsic.{kind}`; the mapper
-maps `IntrinsicKind` (Set, SetOutput, SetCorrelationId, SetInstanceName, Finish) and its variable target directly.
+**Activity types** resolve through `NativeActivityCatalog.Resolve`, which takes the catalog key and the declared key a
+compiled node carries. A compiled intrinsic node carries `elsa.intrinsic.{kind}` and skips `Resolve`: the mapper maps
+its `IntrinsicKind` (Set, SetOutput, SetCorrelationId, SetInstanceName, Finish) and its variable target directly.
 Merge, Reduce, Return and Control intrinsics are refused. One of the eight hidden activities, or an unknown type, is
 refused with the node named.
 
@@ -167,9 +170,11 @@ workflow's variables. Container-scoped variables are refused until the mapper sl
 - **Ambient variables.** JavaScript reads visible variables as `variables.X` and through `getVariable`. So the model
   passes the frame's visible variables by name with each evaluation, as the old evaluator does.
 - **The host.** It supplies `INativeExpressions` on `NativeExecutionOptions`, a synchronous evaluator, because bindings
-  are evaluated synchronously inside a turn. The Workbench adapter calls the registered `IPortableExpressionEvaluator`,
-  which applies the purity rules of the binding-pure profile and normalizes the result by its type. It faults when the
-  evaluation does not complete synchronously.
+  are evaluated synchronously inside a turn. The Workbench adapter calls the default shell's
+  `IPortableExpressionEvaluator`, which applies the purity rules of the binding-pure profile and normalizes the result
+  by its type. That evaluator and its handlers are scoped services of the shell, so the adapter opens a scope of the
+  shell's service provider once per turn that evaluates an expression, and evaluates every expression of that turn in
+  it. It faults when an evaluation does not complete synchronously.
   - JavaScript runs on the portable Jint evaluator, which completes synchronously, refuses any other profile, and
     strips the clock, randomness and I/O.
   - Liquid renders through the registered handler, which completes synchronously with the built-in filters and fixes
@@ -191,7 +196,8 @@ coordinator and preflight, and shares the kernel's registry between the root hos
 2. The expression seam in the Native model, with `VariableBinding` paths and ambient variables, and checks on a
    stand-in evaluator.
 3. The host evaluator in the Workbench, over `IPortableExpressionEvaluator`.
-4. The workflow actor's definition label and artifact pinning, and `NativeSchedules` keyed by definition.
+4. The workflow actor's definition label and artifact pinning, with migration plans selecting by both, and
+   `NativeSchedules` keyed by definition.
 5. `NativeExecutableMapper`, with checks from compiled executables of the GA test drive's workflows.
 6. The kernel coordinator and the kernel trigger extractor, with activate, deactivate, refusal, discard, revert and
    ensure-serving checks.
