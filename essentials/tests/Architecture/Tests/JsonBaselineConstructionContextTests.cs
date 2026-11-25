@@ -509,7 +509,10 @@ public sealed class JsonBaselineConstructionContextTests
         {
             var prefix = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())) + Path.DirectorySeparatorChar;
             Assert.StartsWith(prefix, Path.GetFullPath(root), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-            Directory.Delete(root, recursive: true);
+            // Windows keeps an image loaded into the test process locked; the temp tree is left for the OS then.
+            try { Directory.Delete(root, recursive: true); }
+            catch (UnauthorizedAccessException) when (OperatingSystem.IsWindows()) { }
+            catch (IOException) when (OperatingSystem.IsWindows()) { }
         }
     }
 }

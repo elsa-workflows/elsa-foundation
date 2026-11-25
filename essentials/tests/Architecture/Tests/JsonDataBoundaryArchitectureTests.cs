@@ -62,6 +62,11 @@ public sealed class JsonDataBoundaryArchitectureTests
             "Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ActivityLayoutRecordsPayload|Elsa.Activities.Design.Api.Commands.ActivityLayoutRecordsPayloadJsonConverter",
             "Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ActivityNodePresentationPayload|Elsa.Activities.Design.Api.Commands.ActivityPresentationPayloadConverter",
             "Elsa.Etl.Design.Api.EtlDesignJsonContext|Elsa.Etl.Core.EtlPipelineV2|Elsa.Etl.Design.Api.EtlPipelineV2JsonConverter",
+            // Authored workflow members: re-emits each member through the caller's options (raw JsonElement data) and omits only isNullable.
+            "Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Api.Models.WorkflowDefinitionStateView.inputs|System.Collections.Generic.IEnumerable`1[Elsa.Activities.Design.Core.Models.InputDefinition]|Elsa.Workflows.Design.Api.Models.AuthoredWorkflowMemberListJsonConverter`1[Elsa.Activities.Design.Core.Models.InputDefinition]",
+            "Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Api.Models.WorkflowDefinitionStateView.outputs|System.Collections.Generic.IEnumerable`1[Elsa.Activities.Design.Core.Models.OutputDefinition]|Elsa.Workflows.Design.Api.Models.AuthoredWorkflowMemberListJsonConverter`1[Elsa.Activities.Design.Core.Models.OutputDefinition]",
+            // The registered ValueTypeDescriptor adapter (docs/serialization.md): the selected options minus itself.
+            "Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Primitives.Models.ValueTypeDescriptor|Elsa.Serialization.Core.ValueTypeDescriptorJsonConverter",
             "Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceDetailsView.outputs|System.Collections.Generic.IReadOnlyDictionary`2[System.String,Elsa.Workflows.Runtime.Api.Models.WorkflowOutputView]|Elsa.Workflows.Runtime.Api.Models.WorkflowOutputsJsonConverter"
         }, snapshot.OpaqueConverters);
     }
