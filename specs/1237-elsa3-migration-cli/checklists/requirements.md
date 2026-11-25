@@ -30,4 +30,4 @@
 
 ## Notes
 
-- Provisional on the ADR 0076 amendment (spec Q4). SC-004's composite case waits on the engine gap (spec Q2).
+- Provisional on the ADR 0076 amendment (spec Q4).
