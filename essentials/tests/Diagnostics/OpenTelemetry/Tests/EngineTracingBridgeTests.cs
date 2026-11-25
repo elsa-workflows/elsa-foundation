@@ -5,6 +5,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Providers.InMemory;
 using Elsa.Diagnostics.OpenTelemetry.Services;
 using Elsa.Diagnostics.OpenTelemetry.Workflows;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;

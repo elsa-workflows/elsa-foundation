@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
-using Elsa.Workflows.Runtime.Diagnostics;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Secrets.Workflows.Tests.Support;
