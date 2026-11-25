@@ -70,6 +70,12 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
     await expectUncovered(page.locator(".cm-completionInfo"), "Declared-type note");
     // The note box belongs to the completion popup; at narrow widths CodeMirror places it over the following options.
     await expectUncovered(list(), "Completion popup");
+    // The note never hides an option: each option's centre hits the option itself.
+    const hidden = await list().getByRole("option").evaluateAll(items => items.flatMap(item => {
+      const rect = item.getBoundingClientRect(), hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return hit && item.contains(hit) ? [] : [`${item.textContent} under ${hit?.className}`];
+    }));
+    expect(hidden, "Every completion option stays visible beside the note").toEqual([]);
   }
   /** Nothing on the page paints over the popup: every sampled point inside it hits the popup itself. */
   async function expectUncovered(box: ReturnType<Page["locator"]>, what: string) {
@@ -207,5 +213,8 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await expect.poll(inserted, { message: "The whole conn variable is inserted and saved as a parameter" }).not.toBeNull();
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   await expect(large).toHaveText(`${beforeInsert}args.${await inserted()}`);
+  // The editor scrolls to the inserted reference, so its end is on screen at narrow widths too.
+  await expect.poll(() => expanded.locator(".cm-scroller").evaluate(scroller =>
+    scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 2), { message: "The inserted reference is scrolled into view" }).toBe(true);
   await capture(page, info, "chooser-typed-variable-whole");
 }
