@@ -92,7 +92,8 @@ reason it is there. That tells me what my host must compose.
 what they carry over.
 
 **Independent Test**: Open the host's composition and its reasons file (the README shows it). Every feature has a reason: a JTest suite or
-template, the designer, the `migrated/` folder, or another listed feature that requires it.
+template, the S-15 run configuration, the designer, the `migrated/` folder, another listed feature that requires it, or
+what the host runs on.
 
 **Acceptance Scenarios**:
 

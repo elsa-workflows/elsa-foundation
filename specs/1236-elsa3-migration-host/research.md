@@ -45,8 +45,8 @@ acceptance set and templates from the merged S-15, or from the head current at t
     features through the `DependencyContext` and fails activation with `FeatureNotFoundException` for an unknown one;
   - `MapFoundationHealth`, which maps `/health/live` and `/health/ready`; readiness returns 200 once the default shell
     is active, which is what *Refusing to start* in the spec relies on;
-  - `AddEfPersistenceResources`, with a migration-host `IEfToolingShellDefaults` type and its
-    `[assembly: EfToolingShellDefaults(...)]` attribute, as `WorkbenchEfToolingShellDefaults` is for the Workbench;
+  - no `AddEfPersistenceResources`: main's essentials host doesn't call it (only the Workbench does, without
+    `AddFoundationShellHosting`), and its EF features read `ConnectionStrings:Elsa`, so this host does the same;
   - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` (EF key store) and
     `AddShellStartupValidation`;
   - the initiative's JSON baseline (S-9, ADR 0091) at host level, as the Workbench and `Elsa.Foundation.Host`
@@ -189,8 +189,11 @@ and the folder settings. `FeatureCompositionTests` already proves each feature c
   uses at startup. An engineer who starts the built assembly another way passes absolute paths and sets
   `ASPNETCORE_ENVIRONMENT=Development`; without it the host runs as Production and `DevelopmentOrDemoGuard` refuses
   to start it (R-2). The README says so.
-- **Data.** The persistence resource `Elsa` points at `Data Source=data/elsa.db`. Nothing in the persistence code
-  creates the folder, so the host creates `data/` at startup when it is missing. `data/` is git-ignored.
+- **Data.** `ConnectionStrings:Elsa` is `Data Source=data/elsa.db`, as main's essentials host configures its EF
+  features. Nothing in the persistence code
+  creates the folder, so the host creates `data/` at startup when it is missing. `data/` is git-ignored, and so is
+  the `nuplane.lock.json` that `AddFoundationNuplane` may write to the content root (the root `.gitignore` already
+  ignores it for the Workbench and the Studio hosts).
   `Migrate:Policy` is `AutoMigrate`. In development mode the OpenIddict store is in memory (main,
   `OpenIddictVendorStoreRegistration`), so no identity database file is configured.
 - **Identity.**

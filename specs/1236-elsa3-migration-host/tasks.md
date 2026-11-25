@@ -28,7 +28,7 @@ short worktree path (MSB3030).
 
   Then:
   - add both to `Elsa.Server.slnx`, and regenerate the solution filters and the dependency map;
-  - register the test project as PR tier in `tools/ci/test-tiers.json`;
+  - register the test project as PR tier in `tools/ci/test-tiers.json`, in exactly one PR shard;
   - add `Elsa.Migration.Host` to `ArchitectureGuardTests.ExpectedProjectPath` and `ExpectedSolutionFolder` the way
     `Elsa.Essentials.Host` is listed, and run `ArchitectureGuardTests` (R-1).
 
@@ -50,8 +50,6 @@ short worktree path (MSB3030).
   - the configuration order of R-3 (`shells.Local.json` and user secrets re-added above the shells files);
   - `AddFoundationShellHosting` with `WithHostAssemblies()` and `MapFoundationHealth` (`/health/live`,
     `/health/ready`);
-  - `AddEfPersistenceResources`, with `MigrationHostEfToolingShellDefaults` and its
-    `[assembly: EfToolingShellDefaults(...)]` attribute;
   - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` and `AddShellStartupValidation`;
   - the JSON baseline: `AddElsaJsonResponseHeaders()` and `ConfigureHttpJsonOptions` with `JsonBaseline.Configure`
     and `StrictDateTimeConverters.Configure(..., apiMode: true)`, as the Workbench registers them (R-2);
@@ -67,7 +65,7 @@ short worktree path (MSB3030).
 
   `AddFoundationNuplane` with no feed and no shared assemblies, so no package loads (R-6).
 - [ ] T006 Write `appsettings.json` and the settings in `shells.json` (R-6):
-  - the `Elsa` resource at `data/elsa.db`, with `Migrate:Policy` `AutoMigrate`;
+  - `ConnectionStrings:Elsa` set to `Data Source=data/elsa.db`, with `Migrate:Policy` `AutoMigrate`;
   - development identity with the seeded administrator (the OpenIddict store is in memory in development mode);
   - the development-only demo keys R-6 lists (runtime recovery continuation and hierarchy cursor signing keys, the
     workflow alteration payload protection keys);
@@ -76,7 +74,7 @@ short worktree path (MSB3030).
   - the two reconciliation features with `SourceId` `elsa3-migration`, `PublishOnReconcile` `true`, and the sample
     folder paths.
 
-  Add `.gitignore` entries for `data/` and `shells.Local.json`. Add the sample
+  Add `.gitignore` entries for `data/`, `shells.Local.json` and `nuplane.lock.json`. Add the sample
   `migrated/workflows/hello.json` (an HTTP trigger and `WriteHttpResponse`, with a fixed `definitionId`) and `migrated/activities/activities.json`
   (`[]`) (FR-011).
 

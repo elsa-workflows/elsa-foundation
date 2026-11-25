@@ -48,7 +48,7 @@ activity reconciliation, main's OpenIddict store library (R-7), and `jtest` for 
 | §E2.7 Elsa 3 behind the import boundary | PASS | The host references no `Elsa3.*` project or package; a closure test checks it (R-5). It lives in `apps/`, not in the `Elsa3` domain (R-1). |
 | §E2.2 Runtime takes no Design reference | PASS | No runtime project changes; the host composes existing features. |
 | §E5 packaging, reserved `Elsa.Server` name | PASS | The host isn't packed or published, and doesn't take the reserved name. |
-| §E7 CI test tiers | PASS | The new test project goes into `tools/ci/test-tiers.json` as PR tier, with no child host of 2 minutes or more. |
+| §E7 CI test tiers | PASS | The new test project goes into `tools/ci/test-tiers.json` as PR tier, in one PR shard, with no child host of 2 minutes or more. |
 | §2.2 project paths follow the domain tree; §E2.1 groupings | PASS | `ArchitectureGuardTests.ExpectedProjectPath` and `ExpectedSolutionFolder` name each `apps/` host; T002 adds `Elsa.Migration.Host`. The test project's path is name-derived. §E2.1 is unchanged, as for main's other `apps/` hosts (R-1, R-11). |
 | §2.5, §2.23.1 every feature composes | PASS | No feature is added. |
 | Framework gate §2.20 "Only admitted projects resolve EF Core packages"; ADR 0073 | PASS | The host resolves EF through the composed features, so it is admitted in `EfCoreDependencyGuardTests`: its name in `AllowedEfConsumers`, a reviewed package array, and an arm in `ReviewedEfPackages` (R-9, T004). |
@@ -97,7 +97,6 @@ specs/1236-elsa3-migration-host/
 apps/Elsa.Migration.Host/
 ├── Elsa.Migration.Host.csproj     # project references of every composed feature; not packed
 ├── Program.cs                      # host wiring (R-2)
-├── MigrationHostEfToolingShellDefaults.cs
 ├── appsettings.json                # persistence, logging
 ├── appsettings.Development.json    # development overrides (read by the host-services guard)
 ├── Properties/launchSettings.json  # Development, fixed local URL (R-2)

@@ -9,7 +9,9 @@ files and records this feature defines.
 - **Fields per feature**: the CShells feature name (the key) and its settings (the value, often `{}`).
 - **Reason**: one entry per feature in `composition-reasons.json` next to `shells.json` (feature name → reason), shown
   by the README. The reason is one
-  of the following: a JTest suite or template; "Studio designer"; "migrated folder"; or "required by <feature>".
+  of the following: a JTest suite or template; "S-15 run configuration"; "Studio designer"; "migrated folder";
+  "required by <feature>" (a `DependsOn` or a service the feature resolves at runtime); or "host need" (hosting,
+  persistence or locking the host runs on).
 - **Rule**: the set of features in `shells.json` equals the set of keys in `composition-reasons.json` (FR-004, R-5).
 
 ## Migrated folder
