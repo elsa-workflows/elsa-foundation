@@ -85,7 +85,8 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
       const ys = [rect.top + 3, rect.top + rect.height / 2, rect.bottom - 3];
       for (const x of xs) for (const y of ys) {
         const hit = document.elementFromPoint(x, y);
-        if (hit && !element.contains(hit)) hits.push(`${Math.round(x)},${Math.round(y)} ${hit.tagName.toLowerCase()}.${[...hit.classList].join(".")}`);
+        // A point outside the viewport hits nothing, so the user cannot see that part of the popup either.
+        if (!hit || !element.contains(hit)) hits.push(`${Math.round(x)},${Math.round(y)} ${hit ? `${hit.tagName.toLowerCase()}.${[...hit.classList].join(".")}` : "off-screen"}`);
       }
       const chain: string[] = [];
       for (let node: Element | null = element; node; node = node.parentElement) {
