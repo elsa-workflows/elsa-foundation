@@ -424,8 +424,8 @@ public sealed class GraphActivityProvider(
 
         if (node is null)
             return [];
-        // Exact reads leave a wrongly cased or missing argument list unbound; MalformedArguments refuses the wrongly
-        // cased one. Structure projections and the usage below read it as empty.
+        // Exact reads leave a missing or wrongly cased argument list null; MalformedArguments refuses both.
+        // Structure projections and the usage below read it as empty so the walk can finish.
         node = node with { Inputs = node.Inputs ?? [], Outputs = node.Outputs ?? [] };
 
         var projection = activityStructureService.ProjectInputs(node);
@@ -558,7 +558,7 @@ public sealed class GraphActivityProvider(
                 {
                     diagnostics.Add(Diagnostic(
                         ArgumentMalformedCode,
-                        $"A graph node's '{propertyName}' must be a list of arguments, each with a non-empty 'referenceKey' and, when bound, an expression 'value' object.",
+                        $"A graph node's '{propertyName}' must be a list of arguments ([] when it has none), each with a non-empty 'referenceKey' and, when bound, an expression 'value' object.",
                         subject,
                         $"{candidate.JsonPointer}{pointer}"));
                 }
@@ -1303,8 +1303,8 @@ public sealed class GraphActivityProvider(
         {
             if (string.IsNullOrWhiteSpace(item.Node.NodeId) || string.IsNullOrWhiteSpace(item.Node.ActivityVersionId))
                 continue;
-            // The exact node reader leaves a missing or wrongly cased argument list null. MalformedArguments reports the
-            // wrongly cased one; every later read sees an empty list instead of failing.
+            // The exact node reader leaves a missing or wrongly cased argument list null. MalformedArguments refuses
+            // both; every later read sees an empty list instead of failing.
             if (item.Node.Inputs is null || item.Node.Outputs is null)
                 item.Node = item.Node with { Inputs = item.Node.Inputs ?? [], Outputs = item.Node.Outputs ?? [] };
             var pointer = pointers.GetValueOrDefault(item.Node.NodeId, "/rootActivity");
@@ -1515,22 +1515,32 @@ public sealed class GraphActivityProvider(
         return node is not null;
     }
 
-    // The relative pointer of each argument the activity node reader cannot read, or that has no reference key.
+    // The relative pointer of a missing or null argument list, or of each argument the activity node reader cannot
+    // read or that has no reference key. A node with no arguments carries an empty list.
     private static IEnumerable<string> MalformedArguments(JsonElement node, string propertyName)
     {
         if (node.ValueKind != JsonValueKind.Object)
             yield break;
 
         // The node reader is exact (spec 1207): a list under any other casing would be silently ignored, so it is refused.
+        var misnamed = false;
         foreach (var variant in node.EnumerateObject())
             if (string.Equals(variant.Name, propertyName, StringComparison.OrdinalIgnoreCase) && !string.Equals(variant.Name, propertyName, StringComparison.Ordinal))
+            {
+                misnamed = true;
                 yield return $"/{EscapePointer(variant.Name)}";
+            }
 
-        if (!node.TryGetProperty(propertyName, out var arguments) || arguments.ValueKind == JsonValueKind.Null)
+        // A missing list is refused too, unless a wrongly cased one already stands in its place.
+        if (!node.TryGetProperty(propertyName, out var arguments))
+        {
+            if (!misnamed)
+                yield return $"/{EscapePointer(propertyName)}";
             yield break;
+        }
 
         var name = EscapePointer(propertyName);
-        if (arguments.ValueKind != JsonValueKind.Array)
+        if (arguments.ValueKind != JsonValueKind.Array) // null included
         {
             yield return $"/{name}";
             yield break;
