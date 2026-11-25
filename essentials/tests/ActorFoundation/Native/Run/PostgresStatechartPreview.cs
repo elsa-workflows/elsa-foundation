@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Statecharts.OrderFixture;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Postgres;
 using Kernel.Native;
 using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;

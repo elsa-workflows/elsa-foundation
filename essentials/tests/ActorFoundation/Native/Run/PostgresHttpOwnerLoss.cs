@@ -3,6 +3,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Kernel.EntityFramework;
+using Kernel.Foundation.Postgres;
 using Kernel.Native;
 using Kernel.Runtime.Hosting;
 using Kernel.WorkflowActor;

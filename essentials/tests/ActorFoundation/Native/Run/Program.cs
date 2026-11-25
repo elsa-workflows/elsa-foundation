@@ -42,6 +42,10 @@ if (args is ["pg-http-owner-loss", var ownerFence and ("checked" or "in-batch"),
     return await PostgresHttpOwnerLoss.RunAsync(ownerFence, loss);
 if (args is ["pg-http-owner-process", var workerFence and ("checked" or "in-batch"), var pause and ("before" or "after" or "resume"), var ownerRef])
     return await PostgresHttpOwnerLoss.RunOwnerAsync(workerFence, pause, new(ownerRef));
+if (args is ["pg-held-start"]) return await PostgresHeldStartChecks.RunAsync();
+if (args is ["pg-held-reply-order", var orderCallers, var orderStarts] && int.TryParse(orderCallers, out var callerCount) &&
+    int.TryParse(orderStarts, out var startCount))
+    return await PostgresHeldStartChecks.RunOrderAsync(callerCount, startCount);
 if (args is ["pg-http-preview", var httpFence and ("checked" or "in-batch"), var httpSchedule and ("timely" or "late" or "disconnect" or "slow-body" or "blocked" or "clock-delay")])
     return await PostgresHttpPreview.RunAsync(httpFence == "in-batch", httpSchedule);
 if (args is ["pg-root-held-direct", var replyFence and ("checked" or "in-batch")])
