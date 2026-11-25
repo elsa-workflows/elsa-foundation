@@ -25892,6 +25892,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "essentials/src/Activities/Http/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime",
           "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
         },
