@@ -9,8 +9,10 @@ namespace Kernel.Foundation.Postgres;
 /// <summary>Runs one PostgreSQL Core Preview node for the lifetime of its application host.</summary>
 /// <param name="logger">Each fault the node or this service records about its stop is logged once, at Error: a lost
 /// fence or a drain fault, a dispose that returned at its bound, a fault after a kill, and a fault of the shutdown itself.</param>
+/// <param name="replies">How the node answers held callers, on a store with held replies (<see cref="PostgresPreviewHosting.StartAsync"/>).</param>
 public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor,
-    Action<string> endProcess, LoopOptions? options = null, ILogger<PostgresPreviewHostedService>? logger = null) : IHostedService, IAsyncDisposable
+    Action<string> endProcess, LoopOptions? options = null, ILogger<PostgresPreviewHostedService>? logger = null,
+    Kernel.Durable.IReplyTransport? replies = null) : IHostedService, IAsyncDisposable
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Exception, object> _logged = [];     // weak: no exception is kept alive
     private Exception? _shutdownFault;
@@ -55,7 +57,7 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     private async Task<RuntimeNode> StartNodeAsync(CancellationToken cancellationToken)
     {
         using var startup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancelStartup.Token);
-        return await PostgresPreviewHosting.StartAsync(create, node, actor, Escalate, options, startup.Token, Fault);
+        return await PostgresPreviewHosting.StartAsync(create, node, actor, Escalate, options, startup.Token, Fault, replies);
     }
 
     /// <summary>

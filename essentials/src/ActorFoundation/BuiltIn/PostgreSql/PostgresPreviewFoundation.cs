@@ -1,17 +1,31 @@
+using Kernel.Durable;
 using Kernel.EntityFramework;
 using Contract = Kernel.Foundation.Contracts;
 
-namespace Kernel.Native.Run;
+namespace Kernel.Foundation.Postgres;
 
-/// <summary>Public Foundation surfaces for the opt-in PostgreSQL direct-input preview.</summary>
-internal sealed class PostgresPreviewFoundation(
-    PostgresRootAdmission admission,
-    PostgresRootReads reads,
-    string actorType,
-    Func<Contract.BoundScope, string, bool>? authorizeOperator = null,
-    PostgresDirectRequests? directRequests = null) : Contract.IIngress, Contract.IActorReads
+/// <summary>
+/// The Foundation's ingress and reads on a PostgreSQL Core Preview store: durable starts of the configured actor type,
+/// ordinary sends to exact root references, and the reads of those roots. With <see cref="PostgresDirectRequests"/>, on a
+/// store with held replies, a request starts a root or sends to one and holds its caller until the owner answers.
+/// </summary>
+public sealed class PostgresPreviewFoundation : Contract.IIngress, Contract.IActorReads
 {
-    private readonly PostgresRootIngress ingress = new(admission, actorType);
+    private readonly PostgresRootAdmission admission;
+    private readonly PostgresRootReads reads;
+    private readonly Func<Contract.BoundScope, string, bool>? authorizeOperator;
+    private readonly PostgresDirectRequests? directRequests;
+    private readonly PostgresRootIngress ingress;
+
+    /// <summary>The held requests of this Foundation, and the transport its owner answers through: null without held replies.</summary>
+    public PostgresDirectRequests? Requests => directRequests;
+
+    internal PostgresPreviewFoundation(PostgresRootAdmission admission, PostgresRootReads reads, string actorType,
+        Func<Contract.BoundScope, string, bool>? authorizeOperator = null, PostgresDirectRequests? directRequests = null)
+    {
+        (this.admission, this.reads, this.authorizeOperator, this.directRequests) = (admission, reads, authorizeOperator, directRequests);
+        ingress = new(admission, actorType);
+    }
 
     public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
@@ -42,9 +56,9 @@ internal sealed class PostgresPreviewFoundation(
 
     public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
         string? payload, Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default) =>
-        directRequests is not null && target is Contract.Target.Ref exact
-            ? directRequests.RequestAsync(scope, exact.Actor, id, kind, payload, add, request, cancellationToken)
-            : throw new NotSupportedException("This preview supports held direct requests only when the reply profile is enabled.");
+        directRequests is not null && target is Contract.Target.Ref or Contract.Target.Start
+            ? directRequests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken)
+            : throw new NotSupportedException("This preview holds requests only with a reply-capable store and its direct requests.");
 
     public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
         CancellationToken cancellationToken = default) =>

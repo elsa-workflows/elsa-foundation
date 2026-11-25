@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using Kernel.EntityFramework;
 using Kernel.Foundation.InMemory;
+using Kernel.Foundation.Postgres;
 using Kernel.Runtime.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;

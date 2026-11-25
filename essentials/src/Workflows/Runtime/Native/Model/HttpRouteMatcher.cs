@@ -1,12 +1,12 @@
-namespace Kernel.Native.Run;
+namespace Kernel.Native;
 
 /// <summary>Where a request goes: a start route, a wait route's resolved key, or (no template matched) its literal path's key.</summary>
 public sealed record HttpRouteMatch(HttpRoute? Route, string Key, IReadOnlyDictionary<string, string> Values);
 
 /// <summary>
-/// The test edges' route matcher: the model keeps templates and keys and no matcher (the HTTP adapter's work). A request
-/// path is matched segment by segment against the routes of its method, most specific first; literals ignore case, and a
-/// parameter takes one decoded segment, a catch-all the rest.
+/// An HTTP edge's route matcher over <see cref="HttpRoutes"/>, which keeps templates and keys: a request path is matched
+/// segment by segment against the routes of its method, most specific first; literals ignore case, and a parameter takes
+/// one decoded segment, a catch-all the rest.
 /// </summary>
 public static class HttpRouteMatcher
 {

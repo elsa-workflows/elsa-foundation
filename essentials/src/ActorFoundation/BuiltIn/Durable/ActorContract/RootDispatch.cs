@@ -199,8 +199,10 @@ internal sealed partial class ActorAdapter
                 message.Sender is not null || message.EventMatch is not null ||
                 message.ActorAuthored || message.Operator is not null)
                 return "RootDispatchUnavailable";
-            if (message.ReplyTo is not null && (!rootHeldReplies || message.Start is not null ||
-                input.Row?.FoundationDispatchHeader is not { } qualified || delivery.ReplyTenant != qualified.Tenant))
+            // A held caller is answered on a start as on a direct input: the route's tenant is the root's, bound by its
+            // birth on a start and by its checkpoint's header afterwards.
+            if (message.ReplyTo is not null && (!rootHeldReplies || delivery.ReplyTenant is not { } callerTenant ||
+                (message.Start is not null ? message.FoundationRootBinding?.Tenant : input.Row?.FoundationDispatchHeader?.Tenant) != callerTenant))
                 return "RootDispatchUnavailable";
             if (message.Start is not null)
             {
