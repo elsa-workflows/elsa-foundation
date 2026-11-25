@@ -37,6 +37,12 @@ public sealed class CredentialLiteralValidator(
     public async ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(state);
+        // Admission fails closed: a node whose argument list is missing cannot be checked, so the state is refused with
+        // that finding instead (the validation gate reports the same one and runs no validator on such a tree).
+        var malformed = activityTreeWalker.Walk(state.RootActivity, int.MaxValue).SelectMany(ActivityArgumentLists.Refusals).ToArray();
+        if (malformed.Length > 0)
+            return malformed;
+
         var findings = new List<ValidationError>();
         var catalogNodes = activityTreeWalker
             .Walk(state.RootActivity, options.Value.MaxRecursionDepth)
@@ -55,8 +61,7 @@ public sealed class CredentialLiteralValidator(
     {
         foreach (var input in version?.Inputs ?? [])
         {
-            // A missing list is refused by the validation gate (Graph/MalformedArgumentList), not here.
-            var state = node.Inputs?.FirstOrDefault(candidate =>
+            var state = node.Inputs.FirstOrDefault(candidate =>
                 StringComparer.Ordinal.Equals(candidate.ReferenceKey, input.ReferenceKey));
             if (state is null)
                 continue;
