@@ -106,13 +106,16 @@ internal static class PostgresPreviewLifetimeChecks
             await replacement.StopAsync(token);
             Require((await ReadFenceAsync()).Owner is null, "the replacement also releases ownership through application shutdown");
         }
-        await CheckTurnDeadlineAsync();
-        await CheckStartupDeadlineAsync();
-        await CheckStartupRetryAsync();
-        await CheckDisposeDeadlineAsync(stuck: false);
-        await CheckDisposeDeadlineAsync(stuck: true);
-        await CheckDisposeReportsOnceAsync();
-        await CheckJoinedDisposeKillsAsync();
+        // KERNEL_LIFETIME_PROBES=name[,name]: run only these deadline probes after the main flow (for fail-before witnesses).
+        var only = Environment.GetEnvironmentVariable("KERNEL_LIFETIME_PROBES")?.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        bool Probe(string name) => only is null || only.Contains(name, StringComparer.Ordinal);
+        if (Probe("turn-deadline")) await CheckTurnDeadlineAsync();
+        if (Probe("startup-deadline")) await CheckStartupDeadlineAsync();
+        if (Probe("startup-retry")) await CheckStartupRetryAsync();
+        if (Probe("dispose-prompt")) await CheckDisposeDeadlineAsync(stuck: false);
+        if (Probe("dispose-stuck")) await CheckDisposeDeadlineAsync(stuck: true);
+        if (Probe("dispose-report")) await CheckDisposeReportsOnceAsync();
+        if (Probe("dispose-joins")) await CheckJoinedDisposeKillsAsync();
         return 0;
 
         // The first dispose to receive the stop's failure reports it; a second dispose does not throw it again.
