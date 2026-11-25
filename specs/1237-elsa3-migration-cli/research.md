@@ -84,9 +84,13 @@ instead of returning a result, and it is registered only by `Elsa3JsonReconcilia
   diagnostic needs a registered host function), so it would convert silently and fail at run time. FR-016a adds
   `ComponentName` metadata, and gives every matchable call and value read a component code of its own;
   unmatchable calls and forbidden capabilities keep the forbidden-capability code.
-- Guidance strings are constant literals, while some messages interpolate. One example is the strict-mode parse
-  message, which embeds the parser's error description, and that description can quote script text
-  (`Elsa3ExpressionRewriter.cs`, the sloppy-mode message).
+- Several messages, and some guidance, interpolate input text: the strict-mode and safe-lowering parse messages pass
+  the parser's description through (`Elsa3ExpressionRewriter.cs`), the Switch mode and case-condition messages quote
+  literals (`Elsa3SwitchValueSynthesisRewrite.cs`), the Fork join-mode message can quote a whole typed value
+  (`Elsa3ParallelBranchNamesRewrite.cs`), the HTTP status and `canStartWorkflow` messages quote literals
+  (`Elsa3ActivityNormalizer.cs`), the variable starting-value messages echo the value and one guidance builds a
+  suggestion from its items (`Elsa3VariableMapper.cs`), and several sites pass `exception.Message` through
+  (`Elsa3ActivityNormalizer.cs`, `Elsa3DefinitionConverter.cs`).
 - Publish refusals come from Elsa 4 (`ExpressionPublicationValidationException`, `WorkflowExecutableCompilationException`,
   `PublicationActivationException`). Their diagnostics use Elsa 4 codes.
 
@@ -105,7 +109,9 @@ must be changed or reported as a converter gap. Their messages are not copied. E
 `JavaScriptDotNetUsageAnalyzer` puts the call into its message, and `JavaScriptExpressionToolingProvider` passes the
 parser message through. The report therefore takes the text for a code the converter does not own from the code
 table's fixed text, and the code table carries a default text for unknown Elsa 4 codes (FR-019). Messages that embed input text are changed at the converter so that
-they name the cause without the text (FR-019). The sentinel test finds every such message.
+they name the cause without the text (FR-019). The fixture's sentinel test proves only the paths the fixture
+triggers, so T028 audits every interpolated message and guidance string in the Elsa 3 sources and gives each changed
+site a unit test with a sentinel.
 
 ## R-4 In-memory SQLite across modules
 
