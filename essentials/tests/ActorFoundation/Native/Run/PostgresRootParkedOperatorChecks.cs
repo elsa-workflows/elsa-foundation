@@ -19,7 +19,8 @@ namespace Kernel.Native.Run;
 // recovery refuses Suspend. S5b-1: the parked root's view seals its Park selection (revision and time), which admission
 // requires for a Terminate, held or not, on a parked root. The owner ends the root in one commit when its kept rows fit
 // one page: Cancelled and unsuspended with its terminal mark, every kept row cleared and its Park mark gone, journalled
-// "terminated". A stale Park is refused as "selection" and a larger one as "page". Shipped formats carry none of these paths.
+// "terminated". A stale Park is refused as "selection" and a larger one as "page". Of the shipped formats only RootShipped
+// (format 25) takes these paths, the S5b-3b Delete of a parked root among them; the qualification profiles carry none.
 internal static class PostgresRootParkedOperatorChecks
 {
     private static readonly StoreFormat Composed = StoreFormat.Current with { MessageProtocol = 95 };
@@ -56,6 +57,7 @@ internal static class PostgresRootParkedOperatorChecks
     ];
 
     private sealed record InputRow(long Seq, string Id, string Kind, bool Done, short? KeptBy, bool Content);
+    private sealed record ControlRow(long Due, long KeepUntil, string Start);
 
     internal static async Task<int> RunAsync(bool owned, bool inBatch, bool shippedSet = false)
     {
@@ -339,11 +341,11 @@ internal static class PostgresRootParkedOperatorChecks
 
         void ShippedFormatsUnchanged()
         {
-            // S7: of the shipped formats only format 24 carries Park with termination, and it takes the parked-operator paths.
+            // S7: of the shipped formats only format 25 carries Park with termination, and it takes the parked-operator paths.
             Check(RootProfiles.Formats.Where(entry => entry.Key != StoreFormat.RootShipped)
                     .All(entry => (entry.Value & RootCapabilities.ParkOpening) == 0 || (entry.Value & RootCapabilities.Termination) == 0) &&
                 KernelDb.ForPostgresRootShipped(options).UsesRootParkedOperators,
-                "only format 24 carries Park with termination, on the parked-operator paths, so formats 19-22 and 5, 11-17 keep theirs");
+                "only format 25 carries Park with termination, on the parked-operator paths, so formats 19-22 and 5, 11-17 keep theirs");
             foreach (var shipped in new Func<DbContextOptions<KernelDb>, KernelDb>[] { KernelDb.ForPostgresRootParkOpening,
                 KernelDb.ForPostgresRootParkInspection, KernelDb.ForPostgresRootParkArrivals, KernelDb.ForPostgresRootParkRecovery,
                 KernelDb.ForPostgresRootOperators, KernelDb.ForPostgresRootTerminations, KernelDb.ForPostgresRootOperatorReplies })
@@ -961,6 +963,8 @@ internal static class PostgresRootParkedOperatorChecks
             var during = new Dictionary<string, (Contract.ActorRef Root, string Park, string[] Arrivals)>();
             Contract.ActorRef large = default;
             var opened = new Dictionary<string, Action>();
+            var retries = new List<(string Entry, Set.ClearingRow Clearing, int Kept, long Delay, bool Admitted)>();
+            string? parkUnreadableShared = null;
             await using var set = new Set("parked-delete", OpenDelete, owned, inBatch, tenant, stop);
             set.Write = Write;
             await set.InstallAsync(createTables: true);
@@ -1107,30 +1111,32 @@ internal static class PostgresRootParkedOperatorChecks
             set.Answered("del-mid", "started");
             set.Probe.Protects.Remove(mid.Id);
 
-            // Protection that cannot be read at the last page neither deletes nor discards. The control's refusal fails closed:
-            // the owner stands down with the clearing open and the control pending, and the next owner, able to read the
-            // protection again, ends the Delete.
+            // Protection that cannot be read at the last page neither deletes nor discards. The control is refused as
+            // "unavailable" with the clearing open, and the same commit inserts the next control after a backoff of one second,
+            // then two. The owner does not stand down, a Delete is still refused as "clearing" at admission, and once the
+            // protection can be read again the last page retires the root.
             var unreadablePark = await ParkLargeAsync(keptLarge, "f", copied: 169);
             var parkUnreadable = await set.ParkSelectionAsync(keptLarge, 2);
+            parkUnreadableShared = parkUnreadable;
             during["del-kept-large"] = (keptLarge, parkUnreadable, ["del-kept-during-1", "del-kept-during-2"]);
             opened["del-kept-large"] = () => set.Probe.Unreadable.Add(keptLarge.Id);
             Check(await set.OperateAsync(keptLarge, "del-kept-large", Contract.Kinds.Delete, parkUnreadable, reply: true),
                 "a held Delete is admitted for the Park of 171 kept rows while its protection can be read");
-            await set.PassUntilAsync(() => set.StoodDown);
-            var stalled = await set.InputsAsync(keptLarge);
-            Check(await set.ImageAsync(keptLarge) is { Status: InstanceStatus.Faulted, TerminalRevision: null } &&
-                    await set.ClearingAsync(keptLarge) == new Set.ClearingRow("del-kept-large", 170) &&
-                    Outcomes(await set.Cold.ReadJournalOfAsync(0, unreadablePark.Actor.Id, 0, stop)) is
-                        ["""{"Outcome":"clearing","Operation":"del-kept-large","Cleared":170}"""] &&
-                    stalled.Count(row => row.Kind == Contract.Kinds.Delete && !row.Done) == 1 &&
-                    stalled.Count(row => row.KeptBy is not null) == 1,
-                "the owner stood down at the last page: the clearing is open at 170, the control is pending and one row is still kept");
+            var unreadableOwner = set.Owner;
+            await set.PassUntilAsync(() => retries.Count == 2);
             set.Probe.Unreadable.Remove(keptLarge.Id);
-            await set.RetakeAsync();
             await set.RetiredAsync(keptLarge);
+            Check(ReferenceEquals(set.Owner, unreadableOwner) && !set.StoodDown &&
+                    retries.Select(retry => retry.Entry).SequenceEqual(Enumerable.Repeat(
+                        """{"Outcome":"refused","Operation":"del-kept-large","Reason":"unavailable"}""", 2)) &&
+                    retries.All(retry => retry.Clearing == new Set.ClearingRow("del-kept-large", 170) && retry.Kept == 1 && !retry.Admitted) &&
+                    retries[0].Delay == 1_000 && retries[1].Delay == 2_000,
+                "each unreadable answer was journalled with the clearing open and one row kept, the next control came due after 1 s, " +
+                    "then 2 s, admission still refused a Delete, and the same owner ran throughout");
             Check(await RetiredFaultedAsync(unreadablePark.Actor.Id) &&
-                    (await set.InputsOfAsync(unreadablePark.Actor.Id)).All(row => row.Done && row.KeptBy is null && !row.Content),
-                "the next owner ran the control again and retired the root once its protection could be read");
+                    (await set.InputsOfAsync(unreadablePark.Actor.Id)).All(row => row.Done && row.KeptBy is null && !row.Content) &&
+                    !set.Probe.Saw(keptLarge, "ordinary"),
+                "once the protection could be read the last page retired the root, and the arrivals were settled by the retirement");
             set.Answered("del-kept-large", "started");
 
             // A Park selection the owner finds stale is refused there as "selection", and the held caller answered once.
@@ -1168,12 +1174,26 @@ internal static class PostgresRootParkedOperatorChecks
             Check(await set.TerminateAsync(probed, "del-probe-terminate"), "a Terminate whose own turn fails is admitted for the probe root");
             await set.DriveAsync(probed, image => image is { Revision: 3, Status: InstanceStatus.Faulted });
             var parkedProbe = await set.ImageAsync(probed);
-            Check(await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe)) &&
-                    !await set.TriggerProbeAsync(parkedProbe, null, Discard(parkedProbe)) &&
-                    !await set.TriggerProbeAsync(parkedProbe, ProbeTerminated, Discard(parkedProbe)) &&
-                    !await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe, """, "Suspended" = NOT "Suspended" """)) &&
-                    !await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe, terminal: false)) &&
-                    !await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, End(parkedProbe)) &&
+            // A discard is the last page of a clearing: without an open clearing it is refused, so a single page never discards.
+            Check(!await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe)),
+                "a discard of a parked root with no open clearing is refused");
+            await set.BypassAsync(parkedProbe, """ "FoundationParkClearing" = 'del-probe-clearing', "FoundationParkCleared" = 1 """);
+            bool[] clearingProbes;
+            try
+            {
+                clearingProbes =
+                [
+                    await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe)),
+                    !await set.TriggerProbeAsync(parkedProbe, null, Discard(parkedProbe)),
+                    !await set.TriggerProbeAsync(parkedProbe, ProbeTerminated, Discard(parkedProbe)),
+                    !await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe, """, "Suspended" = NOT "Suspended" """)),
+                    !await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Discard(parkedProbe, terminal: false))
+                ];
+            }
+            finally { await set.BypassAsync(parkedProbe, """ "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL """); }
+            Check(clearingProbes.All(passed => passed),
+                "with an open clearing, a discarded entry passes beside the discard end only: its entry, Suspended kept and a new terminal mark");
+            Check(!await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, End(parkedProbe)) &&
                     !await set.TriggerProbeAsync(parkedProbe, ProbeDiscarded, Continue(parkedProbe)) &&
                     !await set.LoneEntryCommitsAsync(parkedProbe, ProbeDiscarded),
                 "a discarded entry passes only beside the discard end: Faulted, Suspended kept, a new terminal mark and the Park cleared");
@@ -1233,6 +1253,22 @@ internal static class PostgresRootParkedOperatorChecks
                 var turn = batch.Turns.SingleOrDefault(turn => turn.FoundationRootOperator?.Id is { } id && during.ContainsKey(id));
                 var committed = await store.CommitAsync(batch, token);
                 if (!committed.Landed) return committed;
+                if (batch.Turns.FirstOrDefault(turn => turn.FoundationRootOperator?.Id == "del-kept-large" &&
+                        turn.Journal?.Contains("\"Reason\":\"unavailable\"", StringComparison.Ordinal) == true) is { Journal: { } refused })
+                {
+                    // The refusal's commit: the clearing, the kept rows, the next control's delay, and admission while it waits.
+                    await using var read = OpenDelete();
+                    var actor = (await set.ImageAsync(keptLarge)).Actor.Id;
+                    // Due and KeepUntil share the commit's time: the delay is Due less KeepUntil's start, its window apart.
+                    var control = await read.Database.SqlQuery<ControlRow>($"""
+                        SELECT "Due", "KeepUntil", "Start" FROM "Messages"
+                        WHERE "Target" = {actor} AND "Kind" = {Contract.Kinds.Delete} AND NOT "Done"
+                        """).SingleAsync(token);
+                    using var header = JsonDocument.Parse(control.Start[control.Start.IndexOf('{')..]);
+                    var delay = control.Due - (control.KeepUntil - header.RootElement.GetProperty("Window").GetInt64());
+                    retries.Add((refused, await set.ClearingAsync(keptLarge), (await set.InputsAsync(keptLarge)).Count(row => row.KeptBy is not null),
+                        delay, await set.OperateAsync(keptLarge, $"del-kept-retry-{retries.Count}", Contract.Kinds.Delete, parkUnreadableShared!)));
+                }
                 if (batch.Turns.FirstOrDefault(turn => turn.FoundationRootOperator?.Id is { } id && opened.ContainsKey(id) &&
                         turn.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true) is { } open)
                 {
@@ -1541,7 +1577,7 @@ internal static class PostgresRootParkedOperatorChecks
 
     // S5b-3b: a protected Delete's end: the Park and its mark cleared, a new terminal mark, the row otherwise as it was.
     private static FormattableString Discard(EfStore.RootImage root, string extra = "", bool terminal = true) => Change(root, """
-        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL
+        "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL, "FoundationParkClearing" = NULL, "FoundationParkCleared" = NULL
         """ + (terminal ? """, "FoundationTerminalRevision" = "Revision" + 1, "FoundationTerminalAt" = 1""" : "") + extra);
 
     // A parked root's retirement as a Delete writes it: still Faulted, with or without its terminal mark.
