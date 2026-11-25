@@ -100,14 +100,26 @@ class CorePreviewCompositionTests(unittest.TestCase):
         self.assertFalse([argument for argument in started if argument.startswith("POSTGRES_PASSWORD=")], "The password is in argv")
         self.assertEqual(48, len(options["env"]["POSTGRES_PASSWORD"]))
         self.assertIn(acceptance.LABEL, started)
+        self.assertIn(f"{acceptance.OWNER_LABEL}={acceptance.OWNER}", started)
         self.assertEqual(["docker", "stop", "--time", "3", name], stopped)
 
-    def test_stale_containers_of_this_runner_are_swept_by_label(self):
-        with patch.object(acceptance.subprocess, "check_output", return_value="abc\ndef\n") as listed, \
-                patch.object(acceptance.subprocess, "run") as removed:
-            self.assertEqual(["abc", "def"], acceptance.sweep_stale_containers())
+    def test_only_containers_whose_run_has_ended_are_swept(self):
+        host = acceptance.socket.gethostname()
+        live = f"{host}:{acceptance.os.getpid()}:1"
+        gone = f"{host}:999999:1"
+        listing = f"exited1 exited {live}\nlive1 running {live}\ngone1 running {gone}\nother1 running elsewhere:1:1\n"
+        with patch.object(acceptance.subprocess, "check_output", return_value=listing) as listed, \
+                patch.object(acceptance.subprocess, "run") as removed, \
+                patch.object(acceptance.os, "kill", side_effect=lambda pid, _: (_ for _ in ()).throw(ProcessLookupError()) if pid == 999999 else None):
+            swept = acceptance.sweep_stale_containers()
+        self.assertEqual({"removed": ["exited1", "gone1"], "keptRunning": ["live1", "other1"]}, swept)
         self.assertIn(f"label={acceptance.LABEL}", listed.call_args.args[0])
-        self.assertEqual(["docker", "rm", "-f", "abc", "def"], removed.call_args.args[0])
+        self.assertEqual(["docker", "rm", "-f", "exited1", "gone1"], removed.call_args.args[0])
+
+    def test_each_container_is_labelled_with_its_owner(self):
+        host, pid, started = acceptance.OWNER.split(":")
+        self.assertEqual((acceptance.socket.gethostname(), str(acceptance.os.getpid())), (host, pid))
+        self.assertTrue(started.isdigit())
 
     def test_the_stub_answers_with_what_it_got_and_records_it(self):
         with acceptance.Stub() as stub:

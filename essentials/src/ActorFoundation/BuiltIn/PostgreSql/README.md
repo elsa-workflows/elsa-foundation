@@ -24,8 +24,10 @@ Opt-in PostgreSQL node composition and Generic Host lifetime for the Built-in Ac
   `OpenFoundationAsync` for its edge. The earlier preview formats (2, 6, 18) stay for their qualification checks, and a
   database on one of them is recreated for format 24, not migrated.
 - `PostgresPreviewHosting.InstallShippedAsync` readies a dedicated database for format 24 in a single-process host (the
-  Workbench calls it before its node starts): an empty database is installed, one already on format 24 is left as it is,
-  and any other is refused with the advice to recreate it empty. A multi-node host keeps installation an explicit setup
+  Workbench calls it before its node starts): an empty database is installed, and one whose store marker is format 24 is
+  installed again, which completes a first install that was cut short and changes nothing in a whole one. Any other is
+  refused, naming what it holds, with the advice to recreate it empty. Objects of PostgreSQL extensions do not count, and
+  hosts starting at once install one after the other (an advisory lock). A multi-node host keeps installation an explicit setup
   step (`EfStore.CreateAsync` and `InstallPreviewRootSchemaAsync`), run while no node is.
 - Format 24 runs no self-sends, timers or child starts yet. Self-sends wait on S6's input-scope union with timed jobs,
   and child workflows on PostgreSQL roots are their own slice. So a kernel host refuses Delay and Dispatch Workflow at

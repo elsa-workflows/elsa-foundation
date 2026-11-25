@@ -40,7 +40,7 @@ internal static class WorkbenchPostgresPreview
 
     internal static async Task RunAsync(string[] arguments, string? executable = null)
     {
-        if (arguments is not [var phase and ("birth" or "restart" or "disabled" or "install-empty" or "install-foreign"), var receiptPath, .. var profileArguments] ||
+        if (arguments is not [var phase and ("birth" or "restart" or "disabled" or "install-empty" or "install-partial" or "install-foreign"), var receiptPath, .. var profileArguments] ||
             profileArguments is not ([] or ["jobs" or "timed" or "timeout" or "takeover" or "takeover-complete" or "publications"]))
             throw new ArgumentException("Expected birth, restart or disabled, a receipt file and optional jobs, timed, timeout, takeover, takeover-complete or publications profile.");
         var profile = profileArguments.SingleOrDefault();
@@ -53,9 +53,9 @@ internal static class WorkbenchPostgresPreview
         var nativeJobs = profile is not (null or "publications");
         var ticketScope = timed ? TimedJobScope : JobTicketScope;
 
-        if ((phase is "disabled" or "install-empty" or "install-foreign" || takeover) && executable is null)
+        if ((phase is "disabled" or "install-empty" or "install-partial" or "install-foreign" || takeover) && executable is null)
             throw new ArgumentException("The disabled, install and takeover checks require a Workbench executable.");
-        if (phase is "install-empty" or "install-foreign" && !publications)
+        if (phase is "install-empty" or "install-partial" or "install-foreign" && !publications)
             throw new ArgumentException("The install checks run the publications profile, which installs its own format.");
 
         var releaseFile = completesTakeover ? Path.GetFullPath(receiptPath + ".release") : null;
@@ -80,9 +80,9 @@ internal static class WorkbenchPostgresPreview
         KernelDb OpenObservation() => OpenProfile(observationOptions, profile);
         var wire = Wire.Start("postgres", $"Host={settings.Host};Port={settings.Port}");
         settings.Port = wire.LocalPort;
-        if (phase is "install-empty" or "install-foreign")
+        if (phase is "install-empty" or "install-partial" or "install-foreign")
         {
-            await CheckWorkbenchInstallAsync(executable!, settings.ConnectionString, OpenObservation, foreign: phase == "install-foreign", scope, token);
+            await CheckWorkbenchInstallAsync(executable!, settings.ConnectionString, OpenObservation, phase["install-".Length..], scope, token);
             return;
         }
         if (phase == "disabled")
@@ -501,16 +501,19 @@ internal static class WorkbenchPostgresPreview
         }
     }
 
-    // With publications on, the Workbench installs the shipped format in an empty database before its node starts, and refuses
-    // a database that holds something else, ending before its node starts.
-    private static async Task CheckWorkbenchInstallAsync(string executable, string connection, Func<KernelDb> openObservation, bool foreign,
+    // With publications on, the Workbench installs the shipped format before its node starts: in an empty database, and over
+    // a first install that was cut short (the store's marker seeded, the rest not). It refuses a database that holds
+    // something else, ending before its node starts.
+    private static async Task CheckWorkbenchInstallAsync(string executable, string connection, Func<KernelDb> openObservation, string start,
         Contract.BoundScope scope, CancellationToken token)
     {
+        var foreign = start == "foreign";
         await using (var db = openObservation())
         {
             Require(await PostgresFixtureDatabase.IsEmptyAsync(db, token), "the install check starts from an empty database");
             if (foreign) await db.Database.ExecuteSqlRawAsync("CREATE TABLE someone_elses_orders (id integer PRIMARY KEY)", token);
         }
+        if (start == "partial") await new EfStore(openObservation, postgres: true).CreateAsync();
         using var workbench = WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null);
         if (foreign)
         {
@@ -536,7 +539,9 @@ internal static class WorkbenchPostgresPreview
             await RequireKernelServingAsync(workbench, ProbeRunsAsync, token);
             await using var db = openObservation();
             await EfStore.RequireStoreVersionsAsync(db, token);
-            Require(true, "a Workbench with publications on installs the shipped format in an empty database, starts and serves");
+            Require(true, start == "partial"
+                ? "a Workbench with publications on completes a first install that was cut short, starts and serves"
+                : "a Workbench with publications on installs the shipped format in an empty database, starts and serves");
         }
         finally
         {

@@ -25,53 +25,82 @@ public static class PostgresPreviewHosting
 
     /// <summary>
     /// Readies a dedicated database for the shipped format (<see cref="CreateShippedContext"/>), for a single-process host
-    /// such as the Workbench to call before its node starts: an empty database is installed, one already on the shipped
-    /// format is left as it is, and any other (an earlier preview format, or tables of something else) is refused with
-    /// what to do. A multi-node production host keeps installation an explicit setup step, run while no node is.
+    /// such as the Workbench to call before its node starts. An empty database is installed. One whose store marker is the
+    /// shipped format is installed again, which completes a first install that was cut short and changes nothing in a whole
+    /// one. Any other database (another kernel store format, or tables of something else) is refused, naming what it holds.
+    /// Objects of PostgreSQL extensions do not count. Hosts starting at once on one database install one after the other. A
+    /// multi-node production host keeps installation an explicit setup step, run while no node is.
     /// </summary>
     /// <exception cref="InvalidOperationException">The database holds something other than the shipped format.</exception>
     public static async Task InstallShippedAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
         KernelDb Open() => CreateShippedContext(options);
-        await using (var db = Open())
+        await using var guard = Open();
+        if (!guard.Database.IsNpgsql())
+            throw new NotSupportedException("The shipped Core Preview format installs on PostgreSQL.");
+        // One install at a time: a session lock held on its own connection around the whole check and install. Its key is
+        // apart from the transaction lock the install steps take themselves.
+        await guard.Database.OpenConnectionAsync(cancellationToken);
+        await guard.Database.ExecuteSqlRawAsync("SELECT pg_advisory_lock(48602345, 2)", cancellationToken);
+        try
         {
-            if (!db.Database.IsNpgsql())
-                throw new NotSupportedException("The shipped Core Preview format installs on PostgreSQL.");
-            if (!await IsEmptyAsync(db, cancellationToken))
+            await using (var db = Open())
             {
-                try
-                {
-                    await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
-                    return;
-                }
-                catch (StoreFormatException refused)
-                {
+                if (await db.Database.SqlQueryRaw<bool>("""SELECT pg_catalog.current_schema() IS NULL AS "Value" """).SingleAsync(cancellationToken))
                     throw new InvalidOperationException(
-                        $"The Core Preview database holds something other than the shipped format ({refused.Message}). " +
-                        "Recreate this database empty, or point ConnectionStrings:KernelCorePreview at an empty one: the Workbench installs the format there.",
-                        refused);
+                        "The Core Preview database has no schema on its search path to install the shipped format into. " +
+                        "Recreate this database empty, or point ConnectionStrings:KernelCorePreview at an empty one.");
+                var found = await ObjectsAsync(db, cancellationToken);
+                if (found.Count > 0)
+                {
+                    if (!await db.Database.SqlQueryRaw<bool>("""SELECT to_regclass('"KernelStoreVersions"') IS NOT NULL AS "Value" """).SingleAsync(cancellationToken))
+                        throw new InvalidOperationException(
+                            $"The Core Preview database is not empty: it holds {string.Join(", ", found.Take(5))}{(found.Count > 5 ? " and more" : "")}, " +
+                            "and no kernel store. Recreate this database empty, or point ConnectionStrings:KernelCorePreview at an empty one: the Workbench installs the shipped format there.");
+                    try { await EfStore.RequireStoreVersionsAsync(db, cancellationToken); }
+                    catch (StoreFormatException refused)
+                    {
+                        throw new InvalidOperationException(
+                            $"The Core Preview database holds another kernel store format ({refused.Message}). " +
+                            "Recreate this database empty, or point ConnectionStrings:KernelCorePreview at an empty one: the Workbench installs the shipped format there.",
+                            refused);
+                    }
                 }
             }
+            // Both steps are idempotent: on a store already whole they change nothing, and on one a cut-short first install
+            // left (its marker seeded, the rest not yet) they complete it.
+            var store = new EfStore(Open, postgres: true);
+            await store.CreateAsync();
+            await store.InstallPreviewRootSchemaAsync(cancellationToken);
         }
-        var store = new EfStore(Open, postgres: true);
-        await store.CreateAsync();
-        await store.InstallPreviewRootSchemaAsync(cancellationToken);
+        finally
+        {
+            await guard.Database.ExecuteSqlRawAsync("SELECT pg_advisory_unlock(48602345, 2)", CancellationToken.None);
+            await guard.Database.CloseConnectionAsync();
+        }
     }
 
-    // Whether the database's current schema holds no object at all: nothing to keep, so nothing to refuse.
-    private static Task<bool> IsEmptyAsync(KernelDb database, CancellationToken cancellationToken) =>
-        database.Database.SqlQueryRaw<bool>("""
+    // The objects in the database's own schemas, described, apart from PostgreSQL extensions and what they own: none means
+    // the database is empty, so nothing is refused.
+    private static Task<List<string>> ObjectsAsync(KernelDb database, CancellationToken cancellationToken) =>
+        database.Database.SqlQueryRaw<string>("""
             WITH user_schema AS (
-                SELECT oid, nspname FROM pg_catalog.pg_namespace
-                WHERE nspname <> 'information_schema' AND nspname !~ '^pg_'
+                SELECT ns.oid FROM pg_catalog.pg_namespace ns
+                WHERE ns.nspname <> 'information_schema' AND ns.nspname !~ '^pg_' AND NOT EXISTS (
+                    SELECT 1 FROM pg_catalog.pg_depend owned
+                    WHERE owned.classid = 'pg_catalog.pg_namespace'::pg_catalog.regclass AND owned.objid = ns.oid AND owned.deptype = 'e')
             )
-            SELECT EXISTS (SELECT 1 FROM user_schema WHERE nspname = pg_catalog.current_schema()) AND NOT EXISTS (
-                SELECT 1 FROM pg_catalog.pg_depend dependency
-                JOIN user_schema ns ON ns.oid = dependency.refobjid
-                WHERE dependency.refclassid = 'pg_catalog.pg_namespace'::pg_catalog.regclass
-            ) AS "Value"
-            """).SingleAsync(cancellationToken);
+            SELECT pg_catalog.pg_describe_object(dependency.classid, dependency.objid, 0) AS "Value"
+            FROM pg_catalog.pg_depend dependency
+            JOIN user_schema ns ON ns.oid = dependency.refobjid
+            WHERE dependency.refclassid = 'pg_catalog.pg_namespace'::pg_catalog.regclass
+                AND dependency.classid <> 'pg_catalog.pg_extension'::pg_catalog.regclass
+                AND NOT EXISTS (
+                    SELECT 1 FROM pg_catalog.pg_depend owned
+                    WHERE owned.classid = dependency.classid AND owned.objid = dependency.objid AND owned.deptype = 'e')
+            ORDER BY 1 LIMIT 6
+            """).ToListAsync(cancellationToken);
 
     /// <summary>
     /// Whether a node on the format <paramref name="create"/> selects takes an actor's self-sends. A host gives the answer to

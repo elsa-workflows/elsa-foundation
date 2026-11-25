@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Run the Core Preview acceptance journeys against owned hosts: a Workbench whose default shell serves its
-publications on the kernel (Elsa:CorePreview:Publications, PostgreSQL format 24 in a throwaway container), Studio, and
+publications on the kernel (Elsa:CorePreview:Publications, the shipped PostgreSQL format in a throwaway container), Studio, and
 a local HTTP stub for the workflows' outbound requests. Every process, container and store is owned and removed."""
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import secrets
 import signal
+import socket
 import subprocess
 import tempfile
 import threading
@@ -62,14 +63,40 @@ def kernel_environment(connection):
 
 
 LABEL = 'elsa.ux-acceptance=core-preview'
+# Which run owns a container: this host, the runner's process and when it started.
+OWNER_LABEL = 'elsa.ux-acceptance.owner'
+OWNER = f'{socket.gethostname()}:{os.getpid()}:{time.time_ns()}'
+
+
+def owner_gone(owner):
+    """Whether the run that owns a container has ended: its runner process on this host is no longer alive."""
+    host, _, rest = (owner or '').partition(':')
+    pid = rest.partition(':')[0]
+    if host != socket.gethostname() or not pid.isdigit():
+        return False  # another machine's run, or an unlabelled one: not ours to judge
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return True
+    except PermissionError:
+        return False
+    return False
 
 
 def sweep_stale_containers():
-    """Remove containers an interrupted earlier run left behind, by this runner's label; returns their ids."""
-    stale = subprocess.check_output(['docker', 'ps', '-aq', '--filter', f'label={LABEL}'], text=True).split()
-    if stale:
-        subprocess.run(['docker', 'rm', '-f', *stale], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return stale
+    """Remove what an interrupted earlier run left behind: this runner's containers that are not running, or whose owner's
+    run has ended. A container another live run owns is kept and reported."""
+    listed = subprocess.check_output(['docker', 'ps', '-a', '--filter', f'label={LABEL}', '--format',
+                                      f'{{{{.ID}}}} {{{{.State}}}} {{{{.Label "{OWNER_LABEL}"}}}}'], text=True)
+    removed, kept = [], []
+    for line in listed.splitlines():
+        container, state, owner = (line.split(' ', 2) + ['', ''])[:3]
+        if not container:
+            continue
+        (removed if state != 'running' or owner_gone(owner) else kept).append(container)
+    if removed:
+        subprocess.run(['docker', 'rm', '-f', *removed], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return {'removed': removed, 'keptRunning': kept}
 
 
 @contextmanager
@@ -80,7 +107,7 @@ def postgres(log, *, attempts=240):
     name = f'elsa-ux-core-preview-{secrets.token_hex(8)}'
     try:
         # The password reaches the container through the environment only: never in argv, a failure's text or the report.
-        container = subprocess.check_output(['docker', 'run', '-d', '--rm', '--name', name, '--label', LABEL,
+        container = subprocess.check_output(['docker', 'run', '-d', '--rm', '--name', name, '--label', LABEL, '--label', f'{OWNER_LABEL}={OWNER}',
                                              '-e', 'POSTGRES_PASSWORD', '-p', '127.0.0.1::5432', POSTGRES_IMAGE],
                                             text=True, stderr=subprocess.STDOUT, env=dict(os.environ, POSTGRES_PASSWORD=password)).strip()
         with log.open('w') as output:
@@ -232,7 +259,7 @@ def run(output, journey=None):
               'suite': SUITE, 'project': PROJECT, 'journeys': sorted(title for _, title in inventory(selected)),
               'sharedHostHelperSha256': hashlib.sha256((ROOT / 'tools/ux-acceptance/run.py').read_bytes()).hexdigest(),
               'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'status': 'failed', 'stage': 'build',
-              'composition': {'corePreview': {'publications': True, 'tenant': TENANT, 'format': 'PostgreSQL shipped format 24'}},
+              'composition': {'corePreview': {'publications': True, 'tenant': TENANT, 'format': 'the shipped PostgreSQL format'}},
               'visualApproval': 'requires independent review', 'ownedPids': {}}
     processes = {}
     try:
@@ -256,7 +283,7 @@ def run(output, journey=None):
             env = dict(clean_environment(), DOTNET_PROCESSOR_COUNT='2', HOME=str(data / 'home'), DOTNET_CLI_HOME=str(data / 'home'),
                        **{'Logging__LogLevel__Microsoft.Hosting.Lifetime': 'Information'})
             report['stage'] = 'postgres'
-            report['staleContainersRemoved'] = sweep_stale_containers()
+            report['staleContainers'] = sweep_stale_containers()
             with postgres(output / 'postgres.log') as database, Stub() as stub:
                 # The database is empty: the Workbench installs the shipped format itself before its node starts.
                 report['postgres'] = {key: database[key] for key in ('container', 'image', 'database')}

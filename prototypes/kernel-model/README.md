@@ -348,8 +348,8 @@ the preview database. Existing workflow and Studio endpoints still use their cur
 
 Set `Elsa__CorePreview__Publications=true`, beside `Elsa__CorePreview__Enabled=true`, to run the default shell's
 publications on the kernel (K10). Before its node starts, the Workbench installs the shipped format in an empty database
-(`PostgresPreviewHosting.InstallShippedAsync`), starts on one already installed, and refuses any other database with
-the advice to recreate it empty. The one switch composes both sides. It is the release profile: the preview database runs
+(`PostgresPreviewHosting.InstallShippedAsync`), completes a first install that was cut short, and refuses any other
+database, naming what it holds, with the advice to recreate it empty. The one switch composes both sides. It is the release profile: the preview database runs
 on the shipped format 24 (operators, Native jobs with timed settlement, held replies, Park opening and inspection, and
 workflow history), and `NativeJobs` and `TimedNativeJobs` stay off. A database created on an earlier preview format (2, 6
 or 18) is refused and recreated, not migrated. The host shares one `KernelServing` between the
