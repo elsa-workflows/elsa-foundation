@@ -48,9 +48,9 @@ short worktree path (MSB3030).
   a `Program.cs` that calls both (R-2). Start from main's `apps/Elsa.Essentials.Host/Program.cs`, and name in the PR
   each piece dropped and why. Include:
   - the configuration order of R-3 (`shells.Local.json` and user secrets re-added above the shells files);
-  - plain CShells hosting with `WithHostAssemblies()`, the default shell activated at startup, and `/health/ready`
-    (R-2); no Nuplane, no module-management or other admin endpoints (FR-018);
-  - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` and `AddShellStartupValidation`;
+  - plain CShells hosting with `WithHostAssemblies()`, the default shell activated at startup, and
+    `MapFoundationHealth` with a `ShellActivationTracker`, the health paths excluded from shell routing (R-2); no Nuplane, no module-management or other admin endpoints (FR-018);
+  - `AddConfiguredDataProtection` and `AddShellStartupValidation` (no `AddEfPendingMigrationActivationGuard`, R-2);
   - the JSON baseline: `AddElsaJsonResponseHeaders()` and `ConfigureHttpJsonOptions` with `JsonBaseline.Configure`
     and `StrictDateTimeConverters.Configure(..., apiMode: true)`, as the Workbench registers them (R-2);
   - authentication, authorization and `AddOpenIddictEntityFrameworkCoreStore`;

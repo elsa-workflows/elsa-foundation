@@ -150,8 +150,8 @@ returns 200, and the log names the setting, feature or file and the reason. The 
 - **FR-001**: The migration host MUST be one ASP.NET Core project in this repository, built and run from source. It
   MUST NOT be published as an image or a package, and MUST NOT be presented as a product or deployment host. It MUST
   be marked temporary in its README and project description, naming #5800 as the issue whose cleanup removes it.
-- **FR-018**: The host MUST be a plain CShells host: it activates the features of the assemblies it references, with
-  no package loading (no Nuplane) and no admin or module-management endpoints.
+- **FR-018**: The host MUST be a plain CShells host: it activates the features listed in its composition, found in the
+  assemblies it references, with no package loading (no Nuplane) and no admin or module-management endpoints.
 - **FR-002**: The host MUST compose only:
   - the features the JTest acceptance set needs;
   - the features the repository's Studio designer needs against it (US4);

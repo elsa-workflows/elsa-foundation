@@ -47,11 +47,16 @@ acceptance set and templates from the merged S-15, or from the head current at t
     always adds Nuplane feature discovery, so the host doesn't call it or `AddFoundationNuplane`;
   - the default shell activated at startup (a small hosted service, since main's `EagerShellActivationHostedService` is
     internal to `Elsa.Foundation.Hosting`), and `/health/ready` returning 200 once it is active: main's
-    `MapFoundationHealth` with a registered `ShellActivationTracker` if it works without Foundation's Nuplane hosting,
-    otherwise a minimal endpoint. *Refusing to start* in the spec relies on this;
+    `MapFoundationHealth`, which needs only `IShellRegistry`, the `CShells:Shells` section and a registered
+    `ShellActivationTracker` (public constructor), with `/health/live` and `/health/ready` in `WithWebRouting`'s
+    `ExcludePaths` as main's hosts set them. Referencing `Elsa.Foundation.Hosting` brings Nuplane packages into the
+    closure but loads nothing (FR-018). Nothing feeds the tracker's failures, so readiness is right but carries no
+    failure reason; the log names it. *Refusing to start* in the spec relies on this;
   - no `AddEfPersistenceResources`: main's essentials host doesn't call it (the Workbench does, with its own EF tooling
     defaults), and its EF features read `ConnectionStrings:Elsa`, so this host does the same;
-  - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` (EF key store) and
+  - no `AddEfPendingMigrationActivationGuard`: only Nuplane's feature-management service reads activation guards, and
+    this host has none; pending migrations are applied by the default `AutoMigrate` policy (R-6);
+  - `AddConfiguredDataProtection` (EF key store) and
     `AddShellStartupValidation`;
   - the initiative's JSON baseline (S-9, ADR 0091) at host level, as the Workbench and `Elsa.Foundation.Host`
     register it: `AddElsaJsonResponseHeaders()` and `ConfigureHttpJsonOptions` with `JsonBaseline.Configure` and

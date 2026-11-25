@@ -8,13 +8,16 @@ quickstart) may rely on.
 
 ## Paths
 
-| Item | Path (repository-relative) | Stable? |
+| Item | Path (repository-relative) | Stable? (until #5800's cleanup removes the host) |
 |---|---|---|
 | Host project | `apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj` | Yes |
 | Composition | `apps/Elsa.Migration.Host/shells.json`, under `CShells:Shells:default:Features` | Yes |
 | Reasons | `apps/Elsa.Migration.Host/composition-reasons.json` (feature name → reason), shown by the README | Yes |
 | Sample migrated folder | `apps/Elsa.Migration.Host/migrated/` | Yes |
 | Data | `apps/Elsa.Migration.Host/data/` (git-ignored) | Local only |
+
+When #5800's cleanup removes the host, the Elsa 3 import profile's package and feature set replaces the composition
+and the reasons, and the migrated-folder layout below carries over.
 
 A tool reads the composition and the reasons with any JSON reader. The host loads no packages at runtime; an
 engineer's own features come in as project references. It needs no reference to the host project.
