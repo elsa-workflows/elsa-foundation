@@ -87,6 +87,27 @@ it("histories real typing and an isolated source/payload/selection insertion tog
   expect(e.view().state.doc.toString()).toBe("ab+args.customer"); expect(e.payload()).toEqual(bound);
   expect(e.edits.map(edit => edit.origin)).toContain("insertion");
 });
+it.each([
+  ["a caret after the insertion", undefined, "a+args.customer".length],
+  ["a caret inside the insertion", { anchor: 13, head: 13 }, 13]
+])("scrolls the whole insertion into view with %s", (_, selection, caret) => {
+  const e = editor(); const scrolled: { from: number; to: number; head: number }[] = [];
+  const dispatch = e.view().dispatch.bind(e.view());
+  e.view().dispatch = ((...specs: Parameters<EditorView["dispatch"]>) => {
+    const transaction = specs[0] instanceof Transaction ? specs[0] : e.view().state.update(...(specs as never[]));
+    if (transaction.docChanged) for (const effect of transaction.effects) {
+      // EditorView.scrollIntoView effects carry a ScrollTarget whose range is the region to reveal.
+      const range = (effect.value as { range?: { from: number; to: number; head: number } } | null)?.range;
+      if (range) scrolled.push({ from: range.from, to: range.to, head: range.head });
+    }
+    dispatch(transaction);
+  }) as EditorView["dispatch"];
+  e.view().dispatch({ selection: { anchor: 1 } });
+  expect(e.controller().apply({ expected: e.controller().capture()!, insert: "+args.customer", historyValue: bound, selection })).toBe(true);
+  // The end of the insertion is the head, so CodeMirror prefers it when the line is narrower than the insertion.
+  expect(scrolled).toEqual([{ from: 1, to: "a+args.customer".length, head: "a+args.customer".length }]);
+  expect(e.view().state.selection.main.head).toBe(caret);
+});
 it("retains alias-reuse history across compact/expanded and back", () => {
   const e = editor(); e.replace(bound); e.view().dispatch({ selection: { anchor: 1 } });
   expect(e.controller().apply({ expected: e.controller().capture()!, insert: "+args.customer", historyValue: bound })).toBe(true);
