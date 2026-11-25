@@ -56,18 +56,19 @@ public sealed class PortableNativeExpressionsTests
     }
 
     [Fact]
-    public async Task A_null_result_is_null()
+    public async Task A_null_result_is_null_and_an_expression_without_a_result_type_is_refused()
     {
         await using var session = Open(out _);
-        Assert.Null(session.Evaluate(new HostExpression("JavaScript", "null", null, null), None, None));
+        Assert.Null(session.Evaluate(new HostExpression("JavaScript", "null", "Object", null), None, None));
+        Assert.Throws<InvalidOperationException>(() => session.Evaluate(new HostExpression("JavaScript", "1", null, null), None, None));
     }
 
     [Fact]
     public async Task An_unknown_language_or_a_throwing_expression_throws()
     {
         await using var session = Open(out _);
-        Assert.ThrowsAny<Exception>(() => session.Evaluate(new HostExpression("Python", "1", null, null), None, None));
-        Assert.ThrowsAny<Exception>(() => session.Evaluate(new HostExpression("JavaScript", "missing.x", null, null), None, None));
+        Assert.ThrowsAny<Exception>(() => session.Evaluate(new HostExpression("Python", "1", "Object", null), None, None));
+        Assert.ThrowsAny<Exception>(() => session.Evaluate(new HostExpression("JavaScript", "missing.x", "Object", null), None, None));
     }
 
     [Fact]
@@ -85,8 +86,54 @@ public sealed class PortableNativeExpressionsTests
     {
         var services = new ServiceCollection().AddSingleton<IPortableExpressionEvaluator>(new PendingEvaluator()).BuildServiceProvider();
         await using var session = new PortableNativeExpressions(() => (services, new Lifetime())).Open(CancellationToken.None);
-        var refused = Assert.Throws<InvalidOperationException>(() => session.Evaluate(new HostExpression("JavaScript", "1", null, null), None, None));
+        var refused = Assert.Throws<InvalidOperationException>(() => session.Evaluate(new HostExpression("JavaScript", "1", "Object", null), None, None));
         Assert.Contains("did not complete synchronously", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_gate_holds_the_service_until_it_opens_and_a_stop_before_then_starts_nothing()
+    {
+        var gate = new TaskCompletionSource();
+        var inner = new Recording();
+        var gated = new ShellGatedHostedService(inner, token => gate.Task.WaitAsync(token), _ => throw new InvalidOperationException("ended"));
+        await gated.StartAsync(CancellationToken.None);
+        await Task.Delay(50);
+        Assert.False(inner.Started);
+        gate.SetResult();
+        await WaitUntil(() => inner.Started);
+        await gated.StopAsync(CancellationToken.None);
+        Assert.True(inner.Stopped);
+
+        var closed = new Recording();
+        var never = new ShellGatedHostedService(closed, token => Task.Delay(Timeout.Infinite, token), _ => throw new InvalidOperationException("ended"));
+        await never.StartAsync(CancellationToken.None);
+        await never.StopAsync(CancellationToken.None);
+        Assert.False(closed.Started);
+        Assert.False(closed.Stopped);
+    }
+
+    [Fact]
+    public async Task A_gate_that_fails_ends_the_process()
+    {
+        string? ended = null;
+        var gated = new ShellGatedHostedService(new Recording(), _ => Task.FromException(new InvalidOperationException("no shell")), reason => ended = reason);
+        await gated.StartAsync(CancellationToken.None);
+        await WaitUntil(() => ended is not null);
+        Assert.Contains("no shell", ended, StringComparison.Ordinal);
+    }
+
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        for (var i = 0; i < 200 && !condition(); i++) await Task.Delay(10);
+        Assert.True(condition());
+    }
+
+    private sealed class Recording : Microsoft.Extensions.Hosting.IHostedService
+    {
+        public bool Started { get; private set; }
+        public bool Stopped { get; private set; }
+        public Task StartAsync(CancellationToken cancellationToken) { Started = true; return Task.CompletedTask; }
+        public Task StopAsync(CancellationToken cancellationToken) { Stopped = true; return Task.CompletedTask; }
     }
 
     private static INativeExpressionSession Open(out Lifetime lifetime)

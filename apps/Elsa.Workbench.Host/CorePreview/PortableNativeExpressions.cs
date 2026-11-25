@@ -13,7 +13,10 @@ namespace Elsa.Workbench.CorePreview;
 /// <see cref="IPortableExpressionEvaluator"/>, which applies the binding-pure profile and normalizes the result by its type,
 /// in one service scope a turn opens the first time it evaluates one. The resolved parameters become the definition's
 /// literal parameters; JavaScript also sees the visible variables its source names, as the old core passes them. An
-/// evaluation that does not complete synchronously faults, since a turn evaluates bindings synchronously.
+/// evaluation that does not complete synchronously faults, since a turn evaluates bindings synchronously. A shell that is
+/// not active, or that is going away, makes the evaluator unavailable: the turn rolls back and keeps its messages, so
+/// Recover runs it again, rather than committing a fault (the Core Preview starts only once the shell is active).
+/// Release 1's kernel runs on the default shell only, and host expressions use that shell's JavaScript limits.
 /// </summary>
 internal sealed class PortableNativeExpressions(Func<(IServiceProvider Services, IAsyncDisposable Lifetime)> open) : INativeExpressions
 {
@@ -23,7 +26,7 @@ internal sealed class PortableNativeExpressions(Func<(IServiceProvider Services,
         try { return new Session(services.GetRequiredService<IPortableExpressionEvaluator>(), lifetime, cancellationToken); }
         catch
         {
-            _ = lifetime.DisposeAsync();
+            _ = lifetime.DisposeAsync().AsTask().ContinueWith(static t => _ = t.Exception, TaskScheduler.Default);
             throw;
         }
     }
@@ -35,11 +38,13 @@ internal sealed class PortableNativeExpressions(Func<(IServiceProvider Services,
 
         public JsonNode? Evaluate(HostExpression expression, IReadOnlyDictionary<string, JsonNode?> parameters, IReadOnlyDictionary<string, JsonNode?> variables)
         {
+            // The mapper gives every expression its reading input's type, which Liquid normalizes its text by.
+            var resultType = expression.ResultType ?? throw new InvalidOperationException($"The {expression.Language} expression names no result type.");
             var values = parameters.ToDictionary(p => p.Key, p => Element(p.Value), StringComparer.Ordinal);
             var definition = new ExpressionDefinition(
                 expression.Language,
                 expression.Text,
-                new TypeReference(expression.ResultType ?? "Object"),
+                new TypeReference(resultType),
                 values.ToDictionary(p => p.Key, p => (ExpressionParameterBinding)new LiteralExpressionParameterBinding(p.Value), StringComparer.Ordinal),
                 expression.Options is { } options ? JsonSerializer.SerializeToElement(options) : NoOptions,
                 ExpressionCapabilityProfiles.BindingPureV1);

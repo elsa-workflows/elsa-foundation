@@ -55,7 +55,11 @@ internal static class WorkbenchCorePreview
             var shellName = provider.GetRequiredService<IOptions<ShellReadinessOptions>>().Value.DefaultShellName;
             var expressions = new PortableNativeExpressions(() =>
             {
-                var scope = (shells.GetActive(shellName) ?? throw new InvalidOperationException($"The shell '{shellName}' is not active.")).BeginScope();
+                var shell = shells.GetActive(shellName) ?? throw new NativeExpressionsUnavailableException($"The shell '{shellName}' is not active.");
+                IShellScope scope;
+                try { scope = shell.BeginScope(); }
+                catch (Exception closing) when (closing is ObjectDisposedException or InvalidOperationException)
+                { throw new NativeExpressionsUnavailableException($"The shell '{shellName}' is going away.", closing); }
                 return (scope.ServiceProvider, scope);
             });
             var model = new NativeExecutionModel(workflows, new NativeExecutionOptions
@@ -64,7 +68,9 @@ internal static class WorkbenchCorePreview
                 Http = new NativeHttpOptions { Client = NativeHttpOptions.CreateClient() },
                 Expressions = expressions,
             });
-            return new PostgresPreviewHostedService(Open, node, new WorkflowActor([model]), Environment.FailFast);
+            // The node starts once the default shell is active, so its first turns find the evaluator.
+            return new ShellGatedHostedService(new PostgresPreviewHostedService(Open, node, new WorkflowActor([model]), Environment.FailFast),
+                token => shells.GetOrActivateAsync(shellName, token), Environment.FailFast);
         });
         if (configuration["Elsa:CorePreview:ReadsTenant"] is { } readsTenant)
             services.AddSingleton(new WorkbenchCorePreviewReads(Open, EmbeddedTenant.Bind(readsTenant)));

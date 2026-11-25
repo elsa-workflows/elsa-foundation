@@ -36,6 +36,13 @@ public sealed class NativeExpressionException(string message, Exception? inner =
     public NativeExpressionException For(string input) => new(Message, InnerException) { Input = input };
 }
 
+/// <summary>
+/// The host cannot evaluate expressions for now (for example, its shell is reloading). Unlike a failed expression it
+/// commits no fault: it abandons the turn, which rolls back, and the runtime faults the actor with this reason and keeps
+/// the turn's messages, as for any turn that throws, so Recover runs the turn again once the host is back.
+/// </summary>
+public sealed class NativeExpressionsUnavailableException(string message, Exception? inner = null) : Exception(message, inner);
+
 internal sealed partial class Burst
 {
     private INativeExpressionSession? _expressions;
@@ -55,7 +62,7 @@ internal sealed partial class Burst
         catch (Exception error) when (error is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             if (cancellationToken.IsCancellationRequested) throw;
-            if (error is NativeExpressionException) throw;
+            if (error is NativeExpressionException or NativeExpressionsUnavailableException) throw;
             var message = $"The {binding.Language} expression failed: {error.GetType().Name}: {error.Message}";
             throw new NativeExpressionException(message[..Math.Min(message.Length, 2048)], error);
         }
