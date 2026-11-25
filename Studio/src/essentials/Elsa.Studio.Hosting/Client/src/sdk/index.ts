@@ -362,6 +362,11 @@ export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSetting
   settings?: StudioDashboardWidgetSettings<TSettings>;
   load?(context: StudioDashboardWidgetLoadContext<TSettings>): Promise<TSnapshot>;
   isEmpty?(snapshot: TSnapshot | undefined, settings: TSettings): boolean;
+  /**
+   * For checklist widgets. When it returns true for a loaded snapshot, Home hides the widget once and marks it
+   * auto-hidden; the user can add it back from Add widget. Such a widget offers Dismiss in place of Hide.
+   */
+  isComplete?(snapshot: TSnapshot | undefined): boolean;
   emptyState?: StudioDashboardWidgetEmptyState;
   component: ComponentType<StudioDashboardWidgetBodyProps<TSnapshot, TSettings>>;
 }
@@ -387,6 +392,63 @@ export function registerHomeWidget<TSnapshot = unknown, TSettings = unknown>(
     supportedSizes
   };
   (api.homeWidgets ?? api.dashboardWidgets).add(widget);
+}
+
+/**
+ * True when every feature a Home contribution lists in `requiresFeature` is enabled. A missing `enabledFeatures`
+ * list fails closed for gated contributions; an ungated contribution is always enabled.
+ */
+export function isHomeWidgetFeatureEnabled(
+  contribution: { requiresFeature?: string | readonly string[] },
+  enabledFeatures: Iterable<string> | undefined
+): boolean {
+  const required = typeof contribution.requiresFeature === "string"
+    ? [contribution.requiresFeature]
+    : [...(contribution.requiresFeature ?? [])];
+  if (required.length === 0) return true;
+  if (!enabledFeatures) return false;
+  const available = [...enabledFeatures];
+  return required.every(feature => available.some(enabled => homeFeatureTokensMatch(feature, enabled)));
+}
+
+const studioModulePrefix = "elsa.studio.";
+
+/** Slugs match only `Elsa.Studio.*` assembly ids. `workflows` matches `Elsa.Studio.Workflows`, not `Contoso.Workflows`. */
+export function homeFeatureTokensMatch(required: string, enabled: string): boolean {
+  const want = required.trim();
+  const have = enabled.trim();
+  if (!want || !have) return false;
+  if (want.toLowerCase() === have.toLowerCase()) return true;
+  const wantSlug = studioFeatureSlug(want);
+  const haveSlug = studioFeatureSlug(have);
+  return wantSlug != null && haveSlug != null && wantSlug === haveSlug;
+}
+
+function studioFeatureSlug(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!trimmed.includes(".")) return kebabToken(trimmed);
+  if (!trimmed.toLowerCase().startsWith(studioModulePrefix)) return null;
+  const rest = trimmed.slice(studioModulePrefix.length);
+  if (!rest || rest.includes(".")) return null;
+  return kebabToken(rest);
+}
+
+function kebabToken(value: string): string {
+  return value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+}
+
+/**
+ * Content the shell renders on Home above the widget grid, in `order`. Sections are fixed: users cannot hide,
+ * move or resize them, and they are not part of the saved Home layout. Use a widget for anything a user arranges.
+ */
+export interface StudioHomeSectionContribution extends StudioBackendAwareContribution {
+  id: string;
+  moduleId: string;
+  order?: number;
+  /** Hide the section unless every listed feature/capability is enabled on the host. */
+  requiresFeature?: string | readonly string[];
+  component: ComponentType;
 }
 
 export type StudioDiagnosticsWidgetMode = "snapshot" | "live";
@@ -1837,6 +1899,7 @@ export const studioSlotIds = {
   routes: "studio.routes",
   dashboardWidgets: "studio.dashboard.widgets",
   dashboardRecordLinks: "studio.dashboard.record-links",
+  homeSections: "studio.home.sections",
   panels: "studio.panels",
   toolbarActions: "studio.toolbar.actions",
   activityEditors: "workflow.activity.editors",
@@ -1936,6 +1999,7 @@ export const studioSlots = {
   routes: defineStudioSlot({ id: studioSlotIds.routes, kind: "route", title: "Routes", owner: hostSlotOwner() }),
   dashboardWidgets: defineStudioSlot({ id: studioSlotIds.dashboardWidgets, kind: "dashboard-widget", title: "Dashboard widgets", owner: hostSlotOwner() }),
   dashboardRecordLinks: defineStudioSlot({ id: studioSlotIds.dashboardRecordLinks, kind: "dashboard-record-link", title: "Dashboard record links", owner: hostSlotOwner() }),
+  homeSections: defineStudioSlot({ id: studioSlotIds.homeSections, kind: "home-section", title: "Home sections", owner: hostSlotOwner() }),
   panels: defineStudioSlot({ id: studioSlotIds.panels, kind: "panel", title: "Panels", owner: hostSlotOwner() }),
   toolbarActions: defineStudioSlot({ id: studioSlotIds.toolbarActions, kind: "toolbar-action", title: "Toolbar actions", owner: hostSlotOwner() }),
   activityEditors: defineStudioSlot({ id: studioSlotIds.activityEditors, kind: "activity-editor", title: "Activity editors", owner: hostSlotOwner() }),
@@ -2353,6 +2417,8 @@ export interface ElsaStudioModuleApi {
   readonly dashboardWidgets: StudioDashboardWidgetRegistry;
   /** Alias of {@link dashboardWidgets}. Modules should prefer {@link registerHomeWidget}. */
   readonly homeWidgets: StudioDashboardWidgetRegistry;
+  /** Fixed Home content above the widget grid. See {@link StudioHomeSectionContribution}. */
+  readonly homeSections: StudioContributionRegistry<StudioHomeSectionContribution>;
   /** Optional on older hosts. Modules resolve already-authorized dashboard query cells to Studio deep-links. */
   readonly dashboardRecordLinks?: StudioContributionRegistry<StudioDashboardRecordLinkContribution>;
   readonly diagnosticsWidgets: StudioContributionRegistry<StudioDiagnosticsWidgetContribution>;

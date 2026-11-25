@@ -4,11 +4,12 @@ import { StatusChip } from "@elsa-workflows/studio-ui";
 import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
-import { HomePage } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/HomePage";
-import { homeLayoutLocalStoragePrefix } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/homeLayout";
+import { HomePage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/home/HomePage";
+import { homeLayoutLocalStoragePrefix } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/home/homeLayout";
+import { HomeTaskGroup } from "../../../extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/home/HomeTaskGroup";
 import type { StudioNavigationContribution } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
-import "../../src/essentials/Elsa.Studio.Dashboard/Client/src/styles.css";
+import "../../../extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/home/home.css";
 
 const searchParams = new URLSearchParams(window.location.search);
 const edit = searchParams.get("edit") === "1";
@@ -43,7 +44,7 @@ const moduleNavigation: StudioNavigationContribution[] = [
 function widget(overrides: Partial<StudioDashboardWidgetContribution>): StudioDashboardWidgetContribution {
   return {
     id: "widget",
-    moduleId: "Elsa.Studio.Dashboard",
+    moduleId: "Elsa.Studio.Workflows.Dashboard",
     title: "Widget",
     defaultVisible: true,
     defaultSize: "medium",
@@ -81,8 +82,11 @@ export function createWidgetHost() {
     routes: { add() {}, list: () => [], compose: () => [], slot: widgets.slot },
     dashboardWidgets: widgets,
     homeWidgets: widgets,
+    homeSections: { add() {}, list: () => sections, compose: () => [], slot: widgets.slot },
     settingEditors
   } as unknown as ElsaStudioModuleApi;
+  // The workflow dashboard module contributes the workflow task group above the widget grid.
+  const sections = [{ id: "workflows.tasks", moduleId: "Elsa.Studio.Workflows.Dashboard", requiresFeature: "workflows", component: () => <HomeTaskGroup api={api} /> }];
   return { api, widgets };
 }
 

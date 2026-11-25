@@ -26,6 +26,9 @@ screens show, and each module hides itself when the backend lacks its capability
 Nuplane administration is part of the shared wiring, so the Modules page at `/modules` lists installed packages and uploads new
 ones to the feed.
 
+Home at `/` is part of the shell, so this app has it too. With no module installed it shows an empty state; modules from the
+feed, such as the workflow dashboard or Attention, add their widgets to it.
+
 The shared wiring lives in [`Elsa.Studio.Hosting.Distribution`](../../essentials/Elsa.Studio.Hosting.Distribution/README.md), so
 `Program.cs` passes only the FeatureManagement assembly.
 
@@ -57,4 +60,4 @@ the module admin API needs a signed-in backend session; the server provides sign
 `Studio__BackendBaseUrl` at another server to use it with that server instead.
 
 The boot test, `FoundationStudioHostBootTests` in `Studio/tests/Elsa.Studio.Tests`, starts the built app as a child process and
-checks the index page, the module admin routes and the compiled-in module list.
+checks the index page, Home served from the shell's own assets, the module admin routes and the compiled-in module list.

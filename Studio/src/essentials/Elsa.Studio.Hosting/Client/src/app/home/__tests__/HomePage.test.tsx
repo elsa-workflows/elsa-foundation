@@ -6,6 +6,7 @@ import { AnonymousAuthProvider } from "@elsa-workflows/studio-sdk";
 import { registerBuiltInSettingEditors } from "@elsa-workflows/studio-ui";
 import { HomePage } from "../HomePage";
 import { homeLayoutLocalStoragePrefix } from "../homeLayout";
+import { HomeTaskGroup } from "../../../../../../../../../extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/home/HomeTaskGroup";
 import { flush, seedHomeLayout, stubApi, waitUntil, widget } from "./testSupport";
 
 describe("HomePage", () => {
@@ -14,45 +15,55 @@ describe("HomePage", () => {
     localStorage.clear();
   });
 
-  it("shows durable workflow tasks before the configurable grid without writing Home preferences", async () => {
+  it("renders module sections before the configurable grid without writing Home preferences", async () => {
     const api = stubApi();
+    api.homeSections.add({ id: "later", moduleId: "Acme.Later", order: 20, component: () => <p className="home-section-probe">Later section</p> });
+    api.homeSections.add({ id: "first", moduleId: "Acme.First", order: 10, component: () => <p className="home-section-probe">First section</p> });
     api.dashboardWidgets.add(widget({ id: "preserved-widget", title: "Preserved widget", component: () => <span>Preserved content</span> }));
     seedHomeLayout(api, ["preserved-widget"]);
     const putJson = vi.spyOn(api.backend.http, "putJson");
     const view = render(api);
 
-    const taskGroup = view.container.querySelector(".home-task-group");
-    expect(taskGroup).not.toBeNull();
-    expect(view.container.querySelector(".dashboard-grid")).toBeNull();
-    expect(taskGroup?.textContent).toContain("New workflow");
-    expect(taskGroup?.textContent).toContain("Continue editing");
-    expect(taskGroup?.querySelector("a[href='/workflows/instances?incidentHealth=active']")).not.toBeNull();
-
-    const continueButton = [...view.container.querySelectorAll("button")]
-      .find(button => button.textContent?.includes("Continue editing"))!;
-    flushSync(() => continueButton.click());
-    const openChooser = view.container.querySelector('.home-continue-dialog[role="dialog"]');
-    expect(openChooser).not.toBeNull();
-
     await waitUntil(() => view.container.querySelector(".dashboard-grid") !== null);
-    expect(view.container.querySelector('.home-continue-dialog[role="dialog"]')).toBe(openChooser);
+    const sections = [...view.container.querySelectorAll(".home-section-probe")];
+    expect(sections.map(section => section.textContent)).toEqual(["First section", "Later section"]);
     const grid = view.container.querySelector(".dashboard-grid")!;
-    expect(taskGroup!.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sections[1].compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(view.container.textContent).toContain("Preserved content");
     expect(putJson).not.toHaveBeenCalled();
     flushSync(() => view.root.unmount());
   });
 
-  it("hides the Home workflow task group when the workflows module is off", async () => {
+  it("hides a Home section whose required feature is disabled", async () => {
     const api = stubApi();
     api.runtime.enabledFeatures = [];
+    api.homeSections.add({ id: "workflows.tasks", moduleId: "Elsa.Studio.Workflows.Dashboard", requiresFeature: "workflows", component: () => <p>Workflow tasks</p> });
     api.dashboardWidgets.add(widget({ id: "core", title: "Core widget", core: true, component: () => <span>Core content</span> }));
     seedHomeLayout(api, ["core"]);
     const view = render(api);
 
     await waitUntil(() => view.container.textContent?.includes("Core content") === true);
-    expect(view.container.querySelector(".home-task-group")).toBeNull();
+    expect(view.container.textContent).not.toContain("Workflow tasks");
     flushSync(() => view.root.unmount());
+  });
+
+  it("auto-hides a completed checklist widget once and offers it again from Add widget", async () => {
+    const api = stubApi();
+    api.dashboardWidgets.add(widget({
+      id: "acme.checklist",
+      title: "Checklist",
+      load: async () => ({ done: true }),
+      isComplete: snapshot => (snapshot as { done?: boolean } | undefined)?.done === true,
+      component: () => <span>Checklist body</span>
+    }));
+    seedHomeLayout(api, ["acme.checklist"]);
+    const { container, root } = render(api);
+
+    await waitUntil(() => container.querySelector('[data-widget-id="acme.checklist"]') === null && container.querySelector(".dashboard-empty") !== null);
+    clickText(container, "Edit home");
+    clickText(container, "Add widget");
+    expect(document.body.textContent).toContain("Hidden: all steps done");
+    flushSync(() => root.unmount());
   });
 
   it("moves, resizes, hides, and restores widgets in Edit home", async () => {
@@ -190,14 +201,65 @@ describe("HomePage", () => {
     flushSync(() => view.root.unmount());
   });
 
-  it("renders its empty state when no module contributes a widget", async () => {
+  it("renders an empty state without Home actions when no module contributes a widget", async () => {
     const api = stubApi();
     const { container, root } = render(api);
     await waitUntil(() => container.querySelector(".dashboard-empty") !== null);
 
-    expect(container.textContent).toContain("No Home widgets are visible.");
+    expect(container.textContent).toContain("No installed module adds content to Home yet.");
     expect(container.querySelectorAll("article.dashboard-widget")).toHaveLength(0);
     expect(container.querySelector("h2")?.textContent).toBe("Home");
+    expect([...container.querySelectorAll("button")].map(button => button.textContent)).not.toContain("Edit home");
+    flushSync(() => root.unmount());
+  });
+
+  it("says the installed widgets are unavailable here when a feature gate filters every one", async () => {
+    const api = stubApi();
+    api.runtime.enabledFeatures = [];
+    api.dashboardWidgets.add(widget({ id: "home.recent-workflows", title: "Recent workflows", requiresFeature: "workflows", component: () => <span>Recent body</span> }));
+    const { container, root } = render(api);
+    await waitUntil(() => container.querySelector(".dashboard-empty") !== null);
+
+    expect(container.textContent).toContain("The installed Home widgets need a backend capability, a module feature or a permission that this session lacks.");
+    expect(container.textContent).not.toContain("No installed module adds content to Home yet.");
+    flushSync(() => root.unmount());
+  });
+
+  it("restores the workflow task group's open dialog across the Home layout load", async () => {
+    const api = stubApi();
+    api.homeSections.add({ id: "workflows.tasks", moduleId: "Elsa.Studio.Workflows.Dashboard", requiresFeature: "workflows", component: () => <HomeTaskGroup api={api} /> });
+    api.dashboardWidgets.add(widget({ id: "preserved-widget", title: "Preserved widget", component: () => <span>Preserved content</span> }));
+    seedHomeLayout(api, ["preserved-widget"]);
+    const putJson = vi.spyOn(api.backend.http, "putJson");
+    const view = render(api);
+
+    const taskGroup = view.container.querySelector(".home-task-group");
+    expect(taskGroup).not.toBeNull();
+    expect(view.container.querySelector(".dashboard-grid")).toBeNull();
+    const continueButton = [...view.container.querySelectorAll("button")].find(button => button.textContent?.includes("Continue editing"))!;
+    flushSync(() => continueButton.click());
+    const openChooser = view.container.querySelector('.home-continue-dialog[role="dialog"]');
+    expect(openChooser).not.toBeNull();
+
+    await waitUntil(() => view.container.querySelector(".dashboard-grid") !== null);
+    expect(view.container.querySelector('.home-continue-dialog[role="dialog"]')).toBe(openChooser);
+    expect(view.container.querySelector(".home-task-group")).toBe(taskGroup);
+    expect(taskGroup!.compareDocumentPosition(view.container.querySelector(".dashboard-grid")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(view.container.textContent).toContain("Preserved content");
+    expect(putJson).not.toHaveBeenCalled();
+    flushSync(() => view.root.unmount());
+  });
+
+  it("offers Add widget when every contributed widget is hidden", async () => {
+    const api = stubApi();
+    api.dashboardWidgets.add(widget({ id: "hidden-one", title: "Hidden one", component: () => <span>Hidden body</span> }));
+    localStorage.setItem(`${homeLayoutLocalStoragePrefix}${encodeURIComponent(JSON.stringify({ studioHostId: "test", backendBaseUrl: "https://backend.example", subjectId: "anonymous", tenantId: "default" }))}`,
+      JSON.stringify({ source: "local", namespace: "home-layout", schemaVersion: 1, value: { widgets: [{ id: "hidden-one", size: "wide", visible: false }] } }));
+    const { container, root } = render(api);
+    await waitUntil(() => container.querySelector(".dashboard-empty") !== null);
+
+    expect(container.textContent).toContain("No Home widgets are visible.");
+    expect(container.querySelector(".dashboard-empty button")?.textContent).toBe("Add widget");
     flushSync(() => root.unmount());
   });
 

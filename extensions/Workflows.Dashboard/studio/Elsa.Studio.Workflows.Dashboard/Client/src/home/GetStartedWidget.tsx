@@ -2,33 +2,15 @@ import React from "react";
 import { ArrowUpRight, BookOpen, Check } from "lucide-react";
 import { type StudioDashboardWidgetBodyProps } from "@elsa-workflows/studio-sdk";
 import { navigateStudioPath } from "./homeData";
+import { getStartedSteps, type GetStartedSnapshot } from "./getStartedSteps";
 
-export interface GetStartedSnapshot {
-  definitionExists: boolean;
-  runExists: boolean;
-  runDetailOpened: boolean;
-}
-
-export interface GetStartedStep {
-  id: "create" | "run" | "inspect";
-  title: string;
-  done: boolean;
-  href: string;
-}
+export type { GetStartedSnapshot } from "./getStartedSteps";
 
 export const homeDocsLinks = [
   { title: "Try Elsa locally", href: "https://v4.elsaworkflows.io/essentials/quickstart" },
   { title: "Your first workflow", href: "https://v4.elsaworkflows.io/essentials/first-workflow" },
   { title: "Elsa Studio", href: "https://v4.elsaworkflows.io/studio" }
 ] as const;
-
-export function getStartedSteps(snapshot: GetStartedSnapshot | undefined): GetStartedStep[] {
-  return [
-    { id: "create", title: "Create a workflow", done: Boolean(snapshot?.definitionExists), href: "/workflows/definitions" },
-    { id: "run", title: "Run it", done: Boolean(snapshot?.runExists), href: "/workflows/instances" },
-    { id: "inspect", title: "See what happened", done: Boolean(snapshot?.runDetailOpened), href: "/workflows/instances" }
-  ];
-}
 
 export function GetStartedWidget({ snapshot }: StudioDashboardWidgetBodyProps<GetStartedSnapshot, unknown>) {
   const steps = getStartedSteps(snapshot);

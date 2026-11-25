@@ -2,63 +2,52 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { describe, expect, it } from "vitest";
-import { builtInHomeLayout, homeFeatureTokensMatch, isHomeWidgetFeatureEnabled } from "../homeLayout";
-import { GetStartedWidget, homeDocsLinks } from "../widgets/GetStartedWidget";
-import { QuickActionsWidget, RecentRunsWidget, RecentWorkflowsWidget, TasksWidget } from "../widgets/HomeListWidget";
-import { runStatusTone } from "../widgets/homeData";
-import { registerCoreHomeWidgets } from "../widgets/registerCoreHomeWidgets";
+import { homeWidgetIds } from "@elsa-workflows/studio-sdk";
+import { GetStartedWidget, homeDocsLinks } from "../GetStartedWidget";
+import { QuickActionsWidget, RecentRunsWidget, RecentWorkflowsWidget, TasksWidget } from "../HomeListWidget";
+import { runStatusTone } from "../homeData";
+import { registerWorkflowHome } from "../registerWorkflowHome";
+import { register } from "../../module";
 import { stubApi } from "./testSupport";
 
 describe("Home default landing", () => {
-  it("ships workflow health and portfolio before the core Home widgets", () => {
-    expect(builtInHomeLayout.widgets.map(entry => entry.id)).toEqual([
-      "home.get-started",
-      "workflows.run-health",
+  it("registers the workflow task group and the core workflow widgets with the module", () => {
+    const api = stubApi();
+    register(api);
+    expect(api.homeSections.list().map(section => [section.id, section.moduleId, section.requiresFeature])).toEqual([
+      ["workflows.tasks", "Elsa.Studio.Workflows.Dashboard", "workflows"]
+    ]);
+    expect(api.homeWidgets.list().map(widget => widget.id)).toEqual([
+      homeWidgetIds.getStarted,
+      homeWidgetIds.quickActions,
+      homeWidgetIds.recentWorkflows,
+      homeWidgetIds.recentRuns,
+      homeWidgetIds.needsAttention,
+      homeWidgetIds.tasks,
       "workflows.portfolio",
-      "home.quick-actions",
-      "home.needs-attention",
-      "home.recent-runs",
-      "home.recent-workflows",
-      "home.tasks"
+      "workflows.run-health"
     ]);
-    expect(builtInHomeLayout.widgets.map(entry => entry.size)).toEqual([
-      "full", "full", "medium", "medium", "medium", "medium", "medium", "medium"
-    ]);
+    expect(api.homeWidgets.list().every(widget => widget.moduleId === "Elsa.Studio.Workflows.Dashboard")).toBe(true);
   });
 
-  it("matches Studio module assembly ids to feature slugs", () => {
-    expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.Workflows")).toBe(true);
-    expect(homeFeatureTokensMatch("user-tasks", "Elsa.Studio.UserTasks")).toBe(true);
-    expect(homeFeatureTokensMatch("Elsa.Studio.Workflows", "workflows")).toBe(true);
-    expect(homeFeatureTokensMatch("user-tasks", "workflows")).toBe(false);
-    expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.Dashboard")).toBe(false);
-    expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.WorkflowsX")).toBe(false);
-    expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.Other.Workflows")).toBe(false);
-    expect(homeFeatureTokensMatch("workflows", "Contoso.Workflows")).toBe(false);
-    expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.Workflows.Extra")).toBe(false);
-    expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.XWorkflows")).toBe(false);
-    expect(homeFeatureTokensMatch("workflows", "Elsa.Workflows")).toBe(false);
-    expect(homeFeatureTokensMatch("workflows", "Studio.Workflows")).toBe(false);
-    expect(homeFeatureTokensMatch("workflows", "workflows-extra")).toBe(false);
-    expect(homeFeatureTokensMatch("workflows", "extra-workflows")).toBe(false);
-    expect(homeFeatureTokensMatch("user-tasks", "Elsa.Studio.UserTasksX")).toBe(false);
-    expect(homeFeatureTokensMatch("user-tasks", "Contoso.UserTasks")).toBe(false);
+  it("marks Get started complete only when every step is done", () => {
+    const api = stubApi();
+    registerWorkflowHome(api);
+    const getStarted = api.homeWidgets.list().find(widget => widget.id === homeWidgetIds.getStarted)!;
+    expect(getStarted.isComplete?.({ definitionExists: true, runExists: true, runDetailOpened: false })).toBe(false);
+    expect(getStarted.isComplete?.({ definitionExists: true, runExists: true, runDetailOpened: true })).toBe(true);
+    expect(getStarted.isComplete?.(undefined)).toBe(false);
   });
 
   it("registers Tasks as a user-tasks inbox entry point without a data loader", () => {
     const api = stubApi();
-    registerCoreHomeWidgets(api);
-    const tasks = (api.homeWidgets ?? api.dashboardWidgets).list().find(widget => widget.id === "home.tasks");
+    registerWorkflowHome(api);
+    const tasks = api.homeWidgets.list().find(widget => widget.id === "home.tasks");
     expect(tasks?.requiresFeature).toBe("user-tasks");
     expect(tasks?.load).toBeUndefined();
     expect(tasks?.description).toMatch(/tasks inbox/i);
     expect(tasks?.description).not.toMatch(/when user tasks are enabled/i);
     expect(tasks?.description).not.toMatch(/assigned tasks appear here/i);
-  });
-
-  it("fails closed when enabledFeatures is omitted", () => {
-    expect(isHomeWidgetFeatureEnabled({ requiresFeature: "workflows" }, undefined)).toBe(false);
-    expect(isHomeWidgetFeatureEnabled({}, undefined)).toBe(true);
   });
 
   it("maps run status to semantic tones", () => {

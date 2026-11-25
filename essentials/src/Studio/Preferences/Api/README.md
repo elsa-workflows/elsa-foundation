@@ -28,7 +28,7 @@ GET `/home-layout` returns the fallback document's `ETag` when the source is `de
 
 The core feature registers the built-in dashboard, attention, and home-layout namespaces, namespace registry, in-memory store, time provider, scoped preference service, and `StudioPreferencesPermissionContributor`. The API feature adds the scoped `StudioPreferenceScopeResolver` and the Home layout routes.
 
-Anonymous or demo Studio sessions (sign-in off) never reach this surface. The Studio client falls back to `localStorage` or the built-in default; see the Home module README.
+Anonymous or demo Studio sessions (sign-in off) never reach this surface. The Studio client falls back to `localStorage` or the built-in default; see [Home in the Studio shell](../../../../../Studio/src/essentials/Elsa.Studio.Hosting/README.md#home).
 
 There are no module-owned event handlers, background tasks, or scheduled jobs. Persistence hosts can replace `IStudioPreferenceStore`; feature modules can contribute additional `IStudioPreferenceNamespace` implementations.
 

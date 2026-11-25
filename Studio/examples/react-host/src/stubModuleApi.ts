@@ -53,6 +53,7 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
     routes,
     dashboardWidgets,
     homeWidgets: dashboardWidgets,
+    homeSections: createContributionRegistry({ slot: studioSlots.homeSections }),
     diagnosticsWidgets: createContributionRegistry({ slot: studioSlots.diagnosticsWidgets }),
     panels: createContributionRegistry({ slot: studioSlots.panels }),
     toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),

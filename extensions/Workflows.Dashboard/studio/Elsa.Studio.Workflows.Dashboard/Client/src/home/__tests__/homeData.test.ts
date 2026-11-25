@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { homeHasRun, homeHasWorkflow, loadNeedsAttention, loadRecentRuns, loadRecentWorkflows } from "../homeData";
-import { stubApi } from "../../__tests__/testSupport";
+import { stubApi } from "./testSupport";
 
 const definitionsPath = "/design/workflows/definitions?take=8";
 const recentRunsPath = "/runtime/workflows/instances/page?take=8";

@@ -2,7 +2,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, EyeOff, RefreshCw, Settings } from "lucide-react";
 import { SkeletonRows, StudioAlert, StudioButton, OverflowMenu, selectSettingEditor, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { normalizeHomeWidgetSize, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
-import { useDashboardWidget } from "./useDashboardWidgets";
+import { useDashboardWidget } from "./useHomeWidget";
 
 const sizeLabels: Record<StudioDashboardWidgetSize, string> = {
   small: "S",
@@ -66,7 +66,7 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
           </select></StudioField>
           {widget.settings ? <StudioButton type="button" variant="ghost" size="sm" onClick={() => setSettingsOpen(true)} aria-label={`Settings for ${widget.title}`}><Settings size={15} /></StudioButton> : null}
           {widget.load ? <StudioButton type="button" variant="ghost" size="sm" onClick={() => void runtime.refresh()} aria-label={`Refresh ${widget.title}`}><RefreshCw size={15} /></StudioButton> : null}
-          {!pinned ? <StudioButton type="button" variant="ghost" size="sm" onClick={onHide} aria-label={widget.id === "home.get-started" ? `Dismiss ${widget.title}` : `Hide ${widget.title}`}><EyeOff size={15} /></StudioButton> : null}
+          {!pinned ? <StudioButton type="button" variant="ghost" size="sm" onClick={onHide} aria-label={widget.isComplete ? `Dismiss ${widget.title}` : `Hide ${widget.title}`}><EyeOff size={15} /></StudioButton> : null}
         </div>
       ) : (
         <OverflowMenu
@@ -79,7 +79,7 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
               label: `Size ${sizeLabels[option] ?? option}`,
               onSelect: () => onSize(option)
             })),
-            ...(!pinned ? [{ id: "remove", label: widget.id === "home.get-started" ? "Dismiss" : "Remove", destructive: true, onSelect: onHide }] : [])
+            ...(!pinned ? [{ id: "remove", label: widget.isComplete ? "Dismiss" : "Remove", destructive: true, onSelect: onHide }] : [])
           ]}
         />
       )}
