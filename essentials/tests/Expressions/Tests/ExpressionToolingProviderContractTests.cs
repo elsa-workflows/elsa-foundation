@@ -97,6 +97,9 @@ public sealed class ExpressionToolingProviderContractTests
         var getterHover = await provider.GetHoverAsync(
             new(scope, "getCustomer().name", new(0, "getCustomer().name".Length)),
             CancellationToken.None);
+        var functionHover = await provider.GetHoverAsync(
+            new(scope, "getCurrentValue", new(0, "getCurrentValue".Length)),
+            CancellationToken.None);
 
         var rootGetter = Assert.Single(root.Payload!.Items);
         Assert.Equal("getCurrentValue", rootGetter.Label);
@@ -104,6 +107,8 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.Equal("currentValue", Assert.Single(member.Payload!.Items).Label);
         Assert.Equal("name", Assert.Single(getterMember.Payload!.Items).Label);
         Assert.Contains("Customer name.", getterHover.Payload!.Contents, StringComparison.Ordinal);
+        // A signature already names the function, so it is the whole first line.
+        Assert.Equal("getCurrentValue()", functionHover.Payload!.Contents.Split(Environment.NewLine)[0]);
     }
 
     [Fact]
