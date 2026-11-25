@@ -8,11 +8,11 @@
 
 | File | What it is |
 |---|---|
-| `Essentials/apps/Elsa.Workbench/Dockerfile` | The image: multi-stage, `net10.0`, non-root, port 8080 |
+| `apps/Elsa.Workbench.Host/Dockerfile` | The image: multi-stage, `net10.0`, non-root, port 8080 |
 | `docker/compose/docker-compose.yml` | The reference stack |
 | `docker/compose/elsa-workbench.shells.json` | The curated demo composition the stack mounts |
 
-The repo default `Essentials/apps/Elsa.Workbench/shells.json` (SQLite) is intentionally left untouched; the compose stack mounts its own `shells.json` instead.
+The repo default `apps/Elsa.Workbench.Host/shells.json` (SQLite) is intentionally left untouched; the compose stack mounts its own `shells.json` instead.
 
 ## Run the reference stack
 
@@ -82,7 +82,7 @@ Studio wiring (see `docker-compose.yml`):
   [Environment variables](#environment-variables)).
 - **`/` returns 500 with `FeatureNotFoundException: WorkflowsRuntimeResumption`** — the host is
   missing the `Elsa.Workflows.Runtime.Resumption` project reference that every durable
-  persistence provider depends on. It is wired in `Elsa.Workbench.csproj` / `Program.cs`; rebuild the
+  persistence provider depends on. It is wired in `Elsa.Workbench.Host.csproj` / `Program.cs`; rebuild the
   image if you see this.
 - **`Npgsql … Failed to connect to 127.0.0.1:5432`** — the feature fell back to its default
   connection string, meaning `ConnectionString` did not bind. Ensure it is a **top-level** property
@@ -98,7 +98,7 @@ The build context **must be the repository root** — the project references spa
 tree and the build needs repo-root `Directory.Packages.props`, the `.slnx`, and a NuGet config.
 
 ```bash
-docker build -f Essentials/apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
+docker build -f apps/Elsa.Workbench.Host/Dockerfile -t elsa-workbench:local .
 docker run --rm -p 13000:8080 \
   -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
   -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \
@@ -126,7 +126,7 @@ base64-encoded as `.github/workflows/docker.yml`'s `versions` job encodes the fi
 ```bash
 dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- \
   plan --ref refs/heads/main --commit HEAD --output /tmp/elsa-versions
-docker build -f Essentials/apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local \
+docker build -f apps/Elsa.Workbench.Host/Dockerfile -t elsa-workbench:local \
   --build-arg ELSA_PACKAGE_VERSIONS="$(gzip -9n < /tmp/elsa-versions/package-versions.props | base64 | tr -d '\n')" .
 ```
 
@@ -334,4 +334,4 @@ DataProtection.Keys --provider Sqlite --connection-env ELSA_EF_CONNECTION` again
 `WorkflowsRuntimeEntityFrameworkCore` declares `DependsOn "WorkflowsRuntimeResumption"`, and the distributed
 persistence feature declares `DependsOn "WorkflowsRuntimeDistributed"`; CShells auto-enables those dependencies. Their
 assemblies are referenced by the host so the features are discoverable in a clean deployment (see the note in
-`Elsa.Workbench.csproj`).
+`Elsa.Workbench.Host.csproj`).

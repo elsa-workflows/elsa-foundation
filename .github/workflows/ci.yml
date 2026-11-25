@@ -110,7 +110,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
             if ! changed=$(git diff --name-only "$GITHUB_SHA^1" "$GITHUB_SHA"); then
               kernel=true
-            elif grep -Eq '^(prototypes/kernel-model/|apps/Elsa\.Workbench/CorePreview/|tools/ci/actor-foundation/WorkbenchPostgresPreview\.cs$|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts|WorkflowActor)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|tools/architecture/check-kernel-model-references\.targets$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+            elif grep -Eq '^(prototypes/kernel-model/|apps/Elsa\.Workbench\.Host/CorePreview/|tools/ci/actor-foundation/WorkbenchPostgresPreview\.cs$|essentials/(src|tests)/ActorFoundation/|essentials/(src|tests)/Workflows/Runtime/(Graph|Native|Statecharts|WorkflowActor)/|essentials/build/Analyzers/|essentials/tests/Directory\.Build\.props$|Directory\.Build\.(props|targets)$|Directory\.Packages\.props$|PackageVersioning\.props$|PackageRanges\.targets$|VersionLines\.props$|\.editorconfig$|tools/ci/kernel_prototype_gate\.py$|tools/architecture/check-kernel-model-references\.targets$|\.github/workflows/ci\.yml$)' <<<"$changed"; then
               kernel=true
             fi
           fi
@@ -1485,12 +1485,12 @@ jobs:
       - name: Restore Workbench and the focused test project from committed public feeds
         shell: bash
         run: |
-          dotnet restore apps/Elsa.Workbench/Elsa.Workbench.csproj --locked-mode
+          dotnet restore apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj --locked-mode
           dotnet restore essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
 
       - name: Build Workbench with the documented command
         shell: bash
-        run: dotnet build apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+        run: dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
 
       - name: Verify the documented build left tracked lock files unchanged
         shell: bash
@@ -2276,6 +2276,54 @@ jobs:
                 failed+=("$label")
               fi
               echo "::endgroup::"
+            done
+          done
+          if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
+
+      # The S2 and S3 composition guards (#4229): each lane on its own new database; a failed lane fails the step at the end.
+      - name: Root state family, all lanes
+        if: ${{ !cancelled() }}
+        env:
+          PG_PORT: ${{ job.services.postgres.ports[5432] }}
+          PG_ID: ${{ job.services.postgres.id }}
+        run: |
+          failed=()
+          for writer in owned ef; do
+            for fence in checked in-batch; do
+              db="state_family_${writer}_${fence//-/_}"
+              echo "::group::$writer $fence"
+              docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
+              export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
+              if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-state-family "$writer" "$fence"; then
+                echo "::error::Root state family failed: $writer $fence"
+                failed+=("$writer $fence")
+              fi
+              echo "::endgroup::"
+            done
+          done
+          if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
+
+      # S4 adds the composed install guard beside the S2 composition guard.
+      - name: Root composition and composed install, all lanes
+        if: ${{ !cancelled() }}
+        env:
+          PG_PORT: ${{ job.services.postgres.ports[5432] }}
+          PG_ID: ${{ job.services.postgres.id }}
+        run: |
+          failed=()
+          for check in composition composed-install; do
+            for writer in owned ef; do
+              for fence in checked in-batch; do
+                db="${check//-/_}_${writer}_${fence//-/_}"
+                echo "::group::$check $writer $fence"
+                docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
+                export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
+                if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "pg-root-$check" "$writer" "$fence"; then
+                  echo "::error::Root $check failed: $writer $fence"
+                  failed+=("$check $writer $fence")
+                fi
+                echo "::endgroup::"
+              done
             done
           done
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi

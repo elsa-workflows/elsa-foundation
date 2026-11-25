@@ -78,6 +78,7 @@ internal sealed class LegacyTurn : INativeTurn
 
     public void SetStatus(Contract.ActorStatus status, string? subStatus, JsonNode? output) =>
         _turn.SetStatus((InstanceStatus)status, subStatus, output);
+    public void SetLabel(string name, string? value) => throw new NotSupportedException("The legacy host projects no labels.");
 
     public string EffectKey(string node, string iteration, int attempt) =>
         Kernel.Workflows.EffectKey.For(_turn.Instance, node, iteration, attempt);

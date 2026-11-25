@@ -43,7 +43,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class HostProvidedPackagesGuardTests
 {
     /// <summary>The hosts known to share assemblies; <see cref="Every_host_that_shares_assemblies_is_guarded"/> keeps this complete.</summary>
-    private static readonly string[] SharingHosts = ["Elsa.Essentials.Host", "Elsa.Foundation.Host", "Elsa.Workbench"];
+    private static readonly string[] SharingHosts = ["Elsa.Essentials.Host", "Elsa.Foundation.Host", "Elsa.Workbench.Host"];
 
     private const string WorkbenchSourceBuildVersion =
         "A source-built Workbench records its Elsa packages at their line's dev version (x.y.0-dev), which every Elsa feed " +
@@ -67,7 +67,7 @@ public sealed class HostProvidedPackagesGuardTests
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> Exemptions =
         new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)
         {
-            ["Elsa.Workbench"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            ["Elsa.Workbench.Host"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Elsa.Activities.Design.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Activities.Runtime.Core"] = WorkbenchSourceBuildVersion,

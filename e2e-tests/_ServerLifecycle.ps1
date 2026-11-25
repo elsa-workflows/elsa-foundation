@@ -2,7 +2,7 @@
 .SYNOPSIS
     Server process lifecycle for the e2e scripts that restart Elsa.Workbench (dot-sourced).
 .DESCRIPTION
-    A restart-style script owns the server it restarts: it launches the ALREADY-BUILT Elsa.Workbench.dll itself,
+    A restart-style script owns the server it restarts: it launches the ALREADY-BUILT Elsa.Workbench.Host.dll itself,
     keeps the process it launched, and stops only that process. Nothing here looks up "whatever listens on the
     port" in order to stop it. If the port is held by a process this script run did not start, the launch fails
     with the port and the pid in the message and that process is left alone (issue #2329: the earlier helpers
@@ -16,7 +16,7 @@
     large solution's MSBuild graph on every relaunch (minutes).
 #>
 
-$script:WorkbenchProject = (Resolve-Path "$PSScriptRoot/../apps/Elsa.Workbench/Elsa.Workbench.csproj").Path
+$script:WorkbenchProject = (Resolve-Path "$PSScriptRoot/../apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj").Path
 $script:OwnedElsaServer  = $null   # the one launch this script run made: Process, BaseUrl, ContentRoot, Environment
 $script:ElsaServerLaunchCount = 0
 
@@ -133,7 +133,7 @@ function Start-OwnedElsaServer {
     $port = $uri.Port
 
     $dll = if ([string]::IsNullOrWhiteSpace($AssemblyPath)) {
-        Join-Path (Split-Path $script:WorkbenchProject) 'bin/Debug/net10.0/Elsa.Workbench.dll'
+        Join-Path (Split-Path $script:WorkbenchProject) 'bin/Debug/net10.0/Elsa.Workbench.Host.dll'
     } else {
         [IO.Path]::GetFullPath($AssemblyPath)
     }

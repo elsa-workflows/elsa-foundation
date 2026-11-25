@@ -19,7 +19,9 @@ public sealed partial class EfStore
         int limit, CancellationToken cancellationToken)
     {
         await using var db = create();
-        if (!postgres || Engine is not null || !db.Database.IsNpgsql() || db.UsesRootSelfProtocol || db.UsesRootJobProtocol)
+        // A composed Park set inspects its direct and operator rows beside self-sends and jobs, which it never lists.
+        if (!postgres || Engine is not null || !db.Database.IsNpgsql() ||
+            (db.UsesRootSelfProtocol || db.UsesRootJobProtocol) && !db.UsesRootParkInspection)
             throw new NotSupportedException("Inbox inspection requires a PostgreSQL direct-input root profile.");
 
         var expected = db.RequiredFormat;

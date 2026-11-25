@@ -233,8 +233,8 @@ All paths are relative to the repository root, under `Essentials/`.
 
 | Topic | Type(s) | Path |
 |---|---|---|
-| Entry point | `Program` | `apps/Elsa.Workbench/Program.cs` |
-| Shell and feature list | — | `apps/Elsa.Workbench/shells.json` |
+| Entry point | `Program` | `apps/Elsa.Workbench.Host/Program.cs` |
+| Shell and feature list | — | `apps/Elsa.Workbench.Host/shells.json` |
 | Runtime API feature | `WorkflowsRuntimeApiFeature` | `src/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs` |
 | Activities runtime feature | `ActivitiesRuntimeFeature` | `src/Activities/Runtime/Elsa.Activities.Runtime/ActivitiesRuntimeFeature.cs` |
 | EF Core runtime feature | `RuntimeEntityFrameworkCoreFeature` | `src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeEntityFrameworkCoreFeature.cs` |

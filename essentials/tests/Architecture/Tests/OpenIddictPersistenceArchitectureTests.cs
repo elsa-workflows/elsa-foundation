@@ -108,7 +108,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
         Assert.Equal(StoreOpenIddictEfPackages, vendorPackages);
 
         // Workbench takes the store from the package, never from a vendor package of its own.
-        var workbench = XDocument.Load(Path.Combine(RepoRoot, "apps", "Elsa.Workbench", "Elsa.Workbench.csproj"));
+        var workbench = XDocument.Load(Path.Combine(RepoRoot, "apps", "Elsa.Workbench.Host", "Elsa.Workbench.Host.csproj"));
         Assert.DoesNotContain(
             workbench.Descendants("PackageReference"),
             element => string.Equals((string?)element.Attribute("Include"), "OpenIddict.EntityFrameworkCore", StringComparison.Ordinal));

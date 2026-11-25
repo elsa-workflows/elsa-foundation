@@ -22,6 +22,9 @@
     <ProjectReference Include="..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\src\Diagnostics\OpenTelemetry\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Diagnostics\OpenTelemetry\Workflows\Elsa.Diagnostics.OpenTelemetry.Workflows.csproj" />
+    <!-- The engine tracer the bridge tests emit real engine spans through. -->
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
   </ItemGroup>
 
 </Project>

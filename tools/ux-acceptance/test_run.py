@@ -651,7 +651,7 @@ class CopyAssetOwnershipTests(unittest.TestCase):
 
 class CompositionTests(unittest.TestCase):
     def setUp(self):
-        self.shells = json.loads((acceptance.ROOT / 'apps/Elsa.Workbench/shells.json').read_text(encoding='utf-8-sig'))
+        self.shells = json.loads((acceptance.ROOT / 'apps/Elsa.Workbench.Host/shells.json').read_text(encoding='utf-8-sig'))
         self.features = self.shells['CShells']['Shells']['default']['Features']
 
     def test_subset_lists_name_only_currently_configured_features(self):
@@ -786,8 +786,8 @@ class OrchestrationTests(unittest.TestCase):
             # These commands are mocked: keep their simulated fixture build entirely in an owned source copy.
             source = Path(temporary) / 'source'
             for relative in (
-                'apps/Elsa.Workbench/appsettings.json',
-                'apps/Elsa.Workbench/shells.json',
+                'apps/Elsa.Workbench.Host/appsettings.json',
+                'apps/Elsa.Workbench.Host/shells.json',
                 'Studio/src/apps/Elsa.Studio.Web/appsettings.json',
                 'Studio/src/apps/Elsa.Studio.Web/shells.json',
                 'e2e-tests/activity-data-selection/fixtures/fixture.targets',
@@ -811,11 +811,11 @@ class OrchestrationTests(unittest.TestCase):
             def fake_host(directory, dll, url, ready, log, env, on_started=None):
                 seed = None
                 features = {}
-                if dll == 'Elsa.Workbench.dll':
+                if dll == 'Elsa.Workbench.Host.dll':
                     shells = json.loads((directory / 'shells.json').read_text())
                     features = shells['CShells']['Shells']['default']['Features']
                     seed = features[acceptance.IDENTITY_SEED_FEATURE]['SeedAdminUserName']
-                settings = json.loads((directory / 'appsettings.json').read_text()) if dll == 'Elsa.Workbench.dll' else {}
+                settings = json.loads((directory / 'appsettings.json').read_text()) if dll == 'Elsa.Workbench.Host.dll' else {}
                 principals = settings.get('Qualification', {}).get('Principals', [])
                 events.append(('start', directory.name, dll, url, log.name, seed, env.get('Studio__BackendBaseUrl'), len(principals), ready, tuple(sorted(item['username'] for item in principals)), {'history': features.get('WorkflowsRuntimeHistory'), 'omitted': 'PlaybackQualificationWithoutHistory' in features, 'cache': features.get('WorkflowsRuntimeEntityFrameworkCore', {}).get('CacheWorkflowExecutables')}))
                 process = SimpleNamespace(pid=1000 + len(events), returncode=None)
@@ -839,7 +839,7 @@ class OrchestrationTests(unittest.TestCase):
                     }))
                     return
                 if log.name == 'fixture-cleanup-build.log':
-                    dll = source / 'apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
+                    dll = source / 'apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll'
                     dll.parent.mkdir(parents=True, exist_ok=True)
                     dll.write_bytes(b'fixture-free default host')
                     return
@@ -874,8 +874,8 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual({'executed': 1, 'sourceSha': 'abc', 'kind': 'isolated-shared-components', 'portOverrideConfirmed': False}, report['isolatedFieldGallery'])
         starts = [event for event in events if event[0] == 'start']
         seed, owned = starts[0], starts[1:]
-        self.assertEqual(('workbench', 'Elsa.Workbench.dll', 'backend-restricted-seed.log', acceptance.RESTRICTED_USER), (seed[1], seed[2], seed[4], seed[5]))
-        self.assertEqual(('stop', 'workbench', 'Elsa.Workbench.dll'), events[1], 'The seed boot stops before any acceptance host starts')
+        self.assertEqual(('workbench', 'Elsa.Workbench.Host.dll', 'backend-restricted-seed.log', acceptance.RESTRICTED_USER), (seed[1], seed[2], seed[4], seed[5]))
+        self.assertEqual(('stop', 'workbench', 'Elsa.Workbench.Host.dll'), events[1], 'The seed boot stops before any acceptance host starts')
         self.assertEqual(0, seed[7], 'The first-boot seed must not create the Dashboard reader before grant narrowing')
         self.assertEqual(2, owned[0][7], 'Combined acceptance has only the independent Dashboard and history readers')
         self.assertEqual(('dashboard-reader', 'history-reader'), owned[0][9])
@@ -949,7 +949,7 @@ class OrchestrationTests(unittest.TestCase):
 
             with patch.object(acceptance, 'prepare_host', prepare), patch.object(acceptance, 'host', failing_host):
                 with self.assertRaisesRegex(RuntimeError, 'Unsupported host readiness failed'), ExitStack() as stack:
-                    acceptance.playback_profiles(stack, data, acceptance.ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj',
+                    acceptance.playback_profiles(stack, data, acceptance.ROOT / 'apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj',
                         acceptance.ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj', data, {}, processes, pids, profiles)
             expected = {f'playback-{name}-{kind}' for name in ('disabled', 'uncaptured') for kind in ('backend', 'studio')}
             self.assertEqual(expected, set(pids))
@@ -1095,7 +1095,7 @@ class SourcePairTests(unittest.TestCase):
                 root = Path(directory); output = root / 'evidence'
                 fixture = root / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
                 fixture.parent.mkdir(parents=True); fixture.write_text('test import'); fixture.with_name('CustomerFixture.cs').write_text('test fixture')
-                dll = root / 'apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
+                dll = root / 'apps/Elsa.Workbench.Host/bin/Debug/net10.0/Elsa.Workbench.Host.dll'
                 dll.parent.mkdir(parents=True)
                 def command(_args, log, **_kwargs):
                     if log.name == 'backend-build.log': raise RuntimeError('primary build failure')

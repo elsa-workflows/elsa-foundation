@@ -130,6 +130,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         if (roots is not null && input.Row is { Status: Durable.InstanceStatus.Running or Durable.InstanceStatus.Faulted, Suspended: false } recoverTarget &&
             input.Taken is [{ Durable: true } recover] && IsRootRecover(recover.Message))
             return RecoverRootPark(input, recoverTarget, recover);
+        if (RefuseOnParkedRoot(input) is { } parkedRefusal) return parkedRefusal;
         if (roots is not null && input.Row is { } qualifiedPark && input.Taken.All(item => CanKeepRootParkArrival(qualifiedPark, item)))
         {
             if (input.Taken.Any(item => item.Attempts >= input.MaxAttempts))
