@@ -136,7 +136,8 @@ public sealed partial class EfStore
             var fits = page == charged.Length;
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived), kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
-                fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page };
+                fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page,
+                    ClearsInPages = ClearsParkInPages(db) };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }
         return polled with { Messages = messages };

@@ -297,6 +297,14 @@ public sealed partial class EfStore
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """;
             if (await db.Database.ExecuteSqlInterpolatedAsync(Ends ? end : advance, token) != 1) return false;
+            // An Open withholds the root's inputs until the end: one the owner read ahead is marked unseen, and the owner forgets
+            // its copy by the same predicate (Worker), so the next poll reads it again under the clearing's filter.
+            if (Clearing is null && !Ends && ClearsParkInPages(db))
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Seen" = 0, "Trial" = 0
+                    WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        AND "EventMatch" IS NULL AND NOT "Done" AND "Id" NOT LIKE 'operator/%'
+                    """, token);
             if (!Ends)
             {
                 // The next control, bound to the Terminate's operation and Park mark, clears the next page.

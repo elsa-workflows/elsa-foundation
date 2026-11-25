@@ -86,6 +86,9 @@ internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arr
     internal string? Clearing { get; init; }
     internal long Cleared { get; init; }
     internal int Page { get; init; }
+    // S5b-2: the store marks the root's pending inputs unseen in a clearing's Open (EfStore.ClearsParkInPages), so the owner
+    // forgets the copies it read ahead and the poll withholds them until the end.
+    internal bool ClearsInPages { get; init; }
 }
 
 /// <summary>A message. Times are database time in milliseconds.</summary>

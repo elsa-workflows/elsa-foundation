@@ -425,8 +425,9 @@ internal static class PostgresRootParkedOperatorChecks
         async Task ClearingSet()
         {
             await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + ClearingSchema, stop);
-            var clearingOptions = new DbContextOptionsBuilder<KernelDb>()
-                .UseNpgsql(new NpgsqlConnectionStringBuilder(connection) { SearchPath = ClearingSchema }.ConnectionString).Options;
+            var clearingConnection = new NpgsqlConnectionStringBuilder(connection) { SearchPath = ClearingSchema }.ConnectionString;
+            var clearingHold = new RaceHook(clearingConnection);
+            var clearingOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(clearingConnection).AddInterceptors(clearingHold).Options;
             var clearingCapabilities = RootProfiles.Formats[StoreFormat.RootParkArrivals] | RootProfiles.Formats[StoreFormat.RootTerminalSelection] |
                 RootCapabilities.OperatorReplies;
             KernelDb OpenClearing() => KernelDb.ForUnshippedComposition(clearingOptions, ComposedClearing, clearingCapabilities);
@@ -437,6 +438,7 @@ internal static class PostgresRootParkedOperatorChecks
             var arrivals = new[] { "during-1", "during-2", "during-3" };
             // The commit observer reads the large root, so it is assigned before the observer is installed.
             Contract.ActorRef large = default;
+            (string Actor, long Due)? holdAfterOpen = null;
             await using var set = new Set("parked-clearing", OpenClearing, owned, inBatch, tenant, stop);
             set.Write = Write;
             await set.InstallAsync(createTables: true);
@@ -445,6 +447,7 @@ internal static class PostgresRootParkedOperatorChecks
             large = await set.StartAsync("clearing-large");
             var probed = await set.StartAsync("clearing-probe");
             var between = await set.StartAsync("clearing-between");
+            var ahead = await set.StartAsync("clearing-ahead");
 
             // A Park within 170 rows that exceeds 4 MiB is cleared in pages by bytes.
             Check(await set.SendAsync(bytes, "bytes-fail", "fail"), "the clearing set admits a failing input");
@@ -572,6 +575,35 @@ internal static class PostgresRootParkedOperatorChecks
                 "the same owner refused the second Terminate past the withheld arrival and ended the root, which kept the arrival out of Cleared");
             set.Answered("between-second", "ResolutionOpen");
 
+            // An input due shortly is read ahead with the Terminate before Open and comes due mid-clearing. The owner drops its
+            // copy at Open, so it is never kept: it stays pending with no stand-down and settles as Ended after the end.
+            Check(await set.SendAsync(ahead, "ahead-fail", "fail"), "the clearing set admits a failing input for the read-ahead root");
+            var aheadPark = await set.DriveAsync(ahead, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.SendAsync(ahead, "c1", "ordinary"), "the clearing set admits an arrival to copy for the read-ahead root");
+            await set.SettledInputsAsync(ahead);
+            var aheadCopies = Enumerable.Range(1, 200).Select(n => $"{ahead.Id}/{FoundationRootCreator.OperationDigest($"a{n:D3}")}/{Guid.NewGuid():N}").ToArray();
+            await using (var write = OpenClearing())
+                Check(await write.Database.ExecuteSqlInterpolatedAsync($$"""
+                    INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Payload", "Due", "KeepUntil",
+                        "Done", "Seen", "Attempts", "Trial", "JobGeneration", "FoundationKeptBy")
+                    SELECT m."InboxScope", d.id, m."Partition", m."Target", m."Kind", m."Start", '{}', m."Due", m."KeepUntil", true, 0, 0, 0, 0, 1
+                    FROM "Messages" m, unnest({{aheadCopies}}::text[]) WITH ORDINALITY d(id, n)
+                    WHERE m."Target" = {{aheadPark.Actor.Id}} AND m."FoundationKeptBy" = 1 ORDER BY d.n
+                    """, stop) == 200, "raw SQL keeps 200 more arrivals for the read-ahead root");
+            var aheadDue = (await set.ImageAsync(ahead)).AsOf + 1_500;
+            Check(await set.SendAsync(ahead, "ahead-input", "ordinary", aheadDue) &&
+                    await set.TerminateAsync(ahead, "ahead-terminate", await set.ParkSelectionAsync(ahead, 2)),
+                "an input due shortly and a Terminate with the Park selection behind it are admitted");
+            holdAfterOpen = (aheadPark.Actor.Id, aheadDue);
+            var aheadOwner = set.Owner;
+            await set.DriveAsync(ahead, image => image is { Status: InstanceStatus.Cancelled });
+            await set.SettledInputsAsync(ahead);
+            var aheadInput = (await set.InputsAsync(ahead)).Single(row => row.Id.Contains("/" + FoundationRootCreator.OperationDigest("ahead-input") + "/"));
+            Check(clearingHold.Held == 1 && ReferenceEquals(set.Owner, aheadOwner) && !set.StoodDown &&
+                    aheadInput is { Done: true, KeptBy: null } && !set.Probe.Saw(ahead, "ordinary") &&
+                    Outcomes(await set.Cold.ReadJournalOfAsync(0, aheadPark.Actor.Id, 0, stop)) is [_, """{"Outcome":"terminated","Operation":"ahead-terminate","Cleared":202}"""],
+                "the input read ahead and due mid-clearing was never kept, the owner did not stand down, and it settled after the end outside Cleared");
+
             // A clearing control's header names a Park; one that names none is refused at decode.
             var decoded = PostgresRootAdmission.DecodeOperator(ControlRow(true), between.Id, true, true, true, operatorReplies: true, parkedTerminate: true);
             Check(decoded.Operator is { RootParkClear: true, RootParkMark: not null }, "a clearing control's header decodes as a control that names its Park");
@@ -614,6 +646,13 @@ internal static class PostgresRootParkedOperatorChecks
                 if (!committed.Landed) return committed;
                 foreach (var turn in batch.Turns) settled.AddRange(turn.Done.Select(key => key.Id));
                 if (clear is not null && clear.Row?.Status == InstanceStatus.Faulted) cleared.Add((await set.ClearingAsync(large)).Cleared);
+                if (holdAfterOpen is { } hold && batch.Turns.Any(turn => turn.FoundationRootOperator?.Id == "ahead-terminate" &&
+                        turn.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true))
+                {
+                    // The next page's Park facts wait until the read-ahead input is due, so it comes due mid-clearing.
+                    clearingHold.Hold(hold.Actor, hold.Due);
+                    holdAfterOpen = null;
+                }
                 if (clear is { Journal: { } entry } && entry.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal))
                     foreach (var arrival in arrivals) Check(await set.SendAsync(large, arrival, "ordinary"), $"the clearing root admits {arrival} after Open");
                 if (page && !pageChecked)
