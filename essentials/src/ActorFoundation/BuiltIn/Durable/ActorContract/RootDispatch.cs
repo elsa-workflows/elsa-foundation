@@ -199,8 +199,11 @@ internal sealed partial class ActorAdapter
                 message.Sender is not null || message.EventMatch is not null ||
                 message.ActorAuthored || message.Operator is not null)
                 return "RootDispatchUnavailable";
-            // A held caller is answered on a start as on a direct input: the route's tenant is the root's, bound by its
-            // birth on a start and by its checkpoint's header afterwards.
+            // A held caller is answered on a start as on a direct input. On a start this check is structural: the poll takes
+            // both the caller's tenant and the root's from the root's birth binding. Isolation holds where the route is
+            // made and where it lands: admission writes a route only for a request of the root's own tenant, and
+            // Requests.TryReceive refuses a reply whose tenant is not its caller's. After the start, the caller's tenant
+            // is checked against the checkpoint's header.
             if (message.ReplyTo is not null && (!rootHeldReplies || delivery.ReplyTenant is not { } callerTenant ||
                 (message.Start is not null ? message.FoundationRootBinding?.Tenant : input.Row?.FoundationDispatchHeader?.Tenant) != callerTenant))
                 return "RootDispatchUnavailable";

@@ -1,7 +1,7 @@
 namespace Kernel.Native;
 
 /// <summary>Where a request goes: a start route, a wait route's resolved key, or (no template matched) its literal path's key.</summary>
-public sealed record HttpRouteMatch(HttpRoute? Route, string Key, IReadOnlyDictionary<string, string> Values);
+public sealed record NativeHttpRouteMatch(HttpRoute? Route, string Key, IReadOnlyDictionary<string, string> Values);
 
 /// <summary>
 /// An HTTP edge's route matcher over <see cref="HttpRoutes"/>, which keeps templates and keys: a request path is matched
@@ -10,7 +10,7 @@ public sealed record HttpRouteMatch(HttpRoute? Route, string Key, IReadOnlyDicti
 /// </summary>
 public static class HttpRouteMatcher
 {
-    public static HttpRouteMatch Match(HttpRoutes routes, string method, string path)
+    public static NativeHttpRouteMatch Match(HttpRoutes routes, string method, string path)
     {
         var verb = method.ToUpperInvariant();
         var segments = path.Trim().Trim('/') is { Length: > 0 } trimmed ? trimmed.Split('/').Select(Uri.UnescapeDataString).ToArray() : [];
@@ -27,10 +27,10 @@ public static class HttpRouteMatcher
     /// its literal path's, decoded as a template match decodes it. An edge tries it when no template matched, and when a
     /// wait template matched but nothing waits on its key (the computed wait may share that template's shape).
     /// </summary>
-    public static HttpRouteMatch Literal(string method, string path) =>
+    public static NativeHttpRouteMatch Literal(string method, string path) =>
         Literal(method.ToUpperInvariant(), path.Trim().Trim('/') is { Length: > 0 } trimmed ? trimmed.Split('/').Select(Uri.UnescapeDataString).ToArray() : []);
 
-    private static HttpRouteMatch Literal(string verb, string[] segments) =>
+    private static NativeHttpRouteMatch Literal(string verb, string[] segments) =>
         new(null, HttpRoutes.Key(verb, string.Join('/', segments)), new Dictionary<string, string>());
 
     // A parameter takes a segment a client keeps: '.' and '..' are path steps, not values (HttpRouteTemplate.Resolve

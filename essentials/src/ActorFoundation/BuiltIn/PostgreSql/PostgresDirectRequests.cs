@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using Kernel.Durable;
 using Kernel.EntityFramework;
 using Contract = Kernel.Foundation.Contracts;
@@ -22,6 +23,9 @@ public sealed class PostgresDirectRequests : IReplyTransport
     private readonly string node;
     private readonly string? startType;
     private readonly Requests requests = new();
+    // Replies in the order the owner sent them: a turn's response goes out before its end, and the caller takes the first.
+    private readonly Channel<Reply> arrivals = Channel.CreateUnbounded<Reply>(new() { SingleReader = true });
+    private int delivering;
 
     internal PostgresDirectRequests(PostgresRootAdmission admission, EfStore store, string node, string? startType = null)
     {
@@ -33,6 +37,9 @@ public sealed class PostgresDirectRequests : IReplyTransport
     /// <summary>The node whose callers these are: a reply addressed to another node is not this edge's.</summary>
     public string Node => node;
 
+    /// <summary>The open callers, for checks.</summary>
+    internal Requests Pending => requests;
+
     internal async ValueTask<bool> ReceiveAsync(string destination, Reply reply, CancellationToken stop)
     {
         if (destination != node) return false;
@@ -40,18 +47,38 @@ public sealed class PostgresDirectRequests : IReplyTransport
     }
 
     /// <summary>
-    /// Delivers an owner's reply to the caller it addresses, checked against database time on arrival. Not durable, as the
-    /// transport is not: a reply that cannot be checked is dropped, and its caller ends at its deadline.
+    /// Delivers an owner's replies to the callers they address, in the order the owner sent them, each checked against
+    /// database time on arrival: one reader drains what has arrived, reads the time once, and hands the batch over in order.
+    /// Not durable, as the transport is not: a batch whose time cannot be read is dropped, and its callers end at their
+    /// deadlines.
     /// </summary>
     void IReplyTransport.Send(string destination, Reply reply)
     {
         if (destination != node) return;
-        _ = DeliverAsync();
+        arrivals.Writer.TryWrite(reply);
+        if (Interlocked.Exchange(ref delivering, 1) == 0) _ = Task.Run(DeliverAsync);
+    }
 
-        async Task DeliverAsync()
+    private async Task DeliverAsync()
+    {
+        var batch = new List<Reply>();
+        while (true)
         {
-            try { await ReceiveAsync(destination, reply, CancellationToken.None); }
-            catch (Exception) { /* dropped: the caller ends at its deadline */ }
+            while (arrivals.Reader.TryRead(out var next)) batch.Add(next);
+            if (batch.Count == 0)
+            {
+                Volatile.Write(ref delivering, 0);
+                // A reply written after the drain and before the flag cleared finds no reader: take it up again.
+                if (!arrivals.Reader.TryPeek(out _) || Interlocked.Exchange(ref delivering, 1) == 1) return;
+                continue;
+            }
+            try
+            {
+                var receivedAt = await admission.ReadReplyTimeAsync(CancellationToken.None);
+                foreach (var reply in batch) requests.TryReceive(reply, receivedAt);
+            }
+            catch (Exception) { /* dropped: its callers end at their deadlines */ }
+            batch.Clear();
         }
     }
 
@@ -73,10 +100,10 @@ public sealed class PostgresDirectRequests : IReplyTransport
             case Contract.Target.Start start:
                 if (startType is null)
                     throw new NotSupportedException("This edge starts no roots: open it with the actor type it starts.");
+                // A start this edge does not run: another type, an ephemeral spec, a payload beside the spec.
                 if (kind != Contract.Kinds.Start || payload is not null || start.Spec.Type != startType || start.Spec.Ephemeral ||
-                    !Enum.IsDefined(start.Spec.History))
-                    throw new NotSupportedException("The preview starts durable roots of its configured actor type.");
-                if (!FoundationMetadataLimits.IsOutsideMessageId(id)) return new(null, null, Error: "missing");
+                    !Enum.IsDefined(start.Spec.History) || !FoundationMetadataLimits.IsOutsideMessageId(id))
+                    return new(null, null, Error: "missing");
                 spec = new(start.Spec.Type, start.Spec.TypeData, start.Spec.Input, History: (History)start.Spec.History);
                 break;
             default:

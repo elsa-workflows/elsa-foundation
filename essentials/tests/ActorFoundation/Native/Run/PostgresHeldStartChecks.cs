@@ -55,8 +55,11 @@ internal static class PostgresHeldStartChecks
         var clock = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         var witness = new CommitWitness(Open, requests);
         var escalated = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await RequireArgumentRefusedAsync(() => PostgresPreviewHosting.StartAsync(Open, "another-node", actor, _ => { },
+                cancellationToken: stop, requests: requests),
+            "a node is refused the held callers of another node");
         await using var service = new PostgresPreviewHostedService(Open, Node, actor, message => escalated.TrySetResult(message),
-            new() { PollInterval = TimeSpan.FromMilliseconds(20) }, replies: witness);
+            new() { PollInterval = TimeSpan.FromMilliseconds(20) }, requests: requests) { ObserveReplies = _ => witness };
         await service.StartAsync(stop);
         var scope = EmbeddedTenant.Bind("held-start");
         try
@@ -94,6 +97,15 @@ internal static class PostgresHeldStartChecks
                 "slow-expired", Contract.Kinds.Start, null, null, new(null, 1), stop);
             Require(expired is { Error: "timeout", Status: null } && await BirthsAsync(Open, stop) == births + 1,
                 "a held start whose deadline has already passed admits nothing");
+
+            // A start this edge does not run is answered "missing", and admits nothing.
+            var foreignType = await foundation.RequestAsync(scope, new Contract.Target.Start(new("another-type", "data")), "foreign-1",
+                Contract.Kinds.Start, null, null, new(null, await clock.ReadReplyTimeAsync(stop) + RequestTimeout), stop);
+            var ephemeral = await foundation.RequestAsync(scope,
+                new Contract.Target.Start(Start(routes, "POST", "/orders", new JsonObject()) with { Ephemeral = true }), "ephemeral-1",
+                Contract.Kinds.Start, null, null, new(null, await clock.ReadReplyTimeAsync(stop) + RequestTimeout), stop);
+            Require(foreignType is { Error: "missing" } && ephemeral is { Error: "missing" } && await BirthsAsync(Open, stop) == births + 1,
+                "a held start of another actor type, or an ephemeral one, is answered missing and admits nothing");
 
             // 4. A route that responds before the commit releases its response when the turn ends, before its root commits.
             var finishedBefore = witness.Finished(scope.Tenant);
@@ -154,6 +166,76 @@ internal static class PostgresHeldStartChecks
     {
         await using var db = open();
         return await db.Database.SqlQueryRaw<int>("""SELECT count(*)::int AS "Value" FROM "FoundationRootBirths" """).SingleAsync(stop);
+    }
+
+    private static async Task RequireArgumentRefusedAsync(Func<Task> start, string description)
+    {
+        try { await start(); }
+        catch (ArgumentException) { Console.WriteLine($"ok {description}"); return; }
+        throw new InvalidOperationException(description);
+    }
+
+    // The owner sends a turn's response and then its end back to back: each caller must take the response, however the
+    // deliveries interleave. Part one sends both straight to the edge for many callers at once; part two runs many held
+    // starts at once through a node that answers through the same edge.
+    internal static async Task<int> RunOrderAsync(int callers, int starts)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(300));
+        var stop = deadline.Token;
+        var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
+            ?? throw new InvalidOperationException("Supply a fresh PostgreSQL preview database.");
+        var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
+        KernelDb Open() => KernelDb.ForPostgresRootReplies(options);
+        await using (var db = Open())
+            Require(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the reply-order check uses an empty PostgreSQL database");
+        var store = new EfStore(Open, postgres: true);
+        await store.CreateAsync(1);
+        await new PostgresRootAdmission(Open, TimeSpan.FromHours(1)).InstallAsync(stop);
+        var clock = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
+        var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, WorkflowActor.WorkflowActor.ActorType,
+            replyNode: Node, cancellationToken: stop);
+        var requests = foundation.Requests!;
+        IReplyTransport transport = requests;
+
+        var now = await clock.ReadReplyTimeAsync(stop);
+        var lost = 0;
+        await Task.WhenAll(Enumerable.Range(0, callers).Select(i => Task.Run(async () =>
+        {
+            var caller = requests.Pending.OpenBound("caller-" + i, now + 120_000, "order", null);
+            transport.Send(Node, new Reply(caller.Registration, $"k{i}#0", Request.Response, "response") { Tenant = "order" });
+            transport.Send(Node, new Reply(caller.Registration, $"k{i}#end", null, null, InstanceStatus.Finished) { Tenant = "order" });
+            if ((await requests.Pending.CompletionOf(caller).WaitAsync(stop)).Channel != Request.Response) Interlocked.Increment(ref lost);
+        }, stop)));
+        Require(lost == 0, $"each of {callers} callers sent a response and an end back to back, at once, takes the response");
+
+        var registry = new WorkflowRegistry().Add(Wf.Workflow("orders", Wf.Sequence("main",
+            Wf.HttpEndpoint("start", "orders"), Wf.Respond("created", Binding.Result("start", "Body.name"), 201))));
+        var routes = new HttpRoutes(registry);
+        await using var service = new PostgresPreviewHostedService(Open, Node, new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]),
+            message => throw new InvalidOperationException(message), new() { PollInterval = TimeSpan.FromMilliseconds(20) }, requests: requests);
+        await service.StartAsync(stop);
+        var scope = EmbeddedTenant.Bind("reply-order");
+        int answered = 0, unanswered = 0;
+        using var width = new SemaphoreSlim(16);
+        try
+        {
+            await Task.WhenAll(Enumerable.Range(0, starts).Select(async i =>
+            {
+                await width.WaitAsync(stop);
+                try
+                {
+                    var reply = await foundation.RequestAsync(scope, new Contract.Target.Start(Start(routes, "POST", "/orders", new JsonObject { ["name"] = "n" + i })),
+                        "order-" + i, Contract.Kinds.Start, null, null, new(null, await clock.ReadReplyTimeAsync(stop) + 30_000), stop);
+                    if (reply is { Error: null, Channel: "response", Item: JsonNode item } && Values.To<HttpResponse>(item)?.Body?.GetValue<string>() == "n" + i)
+                        Interlocked.Increment(ref answered);
+                    else Interlocked.Increment(ref unanswered);
+                }
+                finally { width.Release(); }
+            }));
+        }
+        finally { await service.StopAsync(CancellationToken.None); }
+        Require(answered == starts && unanswered == 0, $"each of {starts} held starts, 16 at a time, is answered with its own response");
+        return 0;
     }
 
     private static async Task RequireRefusedAsync(Func<Task> start, string description)

@@ -20,7 +20,7 @@ public static class PostgresPreviewHosting
     /// Opens the Foundation's ingress and reads on an installed PostgreSQL Core Preview store, for the configured actor type.
     /// With <paramref name="replyNode"/>, on a store with held replies (<c>ReplyProtocol</c>), its requests start a root or
     /// send to one and hold the caller (<see cref="PostgresPreviewFoundation.Requests"/>); the node that owns the roots
-    /// answers through <see cref="PostgresPreviewFoundation.Requests"/> as its <c>replies</c>.
+    /// answers its callers when it is given them as its <c>requests</c>.
     /// </summary>
     public static async Task<PostgresPreviewFoundation> OpenFoundationAsync(Func<KernelDb> create, string actorType,
         string? replyNode = null, TimeSpan? deduplicationWindow = null, int pageSize = 64, CancellationToken cancellationToken = default)
@@ -51,13 +51,23 @@ public static class PostgresPreviewHosting
     /// The caller stops the returned node before shutting down the host. The caller's endProcess policy
     /// must terminate the process if the watchdog cannot clear a stuck owner call.
     /// </summary>
-    /// <param name="replies">
-    /// How the node answers held callers, required on a store with held replies (<c>ReplyProtocol</c>) and refused on any
-    /// other: <see cref="PostgresPreviewFoundation.Requests"/> when the callers wait in this process.
+    /// <param name="requests">
+    /// The held callers this node answers, required on a store with held replies (<c>ReplyProtocol</c>) and refused on any
+    /// other: <see cref="PostgresPreviewFoundation.Requests"/> of a Foundation opened with this node as its reply node.
     /// </param>
-    public static async Task<RuntimeNode> StartAsync(Func<KernelDb> create, string node, Contract.IActorType actor,
+    public static Task<RuntimeNode> StartAsync(Func<KernelDb> create, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, CancellationToken cancellationToken = default,
-        Action<Exception>? onFault = null, IReplyTransport? replies = null)
+        Action<Exception>? onFault = null, PostgresDirectRequests? requests = null)
+    {
+        if (requests is not null && requests.Node != node)
+            throw new ArgumentException($"The held callers wait for node '{requests.Node}', and this node is '{node}'.", nameof(requests));
+        return StartAsync(create, node, actor, endProcess, options, cancellationToken, onFault, (IReplyTransport?)requests);
+    }
+
+    // The node with the transport its owner answers held callers through (a check may observe it on the way).
+    internal static async Task<RuntimeNode> StartAsync(Func<KernelDb> create, string node, Contract.IActorType actor,
+        Action<string> endProcess, LoopOptions? options, CancellationToken cancellationToken,
+        Action<Exception>? onFault, IReplyTransport? replies)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);

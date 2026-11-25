@@ -9,10 +9,10 @@ namespace Kernel.Foundation.Postgres;
 /// <summary>Runs one PostgreSQL Core Preview node for the lifetime of its application host.</summary>
 /// <param name="logger">Each fault the node or this service records about its stop is logged once, at Error: a lost
 /// fence or a drain fault, a dispose that returned at its bound, a fault after a kill, and a fault of the shutdown itself.</param>
-/// <param name="replies">How the node answers held callers, on a store with held replies (<see cref="PostgresPreviewHosting.StartAsync"/>).</param>
+/// <param name="requests">The held callers the node answers, on a store with held replies (<see cref="PostgresPreviewHosting.StartAsync"/>).</param>
 public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor,
     Action<string> endProcess, LoopOptions? options = null, ILogger<PostgresPreviewHostedService>? logger = null,
-    Kernel.Durable.IReplyTransport? replies = null) : IHostedService, IAsyncDisposable
+    PostgresDirectRequests? requests = null) : IHostedService, IAsyncDisposable
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Exception, object> _logged = [];     // weak: no exception is kept alive
     private Exception? _shutdownFault;
@@ -35,6 +35,9 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     }
 
     private readonly Action<string> _endProcess = endProcess ?? throw new ArgumentNullException(nameof(endProcess));
+    private readonly PostgresDirectRequests? _requests = requests is not null && requests.Node != node
+        ? throw new ArgumentException($"The held callers wait for node '{requests.Node}', and this node is '{node}'.", nameof(requests))
+        : requests;
     private readonly TimeSpan _disposeDeadline = RuntimeNode.ValidDisposeDeadline((options ?? new LoopOptions()).DisposeDeadline);
     private readonly object _lifecycle = new();
     private readonly CancellationTokenSource _cancelStartup = new();
@@ -57,6 +60,8 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     private async Task<RuntimeNode> StartNodeAsync(CancellationToken cancellationToken)
     {
         using var startup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancelStartup.Token);
+        Kernel.Durable.IReplyTransport? replies = _requests;
+        if (replies is not null && ObserveReplies is { } observe) replies = observe(replies);
         return await PostgresPreviewHosting.StartAsync(create, node, actor, Escalate, options, startup.Token, Fault, replies);
     }
 
@@ -96,6 +101,9 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         logger?.LogWarning("The {Deadline} deadline killed the drain of PostgreSQL preview node {Node}: its ownership is left to run out by lease expiry.",
             deadline, node);
     }
+
+    /// <summary>Wraps the transport the node answers held callers through; for witnesses of when a reply was sent.</summary>
+    internal Func<Kernel.Durable.IReplyTransport, Kernel.Durable.IReplyTransport>? ObserveReplies { get; init; }
 
     /// <summary>Runs in the shutdown after the node's stop; for witnesses of a shutdown fault raised outside the node.</summary>
     internal Action? AfterNodeStop { get; init; }
