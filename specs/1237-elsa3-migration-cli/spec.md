@@ -260,7 +260,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   development keys apply. The host project folder and the addition list's folder (the CLI project folder) are fixed
   when the CLI is built; there is no option to point elsewhere, and tests use an internal seam. The order is: the
   host's configuration layers, then the addition list, then the CLI's own run-override layer (the in-memory database
-  of FR-009, the reconciliation inputs below, and the Tasks setting that runs startup tasks only), and only then the
+  of FR-009, the reconciliation inputs below, the Tasks setting that runs startup tasks only, and the file-system lock
+  folder, when the host composes file-system locking, moved into the run's temporary folder), and only then the
   host's root services, which read configuration when they are registered. After them, the CLI replaces only Data
   Protection, with an ephemeral key ring. The shell's initializers run; with the startup-tasks-only setting, the
   Tasks feature's initializer runs the startup tasks alone, so the EF schema and the activity catalog exist. No web
@@ -279,7 +280,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   and the report says that it was.
 - **FR-010**: Nothing the run writes may outlive it, except the output folder. There is no install root and no package
   extraction: the run writes only the in-memory database, which it disposes, the temporary folder that holds the empty
-  reconciliation inputs, and the output folder's staging folder, both of which it removes, including after a failure.
+  reconciliation inputs and the lock folder, and the output folder's staging folder, both of which it removes, including after a failure.
 
 **Selection and pipeline**
 

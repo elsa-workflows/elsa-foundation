@@ -97,9 +97,13 @@
   string literals outside the constant classes, and fails on any (FR-016, FR-019).
 - [ ] T004a Extract `MigrationHost.AddHostConfiguration` and `MigrationHost.AddHostServices` from the migration host's
   `CreateBuilder` (`apps/Elsa.Migration.Host/`), as spec *Dependencies and boundaries* describes. The host keeps
-  calling them, and 1236's host tests stay green unchanged. `AddHostConfiguration` takes the host folder, the
-  environment, the host assembly (for `AddUserSecrets`), the command-line arguments (`string[] args`; the CLI passes an
-  empty array) and a switch that leaves out the local sources.
+  calling them, and 1236's host tests stay green unchanged. The shapes are
+  `AddHostConfiguration(IConfigurationBuilder, string hostFolder, string environment, Assembly hostAssembly,
+  string[] args, bool includeLocalSources)`, so the CLI can build into its own builder under the key filter, and
+  `AddHostServices(IHostApplicationBuilder)`, so both the host's `WebApplicationBuilder` and the CLI's
+  `HostApplicationBuilder` can call it. The host clears `WebApplication.CreateBuilder`'s default configuration sources
+  before calling `AddHostConfiguration`, so that method alone produces the 1236 R-3 order (`appsettings*.json`
+  included); 1236's host tests confirm the host behaves the same.
   `AddHostServices` registers the root services, CShells with `WithHostAssemblies()` included, without the web
   pipeline, and creates no folders; the host creates `data/` at startup, outside it.
 - [ ] T004b Make the converter carry component names as data (FR-016a). Add a `ComponentName` metadata key to every
@@ -158,7 +162,11 @@
      `file:elsa3-migration-<guid>;Mode=Memory;Cache=Shared`, the migrate policy set to apply, JSON workflow
      reconciliation's `FolderPath` at an empty `workflows/` folder and JSON activity reconciliation's `FilePath` at an
      activities file holding `[]`, both in a run-scoped temporary folder outside `--out` that it deletes on every
-     path, and the `Tasks` feature's `StartupTasksOnly` (T009a).
+     path, the `Tasks` feature's `StartupTasksOnly` (T009a), and, when the composed configuration lists
+     `FileSystemDistributedLocking`, its `LocksFolderPath` at a `locks/` folder in the same run-scoped temporary folder
+     (the feature's default is `App_Data/locks` under the current directory; the key is set only when the feature is
+     already listed, because writing a key under `Features` would enable it). Test that no `App_Data` folder appears in
+     the current directory.
 
   Then it calls `MigrationHost.AddHostServices`, and replaces Data Protection at root with an ephemeral key ring. It
   creates `--out` and its staging folder only after the shell has been composed. All shell initializers run; the

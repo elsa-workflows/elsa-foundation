@@ -217,7 +217,11 @@ The tooling builds an empty generic host (`Host.CreateEmptyApplicationBuilder`, 
    workflow reconciliation feature and `Files` under the JSON activity reconciliation feature, at any depth.
 2. The Elsa 3 addition list.
 3. The run-override layer: every persistence connection string set to the run's database (R-4), the two
-   reconciliation inputs (`FolderPath` and `FilePath`, below), and the Tasks feature's startup-tasks-only setting.
+   reconciliation inputs (`FolderPath` and `FilePath`, below), the Tasks feature's startup-tasks-only setting, and,
+   when the host composes `FileSystemDistributedLocking`, its `LocksFolderPath` in the run-scoped temporary folder:
+   its default is `App_Data/locks` under the current directory, and the run takes locks in startup tasks, reusable
+   publish and the import's draft commands. The key is set only when the feature is listed, because a key under
+   `Features` enables a feature.
 4. `AddHostServices`, which reads the configuration built so far.
 5. Data Protection replaced at root with an ephemeral key ring.
 
