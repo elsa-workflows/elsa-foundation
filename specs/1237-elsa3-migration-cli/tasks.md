@@ -58,7 +58,7 @@
   - a Switch whose case conditions are a non-boolean literal and an unparsable JavaScript expression, and a Switch
     with an unsupported mode literal;
   - a Fork whose join mode is an expression;
-  - an HTTP response with a non-numeric status code literal;
+  - an unparsable Liquid template;
   - variables of known types (an integer, a collection, a dictionary) whose starting values cannot be converted;
   - a script that parses only in sloppy mode;
   - a definition with three versions: the latest published one, an older one pinned by a reusable reference, and an
@@ -278,9 +278,9 @@
   the parser's message through). Audit every interpolated message and guidance string in `extensions/Elsa3/src`
   (search for `$"` in diagnostic and issue constructors), and fix at least these known sites: the Switch mode message
   (`Elsa3SwitchValueSynthesisRewrite`), the Fork join-mode message, which can quote a typed value's raw text
-  (`Elsa3ParallelBranchNamesRewrite`), the HTTP status and `canStartWorkflow` literal messages and the
-  `exception.Message` pass-throughs (`Elsa3ActivityNormalizer`, `Elsa3DefinitionConverter`), the safe-lowering parse
-  message (`Elsa3ExpressionRewriter`), and the variable starting-value messages and the guidance that builds a
+  (`Elsa3ParallelBranchNamesRewrite`), the HTTP status literal message of the `EnumNameToInt` value contract (no built-in
+  entry uses it, so its unit test builds that rule directly) and the `exception.Message` pass-throughs (`Elsa3ActivityNormalizer`, `Elsa3DefinitionConverter`), the JavaScript and Liquid safe-lowering parse
+  messages (`Elsa3ExpressionRewriter`), and the variable starting-value messages and the guidance that builds a
   suggestion from the value's items (`Elsa3VariableMapper`). Give each changed site a unit test whose input carries
   `SENTINEL-1237` and assert the sentinel is absent from message and guidance; the fixture sentinel test (T029) only
   covers the paths the fixture triggers. For codes the
