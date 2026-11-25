@@ -1,11 +1,8 @@
 using Elsa.Studio.Api.Authorization;
-using Elsa.Studio.Backends;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.ConsoleStream.Extensions;
+using Elsa.Studio.Hosting.Distribution;
 using Elsa.Studio.Workbench;
-using Elsa.Studio.Hosting;
-using Elsa.Studio.Hosting.Themes;
-using Elsa.Studio.Hosting.Nuplane;
 
 // Install the console stream capture hook before the host is created so that, when the ConsoleStream
 // feature is enabled in shells.json, all process stdout is captured from startup instead of only from
@@ -13,15 +10,10 @@ using Elsa.Studio.Hosting.Nuplane;
 ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
-var studio = builder.AddElsaStudio(options => options.QueryTokenPathPrefixes = [ConsoleStreamStudioServiceCollectionExtensions.HubPath]);
-builder.Services.AddStudioBackendsHostConfiguration(builder.Configuration);
-studio.AddElsaStudioNuplane(options => options.DirectoryFeedName ??= "studio-local-packages");
+builder.AddElsaStudioDistribution(StudioFeatureAssemblies.All,
+    options => options.QueryTokenPathPrefixes = [ConsoleStreamStudioServiceCollectionExtensions.HubPath]);
 var configuration = builder.Configuration;
 ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(configuration);
-
-studio.AddElsaStudioThemes();
-
-studio.ConfigureShells(shells => shells.WithStudioFeatureAssemblies());
 
 // Host the console-log-streaming server (capture host + SignalR hub + HTTP endpoints) on the application
 // root rather than inside the ConsoleStream shell feature. Shell route scopes are recycled at runtime on
@@ -32,10 +24,7 @@ builder.Services.AddConsoleStreamStudioHostIfEnabled(configuration);
 
 var app = builder.Build();
 
-app.UseElsaStudio();
-app.MapElsaStudio();
-
-app.MapElsaStudioNuplane();
+app.UseElsaStudioDistribution();
 app.MapConsoleStreamStudioIfEnabled(configuration, StudioBridgeAuthorization.PolicyName);
 
 app.Run();

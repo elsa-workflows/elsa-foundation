@@ -1,6 +1,6 @@
 # Elsa Foundation Studio
 
-Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The standard browser source and prebuilt `/studio` assets belong to `src/essentials/Elsa.Studio.Hosting`; `src/apps/Elsa.Studio.Workbench.Host` is the distribution composition root. Package consumers use Hosting without copying frontend source or running a frontend build. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
+Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The standard browser source and prebuilt `/studio` assets belong to `src/essentials/Elsa.Studio.Hosting`. Two Studio apps ship from `src/apps`: `Elsa.Studio.Workbench.Host` compiles in every Studio module, and `Elsa.Studio.Foundation.Host` is the bare shell whose modules all arrive from a Nuplane feed. Both compose the same host wiring from `src/essentials/Elsa.Studio.Hosting.Distribution`. Package consumers use Hosting without copying frontend source or running a frontend build. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
 
 For a runnable package-only starting point, supported optional capabilities and migration from copied Web infrastructure, see [custom Studio hosting](docs/custom-hosting.md).
 
@@ -18,7 +18,8 @@ The host is composed from independently enabled Studio capabilities:
 
 - `Elsa.Studio.Core` defines manifests, diagnostics, and the manifest collection event.
 - `Elsa.Studio.Api` exposes `GET /_elsa/studio/modules`.
-- `Elsa.Studio.Hosting` serves the prebuilt root-mounted browser; `Elsa.Studio.Workbench.Host` selects the distribution modules and optional capabilities.
+- `Elsa.Studio.Hosting` serves the prebuilt root-mounted browser; `Elsa.Studio.Hosting.Distribution` composes it with backend profiles, Nuplane add-ons and the Theme Store for the shipped apps.
+- `Elsa.Studio.Workbench.Host` selects every Studio module; [`Elsa.Studio.Foundation.Host`](src/apps/Elsa.Studio.Foundation.Host/README.md) is the bare shell that pairs with `Elsa.Foundation.Host`.
 - `Elsa.Studio.Dashboard` owns `/dashboard`, the Dashboard Widget slot, host-owned frames, loading, refresh, layout, and scoped preferences.
 - `Elsa.Studio.Attention` contributes the ordinary wide/full Attention widget.
 - `Elsa.Studio.Workflows.Dashboard` contributes workflow portfolio and run-health widgets.
@@ -72,7 +73,7 @@ Features ship in:
 | `WeatherForecastSample` | `Elsa.Studio.Samples.WeatherForecast` | `IWebShellFeature` |
 | `ExtensionBuilderStudio` | `Elsa.Studio.ExtensionBuilder` | `IWebShellFeature` (opt-in, not in the default `shells.json`) |
 
-The host discovers in-box features only in the assemblies listed in `StudioFeatureAssemblies` (in `Elsa.Studio.Workbench.Host`), plus installed Nuplane packages. CShells stops scanning host assemblies once that list is registered, so every new in-box feature needs its assembly added there, opt-in features such as `ExtensionBuilderStudio` included. Otherwise CShells skips the feature with a startup warning when `shells.json` enables it, and Feature Management cannot enable it. `WeatherForecastSample` is the exception: the host does not reference it, and it activates once its package (`artifacts/packages/Elsa.Studio.Samples.WeatherForecast.*.nupkg`) is installed into the `packages` feed. Until then, the startup warning for it is expected.
+The Workbench host discovers in-box features only in the assemblies listed in `StudioFeatureAssemblies` (in `Elsa.Studio.Workbench.Host`), plus installed Nuplane packages. CShells stops scanning host assemblies once that list is registered, so every new in-box feature needs its assembly added there, opt-in features such as `ExtensionBuilderStudio` included. Otherwise CShells skips the feature with a startup warning when `shells.json` enables it, and Feature Management cannot enable it. `WeatherForecastSample` is the exception: the host does not reference it, and it activates once its package (`artifacts/packages/Elsa.Studio.Samples.WeatherForecast.*.nupkg`) is installed into the `packages` feed. Until then, the startup warning for it is expected.
 
 ### Opting into Extension Builder
 

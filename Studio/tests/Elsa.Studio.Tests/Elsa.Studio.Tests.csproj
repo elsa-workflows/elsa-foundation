@@ -44,6 +44,11 @@
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Dashboard\Elsa.Studio.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\extensions\Samples.WeatherForecast\studio\Elsa.Studio.Samples.WeatherForecast\Elsa.Studio.Samples.WeatherForecast.csproj" />
     <ProjectReference Include="..\..\src\apps\Elsa.Studio.Workbench.Host\Elsa.Studio.Workbench.Host.csproj" />
+    <!--
+    Build order only: FoundationStudioHostBootTests starts the Foundation Studio app's own build output as a child process. Nothing
+    of it is loaded here, and Private=false keeps its shells.json and appsettings.json out of this output, which holds the Workbench app's.
+    -->
+    <ProjectReference Include="../../src/apps/Elsa.Studio.Foundation.Host/Elsa.Studio.Foundation.Host.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="../../../tools/studio/HostingReuse.Probe/Fixtures/First/First.csproj" />
     <ProjectReference Include="../../../tools/studio/HostingReuse.Probe/Fixtures/Second/Second.csproj" />
   </ItemGroup>

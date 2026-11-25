@@ -4,6 +4,8 @@ This page is for **package consumers** who compose their own host from NuGet pac
 
 Use `Elsa.Studio.Hosting` for the common server pipeline and the prebuilt standard browser. Your application chooses its modules and configuration. It does not copy the private infrastructure from `Elsa.Studio.Workbench.Host` or build the standard frontend.
 
+To start from the composition the shipped Studio apps use (Hosting, backend profiles, Nuplane administration and the Theme Store in one call), reference `Elsa.Studio.Hosting.Distribution` and follow its [README](../src/essentials/Elsa.Studio.Hosting.Distribution/README.md). [`Elsa.Studio.Foundation.Host`](../src/apps/Elsa.Studio.Foundation.Host/README.md) is the smallest app built that way. The rest of this page composes the packages one by one.
+
 The [small runnable sample](../../tools/studio/PackageHost.Sample/) selects Dashboard. Its [Program.cs](../../tools/studio/PackageHost.Sample/Program.cs) is the complete composition root:
 
 ```csharp
