@@ -27,6 +27,7 @@ using Elsa.Weaver.Workflows;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Attention.Api;
+using Elsa.Attention.Core;
 using Elsa.Caching.Memory;
 using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
@@ -205,14 +206,15 @@ var extensionBuilderEnabled = ExtensionBuilderServiceCollectionExtensions.IsEnab
 if (extensionBuilderEnabled)
     builder.Services.AddElsaExtensionBuilder(configuration);
 
+// Nuplane's feeds and assembly loading come from Elsa.Foundation.Hosting. The reload profile stays this host's own: a
+// reconcile refreshes the feature catalog, and shells switch at the next explicit reload unless
+// Elsa:Shells:ReloadOnPackageChange is on.
 builder.AddNuplaneHostIntegration(configuration);
 builder.Services.ConfigureOptions<NuplaneIntegrationOptionsSetup>();
-// Nuplane registers its trigger ingress, reconcile coordinator and admin operations by type or by factory, so every shell
-// container CShells builds from copies of these registrations would hold second instances of them, and a reconcile enqueued
-// on a shell's copy of the queue is read by no dispatcher (#2159). Shells, among them the shell-scoped package catalog
-// contributor, resolve the host's own instead.
+// Nuplane registers its reconcile coordinator and admin operations by type or by factory, so every shell container CShells
+// builds from copies of these registrations would hold second instances of them (#2159). Shells resolve the host's own
+// instead. AddFoundationShellHosting below shares the trigger ingress the same way.
 builder.Services
-    .ShareWithShells<IReconciliationTriggerIngress>()
     .ShareWithShells<ManualReconcileCoordinator>()
     .ShareWithShells<INuplaneAdminOperations>();
 // This host explicitly enrolls the shared EF resource preparers. Without a selected resource,
@@ -240,14 +242,16 @@ builder.Services.AddDynamicEndpointApiExplorerRefresh();
 // activation: the generic host runs them for the host container alone, and CShells runs none (#2331).
 builder.Services.AddShellStartupValidation();
 
-builder.Services.AddCShellsAspNetCore(shells =>
+// Elsa.Foundation.Hosting composes CShells with Nuplane feature discovery, this host's configuration as the blueprint source,
+// the shared activation runner and the optional eager activation (Elsa:Boot:EagerShellActivation:Enabled, off in this host's
+// appsettings.json). The tracker records the eager run's failed attempts for the Attention item below.
+var shellActivation = builder.AddFoundationShellHosting(shells =>
 {
     shells
         .WithHostAssemblies()
         .WithAssemblies(
             typeof(ActivitiesHttpFeature).Assembly,
             typeof(WorkflowsRuntimeHttpFeature).Assembly)
-        .WithNuplaneFeatureDiscovery()
 
         // Delegates authentication-scheme and authorization-policy resolution to the shell scope at
         // request time, so each shell's Identity composition (schemes, permission policies) is honored
@@ -435,7 +439,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(WorkflowsExecutionEvidenceFeature).Assembly
         )
 
-        .WithConfigurationProvider(configuration)
         .WithWebRouting(options =>
         {
             options.EnablePathRouting = true;
@@ -448,18 +451,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
         .ConfigureAllShells(shell => new WorkbenchEfToolingShellDefaults().Configure(shell, configuration));
 });
 
-// Shared root-only execution for the independent eager and post-listen warmup profiles.
-builder.Services.AddShellActivationRunner();
-
-// Opt-in eager shell activation. Default OFF. When
-// Elsa:Boot:EagerShellActivation:Enabled is set, a host-level IHostedService activates the configured shell(s)
-// at boot through the same IShellRegistry.GetOrActivateAsync path the first request would (byte-identical shell
-// state, just earlier), so the activation cliff — and the mid-activation contention tail — is paid before the
-// first user request instead of during it. The trigger lives at the host level because CShells does not run
-// shell-scoped hosted services and the eager trigger must sit outside any shell (it activates the shells).
-// Registered only when the switch is on, so an unset host constructs nothing and pays nothing.
-if (EagerShellActivationOptions.IsEnabled(configuration))
-    builder.Services.AddHostedService<EagerShellActivationHostedService>();
+// Each shell's Attention endpoint lists the shells the eager activation could not activate.
+builder.Services.AddSingleton<IAttentionContributor>(new ShellActivationAttentionContributor(shellActivation));
 
 // Root authentication/authorization services. Registered after AddCShellsAspNetCore so the shell
 // delegating scheme/policy providers (WithAuthenticationAndAuthorization) stay in place — both
