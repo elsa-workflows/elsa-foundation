@@ -29,6 +29,7 @@ const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.PublicationS
 const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.SlotOwnerConflict = "slot_owner_conflict" -> string!
 const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.SlotRevisionConflict = "slot_revision_conflict" -> string!
 const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.TriggerConflict = "trigger_conflict" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.DefinitionUnsupported = "definition_unsupported" -> string!
 const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.UnsupportedAction = "unsupported_action" -> string!
 const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.WorkflowPolicyMismatch = "workflow_policy_mismatch" -> string!
 const Elsa.Workflows.Publishing.Core.Models.PublicationProjectionKinds.HttpRoutes = "HttpRoutes" -> string!

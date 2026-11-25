@@ -1034,6 +1034,17 @@ class ActivityDataCompositionTests(unittest.TestCase):
                 self.assertEqual(({'Keep'} if mode == 'minimal' else studio_keys | {'Keep'}), set(f))
 
 
+    def test_proof_types_are_enabled_only_for_the_typed_collection_journey(self):
+        original = {'CShells': {'Shells': {'default': {'Features': {'Keep': {}}}}}}
+        studio = {'CShells': {'Shells': {'Default': {'Features': {'Keep': {}}}}}}
+        backend = copy.deepcopy(original)
+        acceptance.configure_activity_data(backend, copy.deepcopy(studio), 'normal', {'agent authoring and navigation'})
+        self.assertEqual(original, backend)
+        acceptance.configure_activity_data(backend, copy.deepcopy(studio), 'normal', set(acceptance.PROOF_TYPE_JOURNEYS))
+        self.assertEqual({'Keep', 'ActivityDataSelectionProofTypes'}, set(backend['CShells']['Shells']['default']['Features']))
+        self.assertTrue(acceptance.PROOF_TYPE_JOURNEYS <= acceptance.NORMAL_JOURNEYS)
+        self.assertFalse(acceptance.PROOF_TYPE_JOURNEYS & acceptance.DATA_JOURNEYS)
+
     def test_live_minimal_graph_and_descriptors_are_non_vacuous(self):
         observation = {'features': [
             {'id': 'WorkflowsPublishingApi', 'enabled': True, 'runtimeAvailable': True, 'dependencies': [{'id': 'WorkflowsPublishing', 'optional': False}]},
