@@ -8,8 +8,8 @@ namespace Elsa.Studio.Dashboard;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Dashboard")]
-[StudioModule("dashboard", "Home", "navigation", "routes", "dashboard-widgets")]
-[ShellFeature(name: "DashboardStudio", DisplayName = "Home", Description = "Hosts the customizable Studio Home.")]
+[StudioModule("dashboard", "Dashboards", "navigation", "routes")]
+[ShellFeature(name: "DashboardStudio", DisplayName = "Dashboards", Description = "Saved questions and named dashboards. Home belongs to the Studio shell.")]
 public sealed class DashboardStudioFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)

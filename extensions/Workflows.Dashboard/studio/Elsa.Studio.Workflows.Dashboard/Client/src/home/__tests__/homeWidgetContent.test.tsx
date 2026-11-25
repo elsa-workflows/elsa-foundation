@@ -2,11 +2,11 @@ import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NeedsAttentionWidget, QuickActionsWidget, RecentRunsWidget, RecentWorkflowsWidget } from "../widgets/HomeListWidget";
-import { navigateStudioPath } from "../widgets/homeData";
+import { NeedsAttentionWidget, QuickActionsWidget, RecentRunsWidget, RecentWorkflowsWidget } from "../HomeListWidget";
+import { navigateStudioPath } from "../homeData";
 
-vi.mock("../widgets/homeData", async importOriginal => ({
-  ...await importOriginal<typeof import("../widgets/homeData")>(),
+vi.mock("../homeData", async importOriginal => ({
+  ...await importOriginal<typeof import("../homeData")>(),
   navigateStudioPath: vi.fn()
 }));
 

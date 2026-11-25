@@ -26,6 +26,31 @@ public sealed class FoundationStudioHostBootTests(FoundationStudioHostBootTests.
     }
 
     /// <summary>
+    /// The shell owns Home: <c>/</c> serves the shell, whose bundle registers the Home routes and loads the Home page, empty
+    /// state included, from the shell's own assets. The Dashboard module is not compiled in.
+    /// </summary>
+    [Fact]
+    public async Task The_foundation_studio_serves_home_from_the_shell_without_the_dashboard_module()
+    {
+        var (status, _, index) = await host.GetAsync("/", "text/html");
+        Assert.True(status == HttpStatusCode.OK, $"/ answered {status}: {index}{host.OutputSection}");
+        Assert.Contains("src=\"/studio/assets/index.js\"", index);
+
+        var (shellStatus, _, shell) = await host.GetAsync("/studio/assets/index.js", "text/javascript");
+        Assert.True(shellStatus == HttpStatusCode.OK, $"/studio/assets/index.js answered {shellStatus}{host.OutputSection}");
+        Assert.Contains("home:", shell);
+        Assert.Contains("./HomePage.js", shell);
+
+        var (homeStatus, _, home) = await host.GetAsync("/studio/assets/HomePage.js", "text/javascript");
+        Assert.True(homeStatus == HttpStatusCode.OK, $"/studio/assets/HomePage.js answered {homeStatus}{host.OutputSection}");
+        Assert.Contains("No installed module adds content to Home yet.", home);
+
+        var (modulesStatus, _, modules) = await host.GetAsync("/_elsa/studio/modules", "application/json");
+        Assert.True(modulesStatus == HttpStatusCode.OK, $"/_elsa/studio/modules answered {modulesStatus}: {modules}{host.OutputSection}");
+        Assert.DoesNotContain("Elsa.Studio.Dashboard", modules);
+    }
+
+    /// <summary>
     /// <c>/modules</c> uploads add-on packages to the feed; <c>/features</c> (FeatureManagement) enables their features. These are
     /// client routes the SPA fallback serves; the API test below proves the administration endpoints behind them are mapped.
     /// </summary>

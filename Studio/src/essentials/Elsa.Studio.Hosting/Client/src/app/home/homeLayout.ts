@@ -6,7 +6,11 @@ import {
   type StudioDashboardWidgetContribution,
   type StudioDashboardWidgetSize
 } from "@elsa-workflows/studio-sdk";
-import { createPreferenceScope, type StudioPreferenceScope } from "./dashboardPreferences";
+
+/** Studio Preferences permission that gates the admin default Home layout. */
+export const homeLayoutPermissions = {
+  manageDefaults: "studio/preferences/defaults:manage"
+} as const;
 
 export const homeLayoutRoute = "/_elsa/studio/home-layout";
 export const homeLayoutDefaultRoute = "/_elsa/studio/home-layout/default";
@@ -48,48 +52,21 @@ export const builtInHomeLayout: HomeLayoutValue = {
   ]
 };
 
+/** Who and where a Home layout belongs to: the Studio host, backend, subject and tenant. */
+export interface StudioPreferenceScope {
+  studioHostId: string;
+  backendBaseUrl: string;
+  subjectId: string;
+  tenantId: string;
+}
+
 export function createHomeLayoutScope(api: ElsaStudioModuleApi, session: AuthSession): StudioPreferenceScope {
-  return createPreferenceScope(api, session);
-}
-
-export function isHomeWidgetFeatureEnabled(
-  widget: Pick<StudioDashboardWidgetContribution, "requiresFeature">,
-  enabledFeatures: Iterable<string> | undefined
-): boolean {
-  const required = typeof widget.requiresFeature === "string"
-    ? [widget.requiresFeature]
-    : [...(widget.requiresFeature ?? [])];
-  if (required.length === 0) return true;
-  if (!enabledFeatures) return false;
-  const available = [...enabledFeatures];
-  return required.every(feature => available.some(enabled => homeFeatureTokensMatch(feature, enabled)));
-}
-
-const studioModulePrefix = "elsa.studio.";
-
-/** Slugs match only `Elsa.Studio.*` assembly ids. `workflows` matches `Elsa.Studio.Workflows`, not `Contoso.Workflows`. */
-export function homeFeatureTokensMatch(required: string, enabled: string): boolean {
-  const want = required.trim();
-  const have = enabled.trim();
-  if (!want || !have) return false;
-  if (want.toLowerCase() === have.toLowerCase()) return true;
-  const wantSlug = studioFeatureSlug(want);
-  const haveSlug = studioFeatureSlug(have);
-  return wantSlug != null && haveSlug != null && wantSlug === haveSlug;
-}
-
-function studioFeatureSlug(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (!trimmed.includes(".")) return kebabToken(trimmed);
-  if (!trimmed.toLowerCase().startsWith(studioModulePrefix)) return null;
-  const rest = trimmed.slice(studioModulePrefix.length);
-  if (!rest || rest.includes(".")) return null;
-  return kebabToken(rest);
-}
-
-function kebabToken(value: string): string {
-  return value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  return {
+    studioHostId: api.runtime.hostId ?? "default",
+    backendBaseUrl: api.backend.baseUrl,
+    subjectId: session.subject ?? "anonymous",
+    tenantId: session.tenantId ?? "default"
+  };
 }
 
 export function defaultHomeLayoutDocument(): HomeLayoutDocument {

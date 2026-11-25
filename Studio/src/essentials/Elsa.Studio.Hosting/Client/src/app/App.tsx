@@ -75,6 +75,7 @@ import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ThemeBuilderPage } from "./modules/ThemeBuilderPage";
 import { registerBuiltInPropertyEditors } from "./propertyEditors";
+import { registerHome } from "./home/registerHome";
 import {
   compareNavigationItems,
   filterAccessibleNavigation,
@@ -1016,6 +1017,7 @@ export function ShellFrame({
 
 function registerBuiltInContributions(api: ElsaStudioModuleApi) {
   registerBuiltInPropertyEditors(api);
+  registerHome(api);
 }
 
 function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
