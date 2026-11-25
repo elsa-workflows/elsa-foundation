@@ -138,10 +138,13 @@ extensions/Elsa3/tests/JTest/ledger/runs.md   # essentials run rows (after S-15 
 
 **Structure Decision**: The list and the merge live in a library both the engine host and the migration CLI can
 reference; each host is a thin composition over existing features. The OpenIddict token store moves from `apps/Elsa.Workbench`
-(Program.cs and its OpenIddict files) into `apps/Elsa.Essentials.OpenIddict`. Besides the new projects, only tests
-change: the architecture guards (`OpenIddictPersistenceArchitectureTests`, `EfCoreDependencyGuardTests`,
-`HostProvidedPackagesGuardTests`, `ArchitectureGuardTests`) and `essentials/tests/Modularity/ProviderTests`. Nothing in
-`essentials/src` changes.
+(Program.cs and its OpenIddict files) into `apps/Elsa.Essentials.OpenIddict`. Nothing in `essentials/src` changes. Outside the new
+projects, the code that changes is the Workbench host and these tests: the architecture guards
+(`OpenIddictPersistenceArchitectureTests`, `EfCoreDependencyGuardTests`, `HostProvidedPackagesGuardTests`,
+`ArchitectureGuardTests` with its `InternalsVisibleTo` list), `essentials/tests/Modularity/ProviderTests` and
+`essentials/tests/Modularity/Tests/` (`WorkbenchOpenIddictStoreProviderTests.cs`,
+`WorkbenchOpenIddictPruningTests.cs`, `WorkbenchOpenIddictVendorTests.cs`, `WorkbenchOpenIddictTestHost.cs`,
+`HostOwnedServicesAreSharedWithShellsTests.cs`). Configuration and documentation files the tasks name change too.
 
 ## Complexity Tracking
 
