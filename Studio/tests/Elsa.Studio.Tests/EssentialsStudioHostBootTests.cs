@@ -51,7 +51,10 @@ public sealed class EssentialsStudioHostBootTests(EssentialsStudioHostBootTests.
         Assert.Contains("<title>Elsa Studio</title>", body);
     }
 
-    /// <summary><c>/modules</c> uploads add-on packages to the feed; <c>/features</c> (FeatureManagement) enables their features.</summary>
+    /// <summary>
+    /// <c>/modules</c> uploads add-on packages to the feed; <c>/features</c> (FeatureManagement) enables their features. These are
+    /// client routes the SPA fallback serves; the API test below proves the administration endpoints behind them are mapped.
+    /// </summary>
     [Fact]
     public async Task The_essentials_studio_serves_the_module_admin_routes()
     {
@@ -63,6 +66,18 @@ public sealed class EssentialsStudioHostBootTests(EssentialsStudioHostBootTests.
             Assert.Equal("text/html", mediaType);
             Assert.Contains("<title>Elsa Studio</title>", body);
         }
+    }
+
+    /// <summary>
+    /// The add-on administration API is mapped. The SPA fallback answers any HTML path, and <c>/_elsa/{**path}</c> answers
+    /// unmapped API paths with 404, so only a mapped, authorization-protected endpoint answers 401 here.
+    /// </summary>
+    [Fact]
+    public async Task The_essentials_studio_maps_the_add_on_administration_api()
+    {
+        var (status, _, body) = await host.GetAsync("/_elsa/module-management/registry", "application/json");
+
+        Assert.True(status == HttpStatusCode.Unauthorized, $"/_elsa/module-management/registry answered {status}: {body}{host.OutputSection}");
     }
 
     [Fact]
