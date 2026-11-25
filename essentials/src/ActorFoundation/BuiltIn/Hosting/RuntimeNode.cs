@@ -6,6 +6,9 @@ namespace Kernel.Runtime.Hosting;
 /// <summary>When the loop of a <see cref="RuntimeNode"/> does what.</summary>
 public sealed record LoopOptions
 {
+    /// <summary>The clock (ms) the loop-error report window runs on; for witnesses. The node's own clock when null.</summary>
+    internal Func<long>? ErrorReportClock { get; init; }
+
     /// <summary>A round of the fair share: the membership heartbeat, and the partitions it gives up or asks for.</summary>
     public TimeSpan BalanceEvery { get; init; } = TimeSpan.FromSeconds(1);
 
@@ -60,8 +63,12 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private readonly Func<CancellationToken, Task>? _beforeRelease;
     private readonly Action<Exception>? _onFault;
     private readonly TimeSpan _disposeDeadline;
-    private readonly HashSet<Exception> _faults = new(ReferenceEqualityComparer.Instance);     // each fault is recorded once
-    private readonly HashSet<(Type, string)> _loopErrors = [];     // each distinct loop error is reported once
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Exception, object> _faults = [];     // each fault is recorded once
+    // Loop errors reported, by type and message: at most LoopErrorKeys, oldest evicted; a key is reported again once
+    // LoopErrorWindow has passed, with the count of repeats it suppressed.
+    private readonly Dictionary<(Type, string), (long ReportedAt, long Suppressed)> _loopErrors = [];
+    internal const int LoopErrorKeys = 64;
+    internal static readonly TimeSpan LoopErrorWindow = TimeSpan.FromMinutes(10);
     private TimeoutException? _boundExpired;
     private Exception? _ownCancellation;     // a drain's own cancellation, kept as thrown
     private readonly CancellationTokenSource _besideEnd = new();     // A1: cancelled at the end of the stop, or on a kill
@@ -246,7 +253,8 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             try { await halted.WaitAsync(bound.Token); }
             catch (Exception) { }     // a fault is recorded by the halt itself; the bound's cancellation is noted below
         if (!halted.IsCompleted)     // one instance, so a second dispose of the same stuck node records and logs nothing new
-            RecordFault(_boundExpired ??= new TimeoutException($"The dispose returned {DisposeGrace.TotalSeconds:0.#} s after its deadline while the killed stop had not ended."));
+            RecordFault(Interlocked.CompareExchange(ref _boundExpired,
+                new TimeoutException($"The dispose returned {DisposeGrace.TotalSeconds:0.#} s after its deadline while the killed stop had not ended."), null) ?? _boundExpired);
     }
 
     // The longest delay a CancellationTokenSource accepts; a deadline beyond it is treated as infinite.
@@ -291,19 +299,52 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         return halted;
     }
 
-    // A drain or release that the kill stopped waiting for may still fault: record it when it does.
+    // A drain or release that the kill stopped waiting for may still fault, or end with a cancellation of its own (one
+    // that is not the kill's): record either, as thrown, when it does.
     private void RecordLater(Task work) =>
-        _ = work.ContinueWith(static (ended, node) => ((RuntimeNode)node!).RecordFault(ended.Exception!.InnerException ?? ended.Exception),
-            this, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        _ = work.ContinueWith(static (ended, state) =>
+        {
+            var node = (RuntimeNode)state!;
+            if (ended.IsFaulted) node.RecordFault(ended.Exception!.InnerException ?? ended.Exception);
+            else if (OwnCancellation(ended) is { } own && own.CancellationToken != node._kill.Token) node.KeepOwnCancellation(own);
+        }, this, CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 
-    // A fault about the stop: recorded on LastError and reported to the host's callback, once per exception.
+    private static OperationCanceledException? OwnCancellation(Task canceled)
+    {
+        try { canceled.GetAwaiter().GetResult(); }
+        catch (OperationCanceledException thrown) { return thrown; }
+        catch (Exception) { }
+        return null;
+    }
+
+    // A drain's or the runtime stop's own cancellation, no kill: kept as thrown and recorded at once.
+    private void KeepOwnCancellation(OperationCanceledException own)
+    {
+        Interlocked.CompareExchange(ref _ownCancellation, own, null);
+        RecordFault(own);
+    }
+
+    // A fault about the stop: recorded on LastError and reported to the host's callback, once per exception. An aggregate
+    // reports only its inner exceptions not reported yet.
     private void RecordFault(Exception fault)
     {
         lock (_faults)
-            if (!_faults.Add(fault)) return;
+            if (!_faults.TryAdd(fault, fault)) return;
         RecordError(fault);
-        try { _onFault?.Invoke(fault); }
-        catch (Exception) { }     // a failing log must not hide the fault, which LastError keeps
+        if (fault is AggregateException aggregate)
+        {
+            foreach (var inner in aggregate.InnerExceptions)
+                lock (_faults)
+                    if (_faults.TryAdd(inner, inner)) Report(inner);
+            return;
+        }
+        Report(fault);
+
+        void Report(Exception reported)
+        {
+            try { _onFault?.Invoke(reported); }
+            catch (Exception) { }     // a failing log must not hide the fault, which LastError keeps
+        }
     }
 
     private async Task HaltOnceAsync()     // A1: the watchdog guards the last pass and the releases, so it ends after them
@@ -329,12 +370,8 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 try { await draining.WaitAsync(_kill.Token); }
                 catch (OperationCanceledException) when (_kill.IsCancellationRequested) { RecordLater(draining); }
                 catch (Exception error) { drainError = error; }
-                if (drainError is OperationCanceledException own)
-                {
-                    // The drain's own cancellation, no kill: record it as thrown, now, whatever a later kill does to the stop.
-                    Volatile.Write(ref _ownCancellation, own);
-                    RecordFault(own);
-                }
+                // The drain's own cancellation, no kill: record it as thrown, now, whatever a later kill does to the stop.
+                if (drainError is OperationCanceledException own) KeepOwnCancellation(own);
             }
 
             // A kill during shutdown leaves remaining ownership to expire instead of returning it as clean. So does a
@@ -354,6 +391,12 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 try { await stopping.WaitAsync(_kill.Token); }
                 catch (OperationCanceledException) when (_kill.IsCancellationRequested) { RecordLater(stopping); }
                 catch (Exception abandoned) when (abandon && ReferenceEquals(abandoned, drainError)) { }
+                // The job drain's or the release's own cancellation, no kill: keep it as thrown, whatever comes after.
+                catch (OperationCanceledException own) when (drainError is null)
+                {
+                    KeepOwnCancellation(own);
+                    throw;
+                }
                 // A fence lost in both drains is one loss.
                 catch (ScopeOwnershipLostException) when (drainError is ScopeOwnershipLostException) { ExceptionDispatchInfo.Throw(drainError); }
                 catch (Exception releaseError) when (drainError is not null) { throw new AggregateException(drainError, releaseError); }
@@ -380,12 +423,25 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     public long Errors => Interlocked.Read(ref _errors);
     public Exception? LastError => Volatile.Read(ref _lastError);
 
-    // A loop survived an error: counted always, reported once per distinct error so a repeating one does not flood.
-    private void RecordLoopError(Exception error)
+    // A loop survived an error: counted always, reported once per distinct error per window, so a repeating one does
+    // not flood; a report after the window carries the repeats it suppressed (Exception.Data["SuppressedRepeats"]).
+    internal void RecordLoopError(Exception error)
     {
         RecordError(error);
+        var now = _options.ErrorReportClock?.Invoke() ?? Now;
+        var key = (error.GetType(), error.Message);
         lock (_loopErrors)
-            if (!_loopErrors.Add((error.GetType(), error.Message))) return;
+        {
+            if (_loopErrors.TryGetValue(key, out var seen) && now - seen.ReportedAt < (long)LoopErrorWindow.TotalMilliseconds)
+            {
+                _loopErrors[key] = seen with { Suppressed = seen.Suppressed + 1 };
+                return;
+            }
+            if (seen.Suppressed > 0) error.Data["SuppressedRepeats"] = seen.Suppressed;
+            if (!_loopErrors.ContainsKey(key) && _loopErrors.Count >= LoopErrorKeys)
+                _loopErrors.Remove(_loopErrors.MinBy(entry => entry.Value.ReportedAt).Key);
+            _loopErrors[key] = (now, 0);
+        }
         try { _onFault?.Invoke(error); }
         catch (Exception) { }
     }
