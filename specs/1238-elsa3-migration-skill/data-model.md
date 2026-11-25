@@ -8,7 +8,7 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 
 | Field | Content | Rule |
 |---|---|---|
-| Elsa 4 clone | Path and commit of the user's clone of this repository, from which the tool and the migration host run | Set at inventory; moving the clone to another commit means rerunning the assessment; going live uses the same commit. |
+| Elsa 4 clone | Path and commit of the user's clone of this repository, from which the tool and the migration host run | Set at inventory; moving the clone to another commit means rerunning the assessment; the handoff's local run uses the same commit. |
 | Stage | `inventory` → `prepare` → `test-migration` → `handoff` | Moves forward only; a new finding in `test-migration` sends one component back to `porting`, not the stage. |
 | Export | Path of the Elsa 3 export | Required from `inventory`. |
 | Source locations | Folders or repositories of Elsa 3 source | Added when asked (FR-009). |

@@ -5,7 +5,7 @@
 ```markdown
 # Elsa 3 to Elsa 4 migration plan
 
-Elsa 4 clone: <path> at <commit> (the tool and the migration host run from it; go live on the same commit)
+Elsa 4 clone: <path> at <commit> (the tool and the migration host run from it; try the result on the same commit)
 Stage: inventory | prepare | test-migration | handoff
 Export: <path>
 Last report: <path> (<command>, <date>)

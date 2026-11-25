@@ -204,8 +204,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   agents that read `.agents/skills/` copy the skill folder. No adapter repeats the skill's content.
 - **FR-004**: The skill MUST state the report schema versions it reads and stop on any other. It is not tied to a tool
   release: the tool and the migration host run from the user's clone of this repository (FR-022), and the plan
-  records the clone's path and commit. The user goes live on the same commit (FR-020); moving the clone means rerunning
-  the assessment.
+  records the clone's path and commit. The user tries the result on the same commit (FR-020); moving the clone means
+  rerunning the assessment.
 
 **Privacy**
 
@@ -305,9 +305,11 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - **FR-019**: The main README MUST gain a short "Migrating from Elsa 3" section that names `SKILL.md` as the file to
   read, says that installing it as an AI skill is optional, and lists what the migration does not cover (FR-021).
 - **FR-020**: The skill MUST end with the handoff, as text only: the user keeps their feature projects in any
-  repository and stores the migrated workflows anywhere; going live means running the migration host
+  repository and stores the migrated workflows anywhere. For now, the user runs the result on the migration host
   (`apps/Elsa.Migration.Host`) from the same clone and commit, with their feature projects referenced and its workflow and
-  activity folder settings pointing at the `migrated/` folder. The skill performs no publishing or deployment step.
+  activity folder settings pointing at the `migrated/` folder. This local setup is a temporary development setup, not
+  the production go-live: that comes with an Elsa 3 migration app profile once Elsa 4's distribution channels are
+  decided, and the handoff is updated then. The skill performs no publishing or deployment step.
 - **FR-021**: The skill and the README section MUST state what is out of scope: live workflow instances, running
   Elsa 3 next to Elsa 4, persistence data migration, identity and authentication migration, Elsa 3 Studio
   extensions, and C# and Python expressions.
@@ -343,7 +345,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - Spec 1237 delivers `inventory` and `assess`, the redacted `report.json` with the content listed in the plan's
   report contract, and the categories and buckets. This spec only references that schema.
 - Spec 1236 delivers the migration host the handoff names; spec 1237's tool references it and runs from a clone of
-  this repository.
+  this repository. Both are a temporary development setup until Elsa 4's distribution channels are decided and an
+  Elsa 3 migration app profile exists; this spec builds nothing for that profile.
 - The converter, on the initiative branch, diagnoses unregistered variable types, maps declared JavaScript functions
   to prefixed host functions and refuses a declared global used other than as a direct call; the skill relies on the
   guidance those diagnostics carry. How a global is matched to its host function may still change; case 14 states

@@ -69,7 +69,8 @@ tells the user to update the skill. The tool runs from the user's clone of this 
 **Rationale**: Package versions are computed per commit (`PackageVersioning.props`), so no file can name "the" tool
 version, and a marketplace install follows the default branch rather than a release. Spec 1237 ships the tool and
 the skill separately and versions the report by schema. The tool and the migration host run from the user's clone, so its commit is what the
-user migrates against and goes live on.
+user migrates against and tries the result on. This is a temporary development setup: the production go-live comes
+with an Elsa 3 migration app profile once Elsa 4's distribution channels are decided.
 
 **Alternatives considered**: Stamping the tool version into `plugin.json` and the skill front matter at release:
 there is no release step to do it, and it would go stale on every commit. Reading any schema version leniently:
