@@ -17,6 +17,8 @@ public interface IScriptVariableRenamePlanner
     /// <summary>
     /// Plans the rename of the variable <paramref name="referenceKey"/> declared by <paramref name="scopeId"/> to
     /// <paramref name="newName"/>. <paramref name="scriptInputKeyOf"/> names a node's script-body input, or null.
+    /// A state with a node whose <c>inputs</c> or <c>outputs</c> list is missing or null is refused with an
+    /// <see cref="ArgumentException"/> naming <c>{NodeId}/inputs</c> or <c>{NodeId}/outputs</c>, before scopes are resolved.
     /// </summary>
     ValueTask<ScriptVariableRenamePlan> PlanAsync(
         WorkflowDefinitionState state,

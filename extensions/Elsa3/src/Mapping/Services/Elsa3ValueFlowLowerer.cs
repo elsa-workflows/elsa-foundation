@@ -1465,13 +1465,22 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     /// member (<c>JsonElement</c>, <c>Object</c>, <c>Any</c>) accepts any expression value, so the expression declares
     /// the member's own type, for every activity (spec 256: an Elsa 3 <c>Object</c> response body binds Elsa 4's
     /// <c>JsonElement?</c>). <see cref="DropsTypedConversion"/> has already refused a script with a typed declaration
-    /// there, so no Elsa 3 conversion is lost. A typed member keeps the declared Elsa 3 type, so publication still
-    /// refuses a real mismatch.
+    /// there, so no Elsa 3 conversion is lost. A dictionary member (<c>WriteHttpResponse.Headers</c>,
+    /// <c>DispatchWorkflow.Inputs</c>) declares its own type when the Elsa 3 declaration, in its Elsa 4 shape, fits it
+    /// (#5790): <c>HttpHeaders</c> is a dictionary of string arrays, <c>ObjectDictionary</c> and <c>Object</c> are
+    /// dynamic, and Elsa 4 converts the script's value into the member at run time, as Elsa 3 did. Any other typed member
+    /// keeps the declared Elsa 3 type, so publication still refuses a real mismatch.
     /// </summary>
-    private static TypeReference ExpressionResultType(ActivityProperty property) =>
-        property.InputContract?.Type is { } member && IsUntyped(member, SimpleName(member.Alias))
+    private static TypeReference ExpressionResultType(ActivityProperty property)
+    {
+        if (property.InputContract?.Type is not { } member)
+            return ReadType(property.Value);
+        if (IsUntyped(member, SimpleName(member.Alias)))
+            return member;
+        return member.CollectionKind == CollectionKind.Dictionary && TypesMatch(ReadNormalizedType(property.Value), member)
             ? member
             : ReadType(property.Value);
+    }
 
     private static TypeReference ReadType(JsonElement value)
     {
