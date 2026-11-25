@@ -203,8 +203,8 @@ an alternative save path for reusable graphs.
 ## Expression insertion and editor continuity
 
 Selection in a supported text editor uses the installed syntax adapter's insertion operation. For a
-nested member, bind the existing whole-source role/projection as a portable parameter and let the adapter
-insert escaped member access; this does not require new portable-parameter wire fields. The basic
+nested member (while member reads are on), bind the existing whole-source role/projection as a portable
+parameter and let the adapter insert escaped member access; this does not require new portable-parameter wire fields. The basic
 language-neutral member binding and explicit expression lowering remain separate contracts.
 
 For portable insertion the metadata query supplies the installed `expressionType` and, when focused,
@@ -215,7 +215,10 @@ answer must match the current resource, consuming input, document/base revision 
 The path describes metadata traversal only and never becomes a persisted parameter member kind.
 Older servers omit the capability or return false: Studio preserves the expression and explains that
 compatible insertion is unavailable. Portable metadata support does not enable native MemberReads or
-override the source admission, owner restrictions or protected-path rules.
+override the source admission, owner restrictions or protected-path rules. While member reads are off
+(`memberReadsEnabled` false) a focused portable query with a non-empty `memberPath` is refused like a native
+member read: it reports `ActivityData/UnsupportedMemberBinding` and returns no offer, and the whole value of
+the same `parameterSource` stays offered (owner decision, 17 Nov, #4522).
 
 Choose a legal alias without replacing a different existing parameter. Reuse an alias only when its
 binding is identical; otherwise allocate a distinct alias and preserve all existing manual source,

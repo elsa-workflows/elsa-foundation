@@ -61,6 +61,11 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
       if (answer.state !== "supported" && answer.state !== "empty") {
         setPacket(null);
         if (answer.state !== "invalid") { now.onRefusal(answer); return; }
+        if (expressionType && selection.path.length > 0 && answer.findings?.some(finding => finding.type === "ActivityData/UnsupportedMemberBinding")) {
+          // The server refuses an expression member path while member reads are off (#4754). Treat it as withdrawn
+          // member reads: go back to the sources before the one refresh, so the stale path is never asked again.
+          setSelection(null); now.onRefresh(); return;
+        }
         setError(answer.findings?.map(describeActivityDataMemberFinding).join(" ") || "This source cannot be used here.");
         return;
       }
