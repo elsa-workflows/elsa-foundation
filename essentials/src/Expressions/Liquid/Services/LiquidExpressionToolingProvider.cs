@@ -69,7 +69,7 @@ internal sealed class LiquidExpressionToolingProvider : IExpressionToolingProvid
         var failure = Compatible<ExpressionHover>(request.Scope);
         if (failure is not null) return ValueTask.FromResult(failure);
         var symbol = ExpressionToolingSymbolResolver.Resolve(request.Scope.Context, request.Source, request.Position);
-        var content = symbol is null ? string.Empty : string.Join(Environment.NewLine, new[] { symbol.Label, symbol.Documentation }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        var content = symbol is null ? string.Empty : string.Join(Environment.NewLine, new[] { string.IsNullOrWhiteSpace(symbol.Detail) ? symbol.Label : $"{symbol.Label}: {symbol.Detail}", symbol.Documentation }.Where(value => !string.IsNullOrWhiteSpace(value)));
         var hover = new ExpressionHover(content);
         return ValueTask.FromResult(symbol is null
             ? ExpressionToolingOutcome<ExpressionHover>.SupportedEmpty(hover, SupportedVersion, request.Scope.Document.DocumentRevision, request.Scope.Context.ContextRevision)

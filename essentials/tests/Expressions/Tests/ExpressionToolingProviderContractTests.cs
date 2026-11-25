@@ -128,6 +128,7 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.Equal(note, item.Documentation);
         Assert.Empty(validation.Payload!.Diagnostics);
         Assert.Contains("the stored value may differ", hover.Payload!.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("city: String" + Environment.NewLine, hover.Payload.Contents, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -154,9 +155,14 @@ public sealed class ExpressionToolingProviderContractTests
         var liquidCompletion = await liquid.GetCompletionsAsync(
             new(liquidScope, "producer.", new(0, "producer.".Length)),
             CancellationToken.None);
+        var liquidHover = await liquid.GetHoverAsync(
+            new(liquidScope, "{{ producer.output }}", new(0, "{{ producer.output".Length)),
+            CancellationToken.None);
 
         Assert.Equal("output", Assert.Single(javascriptCompletion.Payload!.Items).Label);
         Assert.Contains("Producer output.", javascriptHover.Payload!.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("output: String" + Environment.NewLine, javascriptHover.Payload.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("output: String" + Environment.NewLine, liquidHover.Payload!.Contents, StringComparison.Ordinal);
         Assert.Contains(liquidCompletion.Payload!.Items, item => item.Label == "output");
     }
 

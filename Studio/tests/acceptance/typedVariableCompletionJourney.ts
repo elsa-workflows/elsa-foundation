@@ -7,7 +7,7 @@ const declaredNote = "the stored value may differ";
 /**
  * A typed variable's declared members complete after `variables.<name>.` in the compact and expanded JavaScript editors
  * (#5677). The host type is the Workbench's Connection reference. An Object variable gets no invented members, hover shows
- * the member with the declared-type note, and the Activity Data chooser still offers the typed variable as a whole value.
+ * the member with its type and the declared-type note, and the Activity Data chooser still offers the typed variable as a whole value.
  */
 export async function typedVariableCompletionJourney(page: Page, info: TestInfo, capture: Capture,
   registerCleanup: (cleanup: () => Promise<void>) => void) {
@@ -55,6 +55,18 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
       await expect(option.locator(".cm-completionDetail")).toHaveText("String");
     }
     await expect(page.locator(".cm-completionInfo")).toContainText(declaredNote);
+    await expectReadable(page.locator(".cm-completionInfo"), "Declared-type note");
+  }
+  /** The long dotted alias wraps inside its box, and the box stays inside the viewport. */
+  async function expectReadable(box: ReturnType<Page["locator"]>, what: string) {
+    const fit = await box.evaluate(element => {
+      const rect = element.getBoundingClientRect(), overflows = [element, ...element.querySelectorAll("*")]
+        .filter(node => node.scrollWidth > node.clientWidth + 1 && getComputedStyle(node).overflowX !== "auto").length;
+      return { left: rect.left, right: rect.right, width: innerWidth, overflows };
+    });
+    expect(fit.overflows, `${what} has no clipped text`).toBe(0);
+    expect(fit.left, `${what} starts inside the viewport`).toBeGreaterThanOrEqual(0);
+    expect(fit.right, `${what} ends inside the viewport`).toBeLessThanOrEqual(fit.width);
   }
 
   // Compact editor: the typed variable's members, each with its type and the declared-type note.
@@ -76,7 +88,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   await capture(page, info, "typed-member-applied");
 
-  // Hover on the applied member shows the declared-type note.
+  // Hover on the applied member shows its type and the declared-type note.
   const box = await compact.evaluate(content => {
     const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -92,7 +104,9 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await page.mouse.move(box!.x, box!.y);
   expect((await hovered).ok()).toBe(true);
   const hover = page.locator(".cm-tooltip-hover .studio-code-editor-hover");
+  await expect(hover).toContainText("connection: String");
   await expect(hover).toContainText(declaredNote);
+  await expectReadable(page.locator(".cm-tooltip-hover"), "Hover");
   await capture(page, info, "typed-member-hover");
   await page.mouse.move(0, 0);
   await expect(hover).toHaveCount(0);

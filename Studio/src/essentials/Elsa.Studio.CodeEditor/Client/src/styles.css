@@ -56,6 +56,14 @@
   border-bottom-color: var(--studio-surface-raised);
 }
 
+/* Documentation can carry long dotted type aliases. Keep it in its box and in the viewport, one entry per line. */
+.studio-code-editor-completion-documentation,
+.studio-code-editor-hover {
+  max-inline-size: min(28rem, calc(100vw - 2rem));
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
 .studio-code-editor-rich .cm-editor:focus-within,
 .studio-code-editor-input:focus,
 .studio-code-editor-preview:focus-visible {
