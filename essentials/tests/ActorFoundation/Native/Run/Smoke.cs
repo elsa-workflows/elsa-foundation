@@ -25,7 +25,7 @@ public static class Smoke
                     [new("f1", "f2"), new("f1", "f3"), new("f2", "f4"), new("f3", "f4")], ("f4", Gateway.ParallelJoin)),
                 Call("svc", "quotes").Capture("quote"),
                 Notify("notify", "hello"),
-                Http("http", "https://partner.example/orders", Expr("input.key")), Email("mail", "ops@example.com", "order", "sent"),
+                TestWf.Post("http", "https://partner.example/orders", Expr("input.key")), Email("mail", "ops@example.com", "order", "sent"),
                 Dispatch("child", "smoke-child", wait: true).Capture("childOut", "Output"),
                 Dispatch("fire", "smoke-child", wait: false),
                 Publish("ping", Expr("'ping-' + input.key"), "hi"),
@@ -63,6 +63,9 @@ public static class Smoke
     {
         await HttpOverlapChecks.Run(Check);
         await HttpSurfaceChecks.RunAsync(Check);
+        await HttpRouteChecks.RunAsync(Check);
+        await HttpTemplateChecks.RunAsync(Check);
+        await PortChecks.RunAsync(Check);
         var registry = Reference.Registry();
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
         {

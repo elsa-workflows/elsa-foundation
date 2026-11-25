@@ -7,10 +7,8 @@ namespace Kernel.EntityFramework;
 
 public sealed partial class EfStore
 {
-    // The generic load treats this as an unknown state family and leaves its bytes intact.
+    // The generic load treats every root state family as unknown and leaves its bytes intact.
     private const string StableBodyMarker = "wire";
-    private const string StableBodyFamily = StoredState.Family + "12:public-root-stable-body:";
-    internal static string RootTerminationStateFamily(KernelDb db) => db.UsesRootStableBody ? StableBodyFamily : TerminationRootStateFamily;
     private bool? _rootStableBody;
     private bool RootStableBody => _rootStableBody ??= ReadRootStableBody();
 
@@ -20,19 +18,10 @@ public sealed partial class EfStore
         return db.UsesRootStableBody;
     }
 
-    private const int RootContentBytes = 16 * 1024 * 1024 - 24 * 1024;
+    internal const int RootContentBytes = 16 * 1024 * 1024 - 24 * 1024;
 
-    private const string PublicRootState = StoredState.Family + "4:public-root:";
-    internal const string TerminationRootStateFamily = StoredState.Family + "11:public-root-termination:";
-    internal const string TimedRootStateFamily = StoredState.Family + "6:public-root-timed-jobs:";
-    private static string RootStateFamily(KernelDb db) => db switch
-    {
-        { UsesRootValueProtocol: true } => StoredState.Family + "5:public-root-values:",
-        { UsesRootTimedJobSettlement: true } => TimedRootStateFamily,
-        { UsesRootTermination: true } => RootTerminationStateFamily(db),
-        { UsesRootReplyProtocol: true } => StoredState.Family + "7:public-root-replies:",
-        _ => PublicRootState
-    };
+    // The capability set chooses the one prefix (RootStateFamily.Of).
+    private static string RootStatePrefix(KernelDb db) => db.RootStateFamily.Prefix;
 
     internal sealed record RootImage(CreationAddress Actor, string Model, string Definition, string TypeData,
         IReadOnlyDictionary<string, string> Labels, string? State, int StateVersion, long Revision)
@@ -78,8 +67,8 @@ public sealed partial class EfStore
                 ? RootTerminalHeaderBytes(Creator.Start!.Model, Creator.Start.Definition) : 0;
             var reserve = Math.Max(0, terminalHeader - Encoding.UTF8.GetByteCount(Header));
             var bytes = db.UsesRootStableBody
-                ? StableContentBytes(state, Header, Wire, reserve, Row.Status == InstanceStatus.Running ? Growth : 0)
-                : await MeasureRootContentAsync(db, RootStateFamily(db).Length + escape.Length + reserve, state, Header,
+                ? StableContentBytes(RootStatePrefix(db), state, Header, Wire, Row.Jobs, reserve, Row.Status == InstanceStatus.Running ? Growth : 0)
+                : await MeasureRootContentAsync(db, RootStatePrefix(db).Length + escape.Length + reserve, state, Header,
                     Row.Jobs, cancellationToken);
             if (bytes > RootContentBytes) throw new StoreException(Failure.Definite, RootContentFailure);
         }
@@ -88,7 +77,7 @@ public sealed partial class EfStore
         {
             // The existing transaction owns the fence. Return the exact deleted envelope for application-side
             // comparison. A missing bind or changed envelope returns false and rolls back all effects.
-            var family = RootStateFamily(db);
+            var family = RootStatePrefix(db);
             var fingerprint = CreationProtocol.Fingerprint(Creator.Start, Creator.Kind, Creator.Payload);
             var finished = Row.Status == InstanceStatus.Finished;
             var candidates = await db.Messages.FromSqlInterpolated(AddRootWire(db, $"""
@@ -173,11 +162,23 @@ public sealed partial class EfStore
                     AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
                     AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
                     AND NEW."History" IS NOT DISTINCT FROM OLD."History")
+                """ : db.UsesRootParkedOperators ? """
+                (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND OLD."FoundationParkAt" IS NOT NULL
+                    AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationTerminalRevision" IS NULL
+                    AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
+                    AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
+                    AND NEW."History" IS NOT DISTINCT FROM OLD."History"
+                    AND EXISTS (SELECT 1 FROM "Journal" j WHERE j."Partition" = NEW."Partition" AND j."Instance" = NEW."Id"
+                        AND j."Revision" = NEW."Revision" AND j."Entries" LIKE '{{"Outcome":"refused",%'))
                 """ : "false", StringComparison.Ordinal)
+            // S5a: a composed set with Park and operators journals an operator refusal on a parked root at its next revision.
             .Replace("/*root-park-journal*/", db.UsesRootParkArrivals ? """
                 (i."Status" = 2 AND NOT i."Retired" AND NEW."Partition" = i."Partition" AND NEW."Revision" = i."Revision" + 1
                     AND i."FoundationParkAt" IS NOT NULL AND i."FoundationParkRevision" > 0
                     AND (NEW."Entries" = '["parked"]' /*root-park-recover-journal*/))
+                """ : db.UsesRootParkedOperators ? """
+                (i."Status" = 2 AND NOT i."Retired" AND NEW."Partition" = i."Partition" AND NEW."Revision" = i."Revision" + 1
+                    AND i."FoundationParkAt" IS NOT NULL AND NEW."Entries" LIKE '{{"Outcome":"refused",%')
                 """ : "false", StringComparison.Ordinal)
             // Only a recover leaves Faulted for Running. It clears the Park mark and moves the release generation by one.
             // A recover outcome at the new revision binds the write: "recovered" only with that transition, "refused"
@@ -201,7 +202,8 @@ public sealed partial class EfStore
                 """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
                 // The state wire column exists only on stable-body profiles.
                 .Replace("/*new-wire*/", db.UsesRootStableBody ? """, NEW."FoundationStateWire" """ : "", StringComparison.Ordinal)
-                .Replace("/*old-wire*/", db.UsesRootStableBody ? """, OLD."FoundationStateWire" """ : "", StringComparison.Ordinal) : "", StringComparison.Ordinal)
+                .Replace("/*old-wire*/", db.UsesRootStableBody ? """, OLD."FoundationStateWire" """ : "", StringComparison.Ordinal)
+                : db.UsesRootParkedOperators ? ParkedRefusalRow(db) : "", StringComparison.Ordinal)
             .Replace("/*root-park-recover*/", db.UsesRootParkRecovery ? """
                 (OLD."Status" = 2 AND NEW."Status" = 0 AND NOT NEW."Retired" AND NOT OLD."Suspended" AND NOT NEW."Suspended"
                     AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
@@ -222,7 +224,8 @@ public sealed partial class EfStore
                 """ : "", StringComparison.Ordinal)
             .Replace("/*root-park-recover-journal*/", db.UsesRootParkRecovery
                 // The raw command is formatted, so the literal brace is doubled.
-                ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" : "", StringComparison.Ordinal)
+                ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'"""
+                : db.UsesRootParkedOperators ? """OR NEW."Entries" LIKE '{{"Outcome":"refused",%'""" : "", StringComparison.Ordinal)
             .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)
@@ -286,7 +289,7 @@ public sealed partial class EfStore
 
     private const string RootContentFailure = "The encoded PostgreSQL checkpoint exceeds its storage budget.";
 
-    private static ValueTask<long> MeasureRootContentAsync(KernelDb db, int framing, string state, string header,
+    internal static ValueTask<long> MeasureRootContentAsync(KernelDb db, int framing, string state, string header,
         string? jobs, CancellationToken cancellationToken, bool comparePriorSize = false)
     {
         // The known framing is ASCII. The remaining 24 KiB covers bounded identifiers and scalars.
@@ -315,11 +318,12 @@ public sealed partial class EfStore
             sql.Format.Replace("/*root-wire*/", $$""" "FoundationStateWire" = {{{sql.ArgumentCount}}}, """, StringComparison.Ordinal),
             [.. sql.GetArguments(), wire]) : sql;
 
-    private static long StableContentBytes(string stored, string header, byte[]? wire, int reserve, long growth)
+    // The exact stable-body row content. Jobs count as in MeasureRootContentAsync; only a job-protocol set writes them.
+    internal static long StableContentBytes(string family, string stored, string header, byte[]? wire, string? jobs, int reserve, long growth)
     {
         if (growth < 0 || growth > RootContentBytes) return (long)RootContentBytes + 1;
-        return (long)StableBodyFamily.Length + stored.Length + Encoding.UTF8.GetByteCount(header) +
-            (wire?.Length ?? 0) + reserve + growth;
+        return (long)family.Length + stored.Length + Encoding.UTF8.GetByteCount(header) +
+            (wire?.Length ?? 0) + (jobs is null ? 0 : Encoding.UTF8.GetByteCount(jobs)) + reserve + growth;
     }
 
     private sealed record PhysicalRoot(string Id, long Creation, string State, byte[]? Wire, int StateVersion, long Revision, string Header,
@@ -331,7 +335,7 @@ public sealed partial class EfStore
         await using var db = create();
         // The model's protection decision must see the same physical checkpoint as retirement.
         await using var transaction = await BeginPinnedRootOperationAsync(db, cancellationToken);
-        var family = RootStateFamily(db);
+        var family = RootStatePrefix(db);
         if (transaction is null && (db.UsesRootValueProtocol || db.UsesRootTimedJobIssuance || db.UsesRootTimedJobSettlement || db.UsesRootReplyProtocol || db.UsesRootStableBody))
             await RequireStoreVersionsAsync(db, cancellationToken);
         FormattableString query = $"""

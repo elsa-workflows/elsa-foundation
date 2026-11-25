@@ -31,6 +31,7 @@ public sealed partial class EfStore
         internal bool KeepsParkInputs { get; set; }
         internal bool KeepsParkArrivals { get; set; }
         internal bool RecoversPark { get; set; }
+        internal bool RefusesParkedOperators { get; set; }
         internal string[] Actors { get; } = roots.Select(r => r.Actor).ToArray();
         private readonly Dictionary<string, WorkerRoot> _actors = roots.ToDictionary(r => r.Actor, StringComparer.Ordinal);
         private readonly Dictionary<string, WorkerRoot> _references = roots.ToDictionary(r => r.Reference, StringComparer.Ordinal);
@@ -62,6 +63,7 @@ public sealed partial class EfStore
         public bool KeepsParkInputs => roots.KeepsParkInputs;
         public bool KeepsParkArrivals => roots.KeepsParkArrivals;
         public bool RecoversPark => roots.RecoversPark;
+        public bool RefusesParkedOperators => roots.RefusesParkedOperators;
 
         public FoundationDispatchHeader Checkpoint(InstanceRow row) =>
             throw new InvalidOperationException("PostgreSQL must load the root's public header with its checkpoint.");
@@ -114,6 +116,7 @@ public sealed partial class EfStore
             scope.KeepsParkInputs = db.UsesRootParkOpening;
             scope.KeepsParkArrivals = db.UsesRootParkArrivals;
             scope.RecoversPark = db.UsesRootParkRecovery;
+            scope.RefusesParkedOperators = db.UsesRootParkedOperators;
             Volatile.Write(ref _ordinaryRoots, scope);
             return scope;
         }
@@ -227,22 +230,30 @@ public sealed partial class EfStore
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
-            var terminal = await db.Database.SqlQuery<long>($"""
-                SELECT i."FoundationTerminalRevision" AS "Value" FROM "Instances" i
-                JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
-                    AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
-                WHERE b."Tenant" = {Root.Tenant} AND b."Reference" = {Root.Reference} AND b."Actor" = {Root.Actor}
-                    AND b."Creation" = 1 AND i."Partition" = {Root.Partition} AND NOT i."Retired"
-                    AND (i."Status" = {(int)InstanceStatus.Finished} OR
-                        ({db.UsesRootTermination} AND i."Status" = {(int)InstanceStatus.Cancelled}
-                            AND starts_with(i."State", {RootTerminationStateFamily(db)})) OR
-                        ({db.UsesRootTimedJobSettlement} AND i."Status" = {(int)InstanceStatus.Faulted}
-                            AND starts_with(i."State", {TimedRootStateFamily})))
-                    AND i."FoundationTerminalAt" IS NOT NULL AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
-                """).ToListAsync(cancellationToken);
+            var terminal = await LockQualifiedTerminalAsync(db, Root, cancellationToken);
             return terminal.Count == 1 && await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), Keys,
                 HeldOperator is null ? null : [HeldOperator], Issue, false, cancellationToken);
         }
+    }
+
+    // The terminal revision of the exact unretired root, share-locked until the transaction ends: Finished, or a status
+    // that its state family ends under the family's prefix.
+    internal static Task<List<long>> LockQualifiedTerminalAsync(KernelDb db, WorkerRoot root, CancellationToken cancellationToken)
+    {
+        var family = db.RootStateFamily;
+        return db.Database.SqlQuery<long>($"""
+            SELECT i."FoundationTerminalRevision" AS "Value" FROM "Instances" i
+            JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
+                AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
+            WHERE b."Tenant" = {root.Tenant} AND b."Reference" = {root.Reference} AND b."Actor" = {root.Actor}
+                AND b."Creation" = 1 AND i."Partition" = {root.Partition} AND NOT i."Retired"
+                AND (i."Status" = {(int)InstanceStatus.Finished} OR
+                    ({family.EndsCancelled} AND i."Status" = {(int)InstanceStatus.Cancelled}
+                        AND starts_with(i."State", {family.Prefix})) OR
+                    ({family.EndsFaulted} AND i."Status" = {(int)InstanceStatus.Faulted}
+                        AND starts_with(i."State", {family.Prefix})))
+                AND i."FoundationTerminalAt" IS NOT NULL AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
+            """).ToListAsync(cancellationToken);
     }
 
     private sealed record PreparedRoot(TurnCommit? JournalTurn, QualifiedRootCheckpoint Checkpoint);
@@ -367,11 +378,18 @@ public sealed partial class EfStore
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
         if (turn.FoundationRootOperator is { Kind: Kinds.Recover }) return await PrepareRootParkRecoverAsync(root, turn, cancellationToken);
+        // A delete, or a retired marker, of an ended Faulted root goes on to retirement below.
+        if (turn is { FoundationRootOperator: not null, Row: { Status: InstanceStatus.Faulted, Retired: false }, OpensPark: false,
+                FoundationKept: null, Delete: false })
+        {
+            await using var profile = create();
+            if (profile.UsesRootParkedOperators) return await PrepareRootParkedRefusalAsync(root, turn, cancellationToken);
+        }
         if (turn.OpensPark || turn.FoundationKept is { Count: > 0 })
         {
             await using var profile = create();
             if (profile.UsesRootParkArrivals || profile.UsesRootParkOpening && turn.OpensPark)
-                return await PrepareRootParkOpeningAsync(root, turn, cancellationToken);
+                return await PrepareRootParkOpeningAsync(root, turn, profile.UsesRootParkedOperators, cancellationToken);
         }
         if (turn.Delete) return await PrepareRootRetirementAsync(root, turn, cancellationToken);
         if (turn.Row is null)

@@ -855,6 +855,7 @@
         {
           "name": "cluster-foundation-host",
           "classes": [
+            "Elsa.Cluster.EntityFrameworkCore.Tests.EssentialsHostBootTests",
             "Elsa.Cluster.EntityFrameworkCore.Tests.FoundationHostBootTests",
             "Elsa.Cluster.EntityFrameworkCore.Tests.FoundationHostClusterBootTests",
             "Elsa.Cluster.EntityFrameworkCore.Tests.FoundationHostDataProtectionBootTests",
