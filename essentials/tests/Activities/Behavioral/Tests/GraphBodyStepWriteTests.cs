@@ -21,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa.Activities.Behavioral.GraphBodyScopeTests;
 using ParallelActivity = Elsa.Activities.Parallel.Activities.Parallel;
+using ForEachActivity = Elsa.Activities.ForEach.Activities.ForEach;
 
 namespace Elsa.Activities.Behavioral;
 
@@ -49,7 +50,7 @@ public sealed class GraphBodyStepWriteTests
             outputs: [new GraphActivityOutputDescriptor("sum", ObjectType, WellKnownRuntimeDurableValueStorageDrivers.Json, "Sum")],
             outputMappings: [new GraphActivityOutputMappingDescriptor("sum", new GraphActivityExpression("JavaScript", JsonSerializer.SerializeToElement("getVariable('Total')")))]);
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(boundary, CallerTotal()));
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(boundary, CallerNamedTotal()));
 
         run.AssertWorkflowCompleted();
         Assert.Equal(90, run.AssertCompleted("node-js").Completion!.Result.InlineValue!.Value.GetProperty("value").GetInt32());
@@ -65,6 +66,10 @@ public sealed class GraphBodyStepWriteTests
         Assert.Equal(BoundaryNodeId, write.ScopeId);
         Assert.Equal("total", write.VariableKey);
         Assert.True(write.NewVersion > write.CurrentVersion);
+        Assert.Equal(run.State("node-js").InvocationId, write.Writer.InvocationId);
+        // The script read Total first, so its write is built on the version it read.
+        Assert.Equal(write.CurrentVersion, write.BaseVersion);
+        Assert.Equal(VariableCommitOutcome.Current, write.Outcome);
         var row = await TotalRowAsync(harness, run);
         Assert.Equal(write.NewVersion.ToString(System.Globalization.CultureInfo.InvariantCulture), row.Metadata[RuntimeMetadataKeys.RowVariableVersion]);
         Assert.Contains("node-js", row.Metadata[RuntimeMetadataKeys.RowVariableWriter], StringComparison.Ordinal);
@@ -80,7 +85,7 @@ public sealed class GraphBodyStepWriteTests
             TotalLeaf("node-set", typeof(SetTotalToFiveActivity)),
             Echo("node-read-total", Variable("total", BoundaryNodeId)));
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(Boundary(body, variables: [TotalVariable(100)]), CallerTotal()));
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(Boundary(body, variables: [TotalVariable(100)]), CallerNamedTotal()));
 
         run.AssertWorkflowCompleted();
         Assert.Equal(5, ReadInput(run, "node-read-total"));
@@ -98,11 +103,72 @@ public sealed class GraphBodyStepWriteTests
             Leaf("node-set", typeof(IncrementTotalByNameActivity), new Dictionary<string, RuntimeInputBinding>()),
             Echo("node-read-total", Variable("total", BoundaryNodeId)));
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(Boundary(body, variables: [TotalVariable(100)]), CallerTotal()));
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(Boundary(body, variables: [TotalVariable(100)]), CallerNamedTotal()));
 
         run.AssertWorkflowCompleted();
         Assert.Equal(101, ReadInput(run, "node-read-total"));
         Assert.Equal(0, run.WorkflowState!.RootVariableFrame!.Values["total"].InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task A_reference_bound_with_the_legacy_graph_scope_writes_the_body_variable()
+    {
+        // A body authored before the `workflow` scope names its own variables with the legacy graph scope.
+        await using var harness = NewHarness();
+        var body = GraphBoundaryCompleteTests.Sequence(
+            "node-body",
+            TotalLeaf("node-set", typeof(SetTotalToFiveActivity), scopeId: "activity-graph"),
+            Echo("node-read-total", Variable("total", BoundaryNodeId)));
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(Boundary(body, variables: [TotalVariable(100)]), CallerNamedTotal()));
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(5, ReadInput(run, "node-read-total"));
+        Assert.Equal(0, run.WorkflowState!.RootVariableFrame!.Values["total"].InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task Each_activation_of_one_reusable_activity_changes_its_own_variable()
+    {
+        // US1 AS5, FR-002: the same boundary node runs once per loop iteration; each activation has its own row.
+        await using var harness = NewHarness();
+        var boundary = Boundary(
+            GraphBoundaryCompleteTests.Sequence("node-body", TotalLeaf("node-inc", typeof(IncrementTotalActivity)),
+                Echo("node-read", Variable("total", BoundaryNodeId))),
+            variables: [TotalVariable(10)]);
+        var loop = Nodes.Structural(
+            "node-loop",
+            typeof(ForEachActivity),
+            ForEachActivity.StructureKind,
+            ForEachActivity.StructureSchemaVersion,
+            new { body = boundary.ExecutableNodeId },
+            [new ExecutableChildSlot(ForEachActivity.BodySlotName, [boundary])],
+            new Dictionary<string, object?> { ["Collection"] = new[] { "first", "second" } });
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(loop, CallerNamedTotal()));
+
+        run.AssertWorkflowCompleted();
+        var reads = run.States("node-read").ToArray();
+        Assert.Equal(2, reads.Length);
+        Assert.All(reads, read => Assert.Equal(11, read.InputSnapshot!.Values[nameof(GraphBodyScopeTests.EchoActivity.Value)].InlineValue!.Value.GetInt32()));
+        Assert.Equal(0, run.WorkflowState!.RootVariableFrame!.Values["total"].InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task A_step_that_writes_and_is_then_cancelled_saves_nothing()
+    {
+        // US2 AS5.
+        await using var harness = NewHarness();
+        var body = TotalLeaf("node-set", typeof(SetTotalThenCancelActivity));
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(Boundary(body, variables: [TotalVariable(100)])),
+            allowPendingWorkOnTerminalCompletion: true,
+            allowAcceptedButFaulted: true);
+
+        Assert.Equal(ActivityExecutionStatus.Cancelled, run.State("node-set").Status);
+        Assert.Null(run.State("node-set").VariableWrites);
+        Assert.Equal(100, (await TotalRowAsync(harness, run)).InlineValue!.Value.GetInt32());
     }
 
     [Fact]
@@ -111,11 +177,11 @@ public sealed class GraphBodyStepWriteTests
         // US1 AS5: each activation's body has its own row.
         await using var harness = NewHarness();
         var first = Boundary(
-            GraphBoundaryCompleteTests.Sequence("node-body-1", TotalLeaf("node-inc-1", typeof(IncrementTotalActivity), scopeId: "node-boundary-1"),
+            GraphBoundaryCompleteTests.Sequence("node-body-1", TotalLeaf("node-inc-1", typeof(IncrementTotalActivity)),
                 Echo("node-read-1", Variable("total", "node-boundary-1"))),
             variables: [TotalVariable(10)], nodeId: "node-boundary-1");
         var second = Boundary(
-            GraphBoundaryCompleteTests.Sequence("node-body-2", TotalLeaf("node-inc-2", typeof(IncrementTotalActivity), scopeId: "node-boundary-2"),
+            GraphBoundaryCompleteTests.Sequence("node-body-2", TotalLeaf("node-inc-2", typeof(IncrementTotalActivity)),
                 Echo("node-read-2", Variable("total", "node-boundary-2"))),
             variables: [TotalVariable(10)], nodeId: "node-boundary-2");
 
@@ -132,7 +198,7 @@ public sealed class GraphBodyStepWriteTests
         // Edge case: a step reaches its nearest body only.
         await using var harness = NewHarness();
         var inner = Boundary(
-            TotalLeaf("node-set", typeof(SetTotalToFiveActivity), scopeId: "node-inner"),
+            TotalLeaf("node-set", typeof(SetTotalToFiveActivity)),
             variables: [TotalVariable(1)], nodeId: "node-inner");
         var outer = Boundary(
             GraphBoundaryCompleteTests.Sequence("node-body", inner, Echo("node-read-outer", Variable("total", BoundaryNodeId))),
@@ -348,6 +414,12 @@ public sealed class GraphBodyStepWriteTests
         new("total", "Total", captured ? ObjectType : Int32Type, WellKnownRuntimeDurableValueStorageDrivers.Json,
             new GraphActivityExpression("Literal", JsonSerializer.SerializeToElement(initial)));
 
+    // SC-005: a caller variable with the body variable's name and key; a body write never reaches it.
+    private static RuntimeVariableDeclaration CallerNamedTotal() => new(
+        "total", "Total", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+        new RuntimeInputBinding("total", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(new ValueTypeDescriptor("Object"), JsonSerializer.SerializeToElement(0), ValueProtectionPolicy.InstanceInline)));
+
     private static async Task<IReadOnlyCollection<DurableValueState>> RowsAsync(WorkflowExecutionHarness harness, WorkflowExecutionRun run) =>
         await harness.Services.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(run.WorkflowState!.WorkflowExecutionId);
 
@@ -363,7 +435,8 @@ public sealed class GraphBodyStepWriteTests
     private static string ProjectionKey(ExecutableNode node, string output) =>
         node.ActivityContract!.Result.Projections.Keys.Single(key => key.EndsWith(output, StringComparison.Ordinal));
 
-    private static ExecutableNode TotalLeaf(string nodeId, Type activityType, string scopeId = BoundaryNodeId) =>
+    // Placement leaves a body's variable-reference literal with the scope it was authored with (`workflow`).
+    private static ExecutableNode TotalLeaf(string nodeId, Type activityType, string scopeId = Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId) =>
         Leaf(nodeId, activityType, new Dictionary<string, RuntimeInputBinding>
         {
             ["Total"] = new(
@@ -539,6 +612,18 @@ public sealed class GraphBodyStepWriteTests
         {
             context.Variables.Set(Total, Seen + 10);
             return ValueTask.FromResult(Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+        }
+    }
+
+    /// <summary>Writes <c>Total</c> and then cancels.</summary>
+    public sealed class SetTotalThenCancelActivity : Activity
+    {
+        [ActivityInput] public VariableReference<int> Total { get; set; } = default!;
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
+        {
+            context.Variables.Set(Total, 9);
+            return ValueTask.FromResult(ActivityTransition.Cancel<ActivityUnit>("stop"));
         }
     }
 

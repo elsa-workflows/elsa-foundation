@@ -88,7 +88,7 @@ public sealed class Elsa3ExpressionRewriter(
     /// terms, because the engineer edits the Elsa 3 workflow; the reusable caveat is spec 246 D-7.
     /// </summary>
     private const string MutationGuidance =
-        "Move the assignment into a Set Variable activity in the Elsa 3 workflow. In a reusable workflow, Elsa 4 cannot set variables yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED).";
+        "Move the assignment into a Set Variable activity in the Elsa 3 workflow. In a reusable workflow, Elsa 4 has no Set Variable yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED); a Run JavaScript script can set its variables.";
 
     /// <summary>
     /// What to change when an input expression writes a variable (spec 1231 FR-033): Elsa 4 input expressions only read,
@@ -96,7 +96,7 @@ public sealed class Elsa3ExpressionRewriter(
     /// </summary>
     private const string VariableWriteGuidance =
         "Move the assignment into a Set Variable activity, or into a Run JavaScript activity, whose script can set variables, in the Elsa 3 workflow. " +
-        "In a reusable workflow, Elsa 4 cannot set variables yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED).";
+        "In a reusable workflow, Elsa 4 has no Set Variable activity yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED); use the Run JavaScript activity there.";
 
     public Elsa3ExpressionRewriteResult Rewrite(
         string language,

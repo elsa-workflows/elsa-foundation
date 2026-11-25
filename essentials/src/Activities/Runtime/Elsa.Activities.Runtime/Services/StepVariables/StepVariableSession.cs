@@ -488,9 +488,13 @@ internal sealed class StepVariableSession : IStepVariableSession
         for (var index = frames.Count - 1; index >= 0; index--)
         {
             var frame = frames[index];
+            // Placement does not remap a variable-reference input's pinned literal, so a body's reference keeps the root
+            // scope it was authored with: `workflow`, or the legacy graph scope (spec 1241). Below a closed boundary both
+            // name the body's own variables.
             var matchesScope = StringComparer.Ordinal.Equals(frame.ScopeId, scopeId) ||
                                index == 0 && _frames!.ClosedScopeBoundary is not null &&
-                               StringComparer.Ordinal.Equals(scopeId, ExpressionVariableReference.WorkflowScopeId);
+                               (StringComparer.Ordinal.Equals(scopeId, ExpressionVariableReference.WorkflowScopeId) ||
+                                StringComparer.Ordinal.Equals(scopeId, LegacyGraphScopeId));
             if (matchesScope && frame.Values.ContainsKey(variableKey))
                 return Resolved(frame, variableKey, name);
         }
@@ -498,6 +502,9 @@ internal sealed class StepVariableSession : IStepVariableSession
         throw Fault(new InvalidOperationException(
             $"Variable '{name}' (scope '{scopeId}', key '{variableKey}') is not visible to node '{_node.ExecutableNodeId}'."));
     }
+
+    // PlacedReferenceRemapper.LegacyGraphScopeId (Publishing); Runtime does not reference Design or Publishing.
+    private const string LegacyGraphScopeId = "activity-graph";
 
     private static ResolvedVariable Resolved(VariableFrameState frame, string key, string name)
     {

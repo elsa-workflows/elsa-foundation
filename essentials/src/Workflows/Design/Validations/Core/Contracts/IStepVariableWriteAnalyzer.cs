@@ -19,7 +19,8 @@ public interface IStepVariableWriteAnalyzer
 {
     /// <summary>
     /// Analyses the tree under <paramref name="root"/>, whose root scope declares <paramref name="rootVariables"/> (a graph
-    /// body's own variables, addressed as the <c>workflow</c> scope inside the body).
+    /// body's own variables, addressed as the <c>workflow</c> scope inside the body). A real host always composes exactly
+    /// one; a consumer built without one checks no step writes.
     /// </summary>
     ValueTask<StepVariableWriteAnalysis> AnalyzeAsync(
         ActivityNode root,
@@ -29,7 +30,10 @@ public interface IStepVariableWriteAnalyzer
 
 /// <summary>
 /// The result of <see cref="IStepVariableWriteAnalyzer.AnalyzeAsync"/>: the step writers by node, and the findings, each
-/// with the rule type workflow draft validation reports it under (<see cref="StepVariableWriteRules"/>).
+/// with the rule type workflow draft validation reports it under. The step-write findings use
+/// <see cref="StepVariableWriteRules"/>; the default analyzer also returns the workflow-state findings
+/// (<c>VF-STATE-001</c>, <c>VF-STATE-002</c>) workflow validation makes on the same walk. A consumer may leave those to
+/// its own workflow-state checks: a graph body's are refused when a workflow places the body.
 /// </summary>
 public sealed record StepVariableWriteAnalysis(StepVariableWriteFacts Facts, IReadOnlyList<ValidationError> Findings)
 {

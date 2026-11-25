@@ -21,27 +21,26 @@ public sealed class Elsa3VariableWriteConversionTests
     private static readonly Elsa3Variable OrderTotal = new() { Id = "order-total-id", Name = "order-total", TypeName = "Int32" };
 
     [Theory]
-    [InlineData("function f(item) { item.Status = 'Paid'; var item; } f(getVariable('Order')); return 1;", false)]
-    [InlineData("function f(item) { var item; item.Status = 'Paid'; } f(getVariable('Order')); return 1;", false)]
-    [InlineData("function f(item = getVariable('Order')) { item.Status = 'Paid'; var item; } f(); return 1;", false)]
-    [InlineData("function f(item, read = () => item) { var item = {}; read().Status = 'Paid'; } f(getVariable('Order')); return 1;", false)]
-    [InlineData("function f(write) { write(); var write; } f(() => { getVariable('Order').Status = 'Paid'; }); return 1;", false)]
-    [InlineData("function f(write = () => { getVariable('Order').Status = 'Paid'; }) { var write; write(); } f(); return 1;", false)]
-    [InlineData("switch (0) { default: const item = getVariable('Order'); item.Status = 'Paid'; } return 1;", false)]
-    [InlineData("const item = getVariable('Order'); switch (0) { default: let item = {}; } item.Status = 'Paid'; return 1;", false)]
-    [InlineData("switch (0) { case 0: const item = getVariable('Order'); case 1: item.Status = 'Paid'; } return 1;", false)]
-    [InlineData("function f(item) { var item; item.Status = 'Local'; } f({}); return 1;", true)]
-    [InlineData("function f(item = {}) { var item; item.Status = 'Local'; } f(); return 1;", true)]
-    [InlineData("switch (0) { default: const setVariable = () => 1; setVariable(); } return 1;", true)]
-    [InlineData("switch (0) { default: const getVariable = () => ({}); const item = getVariable(); item.Status = 'Local'; } return 1;", true)]
-    [InlineData("const item = getVariable('Order'); switch (0) { default: let item = {}; item.Status = 'Local'; } return 1;", true)]
-    [InlineData("function f(item) { item = {}; var item; item.Status = 'Local'; } f(getVariable('Order')); return 1;", true)]
-    [InlineData("function f(item, read = () => item) { var item = {}; item.Status = 'Local'; } f(getVariable('Order')); return 1;", true)]
-    public async Task Reusable_scope_analysis_preserves_parameter_values_and_switch_bindings(string source, bool localOnly)
+    [InlineData("function f(item) { item.Status = 'Paid'; var item; } f(getVariable('Order')); return 1;")]
+    [InlineData("function f(item) { var item; item.Status = 'Paid'; } f(getVariable('Order')); return 1;")]
+    [InlineData("function f(item = getVariable('Order')) { item.Status = 'Paid'; var item; } f(); return 1;")]
+    [InlineData("function f(item, read = () => item) { var item = {}; read().Status = 'Paid'; } f(getVariable('Order')); return 1;")]
+    [InlineData("function f(write) { write(); var write; } f(() => { getVariable('Order').Status = 'Paid'; }); return 1;")]
+    [InlineData("function f(write = () => { getVariable('Order').Status = 'Paid'; }) { var write; write(); } f(); return 1;")]
+    [InlineData("switch (0) { default: const item = getVariable('Order'); item.Status = 'Paid'; } return 1;")]
+    [InlineData("const item = getVariable('Order'); switch (0) { default: let item = {}; } item.Status = 'Paid'; return 1;")]
+    [InlineData("switch (0) { case 0: const item = getVariable('Order'); case 1: item.Status = 'Paid'; } return 1;")]
+    [InlineData("function f(item) { var item; item.Status = 'Local'; } f({}); return 1;")]
+    [InlineData("function f(item = {}) { var item; item.Status = 'Local'; } f(); return 1;")]
+    [InlineData("switch (0) { default: const setVariable = () => 1; setVariable(); } return 1;")]
+    [InlineData("switch (0) { default: const getVariable = () => ({}); const item = getVariable(); item.Status = 'Local'; } return 1;")]
+    [InlineData("const item = getVariable('Order'); switch (0) { default: let item = {}; item.Status = 'Local'; } return 1;")]
+    [InlineData("function f(item) { item = {}; var item; item.Status = 'Local'; } f(getVariable('Order')); return 1;")]
+    [InlineData("function f(item, read = () => item) { var item = {}; item.Status = 'Local'; } f(getVariable('Order')); return 1;")]
+    public async Task Reusable_scope_analysis_preserves_parameter_values_and_switch_bindings(string source)
     {
-        // Spec 1241 SC-002: a script that changes a variable through an alias, or only a local copy, converts in a reusable
-        // workflow exactly as in a workflow; its write lands in the reusable activity's own variable.
-        _ = localOnly;
+        // Spec 1241 SC-002: a script that changes a variable through an alias, or only a local copy, is converted (or
+        // refused) in a reusable workflow exactly as in a workflow; a write lands in the reusable activity's own variable.
         await AssertConvertsAsInAWorkflowAsync(source);
     }
 
@@ -381,10 +380,11 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("const owned = getVariable('Order'); let o = {}; function receiver() { o = owned; return null; } receiver()?.x(o = {}); o.Status = 'Paid'; return 1;")]
     [InlineData("let o = {}; ((o = getVariable('Order')), null)?.[(o = {})]; o.Status = 'Paid'; return 1;")]
     [InlineData("const owned = getVariable('Order'); let o = {}; const h = { get fn() { o = owned; return null; } }; h.fn?.(o = {}); o.Status = 'Paid'; return 1;")]
-    public async Task A_write_in_a_reusable_workflows_script_converts_as_in_a_workflow(string source)
+    public async Task A_write_in_a_reusable_workflows_script_is_handled_as_in_a_workflow(string source)
     {
-        // Spec 1241 SC-002: these were refused only because the workflow was reusable (#4805). A step in a reusable
-        // activity's body now writes the body's own variables, so each converts, or is refused, exactly as in a workflow.
+        // Spec 1241 SC-002: these were refused because the workflow was reusable (#4805). A step in a reusable activity's
+        // body now writes the body's own variables, so each converts, or is refused for its own reason, exactly as in a
+        // workflow.
         await AssertConvertsAsInAWorkflowAsync(source);
     }
 
@@ -402,10 +402,14 @@ public sealed class Elsa3VariableWriteConversionTests
 
     [Theory]
     [InlineData("getVariable('Order').Status = 'Paid'; return 1;")]
-    [InlineData("lookupCustomer(getVariable('Order')); return 1;")]
+    [InlineData("function pay(order) { order.Status = 'Paid'; } pay(getVariable('Order')); return 1;")]
     public async Task A_reusable_script_that_changes_a_member_of_a_variable_converts_as_in_a_workflow(string source)
     {
-        // Spec 1241 US4 AS2.
+        // Spec 1241 US4 AS2: a member change, directly or through a helper that may change it.
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        var reusable = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total, Order]), isReusable: true);
+
+        Assert.True(reusable.Succeeded, Describe(reusable.Diagnostics));
         await AssertConvertsAsInAWorkflowAsync(source);
     }
 

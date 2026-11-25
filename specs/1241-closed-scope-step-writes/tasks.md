@@ -11,7 +11,7 @@ Tests are xunit only. `[P]` = can run in parallel (different files).
 - [x] T002 Captures of one completion into the same body variable judge against the overlay (FR-007); test two captures
   into one row: two records with consecutive versions. *Done: `Two_captures_of_one_completion_into_one_variable_judge_in_order`.*
 - [x] T003 `StepVariableSession.Stage`: remove the closed-scope refusal; intents carry `ClosedScopeBoundaryId`. Session
-  tests: write, read-your-writes, type mismatch and transient faults in a closed-scope frame. *Done. Closed-scope frame values are typed `Any`, so the session checks a body write against the row's declared type (`RuntimeVisibleVariableFrames.RootVariableTypes`). Covered end to end in `GraphBodyStepWriteTests`.*
+  tests: write, read-your-writes, type mismatch and transient faults in a closed-scope frame. *Done. Closed-scope frame values are typed `Any`, so the session checks a body write against the row's declared type (`RuntimeVisibleVariableFrames.RootVariableTypes`). Type mismatch is covered end to end in `GraphBodyStepWriteTests`; a transient body variable is not covered (a body row is never transient).*
 - [x] T004 Session row writes: build the row from the stored row (driver, metadata, protection minimum) and judge it
   through `ClosedScopeRowCommit` with source `SessionChange`.
 - [x] T005 `StepVariableCommit`: on suspension apply row intents; on completion skip row intents already applied; row
@@ -19,7 +19,7 @@ Tests are xunit only. `[P]` = can run in parallel (different files).
 - [x] T006 Invoke and resume handlers: apply session row intents before the capture projection, pass the overlay, route
   a `Fault` session row lost update through `rowLostUpdateFault`.
 - [x] T007 Run tests (end to end through a published graph activity): US1 scenarios 1–5, US2 scenarios 1–6, nested
-  body, loop inside body, caller variable of the same name unchanged (SC-005). *Done in `GraphBodyStepWriteTests` (Activities.Behavioral). Not covered: a loop inside a body (a loop item stays read-only through the existing iteration-frame refusal).*
+  body, loop inside body, caller variable of the same name unchanged (SC-005). *Done in `GraphBodyStepWriteTests` (Activities.Behavioral), over hand-built placed boundaries, not through publication. US2 AS2 is covered on the resume path (warning and `Fault`); the digest exception under `Fault` is the shared commit rule and is not repeated. Not covered: a loop inside a body (a loop item stays read-only through the existing iteration-frame refusal).*
 
 ## Phase 2: Publish checks (US3)
 
@@ -36,7 +36,7 @@ Tests are xunit only. `[P]` = can run in parallel (different files).
 - [x] T012 Reusable input writes: dedicated refusal for `setVariable('<input>', v)`; generated input setter keeps its
   refusal. Tests.
 - [x] T013 Convert the reusable refusal tests into conversion assertions; `ApplyDiscount` conversion + import run test
-  (SC-001, SC-002). *Done. The `ApplyDiscount` conversion is pinned in `ApplyDiscount_converts_with_no_refusal`; its converted script runs in a body in `A_body_script_changes_its_variable_and_the_next_step_and_the_output_read_it`.*
+  (SC-001, SC-002). *Done. The `ApplyDiscount` conversion is pinned in `ApplyDiscount_converts_with_no_refusal`, and its converted script runs in a hand-built body in `A_body_script_changes_its_variable_and_the_next_step_and_the_output_read_it`; a published reusable activity running it is checked in the Studio check (T015).*
 
 ## Phase 4: Docs, Studio, close-out
 

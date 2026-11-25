@@ -1842,7 +1842,8 @@ public sealed class GraphActivityProvider(
                 StepVariableWriteRules.VariableReference => (StepVariableReferenceCode, ActivityDiagnosticSeverity.Error),
                 StepVariableWriteRules.RefusedScriptWrite => (StepScriptWriteCode, ActivityDiagnosticSeverity.Error),
                 StepVariableWriteRules.StepWriteOverlapsCapture => (StepWriteOverlapsCaptureCode, ActivityDiagnosticSeverity.Warning),
-                // Workflow-state findings belong to the body's own workflow-state checks.
+                // Workflow-state findings (VF-STATE-*) are out of this check's scope (spec 1241): a workflow that places
+                // the body refuses them (ActivityTemplatePlacer, VF-STATE-002).
                 _ => (null, ActivityDiagnosticSeverity.Warning)
             };
             if (code is null)
@@ -1887,8 +1888,9 @@ public sealed class GraphActivityProvider(
         }
     }
 
-    // Spec 1241 FR-009: the step-write checks a graph body shares with a workflow draft. Without a composed analyzer or
-    // catalog the body is checked for captures only, as before.
+    // Spec 1241 FR-009: the step-write checks a graph body shares with a workflow draft. GraphActivitiesDesignFeature
+    // composes the provider with the shell's scope factory, where DataSelectionAnalyzerCompositionCheck guarantees one
+    // analyzer; only a provider built directly without one checks captures only.
     private async ValueTask<StepVariableWriteAnalysis> AnalyzeStepWritesAsync(ActivityGraphManifest graph, ActivityNode root, CancellationToken cancellationToken)
     {
         if (scopeFactory is null)

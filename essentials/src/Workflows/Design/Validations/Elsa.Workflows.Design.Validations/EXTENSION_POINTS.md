@@ -83,7 +83,7 @@ The optional scoped Publishing implementation resolves a selected whole activity
   (`Scripts/RefusedVariableWrite`). It returns the step writers (`StepVariableWriteFacts`) the concurrent-write rule
   counts. The default delegates to the same checks `ValueFlowValidator` runs.
 - **Consumer:** `GraphActivityProvider` (Activities.Graph.Design), in a reusable activity's draft validation and
-  compilation, through its service scope factory; a provider without one checks the body's captures only.
+  compilation, through its service scope factory; only a provider built directly without one checks the body's captures only. It leaves the workflow-state findings (`VF-STATE-*`) to placement.
 - **Override when:** a host validates step writes differently; a replacement that disagrees with workflow draft
   validation makes a graph body and a workflow with the same body report differently.
 

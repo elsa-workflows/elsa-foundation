@@ -36,7 +36,8 @@ internal static class Elsa3ReusableGuidance
             $"Elsa 4 graph activities cannot set variables yet (tracked in {IntrinsicIssue}). A reusable workflow's variables " +
             "are its own, so only its body can read them. If nothing in the body reads this variable, remove the Set Variable: " +
             "nothing else changes. If a value only needs to pass from one activity to the next, capture that activity's output " +
-            $"into the variable instead. Otherwise keep the workflow in Elsa 3 until {IntrinsicIssue} is done, or " + ImportAsRegularWorkflow,
+            "into the variable instead, or set it from a Run JavaScript activity's script (setVariable('name', value)), which a " +
+            $"reusable body supports. Otherwise keep the workflow in Elsa 3 until {IntrinsicIssue} is done, or " + ImportAsRegularWorkflow,
         "SetOutput" =>
             $"Elsa 4 graph activities cannot set their outputs yet (tracked in {IntrinsicIssue}). If no workflow that uses this " +
             $"activity reads the output, remove the Set Output. If one does, keep the workflow in Elsa 3 until {IntrinsicIssue} " +
