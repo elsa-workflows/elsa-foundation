@@ -100,8 +100,8 @@ internal static class PostgresRootStateFamilyChecks
         var family = db.RootStateFamily;
         Check(family == new RootStateFamily(FamilyPrefix, true, true),
             $"the {set} writes one family that names timed jobs, stable body and replies: {family.Prefix}");
-        // S7: the shipped format 24 writes this family; no qualification profile's prefix matches it in either direction.
-        Check(RootStateFamily.Of(RootProfiles.Shipped) == family, $"the shipped format 24 writes the {set} family");
+        // S7: the shipped format 25 writes this family; no qualification profile's prefix matches it in either direction.
+        Check(RootStateFamily.Of(RootProfiles.Shipped) == family, $"the shipped format 25 writes the {set} family");
         var qualification = RootProfiles.Formats.Where(entry => entry.Key != StoreFormat.RootShipped)
             .Select(entry => RootStateFamily.Of(entry.Value).Prefix).Distinct().ToArray();
         Check(qualification.Length == 6 && qualification.All(prefix => !family.Prefix.StartsWith(prefix, StringComparison.Ordinal) &&

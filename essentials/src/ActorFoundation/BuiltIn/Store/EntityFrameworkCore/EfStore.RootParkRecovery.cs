@@ -136,8 +136,8 @@ public sealed partial class EfStore
                 command.RootParkClear ? InMemoryStore.ParkPageLimit + 1 : int.MaxValue);
             // A page restores at most 170 rows and 4 MiB of stored rows, and always has room for its first restored row.
             // A recover charges only restored (Arrived) rows, since the cleared fault input is never restored. A Terminate
-            // clears every kept row, so it charges them all.
-            var charged = message.Kind == Kinds.Terminate ? kept.ToArray() : kept.Where(row => row.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
+            // or a Delete (S5b-3b), clears every kept row, so it charges them all.
+            var charged = message.Kind is Kinds.Terminate or Kinds.Delete ? kept.ToArray() : kept.Where(row => row.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
             var page = PageLength(charged);
             var fits = page == charged.Length;
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,

@@ -283,6 +283,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool Owns => _held.Count != 0;
     public long Evicted { get; private set; }
     public int Idle => _slots.Values.Count(s => s.Loaded && !s.Busy && s.Inbox.Count == 0 && s.Replies.Count == 0);    // for tests
+    internal int InboxCountOf(string instance) => _slots.TryGetValue(Canonical(instance), out var slot) ? slot.Inbox.Count : 0;    // for tests
 
     /// <summary>The instances held in memory only, never written (decision 4). For tests.</summary>
     public IEnumerable<string> Unwritten => _slots.Where(s => s.Value.Unwritten).Select(s => s.Key);
@@ -3413,7 +3414,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationHeader = unit.FoundationHeader,
             FoundationRootOperator = unit.Consumed is [var qualified] && qualified.Message.Operator is { } command &&
                 (command.RootHeldReply || unit.Row?.FoundationDispatchHeader is not null ||
-                    unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true })
+                    unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null })
                     ? qualified.Message : null,
             FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
                 unit.Consumed is [{ IsWorkerJobCompletion: true, Original: { } original } completed] &&
@@ -3622,7 +3623,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 RemoveSlot(Canonical(item.Message.Target.Id));
         }
         if (unit.Delete && unit.Slot is { } retired && unit.Consumed is
-            [{ Message.Operator: { QualifiedTerminal: not null } or { RootThenDelete: true } }])
+            [{ Message.Operator: { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null } }])
         {
             // The root retirement write settles every occurrence, including ones read ahead of this command.
             foreach (var item in retired.Inbox.ToArray()) Forget(item);
