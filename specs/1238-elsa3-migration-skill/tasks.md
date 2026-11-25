@@ -13,7 +13,7 @@ beyond xunit.
 **Dependencies outside this spec**: T013 and case 14 follow the converter's global-matching rule as merged at the
 time (a change to it is pending). T018's case 17 and T029–T031 with a storage driver in the sample export need the
 pending converter change that converts storage drivers with Reconsider findings and adds the storage-driver
-migration guide; before it, the walkthrough checks the interview on the refusal. T021 takes the migration image's name and tags from spec 1237. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
+migration guide; before it, the walkthrough checks the interview on the refusal. T021 takes the tool's command line from spec 1237 and the migration host's settings from spec 1236. T029–T031 need spec 1237's `inventory` and `assess` commands. T020 and T021
 need spec 1237's `report.json` schema agreed. Everything else can start once this spec is approved.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -99,8 +99,8 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T
   and [data-model.md](data-model.md), with one example row per table using `Acme` names; the accepted-refusal example uses the placeholder `<code>`.
 - [ ] T021 [US1] Write `skill/SKILL.md`: front matter per [contracts/adapters.md](contracts/adapters.md); then, in
   order, the privacy statement (FR-005, FR-006: what reaches the AI provider; ask before each new raw definition or
-  source file, naming the file and the JSON path), what the skill does and does not do (FR-021), "read the plan first" (FR-007), asking for and recording the essentials image tag when the plan has none (FR-004),
-  the prerequisite check and the `docker run` invocation copied from spec 1237's command-line contract (FR-022), the four stages (FR-008–FR-012, R-6 searches, the report fields of
+  source file, naming the file and the JSON path), what the skill does and does not do (FR-021), "read the plan first" (FR-007), asking for and recording the clone's path and commit when the plan has none (FR-004),
+  the prerequisite check and the `dotnet run` invocation copied from spec 1237's command-line contract (FR-022), the four stages (FR-008–FR-012, R-6 searches, the report fields of
   [contracts/report-consumption.md](contracts/report-consumption.md)), the version check (R-4), the handoff
   (FR-020), and the edge cases of the spec as plain rules. No diagnostic code literal; read code, message and
   guidance from the report.

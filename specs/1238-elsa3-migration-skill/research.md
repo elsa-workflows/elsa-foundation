@@ -42,7 +42,7 @@ read by several agents and renders as an ordinary document on GitHub.
 | 15 | `ILiquidFilter` + `AddLiquidFilter`, expression descriptor providers | Liquid filters closed (`ILiquidFilter` internal); `IExpressionDescriptorProvider` and `IPortableExpressionHandler` are public | Liquid filters: redesign as a host function or an activity. A new syntax: named with its extension points, no example; Elsa 3 projects that add a whole expression language are rare, so no compiled example is built for it. |
 | 16 | `AddVariableTypeAndAlias<T>(alias)` | `IVariableTypeDescriptorProvider` with a dotted alias | Direct. |
 | 17 | `IStorageDriver` + `AddStorageDriver`; the memory driver | Publication refuses any storage other than the default on workflow variables, inputs and outputs; the converter refuses these drivers today, and a pending change converts the value to the default storage with a Reconsider finding | Interview, once per driver type. A driver choice expresses a goal, and the repository's Elsa 3 storage-driver migration guide gives the answers the catalog restates: a secret → Elsa 4 secret references; bulky data → fetch, use and drop it inside one activity, or keep a reference; another store such as blob storage → not possible per variable today, so the user writes their own plan or spec; no particular reason → the default storage. The catalog carries the interview itself (the skill folder is self-contained) and links the guide for further reading. |
-| 18 | `FeatureBase` + `UseXxx()` | `[ShellFeature]` `IShellFeature` in a Nuplane package, enabled in `appsettings.json` | Direct. |
+| 18 | `FeatureBase` + `UseXxx()` | `[ShellFeature]` `IShellFeature` in the user's project, referenced and listed by the migration host | Direct. |
 | 19 | `Elsa.Testing.Shared` `ActivityTestFixture` | No shipped helper; build the context, call `IActivity.ExecuteAsync` | Direct, with a few more lines. |
 
 **Alternatives considered**: Porting composites (7) or signals (8) through the engine-only protocol: it is documented
@@ -64,13 +64,12 @@ copied by every AI that follows the catalog. Only a build catches that without r
 ## R-4 Versions
 
 **Decision**: The skill gates only on the report's integer schema version, which it lists; on any other it stops and
-tells the user to update the skill. The essentials image tag the user targets (a build tag, not a package version) is recorded in the plan and selects the
-migration image tag. `plugin.json` carries no version, so a marketplace install follows the repository's commits.
+tells the user to update the skill. The tool runs from the user's clone of this repository, and the plan records the clone's path and commit. `plugin.json` carries no version, so a marketplace install follows the repository's commits.
 
 **Rationale**: Package versions are computed per commit (`PackageVersioning.props`), so no file can name "the" tool
 version, and a marketplace install follows the default branch rather than a release. Spec 1237 ships the tool and
-the skill separately and versions the report by schema. The user's target engine tag is a real choice they make once,
-and it must match the engine image they go live on.
+the skill separately and versions the report by schema. The tool and the migration host run from the user's clone, so its commit is what the
+user migrates against and goes live on.
 
 **Alternatives considered**: Stamping the tool version into `plugin.json` and the skill front matter at release:
 there is no release step to do it, and it would go stale on every commit. Reading any schema version leniently:

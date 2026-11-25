@@ -8,15 +8,15 @@ Filled in from `migration-plan-template.md` ([contract](contracts/plan-template.
 
 | Field | Content | Rule |
 |---|---|---|
-| Essentials image tag | The tag of the essentials engine image the user will go live on (a build tag, not a package version); the migration image with the same tag runs the tool | Set at inventory; changing it means rerunning the assessment; the report's image version confirms it. |
+| Elsa 4 clone | Path and commit of the user's clone of this repository, from which the tool and the migration host run | Set at inventory; moving the clone to another commit means rerunning the assessment; going live uses the same commit. |
 | Stage | `inventory` → `prepare` → `test-migration` → `handoff` | Moves forward only; a new finding in `test-migration` sends one component back to `porting`, not the stage. |
 | Export | Path of the Elsa 3 export | Required from `inventory`. |
 | Source locations | Folders or repositories of Elsa 3 source | Added when asked (FR-009). |
 | JavaScript prefixes | Prefix → functions | Required before any function is ported. |
-| Features | Elsa 4 feature name → package → components | Every feature must appear in `appsettings.json` (FR-011). |
+| Features | Elsa 4 feature name → project → components | The migration host must reference every project and list every feature (FR-011). |
 | Components | One row per inventory item | See below. |
 | Accepted refusals | Definition, finding code, reason, date | Only the user adds a row. |
-| Last report | Path of the last `report.json` and the `docker run` command | Updated after every run. |
+| Last report | Path of the last `report.json` and the `dotnet run` command | Updated after every run. |
 
 ### Component row
 

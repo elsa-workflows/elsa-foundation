@@ -33,8 +33,8 @@ The assistant reads the plan (none yet), runs the inventory, finds the three com
 Elsa 3 source folder, and finds `SendInvoice.cs`, the `ConfigureEngine` call that defines `lookupCustomer`, and the
 `AddVariableTypeAndAlias<Invoice>` registration. It fills in the plan: one Elsa 4 feature `Acme.Elsa4` with the three
 components, the prefix `acme` for the JavaScript function, and the porting cases that apply to each. It ports each
-component by following the catalog case's example, ports the tests, builds the package, runs the assessment with the
-package and the user's settings, and repeats until every definition converts or carries a refusal the user accepted.
+component by following the catalog case's example, ports the tests, references the feature project from the migration host, runs the
+assessment, and repeats until every definition converts or carries a refusal the user accepted.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -51,14 +51,15 @@ journey to the end, start a new session halfway, and confirm it resumes from the
 **Acceptance Scenarios**:
 
 1. **Given** no migration plan in the workspace, **When** the user starts the skill, **Then** it first states what can
-   reach the AI provider (FR-005), then creates the plan from the template, asks for the tag of the essentials engine
-   image the user will go live on and records it (FR-004), and runs the inventory command.
+   reach the AI provider (FR-005), then creates the plan from the template, asks for the user's clone of this repository and
+   records its path and commit (FR-004), and runs the inventory command.
 2. **Given** an inventory report, **When** the skill reads it, **Then** it lists the custom components the report
    names, with their usage counts, asks for the Elsa 3 source folders or repositories, and records each component's
    source location in the plan, or records it as not found.
 3. **Given** a component in the plan, **When** the skill prepares it, **Then** it records the Elsa 4 target name, the
    porting cases that apply and the tests to port, and ports the component by following each case's example.
-4. **Given** prepared feature packages and the user's settings file, **When** the skill runs the assessment, **Then**
+4. **Given** prepared feature projects that the migration host references and lists, **When** the skill runs the
+   assessment, **Then**
    it records the report path in the plan and works through the report by category: Must fix first, then Reconsider,
    then Take into account.
 5. **Given** a plan with stage "test migration", **When** a new session starts the skill, **Then** it reads the plan
@@ -156,14 +157,15 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 
 - The report's schema version is one the skill does not read: the skill stops and tells the user to update the
   skill, instead of guessing.
-- The tool refuses to run (bad input, a package or setting it cannot load) and writes no report: the skill shows the
+- The tool refuses to run (bad input, a feature it cannot compose) and writes no report: the skill shows the
   tool's reason, records it in the plan and stops until the user fixes the input.
 - A component the report names is not found in the source the user gave: the plan records it as not found, and the
   skill asks for more source or records the user's decision to redesign or drop the definitions that use it.
 - A component exists in the source but no definition uses it: it is not migrated (inventory comes only from the
   report).
-- Docker is not available, or the migration image tagged with the plan's essentials image tag cannot be pulled: the skill stops
-  before running anything and says what to install or which version to use.
+- The .NET SDK is missing, the clone cannot be found, or the clone is not at the commit the plan records: the skill
+  stops before running anything and says what to install or which commit to check out, or records the new commit
+  when the user moved the clone on purpose (FR-004).
 - A JavaScript global is used other than as a direct call (assigned to a variable, passed as a callback): the
   converter refuses it at conversion with an ordinary finding; neither the tool nor the skill scans scripts. The
   skill points the user to case 14, which says to make it a direct call in the Elsa 3 definition.
@@ -175,8 +177,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   plan lists every case, and the port follows them in catalog order.
 - A definition is refused only because a dependency was refused: the skill fixes the root first and does not work on
   the blocked definition.
-- The settings file does not enable a custom feature the plan lists: the skill reports it before running the
-  assessment.
+- The migration host does not reference or list a custom feature the plan lists: the skill reports it before
+  running the assessment.
 - The user stops in the middle of a port: the component's status in the plan says so, and the next session continues
   that component.
 - A case marked *redesign* applies: the skill does not write workaround code; it records the redesign in the plan and
@@ -201,16 +203,18 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   one plugin whose source is `plugins/elsa3-migration/`, and that plugin's `.claude-plugin/plugin.json`. Users of
   agents that read `.agents/skills/` copy the skill folder. No adapter repeats the skill's content.
 - **FR-004**: The skill MUST state the report schema versions it reads and stop on any other. It is not tied to a tool
-  release: the plan records the tag of the essentials engine image the user will go live on (a build tag, not a
-  package version), and the skill runs the migration image with that same tag (FR-022).
+  release: the tool and the migration host run from the user's clone of this repository (FR-022), and the plan
+  records the clone's path and commit. The user goes live on the same commit (FR-020); moving the clone means rerunning
+  the assessment.
 
 **Privacy**
 
 - **FR-005**: Before reading any file, the skill MUST tell the user what can reach the AI provider: the redacted
   report, the migration plan and the skill's own files without asking (the plan holds only what the user wrote into
   it: paths, names, decisions and notes); everything else only after the user agrees. It asks once per Elsa 3 source folder before searching it
-  (FR-009), and before each raw definition and each other file it opens, naming the file. It never reads the user's
-  `appsettings.json` without asking, and warns that the file can hold connection strings and secrets.
+  (FR-009), and before each raw definition and each other file it opens, naming the file. It never reads the migration
+  host's local settings (`shells.Local.json`, user secrets) without asking, and warns that they can hold connection
+  strings and secrets.
 - **FR-006**: The skill MUST rely on the report being complete without an AI and always redacted (spec 1237).
 
 **The journey**
@@ -218,8 +222,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - **FR-007**: Each session MUST read the migration plan first. With no plan, the skill creates one from the template
   in the user's AI workspace. The plan is the only state; the command-line tool stays stateless; keeping the files is
   the user's responsibility, and the skill says so.
-- **FR-008**: **Inventory.** The skill MUST run `workflows inventory` in the Elsa 3 migration image
-  (FR-022) on the export and take the custom components only from the report's inventory: activity types, JavaScript functions, variable types
+- **FR-008**: **Inventory.** The skill MUST run `workflows inventory` (FR-022) on the export and take the custom components only from the report's inventory: activity types, JavaScript functions, variable types
   and storage drivers, with the number of definitions that use each and the number of references. A component no
   definition uses is not migrated.
 - **FR-009**: The skill MUST ask for the folders or repositories of the user's Elsa 3 source and match each
@@ -228,14 +231,14 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   alias, or by the type name before the comma when the export holds an assembly-qualified name, a storage driver by
   its type name. It records the source location, or "not found", in the plan.
 - **FR-010**: **Prepare.** For each component the skill MUST record in the plan its Elsa 4 target name, the Elsa 4
-  feature and package it belongs to, the porting cases that apply, the tests to port, and its status; then port it
+  feature and project it belongs to, the porting cases that apply, the tests to port, and its status; then port it
   by following the applicable catalog cases. The JavaScript prefix choice is a recorded step: the user picks one or
   more prefixes and the plan records which function takes which.
-- **FR-011**: Before running the assessment, the skill MUST have the user confirm that every custom feature in the
-  plan is enabled in their `appsettings.json` (reading the file only with consent, FR-005); after it, it MUST check
+- **FR-011**: Before running the assessment, the skill MUST have the user confirm that the migration host (`apps/Elsa.Migration.Host`)
+  references every custom feature project in the plan and lists each feature in its local settings (reading them only
+  with consent, FR-005); after it, it MUST check
   that each appears among the features the report says the run loaded. It reports any missing one.
-- **FR-012**: **Test migration.** The skill MUST run `workflows assess` in the Elsa 3 migration image
-  (FR-022) with the user's packages folder and settings file, record the report path in the plan, and work through the report: Must fix, then Reconsider,
+- **FR-012**: **Test migration.** The skill MUST run `workflows assess` (FR-022), record the report path in the plan, and work through the report: Must fix, then Reconsider,
   then Take into account; root causes before definitions blocked by a dependency; findings that belong to no definition (an unreadable
   export file, a refusal of the whole import) before the rest. It reruns until no such finding is left unaccepted and every remaining
   definition converts or carries a refusal the user accepted, recorded in the plan with the reason.
@@ -243,13 +246,12 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   guidance from the report, and it reads the categories and buckets the report defines (spec 1237). The skill folder
   contains no diagnostic code literal; examples use a placeholder such as `<code>`.
 
-- **FR-022**: **Running the tool.** The command-line tool runs inside the Elsa 3 migration image that spec 1237 names
-  (`elsaworkflows/elsa-elsa3-migration`, tagged like the essentials engine image it is built from), whose entry point is the tool's migration command group. The skill starts it with `docker run` as spec 1237's
-  command-line contract shows, without network access: the export and the output folder for every run, plus the
-  packages folder and the `appsettings.json` for `assess`. It records the command in the plan. Before the first run of a session, the skill MUST check that Docker is
-  available and that the migration image tagged with the plan's essentials image tag (FR-004) can be
-  pulled. When either fails, it stops, says what is missing, and runs nothing. When the tool refuses to run, the skill
-  shows the tool's reason and stops.
+- **FR-022**: **Running the tool.** The command-line tool runs from the user's clone of this repository with
+  `dotnet run`, as spec 1237's command-line contract shows, with the export and an output folder in the user's
+  workspace; `assess` also composes the features the migration host references and lists (FR-011). The skill records
+  the command in the plan. Before the first run of a session, the skill MUST check that the .NET SDK is available
+  and that the clone is at the commit the plan records (FR-004). When either fails, it stops, says what is missing,
+  and runs nothing. When the tool refuses to run, the skill shows the tool's reason and stops.
 
 **The porting catalog**
 
@@ -279,7 +281,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   | 15 | Liquid filters and other expression additions | Liquid filters: none, filter registration is closed to modules. A new expression syntax: the public expression descriptor and portable expression handler extension points | redesign (Liquid filters: a JavaScript host function or an activity); a new syntax is named with its extension points but carries no example |
   | 16 | Variable type registration | A variable type descriptor provider registering the type under a dotted alias | port |
   | 17 | Storage drivers | None per variable: the converter stores every value in the default durable storage, and Elsa 3's default drivers need nothing. A variable, input or output on the memory driver or on a custom driver converts with a Reconsider finding. Each driver type starts one interview, following the repository's Elsa 3 storage-driver migration guide: why was this driver chosen? A secret: Elsa 4 secret references. Bulky data: fetch, use and drop it inside one activity, or keep only a reference. Another store, such as blob storage: not possible per variable today, so the user writes their own plan or spec, and the migration plan links it. No particular reason: the default storage is fine | interview |
-  | 18 | Feature registration | An Elsa 4 shell feature in a Nuplane package, enabled in `appsettings.json`; activities are discovered from the feature's assembly | port |
+  | 18 | Feature registration | An Elsa 4 shell feature in the user's own project, which the migration host references and lists in its local settings; activities are discovered from the feature's assembly | port |
   | 19 | Tests | xunit tests that build an activity execution context and call the activity directly | port |
 
 - **FR-015**: Catalog cases MUST be ordered as above and applied in that order when several apply to one component.
@@ -303,9 +305,9 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - **FR-019**: The main README MUST gain a short "Migrating from Elsa 3" section that names `SKILL.md` as the file to
   read, says that installing it as an AI skill is optional, and lists what the migration does not cover (FR-021).
 - **FR-020**: The skill MUST end with the handoff, as text only: the user keeps their feature projects in any
-  repository, publishes their packages through any pipeline and stores the migrated workflows anywhere; going live
-  means starting the essentials engine image with their `appsettings.json`, their packages and the `migrated/` folder
-  mounted. The skill performs no publishing or deployment step.
+  repository and stores the migrated workflows anywhere; going live means running the migration host
+  (`apps/Elsa.Migration.Host`) from the same clone and commit, with their feature projects referenced and its workflow and
+  activity folder settings pointing at the `migrated/` folder. The skill performs no publishing or deployment step.
 - **FR-021**: The skill and the README section MUST state what is out of scope: live workflow instances, running
   Elsa 3 next to Elsa 4, persistence data migration, identity and authentication migration, Elsa 3 Studio
   extensions, and C# and Python expressions.
@@ -314,7 +316,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 
 - **Skill folder**: the canonical, self-contained skill: `SKILL.md`, the plan template, the porting catalog.
 - **Migration plan**: the user's filled-in copy of the template, in their workspace: stage; prefix choices; the
-  Elsa 4 features and packages and the components grouped into them; per component its Elsa 3 source location,
+  Elsa 4 features and projects and the components grouped into them; per component its Elsa 3 source location,
   Elsa 4 target name, applicable cases, tests to port and status; accepted refusals with reasons; the path of the
   last report.
 - **Porting case**: one of 19 entries: applies-when, before, after, search, verdict.
@@ -340,14 +342,14 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 
 - Spec 1237 delivers `inventory` and `assess`, the redacted `report.json` with the content listed in the plan's
   report contract, and the categories and buckets. This spec only references that schema.
-- Spec 1236 delivers the essentials engine image the handoff names; spec 1237 delivers the Elsa 3 migration image,
-  built from it, that runs the tool.
+- Spec 1236 delivers the migration host the handoff names; spec 1237's tool references it and runs from a clone of
+  this repository.
 - The converter, on the initiative branch, diagnoses unregistered variable types, maps declared JavaScript functions
   to prefixed host functions and refuses a declared global used other than as a direct call; the skill relies on the
   guidance those diagnostics carry. How a global is matched to its host function may still change; case 14 states
   the rule that holds when the catalog is written.
-- The user has Docker, and the .NET SDK to build their feature packages. The only network calls are NuGet restore
-  and image pulls.
+- The user is an engineer with a clone of this repository and the .NET SDK it needs. The only network calls are
+  the clone and NuGet restore.
 - A pending converter change converts every Elsa 3 storage driver to the default storage: Elsa 3's default drivers
   silently, the memory driver and custom drivers with a Reconsider finding per variable, input or output that names
   the driver type as a storage-driver component (spec 1237 lists both as components). Until it lands, the converter

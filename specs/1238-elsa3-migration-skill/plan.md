@@ -28,8 +28,8 @@ abstractions). No Elsa 3 package anywhere.
 
 **Testing**: xunit for the sample; the Python check has a `--self-test` mode, like `tools/ci/check_evidence_sizes.py`.
 
-**Target Platform**: Any machine with Docker (the tool runs in the Elsa 3 migration image) and the .NET SDK; any AI assistant that reads
-markdown, or none.
+**Target Platform**: An engineer's clone of this repository with the .NET SDK (the tool and the migration host run
+from it); any AI assistant that reads markdown, or none.
 
 **Project Type**: Documentation plus one non-packable sample feature project, its test project and one CI check.
 
@@ -69,7 +69,7 @@ publishes or deploys.
 | P-3 | Catalog verdicts | The spec's FR-014 table, decided against the code (R-2). |
 | P-4 | Sample | `extensions/Elsa3/tests/Migration/Sample/Elsa3.Migration.Sample.csproj` and `extensions/Elsa3/tests/Migration/Sample.Tests/Elsa3.Migration.Sample.Tests.csproj`; marked regions `// catalog:case-NN begin` / `// catalog:case-NN end` (R-3, [contracts/catalog-entry.md](contracts/catalog-entry.md)). |
 | P-5 | Check | `tools/skills/check_migration_skill.py`, run with `--self-test` and then for real next to the catalog link check in `ci.yml`; `plugins/**` is documentation-only in `tools/ci/change_scope.py` (R-5). |
-| P-6 | Versions | `SKILL.md` lists the report schema versions it reads; the plan records the essentials image tag the user targets, which is also the migration image tag; no tool version is stamped anywhere (R-4). |
+| P-6 | Versions | `SKILL.md` lists the report schema versions it reads; the plan records the path and commit of the user's clone, from which the tool runs and the user goes live; no tool version is stamped anywhere (R-4). |
 | P-7 | Report | The skill reads only the fields in [contracts/report-consumption.md](contracts/report-consumption.md); any gap is raised on spec 1237's PR, not solved here. |
 
 ## Project Structure
