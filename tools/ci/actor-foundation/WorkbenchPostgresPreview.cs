@@ -27,7 +27,11 @@ internal static class WorkbenchPostgresPreview
     private const int TimedJobScope = -7;
 
     private sealed record Receipt(string Actor, string Bookmark, string Frame, string StateHash, string JournalHash, long Epoch, int Process);
-    private sealed record Checkpoint(long Revision, string State, long Epoch, string? Owner);
+    private sealed record Checkpoint(long Revision, string State, long Epoch, string? Owner)
+    {
+        // The stable body of a profile that keeps it apart (the shipped format 24): the state itself, in its own column.
+        public byte[]? Wire { get; init; }
+    }
     private sealed record ActiveJob(long Epoch, string Owner, string State, string Registry,
         string TicketId, long TicketSeq, string TicketPayload, string DeadlineId, long DeadlineSeq, string DeadlinePayload,
         long Deadline, long Now);
@@ -176,7 +180,7 @@ internal static class WorkbenchPostgresPreview
                 var frame = WaitFrame(initial);
                 Require(await Approve(actor, "approval-1", "Ada", frame) == Contract.AdmissionOutcome.Accepted, "first approval was admitted");
                 var waiting = await WaitFor(actor, 2);
-                Require(Native(waiting, timed).Frames[frame].State!.AsArray().Select(item => item!.GetValue<string>()).SequenceEqual(["Ada"]),
+                Require(Native(waiting, profile).Frames[frame].State!.AsArray().Select(item => item!.GetValue<string>()).SequenceEqual(["Ada"]),
                     "the checkpoint holds the first approval");
                 var journal = await reads.TailAsync(scope, actor, cancellationToken: token);
                 Require(journal.Next is not null && journal.Items.Count(entry => Entry(entry) == "approved:approval-1" && entry.Revision == 2) == 1,
@@ -259,7 +263,7 @@ internal static class WorkbenchPostgresPreview
                 var completion = await WaitFor(actor, finalRevision);
                 if (cut is not null)
                     Require(completion.Epoch > cut.Epoch, "the replacement Workbench applied the outcome at a higher epoch");
-                var native = Native(completion, timed);
+                var native = Native(completion, profile);
                 Require(await reads.GetAsync(scope, actor, token) is { Header.Status: Contract.ActorStatus.Finished } &&
                     native.Results["approve"]!.AsArray().Select(item => item!.GetValue<string>()).SequenceEqual(["Ada", "Grace"]),
                     "the persisted result contains both approvals exactly once");
@@ -412,8 +416,10 @@ internal static class WorkbenchPostgresPreview
         {
             var builder = Host.CreateEmptyApplicationBuilder(new());
             builder.Logging.ClearProviders();
+            // On the shipped format the node answers held callers.
             builder.Services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node,
-                workflowActor, Environment.FailFast));
+                workflowActor, Environment.FailFast,
+                requests: publications ? PostgresPreviewHosting.CreateRequests(Open, node, workflowActor.Type) : null));
             return builder.Build();
         }
 
@@ -424,11 +430,16 @@ internal static class WorkbenchPostgresPreview
         async Task<Checkpoint?> Read(Contract.ActorRef actor)
         {
             await using var db = OpenObservation();
-            return await db.Database.SqlQuery<Checkpoint>($"""
-                SELECT i."Revision", i."State", p."Epoch", p."Owner" FROM "Instances" i
+            var wire = db.UsesRootStableBody ? """i."FoundationStateWire" """ : "NULL::bytea";
+            var checkpoint = await db.Database.SqlQueryRaw<Checkpoint>("""
+                SELECT i."Revision", i."State", p."Epoch", p."Owner", /*wire*/ AS "Wire" FROM "Instances" i
                 JOIN "Partitions" p ON p."Id" = i."Partition"
-                WHERE i."FoundationTenant" = {scope.Tenant} AND i."FoundationReference" = {actor.Id}
-                """).SingleOrDefaultAsync(token);
+                WHERE i."FoundationTenant" = {0} AND i."FoundationReference" = {1}
+                """.Replace("/*wire*/", wire, StringComparison.Ordinal), scope.Tenant, actor.Id).SingleOrDefaultAsync(token);
+            // A stable body's state column holds its marker: read the state from the body, under the family's prefix.
+            return checkpoint is { Wire: { } body }
+                ? checkpoint with { State = db.RootStateFamily.Prefix + RootSelfContent.Decode(body), Wire = null }
+                : checkpoint;
         }
 
         async Task<ActiveJob?> ReadActiveJob(Contract.ActorRef actor)
@@ -686,6 +697,8 @@ internal static class WorkbenchPostgresPreview
     {
         "timed" or "timeout" or "takeover" or "takeover-complete" => PostgresPreviewHosting.CreateTimedNativeJobContext(options),
         "jobs" => PostgresPreviewHosting.CreateNativeJobContext(options),
+        // The release profile: publications run on the shipped format 24.
+        "publications" => PostgresPreviewHosting.CreateShippedContext(options),
         _ => new(options)
     };
 
@@ -698,9 +711,10 @@ internal static class WorkbenchPostgresPreview
         return parsed.RootElement.ValueKind == JsonValueKind.String ? parsed.RootElement.GetString()! : "";
     }
 
-    private static NativeState Native(Checkpoint checkpoint, bool timed)
+    private static NativeState Native(Checkpoint checkpoint, string? profile)
     {
-        var prefix = timed ? "!kernel-state/6:public-root-timed-jobs:" : "!kernel-state/4:public-root:";
+        // The profile's root state family: the timed-job family on 18, the composed one on the shipped format 24.
+        var prefix = OpenProfile(new DbContextOptionsBuilder<KernelDb>().UseNpgsql("Host=state-family.invalid").Options, profile).RootStateFamily.Prefix;
         Require(checkpoint.State.StartsWith(prefix, StringComparison.Ordinal), "the state uses the expected preview framing");
         return JsonSerializer.Deserialize<NativeState>(checkpoint.State[prefix.Length..])!;
     }

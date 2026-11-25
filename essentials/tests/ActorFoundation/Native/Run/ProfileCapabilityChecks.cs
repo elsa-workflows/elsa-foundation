@@ -59,7 +59,12 @@ internal static class ProfileCapabilityChecks
             ("root-park-arrivals", () => KernelDb.ForPostgresRootParkArrivals(options), StoreFormat.RootParkArrivals,
                 RootCapabilities.ParkOpening | RootCapabilities.ParkInspection | RootCapabilities.ParkArrivals),
             ("root-park-recovery", () => KernelDb.ForPostgresRootParkRecovery(options), StoreFormat.RootParkRecovery,
-                RootCapabilities.ParkOpening | RootCapabilities.ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery | RootCapabilities.OperatorProtocol)
+                RootCapabilities.ParkOpening | RootCapabilities.ParkInspection | RootCapabilities.ParkArrivals | RootCapabilities.ParkRecovery | RootCapabilities.OperatorProtocol),
+            // S7: the shipped format, the capabilities qualified together today.
+            ("root-shipped", () => KernelDb.ForPostgresRootShipped(options), StoreFormat.RootShipped,
+                RootCapabilities.OperatorProtocol | RootCapabilities.Termination | RootCapabilities.StableBody | RootCapabilities.TerminalSelection | RootCapabilities.Retirement | RootCapabilities.TerminateThenDelete | RootCapabilities.Retention | RootCapabilities.OperatorReplies |
+                RootCapabilities.JobProtocol | RootCapabilities.TimedJobSettlement | RootCapabilities.TimedJobPreview | RootCapabilities.ReplyProtocol |
+                RootCapabilities.ParkOpening | RootCapabilities.ParkInspection)
         ];
         // The true accessors of each profile, taken from the pre-refactor subclass chains (UsesRootTimers is new),
         // so that a property bound to the wrong capability fails even when the capability set is right.
@@ -86,6 +91,10 @@ internal static class ProfileCapabilityChecks
             ["root-park-inspection"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-arrivals"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening"],
             ["root-park-recovery"] = ["RequiresPinnedRootNamespace", "SupportsRootWorkflowHistory", "UsesRootOperatorProtocol", "UsesRootParkArrivals", "UsesRootParkInspection", "UsesRootParkOpening", "UsesRootParkRecovery"],
+            ["root-shipped"] = ["RequiresPinnedRootNamespace", "SupportsCorePreview", "SupportsRootWorkflowHistory", "UsesRootJobProtocol", "UsesRootOperatorProtocol",
+                "UsesRootOperatorReplies", "UsesRootParkInspection", "UsesRootParkOpening", "UsesRootParkedOperators", "UsesRootReplyProtocol", "UsesRootRetention",
+                "UsesRootRetirement", "UsesRootStableBody", "UsesRootTerminalSelection", "UsesRootTerminateThenDelete", "UsesRootTermination",
+                "UsesRootTimedJobPreview", "UsesRootTimedJobSettlement"],
         };
         // S3: each profile's root state family, the prefix bytes written before S3 and the statuses besides Finished that end it.
         const string family = "!kernel-state/";
@@ -112,6 +121,7 @@ internal static class ProfileCapabilityChecks
             ["root-park-inspection"] = (family + "4:public-root:", false, false),
             ["root-park-arrivals"] = (family + "4:public-root:", false, false),
             ["root-park-recovery"] = (family + "4:public-root:", false, false),
+            ["root-shipped"] = (family + "13:public-root-composed:timed-jobs+stable-body+replies:", true, true),
         };
         var flags = typeof(KernelDb).GetProperties(BindingFlags.Instance | BindingFlags.NonPublic)
             .Where(p => p.PropertyType == typeof(bool) && (p.Name.StartsWith("Uses", StringComparison.Ordinal) ||

@@ -50,7 +50,7 @@ internal static class PostgresHeldStartChecks
             "a node on a store with held replies needs the reply transport its callers wait on");
 
         var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, WorkflowActor.WorkflowActor.ActorType,
-            replyNode: Node, cancellationToken: stop);
+            PostgresPreviewHosting.CreateRequests(Open, Node, WorkflowActor.WorkflowActor.ActorType), cancellationToken: stop);
         var requests = foundation.Requests ?? throw new InvalidOperationException("A reply node opens held requests.");
         var clock = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         var witness = new CommitWitness(Open, requests);
@@ -193,7 +193,7 @@ internal static class PostgresHeldStartChecks
         await new PostgresRootAdmission(Open, TimeSpan.FromHours(1)).InstallAsync(stop);
         var clock = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, WorkflowActor.WorkflowActor.ActorType,
-            replyNode: Node, cancellationToken: stop);
+            PostgresPreviewHosting.CreateRequests(Open, Node, WorkflowActor.WorkflowActor.ActorType), cancellationToken: stop);
         var requests = foundation.Requests!;
         IReplyTransport transport = requests;
 

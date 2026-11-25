@@ -276,7 +276,8 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
 public sealed partial class EfStore
 {
     /// <summary>
-    /// Installs the ordinary or Native job generated-root preview on an initialized PostgreSQL store.
+    /// Installs the generated-root schema of a PostgreSQL Core Preview format (the ordinary or a Native job preview format,
+    /// or the shipped format) on an initialized PostgreSQL store; the shipped format's workflow history with it.
     /// Run during setup or with existing owners and callers stopped. Retains issued references and bookmarks.
     /// </summary>
     public async Task InstallPreviewRootSchemaAsync(CancellationToken cancellationToken = default)
@@ -284,10 +285,16 @@ public sealed partial class EfStore
         if (!postgres || Engine is not null)
             throw new NotSupportedException("Generated-root preview installation requires PostgreSQL.");
 
-        await using var db = create();
-        if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
-            throw new NotSupportedException("Installation requires the ordinary or Native job PostgreSQL Core Preview format.");
-        await PostgresRootAdmission.InstallAsync(db, cancellationToken, exclusiveFormat: true);
+        bool history;
+        await using (var db = create())
+        {
+            if (!db.Database.IsNpgsql() || !db.SupportsCorePreview)
+                throw new NotSupportedException("Installation requires a PostgreSQL Core Preview format.");
+            await PostgresRootAdmission.InstallAsync(db, cancellationToken, exclusiveFormat: true);
+            // Workflow history ships inside a format whose roots live in a pinned namespace (retirement or Park).
+            history = db.RequiresPinnedRootNamespace && db.SupportsRootWorkflowHistory;
+        }
+        if (history) await InstallRootWorkflowHistoryAsync(cancellationToken);
     }
 
     // The host authenticates the caller and authorizes termination of the supplied exact reference.
