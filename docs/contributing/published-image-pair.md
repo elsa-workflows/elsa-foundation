@@ -4,6 +4,14 @@ This guide checks whether the published Elsa Studio image can create and run a w
 
 The published stack is a local demo: it uses demo credentials and SQLite workflow data inside the container. Do not expose it to a network. The cleanup command below removes this project's Data Protection volume and container-held demo data.
 
+> **Note (2026-11-25, [#5768](https://github.com/elsa-workflows/elsa-foundation/issues/5768)).** This page records a pair
+> verified before the Studio flavors existed. The recorded Studio digest is the Workbench Studio app, then named
+> `Elsa.Studio.Web`. From #5768 on, `elsaworkflows/elsa-studio` publishes the Studio Essentials app, which pairs with
+> `elsaworkflows/elsa-essentials-host`. The Workbench Studio app publishes as `elsaworkflows/elsa-studio-workbench`, and the
+> bare shell as `elsaworkflows/elsa-studio-foundation`. The pinned digests below are unchanged and still describe the
+> recorded run. In the flavor images, an add-on's browser files answer 503 until
+> [valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands.
+
 ## Prepare an isolated, pinned stack
 
 You need Docker Engine and the Compose v2 plugin. Start from the canonical Compose file at the recorded Foundation revision [`48bfcea5f5bc8c05189e9b5f334064e8408ffcba`](https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/48bfcea5f5bc8c05189e9b5f334064e8408ffcba/docker/compose/docker-compose.images.yml), not the current-tree [canonical Compose file](../../docker/compose/docker-compose.images.yml), and save a temporary copy as `pair-compose.yml`:

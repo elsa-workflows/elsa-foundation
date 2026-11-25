@@ -3,6 +3,14 @@ name: Studio Docker (consolidated gated)
 # Main merges publish the exact source commit only after CI succeeds.
 # NuGet/npm publication stays manual: the automatic image is built from source.
 # Manual package-backed qualification/release builds retain their provenance gates.
+#
+# Each Studio flavor publishes its own image (#5768); tools/ci/studio_docker_publish.py (STUDIO_FLAVORS) maps
+# each flavor to its Docker Hub repository and Dockerfile:
+#   essentials -> elsaworkflows/elsa-studio            (pairs with elsaworkflows/elsa-essentials-host)
+#   workbench  -> elsaworkflows/elsa-studio-workbench  (pairs with elsaworkflows/elsa-workbench)
+#   foundation -> elsaworkflows/elsa-studio-foundation (the bare shell; every module from the feed)
+# Every flavor job runs every gate below on its own. One flavor failing, for example because its Docker Hub
+# repository does not exist yet, does not stop the others.
 on:
   workflow_run:
     workflows: [CI]
@@ -20,7 +28,7 @@ on:
         type: boolean
         default: false
       preview_image_tag:
-        description: 'Required for a main image push. Check Docker Hub first and enter a strictly higher 4.0.0-preview.N tag.'
+        description: 'Required for a main image push. Check all three Studio images on Docker Hub (elsa-studio, elsa-studio-workbench, elsa-studio-foundation) and enter a 4.0.0-preview.N tag above the highest of them.'
         required: false
         type: string
         default: ''
@@ -31,7 +39,7 @@ permissions:
 
 jobs:
   build:
-    name: Build & optionally publish elsaworkflows/elsa-studio
+    name: Build & optionally publish Studio ${{ matrix.flavor }}
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
@@ -40,10 +48,16 @@ jobs:
         github.event.workflow_run.head_repository.full_name == github.repository &&
         (github.event.workflow_run.path == '.github/workflows/ci.yml' ||
          startsWith(github.event.workflow_run.path, '.github/workflows/ci.yml@'))))
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [essentials, workbench, foundation]
     concurrency:
       # A failed/PR/fork completion never enters this shared writer queue. Manual
       # image pushes share it; build-only qualification cannot displace a publisher.
-      group: studio-docker-${{ (github.event_name == 'workflow_run' || inputs.publish == true) && 'publisher' || format('validation-{0}', github.run_id) }}
+      # Each flavor has its own writer queue: a queue holds one running and one pending job, so three flavors in
+      # one queue would cancel a pending publisher.
+      group: studio-docker-${{ matrix.flavor }}-${{ (github.event_name == 'workflow_run' || inputs.publish == true) && 'publisher' || format('validation-{0}', github.run_id) }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -63,6 +77,18 @@ jobs:
             tools/ci/verify_studio_nuget_packages.py tools/ci/studio-package-identities.json \
             "$STUDIO_IMAGE_VALIDATORS/"
           echo "STUDIO_IMAGE_VALIDATORS=$STUDIO_IMAGE_VALIDATORS" >> "$GITHUB_ENV"
+
+      - name: Resolve the flavor's image and Dockerfile
+        id: flavor
+        env:
+          STUDIO_FLAVOR: ${{ matrix.flavor }}
+        run: python3 "$STUDIO_IMAGE_VALIDATORS/studio_docker_publish.py" resolve-flavor
+
+      - name: Require the flavor's Docker Hub repository
+        if: github.event_name == 'workflow_run' || inputs.publish == true
+        env:
+          STUDIO_IMAGE: ${{ steps.flavor.outputs.image }}
+        run: python3 "$STUDIO_IMAGE_VALIDATORS/studio_docker_publish.py" require-repository
 
       - name: Verify the triggering main CI run
         if: github.event_name == 'workflow_run'
@@ -169,6 +195,7 @@ jobs:
           PUBLISH_IMAGE: ${{ inputs.publish }}
           PREVIEW_IMAGE_TAG: ${{ inputs.preview_image_tag }}
           PUBLISHING_ENABLED: ${{ vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING }}
+          STUDIO_IMAGE: ${{ steps.flavor.outputs.image }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -179,7 +206,7 @@ jobs:
 
           sys.path.insert(0, os.environ["STUDIO_IMAGE_VALIDATORS"])
           from studio_image_tags import derive_tags
-          from studio_docker_publish import read_preview_floor, require_preview_above_floor
+          from studio_docker_publish import read_repository_preview_floor, require_preview_above_floor
           from verify_studio_nuget_packages import verify_packages
 
           artifact = Path("Studio/packages/nuget")
@@ -210,16 +237,19 @@ jobs:
           if publish_requested and (target not in {"feedz-preview", "public-release"} or not gate_enabled or os.environ["PUBLISHING_ENABLED"] != "true"):
               raise SystemExit("Image publishing requires a successful package publication with the repository gate enabled.")
 
+          image = os.environ["STUDIO_IMAGE"]
           sha = manifest["commit"]
           version = manifest["version"]
           ref = manifest["ref"]
-          tags = derive_tags(ref, version, sha, publish_requested, os.environ["PREVIEW_IMAGE_TAG"])
+          tags = derive_tags(image, ref, version, sha, publish_requested, os.environ["PREVIEW_IMAGE_TAG"])
           if publish_requested and source_branch == "main":
-              require_preview_above_floor(os.environ["PREVIEW_IMAGE_TAG"], read_preview_floor())
+              # The image's own floor keeps its tags unique. The shared floor would refuse a rerun of one flavor after
+              # another flavor has already pushed the same chosen number.
+              require_preview_above_floor(os.environ["PREVIEW_IMAGE_TAG"], read_repository_preview_floor(image))
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"studio_version={version}\n")
-              output.write("image_tags<<TAGS\n" + "\n".join(tag for tag in tags if tag != "elsaworkflows/elsa-studio:latest") + "\nTAGS\n")
+              output.write("image_tags<<TAGS\n" + "\n".join(tag for tag in tags if tag != f"{image}:latest") + "\nTAGS\n")
           print(f"Verified the exact {len(package_ids)} Studio package IDs at version {version} from {sha}.")
           PY
 
@@ -228,6 +258,7 @@ jobs:
         id: automatic
         env:
           SOURCE_SHA: ${{ steps.ci_source.outputs.source_sha }}
+          STUDIO_IMAGE: ${{ steps.flavor.outputs.image }}
         run: python3 "$STUDIO_IMAGE_VALIDATORS/studio_docker_publish.py" preview-version
 
       - name: Resolve image build settings
@@ -287,26 +318,27 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile
+          file: ${{ steps.flavor.outputs.dockerfile }}
           platforms: ${{ (github.event_name == 'workflow_run' || inputs.publish == true) && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
           tags: ${{ steps.image.outputs.tags }}
           build-args: STUDIO_VERSION=${{ steps.image.outputs.version }}
           labels: |
-            org.opencontainers.image.title=Elsa Studio
-            org.opencontainers.image.description=Elsa 4 workflow studio
+            org.opencontainers.image.title=${{ steps.flavor.outputs.title }}
+            org.opencontainers.image.description=${{ steps.flavor.outputs.description }}
             org.opencontainers.image.revision=${{ steps.ci_source.outputs.source_sha || steps.source.outputs.sha }}
             org.opencontainers.image.version=${{ steps.image.outputs.version }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             io.elsa.build.source-run=${{ steps.ci_source.outputs.source_url || format('https://github.com/{0}/actions/runs/{1}', github.repository, steps.source.outputs.run_id) }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=studio-${{ matrix.flavor }}
+          cache-to: type=gha,mode=max,scope=studio-${{ matrix.flavor }}
 
       - name: Promote the verified main digest to latest
         if: (github.event_name == 'workflow_run' || inputs.publish == true) && (github.event_name == 'workflow_run' || steps.source.outputs.head_branch == 'main')
         env:
           GH_TOKEN: ${{ github.token }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          STUDIO_IMAGE: ${{ steps.flavor.outputs.image }}
         run: |
           set -euo pipefail
           MAIN_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
@@ -315,10 +347,11 @@ jobs:
           current_status=0
           python3 "$STUDIO_IMAGE_VALIDATORS/studio_docker_publish.py" is-current || current_status=$?
           if [[ "$current_status" == 1 ]]; then
-            echo "Main advanced while building. Versioned tags were published; latest remains unchanged." >> "$GITHUB_STEP_SUMMARY"
+            echo "Main advanced while building. Versioned $STUDIO_IMAGE tags were published; latest remains unchanged." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           if [[ "$current_status" != 0 ]]; then exit "$current_status"; fi
           [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
-          docker buildx imagetools create --tag elsaworkflows/elsa-studio:latest "elsaworkflows/elsa-studio@$IMAGE_DIGEST"
-          echo "Published Studio latest from $SOURCE_SHA ($IMAGE_DIGEST)." >> "$GITHUB_STEP_SUMMARY"
+          [[ "$STUDIO_IMAGE" =~ ^elsaworkflows/elsa-studio(-workbench|-foundation)?$ ]]
+          docker buildx imagetools create --tag "$STUDIO_IMAGE:latest" "$STUDIO_IMAGE@$IMAGE_DIGEST"
+          echo "Published $STUDIO_IMAGE latest from $SOURCE_SHA ($IMAGE_DIGEST)." >> "$GITHUB_STEP_SUMMARY"

@@ -77,3 +77,20 @@ server instead.
 
 The boot test, `EssentialsStudioHostBootTests` in `Studio/tests/Elsa.Studio.Tests`, starts the built app as a child process and
 checks the index page, the module admin routes and the compiled-in module list.
+
+## Docker image
+
+This app publishes as **`elsaworkflows/elsa-studio`**, the Studio image that pairs with the
+`elsaworkflows/elsa-essentials-host` server image. Build it from the repository root after `pnpm build` in `Studio`:
+
+```bash
+docker build -f Studio/src/apps/Elsa.Studio.Essentials.Host/Dockerfile -t elsa-studio-essentials:local .
+docker run --rm -p 8080:8080 -e Studio__BackendBaseUrl=http://localhost:13000 elsa-studio-essentials:local
+```
+
+The Dockerfile copies only this app's project closure: the shared Studio projects and the seven extension modules above.
+`.github/workflows/studio-docker.yml` publishes it with the other two flavors; [Studio Docker](../../../docs/docker.md) covers
+the runtime settings.
+
+In the image, an add-on's browser files answer 503 until [valence-works/nuplane#145](https://github.com/valence-works/nuplane/issues/145) lands. Nuplane serves an installed package's files only
+from an enrolled extracted store, and that store does not qualify a container's filesystem. The compiled-in modules are unaffected.

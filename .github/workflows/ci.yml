@@ -1340,7 +1340,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && needs.plan-scope.outputs.studio == 'true'
     name: Studio .NET build & test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       # Local CI artifacts share one prerelease version, including their Modularity project dependencies.
       STUDIO_PACKAGE_VERSION: 4.0.0-studio-ci.${{ github.run_id }}.${{ github.run_attempt }}
@@ -1442,8 +1442,16 @@ jobs:
             ${{ runner.temp }}/studio-consumer-qualification/archive-controls/*.json
             ${{ runner.temp }}/studio-consumer-qualification/evidence/**
 
-      - name: Build standalone Studio image without publishing
-        run: docker build --file Studio/src/apps/Elsa.Studio.Workbench.Host/Dockerfile --build-arg "STUDIO_VERSION=$STUDIO_PACKAGE_VERSION" --tag "elsa-studio:ci-${{ github.sha }}" .
+      - name: Build standalone Studio images without publishing
+        # Every Studio flavor's Dockerfile copies its own project closure; building each one catches a missing COPY
+        # before studio-docker.yml publishes it.
+        run: |
+          set -euo pipefail
+          for app in Workbench Essentials Foundation; do
+            flavor=$(tr '[:upper:]' '[:lower:]' <<< "$app")
+            docker build --file "Studio/src/apps/Elsa.Studio.$app.Host/Dockerfile" --build-arg "STUDIO_VERSION=$STUDIO_PACKAGE_VERSION" \
+              --tag "elsa-studio-$flavor:ci-${{ github.sha }}" .
+          done
 
   backend-source:
     needs: plan-scope

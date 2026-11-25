@@ -102,7 +102,8 @@ without cloning or building the repositories. That guide includes macOS/Linux an
 
 This starts **Elsa.Workbench** (`http://localhost:13000`) and **Elsa Studio**
 (`http://localhost:14000`) from the Docker Hub images `elsaworkflows/elsa-workbench` and
-`elsaworkflows/elsa-studio` (SQLite, ephemeral). The [Docker quickstart](docker/compose/README.md)
+`elsaworkflows/elsa-studio` (SQLite, ephemeral). `elsa-studio` is the Studio Essentials app; the Studio app with every module
+compiled in publishes as `elsaworkflows/elsa-studio-workbench` (see [Studio Docker](Studio/docs/docker.md)). The [Docker quickstart](docker/compose/README.md)
 covers this plus the build-from-source path with PostgreSQL, and explains the settings that wire
 Studio to the server backend (`Studio__BackendBaseUrl`, the Elsa host management key, CORS). For the
 full container/image reference (environment variables, mounts, persistence composition,

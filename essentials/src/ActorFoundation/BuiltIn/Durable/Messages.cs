@@ -79,6 +79,8 @@ internal sealed record FoundationRootParkFacts(FoundationParkMark? Mark, int Arr
 {
     // S5b: the row holds jobs, children, custom handles or subscriptions, which a parked Terminate cannot dispose of yet.
     internal bool Outstanding { get; init; }
+    // S5b-3a: a pending row other than a direct input, which the retirement of a Terminate-then-delete refuses.
+    internal bool Residue { get; init; }
     // S5b: the store marks the command's row unseen when a Park keep changes the kept set (EfStore.RereadsParkFacts), so
     // the owner forgets a copy read ahead of the keep and reads it again. Without it the stale command stays in memory.
     internal bool Rereads { get; init; }
