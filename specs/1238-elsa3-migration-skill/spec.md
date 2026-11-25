@@ -317,7 +317,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   repository and stores the migrated workflows anywhere. For now, the user runs the result on the migration host
   (`apps/Elsa.Migration.Host`) from the same clone and commit, with their feature projects referenced and its two settings, which default to the host's
   own sample folder, overridden in its local settings or environment variables with absolute paths under the output
-  folder the plan records: the workflows folder at `<output>/migrated/workflows` and the activities file at
+  folder of the plan's last report: the workflows folder at `<output>/migrated/workflows` and the activities file at
   `<output>/migrated/activities/activities.json`. This local setup is a temporary development setup, not
   the production go-live: that comes with an Elsa 3 migration app profile once Elsa 4's distribution channels are
   decided, and the handoff is updated then. The skill performs no publishing or deployment step.

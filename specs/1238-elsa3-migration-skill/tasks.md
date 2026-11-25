@@ -102,7 +102,7 @@ is final only after T014. All live in `Sample/Elsa3.Migration.Sample/` and
 - [ ] T021 [US1] Write `skill/SKILL.md`: front matter per [contracts/adapters.md](contracts/adapters.md); then, in
   order, the privacy statement (FR-005, FR-006: what reaches the AI provider; ask before each new raw definition or
   source file, naming the file and the JSON path), what the skill does and does not do (FR-021), "read the plan first" (FR-007), asking for and recording the clone's path and commit when the plan has none (FR-004), the `.agents/skills/` copy instruction ([contracts/adapters.md](contracts/adapters.md)),
-  the prerequisite check, the `dotnet run` invocation from spec 1237's command-line contract with the project path under the clone and absolute export and output paths, the build-failure rule (FR-022), the handoff's two host settings with absolute paths under the output folder (FR-020), the four stages (FR-008–FR-012, R-6 searches, the report fields of
+  the prerequisite check, the `dotnet run` invocation from spec 1237's command-line contract with the project path under the clone and absolute export and output paths, the build-failure rule (FR-022), the handoff's two host settings with absolute paths under the output folder of the last report (FR-020), the four stages (FR-008–FR-012, R-6 searches, the report fields of
   [contracts/report-consumption.md](contracts/report-consumption.md)), the version check (R-4), the handoff
   (FR-020), and the edge cases of the spec as plain rules. No diagnostic code literal; read code, message and
   guidance from the report.
