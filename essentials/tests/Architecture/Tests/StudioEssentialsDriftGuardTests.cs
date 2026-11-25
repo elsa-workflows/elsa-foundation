@@ -17,7 +17,8 @@ namespace Elsa.Architecture.Tests;
 /// declares at least one feature its <c>shells.json</c> enables. That is a project-level approximation: a project carries one
 /// domain's API, and its capability sources (the user-task source in the runtime API, for one) are registered by its enabled
 /// feature rather than declared beside it, so a finer per-feature split would miss them. It can overstate what the server
-/// advertises only when an enabled feature shares a project with a disabled one that declares a capability; none does today.
+/// advertises only when an enabled feature shares a project with a disabled one that declares a capability;
+/// <see cref="Capability_declaring_server_projects_enable_every_feature_they_hold"/> keeps that from happening silently.
 /// </para>
 /// <para>
 /// <b>A module's requirement</b> is every <c>elsa.api.*</c> id its <c>Client/src</c> names, tests excluded, less the ids
@@ -128,6 +129,7 @@ public sealed class StudioEssentialsDriftGuardTests
                 continue;
             var root = Path.GetFullPath(Path.Join(RepoRoot, serverRoot)) + Path.DirectorySeparatorChar;
             Assert.True(Directory.Exists(root), $"{module}: {serverRoot} does not exist.");
+            Assert.True(SourceFiles(root, "*.csproj").Any(), $"{module}: {serverRoot} holds no project, so the check below would pass with nothing to match.");
             var compiledIn = closure.Where(project => project.StartsWith(root, StringComparison.OrdinalIgnoreCase)).ToArray();
             Assert.True(compiledIn.Length == 0, $"{module} is reviewed as feed-only, but the Essentials server compiles in {string.Join(", ", compiledIn)}.");
             var declared = SourceFiles(root, "*.cs").Select(File.ReadAllText).Where(IsDeclarationFile).SelectMany(CapabilityIds).ToArray();
@@ -171,6 +173,32 @@ public sealed class StudioEssentialsDriftGuardTests
             Assert.True(modules.TryGetValue(module, out var ids), $"{module} is not a Studio module.");
             Assert.True(ids.Any(owned), $"{module} no longer names an id its add-on-owned exclusion matches; remove the exclusion.");
         }
+    }
+
+    /// <summary>
+    /// The server scan counts a project's capabilities as served when any of its features is enabled. That holds only while a
+    /// project that declares a capability has every feature it holds enabled; otherwise a disabled feature's capability would
+    /// count as served and the guard would demand a Studio module the server does not advertise.
+    /// </summary>
+    [Fact]
+    public void Capability_declaring_server_projects_enable_every_feature_they_hold()
+    {
+        var enabled = EnabledServerFeatures();
+        var mixed = ServerProjects()
+            .Where(project => project.Capabilities.Length > 0 && project.Features.Any(enabled.Contains) && !project.Features.All(enabled.Contains))
+            .Select(project => $"{Path.GetRelativePath(RepoRoot, project.Path)} (disabled: {string.Join(", ", project.Features.Where(feature => !enabled.Contains(feature)))})")
+            .ToArray();
+
+        Assert.True(mixed.Length == 0, $"These server projects declare a capability and mix enabled and disabled features, so the project-level scan may overstate what Essentials serves. Map capabilities to features for them: {string.Join("; ", mixed)}");
+    }
+
+    /// <summary>An add-on-owned id stays unserved by the Essentials server; once it is served, the add-on is part of Essentials and the exclusion would hide a real requirement.</summary>
+    [Fact]
+    public void Add_on_owned_ids_are_not_served_by_the_essentials_server()
+    {
+        var served = ServerCapabilities();
+        foreach (var (module, (owned, _)) in AddOnOwnedIds)
+            Assert.True(!served.Any(owned), $"{module} excludes {string.Join(", ", served.Where(owned))} as add-on owned, but the Essentials server serves it. Remove the exclusion.");
     }
 
     /// <summary>
