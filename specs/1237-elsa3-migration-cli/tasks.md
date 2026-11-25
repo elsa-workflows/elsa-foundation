@@ -155,7 +155,9 @@
   startup tasks in their dependency order (`TopologicalTaskSorter`) and starts no background or recurring task. Add a
   supported `StartupTasksOnly` setting to the `Tasks` feature (default `false`), which `RunShellTasksInitializer`
   reads: when it is set, the initializer calls the startup-only member instead of `StartExecutingRegisteredTasks`.
-  Document the setting in the Tasks README. Test the order, the default, and that with the setting no
+  Document the setting in the Tasks README, and declare the new member and setting in
+  `essentials/src/Tasks/Core/PublicAPI.Unshipped.txt` and `essentials/src/Tasks/Elsa.Tasks/PublicAPI.Unshipped.txt`
+  (RS0016/RS0017 are errors). Test the order, the default, and that with the setting no
   `IBackgroundTask` or recurring task starts (R-5).
 - [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It depends on T013 (the addition list and the
   `Elsa3MigrationImportRun` feature), so do T013 first even though it is listed under US3. It takes the host assembly, the host project folder and
@@ -278,7 +280,8 @@
 - [ ] T020 [US1] Detect dispatched and executed workflow targets missing from the export, from the converted
   definitions' dispatch and execute-workflow activities. List them as Take into account (FR-018 item 5), and test with
   the fixture.
-- [ ] T021 [US1] Add a golden-file integration test in `MTests/Tests/`. The fixture export runs through `inventory`
+- [ ] T021 [US1] Add a golden-file integration test in `MTests/Tests/`. It depends on T022 and T023, which write
+  `migrated/`, `exportedTo` and the output files, so do it after them even though it is listed under US1. The fixture export runs through `inventory`
   in-process: `report.json` must equal the committed golden file after `tool.version` is normalized, it must validate
   against `contracts/report.schema.json`, and the exit code must be 1. A second run must be byte-identical,
   `migrated/` included (FR-022, SC-006).
@@ -358,7 +361,7 @@
   that path directly: a publish-stage diagnostic with an Elsa 4 code and a sentinel in its message reaches the report
   with the fixed text only. Change each
   message so that it names the cause without quoting input, and add no workaround (FR-026).
-- [ ] T029 [US5] Add the sentinel test: the fixture run's `report.json` and `report.html` contain no `SENTINEL-1237`,
+- [ ] T029 [US5] Add the sentinel test (after T031, which renders `report.html`): the fixture run's `report.json` and `report.html` contain no `SENTINEL-1237`,
   including from the conversion-stage `VF-IMP-012` refusal of the .NET-member call (SC-005).
 - [ ] T030 [US5] Add the schema test: every report the tests produce validates against
   [contracts/report.schema.json](contracts/report.schema.json). Copy the schema into `Tooling/` as an embedded resource,
