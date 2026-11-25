@@ -1,6 +1,6 @@
 # Elsa Foundation Studio
 
-Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The standard browser source and prebuilt `/studio` assets belong to `src/essentials/Elsa.Studio.Hosting`. Two Studio apps ship from `src/apps`: `Elsa.Studio.Workbench.Host` compiles in every Studio module, and `Elsa.Studio.Foundation.Host` is the bare shell whose modules all arrive from a Nuplane feed. Both compose the same host wiring from `src/essentials/Elsa.Studio.Hosting.Distribution`. Package consumers use Hosting without copying frontend source or running a frontend build. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
+Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The standard browser source and prebuilt `/studio` assets belong to `src/essentials/Elsa.Studio.Hosting`. Three Studio apps ship from `src/apps`: `Elsa.Studio.Workbench.Host` compiles in every Studio module, `Elsa.Studio.Essentials.Host` compiles in the modules the Essentials server serves, and `Elsa.Studio.Foundation.Host` is the bare shell whose modules all arrive from a Nuplane feed. All three compose the same host wiring from `src/essentials/Elsa.Studio.Hosting.Distribution`. Package consumers use Hosting without copying frontend source or running a frontend build. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
 
 For a runnable package-only starting point, supported optional capabilities and migration from copied Web infrastructure, see [custom Studio hosting](docs/custom-hosting.md).
 
@@ -19,7 +19,7 @@ The host is composed from independently enabled Studio capabilities:
 - `Elsa.Studio.Core` defines manifests, diagnostics, and the manifest collection event.
 - `Elsa.Studio.Api` exposes `GET /_elsa/studio/modules`.
 - `Elsa.Studio.Hosting` serves the prebuilt root-mounted browser; `Elsa.Studio.Hosting.Distribution` composes it with backend profiles, Nuplane add-ons and the Theme Store for the shipped apps.
-- `Elsa.Studio.Workbench.Host` selects every Studio module; [`Elsa.Studio.Foundation.Host`](src/apps/Elsa.Studio.Foundation.Host/README.md) is the bare shell that pairs with `Elsa.Foundation.Host`.
+- `Elsa.Studio.Workbench.Host` selects every Studio module; [`Elsa.Studio.Essentials.Host`](src/apps/Elsa.Studio.Essentials.Host/README.md) pairs with `Elsa.Essentials.Host`; [`Elsa.Studio.Foundation.Host`](src/apps/Elsa.Studio.Foundation.Host/README.md) is the bare shell that pairs with `Elsa.Foundation.Host`.
 - `Elsa.Studio.Hosting` also owns Home (`/`, `/dashboard`, `/overview`) and its widget area: the frames, loading, refresh, the saved layout and the empty state. Every Studio flavor has it.
 - `Elsa.Studio.Dashboard` adds saved questions and named dashboards (`/questions`, `/dashboards`); it needs the backend's `elsa.api.studio-dashboard` capability and leaves Home to the shell.
 - `Elsa.Studio.Attention` contributes the ordinary wide/full Attention widget.

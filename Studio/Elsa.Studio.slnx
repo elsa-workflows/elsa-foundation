@@ -8,6 +8,7 @@
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/apps/">
+    <Project Path="src/apps/Elsa.Studio.Essentials.Host/Elsa.Studio.Essentials.Host.csproj" />
     <Project Path="src/apps/Elsa.Studio.Foundation.Host/Elsa.Studio.Foundation.Host.csproj" />
     <Project Path="src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj" />
   </Folder>
