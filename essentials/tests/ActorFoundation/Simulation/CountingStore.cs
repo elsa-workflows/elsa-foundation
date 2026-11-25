@@ -2,7 +2,8 @@ namespace Kernel.Sim;
 
 /// <summary>Passes everything through and counts the commits.</summary>
 public sealed class CountingStore(IKernelStore inner, Action committed, Action<CommitBatch, bool>? observeCommit = null,
-    Func<CommitBatch, ValueTask>? beforeCommit = null) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore
+    Func<CommitBatch, ValueTask>? beforeCommit = null, Action? beforeRelease = null, Func<ValueTask>? afterRelease = null,
+    Func<ValueTask>? beforePartitionCount = null, Func<ValueTask>? beforeSetTake = null) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     string? IFoundationSchedulingStore.FoundationScheduleTenant(CreationAddress address) =>
@@ -20,9 +21,22 @@ public sealed class CountingStore(IKernelStore inner, Action committed, Action<C
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
-    public ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default) => inner.PartitionCountAsync(cancellationToken);
-    public ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default) => inner.TakeAsync(partitions, node, lease, cancellationToken);
-    public ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default) => inner.ReleaseAsync(owned, cancellationToken);
+    public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
+    {
+        if (beforePartitionCount is not null) await beforePartitionCount();
+        return await inner.PartitionCountAsync(cancellationToken);
+    }
+    public async ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        if (beforeSetTake is not null) await beforeSetTake();
+        return await inner.TakeAsync(partitions, node, lease, cancellationToken);
+    }
+    public async ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default)
+    {
+        beforeRelease?.Invoke();
+        await inner.ReleaseAsync(owned, cancellationToken);
+        if (afterRelease is not null) await afterRelease();
+    }
     public ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => inner.PollAsync(owned, horizon, limit, cancellationToken);
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
     public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, bool countDeaths, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, countDeaths, cancellationToken);
@@ -45,7 +59,12 @@ public sealed class CountingStore(IKernelStore inner, Action committed, Action<C
 
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) => inner.TakeAsync(partition, node, lease, cancellationToken);
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => inner.HeartbeatAsync(node, window, cancellationToken);
-    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => inner.ReleaseAsync(partition, epoch, cancellationToken);
+    public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
+    {
+        beforeRelease?.Invoke();
+        await inner.ReleaseAsync(partition, epoch, cancellationToken);
+        if (afterRelease is not null) await afterRelease();
+    }
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken);
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => inner.AddAsync(message, cancellationToken);
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => inner.AddEventAsync(delivery, cancellationToken);

@@ -14,4 +14,7 @@
   <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Native.Run" />     <!-- test-only witness hooks, such as AfterNodeStop -->
+  </ItemGroup>
 </Project>

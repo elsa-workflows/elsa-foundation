@@ -27,6 +27,9 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
     private readonly Worker? _node;
     private readonly Dictionary<int, NodeScope> _scopes = [];
     private readonly SemaphoreSlim _turn = new(1, 1);     // a pass, a gain and a loss of the node's worker never overlap
+    private readonly object _attachmentGate = new();
+    private RuntimeRun? _runtimeRun;
+    private volatile bool _stopping;
     private long _passes, _lastAt, _calls;
     private TimeSpan? _last;
     private Dictionary<int, TimeSpan> _lastAges = [];
@@ -84,6 +87,8 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
     /// </summary>
     public async ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default)
     {
+        if (_stopping)
+            throw new InvalidOperationException("This durable host cannot start while its previous shutdown is incomplete.");
         if (_counted is not { } counted) return;
         var stored = await counted.Store.PartitionCountAsync(cancellationToken);
         // A store that does not say its count is refused too, unless the node places part of it (the simulation's).
@@ -99,6 +104,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
 
     public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
     {
+        if (_stopping) return null;
         if (_node is not { } node)
         {
             if (_fixed(scope) is not { } worker) return null;
@@ -109,7 +115,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         await _turn.WaitAsync(CancellationToken.None);
         try
         {
-            if (!await node.GainAsync(scope, cancellationToken)) return null;
+            if (_stopping || !await node.GainAsync(scope, cancellationToken)) return null;
             // The same activation each time: layer 1 holds the one it got, and gives up the one it holds.
             return Scope(scope);
         }
@@ -124,6 +130,48 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         {
             if (_node is { } node) return [node];
             lock (_workers) return [.. _workers.Values];
+        }
+    }
+
+    IScopeHostRun IScopeHost.AttachRuntime()
+    {
+        lock (_attachmentGate)
+        {
+            if (_stopping)
+                throw new InvalidOperationException("This durable host cannot start while its previous shutdown is incomplete.");
+            if (_runtimeRun is not null)
+                throw new InvalidOperationException("This durable host is already attached to a runtime.");
+            return _runtimeRun = new(this);
+        }
+    }
+
+    private sealed class RuntimeRun(DurableHost host) : IScopeHostRun
+    {
+        public async ValueTask PrepareToStopAsync(CancellationToken cancellationToken)
+        {
+            lock (host._attachmentGate)
+            {
+                if (host._runtimeRun != this)
+                    throw new InvalidOperationException("Only the attached runtime can prepare this durable host for shutdown.");
+                host._stopping = true;
+            }
+            // Every owning Worker stays live until every Worker's entered jobs have exited; the runtime's host stops
+            // renewing only after this. A lost fence is reported once all jobs have exited.
+            var workers = host.Workers;
+            await host.KeepLiveWhileAsync(workers, [.. workers.Select(worker => worker.CloseJobEntry())], drainsKeepThemselves: false,
+                cancellationToken);
+        }
+
+        public void Stopped()
+        {
+            lock (host._attachmentGate)
+            {
+                if (host._runtimeRun != this || !host._stopping)
+                    throw new InvalidOperationException("Only the attached runtime can complete this durable host's shutdown.");
+                foreach (var worker in host.Workers) worker.ReopenJobEntry();
+                host._stopping = false;
+                host._runtimeRun = null;
+            }
         }
     }
 
@@ -209,8 +257,86 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         finally { _turn.Release(); }
     }
 
-    internal Task DrainEnteredTurnsAsync(CancellationToken cancellationToken) =>
-        _node?.DrainEnteredTurnsAsync(cancellationToken) ?? Task.CompletedTask;
+    /// <summary>The actor-turn drain of every Worker, the per-partition ones too; each owning Worker stays live until all are done.</summary>
+    internal Task DrainEnteredTurnsAsync(CancellationToken cancellationToken)
+    {
+        var workers = Workers;
+        return KeepLiveWhileAsync(workers, [.. workers.Select(worker => worker.DrainEnteredTurnsAsync(cancellationToken))],
+            drainsKeepThemselves: true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Wait for every Worker's drain and give every Worker of the host the drain's pass meanwhile (a pending-only one too),
+    /// so the gate (every holding Worker passed within a lease) keeps the node lease renewing until the whole node has
+    /// drained or the deadline cancels. A Worker whose fence is no longer usable gets no pass; a loss is kept and reported.
+    /// With <paramref name="drainsKeepThemselves"/> a Worker's own drain keeps it live until it ends. Then every outcome
+    /// counts: any fault other than a lost fence, and a drain cancelled without the deadline, is thrown as a fault, so the
+    /// runtime abandons the run; otherwise a lost fence is thrown as <see cref="ScopeOwnershipLostException"/>.
+    /// </summary>
+    internal async Task KeepLiveWhileAsync(IReadOnlyList<Worker> workers, Task[] drains, bool drainsKeepThemselves,
+        CancellationToken cancellationToken)
+    {
+        var generations = workers.Select(worker => worker.DrainGeneration).ToArray();
+        var ownedAtStart = workers.Select(worker => worker.Owns).ToArray();
+        var lost = new bool[workers.Count];
+        var all = Task.WhenAll(drains);
+        // A round at least three times per lease of the shortest-lived Worker, so none of them goes stale between rounds.
+        var lease = workers.Count > 0 ? workers.Min(worker => worker.Lease) : _lease ?? TimeSpan.FromSeconds(10);
+        try
+        {
+            while (!all.IsCompleted)
+            {
+                List<Task> wakes = [all];
+                for (var i = 0; i < workers.Count; i++)
+                {
+                    // A Worker whose own drain ended, also with a fault (a lost fence or any other), still gets the pass while
+                    // its guard is usable or it holds nothing: one that lapsed would close the gate for every other Worker.
+                    // A fault is reported once every drain has ended.
+                    if (drainsKeepThemselves && !drains[i].IsCompleted) continue;
+                    wakes.Add(workers[i].ArmDrainBeat());
+                    if (!await workers[i].KeepDrainLiveAsync(generations[i], ownedAtStart[i], cancellationToken)) lost[i] = true;
+                }
+                using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                wakes.Add(Task.Delay(lease / 3, wait.Token));
+                await Task.WhenAny(wakes);
+                wait.Cancel();     // a beat or an exit woke the drain: drop this round's timer
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+        }
+        catch (Exception error) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The run will be abandoned: let every other Worker's drain end first, so what follows (the job drain judges
+            // answers) never runs beside a drain's flush. The deadline still bounds the wait. No rounds run meanwhile, so
+            // on a host of several Workers the gate may close after a lease and the node lease lapse: that is the abandoned
+            // run's intended end (its ownership runs out by lease), and a drain still waiting then fails its own fence check.
+            try { await all.WaitAsync(cancellationToken); }
+            catch (Exception) { }
+            _ = all.ContinueWith(static drained => _ = drained.Exception, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(error);
+        }
+        catch
+        {
+            // The drains run on: observe their outcome, so a later fault is not left unobserved.
+            _ = all.ContinueWith(static drained => _ = drained.Exception, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            throw;
+        }
+        finally
+        {
+            foreach (var worker in workers) worker.DisarmDrainBeat();
+        }
+        var faults = drains.Where(drain => drain.IsFaulted).SelectMany(drain => drain.Exception!.InnerExceptions).ToList();
+        if (faults.FirstOrDefault(fault => fault is not ScopeOwnershipLostException) is { } fault)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(fault);
+        if (drains.Any(drain => drain.IsCanceled))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException("A Worker's drain was cancelled without the stop deadline.");
+        }
+        if (faults.Count > 0 || lost.Any(value => value))
+            throw faults.FirstOrDefault() ?? new ScopeOwnershipLostException("Ownership was lost while draining during shutdown.");
+    }
 
     private NodeScope Scope(int scope) =>
         _scopes.TryGetValue(scope, out var known) ? known : _scopes[scope] = new NodeScope(this, scope);
@@ -223,6 +349,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (_stopping) return [];
             await _node!.GainSetAsync(scopes, cancellationToken);
             return scopes.Where(_node.Holds).Select(Scope).ToArray();
         }

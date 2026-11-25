@@ -15,7 +15,7 @@ internal static class PostgresPreviewLifetimeChecks
 
     internal static async Task<int> RunAsync()
     {
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(35));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(150));
         var token = deadline.Token;
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use a dedicated PostgreSQL fixture database.");
@@ -106,10 +106,222 @@ internal static class PostgresPreviewLifetimeChecks
             await replacement.StopAsync(token);
             Require((await ReadFenceAsync()).Owner is null, "the replacement also releases ownership through application shutdown");
         }
-        await CheckTurnDeadlineAsync();
-        await CheckStartupDeadlineAsync();
-        await CheckStartupRetryAsync();
+        // KERNEL_LIFETIME_PROBES=name[,name]: run only these deadline probes after the main flow (for fail-before witnesses).
+        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault", "joined-stop-warning", "aggregate-once"];
+        var only = Environment.GetEnvironmentVariable("KERNEL_LIFETIME_PROBES")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (only is { Length: 0 } || only?.FirstOrDefault(name => !probes.Contains(name, StringComparer.Ordinal)) is { } unknown)
+            throw new InvalidOperationException($"KERNEL_LIFETIME_PROBES names no known probe ({string.Join(", ", probes)}).");
+        bool Probe(string name) => only is null || only.Contains(name, StringComparer.Ordinal);
+        if (Probe("turn-deadline")) await CheckTurnDeadlineAsync();
+        if (Probe("startup-deadline")) await CheckStartupDeadlineAsync();
+        if (Probe("startup-retry")) await CheckStartupRetryAsync();
+        if (Probe("dispose-prompt")) await CheckDisposeDeadlineAsync(stuck: false);
+        if (Probe("dispose-stuck")) await CheckDisposeDeadlineAsync(stuck: true);
+        if (Probe("dispose-report")) await CheckDisposeReportsOnceAsync();
+        if (Probe("dispose-joins")) await CheckJoinedDisposeKillsAsync();
+        if (Probe("negative-deadline")) CheckNegativeDisposeDeadline();
+        if (Probe("shutdown-fault")) await CheckShutdownFaultAsync();
+        if (Probe("joined-stop-warning")) await CheckJoinedStopWarningAsync();
+        if (Probe("aggregate-once")) await CheckAggregateOnceAsync();
         return 0;
+
+        // An aggregate shutdown fault is logged as its inner faults, one Error each, never as the aggregate as well.
+        async Task CheckAggregateOnceAsync()
+        {
+            var first = new InvalidOperationException("injected first shutdown fault");
+            var second = new InvalidOperationException("injected second shutdown fault");
+            var log = new RecordingLogger();
+            var service = new PostgresPreviewHostedService(Open, "aggregate-once", new WaitingActor(false), Environment.FailFast,
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25) }, log) { AfterNodeStop = () => throw new AggregateException(first, second) };
+            await service.StartAsync(token);
+            try { await service.StopAsync(token); }
+            catch (Exception) when (!token.IsCancellationRequested) { }
+            await service.DisposeAsync();
+            await Task.Delay(200, token);
+            var errors = log.Errors;
+            Require(errors.Count == 2 && errors.Count(error => ReferenceEquals(error, first)) == 1 && errors.Count(error => ReferenceEquals(error, second)) == 1,
+                $"an aggregate shutdown fault logs one Error per distinct inner fault and none for the aggregate ({string.Join(", ", errors.Select(error => error?.Message ?? "?"))})");
+        }
+
+        // A StopAsync that joins another caller's stop kills nothing when its own deadline fires: no Warning. A later
+        // dispose deadline that does kill the drain logs the one Warning.
+        async Task CheckJoinedStopWarningAsync()
+        {
+            const string name = "joined-stop-warning";
+            var admitted = await ingress.SendAsync(scope, new Contract.Target.Start(new(WaitingActor.Name, "fixture")),
+                name + "-start", Contract.Kinds.Start, cancellationToken: token);
+            Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, $"the {name} probe admits an independent root");
+            var held = new WaitingActor();
+            var log = new RecordingLogger();
+            var service = new PostgresPreviewHostedService(Open, name, held, _ => { },
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25), DisposeDeadline = TimeSpan.FromMilliseconds(500) }, log);
+            using var application = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            Task? first = null;
+            try
+            {
+                await service.StartAsync(token);
+                await held.Entered.Task.WaitAsync(token);
+                first = service.StopAsync(application.Token);
+                using var joined = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+                try { await service.StopAsync(joined.Token).WaitAsync(token); }
+                catch (OperationCanceledException) when (!token.IsCancellationRequested) { }
+                var afterJoined = log.Warnings.Count;
+                await service.DisposeAsync().AsTask().WaitAsync(token);
+                Require(afterJoined == 0 && log.Warnings.Count == 1 && log.Errors.Count == 0,
+                    $"a joined stop's deadline warns nothing, and the dispose deadline that kills the drain warns once ({afterJoined} then {log.Warnings.Count} Warning)");
+            }
+            finally
+            {
+                held.Release.TrySetResult();
+                if (first is not null)
+                    try { await first.WaitAsync(token); }
+                    catch (Exception) when (!token.IsCancellationRequested) { }
+            }
+        }
+
+        // A fault the shutdown raises outside the node is kept on LastError and logged once at Error.
+        async Task CheckShutdownFaultAsync()
+        {
+            var fault = new InvalidOperationException("injected shutdown fault outside the node");
+            var log = new RecordingLogger();
+            var service = new PostgresPreviewHostedService(Open, "shutdown-fault", new WaitingActor(false), Environment.FailFast,
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25) }, log) { AfterNodeStop = () => throw fault };
+            await service.StartAsync(token);
+            Exception? reported = null;
+            try { await service.StopAsync(token); }
+            catch (Exception error) when (!token.IsCancellationRequested) { reported = error; }
+            await Task.Delay(200, token);
+            var errors = log.Errors;
+            Require(ReferenceEquals(reported, fault) && ReferenceEquals(service.LastError, fault) && errors.Count == 1 && ReferenceEquals(errors[0], fault),
+                $"a shutdown fault outside the node is thrown by StopAsync, kept on LastError and logged once at Error ({errors.Count} Error entr{(errors.Count == 1 ? "y" : "ies")})");
+        }
+
+        // A negative dispose deadline is refused when the hosted service is made.
+        void CheckNegativeDisposeDeadline()
+        {
+            Exception? refused = null;
+            try { _ = new PostgresPreviewHostedService(Open, "negative-deadline", new WaitingActor(false), Environment.FailFast,
+                new LoopOptions { DisposeDeadline = TimeSpan.FromSeconds(-5) }); }
+            catch (Exception error) { refused = error; }
+            Require(refused is ArgumentOutOfRangeException, $"a negative dispose deadline is refused when the hosted service is made ({refused?.GetType().Name ?? "accepted"})");
+        }
+
+        // A dispose never throws the stop's failure: the node records it, whoever waits, and a second dispose is quiet too.
+        async Task CheckDisposeReportsOnceAsync()
+        {
+            const string name = "dispose-report";
+            var admitted = await ingress.SendAsync(scope, new Contract.Target.Start(new(WaitingActor.Name, "fixture")),
+                name + "-start", Contract.Kinds.Start, cancellationToken: token);
+            Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, $"the {name} probe admits an independent root");
+            var held = new WaitingActor();
+            var log = new RecordingLogger();
+            var service = new PostgresPreviewHostedService(Open, name, held, Environment.FailFast,
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25), DisposeDeadline = TimeSpan.FromSeconds(30) }, log);
+            Exception? reported = null, again = null;
+            try
+            {
+                await service.StartAsync(token);
+                await held.Entered.Task.WaitAsync(token);
+                var first = service.DisposeAsync().AsTask();
+                await Task.Delay(300, token);
+                // A sibling takes the partition while the entered turn drains: the drain loses its fence.
+                await observer.Database.ExecuteSqlRawAsync("UPDATE \"Partitions\" SET \"Owner\" = 'dispose-thief', \"Epoch\" = \"Epoch\" + 1", token);
+                try { await first.WaitAsync(token); }
+                catch (Exception error) when (!token.IsCancellationRequested) { reported = error; }
+                try { await service.DisposeAsync().AsTask().WaitAsync(token); }
+                catch (Exception error) when (!token.IsCancellationRequested) { again = error; }
+            }
+            finally { held.Release.TrySetResult(); }
+            var recorded = service.LastError;
+            await Task.Delay(200, token);
+            var errors = log.Errors;
+            Require(reported is null && again is null && recorded is Kernel.Runtime.ScopeOwnershipLostException &&
+                errors.Count == 1 && errors[0] is Kernel.Runtime.ScopeOwnershipLostException,
+                $"a dispose stays quiet about the lost fence, which the service records and logs once at Error ({reported?.GetType().Name ?? "quiet"}, then {again?.GetType().Name ?? "quiet"}, recorded {recorded?.GetType().Name ?? "nothing"}, {errors.Count} Error entr{(errors.Count == 1 ? "y" : "ies")})");
+        }
+
+        // A dispose that joins a stop already under way kills it at the dispose deadline: no escalation, fence left for expiry.
+        async Task CheckJoinedDisposeKillsAsync()
+        {
+            const string name = "dispose-joins";
+            var admitted = await ingress.SendAsync(scope, new Contract.Target.Start(new(WaitingActor.Name, "fixture")),
+                name + "-start", Contract.Kinds.Start, cancellationToken: token);
+            Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, $"the {name} probe admits an independent root");
+            var held = new WaitingActor();
+            var escalation = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var service = new PostgresPreviewHostedService(Open, name, held, reason => escalation.TrySetResult(reason),
+                new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25), DisposeDeadline = TimeSpan.FromMilliseconds(500) });
+            using var application = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            Task? stopping = null;
+            try
+            {
+                await service.StartAsync(token);
+                await held.Entered.Task.WaitAsync(token);
+                stopping = service.StopAsync(application.Token);     // a stop with a distant deadline is under way
+                await Task.Delay(300, token);
+                await service.DisposeAsync().AsTask().WaitAsync(token);
+                await Task.Delay(500, token);
+                Require(!escalation.Task.IsCompleted && stopping.IsCompleted && (await ReadFenceAsync()).Owner == name && !held.Release.Task.IsCompleted,
+                    "a dispose that joins a stop under way kills it at its deadline without escalation, and leaves the fence for expiry");
+            }
+            finally
+            {
+                held.Release.TrySetResult();
+                if (stopping is not null)
+                    try { await stopping.WaitAsync(token); }
+                    catch (Exception) when (!token.IsCancellationRequested) { }
+            }
+        }
+
+        // Dispose without StopAsync (a later hosted service failed to start) is bounded by the dispose deadline, which kills
+        // the stop. A stop that the kill ends promptly does not escalate; one that stays stuck past the grace does.
+        async Task CheckDisposeDeadlineAsync(bool stuck)
+        {
+            var name = stuck ? "dispose-stuck" : "dispose-prompt";
+            var escalation = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var loop = new LoopOptions { PollInterval = TimeSpan.FromMilliseconds(25), DisposeDeadline = TimeSpan.FromMilliseconds(500) };
+            if (stuck)
+            {
+                // A preflight that stays blocked keeps the killed stop from finishing: past the grace, the policy runs.
+                var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var service = new PostgresPreviewHostedService(() =>
+                {
+                    entered.TrySetResult();
+                    release.Task.GetAwaiter().GetResult();
+                    return Open();
+                }, name, new WaitingActor(false), reason => escalation.TrySetResult(reason), loop);
+                var starting = service.StartAsync(token);
+                try
+                {
+                    await entered.Task.WaitAsync(token);
+                    await service.DisposeAsync().AsTask().WaitAsync(token);
+                    Require(escalation.Task.IsCompleted && (await escalation.Task).Contains("dispose deadline", StringComparison.Ordinal),
+                        "a dispose whose killed stop stays blocked past the grace runs the process policy");
+                }
+                finally { release.TrySetResult(); }
+                try { await starting.WaitAsync(token); }
+                catch (Exception) when (!token.IsCancellationRequested) { }
+                return;
+            }
+            var admitted = await ingress.SendAsync(scope, new Contract.Target.Start(new(WaitingActor.Name, "fixture")),
+                name + "-start", Contract.Kinds.Start, cancellationToken: token);
+            Require(admitted.Outcome == Contract.AdmissionOutcome.Accepted, $"the {name} probe admits an independent root");
+            var held = new WaitingActor();
+            var log = new RecordingLogger();
+            var prompt = new PostgresPreviewHostedService(Open, name, held, reason => escalation.TrySetResult(reason), loop, log);
+            try
+            {
+                await prompt.StartAsync(token);
+                await held.Entered.Task.WaitAsync(token);     // after an earlier probe's fence has run out, if it left one
+                await prompt.DisposeAsync().AsTask().WaitAsync(token);
+                await Task.Delay(TimeSpan.FromMilliseconds(500), token);
+                Require(!escalation.Task.IsCompleted && (await ReadFenceAsync()).Owner == name && !held.Release.Task.IsCompleted &&
+                    log.Warnings.Count == 1 && log.Warnings[0].Contains("lease expiry", StringComparison.Ordinal) && log.Errors.Count == 0 && prompt.LastError is null,
+                    $"a dispose whose deadline kill ends the stop promptly does not run the process policy, leaves the fence for expiry, and logs one Warning ({log.Warnings.Count} Warning, {log.Errors.Count} Error)");
+            }
+            finally { held.Release.TrySetResult(); }
+        }
 
         async Task CheckTurnDeadlineAsync()
         {
@@ -123,9 +335,9 @@ internal static class PostgresPreviewLifetimeChecks
             {
                 await host.StartAsync(token);
                 await held.Entered.Task.WaitAsync(token);
-                await ExpectDeadlineAsync(host.StopAsync, escalation);
+                await ExpectDeadlineAsync(host.StopAsync, escalation, escalates: false);
                 Require(!held.Release.Task.IsCompleted && (await ReadFenceAsync()).Owner == "lifetime-deadline",
-                    "a host deadline requests process escalation while the entered turn still owns its fence");
+                    "a host deadline kills the stop, which ends promptly without escalation, and the entered turn keeps its fence for expiry");
             }
             finally { held.Release.TrySetResult(); }
         }
@@ -135,18 +347,20 @@ internal static class PostgresPreviewLifetimeChecks
             var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var escalation = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var startupLog = new RecordingLogger();
             await using var service = new PostgresPreviewHostedService(() =>
             {
                 entered.TrySetResult();
                 release.Task.GetAwaiter().GetResult();
                 return Open();
-            }, "lifetime-startup", new WaitingActor(false), reason => escalation.TrySetResult(reason));
+            }, "lifetime-startup", new WaitingActor(false), reason => escalation.TrySetResult(reason), logger: startupLog);
             var starting = service.StartAsync(token);
             try
             {
                 await entered.Task.WaitAsync(token);
-                await ExpectDeadlineAsync(service.StopAsync, escalation);
-                Require(!starting.IsCompleted, "a host deadline requests escalation while preflight is still blocked");
+                await ExpectDeadlineAsync(service.StopAsync, escalation, escalates: true);
+                Require(!starting.IsCompleted && startupLog.Warnings.Count == 0,
+                    $"a host deadline requests escalation while preflight is still blocked, and warns of no kill: nothing was owned ({startupLog.Warnings.Count} Warning)");
             }
             finally { release.TrySetResult(); }
             try
@@ -176,7 +390,7 @@ internal static class PostgresPreviewLifetimeChecks
             Require(attempts > 1, "a failed startup can retry with a healthy database context");
         }
 
-        async Task ExpectDeadlineAsync(Func<CancellationToken, Task> stop, TaskCompletionSource<string> escalation)
+        async Task ExpectDeadlineAsync(Func<CancellationToken, Task> stop, TaskCompletionSource<string> escalation, bool escalates)
         {
             using var shutdown = new CancellationTokenSource();
             var stopping = stop(shutdown.Token);
@@ -187,8 +401,14 @@ internal static class PostgresPreviewLifetimeChecks
                 throw new InvalidOperationException("Application shutdown accepted an expired deadline.");
             }
             catch (OperationCanceledException) when (!token.IsCancellationRequested) { }
-            Require((await escalation.Task.WaitAsync(token)).Contains("shutdown deadline", StringComparison.Ordinal),
-                "the supplied process policy receives the shutdown deadline");
+            if (escalates)
+                Require((await escalation.Task.WaitAsync(token)).Contains("shutdown deadline", StringComparison.Ordinal),
+                    "the supplied process policy receives the shutdown deadline");
+            else
+            {
+                await Task.Delay(PostgresPreviewHostedService.KillGrace + TimeSpan.FromMilliseconds(500), token);
+                Require(!escalation.Task.IsCompleted, "the process policy does not run when the deadline's kill ends the stop within its grace");
+            }
         }
 
         IHost Build(string node, WaitingActor actor, Action<string>? endProcess = null)
@@ -203,6 +423,23 @@ internal static class PostgresPreviewLifetimeChecks
         Task<PartitionEntity> ReadFenceAsync() => observer.Partitions.AsNoTracking().SingleAsync(token);
         ValueTask<Contract.Admission> SendCompleteAsync() =>
             ingress.SendAsync(scope, new Contract.Target.Ref(reference), "complete", "complete", cancellationToken: token);
+    }
+
+    /// <summary>A logger that keeps the exceptions of its Error entries.</summary>
+    private sealed class RecordingLogger : ILogger<PostgresPreviewHostedService>
+    {
+        private readonly List<Exception?> _errors = [];
+        private readonly List<string> _warnings = [];
+        internal IReadOnlyList<Exception?> Errors { get { lock (_errors) return [.. _errors]; } }
+        internal IReadOnlyList<string> Warnings { get { lock (_errors) return [.. _warnings]; } }
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            lock (_errors)
+                if (logLevel == LogLevel.Error) _errors.Add(exception);
+                else if (logLevel == LogLevel.Warning) _warnings.Add(formatter(state, exception));
+        }
     }
 
     private static void Require(bool condition, string message)

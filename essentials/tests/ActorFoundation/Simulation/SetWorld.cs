@@ -16,6 +16,7 @@ public sealed class SerialHost(DurableHost host) : IScopeHost, IScopeCount, INod
     public async ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default) => await Queued(() => host.PassAsync(cancellationToken));
 
     public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) => host.CheckScopesAsync(scopes, cancellationToken);
+    public IScopeHostRun? AttachRuntime() => ((IScopeHost)host).AttachRuntime();
 
     private Task _tail = Task.CompletedTask;
     private readonly Dictionary<int, SerialScope> _scopes = [];
@@ -69,6 +70,7 @@ public sealed class GiveUps(IScopeHost inner) : IScopeHost, IScopeCount, INodeLe
 
     public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) =>
         inner is IScopeCount counted ? counted.CheckScopesAsync(scopes, cancellationToken) : ValueTask.CompletedTask;
+    public IScopeHostRun? AttachRuntime() => inner.AttachRuntime();
 
     public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
     {

@@ -51,7 +51,8 @@ internal static class WorkbenchCorePreview
         });
         var actor = new WorkflowActor([model]);
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
-        services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node, actor, Environment.FailFast));
+        services.AddHostedService(provider => new PostgresPreviewHostedService(Open, node, actor, Environment.FailFast,
+            logger: provider.GetRequiredService<ILogger<PostgresPreviewHostedService>>()));
         if (configuration["Elsa:CorePreview:ReadsTenant"] is { } readsTenant)
             services.AddSingleton(new WorkbenchCorePreviewReads(Open, EmbeddedTenant.Bind(readsTenant)));
 
