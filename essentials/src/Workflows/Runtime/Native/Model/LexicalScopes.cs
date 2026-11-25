@@ -129,7 +129,20 @@ internal sealed partial class Burst
             // An executing intrinsic/leaf is not stored as a live frame; its scheduled parent owns access.
             var access = _s.Frames.ContainsKey(frame.Id) ? frame.Id : frame.Parent ?? frame.Id;
             foreach (var values in LexicalValues(access, frame.LexicalScope, seen)) yield return values;
+            if (ClosesAt(frame)) yield break;     // a GraphActivity's body sees nothing outside its boundary
         }
+    }
+
+    /// <summary>Whether this frame is a GraphActivity's body: its parent is the boundary.</summary>
+    private bool ClosesAt(Frame frame) => ParentOf(frame) is { } parent && _wf.Nodes[parent.Node].Type == typeof(GraphActivity);
+
+    /// <summary>The variables of the nearest GraphActivity whose body this frame is in, or null outside every one.</summary>
+    private Dictionary<string, JsonNode?>? BodyScope(Frame? frame)
+    {
+        for (; frame is not null; frame = ParentOf(frame))
+            if (ClosesAt(frame) && frame.LexicalScope is { } scope)
+                return LexicalScopes.Accessible(_s, frame.Parent!, scope).Values;
+        return null;
     }
 
     private IEnumerable<Dictionary<string, JsonNode?>> LexicalValues(string frame, string? scope, HashSet<string> seen)
@@ -142,30 +155,39 @@ internal sealed partial class Burst
         }
     }
 
-    internal JsonNode? EvaluateInScope(Frame owner, Binding binding, string lexicalScope)
+    internal JsonNode? EvaluateInScope(Frame owner, Binding binding, string lexicalScope, bool closed = false)
     {
         // Refuse an invalid handle even if this binding never reads a variable.
         _ = LexicalScopes.Accessible(_s, owner.Id, lexicalScope);
-        return Evaluate(binding, new CompositeReadScope(this, owner, lexicalScope));
+        return Evaluate(binding, new CompositeReadScope(this, owner, lexicalScope, closed));
     }
 
-    internal JsonNode? ReadInScope(Frame owner, string lexicalScope, string name)
+    internal JsonNode? ReadInScope(Frame owner, string lexicalScope, string name, bool closed = false)
     {
         foreach (var values in LexicalValues(owner.Id, lexicalScope, new(StringComparer.Ordinal)))
             if (values.TryGetValue(name, out var value)) return value;
-        return Read(owner, name);
+        return closed ? null : Read(owner, name);
     }
 }
 
-internal sealed class CompositeReadScope(Burst burst, Frame owner, string lexicalScope) : IScope
+/// <summary>What a composite reads in one of its lexical scopes; closed, nothing outside that scope's chain.</summary>
+internal sealed class CompositeReadScope(Burst burst, Frame owner, string lexicalScope, bool closed = false) : IScope
 {
-    public JsonNode? Variable(string name) => burst.ReadInScope(owner, lexicalScope, name);
+    public JsonNode? Variable(string name) => burst.ReadInScope(owner, lexicalScope, name, closed);
+    public JsonNode? Result(string node) => burst.Result(node);
+}
+
+/// <summary>What a binding reads from a set of values alone: a GraphActivity input's default sees the inputs given so far.</summary>
+internal sealed class ValuesScope(Burst burst, IReadOnlyDictionary<string, JsonNode?> values) : IScope
+{
+    public JsonNode? Variable(string name) => values.GetValueOrDefault(name);
     public JsonNode? Result(string node) => burst.Result(node);
 }
 
 public sealed partial class CompositeContext
 {
-    internal JsonNode? EvaluateInScope(Binding binding, string lexicalScope) => _burst.EvaluateInScope(_frame, binding, lexicalScope);
+    internal JsonNode? EvaluateInScope(Binding binding, string lexicalScope, bool closed = false) => _burst.EvaluateInScope(_frame, binding, lexicalScope, closed);
+    internal JsonNode? EvaluateOver(Binding binding, IReadOnlyDictionary<string, JsonNode?> values) => _burst.Evaluate(binding, new ValuesScope(_burst, values));
     internal LexicalScopeInfo LexicalScopeInfo(string scope) => _burst.LexicalScopeInfo(_frame, scope);
     internal string[] OwnedLexicalScopes() => _burst.OwnedLexicalScopes(_frame);
     internal string CreateLexicalScope(IReadOnlyDictionary<string, JsonNode?> values, string? parent = null) => _burst.CreateLexicalScope(_frame, values, parent);

@@ -18,8 +18,21 @@ internal static class NativeRecoveryMaterial
     internal static JsonArray DescribeCases(Node n) => new(n.Cases.Select(c => (JsonNode?)new JsonObject
     {
         ["Label"] = c.Label,
-        ["Condition"] = c.Condition is { } b ? new JsonObject { ["Kind"] = b.GetType().FullName, ["Value"] = JsonSerializer.SerializeToNode(b, b.GetType()) } : null,
+        ["Condition"] = DescribeBinding(c.Condition),
     }).ToArray());
+
+    /// <summary>A GraphActivity's declaration: its inputs, variables and outputs in order, and its outcome maps by key; null for any other node.</summary>
+    internal static JsonObject? DescribeGraph(Node n) => n.Graph is not { } g ? null : new JsonObject
+    {
+        ["Inputs"] = new JsonArray(g.Inputs.Select(i => (JsonNode?)new JsonObject { ["Name"] = i.Name, ["Required"] = i.Required, ["Default"] = DescribeBinding(i.Default) }).ToArray()),
+        ["Variables"] = new JsonArray(g.Variables.Select(v => (JsonNode?)new JsonObject { ["Name"] = v.Name, ["Value"] = DescribeBinding(v.Value) }).ToArray()),
+        ["Outputs"] = new JsonArray(g.Outputs.Select(o => (JsonNode?)new JsonObject { ["Name"] = o.Name, ["Value"] = DescribeBinding(o.Value) }).ToArray()),
+        ["OutcomeMappings"] = new JsonObject(g.OutcomeMappings.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => KeyValuePair.Create(p.Key, (JsonNode?)p.Value))),
+        ["CompleteOutcomes"] = new JsonObject(g.CompleteOutcomes.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => KeyValuePair.Create(p.Key, (JsonNode?)p.Value))),
+    };
+
+    private static JsonObject? DescribeBinding(Binding? b) =>
+        b is null ? null : new JsonObject { ["Kind"] = b.GetType().FullName, ["Value"] = JsonSerializer.SerializeToNode(b, b.GetType()) };
 
     private static JsonObject DescribeNode(Node n)
     {
@@ -34,6 +47,7 @@ internal static class NativeRecoveryMaterial
         if (n.JobTimeout is { } timeout) material["JobTimeoutTicks"] = timeout.Ticks;
         // A Switch's cases are part of what it is; a node without any describes as before.
         if (n.Cases.Count != 0) material["Cases"] = DescribeCases(n);
+        if (n.Graph is not null) material["Graph"] = DescribeGraph(n);
         return material;
     }
 }

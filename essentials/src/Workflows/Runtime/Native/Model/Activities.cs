@@ -136,6 +136,119 @@ public sealed class Switch : CompositeActivity
     }
 }
 
+/// <summary>A composite that a graph Complete in its body can end (<see cref="ExitEffect"/>).</summary>
+internal interface IExitBoundary
+{
+    void OnExit(CompositeContext context, string outcome);
+}
+
+public sealed record GraphState(string Scope);
+
+/// <summary>
+/// The old core's GraphActivity, a placed reusable activity: its body (its one child) runs in a scope that declares its
+/// inputs and, within that, its local variables, and sees nothing outside it, as the old core's closed graph scope: a read
+/// of an undeclared name is null and a write of one stays in the body's variables. Its input bindings are read where it is placed. It completes with an outcome its mappings give the body's outcome, or
+/// with the one a Complete in its body names, which ends the rest of the body. Its result is its outputs, read in that
+/// scope as it completes. A nested GraphActivity is its own boundary.
+/// </summary>
+public sealed class GraphActivity : CompositeActivity, IExitBoundary
+{
+    public const string CompleteOutcomeUnknownFaultCode = "activity.graph.complete.outcome-unknown";
+    public const string EntryCompletedWithoutMappingFaultCode = "activity.graph.entry-completed-without-mapping";
+    public const string OutcomeUnmappedFaultCode = "activity.graph.outcome-unmapped";
+    public const string InputRequiredFaultCode = "activity.graph.input-required";
+    public const string CompleteOutsideFaultCode = "activity.graph.complete.outside";
+
+    protected internal override void Execute(CompositeContext context)
+    {
+        var graph = context.Node.Graph!;
+        var inputs = new Dictionary<string, JsonNode?>(StringComparer.Ordinal);
+        foreach (var input in graph.Inputs)
+        {
+            // A bound input is supplied, also when it evaluates to null, as the old core tells a supplied null from absence.
+            if (context.Node.Inputs.TryGetValue(input.Name, out var binding)) inputs[input.Name] = context.Evaluate(binding);
+            else if (input.Default is { } fallback) inputs[input.Name] = context.EvaluateOver(fallback, inputs);     // sees the inputs given so far, nothing outside
+            else if (input.Required)
+            {
+                context.Fault(new ActivityFault(InputRequiredFaultCode, $"Required input '{input.Name}' of GraphActivity '{context.Node.Id}' has no value."));
+                return;
+            }
+            else inputs[input.Name] = null;
+        }
+        var inputScope = context.CreateLexicalScope(inputs);
+        var variables = graph.Variables.ToDictionary(v => v.Name, v => v.Value is { } value ? context.EvaluateInScope(value, inputScope, closed: true) : null, StringComparer.Ordinal);
+        var scope = context.CreateLexicalScope(variables, inputScope);
+        context.SetState(new GraphState(scope));
+        context.ScheduleInScope(context.Children[0], scope);
+    }
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        var graph = context.Node.Graph!;
+        if (graph.OutcomeMappings.Count == 0)
+        {
+            // When every outcome comes from a Complete, a body that ends without reaching one has chosen none.
+            if (graph.CompleteOutcomes.Count != 0)
+                context.Fault(new ActivityFault(EntryCompletedWithoutMappingFaultCode, $"The body of GraphActivity '{context.Node.Id}' ended without reaching a Complete, and no outcome mapping covers it."));
+            else Finish(context, "Done");
+            return;
+        }
+        if (graph.OutcomeMappings.TryGetValue(child.Outcome, out var outcome)) Finish(context, outcome);
+        else context.Fault(new ActivityFault(OutcomeUnmappedFaultCode, $"The body of GraphActivity '{context.Node.Id}' ended on '{child.Outcome}', which no outcome mapping covers."));
+    }
+
+    void IExitBoundary.OnExit(CompositeContext context, string key)
+    {
+        if (context.Node.Graph!.CompleteOutcomes.TryGetValue(key, out var outcome)) Finish(context, outcome);
+        else context.Fault(new ActivityFault(CompleteOutcomeUnknownFaultCode, $"A Complete names outcome '{key}', which GraphActivity '{context.Node.Id}' does not declare."));
+    }
+
+    // Completing ends whatever of the body still runs, then releases its scopes.
+    private static void Finish(CompositeContext context, string outcome)
+    {
+        var graph = context.Node.Graph!;
+        JsonObject? outputs = null;
+        if (graph.Outputs.Count != 0)
+        {
+            var scope = context.ReadState<GraphState>()!.Scope;
+            outputs = [];
+            foreach (var output in graph.Outputs) outputs[output.Name] = context.EvaluateInScope(output.Value, scope, closed: true);
+        }
+        context.Complete(outcome, outputs);
+    }
+
+    /// <summary>The definition's own rules, checked when it is registered.</summary>
+    internal static void Validate(Node node, string workflow)
+    {
+        if (node.Graph is not { } graph) throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' declares no boundary.");
+        if (node.Children.Count != 1) throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' needs exactly one body.");
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in graph.Inputs.Select(i => i.Name).Concat(graph.Variables.Select(v => v.Name)))
+            if (string.IsNullOrEmpty(name) || !names.Add(name))
+                throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' needs unique, non-empty input and variable names ('{name}').");
+        if (graph.Outputs.Select(o => o.Name).Distinct(StringComparer.Ordinal).Count() != graph.Outputs.Count || graph.Outputs.Any(o => string.IsNullOrEmpty(o.Name)))
+            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' needs unique, non-empty output names.");
+        // Inputs are bound by name without case, so two inputs may not differ by case alone.
+        if (graph.Inputs.Select(i => i.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != graph.Inputs.Count)
+            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' declares inputs whose names differ only by case.");
+        if (graph.OutcomeMappings.Concat(graph.CompleteOutcomes).Any(p => string.IsNullOrWhiteSpace(p.Key) || string.IsNullOrWhiteSpace(p.Value)))
+            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' maps from a blank outcome or key, or to an empty outcome.");
+        // An input bound under a name the boundary does not declare is a mistake, as the old core refuses unknown input keys.
+        if (node.Inputs.Keys.FirstOrDefault(key => !graph.Inputs.Any(i => string.Equals(i.Name, key, StringComparison.OrdinalIgnoreCase))) is { } unknown)
+            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' binds '{unknown}', which it does not declare as an input.");
+    }
+
+    /// <summary>A Complete needs an enclosing GraphActivity, and a literal outcome must be one that boundary declares.</summary>
+    internal static void ValidateExit(Node complete, Node? boundary, string workflow)
+    {
+        if (boundary is null) throw new InvalidOperationException($"Complete '{complete.Id}' in '{workflow}' has no enclosing GraphActivity.");
+        if (complete.Captures.Count != 0) throw new InvalidOperationException($"Complete '{complete.Id}' in '{workflow}' has no result to capture.");
+        if (complete.Inputs.GetValueOrDefault("Outcome") is LiteralBinding { Value: JsonValue literal } && literal.TryGetValue<string>(out var key) &&
+            !string.IsNullOrWhiteSpace(key) && boundary.Graph?.CompleteOutcomes.ContainsKey(key) != true)
+            throw new InvalidOperationException($"Complete '{complete.Id}' in '{workflow}' names outcome '{key}', which GraphActivity '{boundary.Id}' does not declare.");
+    }
+}
+
 /// <summary>A For loop's range, pinned when it starts, and the index of the pass that runs.</summary>
 public sealed record ForState
 {

@@ -73,6 +73,22 @@ public sealed class Fault : Activity
     private static string Coalesce(string? value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 }
 
+/// <summary>
+/// The old core's graph Complete: ends the nearest enclosing GraphActivity with the boundary outcome its
+/// <see cref="Outcome"/> names (a reference key the boundary declares), from any depth in its body. It is unrelated to Break.
+/// </summary>
+public sealed class Complete : Activity
+{
+    public const string OutcomeRequiredFaultCode = "activity.graph.complete.outcome-required";
+
+    [Input] public string? Outcome { get; set; }
+
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) =>
+        new(string.IsNullOrWhiteSpace(Outcome)
+            ? Fault(OutcomeRequiredFaultCode, $"Complete node '{context.NodeId}' has no boundary outcome.")
+            : Complete().With(new ExitEffect(Outcome)));
+}
+
 /// <summary>A variable write is an engine intrinsic: the interpreter applies it, as Elsa 4's Set intrinsic.</summary>
 public sealed class SetVariable : ActivityBase, IIntrinsic
 {

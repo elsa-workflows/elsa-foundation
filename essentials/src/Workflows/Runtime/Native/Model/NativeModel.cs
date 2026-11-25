@@ -434,6 +434,12 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
 
     private void Apply(Frame frame, Transition t)
     {
+        if (t.Kind == TransitionKind.Complete && t.Effects?.OfType<ExitEffect>().FirstOrDefault() is { } exit)
+        {
+            foreach (var effect in t.Effects) if (effect is not ExitEffect) Do(frame, effect);
+            Exit(frame, exit);
+            return;
+        }
         foreach (var effect in t.Effects ?? []) Do(frame, effect);
         switch (t.Kind)
         {
@@ -524,6 +530,26 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 turn.SendOutbound(frame.Id, frame.Node, path, frame.Attempt, EffectKeyOf(frame, path), o);
                 break;
         }
+    }
+
+    /// <summary>
+    /// A graph Complete's exit: the leaf completes in this turn without telling its parent, so nothing after it runs,
+    /// and its nearest enclosing boundary takes the exit, which ends the rest of its body in the same commit.
+    /// </summary>
+    private void Exit(Frame frame, ExitEffect exit)
+    {
+        var boundary = ParentOf(frame);
+        while (boundary is not null && !typeof(IExitBoundary).IsAssignableFrom(_wf.Nodes[boundary.Node].Type)) boundary = ParentOf(boundary);
+        if (boundary is null)
+        {
+            Fail(frame, new ActivityFault(GraphActivity.CompleteOutsideFaultCode, $"Complete node '{frame.Node}' has no enclosing GraphActivity."));
+            return;
+        }
+        CloseInbox(frame.Id, "completed");
+        _s.Frames.Remove(frame.Id);
+        turn.Record($"c:{frame.Id}:{frame.Node}");
+        var node = _wf.Nodes[boundary.Node];
+        ((IExitBoundary)RestoreActivity(boundary, node)).OnExit(new CompositeContext(this, boundary, node), exit.Outcome);
     }
 
     internal void Complete(Frame frame, string outcome, JsonNode? result)
@@ -675,17 +701,21 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     {
         foreach (var scope in VisibleScopes(frame))
             if (scope.TryGetValue(name, out var value)) return value;
-        return _s.Variables.GetValueOrDefault(name);
+        // A GraphActivity's body sees only what its boundary declares, as the old core's closed graph scope does.
+        return BodyScope(frame) is not null ? null : _s.Variables.GetValueOrDefault(name);
     }
 
     internal JsonNode? Result(string node) => _s.Results.GetValueOrDefault(node);
 
-    /// <summary>A write goes to the nearest scope that declares the variable, else to the workflow's.</summary>
+    /// <summary>
+    /// A write goes to the nearest scope that declares the variable, else to the workflow's; inside a GraphActivity's body,
+    /// else to the body's own variables, so that nothing outside the boundary changes.
+    /// </summary>
     private void Assign(Frame frame, string name, JsonNode? value)
     {
         foreach (var scope in VisibleScopes(frame))
             if (scope.ContainsKey(name)) { scope[name] = value; return; }
-        _s.Variables[name] = value;
+        (BodyScope(frame) ?? _s.Variables)[name] = value;
     }
 }
 
