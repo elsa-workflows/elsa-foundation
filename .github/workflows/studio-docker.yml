@@ -206,7 +206,7 @@ jobs:
 
           sys.path.insert(0, os.environ["STUDIO_IMAGE_VALIDATORS"])
           from studio_image_tags import derive_tags
-          from studio_docker_publish import read_preview_floor, require_preview_above_floor
+          from studio_docker_publish import read_repository_preview_floor, require_preview_above_floor
           from verify_studio_nuget_packages import verify_packages
 
           artifact = Path("Studio/packages/nuget")
@@ -243,7 +243,9 @@ jobs:
           ref = manifest["ref"]
           tags = derive_tags(image, ref, version, sha, publish_requested, os.environ["PREVIEW_IMAGE_TAG"])
           if publish_requested and source_branch == "main":
-              require_preview_above_floor(os.environ["PREVIEW_IMAGE_TAG"], read_preview_floor(image))
+              # The image's own floor keeps its tags unique. The shared floor would refuse a rerun of one flavor after
+              # another flavor has already pushed the same chosen number.
+              require_preview_above_floor(os.environ["PREVIEW_IMAGE_TAG"], read_repository_preview_floor(image))
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"studio_version={version}\n")

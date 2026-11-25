@@ -29,8 +29,9 @@ the unpinned `:latest` commands here are not that recorded run.
 > ([#5768](https://github.com/elsa-workflows/elsa-foundation/issues/5768)). Against Workbench it shows the screens of the modules
 > it compiles in. The Studio app with every module compiled in publishes as `elsaworkflows/elsa-studio-workbench`, and the bare
 > shell as `elsaworkflows/elsa-studio-foundation`; see [Studio Docker](../Studio/docs/docker.md).
-> The three Studio images take their preview numbers from one shared counter, so one commit usually carries the same
-> preview number in all three.
+> The three Studio images take their preview numbers from one shared counter, so one commit often carries the same
+> preview number in all three. During rapid merges each image's queue can run at a different pace, and the same preview
+> number can then name different commits in different repositories. Pair images by their `sha-<commit>` tag.
 
 > **Development posture.** The `docker run` examples below set `ASPNETCORE_ENVIRONMENT=Development`
 > so they can rely on the image's baked-in `shells.json` demo defaults. The canonical published-image

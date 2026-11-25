@@ -301,6 +301,27 @@ class StudioDockerPublishTests(unittest.TestCase):
         self.assertEqual(9, publish.read_repository_preview_floor(IMAGE, open_page))
         self.assertIn("name=4.0.0-preview.", requests[1])
 
+    def test_a_manual_rerun_of_one_flavor_accepts_a_number_another_flavor_already_pushed(self) -> None:
+        # A manual main publish chose 4.0.0-preview.708. Essentials pushed it; Workbench failed on its missing repository.
+        # Once the repository exists, the Workbench rerun checks the number against its own floor and is admitted.
+        floors = {IMAGE: ("4.0.0-preview.708",), WORKBENCH_IMAGE: (), FOUNDATION_IMAGE: ("4.0.0-preview.707",)}
+
+        def open_page(url: str, *, timeout: int) -> FakeResponse:
+            image = next(image for image in floors if url == publish.docker_hub_tags_url(image))
+            return FakeResponse(tags_page(image, *floors[image]))
+
+        publish.require_preview_above_floor("4.0.0-preview.708", publish.read_repository_preview_floor(WORKBENCH_IMAGE, open_page))
+        publish.require_preview_above_floor("4.0.0-preview.708", publish.read_repository_preview_floor(FOUNDATION_IMAGE, open_page))
+        # The image's own repository still refuses a number it has already used.
+        with self.assertRaises(ValueError):
+            publish.require_preview_above_floor("4.0.0-preview.708", publish.read_repository_preview_floor(IMAGE, open_page))
+        # The shared floor is what refused the rerun, so the manual path must not use it.
+        with self.assertRaises(ValueError):
+            publish.require_preview_above_floor("4.0.0-preview.708", publish.read_preview_floor(WORKBENCH_IMAGE, open_page))
+        workflow = (REPO_ROOT / ".github/workflows/studio-docker.yml").read_text()
+        self.assertIn('require_preview_above_floor(os.environ["PREVIEW_IMAGE_TAG"], read_repository_preview_floor(image))', workflow)
+        self.assertNotIn("read_preview_floor(image)", workflow)
+
     def test_repository_check_distinguishes_present_missing_and_unavailable(self) -> None:
         requests: list[str] = []
 
