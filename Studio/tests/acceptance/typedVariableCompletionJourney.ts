@@ -126,13 +126,16 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   // The Activity Data chooser keeps offering the typed variable as a whole value with no declared members.
   await expanded.getByRole("button", { name: "Insert data", exact: true }).press("Enter");
   const chooser = page.getByRole("dialog", { name: "Choose data for Text", exact: true });
-  const variable = chooser.getByRole("option").filter({ hasText: /\bconn\b/ });
-  await expect(variable.first()).toBeVisible();
+  const variables = chooser.getByRole("listbox", { name: "Variables", exact: true });
+  const variable = variables.getByRole("option", { name: `conn ${connectionAlias}`, exact: true });
+  await expect(variable).toBeVisible();
+  await expect(variables.getByRole("option", { name: "plain Object", exact: true })).toBeVisible();
   await capture(page, info, "chooser-typed-variable");
-  await variable.first().press("Enter");
+  await variable.press("Enter");
+  // Declared members are advisory for expression completion only; the chooser lists none for the variable.
   await expect(chooser.getByRole("listbox", { name: "Members", exact: true }).getByRole("option")).toHaveCount(0);
   await capture(page, info, "chooser-typed-variable-whole");
-  await page.keyboard.press("Escape");
+  for (let attempt = 0; attempt < 3 && await chooser.count(); attempt++) await page.keyboard.press("Escape");
   await expect(chooser).toHaveCount(0);
   await expect.poll(source).toBe(expandedSource);
 }
