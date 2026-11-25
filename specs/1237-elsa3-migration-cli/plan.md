@@ -6,39 +6,39 @@
 
 ## Summary
 
-Add an `elsa3-migration workflows` command group to `dotnet-elsa`, and an Elsa 3 migration image that runs it. The
-image is built `FROM` the essentials engine image at the same version. It adds the Elsa 3 addition list and the tool,
-and its entry point is the command group.
+Add a console project, `Elsa3.Migration.Cli`, at `extensions/Elsa3/src/Migration/Cli/`, that engineers run from their
+clone with `dotnet run`. It references the Elsa 3 migration host of specification 1236 (`apps/Elsa.Migration.Host`),
+so every feature the host composes, the engineer's own included, is in its build, plus the Elsa 3 projects of the
+addition list. It is a thin entry over a new tooling library, `Elsa3.Migration.Tooling`, in
+`extensions/Elsa3/src/Migration/Tooling/`. The tooling:
 
-The group runs on the existing ADR 0076 worker inside the image's closure. It reaches a second frozen entry point,
-`Elsa3MigrationToolingHost`, in a new `extensions/Elsa3/src/Migration/Tooling/` project. That entry point:
-
-1. composes the shell without a web host, on one in-memory SQLite database;
+1. composes one shell without a web host, from the host's configuration (committed only for `inventory`, with the
+   engineer's local sources for `assess`) plus the Elsa 3 addition list, on one in-memory SQLite database;
 2. runs the Elsa 3 startup reconciliation sequence, extracted into a shared service;
 3. exports the published content from the store into `migrated/`, through new JSON reconciliation writers;
 4. writes a redacted, versioned `report.json` and a self-contained `report.html`.
 
 ## Technical Context
 
-**Language/Version**: C# / .NET 10; Dockerfile.
+**Language/Version**: C# / .NET 10.
 
-**Primary Dependencies**: System.CommandLine (existing front end); Nuplane (existing worker); the Elsa 3 converter,
-import and reconciliation projects; JSON workflow and activity reconciliation (essentials); EF Core SQLite; the
-essentials engine image (specification 1236).
+**Primary Dependencies**: System.CommandLine; CShells (`WithHostAssemblies()`, as the migration host uses it); the
+Elsa 3 converter, import and reconciliation projects; JSON workflow and activity reconciliation; EF Core SQLite; the
+migration host project (specification 1236).
 
 **Storage**: One in-memory shared-cache SQLite database per run (R-4). There is no other storage.
 
 **Testing**: xunit.
 
 - Unit tests: the report builder, the code table and the bucket rule.
-- Integration tests: run the entry point in-process over fixture exports, on a composition built from the essentials
-  feature list plus the addition list.
-- Front-end tests: the existing CLI style.
-- Image smoke test: build the image and run it with networking disabled.
+- Integration tests: run the tooling in-process over fixture exports, on the host's composition plus the addition list,
+  or on a test-only host composition set through the internal seam.
+- CLI tests: argument rules, refusal reasons and exit codes.
+- Smoke test: `dotnet run --project extensions/Elsa3/src/Migration/Cli` from a clean build on the fixture export.
 
-**Target Platform**: The migration image (Linux container), wherever Docker runs.
+**Target Platform**: wherever the repository builds; run with `dotnet run` from the clone.
 
-**Project Type**: CLI command group, a tooling library and a container image.
+**Project Type**: a console project and a tooling library.
 
 **Performance Goals**: The 34-definition specification 1235 acceptance set completes in under two minutes on a developer machine.
 
@@ -46,10 +46,8 @@ essentials engine image (specification 1236).
 
 - No network access, and nothing persists outside `--out`.
 - The output is deterministic, and the report is redacted.
-- The front end must carry no reference whose name contains `Elsa3`
-  (`Elsa3MigrationBoundaryTests.CanonicalElsaProjects_DoNotReferenceElsa3AssembliesOrDtos`), so it reaches the entry
-  point only by name.
-- The essentials engine image carries no Elsa 3 code.
+- The CLI references the host, never the other way round, so the host carries no Elsa 3 assembly (1236 FR-003).
+- The CLI starts no web host, although it carries the ASP.NET Core shared framework through the host.
 
 **Scale/Scope**: Exports of hundreds of definitions. The fixture export has about 15 definitions, and the specification 1235 acceptance set 34.
 
@@ -59,14 +57,15 @@ essentials engine image (specification 1236).
 
 | Gate | Status | Notes |
 |---|---|---|
-| §E2.7 Elsa 3 stays behind the import boundary | PASS | All Elsa 3 code, the addition list and the Dockerfile are under `extensions/Elsa3/`. `essentials/src` gains no reference containing `Elsa3`, and the front end uses a type-name string only. The essentials engine image stays free of Elsa 3. The boundary tests stay green. |
-| §E2.2 Runtime takes no Design reference | PASS | No runtime project changes. The tooling project is a composition root, as a host is. |
-| ADR 0076 worker and frozen entry points | CONDITIONAL | Applies D1 to a second entry point, and reconciles local directory feeds into a private run-scoped install root by default, which D1 and D10 do not allow unamended. Both depend on the ADR 0076 amendment (spec Q4). The group never touches the network or a host's shared store. |
-| ADR 0080 internal by default | PASS | The shared import run stays internal (`InternalsVisibleTo` for the tooling assembly). The only public additions are the entry point type, the two writer contracts beside their reader contracts, and the startup-only member on `ITaskManager`. |
+| §E2.7 Elsa 3 stays behind the import boundary | PASS | The CLI project, the tooling, the converter and the addition list are under `extensions/Elsa3/`. `essentials/src` gains no reference containing `Elsa3`. The CLI references the migration host; the host references no Elsa 3 project. The boundary tests stay green (R-7). |
+| §E2.2 Runtime takes no Design reference | PASS | No runtime project changes. The CLI is a composition root, as a host is. |
+| §2.2 project paths follow the domain tree | PASS | `Elsa3.Migration.Cli` and `Elsa3.Migration.Tooling` derive their paths from their names under the `Elsa3` extension bucket; no `ExpectedProjectPath` entry is needed (R-7). |
+| Framework gate §2.20 "Only admitted projects resolve EF Core packages"; ADR 0073 | PASS | The CLI is admitted in `EfCoreDependencyGuardTests` as a composition root with a reviewed package array; the tooling and the migration test project get reviewed closures next to `Adr0073Elsa3ImportEf` (R-7, T001). |
+| ADR 0080 internal by default | PASS | The shared import run stays internal (`InternalsVisibleTo` for the tooling assembly), and so does the CLI's test seam. The only public additions are the two writer contracts beside their reader contracts and the startup-only member on `ITaskManager`. |
 | §2.24.2 sanctioned patterns | PASS | R-10. There is no new seam and no dry-run abstraction: the real pipeline runs on a disposable store. |
 | §2.21.1 refactoring keeps behaviour | PASS | Extracting `Elsa3ImportRun` keeps the startup task's log lines and skip behaviour, and the existing reconciliation integration tests cover it. |
-| §2.23 risk-based tests | PASS | Risk sits in redaction, determinism, the bucket rule, code-table completeness, the single-database rule and the image composition. Each has a test (tasks). |
-| §2.22 feature documentation | PASS | The reconciliation READMEs document the new writers, and a tooling README documents the entry point and the image. |
+| §2.23 risk-based tests | PASS | Risk sits in redaction, determinism, the bucket rule, code-table completeness, the single-database rule and the composition parity with the host. Each has a test (tasks). |
+| §2.22 feature documentation | PASS | The reconciliation READMEs document the new writers, and a tooling README documents the CLI. |
 | §E7 CI test tiers | PASS | New test projects follow the existing Elsa 3 test placement, and the solution filters are regenerated. |
 | xunit-only test rule | PASS | xunit only. |
 | Studio | PASS | No Studio surface. |
@@ -76,14 +75,14 @@ essentials engine image (specification 1236).
 
 | # | Decision | Detail |
 |---|---|---|
-| P-1 | Command group | R-1: added to `ElsaCli.cs`. The front end maps exit codes per group (FR-004). |
-| P-2 | Entry point | R-1 and [contracts/worker-entry-point.md](contracts/worker-entry-point.md). |
+| P-1 | Console project | R-1: `Elsa3.Migration.Cli`, a thin System.CommandLine entry over the tooling, run with `dotnet run`; exit codes per FR-004 and [contracts/cli.md](contracts/cli.md). |
+| P-2 | Code closure | R-1: project references to `apps/Elsa.Migration.Host` and to the tooling, which references the Elsa 3 projects of the addition list. The engineer adds a feature project once, to the host. |
 | P-3 | Shared pipeline | R-2: `Elsa3ImportRun`, extracted from `Elsa3FolderImportTask`. |
 | P-4 | Code table | R-3: `Elsa3MigrationCodeTable` in the tooling project, which references every project that holds code constants, with a completeness test in the migration tests. It also holds the fixed texts for codes the converter does not own. |
 | P-5 | Database | R-4: one named in-memory shared-cache database, held open for the run. |
-| P-6 | Composition | R-5: a generic host that is never started, with one shell composed through `Elsa.Essentials.Composition` (lists from `/app/composition`, merged settings). Shell initializers run except the task initializer; startup tasks run alone through a new startup-only `ITaskManager` member; no background or recurring task or hosted service starts; required secret settings get run-only generated values. |
-| P-7 | Packages | R-6: the image's addition folder and the user's folder are read as directory feeds into a run-scoped install root. A missing dependency refuses the run. |
-| P-8 | Image | R-7: `extensions/Elsa3/docker/Dockerfile`, `FROM` the essentials engine image at the same version. It adds `/app/composition/elsa3.features.json` (specification 1236's base contract), its own packages in `/app/elsa3/packages/`, the tool and the entry point. |
+| P-6 | Composition | R-5: a generic host that is never started, in the Development environment, with one shell discovered by `WithHostAssemblies()` over the CLI's build. `inventory` reads the host's committed configuration, `assess` the host's full stack in the host's order; the addition list comes last. The host folder is fixed at build time. Shell initializers run except the task initializer; startup tasks run alone through a new startup-only `ITaskManager` member; no background or recurring task or hosted service starts. |
+| P-7 | The engineer's features | R-6: project references on the migration host; nothing is loaded at run time. |
+| P-8 | Architecture guards | R-7: EF admissions for the CLI, the tooling and the test project, and the CLI as a build-only reference of the architecture tests; no path, extension-boundary or Elsa 3 boundary entry. |
 | P-9 | Migrated export | R-8: writers next to the readers, reading back from the design stores. |
 | P-10 | HTML | R-9: an embedded template with the JSON inline. |
 | P-11 | Output swap | data-model: a hidden staging folder inside `--out`, renamed into place last. |
@@ -101,8 +100,7 @@ specs/1237-elsa3-migration-cli/
 ├── quickstart.md
 ├── contracts/
 │   ├── cli.md
-│   ├── report.schema.json
-│   └── worker-entry-point.md
+│   └── report.schema.json
 ├── checklists/requirements.md
 └── tasks.md
 ```
@@ -110,15 +108,6 @@ specs/1237-elsa3-migration-cli/
 ### Source Code (repository root)
 
 ```text
-essentials/src/Cli/Elsa.Cli/
-├── ElsaCli.cs                                  # + elsa3-migration workflows group
-└── Elsa3MigrationCommands.cs                   # inventory, assess; argument rules; exit mapping
-
-essentials/src/Cli/Worker/
-├── WorkerContract.cs                           # + elsa3-migration command family
-├── ToolingEntryPoint.cs                        # + second entry point, found among loaded package assemblies
-└── NuplanePackageSet.cs                        # + run-scoped directory-feed install root; shared Elsa.Essentials.Composition
-
 essentials/src/Tasks/
 ├── Core/ITaskManager.cs                        # + startup-only member
 └── Elsa.Tasks/Services/TaskManager.cs          # implements it, keeping the dependency order
@@ -136,8 +125,13 @@ extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Services/
 ├── Elsa3ImportRunRegistration.cs               # + shared service registration (extracted)
 └── Elsa3FolderImportTask.cs                    # now calls Elsa3ImportRun
 
+extensions/Elsa3/src/Migration/Cli/             # Elsa3.Migration.Cli (console; references apps/Elsa.Migration.Host)
+├── Elsa3.Migration.Cli.csproj                  # writes the host project folder as assembly metadata
+├── Program.cs                                  # workflows inventory, assess; argument rules; exit codes
+└── elsa3-migration.features.json               # the Elsa 3 addition list
+
 extensions/Elsa3/src/Migration/Tooling/         # Elsa3.Migration.Tooling
-├── Elsa3MigrationToolingHost.cs                # frozen entry point
+├── Elsa3MigrationRun.cs                        # the pipeline the CLI calls
 ├── Elsa3MigrationCodeTable.cs                  # code → remedy, component kind, fixed text
 ├── MigrationComposition.cs
 ├── ExportInputReader.cs
@@ -147,22 +141,18 @@ extensions/Elsa3/src/Migration/Tooling/         # Elsa3.Migration.Tooling
 ├── ReportHtml.cs + report.html (embedded)
 └── README.md
 
-extensions/Elsa3/docker/
-├── Dockerfile                                  # FROM essentials engine image; + additions, tool, entry point
-└── elsa3.features.json                         # the Elsa 3 addition list
-
 extensions/Elsa3/tests/Migration/
 ├── Tests/                                      # unit + in-process integration
 └── Fixtures/export/                            # fixture export (sentinel-marked)
 ```
 
-**Structure Decision**: Elsa 3 code and the migration image stay under `extensions/Elsa3/` (§E2.7). The front end and
-the worker change only through additions by name. The format writers live with their readers, so each format has one
-owner.
+**Structure Decision**: Elsa 3 code, the CLI and the addition list stay under `extensions/Elsa3/` (§E2.7). The
+migration host stays free of Elsa 3; the CLI references it. The format writers live with their readers, so each format
+has one owner.
 
 ## Complexity Tracking
 
 | Item | Why | Simpler alternative rejected because |
 |---|---|---|
-| A second frozen entry point | Keeps Elsa 3 out of the persistence assembly and out of the front end | Routing through `EfToolingHost` would put Elsa 3 knowledge into essentials |
-| A third image | The test migration must run on the engine the user goes live on, plus Elsa 3 | A separate closure (NuGet or bundled) could drift from the engine image |
+| The CLI references an `apps/` host | The test migration must run on the composition the engineer's host runs, with the engineer's features added in one place | Referencing the feature projects from the CLI as well means two places to keep in sync; a container image needs an engine image that 1236 no longer plans |
+| EF admission for the CLI | It resolves the host's EF closure | None: every project that resolves EF is admitted with a reviewed closure |

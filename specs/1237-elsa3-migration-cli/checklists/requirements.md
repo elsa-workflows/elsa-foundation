@@ -5,7 +5,7 @@
 
 ## Content Quality
 
-- [x] No implementation details beyond the agreed boundary (the command names, the worker, in-memory SQLite and the output formats are part of the agreed design, not free choices)
+- [x] No implementation details beyond the agreed boundary (the command names, the console project and its reference to the migration host, in-memory SQLite and the output formats are part of the agreed design, not free choices)
 - [x] Focused on user value and business needs
 - [x] Written for the initiative's stakeholders
 - [x] All mandatory sections completed
@@ -30,4 +30,4 @@
 
 ## Notes
 
-- Provisional on the ADR 0076 amendment (spec Q4).
+- Redesigned on 2026-11-25 to run from source, referencing the migration host of specification 1236 (spec Q3).

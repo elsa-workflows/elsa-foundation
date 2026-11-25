@@ -5,8 +5,8 @@
 
 **Prerequisites before implementation starts**:
 
-- this specification is approved, and the ADR 0076 amendment is agreed (spec Q4);
-- the essentials engine image and feature list of specification 1236 exist on the initiative branch;
+- this specification is approved;
+- the migration host of specification 1236 exists on the initiative branch;
 - the converter's member-name matching of Elsa 3 globals to prefixed host functions, and its storage-driver change
   (the two `ELS3-BEHAVIOUR-*-STORAGE-*` codes with `StorageDriverType` and `ComponentName`), are on the initiative
   branch (done: PRs #5703 and #5709);
@@ -22,9 +22,10 @@
 - the output swap;
 - the refusal paths;
 - the shared-pipeline extraction;
-- the image composition.
+- the composition parity with the migration host.
 
 **Tooling root**: `extensions/Elsa3/src/Migration/Tooling/`, written `Tooling/` below.
+**CLI root**: `extensions/Elsa3/src/Migration/Cli/`, written `Cli/` below.
 **Tests root**: `extensions/Elsa3/tests/Migration/`, written `MTests/` below.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -37,11 +38,15 @@
 ## Phase 1: Setup
 
 - [ ] T001 Create `Tooling/Elsa3.Migration.Tooling.csproj`. It references the Elsa 3 models, mapping, import, import
-  persistence, publishing and reconciliation projects, the JSON workflow and activity reconciliation projects, and
-  specification 1236's composition library `Elsa.Essentials.Composition`, with `Private=false` and
-  `PrivateAssets="all"`, so the packed tooling package neither carries nor depends on it (at run time it binds to the
-  copy in `/app`). Create `MTests/Tests/Elsa3.Migration.Tests.csproj` (xunit). Add both to the solution, regenerate the solution filters
-  and check the CI tier placement (§E7).
+  persistence, publishing and reconciliation projects, and the JSON workflow and activity reconciliation projects.
+  Create `Cli/Elsa3.Migration.Cli.csproj`, a console project (`IsPackable` `false`, no `RunWorkingDirectory`) that
+  references the tooling and `apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj`, and writes the host's project folder
+  into an `AssemblyMetadataAttribute` at build time (R-5). Create `MTests/Tests/Elsa3.Migration.Tests.csproj` (xunit).
+  Add all three to the solution, regenerate the solution filters and `dependency-map.json`, and check the CI tier
+  placement (§E7). Add the guard entries of R-7: the CLI in `EfCoreDependencyGuardTests.AllowedEfConsumers` with a
+  reviewed package array and an arm in `ReviewedEfPackages`, and reviewed closures for the tooling and the test project
+  next to `Adr0073Elsa3ImportEf`; and the CLI as a build-only reference in `Elsa.Architecture.Tests.csproj`. Confirm that `ArchitectureGuardTests`, `ExtensionBoundaryTests`,
+  `Elsa3MigrationBoundaryTests` and 1236's host closure test stay green without other entries.
 - [ ] T002 [P] Build the fixture export in `MTests/Fixtures/export/`, with:
   - clean definitions;
   - an unmapped custom activity used by three definitions;
@@ -70,10 +75,10 @@
   Every literal, script body, variable default and setting value carries the sentinel `SENTINEL-1237`, except
   identities that the report may name (FR-019): definition ids and names, including the dispatch target's id, type
   names and function names.
-- [ ] T003 [P] Build the fixture feature package project in `MTests/Fixtures/AcmeFeature/`. It registers the custom
+- [ ] T003 [P] Build the fixture feature project in `MTests/Fixtures/AcmeFeature/`. It registers the custom
   activity under its Elsa 3 type name, `acme.`-prefixed JavaScript host functions for the undeclared function and for `getConfig`, and a variable type
-  alias. Pack it
-  to a `.nupkg` in the test setup, and add its `appsettings.json`.
+  alias. The test project references it, and a test-only host folder (the host's committed files plus a
+  `shells.Local.json` that lists the feature and its settings) is passed through the CLI's internal seam (R-5).
 
 ## Phase 2: Foundational (blocks every story)
 
@@ -115,73 +120,57 @@
 - [ ] T007 [P] Add `IJsonActivityCatalogWriter` and `JsonActivityCatalogWriter` in
   `essentials/src/Activities/Design/Reconciliation/Json/`, with a round-trip test against `JsonActivityCatalogReader`.
   Update the project's README and `EXTENSION_POINTS.md` (R-8).
-- [ ] T008 Add `Tooling/Elsa3MigrationToolingHost.cs`, with the frozen `RunAsync(Stream, Stream)` and the request and
-  response records of [contracts/worker-entry-point.md](contracts/worker-entry-point.md), including the refusal of an
-  unknown `contractVersion`. Test the contract parsing.
+- [ ] T008 Add `Tooling/Elsa3MigrationRun.cs`, the pipeline the CLI calls in-process. It takes the command, the export
+  path, the output path, `--all-versions` and the tool version, and returns the exit code, the output path and, on
+  exit 2, the refusal reason and sentence of [contracts/cli.md](contracts/cli.md). Test the request validation.
 - [ ] T009a Add a startup-only member to `ITaskManager` (`essentials/src/Tasks/Core/ITaskManager.cs`), implemented in
   `essentials/src/Tasks/Elsa.Tasks/Services/TaskManager.cs`. It runs the registered
   startup tasks in their dependency order (`TopologicalTaskSorter`) and starts no background or recurring task. Test
   the order, and test that no `IBackgroundTask` or recurring task starts (R-5).
-- [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It builds a generic host that is never started, with one
-  shell composed through `Elsa.Essentials.Composition`: `EssentialsFeatureList.Read(<compositionRoot>/composition)`,
-  `EssentialsFeatureAssemblies.All`, and `AddEssentialsConfiguration` with the image's baked `appsettings.json` and the
-  `--settings` file. It registers a feature-assembly provider over the worker-loaded package load contexts
-  (`AssemblyLoadContext.All`), so the addition-list features and a user's features are discoverable. It points the OpenIddict store at the run's database and gives Data
-  Protection an ephemeral key ring. It runs every shell initializer except `RunShellTasksInitializer`, runs the startup tasks through
-  the T009a member, starts no background hosted service, and registers the import run through `Elsa3ImportRunRegistration.Add` without the
-  reconciliation feature. It sets every enabled EF feature to SQLite on
+- [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It builds a generic host that is never started, in the
+  Development environment, with one shell composed by CShells with `WithHostAssemblies()` over the CLI's build. Its
+  configuration comes from the host project folder, never from the CLI's output folder:
+  - `inventory`: the host's `appsettings*.json`, `shells.json` and `shells.Development.json`;
+  - `assess`: the same, then `shells.Local.json`, the host's user secrets (`AddUserSecrets` on the host assembly) and
+    environment variables, in the host's order;
+  - then, for both, `Cli/elsa3-migration.features.json`.
+
+  It points the host's JSON workflow and activity reconciliation path settings at an empty `workflows/` folder and a
+  `[]` activities file inside the staging folder. It points the OpenIddict store at the run's database and gives Data
+  Protection an ephemeral key ring. It runs every shell initializer except `RunShellTasksInitializer`, runs the startup
+  tasks through the T009a member, starts no background hosted service, and registers the import run through
+  `Elsa3ImportRunRegistration.Add` without the reconciliation feature. It sets every enabled EF feature to SQLite on
   `file:elsa3-migration-<guid>;Mode=Memory;Cache=Shared`, sets the migrate policy to apply, keeps one connection open,
-  and disposes everything on every path. For each required engine setting that the settings leave empty, it generates
-  a run-only value. Tests:
+  and disposes everything on every path. Tests:
   - two EF modules commit in one shared transaction without `EfSharedTransactionTargetMismatchException`;
-  - after composition, the schema exists and the activity catalog holds the essentials activities;
+  - after composition, the schema exists and the activity catalog holds the host's activities;
   - no background hosted service, `IBackgroundTask` or recurring task starts;
-  - the addition list is read after the essentials list;
+  - `inventory` ignores a `shells.Local.json`, a user secret and an environment variable that `assess` applies;
+  - a key set in each layer wins over the layers below it, in the host's order;
   - an addition-list feature and a T003 feature both resolve;
-  - the tests use a temporary composition root with baked settings and an empty `migrated/` skeleton, and override the
-    JSON reconciliation paths to that root;
-  - a run with no settings composes, and no generated value appears in the output;
+  - the host's sample workflow does not load into the run;
+  - the tests use a temporary host folder through the internal seam;
   - no file appears outside a temporary `--out`.
 
   (FR-008 to FR-010, SC-003.)
-- [ ] T010 Add the `elsa3-migration` command family to `essentials/src/Cli/Worker/WorkerContract.cs`, and resolution of
-  the second entry point to `ToolingEntryPoint.cs`. The worker looks for the `Elsa3.Migration.Tooling` assembly in the host
-  closure and among the loaded package set's assemblies, then calls `Assembly.GetType`. Only when both lack it is it
-  the `entry-point-missing` refusal (exit 2), which names the type and the minimum version. Test both sources and the
-  missing-from-both refusal.
-- [ ] T011 Add `essentials/src/Cli/Elsa.Cli/Elsa3MigrationCommands.cs`, with:
-  - the two commands;
+- [ ] T011 Add `Cli/Program.cs`, with:
+  - the `workflows inventory` and `workflows assess` commands (System.CommandLine);
   - the argument rules and refusal reasons of [contracts/cli.md](contracts/cli.md);
-  - the per-group exit mapping (FR-004);
-  - the printed output path (FR-005).
+  - the exit codes (FR-004);
+  - the printed output path, or the refusal line on standard error (FR-005).
 
-  Register the group in `ElsaCli.cs`. Test the argument combinations and the exit mapping in the existing CLI test
-  style, and confirm that `Elsa3MigrationBoundaryTests` stays green.
-- [ ] T012 Extend `essentials/src/Cli/Worker/NuplanePackageSet.cs`, or add a sibling, with the run-scoped install root
-  (R-6). `/app/elsa3/packages/` and, for `assess`, the `--packages` folder are reconciled as directory feeds into one
-  temporary root. The Nuplane setup declares `Elsa.Essentials.Composition` a shared assembly, so packages bind to the
-  copy in `/app`. The loader gets `HostIntegratedLoadOptions` built from the engine image's baked
-  `Nuplane:Loading:SharedAssemblies` and `Nuplane:HostProvidedPackages`, plus `Elsa.Essentials.Composition`.
-  Resolution is restricted to those feeds and the host's closure, and the root is
-  deleted on every path. An unresolvable dependency is the `package-unresolved` refusal. Test it with the T003 package
-  and with a package whose dependency is missing, and test that the import's EF ledger module binds the host's
-  `Elsa.Persistence.EntityFramework`.
+  It passes the CLI's informational version as the tool version. Test the argument combinations, the refusal lines
+  and the exit codes, and confirm that `Elsa3MigrationBoundaryTests` stays green.
 
-## Phase 3: User Story 3 - The Elsa 3 migration image (P1)
+## Phase 3: User Story 3 - Same composition as the migration host (P1)
 
-- [ ] T013 [US3] Add `extensions/Elsa3/docker/elsa3.features.json`, the Elsa 3 addition list in the format of
-  specification 1236's `*.features.json`: `Elsa3Mapping`, the collection import for reusables, the import's EF ledger
-  and the publishing bridge. Check that the pack workflow packs each feature's project, their dependencies and
-  `Elsa3.Migration.Tooling` as Nuplane packages, and that the tooling package's nuspec has no
-  `Elsa.Essentials.Composition` dependency.
-- [ ] T014 [US3] Add `extensions/Elsa3/docker/Dockerfile`, using specification 1236's base contract (R-7). It is
-  `FROM` the essentials engine image at the same version. It copies `elsa3.features.json` to `/app/composition/` and
-  the addition and tooling packages to `/app/elsa3/packages/`, sets `ELSA3_MIGRATION_HOST=/app` and `ELSA3_MIGRATION_IMAGE_VERSION` from a build argument holding the
-  essentials tag, installs `dotnet-elsa` at the same version, and sets the
-  entry point to `dotnet-elsa elsa3-migration`, with the worker pointed at the engine host's build output in `/app`. It
-  starts no web host. Add the image, `elsaworkflows/elsa-elsa3-migration`, to the workflow that publishes the essentials images, with the engine's tags.
-- [ ] T015 [US3] Add the image test: the image builds; its composition is the essentials feature list plus the addition
-  list; `--help` lists the group; and the essentials engine image contains no assembly whose name contains `Elsa3`.
+- [ ] T013 [US3] Add `Cli/elsa3-migration.features.json`, the Elsa 3 addition list in the CShells feature shape of
+  the host's `shells.json`: `Elsa3Mapping`, the collection import for reusables, the import's EF ledger and the
+  publishing bridge. Copy it to the CLI's output. It only adds feature entries.
+- [ ] T015 [US3] Add the composition parity test: `inventory`'s enabled features equal the host's committed
+  composition plus the addition list and their dependencies; `assess` adds a feature listed in a local source; a
+  listed feature that no project provides refuses with `composition-failed` and names it; and the migration host's
+  closure contains no assembly whose name contains `Elsa3`.
 
 ## Phase 4: User Story 1 - Inventory an export (P1)
 
@@ -196,7 +185,7 @@
   golden file assert. It keeps every input that shares
   a selected version id, or a selected definition id and version, so that duplicates still reach the duplicate-input
   refusal. Test each fixture case, the duplicate case included.
-- [ ] T018 [US1] Wire the entry point: read, select, run `Elsa3ImportRun`, and collect every diagnostic with its stage.
+- [ ] T018 [US1] Wire `Elsa3MigrationRun`: read, select, run `Elsa3ImportRun`, and collect every diagnostic with its stage.
   Publish stops at the first error and marks `publishStoppedHere` (FR-013, FR-014). `Elsa3ImportRun` returns a refusal
   it cannot pin on one definition instead of throwing (the startup task still throws on it), and the report lists it
   in `runFindings`. Mark older selected workflow versions and the wrappers of older reusable versions
@@ -220,9 +209,9 @@
   definitions' dispatch and execute-workflow activities. List them as Take into account (FR-018 item 5), and test with
   the fixture.
 - [ ] T021 [US1] Add a golden-file integration test in `MTests/Tests/`. The fixture export runs through `inventory`
-  in-process: `report.json` must equal the committed golden file after `tool.version` and `run.imageVersion` are
-  normalized, it must validate against `contracts/report.schema.json`, and the exit code must be 1. A second run must be
-  byte-identical, `migrated/` included (FR-022, SC-006).
+  in-process: `report.json` must equal the committed golden file after `tool.version` is normalized, it must validate
+  against `contracts/report.schema.json`, and the exit code must be 1. A second run must be byte-identical,
+  `migrated/` included (FR-022, SC-006).
 
 ## Phase 5: User Story 4 - Migrated content (P1)
 
@@ -248,9 +237,9 @@
   `[]` when no reusable is exported. Test the layout, the absence, and a run that exports no workflow and no reusable.
 - [ ] T023 [US4] Add the output swap: write to a hidden `.staging-<guid>` folder inside `--out`, rename `report.json`,
   `report.html` and `migrated/` into place last, and touch no other file. A failed run removes the staging folder and
-  leaves the previous output intact. Test both paths, and test with `--out` as a bind-mount root in T034.
-- [ ] T024 [US4] Add the loadability test (SC-004). Compose the essentials feature list with JSON workflow and activity
-  reconciliation over the fixture run's `migrated/`, and assert that every exported reusable and workflow loads,
+  leaves the previous output intact. Test both paths, and test it again in the T034 smoke run.
+- [ ] T024 [US4] Add the loadability test (SC-004). Compose the migration host's committed composition in-process, with
+  its JSON workflow and activity reconciliation settings pointed at the fixture run's `migrated/`, and assert that every exported reusable and workflow loads,
   including the workflow that pins an older reusable version (T022), and that a run that exported nothing loads too
   (both entries empty). Each reusable goes through `SourceOwnedActivityVersionPublisher`, not only a parse; no version
   may be refused with `activity.dependency.version-not-found` or `activity.graph.outcome-done-required`, including the
@@ -258,14 +247,15 @@
 
 ## Phase 6: User Story 2 - Assess with my own features (P1)
 
-- [ ] T025 [US2] Merge `--settings` as specification 1236 defines. Record setting keys only, and set
+- [ ] T025 [US2] Layer the host's local sources for `assess` as R-5 says. Record setting keys only, and set
   `persistenceOverridden` when a persistence connection setting was replaced (FR-009, FR-018 item 4). Test that no
   setting value reaches the report.
-- [ ] T026 [US2] Map composition failures caused by a user package or setting to the `composition-failed` refusal, with
-  no partial run. Name the feature, package or setting key, never a value. Test with a fixture package whose feature
-  throws during configuration.
-- [ ] T027 [US2] Add the assess integration test (SC-007). Run the fixture export with the T003 package and its
-  settings. Every finding that names the custom activity, the function or the variable type disappears, except that the
+- [ ] T026 [US2] Map composition failures to the `composition-failed` refusal, with no partial run: a listed feature
+  that the build does not provide (`FeatureNotFoundException`), and a feature that throws while the shell is
+  composed. Name the feature or setting key, never a value, and do not copy the exception message. Test with a listed
+  feature that no project provides, and with a fixture feature whose configuration throws.
+- [ ] T027 [US2] Add the assess integration test (SC-007). Run the fixture export with the T003 project listed in the
+  test-only host folder's `shells.Local.json`. Every finding that names the custom activity, the function or the variable type disappears, except that the
   value-only read `items.map(lookupCustomer)` becomes `ELS3-REPLACED-FUNCTION-REFERENCE` (`patch-definition`), and the function is no longer
   listed under `components`. No other finding is added. The other definitions it unblocks publish clean.
 
@@ -309,15 +299,16 @@
 
 ## Phase 8: Polish and acceptance
 
-- [ ] T032 Run T024 against the essentials engine image itself, with the fixture run's `migrated/` mounted at
-  `/app/migrated`, and record that every exported version loads (SC-004).
-- [ ] T033 Run `inventory --all-versions` over the specification 1235 acceptance set (34 definitions) in the
-  migration image. Check that every definition has one bucket, and that the published versions equal what startup
+- [ ] T032 Start the actual migration host (`dotnet run --project apps/Elsa.Migration.Host`) with its two folder
+  settings pointing at the fixture run's `migrated/`, and record that every exported version loads (SC-004).
+- [ ] T033 Run `inventory --all-versions` over the specification 1235 acceptance set (34 definitions) from the clone
+  with `dotnet run`. Check that every definition has one bucket, and that the published versions equal what startup
   reconciliation publishes from the same input on the same composition (SC-002). Record the result in the PR evidence, and check the two-minute goal.
-- [ ] T034 Add the image smoke test (SC-003, SC-008). Run `docker run --rm --network none` with the fixture export,
-  then with the T003 packages. Expect exit 1, the printed path and the same `report.json` as the in-process run, after both version fields are
-  normalized.
-  Nothing may remain outside the mounted output folder.
-- [ ] T035 [P] Write `Tooling/README.md`, covering the commands, the image, the entry point contract, the database rule
-  and redaction. Link it from `extensions/Elsa3/src/Mapping/README.md` and `essentials/src/Cli/Elsa.Cli/README.md`.
+- [ ] T034 Add the smoke test (SC-003). From a clean build, run
+  `dotnet run --project extensions/Elsa3/src/Migration/Cli -- workflows inventory` with the fixture export and a
+  relative `--out`. Expect exit 1, the printed path and the same `report.json` as the in-process run, after
+  `tool.version` is normalized. Nothing may remain outside the output folder.
+- [ ] T035 [P] Write `Tooling/README.md`, covering the commands, how to add a feature project to the migration host for
+  `assess`, the database rule and redaction. Link it from `extensions/Elsa3/src/Mapping/README.md` and from the
+  migration host's README.
 - [ ] T036 Set this specification's status to Implemented in the finishing PR.

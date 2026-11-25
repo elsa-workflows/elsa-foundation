@@ -31,7 +31,7 @@
       ],
       "properties": {
         "name": {
-          "const": "dotnet-elsa"
+          "const": "elsa3-migration-cli"
         },
         "version": {
           "type": "string"
@@ -223,34 +223,11 @@
     "run": {
       "type": "object",
       "required": [
-        "imageVersion",
-        "packages",
         "features",
         "settingKeys",
         "persistenceOverridden"
       ],
       "properties": {
-        "imageVersion": {
-          "type": "string"
-        },
-        "packages": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": [
-              "id",
-              "version"
-            ],
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "version": {
-                "type": "string"
-              }
-            }
-          }
-        },
         "features": {
           "type": "array",
           "items": {

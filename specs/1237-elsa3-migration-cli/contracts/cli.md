@@ -2,35 +2,23 @@
 
 ## Commands
 
-The commands run inside the Elsa 3 migration image, whose entry point is `dotnet-elsa elsa3-migration`.
+The commands run from a clone of this repository, through the console project `Elsa3.Migration.Cli`:
 
 ```text
-dotnet elsa elsa3-migration workflows inventory <export> [--out <dir>] [--all-versions]
-dotnet elsa elsa3-migration workflows assess <export> --packages <dir> --settings <file> [--out <dir>] [--all-versions]
+dotnet run --project extensions/Elsa3/src/Migration/Cli -- workflows inventory <export> [--out <dir>] [--all-versions]
+dotnet run --project extensions/Elsa3/src/Migration/Cli -- workflows assess <export> [--out <dir>] [--all-versions]
 ```
 
-A typical start, with the paths mounted at the engine image's own mount points plus `/app/export` and `/app/out`.
-The image is `elsaworkflows/elsa-elsa3-migration`, tagged like the essentials engine image it is built from:
-
-```text
-docker run --rm --network none \
-  -v "$PWD/export:/app/export:ro" -v "$PWD/nupkgs:/app/packages:ro" \
-  -v "$PWD/appsettings.json:/app/config/appsettings.json:ro" -v "$PWD/migration:/app/out" \
-  elsaworkflows/elsa-elsa3-migration:<essentials tag> workflows assess /app/export --packages /app/packages \
-  --settings /app/config/appsettings.json
-```
+`inventory` composes the migration host's committed composition plus the Elsa 3 addition list. `assess` adds the
+host's local configuration sources (`shells.Local.json`, user secrets, environment variables), in the host's order
+(spec FR-008). Neither command takes a host, package or settings option: the engineer's own features come in as
+project references on the migration host, and their settings through the host's configuration sources.
 
 | Argument | Rule |
 |---|---|
-| `<export>` | A folder (searched recursively for `*.json`) or a `.zip`. Anything else exits 2. |
-| `--out` | Default `/app/out`, the documented output mount, created if it is missing. Only `report.json`, `report.html` and `migrated/` are replaced. |
+| `<export>` | A folder (searched recursively for `*.json`) or a `.zip`. Anything else exits 2. Relative paths resolve against the current directory. |
+| `--out` | Default `elsa3-migration-out` in the current directory, created if it is missing. Only `report.json`, `report.html` and `migrated/` are replaced. |
 | `--all-versions` | Converts every version instead of the FR-012 selection. |
-| `--packages` | A folder of `.nupkg` files, read as a directory feed. Required for `assess`. Unlike the persistence group's `--packages` (an install root of extracted packages), it never names an install root. |
-| `--settings` | An `appsettings.json`, merged as the essentials engine image merges it. Required for `assess`. |
-
-The image sets `ELSA3_MIGRATION_HOST=/app` and `ELSA3_MIGRATION_IMAGE_VERSION=<essentials tag>`. The front end
-resolves the host directory as the persistence group resolves `--host`. When the variable is unset or the directory has
-no single `.runtimeconfig.json` and `.deps.json` pair, the run is refused with `entry-point-missing`.
 
 ## Exit codes
 
@@ -42,19 +30,17 @@ no single `.runtimeconfig.json` and `.deps.json` pair, the run is refused with `
 
 ## Standard output
 
-On exit 0 or 1, the last line is the output path as it was given (container path). On exit 2, standard error carries
-one refusal line, `elsa3-migration: refused: <reason>`, with a reason code from the table below and a sentence.
+On exit 0 or 1, the last line is the output path as it was given (the default if none was given). On exit 2,
+standard error carries one refusal line, `elsa3-migration: refused: <reason>`, with a reason code from the table below
+and a sentence. The report is written only on exit 0 or 1.
 
 | Reason code | When |
 |---|---|
+| `arguments` | An unknown command or option, or an invalid combination of options. |
 | `input-missing` | `<export>` does not exist, or is neither a folder nor a zip. |
 | `input-empty` | No file holds an Elsa 3 definition. |
 | `input-unreadable` | The zip cannot be opened. |
-| `arguments` | An invalid combination of options. |
-| `package-unresolved` | A package dependency is in neither `--packages` nor the image. The reason names the id and range. |
-| `settings-unreadable` | `--settings` is missing, or is not valid JSON. |
-| `entry-point-missing` | The migration tooling assembly or its entry point type is in neither the host closure nor the loaded package set (an image build defect). |
-| `composition-failed` | A user package or setting the composition cannot boot. The reason names the feature, package or setting key, never a value. |
+| `composition-failed` | A listed feature that the CLI's build does not provide, or a feature that throws while the shell is composed. The reason names the feature or the setting key, never a value. |
 
 ## Output layout
 

@@ -8,7 +8,7 @@ This page explains the entities and their rules.
 | Field | Meaning |
 |---|---|
 | `schemaVersion` | Integer, `1`. FR-020 says when it changes. |
-| `tool` | `{ name, version }`: `dotnet-elsa` and its own informational version. |
+| `tool` | `{ name, version }`: `elsa3-migration-cli` and the CLI's own informational version. |
 | `command` | `inventory` or `assess`. |
 | `exitCode` | `0` or `1`, the exit code the run returns (FR-004). A refused run writes no report. |
 | `redacted` | Always `true` (FR-019). It lets a consumer check the privacy promise without trusting the version alone. |
@@ -78,9 +78,9 @@ only from findings whose code has a component kind (spec FR-018 item 2), so an u
 
 ## Run section
 
-`imageVersion` (the essentials image tag the migration image was built from, baked as `ELSA3_MIGRATION_IMAGE_VERSION`), `packages [{ id, version }]`
-(the user's packages only), `features [name]`,
-`settingKeys [key]` (sorted, values never written), `persistenceOverridden` (boolean, FR-009).
+`features [name]` (the composed features, sorted), `settingKeys [key]` (sorted, values never written),
+`persistenceOverridden` (boolean, FR-009). Whether local configuration sources were applied follows from `command`:
+`assess` applies them, `inventory` does not (FR-008).
 
 ## Code table
 
@@ -114,5 +114,5 @@ That keeps a blocked definition out of `incompatible`.
 ```
 
 The run replaces `report.json`, `report.html` and `migrated/` as a whole. It writes them to a hidden staging folder
-`.staging-<guid>` inside `--out` and renames them into place last. That keeps every rename on the same mount, so a
-bind-mounted `--out` works. A failed run removes its staging folder and leaves the previous output intact.
+`.staging-<guid>` inside `--out` and renames them into place last. That keeps every rename on the same volume as
+`--out`. A failed run removes its staging folder and leaves the previous output intact.

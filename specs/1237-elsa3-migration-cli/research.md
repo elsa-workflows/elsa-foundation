@@ -2,30 +2,43 @@
 
 Facts are from the initiative branch at the commit this specification was cut from. Paths are repository-relative.
 
-## R-1 The `dotnet-elsa` front end and worker
+## R-1 The console project
 
-- The tool is `essentials/src/Cli/Elsa.Cli/` (`PackAsTool`, command `dotnet-elsa`). `ElsaCli.cs` builds a static
-  `RootCommand` with two groups, `persistence` and `composition`. There is no plugin mechanism, so a third group is
-  added there.
-- The worker is `essentials/src/Cli/Worker/`. It references no product code: Nuplane comes in with
-  `ExcludeAssets="runtime"`. The front end's `essentials/src/Cli/Elsa.Cli/WorkerProcess.cs` starts it with
-  `dotnet exec --runtimeconfig <host>.runtimeconfig.json --depsfile <host>.deps.json Elsa.Cli.Worker.dll`. It takes one
-  JSON request on stdin and writes one JSON response on stdout (`Worker/Program.cs`).
-- The product entry point is reached by type name: `Worker/ToolingEntryPoint.cs` names
-  `Elsa.Persistence.EntityFramework.Tooling.EfToolingHost` and resolves it with `GetType(name, throwOnError: false)`.
-  A missing type is a refusal that names the minimum version. `WorkerRunner.ExecuteAsync` reads the deps file, loads
-  the Nuplane package set, preloads the host closure, and then resolves the entry point.
-- Exit codes live in `WorkerContract.cs` (`ToolExitCode`): 0, 1, 2 refusal, 3 resolution failure, 4 database failure.
-  The new group maps resolution failures to 2, as the specification says (FR-004). This is done in the front end, per
-  group, so the persistence group is unchanged.
+- Specification 1236 was rescoped on 2026-11-25. There is no essentials engine image and no Elsa 3 migration image,
+  and no Nuplane. `apps/Elsa.Migration.Host` is a source-built, plain CShells ASP.NET Core host. Engineers clone the
+  repository and add their own feature projects to it as project references (1236 FR-005, FR-018). Its composition
+  `shells.json` is readable by path (1236 FR-004). How the CLI composes is now this specification's decision.
+- The audience is an engineer who wants a host and project references to debug, and their own activities to port and
+  test (Joey, 2026-11-25).
+- `dotnet-elsa` (`essentials/src/Cli/Elsa.Cli/`) parses its commands with System.CommandLine, which the repository
+  already pins.
 
-**Decision**: add an `elsa3-migration` group to `ElsaCli.cs`. Run it on the same worker with a second command family,
-which resolves a second frozen entry point, `Elsa3.Migration.Tooling.Elsa3MigrationToolingHost`, in the assembly
-`Elsa3.Migration.Tooling`. Reuse `HostClosure` and `WorkerProcess` unchanged. `NuplanePackageSet` gains the run-scoped
-install root of R-6. `ToolingEntryPoint` resolves the persistence type with `Assembly.GetType` on the persistence
-assembly from the host closure. The migration assembly is not in the host closure, because it arrives as a Nuplane
-package, so the worker finds it among the loaded package set's assemblies first and then calls `GetType`. A missing
-assembly or type refuses with `entry-point-missing` (exit 2).
+**Decision**: add a console project, `Elsa3.Migration.Cli`, at `extensions/Elsa3/src/Migration/Cli/`
+(`OutputType` `Exe`, `IsPackable` `false`). It is a thin entry over the tooling library `Elsa3.Migration.Tooling`
+(`extensions/Elsa3/src/Migration/Tooling/`), which holds the pipeline. It parses `workflows inventory` and
+`workflows assess` with System.CommandLine, calls the tooling in-process, prints the output path or the refusal line,
+and returns the exit code (FR-004, FR-005). The engineer runs it with
+`dotnet run --project extensions/Elsa3/src/Migration/Cli -- ...` and debugs it from the IDE like the host. The project
+does not set `RunWorkingDirectory`, so relative paths resolve against the directory the engineer runs it from.
+
+Its project references are the code closure (FR-006):
+
+- `apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj`, so every feature the host composes, and every feature project
+  the engineer has added to the host, is in the CLI's build;
+- `Elsa3.Migration.Tooling`, which references the Elsa 3 projects of the addition list (the converter, the collection
+  import for reusables, the import's EF ledger and the publishing bridge).
+
+The host is an ASP.NET Core project, so the CLI carries the ASP.NET Core shared framework. It starts no web host.
+
+**Rejected**:
+
+- A `dotnet elsa elsa3-migration` command group on the ADR 0076 worker, reaching a second frozen entry point inside an
+  Elsa 3 migration image built `FROM` the essentials engine image, with the engineer's features as Nuplane packages.
+  The engine image is no longer planned (1236 Q11), the design needed an ADR 0076 amendment (D14, D10; PR #5680,
+  withdrawn), and a container is harder to debug than a project in the clone.
+- The engineer adding their feature project to both the host and the CLI. That is two places to keep in sync, and a
+  drift would make the test migration run on another composition than the host.
+- A `--host` option pointing at another host folder. The migration host is the host (spec Q10).
 
 ## R-2 Startup reconciliation already runs the pipeline
 
@@ -41,7 +54,7 @@ assembly or type refuses with `entry-point-missing` (exit 2).
 **Decision**: extract the sequence after reading into one internal service of the reconciliation project, `Elsa3ImportRun`.
 It returns a structured result: the plan items with their diagnostics, the skips with their cause, the publication
 outcome per workflow, and the publish failure's diagnostics. The startup task keeps its behaviour and logs from that
-result. The CLI entry point calls the same service (FR-013). The reconciliation project grants the tooling assembly
+result. The tooling calls the same service (FR-013). The reconciliation project grants the tooling assembly
 `InternalsVisibleTo`, so no public surface is added (ADR 0080).
 
 The run's collaborators (`Elsa3ImportSelection`, `ImportedWorkflowPublisher`, `Elsa3StartupPublishingGrant` and the
@@ -131,17 +144,26 @@ site a unit test with a sentinel.
 enabled EF feature. The host-wide migrate policy is set to apply migrations, and one connection stays open from
 composition until disposal (FR-009). The guid never reaches the report (FR-022).
 
-The baked settings also keep the OpenIddict store and the Data Protection key ring under `/app/data` (specification
-1236). The run points the OpenIddict store at the same in-memory database, and gives Data Protection an ephemeral key
-ring, so nothing reaches a disk (FR-010).
+The host's committed settings put its SQLite file under `data/`, and in development mode its OpenIddict store is in
+memory (1236 R-6). The run replaces `ConnectionStrings:Elsa` and every per-feature persistence connection setting with
+the in-memory database. The host's EF key store for Data Protection is host wiring the CLI does not run, so the run
+gives Data Protection an ephemeral key ring. Nothing reaches a disk (FR-010).
 
 ## R-5 Composition without a web host
 
 - Non-web compositions exist: `essentials/tests/Modularity/Tests/NuplaneHostTestComposition.cs`
-  (`Host.CreateApplicationBuilder`, `AddNuplaneHostIntegration`, `AddCShells().WithNuplaneFeatureDiscovery()`) and
-  `essentials/src/Foundation/Hosting/FoundationShellHostingExtensions.cs`.
-- `EfToolingConfigurationContext` already layers `appsettings.json`, `shells.json` and their environment variants for
-  the persistence tooling.
+  (`Host.CreateApplicationBuilder` with CShells) and `essentials/src/Foundation/Hosting/FoundationShellHostingExtensions.cs`.
+- The migration host discovers its features with CShells `WithHostAssemblies()`, which reads the project-referenced
+  assemblies through the `DependencyContext` and fails activation with `FeatureNotFoundException` for an unknown
+  feature (1236 R-2).
+- The host's configuration order, lowest first, is `appsettings*.json`, `shells.json`, `shells.{Environment}.json`,
+  `shells.Local.json` (git-ignored, optional), user secrets (from the project's `UserSecretsId`), environment variables
+  and the command line (1236 R-3).
+- The host runs only in the Development environment: `DevelopmentOrDemoGuard` refuses identity features in
+  development mode elsewhere (1236 R-2). Its `shells.json` commits development-only demo keys, such as the runtime EF
+  signing keys, without which shell activation fails (1236 R-6).
+- A project reference to the host can copy the host's content files, such as `appsettings.json` and `shells.json`,
+  into the CLI's output folder.
 
 Facts that shape the run:
 
@@ -154,95 +176,90 @@ Facts that shape the run:
   (`essentials/src/Tasks/Elsa.Tasks/Services/RunShellTasksInitializer.cs`), and its one call,
   `ITaskManager.StartExecutingRegisteredTasks`, runs the startup tasks, then the background tasks, then the recurring
   tasks (`TaskManager.cs`).
-- Specification 1236 provides the composition library `Elsa.Essentials.Composition`: `EssentialsFeatureList.Read`,
-  `EssentialsFeatureAssemblies.All` and `AddEssentialsConfiguration(compositionFolder, bakedSettingsPath,
-  userSettingsPath)`. It ships only in `/app` of the engine image and is not packed.
 
-**Decision**: the entry point builds a generic host that is never started. It composes one shell from the image's
-composition and the merged settings, as specification 1236 defines the merge. It reads the lists with
-`EssentialsFeatureList.Read(<root>/composition)` and merges settings with `AddEssentialsConfiguration` (the
-image's baked `appsettings.json`, then the `--settings` file). It runs every shell initializer except
-`RunShellTasksInitializer`, and runs the startup tasks alone, in their dependency order, through a new startup-only
-member on `ITaskManager`. That is a small essentials change. It makes the features of the run-scoped package set discoverable, because `EssentialsFeatureAssemblies.All` lists
-only the essentials features' assemblies, while the Elsa 3 additions and a user's packages arrive as Nuplane packages.
-CShells' own Nuplane discovery reads a DI catalog that a Nuplane-integrated host fills, and the worker loads packages
-through static `NuplaneHostIntegratedLoader` calls instead. So the tooling registers a feature-assembly provider
-(`RegisterFeatureAssemblyProvider`) over the assemblies of the worker-loaded package load contexts, found through
-`AssemblyLoadContext.All`, as `EfToolingHost` finds its assemblies. It resolves services from the shell's provider.
+**Decision**: the tooling builds a generic host that is never started, in the Development environment, with one shell
+composed by CShells' non-web registration with `WithHostAssemblies()` over the CLI's own build, as the host discovers
+its features. Its configuration is built from the host project folder, never from the CLI's output folder, and the CLI
+has no settings file of its own:
 
-`<root>` is a request field, `compositionRoot`, which defaults to `/app`. Tests lay out a composition folder, baked
-settings and an empty `migrated/` skeleton under a temporary root. The essentials list bakes JSON workflow and activity
-reconciliation over the absolute paths `/app/migrated/workflows` and `/app/migrated/activities/activities.json`, so the
-test's baked settings override both paths to `<root>/migrated/...`. Background
-hosted services, background tasks and recurring tasks never start, so there is no trigger runtime, scheduler or
-recurring work. The Elsa 3 folder import feature is not
-composed. The engine image refuses to start without some secret settings (specification 1236, *Required settings*).
-Specification 1236's feature-list contract asks the CLI to supply throwaway values for every one of them. For each one
-that `--settings` leaves empty, the run generates a value that lives only in memory (FR-008a).
+- `inventory`: the host's `appsettings*.json`, `shells.json` and `shells.Development.json`. That is the host's committed
+  composition; the engineer's local sources are ignored.
+- `assess`: the same, then `shells.Local.json`, the host's user secrets (`AddUserSecrets` on the host assembly, which
+  carries its `UserSecretsId`) and environment variables, in the host's order. The CLI's own command line is not a
+  configuration source.
+- Then, for both, the Elsa 3 addition list, `elsa3-migration.features.json` next to the CLI project, read after the host
+  composition. It only adds feature entries, so a local source cannot remove an Elsa 3 addition.
 
-## R-6 User packages
+The host project folder is fixed when the CLI is built: the CLI's project file writes it into an
+`AssemblyMetadataAttribute`, and the addition list is copied to the output. There is no option to point elsewhere.
+Tests pass a test-only host folder and addition list through an internal seam (`InternalsVisibleTo` for the
+migration test project).
 
-- `Worker/NuplanePackageSet.cs` loads a state file, or a probed install root with `.nuplane-ready` markers.
-  `Worker/NuplaneDirectoryFeeds.cs` and `NuplaneRestoreRunner.cs` already reconcile from directory feeds for
-  `--restore`.
+A listed feature that the build does not provide (`FeatureNotFoundException`) refuses the run as `composition-failed`
+and names the feature, as the host does at startup (1236 FR-005). A feature that throws while the shell is composed
+refuses the same way and names the feature, or the setting key when the failure names one; the exception message is
+not copied, because it may quote a value.
 
-**Decision**: on every run, the worker reconciles `/app/elsa3/packages/` (R-7), plus the `--packages` folder for
-`assess`, as directory feeds into one run-scoped temporary install root. The persistence group's `--packages` is a
-different thing, an install root of extracted packages. The two groups never share the option. Package resolution is restricted to that feed and the image's closure. It then loads that root through
-`NuplanePackageSet`, and deletes the root at the end. A dependency that cannot be resolved is a refusal (FR-004,
-spec Q9).
+It runs every shell initializer except `RunShellTasksInitializer`, and runs the startup tasks alone, in their
+dependency order, through a new startup-only member on `ITaskManager`. That is a small essentials change. It resolves
+services from the shell's provider. Background hosted services, background tasks and recurring tasks never start, so
+there is no trigger runtime, scheduler or recurring work. The Elsa 3 folder import feature is not composed. The host's
+JSON workflow and activity reconciliation features are composed, as the host composes them, but the run points their
+two path settings at an empty `workflows/` folder and a `[]` activities file inside its staging folder. Their relative
+defaults would otherwise resolve against the engineer's current directory, where the host refuses a missing folder, and
+an engineer who pointed them at a previous `migrated/` folder would load it into the run next to the import.
 
-ADR 0076 D1 says the worker never reconciles on its own initiative, and D10 says no command reconciles by default,
-because a reconcile pass writes a host's shared state file and install root. This reconcile touches neither: it
-reads local folders, writes only a private root it deletes, and uses no network. The ADR 0076 amendment (spec Q4)
-states that exception.
+The host's committed development keys apply, so the run needs no generated settings. **Rejected**: generating run-only
+values for required secret settings. That answered the essentials engine image, which committed none; the migration
+host commits development keys, so the problem does not exist.
 
-## R-7 The Elsa 3 migration image
+**Rejected**: calling the host's `MigrationHost.CreateBuilder`. It builds a web application and reads the process's
+command line, and the CLI must start no web host. A test instead checks that a key set in each layer wins over the
+layers below it, in the host's order.
 
-The CLI runs inside an image built `FROM` the essentials engine image at the same version (spec Q3). Specification
-1236 defines the engine image's base contract for a derived image:
+## R-6 The engineer's own features
 
-- `/app/composition/essentials.features.json` holds the essentials list. A derived image adds its own
-  `<name>.features.json` there, and the composition library reads it after the essentials list, in ordinal file-name
-  order.
-- `Elsa.Essentials.Composition.dll` and every listed essentials feature's assemblies are in `/app`.
-- The engine host reads every list in `/app/composition/`, but loads no package a derived image adds. A derived tool
-  composes for itself, and the migration image never starts the engine host.
-- A derived image uses its base's version tag, and replaces the entry point.
+**Decision**: the engineer's Elsa 4 features reach the run as project references they add to the migration host in
+their clone, the same edit that makes the host compose them (1236 FR-005). The CLI references the host, so the feature
+is in the CLI's build. The engineer lists the feature, and its settings, in a local source of the host
+(`shells.Local.json`, user secrets or environment variables), which `assess` reads (R-5). No package is loaded at run
+time (spec Q9).
 
-**Decision**: the migration image uses that contract and rebuilds nothing.
+**Rejected**: reading a folder of `.nupkg` files as Nuplane directory feeds into a run-scoped install root. It needed
+an ADR 0076 amendment, because the worker never reconciles on its own initiative (D1, D10), and the migration host
+loads no packages, so the test migration would have run on another closure than the host.
 
-- `extensions/Elsa3/docker/elsa3.features.json`, the Elsa 3 addition list, is copied to
-  `/app/composition/elsa3.features.json`. It holds the converter (`Elsa3Mapping`), the collection import for
-  reusables, the import's EF ledger and the publishing bridge.
-- The packages of those features, and the `Elsa3.Migration.Tooling` package, go into `/app/elsa3/packages/`. That folder
-  belongs to this specification, not to the engine contract, and the worker reconciles it (R-6). The existing pack
-  workflow already packs the `extensions/` projects.
-- The worker loads packages with `HostIntegratedLoadOptions` built from the engine image's baked
-  `Nuplane:Loading:SharedAssemblies` and `Nuplane:HostProvidedPackages`, plus `Elsa.Essentials.Composition`. Today
-  `NuplaneLoader` passes no options (`essentials/src/Cli/Worker/NuplaneLoader.cs`), and then a feed-loaded EF module
-  such as the import's EF ledger would bind its own copy of `Elsa.Persistence.EntityFramework`, where ADR 0076 requires
-  the host's. Specification 1236 leaves the shared-assembly declaration for its composition library to this
-  specification.
-- The tooling project references `Elsa.Essentials.Composition` with `Private=false` and `PrivateAssets="all"`, so the
-  packed tooling package neither carries the library nor depends on it. The library is not packed.
-- The Dockerfile sets `ELSA3_MIGRATION_HOST=/app`. The front end resolves it with `HostLayout.Resolve`, exactly as the
-  persistence group resolves `--host` (a directory holding one `*.runtimeconfig.json` and `*.deps.json` pair), and maps
-  that resolver's refusals to `entry-point-missing`.
-- Image tags are build numbers, not package versions (`.github/workflows/docker.yml`), and every packable project has
-  its own computed version (`PackageVersioning.props`). So the Dockerfile takes the essentials image tag as a build
-  argument and bakes it as `ELSA3_MIGRATION_IMAGE_VERSION`. The front end passes it, and its own informational
-  version, to the entry point as `imageVersion` and `toolVersion`. They become `run.imageVersion` and `tool.version`.
-- `dotnet-elsa` is installed in the version computed for the same commit. The entry point is `dotnet-elsa elsa3-migration`, with the worker
-  pointed at the engine host's build output in `/app`. No web host starts.
-- The image is published as `elsaworkflows/elsa-elsa3-migration`, with the essentials engine's tags; each tag is built `FROM` the engine
-  image with that tag.
-- Mount points follow the engine's: `/app/config/appsettings.json` and `/app/packages` hold the user's settings and
-  packages, as on the engine. `/app/export` (read-only) holds the export, and `/app/out` the output. The engine later
-  mounts the output's `migrated/` at `/app/migrated`.
+## R-7 Architecture guards for a CLI that references a host
 
-**Rejected**: a NuGet reference host restored on first use, and a host bundled in the tool. Both would ship a second
-Elsa 4 closure that can drift from the engine the user goes live on.
+- `ArchitectureGuardTests.ExpectedProjectPath` derives an `Elsa3.*` project's path from its name under
+  `extensions/Elsa3/` (the `ExtensionBuckets` row). `Elsa3.Migration.Cli` derives to
+  `extensions/Elsa3/src/Migration/Cli/Elsa3.Migration.Cli.csproj`, so it needs no entry. The host's own entry is
+  1236's (1236 T002).
+- `ExtensionBoundaryTests` checks core-to-extension and extension-to-extension edges. An edge from an extension to an
+  `apps/` host is neither, so it needs no entry. `Excluded_hosts_are_deployable_hosts_not_libraries` needs the host to
+  be `IsPackable=false`, which 1236 already sets.
+- `Elsa3MigrationBoundaryTests.CanonicalElsaProjects_DoNotReferenceElsa3AssembliesOrDtos` scans `essentials/src` only.
+  The CLI lives under `extensions/Elsa3/` and the host under `apps/`, so it is unaffected. 1236's closure test (the
+  host carries no Elsa 3 assembly, 1236 FR-003) is unaffected too, because the reference goes from the CLI to the host,
+  never from the host to Elsa 3.
+- `EfCoreDependencyGuardTests.Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages` fails for any
+  project outside its admitted lists that resolves an EF Core package. The CLI resolves the host's EF closure, the
+  tooling and the migration test project resolve EF through the import's EF ledger. So the CLI is added to
+  `AllowedEfConsumers` as a composition root, with a reviewed package array (the host's, from 1236 R-9) and an arm in
+  `ReviewedEfPackages`; the tooling and the migration test project get reviewed closures next to
+  `Adr0073Elsa3ImportEf`.
+- The Nuplane host guards (`NuplaneHostSettings.HostsThatShareAssemblies`) scan only `apps/` hosts that share
+  assemblies, so a project under `extensions/` is out of their scope.
+- `ArchitectureGuardTests.Every_production_project_is_built_before_the_architecture_tests` fails for a production
+  project outside `Elsa.Architecture.Tests.csproj`'s reference graph. Nothing references the CLI, so it is added there
+  as a build-only reference (`ReferenceOutputAssembly="false"`), as the `apps/` hosts and `Elsa.Cli` are.
+- §E2.7 names import adapters and shared support as the `Elsa3` domain's projects. 1236 kept its host out of
+  `extensions/Elsa3/` partly for that reason. The CLI and the tooling are migration tooling over the import adapter,
+  as the tooling already was in the earlier design; if reviewers read §E2.7 as excluding them, the constitution
+  section is updated in this unit.
+
+**Decision**: the implementing PR adds the EF admissions and the build-only reference above, regenerates the solution
+filters and `dependency-map.json`, and places the test project in `tools/ci/test-tiers.json`. No other guard changes.
 
 ## R-8 Exporting migrated content
 
@@ -262,7 +279,7 @@ Elsa 4 closure that can drift from the engine the user goes live on.
 
 **Decision**: add a writer next to each reader, in the same project, so the format has one owner:
 `JsonWorkflowCatalogWriter` and `JsonActivityCatalogWriter`. Each serializes models through `IPayloadSerializer`, and a
-round-trip test checks read(write(x)) = x. The tooling entry point reads the published versions back from the
+round-trip test checks read(write(x)) = x. The tooling reads the published versions back from the
 design stores and writes them. Workflows go one file per definition, named by definition id. Activities go in one file,
 in dependency order. The export rewrites each reusable version id, and every reference to one, to the engine's catalog id
 (`ActivityCatalogStableIds.VersionId`), wherever an `activityVersionId` member appears, also inside a node's opaque
@@ -297,7 +314,7 @@ other data is written into the page (FR-021).
 
 ## R-10 Sanctioned patterns (framework §2.24.2)
 
-There is no new seam. The entry point is the ADR 0076 frozen entry point pattern under its amendment. The shared
-import run is a plain internal service. The writers are services with contracts beside the reader contracts. The tooling
-composition registers them, and no feature behaviour changes. No new pattern is introduced,
-so the §2.24.3 gate is not triggered.
+There is no new seam. The CLI is a composition root, as a host is, and its test seam is internal. The shared
+import run is a plain internal service. The writers are services with contracts beside the reader contracts. The
+tooling composition registers them, and no feature behaviour changes. No new pattern is introduced, so the §2.24.3 gate
+is not triggered.
