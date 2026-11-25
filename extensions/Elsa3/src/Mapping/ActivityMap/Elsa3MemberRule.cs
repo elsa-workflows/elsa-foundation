@@ -161,5 +161,12 @@ public enum Elsa3ValueContract
     PositiveHttpResponseStatus,
 
     /// <summary>Legacy request text whose body presence the target can retain.</summary>
-    HttpRequestContent
+    HttpRequestContent,
+
+    /// <summary>
+    /// A DispatchWorkflow/ExecuteWorkflow input map (#5808): JSON as <see cref="JsonOnly"/>. Elsa 3 passed any name and
+    /// matched names case-insensitively; Elsa 4 accepts only the names the target declares, spelled as declared. A literal
+    /// map to a target in the same import is checked and its keys spelled as declared; any other binding is warned.
+    /// </summary>
+    DispatchInputs
 }

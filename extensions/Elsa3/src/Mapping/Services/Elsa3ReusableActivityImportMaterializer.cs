@@ -83,6 +83,16 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                     pathSegments: [new(Elsa3MigrationPathSegmentKind.SourceVersion, id)])).ToArray());
         var convertedById = new Dictionary<string, Elsa3ConvertedDefinition>(StringComparer.Ordinal);
 
+        // A dispatch pins the target's newest published version, and this import publishes the newest selected version of
+        // each workflow, so that is the one a literal input map must fit (#5808).
+        var dispatchTargetInputs = sourceById.Values
+            .GroupBy(x => x.DefinitionId, StringComparer.Ordinal)
+            .ToDictionary(
+                x => x.Key,
+                x => (IReadOnlyList<string>)(x.OrderByDescending(y => y.Version).ThenByDescending(y => y.Id, StringComparer.Ordinal).First()
+                    .Inputs ?? []).Select(input => input.Name).ToArray(),
+                StringComparer.Ordinal);
+
         foreach (var item in reusable.Concat(selection.Where(x => !x.IsReusable).OrderBy(x => x.SourceVersionId, StringComparer.Ordinal)))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -92,7 +102,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                 continue;
             var replacements = BuildReplacements(item, sourceById, selectedById, convertedById);
             var conversion = await converter.ConvertAsync(
-                new Elsa3ConversionRequest(source, item.IsReusable, replacements, DiagnosticMetadata(item)),
+                new Elsa3ConversionRequest(source, item.IsReusable, replacements, DiagnosticMetadata(item), dispatchTargetInputs),
                 cancellationToken);
             if (!conversion.Succeeded)
             {
