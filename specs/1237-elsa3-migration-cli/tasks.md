@@ -98,7 +98,8 @@
 - [ ] T004a Extract `MigrationHost.AddHostConfiguration` and `MigrationHost.AddHostServices` from the migration host's
   `CreateBuilder` (`apps/Elsa.Migration.Host/`), as spec *Dependencies and boundaries* describes. The host keeps
   calling them, and 1236's host tests stay green unchanged. `AddHostConfiguration` takes the host folder, the
-  environment, the host assembly (for `AddUserSecrets`) and a switch that leaves out the local sources.
+  environment, the host assembly (for `AddUserSecrets`), the command-line arguments (`string[] args`; the CLI passes an
+  empty array) and a switch that leaves out the local sources.
   `AddHostServices` registers the root services, CShells with `WithHostAssemblies()` included, without the web
   pipeline, and creates no folders; the host creates `data/` at startup, outside it.
 - [ ] T004b Make the converter carry component names as data (FR-016a). Add a `ComponentName` metadata key to every
@@ -142,7 +143,10 @@
 - [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It takes the host assembly, the host project folder and
   the CLI project folder from the CLI, builds an empty generic host (`Host.CreateEmptyApplicationBuilder`) that is
   never started, with `ContentRootPath` set to the host folder and `EnvironmentName` set to Development, and uses the
-  T004a methods; it copies none of the host's wiring. Configuration comes from the host project folder, never from the
+  T004a methods; it copies none of the host's wiring. After building, it activates the shell itself with
+  `IShellRegistry.GetOrActivateAsync` and the host composition's shell name (the host's activation hosted service never
+  runs, because this host is never started); an exception from that call maps to `composition-failed` (T026), and
+  `--out` is created only after it returns. Configuration comes from the host project folder, never from the
   CLI's output folder, in this order:
   1. `MigrationHost.AddHostConfiguration`, read through a key filter that drops `Files`, `FilePath` and
      `AdditionalSources` under JSON workflow reconciliation and `Files` under JSON activity reconciliation.
@@ -192,8 +196,10 @@
   import's EF ledger, the publishing bridge and `Elsa3MigrationImportRun`. It is read from the CLI project folder only,
   never copied to the output. It only adds feature entries. Test that the feature registers the import run and the
   publishing authorization decoration in the shell.
-- [ ] T015 [US3] Add the composition parity test (R-5): the descriptors of a collection where only
-  `MigrationHost.AddHostServices` ran, compared as a multiset with the CLI's root collection, keyed by (ServiceType,
+- [ ] T015 [US3] Add the composition parity test (R-5): in both a baseline empty application builder with the same
+  settings and the CLI's builder, snapshot the descriptors before and after the `MigrationHost.AddHostServices` call,
+  and compare the descriptors that call added as multisets (the CLI's added set taken after its Data Protection
+  replacement), keyed by (ServiceType,
   ServiceKey, Lifetime, ImplementationType, or the marker `factory` or `instance`), excluding the Data Protection
   descriptors the ephemeral key ring replaces (`IDataProtectionProvider`, `IKeyManager`,
   `IConfigureOptions<KeyManagementOptions>`, and the `IHostedService` of `DataProtectionStartupCheck`); every EF

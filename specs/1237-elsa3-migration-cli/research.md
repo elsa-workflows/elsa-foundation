@@ -203,7 +203,8 @@ host's `CreateBuilder`, leaving the host's behaviour unchanged; the host's `Prog
 (spec *Dependencies and boundaries*):
 
 - `MigrationHost.AddHostConfiguration`: the host's configuration layers in 1236 R-3's order, for a given host folder
-  and environment, taking the host assembly for `AddUserSecrets`, with a switch that leaves out the local sources
+  and environment, taking the host assembly for `AddUserSecrets` and the command-line arguments (the CLI passes none),
+  with a switch that leaves out the local sources
   (`shells.Local.json`, user secrets, environment variables, command line);
 - `MigrationHost.AddHostServices`: the host's root service registration, including CShells with
   `WithHostAssemblies()`, without the web pipeline.
@@ -231,7 +232,10 @@ The addition list of step 2, `elsa3-migration.features.json`, only adds feature 
 remove an Elsa 3 addition.
 
 Configuration is read from the host project folder, never from the CLI's output folder, and the CLI has no settings
-file of its own. Then the tooling activates the shell. No web server starts.
+file of its own. Then the tooling activates the shell itself: CShells activates lazily, and the host's activation
+hosted service never runs because the CLI's host is never started, so `MigrationComposition` calls
+`IShellRegistry.GetOrActivateAsync` with the host composition's shell name. An exception from that call is
+`composition-failed`, and `--out` is created only after it returns. No web server starts.
 
 The shell-level parts are a feature of the tooling's own, `Elsa3MigrationImportRun`, in the addition list. It
 `DependsOn` `WorkflowsPublishingApi`, `Elsa3ImportActivitiesPublishing` and `Tasks`, and its `ConfigureServices` calls
@@ -277,8 +281,9 @@ host commits development keys, so the problem does not exist.
 **Rejected**: calling the host's `MigrationHost.CreateBuilder` and building a `WebApplication`. It brings in the web
 pipeline and reads the process's command line, and the CLI must start no web server.
 
-T015 checks parity: it compares, as multisets, the descriptors of a collection where only `AddHostServices` ran with
-the CLI's root collection, keyed by (ServiceType, ServiceKey, Lifetime, ImplementationType, or the marker `factory` or
+T015 checks parity: in a baseline empty application builder with the same settings and in the CLI's builder, it
+snapshots the descriptors before and after the `AddHostServices` call and compares, as multisets, the descriptors
+that call added, keyed by (ServiceType, ServiceKey, Lifetime, ImplementationType, or the marker `factory` or
 `instance`). Excluded are the Data Protection descriptors the ephemeral key ring replaces (`IDataProtectionProvider`,
 `IKeyManager`, `IConfigureOptions<KeyManagementOptions>`, and the `IHostedService` of `DataProtectionStartupCheck`).
 The connection and the task mode get their own assertions: every EF feature resolves the run's connection string, and

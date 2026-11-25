@@ -459,7 +459,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **Two public wiring methods on the migration host.** 1237 adds them to the host (task T004a), as an extraction from
   `CreateBuilder` that leaves the host's behaviour unchanged. The host's `Program.cs` and the CLI both call them:
   - `MigrationHost.AddHostConfiguration`: adds the host's configuration layers in 1236 R-3's order for a given host
-    folder and environment, taking the host assembly for `AddUserSecrets`, with a switch that leaves out the engineer's
+    folder and environment, taking the host assembly for `AddUserSecrets` and the command-line arguments, with a switch that leaves out the engineer's
     local sources (`shells.Local.json`, user secrets, environment variables, command line);
   - `MigrationHost.AddHostServices`: the host's root service registration (1236 R-2), including the CShells
     `WithHostAssemblies()` setup, without the web pipeline. It creates no folders: the host creates `data/` at
