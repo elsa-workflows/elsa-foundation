@@ -14,6 +14,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   const s = await activityDataSupport(page, info, registerCleanup);
   const tooling: { path: string; request: unknown; status: number; response: unknown }[] = [], pending: Promise<void>[] = [];
   const presses: { prefix: string; presses: number }[] = [];
+  const stacking: { what: string; hits: string[]; chain: string[] }[] = [];
   const isTooling = (response: Response) => /\/design\/workflows\/expression-tooling\/(completions|hover)$/.test(new URL(response.url()).pathname);
   page.on("response", response => {
     if (!isTooling(response)) return;
@@ -24,7 +25,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   });
   registerCleanup(async () => {
     await Promise.all(pending);
-    await attachActivityDataJson(info, "typed-completion-proof.json", { sourceSha: process.env.UX_SOURCE_SHA, tooling, presses });
+    await attachActivityDataJson(info, "typed-completion-proof.json", { sourceSha: process.env.UX_SOURCE_SHA, tooling, presses, stacking });
   });
 
   const typed = { referenceKey: "conn", name: "conn", type: { alias: connectionAlias, collectionKind: "Single" }, storageDriverType: null };
@@ -66,6 +67,29 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
     }
     await expect(page.locator(".cm-completionInfo")).toContainText(declaredNote);
     await expectReadable(page.locator(".cm-completionInfo"), "Declared-type note");
+    await expectUncovered(page.locator(".cm-completionInfo"), "Declared-type note");
+    await expectUncovered(list().getByRole("listbox"), "Completion list");
+  }
+  /** Nothing on the page paints over the popup: every sampled point inside it hits the popup itself. */
+  async function expectUncovered(box: ReturnType<Page["locator"]>, what: string) {
+    const covered = await box.evaluate(element => {
+      const rect = element.getBoundingClientRect(), hits: string[] = [];
+      for (const fx of [0.05, 0.25, 0.5, 0.75, 0.95]) for (const fy of [0.15, 0.5, 0.85]) {
+        const x = rect.left + rect.width * fx, y = rect.top + rect.height * fy, hit = document.elementFromPoint(x, y);
+        if (hit && !element.contains(hit)) hits.push(`${Math.round(x)},${Math.round(y)} ${hit.tagName.toLowerCase()}.${[...hit.classList].join(".")}`);
+      }
+      const chain: string[] = [];
+      for (let node: Element | null = element; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        const traits = [["z", style.zIndex], ["pos", style.position], ["transform", style.transform], ["isolation", style.isolation],
+          ["contain", style.contain], ["opacity", style.opacity], ["filter", style.filter], ["willChange", style.willChange]]
+          .filter(([key, value]) => !["auto", "none", "static", "normal", "1"].includes(value) || key === "z" && value !== "auto");
+        if (traits.length) chain.push(`${node.tagName.toLowerCase()}.${[...node.classList].join(".")} ${traits.map(t => t.join("=")).join(" ")}`);
+      }
+      return { hits, chain };
+    });
+    stacking.push({ what, ...covered });
+    expect(covered.hits, `${what} is not covered by other page content`).toEqual([]);
   }
   /** The long dotted alias wraps inside its box, and the box stays inside the viewport. */
   async function expectReadable(box: ReturnType<Page["locator"]>, what: string) {
@@ -118,6 +142,7 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await expect(hover).toContainText("connection: String");
   await expect(hover).toContainText(declaredNote);
   await expectReadable(page.locator(".cm-tooltip-hover"), "Hover");
+  await expectUncovered(page.locator(".cm-tooltip-hover"), "Hover");
   await capture(page, info, "typed-member-hover");
   await page.mouse.move(0, 0);
   await expect(hover).toHaveCount(0);
