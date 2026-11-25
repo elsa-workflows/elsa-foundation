@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 internal sealed partial class EfWorkflowLibraryStore
 {
     private static IReadOnlyList<WorkflowTagValue> Values(WorkflowTagEntity row) =>
-        JsonSerializer.Deserialize<WorkflowTagValue[]>(row.ValuesJson, Json) ?? throw new InvalidDataException("The stored tag values are invalid.");
+        JsonSerializer.Deserialize<WorkflowTagValue[]>(row.ValuesJson, options: Json) ?? throw new InvalidDataException("The stored tag values are invalid.");
     private static WorkflowTag Tag(WorkflowTagEntity row) => new(row.Id, row.Name, row.Description, row.Mode,
         row.Cardinality, row.Deprecated, row.Revision, Values(row));
 
@@ -120,7 +120,7 @@ internal sealed partial class EfWorkflowLibraryStore
                 var row = new WorkflowTagEntity { Id = NewId("tag-"), TenantId = Tenant, Name = input.Name,
                     NormalizedName = normalized, NameHash = hash, Description = input.Description,
                     Mode = input.Mode, Cardinality = input.Cardinality, Deprecated = input.Deprecated,
-                    Revision = Revision(), ValuesJson = JsonSerializer.Serialize(input.Values, Json), CreatedAt = now, LastModifiedAt = now,
+                    Revision = Revision(), ValuesJson = JsonSerializer.Serialize(input.Values, options: Json), CreatedAt = now, LastModifiedAt = now,
                     OperationKey = keyHash, OperationFingerprint = fingerprint };
                 db.Tags.Add(row); var result = Tag(row); Audit(row.Id, actorId, "tag.create", key, null, result); return result;
             }, cancellationToken);
@@ -161,7 +161,7 @@ internal sealed partial class EfWorkflowLibraryStore
             if (await TagRows.AnyAsync(candidate => candidate.Id != id && candidate.NameHash == hash, token)) Conflict("A tag with this name already exists.");
             row.Name = validated.Name; row.NormalizedName = normalized; row.NameHash = hash; row.Description = validated.Description;
             row.Mode = validated.Mode; row.Cardinality = validated.Cardinality; row.Deprecated = validated.Deprecated;
-            row.ValuesJson = JsonSerializer.Serialize(validated.Values, Json); row.Revision = Revision(); row.LastModifiedAt = DateTimeOffset.UtcNow;
+            row.ValuesJson = JsonSerializer.Serialize(validated.Values, options: Json); row.Revision = Revision(); row.LastModifiedAt = DateTimeOffset.UtcNow;
             var result = Tag(row); Audit(id, actorId, "tag.update", key, before, result); return result;
         }, cancellationToken);
     }

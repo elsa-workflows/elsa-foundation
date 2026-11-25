@@ -157,7 +157,7 @@ public sealed class CanaryFaultingInvokeHandler(IWorkflowSchedulerWorkHandler in
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         await inner.HandleAsync(workItem, cancellationToken);
-        var nodeId = workItem.Payload?.Deserialize<RuntimeInvokeActivityCommandPayload>()?.ExecutableNodeId;
+        var nodeId = workItem.Payload?.Deserialize<RuntimeInvokeActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)?.ExecutableNodeId;
         if (nodeId is not null && injections.HandlerFaultFor(nodeId) is { } planted)
             throw new InvalidOperationException(planted);
     }

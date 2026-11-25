@@ -73,7 +73,7 @@
   "content": {
     "workflowDefinitionId": "definition",
     "draftId": "draft",
-    "revision": "sha256:35627411077a2839a0b99a43f17ff96d00afeed9bbceb65e7075d036fc75fb11",
+    "revision": "sha256:d700ae21e0487446041bd38a16fe3896ae79d78ec23a18a605c34359d4711ec7",
     "selectedNodeId": "api",
     "selectedActivityType": "Acme.ApiCall",
     "inspectedNodeId": null,

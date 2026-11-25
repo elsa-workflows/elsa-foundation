@@ -149,12 +149,12 @@ Elsa.Activities.Design.Core.Models.ActivityArgumentState.Value.get -> Elsa.Activ
 Elsa.Activities.Design.Core.Models.ActivityArgumentState.Value.init -> void
 Elsa.Activities.Design.Core.Models.ActivityArgumentValue
 Elsa.Activities.Design.Core.Models.ActivityArgumentValue.<Clone>$() -> Elsa.Activities.Design.Core.Models.ActivityArgumentValue!
-Elsa.Activities.Design.Core.Models.ActivityArgumentValue.ActivityArgumentValue(object? Value, string! ExpressionType) -> void
-Elsa.Activities.Design.Core.Models.ActivityArgumentValue.Deconstruct(out object? Value, out string! ExpressionType) -> void
+Elsa.Activities.Design.Core.Models.ActivityArgumentValue.ActivityArgumentValue(System.Text.Json.JsonElement? Value, string! ExpressionType) -> void
+Elsa.Activities.Design.Core.Models.ActivityArgumentValue.Deconstruct(out System.Text.Json.JsonElement? Value, out string! ExpressionType) -> void
 Elsa.Activities.Design.Core.Models.ActivityArgumentValue.Equals(Elsa.Activities.Design.Core.Models.ActivityArgumentValue? other) -> bool
 Elsa.Activities.Design.Core.Models.ActivityArgumentValue.ExpressionType.get -> string!
 Elsa.Activities.Design.Core.Models.ActivityArgumentValue.ExpressionType.init -> void
-Elsa.Activities.Design.Core.Models.ActivityArgumentValue.Value.get -> object?
+Elsa.Activities.Design.Core.Models.ActivityArgumentValue.Value.get -> System.Text.Json.JsonElement?
 Elsa.Activities.Design.Core.Models.ActivityArgumentValue.Value.init -> void
 Elsa.Activities.Design.Core.Models.ActivityAuthoringCatalogEntry
 Elsa.Activities.Design.Core.Models.ActivityAuthoringCatalogEntry.<Clone>$() -> Elsa.Activities.Design.Core.Models.ActivityAuthoringCatalogEntry!

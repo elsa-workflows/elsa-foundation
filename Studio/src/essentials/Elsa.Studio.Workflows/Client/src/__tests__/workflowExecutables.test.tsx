@@ -2,6 +2,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate, setStudioTimeZonePreference } from "@elsa-workflows/studio-sdk";
 import { StudioHttpError } from "@elsa-workflows/studio-sdk";
 import { listExecutables } from "../api/runtime";
 import { listDefinitions } from "../api/workflowDesign";
@@ -43,6 +44,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setStudioTimeZonePreference("browser");
   flushSync(() => root.unmount());
   container.remove();
   window.history.replaceState({}, "", "/");
@@ -147,6 +149,7 @@ describe("WorkflowExecutables", () => {
   });
 
   it("keeps long workflow names on one line and offers an empty-state action", async () => {
+    setStudioTimeZonePreference("UTC");
     const longName = "Customer-onboarding-and-KYC-refresh-for-regulated-markets-with-manual-exception-review-and-multi-region-escalation";
     vi.mocked(listExecutables).mockResolvedValue([executableSummary()]);
     vi.mocked(listDefinitions).mockResolvedValue({ definitions: [definitionSummary(longName)], page: 1, pageSize: 100, totalCount: 1 });
@@ -176,9 +179,10 @@ describe("WorkflowExecutables", () => {
 
     const published = container.querySelector<HTMLTimeElement>(".wf-executable-published time");
     const publishedAt = new Date("2026-10-18T00:00:00Z");
-    expect(published?.querySelector(".studio-timestamp-date")?.textContent).toBe(new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(publishedAt));
-    expect(published?.querySelector(".studio-timestamp-time")?.textContent).toBe(new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(publishedAt));
-    expect(published?.getAttribute("title")).toBe(new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "long" }).format(publishedAt));
+    expect(published?.textContent).toMatch(/UTC[+-]\d{2}:\d{2}/);
+    expect(published?.querySelector(".studio-timestamp-date")?.textContent).toBe(new Intl.DateTimeFormat(undefined, { timeZone: "UTC", dateStyle: "medium" }).format(publishedAt));
+    expect(published?.querySelector(".studio-timestamp-time")?.textContent).toBe(`${new Intl.DateTimeFormat(undefined, { timeZone: "UTC", timeStyle: "medium" }).format(publishedAt)} UTC+00:00`);
+    expect(published?.getAttribute("title")).toBe(formatStudioDate(publishedAt));
   });
 
   it("offers publication management choices for distinct published workflow references", async () => {

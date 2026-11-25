@@ -66,7 +66,7 @@ public sealed class BpmnCompleteSourceExportTests
 
     private static ActivityNode Owner()
     {
-        var native = new ActivityNode("native", "native-exact-version", [new("secret", new("secret-native-value", "Literal"), null, null, null, null)], []);
+        var native = new ActivityNode("native", "native-exact-version", [new("secret", ArgumentValue.FromClr("secret-native-value", "Literal"), null, null, null, null)], []);
         var variable = new VariableDefinition("local", "Local", new TypeReference("String"), null, null);
         var source = new BpmnAuthoredDocument(Xml, "P", [native], [new("Work", native.NodeId)], [variable])
         { ScopeHeaders = [new("Sub", "sub-native", "process-exact-version", [], [], [variable])] };

@@ -26,7 +26,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42")));
 
         var activation = Assert.Single(activator.Requests);
@@ -71,7 +71,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(new ValueTypeDescriptor("test/wrong-trigger"), "dedupe-42")));
 
         Assert.Empty(activator.Requests);
@@ -96,7 +96,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42")));
 
         Assert.Empty(activator.Requests);
@@ -121,7 +121,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(activator, observer);
         var handler = NewHandler(provider);
         var workItem = NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42"));
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => handler.HandleAsync(workItem, cancellation.Token).AsTask());
@@ -216,7 +216,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
                 registration.ResumeTargetKey,
                 registration.StimulusType,
                 registration.StimulusHash,
-                JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
                 RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason,
                 new RuntimeTypedTriggerDeliveryMetadata(
                     $"delivery-{index}",
@@ -234,7 +234,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
                 _now.AddSeconds(index),
                 _now.AddSeconds(index),
                 40 + index,
-                JsonSerializer.SerializeToElement(payload),
+                JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
                 new Dictionary<string, string>(),
                 new Dictionary<string, string>());
 
@@ -267,7 +267,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(new StatefulResumeActivator(), observer);
         var handler = NewHandler(provider);
         var workItem = NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42"));
 
         await handler.HandleAsync(workItem);
@@ -313,7 +313,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(new StatefulResumeActivator(), observer);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42")));
 
         Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
@@ -344,7 +344,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(new ConstructionFailingResumeActivator());
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42")));
 
         await AssertConsumedResumeFaultAsync("ActivityResumeConstructionFailed");
@@ -362,7 +362,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(new ThrowingResumeActivator());
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42")));
 
         await AssertConsumedResumeFaultAsync("ActivityResumeFaulted");
@@ -381,7 +381,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42")));
 
         Assert.True(activator.Activity.Result.GetterRead);
@@ -402,7 +402,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(activator);
         var handler = NewHandler(provider);
         var workItem = NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42"));
 
         await handler.HandleAsync(workItem);
@@ -426,7 +426,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(activator);
         var handler = NewHandler(provider);
         var workItem = NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42"));
 
         await handler.HandleAsync(workItem);
@@ -468,14 +468,14 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42")));
 
         var suspended = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.Equal(ActivityExecutionStatus.Suspended, suspended!.Status);
         Assert.Equal("TriggerWaiting", suspended.SubStatus);
         Assert.Null(suspended.Completion);
-        Assert.Equal("request-43", suspended.PrivateState!.Value.InlineValue!.Value.GetProperty("RequestId").GetString());
+        Assert.Equal("request-43", suspended.PrivateState!.Value.InlineValue!.Value.GetProperty("requestId").GetString());
         Assert.Collection(
             suspended.Attempts!.OrderBy(attempt => attempt.Ordinal),
             attempt => Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend, attempt.TransitionKind),
@@ -496,11 +496,11 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityAttemptClaimed).Commit;
         Assert.Equal(RuntimeStateChangeOperation.Delete, Assert.Single(claimCommit.StateChanges.Bookmarks).Operation);
         var replacementIntent = Assert.Single(commit.PostCommitIntents);
-        var replacementWork = replacementIntent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var replacementWork = replacementIntent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.CreateBookmark, replacementWork.CommandKind);
-        Assert.Equal(replacement.RegistrationId, replacementWork.Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>()!.BookmarkId);
-        Assert.Equal(ResuspendingApprovalActivity.Deadline, replacementWork.Payload.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>()!.ExpiresAt);
-        Assert.DoesNotContain("ExpiresAt", JsonSerializer.Serialize(replacement));
+        Assert.Equal(replacement.RegistrationId, replacementWork.Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.BookmarkId);
+        Assert.Equal(ResuspendingApprovalActivity.Deadline, replacementWork.Payload.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.ExpiresAt);
+        Assert.DoesNotContain("ExpiresAt", JsonSerializer.Serialize(replacement, Elsa.Serialization.Core.JsonBaseline.Options));
         Assert.True(Assert.Single(activator.Activities).Disposed);
     }
 
@@ -518,7 +518,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(activator, observer);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42")));
 
         Assert.True(Assert.Single(activator.Activities).Disposed);
@@ -563,7 +563,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await using var provider = NewProvider(activator);
 
         await NewHandler(provider).HandleAsync(NewResumeWorkItem(
-            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
             triggerDelivery: Delivery(triggerType, "dedupe-42")));
 
         Assert.True(Assert.Single(activator.Activities).Disposed);
@@ -580,7 +580,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             _checkpointWriter.ListCommits(),
             write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCancelled).Commit;
         Assert.Equal(Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.ActivityCancelled, commit.Checkpoint.Name);
-        var cancelWork = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var cancelWork = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.Cancel, cancelWork.CommandKind);
     }
 
@@ -595,7 +595,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
                 stateType.SchemaVersion!.Value,
                 ValueEnvelope.Inline(
                     stateType,
-                    JsonSerializer.SerializeToElement(new ApprovalState("request-42")),
+                    Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalState("request-42")),
                     ValueProtectionPolicy.InstanceInline),
                 "actexec-1:attempt:1",
                 _now.AddMinutes(-1)),
@@ -627,7 +627,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             triggerType,
             ValueEnvelope.Inline(
                 triggerType,
-                JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)),
                 ValueProtectionPolicy.InstanceInline),
             "provider.delivery-status",
             DateTimeOffset.UnixEpoch,

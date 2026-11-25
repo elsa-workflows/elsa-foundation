@@ -4,9 +4,8 @@ using System.Text.Json.Serialization;
 namespace Elsa.Connections.Api;
 
 [JsonSourceGenerationOptions(
-    PropertyNameCaseInsensitive = true,
+    PropertyNameCaseInsensitive = false,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase,
     UseStringEnumConverter = true,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(ConnectionMetadata))]
@@ -19,4 +18,16 @@ namespace Elsa.Connections.Api;
 [JsonSerializable(typeof(ConnectionTestResult))]
 [JsonSerializable(typeof(OAuthRedirectUriResponse))]
 [JsonSerializable(typeof(OAuthAuthorizeUrlResponse))]
-internal partial class ConnectionsJsonContext : JsonSerializerContext;
+internal partial class ConnectionsJsonContext : JsonSerializerContext
+{
+    internal static ConnectionsJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.Converters.Add(new JsonStringEnumConverter());
+        return options;
+    }
+
+}

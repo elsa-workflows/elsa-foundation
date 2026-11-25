@@ -39,7 +39,7 @@ public sealed record AgentModelCapabilitiesRequest(string ProviderKey, string Co
 /// <summary>Current authorized capabilities of one connection's model, read without inference.</summary>
 public sealed record AgentModelCapabilitiesView(JsonElement SettingsSchema, bool SupportsJsonSchema, int MaximumOutputTokens);
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata,
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata,
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
 [JsonSerializable(typeof(AgentSourceCreate))]
 [JsonSerializable(typeof(AgentSourceSave))]
@@ -64,12 +64,17 @@ public sealed record AgentModelCapabilitiesView(JsonElement SettingsSchema, bool
 [JsonSerializable(typeof(AgentModelCapabilitiesView))]
 internal partial class AgentApiJsonContext : JsonSerializerContext
 {
-    internal static AgentApiJsonContext WireContext => Wire.Context;
+    internal static AgentApiJsonContext WireContext { get; } = new(CreateWireOptions());
 
-    private static class Wire
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
     {
-        internal static readonly AgentApiJsonContext Context = new(new JsonSerializerOptions(Default.Options));
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
     }
+
+
 }
 
 /// <summary>Known refusals become plain problems; an unavailable connection never explains which check failed.</summary>

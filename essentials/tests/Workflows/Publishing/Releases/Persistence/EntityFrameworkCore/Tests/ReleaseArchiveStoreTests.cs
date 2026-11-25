@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
@@ -321,7 +322,7 @@ public sealed class ReleaseArchiveStoreTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Same_length_attachment_or_whitespace_only_manifest_tampering_refuses_exact_byte_integrity(bool manifest)
+    public async Task Json_manifest_spelling_is_canonical_while_binary_attachments_keep_exact_integrity(bool manifest)
     {
         await using var database = await ArchiveDatabase.CreateAsync();
         await using var services = database.Services();
@@ -342,6 +343,10 @@ public sealed class ReleaseArchiveStoreTests
                 .ToDictionary(x => x, x => (ReadOnlyMemory<byte>)original.Transport.GetBlobBytes(x), StringComparer.Ordinal);
             Assert.Equal(original.Transport.Digest, scope.ServiceProvider.GetRequiredService<IReleaseBundleCodec>().Validate(changed, blobs).Digest);
             await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_release_archives SET Manifest={changed}");
+            var reloaded = (await reader.FindAsync("raw-integrity"))!;
+            Assert.Equal(original.Transport.Digest, reloaded.Transport.Digest);
+            Assert.Equal(changed, reloaded.Transport.GetManifestBytes());
+            return;
         }
         else
         {
@@ -350,6 +355,32 @@ public sealed class ReleaseArchiveStoreTests
         }
         Assert.Equal("archive_stored_content_invalid", (await Assert.ThrowsAsync<ReleaseArchiveStoreException>(
             () => reader.FindAsync("raw-integrity").AsTask())).Code);
+    }
+
+    [Theory]
+    [InlineData(false, "{")]
+    [InlineData(true, "{")]
+    [InlineData(false, "{\"v\":\"\\uD800\"}")]
+    [InlineData(true, "{\"v\":\"\\uD800\"}")]
+    [InlineData(false, "{\"\\uD800\":1}")]
+    [InlineData(true, "{\"\\uD800\":1}")]
+    public async Task Malformed_stored_json_keeps_the_owned_corruption_refusal(bool manifest, string raw)
+    {
+        await using var database = await ArchiveDatabase.CreateAsync();
+        await using var services = database.Services();
+        await using var scope = services.CreateAsyncScope();
+        var fixture = new ArchiveFixture();
+        await scope.ServiceProvider.GetRequiredService<IReleaseArchiveWriter>().CreateAsync("malformed-json", new MemoryStream(fixture.Zip()));
+        var context = scope.ServiceProvider.GetRequiredService<ConsumerContext>();
+        var length = manifest ? fixture.ManifestBytes.Length : fixture.Payload.Length;
+        Assert.True(raw.Length <= length);
+        var changed = Encoding.UTF8.GetBytes(raw.PadRight(length));
+        Assert.Equal(length, changed.Length);
+        if (manifest) await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_release_archives SET Manifest={changed}");
+        else await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_release_archive_entries SET Content={changed} WHERE EntryKind=1");
+        var error = await Assert.ThrowsAsync<ReleaseArchiveStoreException>(() => scope.ServiceProvider.GetRequiredService<IReleaseArchiveReader>()
+            .FindAsync("malformed-json").AsTask());
+        Assert.Equal("archive_stored_content_invalid", error.Code);
     }
 
     [Theory]

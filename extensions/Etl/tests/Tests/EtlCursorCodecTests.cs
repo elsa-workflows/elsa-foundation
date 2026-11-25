@@ -16,9 +16,20 @@ public sealed class EtlCursorCodecTests
 
         var token = codec.Encode(state);
 
+        Assert.True(token.Split('.')[1] == "EJR-GfslZM43YKHZH12_BMCN86et4hIq9M44wCD-VDI",
+            "First-stable hash freeze: changes require an explicit identity/migration decision.");
         Assert.True(token.Length <= 4096);
         Assert.DoesNotContain(SigningKey, token, StringComparison.Ordinal);
         Assert.Equal(state, codec.Decode(token));
+    }
+
+    [Fact]
+    public void Decode_refuses_the_former_raw_json_signature_without_a_compatibility_fallback()
+    {
+        var codec = new EtlCursorCodec(SigningKey);
+        var payload = DecodePayload(codec.Encode(State()));
+        var rawSignature = HMACSHA256.HashData(Encoding.UTF8.GetBytes(SigningKey), payload);
+        Assert.Throws<FormatException>(() => codec.Decode($"{EncodeBase64Url(payload)}.{EncodeBase64Url(rawSignature)}"));
     }
 
     [Fact]
@@ -123,7 +134,7 @@ public sealed class EtlCursorCodecTests
     private static string Sign(string json, string signingKey)
     {
         var payload = Encoding.UTF8.GetBytes(json);
-        var signature = HMACSHA256.HashData(Encoding.UTF8.GetBytes(signingKey), payload);
+        var signature = Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(payload, Encoding.UTF8.GetBytes(signingKey));
         return $"{EncodeBase64Url(payload)}.{EncodeBase64Url(signature)}";
     }
 

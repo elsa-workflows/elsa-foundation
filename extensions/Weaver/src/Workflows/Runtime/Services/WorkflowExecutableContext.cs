@@ -32,7 +32,7 @@ internal static class WorkflowExecutableContext
     internal const string UnavailableCode = "workflow.executable.inspection_unavailable";
     internal const string UnavailableMessage = "Exactly one owning workflow Executable inspection is required; workflow Executables are unavailable.";
 
-    internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>The disclosure gate: the host's current workflow runtime read permission for the session actor in its tenant.</summary>
     internal static readonly WeaverToolDescriptor ReadGate = new("workflow_executable_read", "Read workflow Executable", "Reads one exact workflow Executable.",
@@ -52,9 +52,7 @@ internal static class WorkflowExecutableContext
         reference = null;
         error = "The workflow Executable context must name exactly one artifact id and its Artifact Hash, bound to its Executable target.";
         if (attachment.ModuleId != ModuleId || attachment.ContentType != ExecutableKind || attachment.SchemaVersion != "1") return false;
-        JsonElement content;
-        try { content = attachment.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(attachment.Content, JsonOptions); }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
+        if (attachment.Content is not { } content) return false;
         if (content.ValueKind != JsonValueKind.Object) return false;
         string? artifactId = null, artifactHash = null, sourceReferenceId = null;
         var admitted = attachment.Origin == WeaverContextOrigin.AuthoritativeRead;

@@ -10,17 +10,17 @@ namespace Elsa.Diagnostics.OpenTelemetry.Endpoints;
 public sealed class OpenTelemetryStreamItemSerializer
 {
     /// <summary>Serializes a telemetry resource to its JSON object form.</summary>
-    public string Serialize(TelemetryResource resource) => JsonSerializer.Serialize(resource, OpenTelemetryJsonContext.Default.TelemetryResource);
+    public string Serialize(TelemetryResource resource) => JsonSerializer.Serialize(resource, OpenTelemetryJsonContext.WireContext.TelemetryResource);
 
     /// <summary>Serializes a telemetry trace to its JSON object form.</summary>
-    public string Serialize(TelemetryTrace trace) => JsonSerializer.Serialize(trace, OpenTelemetryJsonContext.Default.TelemetryTrace);
+    public string Serialize(TelemetryTrace trace) => JsonSerializer.Serialize(trace, OpenTelemetryJsonContext.WireContext.TelemetryTrace);
 
     /// <summary>Serializes a metric point to its JSON object form.</summary>
-    public string Serialize(MetricPoint point) => JsonSerializer.Serialize(point, OpenTelemetryJsonContext.Default.MetricPoint);
+    public string Serialize(MetricPoint point) => JsonSerializer.Serialize(point, OpenTelemetryJsonContext.WireContext.MetricPoint);
 
     /// <summary>Serializes an OTLP log record to its JSON object form.</summary>
-    public string Serialize(OtlpLogRecord log) => JsonSerializer.Serialize(log, OpenTelemetryJsonContext.Default.OtlpLogRecord);
+    public string Serialize(OtlpLogRecord log) => JsonSerializer.Serialize(log, OpenTelemetryJsonContext.WireContext.OtlpLogRecord);
 
     /// <summary>Serializes a dropped-item summary to its JSON object form.</summary>
-    public string Serialize(OpenTelemetryDroppedItemSummary dropped) => JsonSerializer.Serialize(dropped, OpenTelemetryJsonContext.Default.OpenTelemetryDroppedItemSummary);
+    public string Serialize(OpenTelemetryDroppedItemSummary dropped) => JsonSerializer.Serialize(dropped, OpenTelemetryJsonContext.WireContext.OpenTelemetryDroppedItemSummary);
 }

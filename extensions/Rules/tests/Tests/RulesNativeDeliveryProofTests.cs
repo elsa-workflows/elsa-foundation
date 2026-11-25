@@ -498,7 +498,7 @@ internal sealed class RulesNativeDeliveryTestFixture
 
     private ActivityPrivateState CreatePrivateState() => new(ActivityId, 1,
         ValueEnvelope.Inline(new(typeof(RunRulesState).FullName!, schemaVersion: RulesNativeBoundary.FormatVersion),
-            JsonSerializer.SerializeToElement(new RunRulesState(RulesNativeBoundary.FormatVersion, RulesNativeBoundary.Write(Request))),
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new RunRulesState(RulesNativeBoundary.FormatVersion, RulesNativeBoundary.Write(Request))),
             ValueProtectionPolicy.InstanceInline),
         "initial-attempt", Now);
 
@@ -512,7 +512,7 @@ internal sealed class RulesNativeDeliveryTestFixture
             TerminalElement(Envelope.Result), InvalidCode: null);
         var payload = retired
             ? ValueEnvelope.Absent(RulesNativeBoundary.CompletionType, ValueProtectionPolicy.InstanceInline)
-            : ValueEnvelope.Inline(RulesNativeBoundary.CompletionType, JsonSerializer.SerializeToElement(completion),
+            : ValueEnvelope.Inline(RulesNativeBoundary.CompletionType, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(completion),
                 ValueProtectionPolicy.InstanceInline);
         return new(deliveryId, Address.RegistrationId, RulesNativeBoundary.CompletionType, payload,
             RulesNativeBoundary.ProviderId, Now.AddSeconds(2),
@@ -525,7 +525,7 @@ internal sealed class RulesNativeDeliveryTestFixture
     private RuleTerminalEnvelope MakeEnvelope(RuleTerminalResult result)
     {
         var bytes = RuleRecordCodec.DeliveryBytes("rules-delivery-1", Address, result);
-        return new("rules-delivery-1", Address, result, RuleRecordCodec.Hash(bytes));
+        return new("rules-delivery-1", Address, result, RuleRecordCodec.JsonHash(bytes));
     }
 
     private static JsonElement TerminalElement(RuleTerminalResult result)

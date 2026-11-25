@@ -233,8 +233,9 @@ public sealed class SimpleActivityExecutionContext(
         _ancestorNotificationRequests.ToArray();
 
     /// <summary>Projects the engine context to the deliberately smaller ordinary activity context.</summary>
-    public ActivityExecutionContext ToActivityExecutionContext() =>
-        new ActivityExecutionContext(
+    public ActivityExecutionContext ToActivityExecutionContext()
+    {
+        var context = new ActivityExecutionContext(
             WorkflowExecutionId,
             InvocationId,
             AttemptId,
@@ -245,7 +246,9 @@ public sealed class SimpleActivityExecutionContext(
         {
             DefaultOnNull = DefaultOnNull,
             UndefinedAsNull = UndefinedAsNull
-        }.WithWarnings(Warnings!).WithResolvedOperationKeys(activityExecutionState);
+        }.WithResolvedOperationKeys(activityExecutionState);
+        return Warnings is { } warnings ? context.WithWarnings(warnings) : context;
+    }
 
     /// <summary>
     /// The visible container-scope chain threaded by the runtime for this concrete activity execution.

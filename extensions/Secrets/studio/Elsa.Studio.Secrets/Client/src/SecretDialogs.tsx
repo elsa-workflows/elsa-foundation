@@ -1,3 +1,4 @@
+import { localDateTimeToIso, resolveStudioTimeZone, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RevealToggle, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
@@ -31,6 +32,7 @@ export function CreateSecretDialog(props: CreateSecretFormProps & { notice?: Rea
 }
 
 export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, scopeCatalogError = false, onRetryScopeCatalog, onCancel, onSave, onStateChange, initialField }: CreateSecretFormProps & { initialField?: React.RefObject<HTMLElement | null> }) {
+  useStudioTimeZone();
   const initialTypeName = descriptors.types[0]?.name ?? "";
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -73,7 +75,7 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
     if (!selectedType) { fail("secret", "type", "No secret type is available. Refresh secret options."); return; }
     if (!compatible) { fail("storage", "store", "No compatible secret store is available. Refresh secret options or choose another type."); return; }
     if (usesConfigurationKey ? !configurationKey.trim() : !value) { fail("secret", usesConfigurationKey ? "configuration" : "value", usesConfigurationKey ? "Enter a configuration key." : "Enter a secret value."); return; }
-    if (expiresAt && Number.isNaN(new Date(expiresAt).getTime())) { fail("storage", "expires", "Enter a valid expiry date."); return; }
+    try { toIsoDate(expiresAt); } catch (error) { fail("storage", "expires", error instanceof Error ? error.message : "Enter a valid expiry date."); return; }
     submittingRef.current = true; setSubmitting(true); setError(""); setInvalid(""); setInvalidField("");
     try {
       await onSave({ name: trimmedName, displayName: displayName.trim() || trimmedName, description: description.trim() || undefined, typeName, storeName,
@@ -127,7 +129,7 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
         <SecretScopePicker value={scope} options={descriptors.scopes} loading={scopeCatalogLoading} error={scopeCatalogError} onChange={setScope} onRetry={onRetryScopeCatalog} externalMatchingHintId={scopeMatchingHintId} compact disabled={submitting} />
         <ScopeMatchingHint id={scopeMatchingHintId} concise />
         <SecretFormField label="Expires" disabled={submitting} error={fieldError("expires")}>
-          {attributes => <input {...attributes} data-secret-field="expires" type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} />}
+          {attributes => <input {...attributes} data-secret-field="expires" aria-description={`Date and time in ${resolveStudioTimeZone()}`} type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} />}
         </SecretFormField>
       </> }}
     </SecretEditorTabs>
@@ -147,6 +149,7 @@ export function RotateSecretDialog({
   onCancel(): void;
   onSave(request: RotateSecretRequest): Promise<void>;
 }) {
+  useStudioTimeZone();
   const [value, setValue] = useState("");
   const [configurationKey, setConfigurationKey] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
@@ -190,7 +193,7 @@ export function RotateSecretDialog({
         ) : (
           <SecretValueField label="New value" value={value} typeName={secret.typeName} editorHint={type?.editorHint ?? null} onChange={setValue} />
         )}
-        <StudioField label="Expires"><input type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></StudioField>
+        <StudioField label={`Expires (${resolveStudioTimeZone()})`}><input aria-description={`Date and time in ${resolveStudioTimeZone()}`} type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></StudioField>
     </StudioDialog>
   );
 }
@@ -258,5 +261,5 @@ function parseTags(value: string) {
 }
 
 function toIsoDate(value: string) {
-  return value ? new Date(value).toISOString() : undefined;
+  return value ? localDateTimeToIso(value) : undefined;
 }

@@ -22,7 +22,7 @@ internal sealed class WorkflowApplyOperationBatchTool(IWeaverToolAuthorizer auth
 {
     public const string ToolName = "workflow_apply_operation_batch";
     public const string RendererId = "weaver.workflows.batch-result";
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     // Static so the context source can report the same host decision the engine applies to this tool's advertisement.
     internal static WeaverToolDescriptor Contract { get; } = new(ToolName, "Change workflow draft",

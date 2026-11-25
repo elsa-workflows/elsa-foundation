@@ -4,6 +4,9 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Elsa.Git;
 using Elsa.Serialization.Core;
+using Elsa.Serialization.Testing;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
@@ -333,7 +336,17 @@ internal static class GitTestSupport
         System.IO.Path.Combine(System.IO.Path.GetTempPath(), "elsa-gitops-tests", "cache-" + Guid.NewGuid().ToString("N"));
 
     /// <summary>The canonical (compact) empty-state JSON written into version fixtures.</summary>
-    public static string EmptyStateJson => JsonSerializer.Serialize(WorkflowDefinitionState.Empty);
+    public static string EmptyStateJson => JsonSerializer.Serialize(WorkflowDefinitionState.Empty, JsonBaseline.Options);
+
+    // This is authored data: its member spelling, whitespace, null and number tokens belong
+    // to the value, rather than to the surrounding WorkflowDefinitionState contract.
+    internal const string AuthoredRawFixtureValue = """{ "CustomerName" : "Ren\u00e9 <+>", "N" : 1.0, "Big" : 9007199254740993, "Null" : null }""";
+    internal static WorkflowDefinitionState AuthoredStateFixture => WorkflowDefinitionState.Empty with
+    {
+        Variables = [new VariableDefinition("raw-fixture", "FixtureName", new TypeReference("Any"), null,
+            ArgumentValue.FromClr(JsonSerializer.Deserialize<JsonElement>(AuthoredRawFixtureValue, JsonBaseline.Options), "Literal"))]
+    };
+    internal static string AuthoredStateJson => SerializationServices.PayloadSerializer().Serialize(AuthoredStateFixture);
 
     /// <summary>
     /// Creates a bare remote whose <c>main</c> branch has one initial commit (so a Writer clone can
@@ -393,7 +406,7 @@ public sealed class InMemoryVersionStore : IWorkflowDefinitionVersionStore
 /// </summary>
 internal sealed class FakePayloadSerializer : IPayloadSerializer
 {
-    public string Serialize(object payload) => JsonSerializer.Serialize(payload);
+    public string Serialize(object payload) => JsonSerializer.Serialize(payload, JsonBaseline.Options);
     public T Deserialize<T>(string serializedData) => (T)(object)WorkflowDefinitionState.Empty;
     public JsonElement SerializeToElement(object payload) => throw new NotSupportedException();
     public object Deserialize(string serializedData) => throw new NotSupportedException();

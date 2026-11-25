@@ -35,7 +35,7 @@ public sealed class WorkflowAlterationJobDispatcher(
             job.WorkflowExecutionId,
             WorkflowExecutionCommandKind.AlterWorkflow,
             now,
-            JsonSerializer.SerializeToElement(payload),
+            JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             metadata);
         var partition = new WorkflowExecutionPartition(job.TenantPartition);
         var envelope = new WorkflowExecutionCommandEnvelope(

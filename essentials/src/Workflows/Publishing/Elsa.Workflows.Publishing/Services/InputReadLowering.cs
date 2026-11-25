@@ -41,20 +41,19 @@ internal static class InputReadLowering
         if (!member)
             return value.Value is JsonElement json && json.TryGetProperty("memberPath", out _)
                 ? value
-                : new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey }), WorkflowRequestExpressionType);
+                : new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey }, Elsa.Serialization.Core.JsonBaseline.Options), WorkflowRequestExpressionType);
 
         // The member path is carried as authored, valid or not, so the request member read is refused for the same path.
         var payload = (JsonElement)value.Value!;
         return payload.TryGetProperty("memberPath", out var memberPath)
-            ? new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey, memberPath }), ActivityDataReadRoles.WorkflowRequestMember)
-            : new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey }), ActivityDataReadRoles.WorkflowRequestMember);
+            ? new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey, memberPath }, Elsa.Serialization.Core.JsonBaseline.Options), ActivityDataReadRoles.WorkflowRequestMember)
+            : new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey }, Elsa.Serialization.Core.JsonBaseline.Options), ActivityDataReadRoles.WorkflowRequestMember);
     }
 
-    // A stored read is { referenceKey } JSON; an in-process caller may hand an Input read over as the reference itself.
-    // Nothing else is read as a reference, so no other object's serialized shape decides what is lowered.
-    private static string? ReferenceKey(object? payload) => payload switch
+    // The authored boundary has already converted CLR values through their scoped contract.
+    // Lowering recognizes only the resulting { referenceKey } JSON contract.
+    private static string? ReferenceKey(JsonElement? payload) => payload switch
     {
-        VariableReference reference => reference.ReferenceKey,
         JsonElement { ValueKind: JsonValueKind.Object } json when json.TryGetProperty("referenceKey", out var key) && key.ValueKind == JsonValueKind.String =>
             key.GetString(),
         _ => null

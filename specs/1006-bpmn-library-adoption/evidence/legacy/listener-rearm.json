@@ -6,8 +6,8 @@
   "interchangePackage": "0.1.1-preview.19",
   "stateAlias": "Elsa.Bpmn.ExecutionState",
   "stateVersion": 1,
-  "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d",
-  "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+  "databaseSha256": "723d84a4fd81999d62d6dc9f7b81207a0b30b634e6fd43acc87db80516c47492",
+  "compressedSha256": "84cac2395a81ac306e13bf307cf952dd6a8b7076540bf4bade3766bad171623a",
   "oldHostControl": "fresh provider over a separate exact database copy passed",
   "facts": {
     "parentId": "legacy-activity-0",
@@ -74,5 +74,101 @@
     "queuedIds": [
       "fa286594d87e0e20:complete:legacy-activity-4"
     ]
+  },
+  "s9Regeneration": {
+    "spec": 1207,
+    "inputDatabaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d",
+    "inputCompressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+    "changedContracts": 4,
+    "changedDescriptors": 8,
+    "changedFields": [
+      "workflow_executable.ContentJson/activityContract/schemaFingerprint",
+      "workflow_executable.ContentJson/descriptorPayload/typeAlias",
+      "activity_execution_state.ContentJson/contractIdentity/schemaFingerprint",
+      "activity_execution_state.ContentJson/inputSnapshot/contractFingerprint",
+      "activity_execution_state.ContentJson/completion/contractFingerprint",
+      "activity_execution_state.ContentJson/inputSnapshot/bindingFingerprint",
+      "activity_execution_state.ContentJson/privateState/value/inlineValue: EventWaitState.EventName→eventName or LegacyCheckpointOutcomeWaitState.Name→name only"
+    ],
+    "historicalControl": "oldHostControl applies to the original input capture, before the S-9 transformation",
+    "statePinsRegenerated": true,
+    "changedStateContractReferences": 12,
+    "changedBindingFingerprints": 5,
+    "changedLeafStateMemberNames": 2
+  },
+  "s9ProtocolRegeneration": {
+    "spec": 1207,
+    "inputCompressedSha256": "b93a5863af262c09d15160854c40f0e6324ea47c6db400a2bf1fbd4de14b3f8d",
+    "inputDatabaseSha256": "156fcf65755ce9c6ea1962a424d2ed0534a0f37c6212af7b3fcec99beb542e0a",
+    "changedColumns": [
+      "elsa_runtime_post_commit_outbox.ContentJson",
+      "elsa_runtime_scheduler_work_item.ContentJson"
+    ],
+    "changes": [
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 1,
+        "renamedKeyTokens": 23,
+        "inputSha256": "ccf04ce2aadcf544d0337ed009a2b6a4747eadfbd0c347ff288fd317677aee72",
+        "outputSha256": "f7263dfebc0f0c7e05bbad677b0ffe2e31fbdc1df4352ec9880e52983b1d55d5"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 2,
+        "renamedKeyTokens": 23,
+        "inputSha256": "31930f4e58a700b2c209a60331ae27047e253d43935e8ffd56a95a16c9a061c4",
+        "outputSha256": "6cc8459e47ce23cd28f1180d3bc7fa1bb1b1b3b5dc32d0529bbb69f784558f85"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 3,
+        "renamedKeyTokens": 32,
+        "inputSha256": "afb5de37c4a79d4fa45d1712ccc5601a8e2123658cf8c1b242d8f2fe9abda52d",
+        "outputSha256": "34ccc6213323fe68a16bf200242d8472dfac134fadd09355769dc4fdbe48226a"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 4,
+        "renamedKeyTokens": 32,
+        "inputSha256": "fbac7abe6f6fcff7cff2cdc98a211ea224d2f13f157137f35d12d5c1b38e1833",
+        "outputSha256": "1f47b0e7e6b90706ac9f973d622c3bd4fbc8fac8103836ab481442aa2b41eb1b"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 5,
+        "renamedKeyTokens": 23,
+        "inputSha256": "e0af1a2c125b8fcfae060b1c8b3cd59203d6daee17abd2013872c64561650eab",
+        "outputSha256": "96dcc5549ce8d71c3f2ab9d074a2dac9ce4de01691843d0c450402fc4ae7b29d"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 6,
+        "renamedKeyTokens": 23,
+        "inputSha256": "6a0ceab88d41b790eb71fd75a02dac2d674023c6aacd2cd86431b6fdec30cdc9",
+        "outputSha256": "cef46927de9e0ef37638afc213babfc15ab6d1c866c8e59d025b756009830d19"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 7,
+        "renamedKeyTokens": 32,
+        "inputSha256": "09d41f355f239edb6302c0aa84dabf569ee7982b16f66b85ecd01d2767a60794",
+        "outputSha256": "1e8d3e1bcc56eba1626178862b61544ac55c7ed7d137de8b03ea5fa71468b796"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 8,
+        "renamedKeyTokens": 28,
+        "inputSha256": "6486dbef1cff6cc863a90b3007b74f07d4d66c7103b41cbddfdcdd24b8a8e51e",
+        "outputSha256": "1cb63a1700ab9e60cc525ba1cfd5a94c52ccad78968126d308c938d0780ed458"
+      },
+      {
+        "table": "elsa_runtime_scheduler_work_item",
+        "rowId": 2,
+        "renamedKeyTokens": 14,
+        "inputSha256": "7a64403015c3099ab8708efb01e5f4e9bb9d879f16da79840933f54f6c9189e5",
+        "outputSha256": "305cb9412c7ceef4c34825c7acaefa936ab8da0558d7e1685e78bd8c8d02bbdf"
+      }
+    ],
+    "preserved": "Only declared RuntimeSchedulerWorkItem/typed command/identity/provenance key tokens change; every other JSON token and database column is unchanged. Historical old-host proof applies to the original capture."
   }
 }

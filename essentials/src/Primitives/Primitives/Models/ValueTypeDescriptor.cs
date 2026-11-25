@@ -36,6 +36,7 @@ public sealed record ValueTypeDescriptor
 
     public string Alias { get; }
     public CollectionKind CollectionKind { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonElement? Schema { get; }
     public int? SchemaVersion { get; }
 

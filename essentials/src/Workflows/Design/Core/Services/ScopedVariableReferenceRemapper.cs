@@ -60,6 +60,6 @@ public sealed class ScopedVariableReferenceRemapper(IActivityStructureService st
             return argument;
 
         var remappedReference = reference with { DeclaringScopeId = newScopeId };
-        return argument with { Value = argument.Value with { Value = remappedReference } };
+        return argument with { Value = ArgumentValue.FromClr(remappedReference, argument.Value.ExpressionType) };
     }
 }

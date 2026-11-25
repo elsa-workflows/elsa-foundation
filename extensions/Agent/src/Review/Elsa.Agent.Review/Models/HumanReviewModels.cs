@@ -27,7 +27,7 @@ public enum ReviewDecision
 
 /// <summary>
 /// The exact pinned wait a decision targets. Every identity field is bound into the decision envelope. The native
-/// runtime persists it as private state with default serializer options; <c>HumanReviewRecords</c> reads it the same way.
+/// runtime persists it as private state with the shared scoped conversion contract; <c>HumanReviewRecords</c> reads it the same way.
 /// </summary>
 public sealed record HumanReviewState(
     int FormatVersion,

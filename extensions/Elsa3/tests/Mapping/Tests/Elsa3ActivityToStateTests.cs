@@ -35,7 +35,7 @@ public sealed class Elsa3ActivityToStateTests
 
         var input = Assert.Single(node.Inputs);
         Assert.Equal("key:message", input.ReferenceKey);
-        Assert.Equal("Hello world", input.Value.Value);
+        Assert.Equal("Hello world", Assert.IsType<JsonElement>(input.Value.Value).GetString());
         Assert.Equal("Literal", input.Value.ExpressionType);
         Assert.Empty(node.Outputs);
     }
@@ -47,7 +47,7 @@ public sealed class Elsa3ActivityToStateTests
 
         var input = Assert.Single(node.Inputs);
         Assert.Equal("key:message", input.ReferenceKey);
-        Assert.Equal("Hello world", input.Value.Value);
+        Assert.Equal("Hello world", Assert.IsType<JsonElement>(input.Value.Value).GetString());
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class Elsa3ActivityToStateTests
 
         var output = Assert.Single(node.Outputs);
         Assert.Equal("key:result", output.ReferenceKey);
-        Assert.Equal("result", output.Value.Value);
+        Assert.Equal("result", Assert.IsType<JsonElement>(output.Value.Value).GetString());
         Assert.Equal("Literal", output.Value.ExpressionType);
         Assert.Empty(node.Inputs);
     }

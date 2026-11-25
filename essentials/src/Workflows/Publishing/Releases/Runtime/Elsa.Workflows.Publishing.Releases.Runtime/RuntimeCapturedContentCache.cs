@@ -26,8 +26,12 @@ internal sealed class RuntimeCapturedContentCache(IReleaseRuntimeArtifactCodec c
             captured.Descriptor.PayloadDigest == member.Descriptor.PayloadDigest && captured.Descriptor.ByteLength == member.Descriptor.ByteLength &&
             MatchesBytes(member.Descriptor, payload);
     }
-    private static bool MatchesBytes(ReleaseBundleMember descriptor, ReadOnlyMemory<byte> payload) =>
-        descriptor.ByteLength == payload.Length && descriptor.PayloadDigest == "sha256:" + Convert.ToHexStringLower(SHA256.HashData(payload.Span));
+    private static bool MatchesBytes(ReleaseBundleMember descriptor, ReadOnlyMemory<byte> payload)
+    {
+        if (descriptor.ByteLength != payload.Length) return false;
+        try { return descriptor.PayloadDigest == "sha256:" + Elsa.Serialization.Core.JsonHashInput.HashUtf8(payload); }
+        catch (Exception error) when (error is System.Text.Json.JsonException or InvalidOperationException) { return false; }
+    }
 
     public (ReleaseMemberKey Key, WorkflowExecutableIdentity Pin) RuntimePin(IReleaseContentReader reader, string id, ReleaseRuntimeContentScope scope)
     {

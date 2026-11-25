@@ -1,4 +1,10 @@
 <!--
+SYNC IMPACT REPORT — 6.1.0 -> 6.1.1 (2026-11-22)
+PATCH: completes the draft §2.24.2 catalog for the shared read-only serialization baseline already accepted in ADR 0091 (#3408, spec 1207 T002). This records the accepted application decision; it adds no new rule and does not ratify §2.24. Criteria and a worked example are in docs/reference/framework-examples.md.
+Authority: accepted ADR 0091 and the coordinator's approved S-9 implementation dispatch (#3052).
+Propagation: Elsa constitution re-pinned; AGENTS.md version navigation synchronized. Spec Kit templates contain no pinned catalog or version and require no change.
+-->
+<!--
 SYNC IMPACT REPORT — 6.0.1 -> 6.1.0 (2026-10-14)
 MINOR: §2.23.3 materially changed (#2591, ADR 0080 D3 owner amendment of 2026-10-14). A production project may grant [InternalsVisibleTo] to another production project of its own domain, for a type a third party writing the same kind of package would not need (the sibling test); 6.0.1 refused every production grantee. A need from another domain is never granted: the type is an extension point or is misplaced. Whether a type is public is decided by what it means to someone building on <App>, not by which projects of the solution use it. The Elsa.Workbench -> Elsa.Modularity.Tests exception is unchanged. MINOR rather than MAJOR: the change only relaxes the rule, so every grant 6.0.1 accepted is still accepted and nothing compliant becomes non-compliant (compatible expansion, §4.2). "Domain" is now defined in the rule: the path key the guard reads, not a #2591 delivery batch.
 Gate index: the §2.23.3 row names the renamed guard (InternalsVisibleTo_grants_stay_within_the_granting_domain), which admits a same-domain production grantee and still refuses everything else it refused; the sibling test itself is judged at review.
@@ -22,9 +28,10 @@ Moved: rationale, examples and methodology to docs/reference/ (architecture-rati
 Templates requiring updates: .specify/memory/constitution.md (re-pin v6.0.0); .specify/templates/plan-template.md.
 Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to revision if Joey Barten or Frans van Ek dissent, as with the 4.0.0 ratification.
 -->
+
 # Modular Software Design Framework Constitution
 
-**Version:** 6.1.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-14
+**Version:** 6.1.1 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-11-22
 
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance calls for consensus among Joey Barten, Sipke Schoorstra and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. A section marked draft (§2.24) is **not** covered by it.
 
@@ -213,7 +220,7 @@ Tests prove behaviour at risk, at the cheapest level that proves it (ADR 0080 D1
 
 **Status:** Draft pending ratification (D4). Code resolves recurring modular-design problems with a catalogued pattern; an ad-hoc pattern is flagged at review. Full table: [framework-examples](../../docs/reference/framework-examples.md#sanctioned-patterns-catalog).
 
-**§2.24.2 The catalog.** Three-layer separation (§2.1); feature inheritance (§2.5); events with Registry + StartUp Task and contributor + single aggregating handler (§2.6.1); delivery strategies (§2.6.6); replacement contracts (§2.6.2); design-time vs runtime split (§2.6.4); sync contributor exception (§2.6.5); adapter / bridge (§2.7); Strategy (selectable algorithm variants, e.g. `IEventPublishingStrategy`); Factory (candidate); provider module decomposition (§2.20); domain-level shadow properties (§2.9.1); CQS (§2.10); integration vs consumption-shape (§2.14).
+**§2.24.2 The catalog.** Three-layer separation (§2.1); feature inheritance (§2.5); events with Registry + StartUp Task and contributor + single aggregating handler (§2.6.1); delivery strategies (§2.6.6); replacement contracts (§2.6.2); design-time vs runtime split (§2.6.4); sync contributor exception (§2.6.5); adapter / bridge (§2.7); Strategy (selectable algorithm variants, e.g. `IEventPublishingStrategy`); Factory (candidate); provider module decomposition (§2.20); domain-level shadow properties (§2.9.1); CQS (§2.10); integration vs consumption-shape (§2.14); shared read-only serialization baseline with registered deviations ([criteria and worked example](../../docs/reference/framework-examples.md#shared-read-only-serialization-baseline)).
 
 **§2.24.3 Adding a new pattern.** Raise it with the architects; document the use case, criteria for and against, and a worked example; ratify; add it to §2.24.2. A pattern adopted before ratification is debt: ratify or refactor.
 

@@ -163,7 +163,13 @@ internal sealed partial class PublishedNativeFixture : IAsyncDisposable
         public ValueTask<bool> DeleteAsync(WorkflowExecutableDeletionGuard guard, DateTimeOffset now, CancellationToken token = default) => actual.DeleteAsync(guard, now, token);
     }
     private sealed class Accessor : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(Partition); }
-    private sealed class Cursor : IRuntimeRecoveryContinuationCodec { public string Encode(string purpose, ReadOnlySpan<byte> payload) => Convert.ToBase64String(payload); public byte[] Decode(string purpose, string token) => Convert.FromBase64String(token); }
+    private sealed class Cursor : IRuntimeRecoveryContinuationCodec
+    {
+        public string Encode(string purpose, ReadOnlySpan<byte> payload) => Convert.ToBase64String(payload);
+        public byte[] Decode(string purpose, string token) => Convert.FromBase64String(token);
+        public string EncodeJson(string purpose, ReadOnlySpan<byte> payload) => Encode(purpose, payload);
+        public byte[] DecodeJson(string purpose, string token) => Decode(purpose, token);
+    }
     public sealed class SourceContext : INativeReleaseCaptureContextAccessor, IReleaseRuntimeSourceContextAccessor { public ReleaseRuntimeContentScope Current { get; set; } = Scope; }
     public sealed class Policy : INativeReleaseCaptureAuthorization, IReleaseRuntimeSourceAuthorization
     {

@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { useEffect, useRef, useState } from "react";
 import { ListTree, RefreshCw } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -25,6 +26,7 @@ export function RunHistoryTimeline({ context, workflowExecutionId, filters, onFi
   activities?: readonly ActivityExecutionStateSummary[];
   labelForActivity?(activity: ActivityExecutionStateSummary): string;
 }) {
+  useStudioTimeZone();
   const history = useRunHistory(context, workflowExecutionId, { activityExecutionId: filters.activityExecutionId,
     includeDescendants: filters.includeDescendants, category: filters.category, name: filters.name, search: filters.search }, enabled);
   const [search, setSearch] = useState(filters.search);
@@ -103,6 +105,7 @@ export function ActivityHistoryJournal({ context, workflowExecutionId, activityE
   context: StudioEndpointContext; workflowExecutionId: string; activityExecutionId: string;
   selectedEventId?: string | null; onSelectEvent?(event: RuntimeHistoryEvent): void; onOpenTimeline?(activityExecutionId: string): void;
 }) {
+  useStudioTimeZone();
   const [includeDescendants, setIncludeDescendants] = useState(false);
   const history = useRunHistory(context, workflowExecutionId, { activityExecutionId, includeDescendants });
   const value = history.value;

@@ -16,7 +16,7 @@ public sealed partial class EtlRuntimeStoreTests
         var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.Runtime.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         File.Copy(Path.Combine(EtlV1CompatibilityFixture.FindRepositoryRoot(),
-            "extensions", "Etl", "tests", "Shared", "Fixtures", "Continuous1192", "runtime.db"), Path.Combine(directory, "etl-runtime.db"));
+            "specs", "1207-json-data-integrity-baseline", "evidence", "fixtures", "etl", "current-continuous", "runtime.db"), Path.Combine(directory, "etl-runtime.db"));
         await using var database = new EtlRuntimeTestDatabase(directory);
         await using var context = database.CreateContext();
         await EfDatabaseMigrator.ApplyAsync(context, EtlRuntimeSqliteDbContext.ExpectedProviderName);

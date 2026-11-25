@@ -15,5 +15,14 @@ internal static class DescriptorPayloadSerializer
     /// provider sorts object keys) can put a polymorphic type discriminator after other properties, so it is read in any
     /// position.
     /// </summary>
-    internal static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { AllowOutOfOrderMetadataProperties = true };
+    internal static readonly JsonSerializerOptions Options = Create();
+
+    private static JsonSerializerOptions Create()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.AllowOutOfOrderMetadataProperties = true;
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options);
+        options.MakeReadOnly();
+        return options;
+    }
 }

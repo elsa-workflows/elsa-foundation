@@ -12,13 +12,13 @@ public sealed class StructuredLogEntrySerializer
 {
     /// <summary>Serializes a single entry to its JSON object form.</summary>
     public string Serialize(StructuredLogEntry entry) =>
-        JsonSerializer.Serialize(entry, StructuredLogsJsonContext.Default.StructuredLogEntry);
+        JsonSerializer.Serialize(entry, StructuredLogsJsonContext.WireContext.StructuredLogEntry);
 
     /// <summary>Serializes a sequence of entries to a JSON array.</summary>
     public string SerializeMany(IReadOnlyList<StructuredLogEntry> entries) =>
-        JsonSerializer.Serialize(entries.ToArray(), StructuredLogsJsonContext.Default.StructuredLogEntryArray);
+        JsonSerializer.Serialize(entries.ToArray(), StructuredLogsJsonContext.WireContext.StructuredLogEntryArray);
 
     /// <summary>Serializes a drop signal to its JSON object form.</summary>
     public string SerializeDropped(DroppedEntriesSignal signal) =>
-        JsonSerializer.Serialize(signal, StructuredLogsJsonContext.Default.DroppedEntriesSignal);
+        JsonSerializer.Serialize(signal, StructuredLogsJsonContext.WireContext.DroppedEntriesSignal);
 }

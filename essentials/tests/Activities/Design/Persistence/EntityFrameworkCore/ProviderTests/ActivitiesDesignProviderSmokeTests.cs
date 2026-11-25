@@ -209,6 +209,19 @@ internal static class ActivitiesDesignProviderSmoke
             var kindColumn = sql.DelimitIdentifier(nameof(ActivityDefinitionManagementProjectionRevision.ContentAuthorityKind));
             var resourceColumn = sql.DelimitIdentifier(nameof(ActivityDefinitionManagementProjectionRevision.ResourceId));
             Assert.True(providerMaterial.ContentAuthorityIsValid, $"Provider projection validity failed for {expectedProviderName}: {providerMaterial.ContentAuthorityJson}, kind={providerMaterial.ContentAuthorityKind}.");
+            var authorityStore = new EfActivityDesignStores(context);
+            Assert.NotNull(await authorityStore.FindDefinitionAsync(projection.ResourceId, "tenant-a", projection.ValidFromSequence));
+            var caseDrift = providerMaterial.ContentAuthorityJson!.Replace("provider", "Provider", StringComparison.Ordinal);
+            Assert.NotEqual(providerMaterial.ContentAuthorityJson, caseDrift);
+            await context.Database.ExecuteSqlRawAsync(string.Concat("UPDATE ", table, " SET ", canonicalColumn, " = {0} WHERE ", resourceColumn, " = {1}"), caseDrift, projection.ResourceId);
+            var witnessCollation = Elsa.Persistence.EntityFramework.EfOrdinalCollation.ForProvider(expectedProviderName)!;
+            Assert.False(await context.ActivityDefinitionManagementProjections.AsNoTracking()
+                .Where(x => x.ResourceId == projection.ResourceId && x.ContentAuthorityIsValid && x.ContentAuthorityJson != null &&
+                    EF.Functions.Collate(x.ContentAuthorityJson, witnessCollation) == EF.Functions.Collate(x.ContentAuthorityCanonicalJson, witnessCollation))
+                .AnyAsync());
+            Assert.Null(await authorityStore.FindDefinitionAsync(projection.ResourceId, "tenant-a", projection.ValidFromSequence));
+            await context.Database.ExecuteSqlRawAsync(string.Concat("UPDATE ", table, " SET ", canonicalColumn, " = {0} WHERE ", resourceColumn, " = {1}"), providerMaterial.ContentAuthorityJson, projection.ResourceId);
+            Assert.NotNull(await authorityStore.FindDefinitionAsync(projection.ResourceId, "tenant-a", projection.ValidFromSequence));
             var escapedProjection = Projection($"projection-escaped-{suffix}", "tenant-a", ActivityContentAuthorityKind.ProviderSource, "é<&+\u2028\\\"", "source-é<&+\u2028\\\"");
             context.ActivityDefinitionManagementProjections.Add(escapedProjection);
             await context.SaveChangesAsync();
@@ -219,7 +232,7 @@ internal static class ActivitiesDesignProviderSmoke
             Assert.False(await context.ActivityDefinitionManagementProjections
                 .Where(x => x.ResourceId == escapedProjection.ResourceId)
                 .Select(x => x.ContentAuthorityIsValid).SingleAsync());
-            await context.Database.ExecuteSqlRawAsync(string.Concat("UPDATE ", table, " SET ", authorityKeyTokenColumn, " = {0} WHERE ", resourceColumn, " = {1}"), JsonSerializer.Serialize(escapedProjection.ContentAuthority!.AuthorityKey), escapedProjection.ResourceId);
+            await context.Database.ExecuteSqlRawAsync(string.Concat("UPDATE ", table, " SET ", authorityKeyTokenColumn, " = {0} WHERE ", resourceColumn, " = {1}"), JsonSerializer.Serialize(escapedProjection.ContentAuthority!.AuthorityKey, Elsa.Serialization.Core.JsonBaseline.Options), escapedProjection.ResourceId);
             Assert.True(await context.ActivityDefinitionManagementProjections
                 .Where(x => x.ResourceId == escapedProjection.ResourceId)
                 .Select(x => x.ContentAuthorityIsValid).SingleAsync());
@@ -239,6 +252,44 @@ internal static class ActivitiesDesignProviderSmoke
                 Assert.True(await context.ActivityDefinitionManagementProjections
                     .Where(x => x.ResourceId == longProjection.ResourceId)
                     .Select(x => x.ContentAuthorityIsValid).SingleAsync());
+
+                // SQL scalar capacity and the physical frame both count UTF-16 code units.
+                // LEN drops trailing spaces and counts supplementary characters differently
+                // under an SC collation; neither behavior may hide a valid >4000-unit scalar.
+                foreach (var (name, value, units) in new[]
+                {
+                    ("short-supplementary", "🧪x  ", 5),
+                    ("supplementary", string.Concat(Enumerable.Repeat("🧪", 2000)) + "x", 4001),
+                    ("trailing", new string('x', 3999) + "  ", 4001)
+                })
+                {
+                    Assert.Equal(units, value.Length);
+                    var sizeProjection = Projection($"projection-size-{name}-{suffix}", "tenant-a", ActivityContentAuthorityKind.ProviderSource, value, value);
+                    context.ActivityDefinitionManagementProjections.Add(sizeProjection);
+                    await context.SaveChangesAsync();
+                    Assert.True(await context.ActivityDefinitionManagementProjections
+                        .Where(x => x.ResourceId == sizeProjection.ResourceId)
+                        .Select(x => x.ContentAuthorityIsValid).SingleAsync());
+                    // Exercise the actual verifier with SC string expressions without changing
+                    // the shared database/table collation. The former LEN frame fails this probe.
+                    var marker = ActivityAuthorityValiditySql.Compose(ActivityAuthorityValiditySql.SqlServer(), "CONVERT(bit, 1)", "CONVERT(bit, 0)");
+                    foreach (var column in new[]
+                    {
+                        "ContentAuthority", nameof(ActivityDefinitionManagementProjectionRevision.ContentAuthorityCanonicalJson),
+                        nameof(ActivityDefinitionManagementProjectionRevision.ContentAuthorityAuthorityKeyJson), nameof(ActivityDefinitionManagementProjectionRevision.ContentAuthoritySourceIdJson),
+                        nameof(ActivityDefinitionManagementProjectionRevision.ContentAuthorityAuthorityKey), nameof(ActivityDefinitionManagementProjectionRevision.ContentAuthoritySourceId),
+                        nameof(ActivityDefinitionManagementProjectionRevision.ContentAuthorityIntegrityHash)
+                    }) marker = marker.Replace($"[{column}]", $"([{column}] COLLATE Latin1_General_100_CI_AS_SC)", StringComparison.Ordinal);
+                    await context.Database.OpenConnectionAsync();
+                    try
+                    {
+                        await using var probe = context.Database.GetDbConnection().CreateCommand();
+                        probe.CommandText = $"SELECT {marker} FROM {table} WHERE {resourceColumn} = @id";
+                        var parameter = probe.CreateParameter(); parameter.ParameterName = "@id"; parameter.Value = sizeProjection.ResourceId; probe.Parameters.Add(parameter);
+                        Assert.True((bool)(await probe.ExecuteScalarAsync())!);
+                    }
+                    finally { await context.Database.CloseConnectionAsync(); }
+                }
 
                 var longWhitespaceProjection = Projection($"projection-long-whitespace-{suffix}", "tenant-a", ActivityContentAuthorityKind.ProviderSource, "provider", "source");
                 context.ActivityDefinitionManagementProjections.Add(longWhitespaceProjection);

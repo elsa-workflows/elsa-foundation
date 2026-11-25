@@ -44,7 +44,7 @@ internal sealed class EtlNativeResultExecutor(IEtlRuntimeStore runs, IWorkflowEx
         await HoldNativeResultDeliveryForTestAsync(Environment.GetEnvironmentVariable(NativeResultDeliveryHoldVariable), cancellationToken);
         var dispatched = await dispatcher.DispatchAsync(new BookmarkResumeDispatchRequest(
             address.WorkflowExecutionId, address.StimulusType, address.StimulusHash,
-            JsonSerializer.SerializeToElement(payload), delivery.DeliveryId, address.ProviderId, null,
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(payload), delivery.DeliveryId, address.ProviderId, null,
             EtlNativeBoundary.CompletionType, address.ProviderId, address.BookmarkId, null), cancellationToken: cancellationToken);
         if (dispatched.WorkflowExecutionId != address.WorkflowExecutionId)
             throw EtlNativeBoundary.Invalid();

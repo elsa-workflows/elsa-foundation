@@ -52,7 +52,7 @@ public sealed class RuntimeChildControlInbox
         if (transport.Batch.Ordinal < NextOrdinal || IsTerminalConsumed && NextOrdinal == long.MaxValue && transport.Batch.Ordinal == long.MaxValue)
             return true;
         return Pending.Any(item => item.Batch.Ordinal == transport.Batch.Ordinal &&
-            JsonElement.DeepEquals(JsonSerializer.SerializeToElement(item), JsonSerializer.SerializeToElement(transport)));
+            Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(item, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(transport, Elsa.Serialization.Core.JsonBaseline.Options)));
     }
 
 }
@@ -72,9 +72,12 @@ internal sealed class RuntimeChildControlInboxJsonConverter : JsonConverter<Runt
     }
 
     public override void Write(Utf8JsonWriter writer, RuntimeChildControlInbox value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, new WireInbox(value.Version, value.Target, value.NextOrdinal,
-            value.IsTerminalConsumed, value.Pending), options);
+        JsonSerializer.Serialize(writer, HashProjection(value), options);
 
-    private sealed record WireInbox(int Version, RuntimeChildControlTarget Target, long? NextOrdinal,
+    internal static WireInbox HashProjection(RuntimeChildControlInbox value) =>
+        new WireInbox(value.Version, value.Target, value.NextOrdinal,
+            value.IsTerminalConsumed, value.Pending);
+
+    internal sealed record WireInbox(int Version, RuntimeChildControlTarget Target, long? NextOrdinal,
         bool? IsTerminalConsumed, IReadOnlyList<RuntimeChildControlTransport>? Pending);
 }

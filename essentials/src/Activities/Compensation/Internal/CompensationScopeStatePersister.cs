@@ -18,7 +18,7 @@ internal static class CompensationScopeStatePersister
     private const int Version3 = 3;
     private const int Version4 = 4;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public static CompensationScopeState? Load(ActivityExecutionState activityExecutionState)
     {

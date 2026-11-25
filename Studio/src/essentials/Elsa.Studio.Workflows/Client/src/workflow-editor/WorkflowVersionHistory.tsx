@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { useEffect, useRef, useState } from "react";
 import { StatusChip, StudioButton, StudioVersionHistory } from "@elsa-workflows/studio-ui";
 import type { StudioWeaverRegistry, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
@@ -29,6 +30,7 @@ export function WorkflowVersionHistory({ definitionId, versions, latestVersionId
   loadVersion(versionId: string): Promise<WorkflowDefinitionVersionDetails>;
   weaver?: WorkflowVersionHistoryWeaver;
 }) {
+  useStudioTimeZone();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<WorkflowDefinitionVersionDetails | null>(null);
   const [loading, setLoading] = useState(false);

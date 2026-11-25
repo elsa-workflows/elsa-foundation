@@ -90,7 +90,7 @@ internal sealed partial class EfRuleRunStore
                 if (existing is not null)
                 {
                     var recorded = RuleRoundRecords.Read(row, existing);
-                    if (existing.ReceiptJson != json) return ReceiptResult(RuleReceiptDisposition.Conflict, identity);
+                    if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(existing.ReceiptJson, json)) return ReceiptResult(RuleReceiptDisposition.Conflict, identity);
                     // Only the original confirmation is replayed; attempt attribution and successor state stay untouched.
                     return new(RuleReceiptDisposition.Replay, identity, recorded.ReceiptId, recorded.AcceptedModelRevision, null, null);
                 }

@@ -76,7 +76,7 @@ public sealed partial class CombinedChildOutcomeEfTests
             try
             {
                 var actualQueued = await cut.Enqueued.Task.WaitAsync(TimeSpan.FromSeconds(30));
-                Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work), JsonSerializer.SerializeToElement(actualQueued)));
+                Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(actualQueued, Elsa.Serialization.Core.JsonBaseline.Options)));
                 var inflight = Assert.IsType<RuntimePostCommitOutboxItem>(await FindOutboxItemAsync(second, failedSource.OutboxItemId));
                 Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, inflight.Status);
                 Assert.True(inflight.DeliveryFencingToken > 0);
@@ -149,7 +149,7 @@ public sealed partial class CombinedChildOutcomeEfTests
             var delivered = Assert.IsType<RuntimePostCommitOutboxItem>(await FindOutboxItemAsync(third, failedSource.OutboxItemId));
             Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
             Assert.Equal(3, delivered.DeliveryAttemptCount);
-            Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work), JsonSerializer.SerializeToElement(ReadParentOutcomeWorkItem(delivered))));
+            Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(ReadParentOutcomeWorkItem(delivered), Elsa.Serialization.Core.JsonBaseline.Options)));
             var attempts = _outboxProbe.Attempts.Where(attempt => attempt.CompletionKind == SchedulerCompletionKind.ParentOutcomeEvaluation).ToArray();
             Assert.Equal(3, attempts.Length);
             Assert.All(attempts, attempt => Assert.Equal(work.WorkItemId, attempt.WorkItemId));
@@ -297,7 +297,7 @@ internal sealed class BpmnCombinedOutcomeAckCutDispatcher(IRuntimePostCommitInte
     {
         await inner.DispatchAsync(intent, cancellationToken);
         if (intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork && intent.Payload is { } payload &&
-            payload.Deserialize<RuntimeSchedulerWorkItem>() is { } work && work.WorkItemId == cut.WorkId)
+            payload.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options) is { } work && work.WorkItemId == cut.WorkId)
         {
             cut.Enqueued.TrySetResult(work);
             await cut.Release.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);

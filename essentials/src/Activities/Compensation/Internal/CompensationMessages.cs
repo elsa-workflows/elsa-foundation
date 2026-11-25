@@ -8,7 +8,7 @@ namespace Elsa.Activities.Compensation.Internal;
 /// </summary>
 internal static class CompensationMessages
 {
-    public static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    public static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public static JsonElement Serialize<T>(T message) => JsonSerializer.SerializeToElement(message, SerializerOptions);
 

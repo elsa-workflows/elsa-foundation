@@ -5,6 +5,8 @@ These are framework-level terms. Elsa-specific bindings live in [elsa.md](elsa.m
 | Term | Canonical meaning |
 |---|---|
 | Host | The application process that composes and runs selected modules/features. |
+| Baseline | The shared default contract from which an owner's configuration derives; for JSON, the read-only `JsonBaseline` in the [serialization rule](../serialization.md#baseline-deviations). |
+| Baseline deviation | An owner-scoped difference from the shared baseline, with its setting, reason and approval recorded in the [deviation register](../serialization.md#baseline-deviations). |
 | Module | A package/project boundary that ships code. A module may contain one feature or several closely related features. |
 | Feature | A coherent capability with a named activation/configuration surface. Feature identity is used for navigation, composition, and dependency reasoning. |
 | Feature identity | The stable logical identity of a feature, used by hosts, configuration, diagnostics, telemetry, maps, and tooling. It is not display text and not proof of activation dependency. |

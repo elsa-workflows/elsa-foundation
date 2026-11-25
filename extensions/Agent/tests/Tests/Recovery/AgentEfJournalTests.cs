@@ -25,6 +25,25 @@ namespace Elsa.Agent.Tests.Recovery;
 
 public sealed partial class AgentEfJournalTests
 {
+    // Independent Python canonical JSON preimages are [partition, tenant].
+    [Theory]
+    [InlineData("tenant", "tenant", "183ae24386d15b43fb319486b87baa1cebcc2b72d1f1d2ac550d27d77e8a2349")]
+    [InlineData("tenant", null, "a92c5f0a899f39e13bde3a7561c782188c57adf9e5dabd711f3833e2ddde25a8")]
+    [InlineData("partition-é", null, "ffbc78b41e9bf0a7dac16d1fa3802353a364d1bf9501ef892faf4bec8b6a432d")]
+    [InlineData("tenant-é", "tenant-é", "c4a87c3d9aaea9868b90c7a56494599fa801d8341f51e1da79fc8a53148cd6e3")]
+    [InlineData("Tenant", "Tenant", "824e845a30d39c1a795728beadf18d17cd573e30996c1d0179df90ae53d83772")]
+    public void Actual_scope_owner_pins_nullable_tenant_and_exact_partition(string partition, string? tenant, string expected)
+    {
+        using var context = new DbContext(new DbContextOptions<DbContext>());
+        var store = Store(context, PersistenceAccessContext.Scoped(new(partition)));
+        var method = typeof(EfAgentTurnStore).GetMethod("Scope", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+            null, [typeof(string), typeof(string)], null)!;
+        var actual = (string)method.Invoke(store, [tenant, partition])!;
+        Assert.True(actual == expected, $"Agent EF scope/{partition}/{tenant ?? "<null>"}: First-stable hash freeze requires an explicit identity/migration decision. Expected {expected}; actual {actual}");
+        var refused = Assert.Throws<System.Reflection.TargetInvocationException>(() => method.Invoke(store, [tenant, partition + "-other"]));
+        Assert.IsType<InvalidOperationException>(refused.InnerException);
+    }
+
     private static readonly DateTimeOffset Now = new(2026, 11, 1, 5, 0, 0, TimeSpan.Zero);
     private static AgentInvocationIdentity Identity => new("tenant", "tenant", "workflow", "activity", "operation", "artifact", "hash", "version", "template");
     private static AgentTurnDocument Document => new(new string('a', 64), AgentTurnDocument.CalculateOperationKey(Identity), new string('c', 64), Identity, "opaque-protected-request", Now.AddMinutes(5));

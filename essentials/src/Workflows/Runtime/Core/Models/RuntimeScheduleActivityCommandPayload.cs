@@ -8,6 +8,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed class RuntimeScheduleActivityCommandPayload : IActivityCommandPayload
 {
+    /// <summary>Workflow-input warnings carried only by the initial root schedule.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning>? InputWarnings { get; init; }
+
     public const string WorkflowStartReason = "WorkflowStart";
     public const string ActivityCompletionReason = "ActivityCompletion";
 

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { StudioCodeEditor } from "@elsa-workflows/studio-code-editor";
 import { LiquidExpandedEditor, LiquidInlineEditor, LiquidSourceRenderer, register } from "../module";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
+import { createContributionRegistry } from "@elsa-workflows/studio-sdk";
 
 describe("Liquid expression editor module", () => {
   it("registers compact and expanded Liquid expression editor surfaces", () => {
@@ -159,12 +160,8 @@ function testApi(): ElsaStudioModuleApi {
   } as ElsaStudioModuleApi;
 }
 
-function registry<T>(): Pick<StudioContributionRegistry<T>, "add" | "list"> {
-  const contributions: T[] = [];
-  return {
-    add: contribution => contributions.push(contribution),
-    list: () => [...contributions]
-  };
+function registry<T>(): StudioContributionRegistry<T> {
+  return createContributionRegistry<T>();
 }
 
 function context(syntax: string, surface: "inline" | "expanded" = "inline") {

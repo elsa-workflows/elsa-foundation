@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatActivityDefinitionDate, humanizeTypeName, resolveActivityDefinitionTitle, shortTypeName, truncate } from "../workflowFormatting";
+import { formatStudioDate, setStudioTimeZonePreference } from "@elsa-workflows/studio-sdk";
 
 describe("workflow formatting helpers", () => {
   it("humanizes the last CLR/type-key segment", () => {
@@ -39,9 +40,13 @@ describe("workflow formatting helpers", () => {
   });
 
   it("renders a locale date for a real timestamp", () => {
-    const rendered = formatActivityDefinitionDate("2026-07-17T10:00:00Z");
-    expect(rendered).not.toBe("—");
-    expect(rendered).toBe(new Date("2026-07-17T10:00:00Z").toLocaleDateString());
+    setStudioTimeZonePreference("UTC");
+    try {
+      const rendered = formatActivityDefinitionDate("2026-07-17T10:00:00Z");
+      expect(rendered).toBe(formatStudioDate("2026-07-17T10:00:00Z"));
+      expect(rendered).toContain("10:00:00");
+      expect(rendered).toMatch(/ UTC\+00:00$/);
+    } finally { setStudioTimeZonePreference("browser"); }
   });
 
   it("truncates only when over the limit, with a single ellipsis", () => {

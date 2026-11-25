@@ -98,7 +98,6 @@ internal sealed class CompensationTargetValidator(
 
         var text = value.Value switch
         {
-            string literal => literal,
             JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
             _ => null
         };

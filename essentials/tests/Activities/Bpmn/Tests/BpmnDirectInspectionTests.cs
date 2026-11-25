@@ -75,14 +75,13 @@ public sealed partial class BpmnDirectExecutionTests
     }
 
     [Fact]
-    public async Task Inspection_preserves_physical_attempts_and_cancellation_from_the_actual_legacy_writer()
+    public async Task Inspection_preserves_physical_attempts_and_cancellation_from_the_current_writer()
     {
-        await using (var input = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ActualNativeStartRetirement.sqlite.gz")))
-        await using (var zipped = new GZipStream(input, CompressionMode.Decompress))
-        await using (var output = File.Create(database)) await zipped.CopyToAsync(output);
+        var captured = await RestoreCurrentNativeAsync("native-start-retirement");
         await using var host = await OpenAsync(configure: services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(TimeProvider.System)));
         await using var scope = await ScopeAsync(host);
         var state = Assert.Single((await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().ListPageAsync(new())).Items);
+        Assert.Equal(JsonSerializer.Serialize(captured, Web), JsonSerializer.Serialize(state, Web));
         var document = BpmnDirectExecutionDriver.Read(state);
         var owed = Assert.Single(document.Cancellations!);
         var inspection = await scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>().InspectAsync(state.ExecutionId, new("operator", state.TenantId));
@@ -97,21 +96,20 @@ public sealed partial class BpmnDirectExecutionTests
     }
 
     [Fact]
-    public async Task Inspection_preserves_the_original_fault_and_another_requested_attempt_from_the_actual_legacy_writer()
+    public async Task Inspection_preserves_the_original_fault_and_the_current_pending_cancellation_attempt()
     {
-        await using (var input = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ActualConcurrentAdmittedFault.sqlite.gz")))
-        await using (var zipped = new GZipStream(input, CompressionMode.Decompress))
-        await using (var output = File.Create(database)) await zipped.CopyToAsync(output);
+        var captured = await RestoreCurrentFaultAsync(true);
         await using var host = await OpenAsync();
         await using var scope = await ScopeAsync(host);
         var state = Assert.Single((await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().ListPageAsync(new())).Items);
         var document = BpmnDirectExecutionDriver.Read(state);
+        Assert.Equal(JsonSerializer.Serialize(captured, Web), JsonSerializer.Serialize(state, Web));
         var result = Assert.Single(document.NativeResults!);
         var inspection = await scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>().InspectAsync(state.ExecutionId, new("operator", state.TenantId));
         var original = Assert.Single(inspection.Attempts, a => a.AttemptId == result.Origin.AttemptId);
         Assert.Equal(result.Status.ToString(), original.Status); Assert.Equal(result.FaultCode, original.FaultCode);
         Assert.Equal(result.Origin.WorkerExecutionId, original.WorkerExecutionId);
-        Assert.Contains(inspection.Attempts, a => a.Status == "Requested");
+        Assert.Contains(inspection.Attempts, a => a.Status == "CancellationPending");
         Assert.Equal(state.Revision, inspection.State.Revision);
     }
 
@@ -136,9 +134,7 @@ public sealed partial class BpmnDirectExecutionTests
     [InlineData("worker-address")]
     public async Task Inspection_refuses_inconsistent_native_origin_metadata_instead_of_returning_an_unrelated_run(string change)
     {
-        await using (var input = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ActualConcurrentAdmittedFault.sqlite.gz")))
-        await using (var zipped = new GZipStream(input, CompressionMode.Decompress))
-        await using (var output = File.Create(database)) await zipped.CopyToAsync(output);
+        _ = await RestoreCurrentFaultAsync(true);
         await using var host = await OpenAsync();
         await using var scope = await ScopeAsync(host);
         var state = Assert.Single((await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().ListPageAsync(new())).Items);

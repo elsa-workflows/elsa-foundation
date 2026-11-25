@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// </summary>
 public sealed class RuntimeVariableDeclarationProjector
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public IReadOnlyDictionary<string, RuntimeVariableDeclaration> ProjectDeclarations(ExecutableNode node)
     {

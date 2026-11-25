@@ -83,7 +83,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
         if (!contract.Result.Policy.IsPersistable)
             return ProjectTransient(invocationId, attempt, contract, completion, completedAt);
 
-        var resultJson = JsonSerializer.SerializeToElement(completion.Result, completion.ResultType, ActivityValueJson.Options);
+        var resultJson = Elsa.Serialization.Core.JsonConversionContract.For(completion.ResultType).Write(completion.Result, completion.ResultType);
         if (lateReadProtection is not null) readProtection = lateReadProtection();
         var resultPolicy = contract.Result.Projections.Values.Aggregate(
             readProtection is null

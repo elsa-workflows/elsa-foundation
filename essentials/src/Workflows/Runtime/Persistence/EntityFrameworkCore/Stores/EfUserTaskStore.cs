@@ -157,7 +157,7 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
         if (draft is not null && ReadDraft(draft, scope).Deleted) return false;
         var row = new UserTaskFormEntity { Id = CompositeId(scope, version.TenantId, version.Form.Id, version.Form.Version),
             ScopeKey = Encode(scope), ScopeHash = Hash(scope), TenantKey = Encode(version.TenantId), TenantHash = Hash(version.TenantId), FormKey = Encode(version.Form.Id),
-            VersionKey = Encode(version.Form.Version), ContentJson = JsonSerializer.Serialize(version) };
+            VersionKey = Encode(version.Form.Version), ContentJson = JsonSerializer.Serialize(version, Elsa.Serialization.Core.JsonBaseline.Options) };
         context.UserTaskForms.Add(row);
         try { await context.SaveChangesAsync(cancellationToken); return true; }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey)) { return false; }
@@ -268,14 +268,14 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
     {
         Id = CompositeId(scope, version.TenantId, version.Form.Id, version.Form.Version), ScopeKey = Encode(scope), ScopeHash = Hash(scope),
         TenantKey = Encode(version.TenantId), TenantHash = Hash(version.TenantId), FormKey = Encode(version.Form.Id),
-        VersionKey = Encode(version.Form.Version), ContentJson = JsonSerializer.Serialize(version)
+        VersionKey = Encode(version.Form.Version), ContentJson = JsonSerializer.Serialize(version, options: Elsa.Serialization.Core.JsonBaseline.Options)
     };
 
     private static UserTaskFormEntity ToDraftRow(UserTaskFormDraft draft, string scope) => new()
     {
         Id = CompositeId(scope, draft.TenantId, draft.Id, UserTaskProtocol.FormDraftVersion), ScopeKey = Encode(scope), ScopeHash = Hash(scope),
         TenantKey = Encode(draft.TenantId), TenantHash = Hash(draft.TenantId), FormKey = Encode(draft.Id),
-        VersionKey = Encode(UserTaskProtocol.FormDraftVersion), ContentJson = JsonSerializer.Serialize(draft)
+        VersionKey = Encode(UserTaskProtocol.FormDraftVersion), ContentJson = JsonSerializer.Serialize(draft, options: Elsa.Serialization.Core.JsonBaseline.Options)
     };
 
     private static UserTaskFormDefinition Definition(string tenantId, string id, IReadOnlyCollection<UserTaskFormEntity> rows, string scope)
@@ -298,12 +298,12 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
         Id = CompositeId(scope, task.TenantId, task.Id), ScopeKey = Encode(scope), ScopeHash = Hash(scope), TenantKey = Encode(task.TenantId), TenantHash = Hash(task.TenantId),
         ClaimantHash = task.ClaimantId is null ? null : Hash(task.ClaimantId), TaskId = task.Id, ExecutionHash = Hash(task.WorkflowExecutionId), AssigneeHash = task.AssigneeId is null ? null : Hash(task.AssigneeId), GroupHash = task.GroupId is null ? null : Hash(task.GroupId), ExecutionKey = Encode(task.WorkflowExecutionId), AssigneeKey = task.AssigneeId is null ? null : Encode(task.AssigneeId),
         GroupKey = task.GroupId is null ? null : Encode(task.GroupId), ClaimantKey = task.ClaimantId is null ? null : Encode(task.ClaimantId),
-        SearchTitle = task.Title.ToUpperInvariant(), Status = (int)task.Status, Revision = task.Revision, ContentJson = JsonSerializer.Serialize(task)
+        SearchTitle = task.Title.ToUpperInvariant(), Status = (int)task.Status, Revision = task.Revision, ContentJson = JsonSerializer.Serialize(task, Elsa.Serialization.Core.JsonBaseline.Options)
     };
     private static UserTaskRecord Read(UserTaskEntity row, string scope)
     {
         var content = UserTasksEfModule.Chain.Upcast<UserTaskEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
-        var value = JsonSerializer.Deserialize<UserTaskRecord>(content) ?? throw new InvalidDataException("The task journal is invalid.");
+        var value = JsonSerializer.Deserialize<UserTaskRecord>(content, Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new InvalidDataException("The task journal is invalid.");
         var expected = ToRow(value, scope);
         if (row.Id != expected.Id || row.ScopeKey != expected.ScopeKey || row.ScopeHash != expected.ScopeHash ||
             row.TenantKey != expected.TenantKey || row.TenantHash != expected.TenantHash || row.ClaimantHash != expected.ClaimantHash || row.ExecutionHash != expected.ExecutionHash || row.AssigneeHash != expected.AssigneeHash || row.GroupHash != expected.GroupHash || row.TaskId != expected.TaskId || row.ExecutionKey != expected.ExecutionKey ||
@@ -315,7 +315,7 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
     private static UserTaskFormVersion ReadForm(UserTaskFormEntity row, string scope)
     {
         var content = UserTasksEfModule.Chain.Upcast<UserTaskFormEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
-        var value = JsonSerializer.Deserialize<UserTaskFormVersion>(content) ?? throw new InvalidDataException("The form version is invalid.");
+        var value = JsonSerializer.Deserialize<UserTaskFormVersion>(content, Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new InvalidDataException("The form version is invalid.");
         if (row.ScopeKey != Encode(scope) || row.ScopeHash != Hash(scope) || row.TenantKey != Encode(value.TenantId) || row.TenantHash != Hash(value.TenantId) ||
             row.FormKey != Encode(value.Form.Id) || row.VersionKey != Encode(value.Form.Version) || row.Id != CompositeId(scope, value.TenantId, value.Form.Id, value.Form.Version))
             throw new InvalidDataException("The form identity or projection differs.");
@@ -324,7 +324,7 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
     private static UserTaskFormDraft ReadDraft(UserTaskFormEntity row, string scope)
     {
         var content = UserTasksEfModule.Chain.Upcast<UserTaskFormEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
-        var value = JsonSerializer.Deserialize<UserTaskFormDraft>(content) ?? throw new InvalidDataException("The form draft is invalid.");
+        var value = JsonSerializer.Deserialize<UserTaskFormDraft>(content, options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new InvalidDataException("The form draft is invalid.");
         if (row.ScopeKey != Encode(scope) || row.ScopeHash != Hash(scope) || row.TenantKey != Encode(value.TenantId) || row.TenantHash != Hash(value.TenantId) ||
             row.FormKey != Encode(value.Id) || row.VersionKey != Encode(UserTaskProtocol.FormDraftVersion) || row.Id != CompositeId(scope, value.TenantId, value.Id, UserTaskProtocol.FormDraftVersion) ||
             value.Revision < 1 || value.Form is { } form && form.Id != value.Id)

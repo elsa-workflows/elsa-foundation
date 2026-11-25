@@ -11,4 +11,7 @@
                       LogicalName="Elsa.Modularity.Planning.Catalogs.foundation-selection-catalog-v4.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

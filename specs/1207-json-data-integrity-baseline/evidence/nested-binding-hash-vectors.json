@@ -1,0 +1,248 @@
+{
+  "version": 1,
+  "freeze": "JSON hashes freeze at Elsa 4's first stable release; before then regenerate goldens and fixtures together, never add an old-hash verifier.",
+  "savedViews": [
+    {
+      "name": "base",
+      "title": "View <\u00e9>",
+      "columns": [
+        "name",
+        "tags"
+      ],
+      "shared": false,
+      "contentCanonical": "{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0}",
+      "keyedCanonical": "{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"name\":\"View \\u003C\\u00E9\\u003E\",\"shared\":false}",
+      "requestCanonical": "{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"id\":null,\"name\":\"View \\u003C\\u00E9\\u003E\",\"operationKey\":\"309c1e495d8aa0b3e2a32ea47f34dafca3ced374c88c9affaea86ff9e5785a22\",\"revision\":null,\"shared\":false,\"subjectId\":\"alice\"}",
+      "requestFrame": "23:elsa-design-material:v121:workflow.view.save.v11:1485:{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"id\":null,\"name\":\"View \\u003C\\u00E9\\u003E\",\"operationKey\":\"309c1e495d8aa0b3e2a32ea47f34dafca3ced374c88c9affaea86ff9e5785a22\",\"revision\":null,\"shared\":false,\"subjectId\":\"alice\"}",
+      "keyedHash": "2da53077e842a9ccc30c38b7a5a79be4e6434cee46ff430ed1123be8af318f8a",
+      "requestHash": "sha256:32b2a54cacd01d1b6c99f8884bd4881ce6661c58017503967b351dcecd097476"
+    },
+    {
+      "name": "column-order",
+      "title": "View <\u00e9>",
+      "columns": [
+        "tags",
+        "name"
+      ],
+      "shared": false,
+      "contentCanonical": "{\"columns\":[\"tags\",\"name\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0}",
+      "keyedCanonical": "{\"content\":{\"columns\":[\"tags\",\"name\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"name\":\"View \\u003C\\u00E9\\u003E\",\"shared\":false}",
+      "requestCanonical": "{\"content\":{\"columns\":[\"tags\",\"name\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"id\":null,\"name\":\"View \\u003C\\u00E9\\u003E\",\"operationKey\":\"309c1e495d8aa0b3e2a32ea47f34dafca3ced374c88c9affaea86ff9e5785a22\",\"revision\":null,\"shared\":false,\"subjectId\":\"alice\"}",
+      "requestFrame": "23:elsa-design-material:v121:workflow.view.save.v11:1485:{\"content\":{\"columns\":[\"tags\",\"name\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"id\":null,\"name\":\"View \\u003C\\u00E9\\u003E\",\"operationKey\":\"309c1e495d8aa0b3e2a32ea47f34dafca3ced374c88c9affaea86ff9e5785a22\",\"revision\":null,\"shared\":false,\"subjectId\":\"alice\"}",
+      "keyedHash": "d990f6fdb7984062cdef2b0f7ec6a32af45691dc79d5c694e7a2a0d6bb294f38",
+      "requestHash": "sha256:452cd65f9eed5779eed51616ce745290c7f4325c74bcf0ee34554c537ac87070"
+    },
+    {
+      "name": "shared",
+      "title": "View <\u00e9>",
+      "columns": [
+        "name",
+        "tags"
+      ],
+      "shared": true,
+      "contentCanonical": "{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0}",
+      "keyedCanonical": "{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"name\":\"View \\u003C\\u00E9\\u003E\",\"shared\":true}",
+      "requestCanonical": "{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"id\":null,\"name\":\"View \\u003C\\u00E9\\u003E\",\"operationKey\":\"309c1e495d8aa0b3e2a32ea47f34dafca3ced374c88c9affaea86ff9e5785a22\",\"revision\":null,\"shared\":true,\"subjectId\":\"alice\"}",
+      "requestFrame": "23:elsa-design-material:v121:workflow.view.save.v11:1484:{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"id\":null,\"name\":\"View \\u003C\\u00E9\\u003E\",\"operationKey\":\"309c1e495d8aa0b3e2a32ea47f34dafca3ced374c88c9affaea86ff9e5785a22\",\"revision\":null,\"shared\":true,\"subjectId\":\"alice\"}",
+      "keyedHash": "8f4d38a5b6545175649b52ffac1aada42f37e2cedd5e020ed3416da089e2c850",
+      "requestHash": "sha256:f9632f44f066f4e52158ed22b3fdd95bff6548f8d63b5c9078549f9d2610dbba"
+    },
+    {
+      "name": "text-a",
+      "title": "{}",
+      "columns": [
+        "name",
+        "tags"
+      ],
+      "shared": false,
+      "contentCanonical": "{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0}",
+      "keyedCanonical": "{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"name\":\"{}\",\"shared\":false}",
+      "requestCanonical": "{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"id\":null,\"name\":\"{}\",\"operationKey\":\"309c1e495d8aa0b3e2a32ea47f34dafca3ced374c88c9affaea86ff9e5785a22\",\"revision\":null,\"shared\":false,\"subjectId\":\"alice\"}",
+      "requestFrame": "23:elsa-design-material:v121:workflow.view.save.v11:1464:{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"id\":null,\"name\":\"{}\",\"operationKey\":\"309c1e495d8aa0b3e2a32ea47f34dafca3ced374c88c9affaea86ff9e5785a22\",\"revision\":null,\"shared\":false,\"subjectId\":\"alice\"}",
+      "keyedHash": "58dd06750bf1cedd4d9522ecdea6a983fce171ce397e35ad6f63de7b53860010",
+      "requestHash": "sha256:530fed4b00caeea29ebcb10960d608d3c1c49f4d9a3cacf0514636769f4414d9"
+    },
+    {
+      "name": "text-b",
+      "title": "{ }",
+      "columns": [
+        "name",
+        "tags"
+      ],
+      "shared": false,
+      "contentCanonical": "{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0}",
+      "keyedCanonical": "{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"name\":\"{ }\",\"shared\":false}",
+      "requestCanonical": "{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"id\":null,\"name\":\"{ }\",\"operationKey\":\"309c1e495d8aa0b3e2a32ea47f34dafca3ced374c88c9affaea86ff9e5785a22\",\"revision\":null,\"shared\":false,\"subjectId\":\"alice\"}",
+      "requestFrame": "23:elsa-design-material:v121:workflow.view.save.v11:1465:{\"content\":{\"columns\":[\"name\",\"tags\"],\"query\":{\"continuationToken\":null,\"favoritesOnly\":false,\"folderId\":null,\"includeDescendants\":false,\"pageSize\":5e1,\"publicationState\":null,\"searchTerm\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"sort\":\"modified\",\"state\":\"active\",\"tagFilters\":[],\"unfiled\":false},\"schemaVersion\":1e0},\"id\":null,\"name\":\"{ }\",\"operationKey\":\"309c1e495d8aa0b3e2a32ea47f34dafca3ced374c88c9affaea86ff9e5785a22\",\"revision\":null,\"shared\":false,\"subjectId\":\"alice\"}",
+      "keyedHash": "903bd9dc3004ad7ba5d1e2ffc418bb793eba6a704e7cdc6aba56b51cbee65510",
+      "requestHash": "sha256:f877c45221c6c5d0cb5f065ad98faa7b918c8e5d3f6926364496e7f4fd6a9f40"
+    }
+  ],
+  "recoveryBindings": [
+    {
+      "name": "base",
+      "scope": "tenant:tenant-a",
+      "utcTicks": "639040662000000000",
+      "leaseTicks": "3000000000",
+      "heartbeatTicks": "600000000",
+      "owner": "owner <\u00e9>",
+      "offsetMinutes": 0,
+      "limit": 1,
+      "canonical": "{\"heartbeatTimeoutTicks\":6e8,\"leaseTimeoutTicks\":3e9,\"nowUtcTicks\":639040662e9,\"ownerId\":\"owner \\u003C\\u00E9\\u003E\",\"scope\":\"tenant:tenant-a\"}",
+      "sha256": "735150d3eef715a3bfdff3efb32fba6a170ebc0a7bdd17a94b3907ab2ad545ee",
+      "eligibleUtcTicks": "639040662000000000",
+      "cursorCanonical": "{\"Binding\":\"735150d3eef715a3bfdff3efb32fba6a170ebc0a7bdd17a94b3907ab2ad545ee\",\"EligibleAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"EligibleAtUtcTicks\":639040662e9,\"OperationalStateId\":\"liveness\",\"WorkflowExecutionId\":\"workflow\"}",
+      "cursorSignature": "58KUIcsSd_HgY3uAUGTzr26WHg9gVxiapIsznJK6BRg"
+    },
+    {
+      "name": "same-UTC-offset",
+      "scope": "tenant:tenant-a",
+      "utcTicks": "639040662000000000",
+      "leaseTicks": "3000000000",
+      "heartbeatTicks": "600000000",
+      "owner": "owner <\u00e9>",
+      "offsetMinutes": 60,
+      "limit": 1,
+      "canonical": "{\"heartbeatTimeoutTicks\":6e8,\"leaseTimeoutTicks\":3e9,\"nowUtcTicks\":639040662e9,\"ownerId\":\"owner \\u003C\\u00E9\\u003E\",\"scope\":\"tenant:tenant-a\"}",
+      "sha256": "735150d3eef715a3bfdff3efb32fba6a170ebc0a7bdd17a94b3907ab2ad545ee",
+      "eligibleUtcTicks": "639040662000000000",
+      "cursorCanonical": "{\"Binding\":\"735150d3eef715a3bfdff3efb32fba6a170ebc0a7bdd17a94b3907ab2ad545ee\",\"EligibleAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"EligibleAtUtcTicks\":639040662e9,\"OperationalStateId\":\"liveness\",\"WorkflowExecutionId\":\"workflow\"}",
+      "cursorSignature": "58KUIcsSd_HgY3uAUGTzr26WHg9gVxiapIsznJK6BRg"
+    },
+    {
+      "name": "different-page-limit",
+      "scope": "tenant:tenant-a",
+      "utcTicks": "639040662000000000",
+      "leaseTicks": "3000000000",
+      "heartbeatTicks": "600000000",
+      "owner": "owner <\u00e9>",
+      "offsetMinutes": 0,
+      "limit": 2,
+      "canonical": "{\"heartbeatTimeoutTicks\":6e8,\"leaseTimeoutTicks\":3e9,\"nowUtcTicks\":639040662e9,\"ownerId\":\"owner \\u003C\\u00E9\\u003E\",\"scope\":\"tenant:tenant-a\"}",
+      "sha256": "735150d3eef715a3bfdff3efb32fba6a170ebc0a7bdd17a94b3907ab2ad545ee",
+      "eligibleUtcTicks": "639040662000000000",
+      "cursorCanonical": "{\"Binding\":\"735150d3eef715a3bfdff3efb32fba6a170ebc0a7bdd17a94b3907ab2ad545ee\",\"EligibleAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"EligibleAtUtcTicks\":639040662e9,\"OperationalStateId\":\"liveness\",\"WorkflowExecutionId\":\"workflow\"}",
+      "cursorSignature": "58KUIcsSd_HgY3uAUGTzr26WHg9gVxiapIsznJK6BRg"
+    },
+    {
+      "name": "null-owner",
+      "scope": "tenant:tenant-a",
+      "utcTicks": "639040662000000000",
+      "leaseTicks": "3000000000",
+      "heartbeatTicks": "600000000",
+      "owner": null,
+      "offsetMinutes": 0,
+      "limit": 1,
+      "canonical": "{\"heartbeatTimeoutTicks\":6e8,\"leaseTimeoutTicks\":3e9,\"nowUtcTicks\":639040662e9,\"ownerId\":null,\"scope\":\"tenant:tenant-a\"}",
+      "sha256": "2b6040813d47c5cfd771975e04b32c7886e86e06fe49ca116a3bc54d9acbb332",
+      "eligibleUtcTicks": "639040662000000000",
+      "cursorCanonical": "{\"Binding\":\"2b6040813d47c5cfd771975e04b32c7886e86e06fe49ca116a3bc54d9acbb332\",\"EligibleAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"EligibleAtUtcTicks\":639040662e9,\"OperationalStateId\":\"liveness\",\"WorkflowExecutionId\":\"workflow\"}",
+      "cursorSignature": "KifddLDmK0f2_SPWhJ4xwreXaO8lPwlkH5wr1zj_tAk"
+    },
+    {
+      "name": "other-scope",
+      "scope": "tenant:tenant-b",
+      "utcTicks": "639040662000000000",
+      "leaseTicks": "3000000000",
+      "heartbeatTicks": "600000000",
+      "owner": "owner <\u00e9>",
+      "offsetMinutes": 0,
+      "limit": 1,
+      "canonical": "{\"heartbeatTimeoutTicks\":6e8,\"leaseTimeoutTicks\":3e9,\"nowUtcTicks\":639040662e9,\"ownerId\":\"owner \\u003C\\u00E9\\u003E\",\"scope\":\"tenant:tenant-b\"}",
+      "sha256": "8b8679db36ca27da608cd4a6d85e94c90078d35acb59fae00f31e1bf59b659c2",
+      "eligibleUtcTicks": "639040662000000000",
+      "cursorCanonical": "{\"Binding\":\"8b8679db36ca27da608cd4a6d85e94c90078d35acb59fae00f31e1bf59b659c2\",\"EligibleAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"EligibleAtUtcTicks\":639040662e9,\"OperationalStateId\":\"liveness\",\"WorkflowExecutionId\":\"workflow\"}",
+      "cursorSignature": "esmtFwh8uRFyoZr878cmL741FK2I0XpbEo0-plgmZWk"
+    },
+    {
+      "name": "one-UTC-tick",
+      "scope": "tenant:tenant-a",
+      "utcTicks": "639040662000000001",
+      "leaseTicks": "3000000000",
+      "heartbeatTicks": "600000000",
+      "owner": "owner <\u00e9>",
+      "offsetMinutes": 0,
+      "limit": 1,
+      "canonical": "{\"heartbeatTimeoutTicks\":6e8,\"leaseTimeoutTicks\":3e9,\"nowUtcTicks\":639040662000000001e0,\"ownerId\":\"owner \\u003C\\u00E9\\u003E\",\"scope\":\"tenant:tenant-a\"}",
+      "sha256": "9a813574a2b37d6908d9a7b8d57bdd13cc13c99ef73644cae99ca51506a098c6",
+      "eligibleUtcTicks": "639040662000000000",
+      "cursorCanonical": "{\"Binding\":\"9a813574a2b37d6908d9a7b8d57bdd13cc13c99ef73644cae99ca51506a098c6\",\"EligibleAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"EligibleAtUtcTicks\":639040662e9,\"OperationalStateId\":\"liveness\",\"WorkflowExecutionId\":\"workflow\"}",
+      "cursorSignature": "K346SmsxWnI1B0J6U0Ny_xKL_nop6fM46Beknnu4E8Q"
+    },
+    {
+      "name": "one-lease-tick",
+      "scope": "tenant:tenant-a",
+      "utcTicks": "639040662000000000",
+      "leaseTicks": "3000000001",
+      "heartbeatTicks": "600000000",
+      "owner": "owner <\u00e9>",
+      "offsetMinutes": 0,
+      "limit": 1,
+      "canonical": "{\"heartbeatTimeoutTicks\":6e8,\"leaseTimeoutTicks\":3000000001e0,\"nowUtcTicks\":639040662e9,\"ownerId\":\"owner \\u003C\\u00E9\\u003E\",\"scope\":\"tenant:tenant-a\"}",
+      "sha256": "f9f8a617a02c4fbbc6038fbe137e618e933c308e830295cbcd6f1af82b2e9e59",
+      "eligibleUtcTicks": "639040662000000000",
+      "cursorCanonical": "{\"Binding\":\"f9f8a617a02c4fbbc6038fbe137e618e933c308e830295cbcd6f1af82b2e9e59\",\"EligibleAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"EligibleAtUtcTicks\":639040662e9,\"OperationalStateId\":\"liveness\",\"WorkflowExecutionId\":\"workflow\"}",
+      "cursorSignature": "ZpqFXSxo4-ItoHpp8iOwHHb0scBy71b5bmqCHBRDf0c"
+    },
+    {
+      "name": "one-heartbeat-tick",
+      "scope": "tenant:tenant-a",
+      "utcTicks": "639040662000000000",
+      "leaseTicks": "3000000000",
+      "heartbeatTicks": "600000001",
+      "owner": "owner <\u00e9>",
+      "offsetMinutes": 0,
+      "limit": 1,
+      "canonical": "{\"heartbeatTimeoutTicks\":600000001e0,\"leaseTimeoutTicks\":3e9,\"nowUtcTicks\":639040662e9,\"ownerId\":\"owner \\u003C\\u00E9\\u003E\",\"scope\":\"tenant:tenant-a\"}",
+      "sha256": "b8c0c096ad0e44b48fa9960315fd0cbe3472e0815384f136bea24a06a0c7edd4",
+      "eligibleUtcTicks": "639040662000000000",
+      "cursorCanonical": "{\"Binding\":\"b8c0c096ad0e44b48fa9960315fd0cbe3472e0815384f136bea24a06a0c7edd4\",\"EligibleAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"EligibleAtUtcTicks\":639040662e9,\"OperationalStateId\":\"liveness\",\"WorkflowExecutionId\":\"workflow\"}",
+      "cursorSignature": "vvGaGR06HFybtdiWmNpT0tfKHFqTQIVkbAk9xarT5wY"
+    },
+    {
+      "name": "other-owner",
+      "scope": "tenant:tenant-a",
+      "utcTicks": "639040662000000000",
+      "leaseTicks": "3000000000",
+      "heartbeatTicks": "600000000",
+      "owner": "another owner",
+      "offsetMinutes": 0,
+      "limit": 1,
+      "canonical": "{\"heartbeatTimeoutTicks\":6e8,\"leaseTimeoutTicks\":3e9,\"nowUtcTicks\":639040662e9,\"ownerId\":\"another owner\",\"scope\":\"tenant:tenant-a\"}",
+      "sha256": "56b89c83c85b75869e7b41220f2143e8ce8d9efd1c0650a51c8adbad9823f2af",
+      "eligibleUtcTicks": "639040662000000000",
+      "cursorCanonical": "{\"Binding\":\"56b89c83c85b75869e7b41220f2143e8ce8d9efd1c0650a51c8adbad9823f2af\",\"EligibleAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"EligibleAtUtcTicks\":639040662e9,\"OperationalStateId\":\"liveness\",\"WorkflowExecutionId\":\"workflow\"}",
+      "cursorSignature": "FTRkVU_R2uZGM2SEjjwKJIY0io6RSXWe90f-8-NIVbA"
+    },
+    {
+      "name": "owner-text-a",
+      "scope": "tenant:tenant-a",
+      "utcTicks": "639040662000000000",
+      "leaseTicks": "3000000000",
+      "heartbeatTicks": "600000000",
+      "owner": "{}",
+      "offsetMinutes": 0,
+      "limit": 1,
+      "canonical": "{\"heartbeatTimeoutTicks\":6e8,\"leaseTimeoutTicks\":3e9,\"nowUtcTicks\":639040662e9,\"ownerId\":\"{}\",\"scope\":\"tenant:tenant-a\"}",
+      "sha256": "9fec3df95eb42af79321355a9c6a0a75d59db3a9fa40b1b44d48f76f06d20dc0",
+      "eligibleUtcTicks": "639040662000000000",
+      "cursorCanonical": "{\"Binding\":\"9fec3df95eb42af79321355a9c6a0a75d59db3a9fa40b1b44d48f76f06d20dc0\",\"EligibleAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"EligibleAtUtcTicks\":639040662e9,\"OperationalStateId\":\"liveness\",\"WorkflowExecutionId\":\"workflow\"}",
+      "cursorSignature": "e0ef1YfFtgMLqVGC1uXMcZTcJXzHFmfnEUca5Un5mtA"
+    },
+    {
+      "name": "owner-text-b",
+      "scope": "tenant:tenant-a",
+      "utcTicks": "639040662000000000",
+      "leaseTicks": "3000000000",
+      "heartbeatTicks": "600000000",
+      "owner": "{ }",
+      "offsetMinutes": 0,
+      "limit": 1,
+      "canonical": "{\"heartbeatTimeoutTicks\":6e8,\"leaseTimeoutTicks\":3e9,\"nowUtcTicks\":639040662e9,\"ownerId\":\"{ }\",\"scope\":\"tenant:tenant-a\"}",
+      "sha256": "34aa376a75d6b5054ffdb4de7f1634bc62b7fc5e505de6d7f4b31b74ca3ac967",
+      "eligibleUtcTicks": "639040662000000000",
+      "cursorCanonical": "{\"Binding\":\"34aa376a75d6b5054ffdb4de7f1634bc62b7fc5e505de6d7f4b31b74ca3ac967\",\"EligibleAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"EligibleAtUtcTicks\":639040662e9,\"OperationalStateId\":\"liveness\",\"WorkflowExecutionId\":\"workflow\"}",
+      "cursorSignature": "3lnP_0TZnDkm_VKLZ5Z8B8lur1aVscB7e_ZVjlcOZlI"
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { studioRowInteraction, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useRef, useState, type UIEvent } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -35,6 +37,7 @@ export function ActivityDefinitionDependencyExplorer({
   initialVersionId?: string;
   initialDirection?: DependencyDirection;
 }) {
+  useStudioTimeZone();
   const [versionCursors, setVersionCursors] = useState<(string | null)[]>([null]);
   const [versionPage, setVersionPage] = useState(0);
   const [rootVersionId, setRootVersionId] = useState("");
@@ -262,6 +265,7 @@ function DependencyRow({
   selected: boolean;
   onSelect(): void;
 }) {
+
   const sourceHref = exactOwnerHref(item);
   return <tr className={selected ? "is-selected" : ""} aria-selected={selected} {...studioRowInteraction<HTMLTableRowElement>(onSelect)}>
     <td data-label={direction === "inbound" ? "Used in" : "Version"}><strong>{referenceLabel(item.owner)}</strong><code>{referenceIdentity(item.owner)}</code></td>
@@ -273,6 +277,7 @@ function DependencyRow({
 }
 
 function DependencyPath({ item }: { item: ActivityDefinitionDependencyItem }) {
+
   const path = item.path.length ? item.path : [item.owner, item.dependency];
   const cycle = path.length > 1 && referenceIdentity(path[0]) === referenceIdentity(path[path.length - 1]);
   return <section className="ad-dependency-path" aria-labelledby="dependency-path-title">
@@ -345,5 +350,5 @@ function exactOwnerHref(item: ActivityDefinitionDependencyItem) {
 
 function formatTimestamp(value: string) {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  return Number.isNaN(parsed.getTime()) ? value : formatStudioDate(parsed);
 }

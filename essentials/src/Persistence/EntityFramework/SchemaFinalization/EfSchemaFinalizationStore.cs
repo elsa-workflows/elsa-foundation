@@ -41,7 +41,7 @@ public sealed class EfSchemaFinalizationStore
     /// <summary>The key of the one database identity row.</summary>
     internal const int DatabaseIdentityRowId = 1;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Converters = { new JsonStringEnumConverter() },

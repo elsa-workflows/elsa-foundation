@@ -185,7 +185,7 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
             return ValueEnvelope.Null(type, policy);
         var json = value is JsonElement element
             ? element.Clone()
-            : JsonSerializer.SerializeToElement(value, value.GetType());
+            : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value);
         return ValueEnvelope.Inline(type, json, policy);
     }
 

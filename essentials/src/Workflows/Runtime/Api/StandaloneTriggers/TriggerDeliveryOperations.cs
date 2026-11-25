@@ -98,7 +98,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
         impact.Add(new("Effect", Description: kind == RuntimeIngressControlKind.CancelPendingRecipients
             ? "Only selected unsealed new-root responsibility can be cancelled. Committed dispatch and ordinary waits remain owed."
             : "Request recovery with the captured targets and inputs. This does not assert workflow execution started."));
-        return new(previews.Protect(JsonSerializer.Serialize(proof, StandaloneTriggersApi.Json)), expires, resource.Trigger.Revision, proof.CommandFingerprint,
+        return new(previews.Protect(JsonSerializer.Serialize(proof, options: StandaloneTriggersApi.Json)), expires, resource.Trigger.Revision, proof.CommandFingerprint,
             true, impact, []);
     }
 
@@ -119,7 +119,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
         else
         {
             TriggerDeliveryPreviewProof proof;
-            try { proof = JsonSerializer.Deserialize<TriggerDeliveryPreviewProof>(previews.Unprotect(Text(request, "previewId")), StandaloneTriggersApi.Json) ?? throw Changed(); }
+            try { proof = JsonSerializer.Deserialize<TriggerDeliveryPreviewProof>(previews.Unprotect(Text(request, "previewId")), options: StandaloneTriggersApi.Json) ?? throw Changed(); }
             catch (Exception exception) when (exception is System.Security.Cryptography.CryptographicException or JsonException or FormatException) { throw Changed(); }
             expected = Select(source, triggerId, command);
             if (proof.Actor != access.Subject || proof.Scope != access.Scope || proof.TriggerId != triggerId ||
@@ -136,8 +136,8 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
 
         TriggerChangeResult ControlResult(RuntimeIngressControlReceipt receipt, bool replayed) =>
             new(requestId, replayed ? "AlreadyApplied" : "Applied", Number(request, "expectedRevision"), null,
-                Effects: receipt.Recipients.Select(outcome => (object)new { recipientId = outcome.RecipientId, outcome = Outcome(kind, outcome.Outcome),
-                    message = "The source control receipt was committed; it does not assert workflow completion." }).ToArray());
+                Effects: JsonSerializer.SerializeToElement(receipt.Recipients.Select(outcome => new { recipientId = outcome.RecipientId, outcome = Outcome(kind, outcome.Outcome),
+                    message = "The source control receipt was committed; it does not assert workflow completion." }).ToArray(), options: StandaloneTriggersApi.Json));
     }
 
     private async ValueTask<TriggerDeliveryView> ViewAsync(RuntimePostCommitOutboxItem source, TriggerAggregate resource, CancellationToken ct)
@@ -282,7 +282,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
         string sourceId; string? owner;
         if (id.StartsWith("dv1.", StringComparison.Ordinal))
         {
-            try { var parts = JsonSerializer.Deserialize<string[]>(Decode(id[4..])) ?? throw Missing();
+            try { var parts = JsonSerializer.Deserialize<string[]>(Decode(id[4..]), options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw Missing();
                 if (parts.Length != 2 || parts.Any(string.IsNullOrWhiteSpace)) throw Missing(); sourceId = parts[0]; owner = parts[1]; }
             catch (Exception exception) when (exception is FormatException or JsonException or ArgumentException) { throw Missing(); }
         }
@@ -299,19 +299,19 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
         await access.RequireAsync(permission, resource.Trigger, ct, mask: true);
         return resource; // Tombstones retain history authority independently of normal resource browsing.
     }
-    internal static string EncodeId(string sourceId, string triggerId) => "dv1." + Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new[] { sourceId, triggerId }))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    internal static string EncodeId(string sourceId, string triggerId) => "dv1." + Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new[] { sourceId, triggerId }, options: Elsa.Serialization.Core.JsonBaseline.Options))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     private static string Decode(string value) { value = value.Replace('-', '+').Replace('_', '/'); return Encoding.UTF8.GetString(Convert.FromBase64String(value.PadRight((value.Length + 3) / 4 * 4, '='))); }
     private TriggerDeliveryCursor ReadCursor(string value, string? triggerId)
     {
         try
         {
-            var cursor = JsonSerializer.Deserialize<TriggerDeliveryCursor>(cursors.Unprotect(value), StandaloneTriggersApi.Json) ?? throw Missing();
+            var cursor = JsonSerializer.Deserialize<TriggerDeliveryCursor>(cursors.Unprotect(value), options: StandaloneTriggersApi.Json) ?? throw Missing();
             if (cursor.Actor != access.Subject || cursor.Scope != access.Scope || cursor.TriggerId != triggerId) throw Invalid("The delivery cursor belongs to another query.");
             return cursor;
         }
         catch (Exception exception) when (exception is System.Security.Cryptography.CryptographicException or JsonException) { throw Invalid("The delivery cursor is invalid."); }
     }
-    private string ProtectCursor(TriggerDeliveryCursor value) => cursors.Protect(JsonSerializer.Serialize(value, StandaloneTriggersApi.Json));
+    private string ProtectCursor(TriggerDeliveryCursor value) => cursors.Protect(JsonSerializer.Serialize(value, options: StandaloneTriggersApi.Json));
     private static IEnumerable<string> ResourceIds(RuntimePostCommitOutboxItem source) => source.StandaloneIngress is { } external
         ? [external.TriggerId] : (source.SubscriptionDelivery?.ResourceCaptures?.Select(item => item.TriggerId) ?? []).Order(StringComparer.Ordinal);
     private static bool Owns(RuntimePostCommitOutboxItem source, string subscriptionId, string triggerId) => source.StandaloneIngress?.TriggerId == triggerId ||

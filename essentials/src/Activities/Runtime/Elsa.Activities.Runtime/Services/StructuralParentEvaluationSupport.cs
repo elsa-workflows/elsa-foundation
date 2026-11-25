@@ -47,7 +47,8 @@ internal static class StructuralParentEvaluationSupport
         CancellationToken cancellationToken,
         RuntimeActivityInputSnapshotMaterializer? inputRematerializer = null,
         WorkflowExecutable? executable = null,
-        DateTimeOffset? materializedAt = null)
+        DateTimeOffset? materializedAt = null,
+        Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings = null)
     {
         var contract = executableNode.ActivityContract
             ?? throw new InvalidOperationException($"VF-ACT-001: Executable CLR activity node '{executableNode.ExecutableNodeId}' has no pinned activity contract.");
@@ -57,7 +58,7 @@ internal static class StructuralParentEvaluationSupport
             ?? throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no open committed attempt.");
         var activator = serviceProvider.GetRequiredService<IActivityActivator>();
         var activationLease = await activator.ActivateAsync(
-            new ActivityActivationRequest(WorkflowExecutionId: state.Execution.WorkflowExecutionId, ActivityExecutionId: state.Execution.ActivityExecutionId, contract, snapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
+            new ActivityActivationRequest(WorkflowExecutionId: state.Execution.WorkflowExecutionId, ActivityExecutionId: state.Execution.ActivityExecutionId, contract, snapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor) { Warnings = warnings },
             cancellationToken);
 
         if (inputRematerializer is null || executable is null || activationLease.Activity is not IRuntimeRematerializeInputsOnChildCompletion)
@@ -89,9 +90,10 @@ internal static class StructuralParentEvaluationSupport
             throw;
         }
 
+        foreach (var warning in freshSnapshot.Warnings ?? []) warnings?.Report(warning);
         await activationLease.DisposeAsync();
         var freshLease = await activator.ActivateAsync(
-            new ActivityActivationRequest(WorkflowExecutionId: state.Execution.WorkflowExecutionId, ActivityExecutionId: state.Execution.ActivityExecutionId, contract, freshSnapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
+            new ActivityActivationRequest(WorkflowExecutionId: state.Execution.WorkflowExecutionId, ActivityExecutionId: state.Execution.ActivityExecutionId, contract, freshSnapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor) { Warnings = warnings },
             cancellationToken);
         return new ConstructedActivity(freshLease.Activity, freshSnapshot, freshLease);
     }
@@ -460,7 +462,7 @@ internal static class StructuralParentEvaluationSupport
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.InvokeReason] = payload.Reason;
         metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;
-        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(normalizedOutcomeNames);
+        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(normalizedOutcomeNames, Elsa.Serialization.Core.JsonBaseline.Options);
         // Only the current successful direct-child completion may supply this causal edge. Notification and
         // other callbacks must not retain a marker left by an earlier fault evaluation or attempt.
         metadata.Remove(RuntimeMetadataKeys.CompletedChildActivityExecutionId);

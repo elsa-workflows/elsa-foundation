@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-03
 
-**Status**: Approved — agreed 2026-11-20 by @j03y-nxxbz as coordinator (the approval plan), with Q9 to Q11 decided as recommended and Q10 as answered; applies ADR 0091 and the ADR 0046 amendment as merged on the initiative branch. Initiative #3052 spec **S-9**.
+**Status**: Implemented — PR #5460 on the initiative branch (2026-11-25); approved 2026-11-20 by @j03y-nxxbz as coordinator, with Q9 to Q11 decided as recommended and Q10 as answered. Initiative #3052 spec **S-9**.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-9**.
 

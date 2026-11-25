@@ -1,3 +1,4 @@
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import { AlertCircle, CheckCircle2, CircleSlash, Clock3 } from "lucide-react";
 import { StatusChip } from "@elsa-workflows/studio-ui";

@@ -8,7 +8,7 @@ internal static class EfToolingContextContract
 {
     public const int Version = 2;
 
-    public static readonly JsonSerializerOptions Json = new()
+    public static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = false,

@@ -66,7 +66,7 @@ public sealed class SourceOwnedStimulusRouterTests
         Assert.Equal(1, harness.Lookup.Reads); Assert.Equal(1, harness.Actors.Accepted.Count(command => command.Command.Kind == WorkflowExecutionCommandKind.Start));
         Assert.Equal(2, harness.Actors.Accepted.Count(command => command.Command.Kind == WorkflowExecutionCommandKind.ResumeBookmark));
         var resumes = harness.Actors.Accepted.Where(command => command.Command.Kind == WorkflowExecutionCommandKind.ResumeBookmark)
-            .Select(command => command.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!).ToArray();
+            .Select(command => command.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!).ToArray();
         Assert.Equal(new[] { "wait-a", "wait-b" }, resumes.Select(payload => payload.BookmarkId));
         Assert.All(resumes, payload => { Assert.NotNull(payload.ExpectedBookmarkResume!.RegistrationCapture); Assert.Equal("immutable-value", payload.Input!.Value.GetProperty("value").GetString()); });
         await harness.Bindings.DeleteByArtifactAsync(Pin.ArtifactId); await harness.Bind("new-binding");
@@ -151,7 +151,7 @@ public sealed class SourceOwnedStimulusRouterTests
         harness.Lookup.Fail = true;
         var retried = await harness.Router.RouteSourceAsync(source);
         Assert.Equal(2, retried.Resumes.Count); Assert.Equal(2, harness.Actors.Accepted.Count); Assert.Equal(3, harness.Actors.Attempts.Count);
-        Assert.All(harness.Actors.Accepted, command => Assert.NotNull(command.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.ExpectedBookmarkResume));
+        Assert.All(harness.Actors.Accepted, command => Assert.NotNull(command.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.ExpectedBookmarkResume));
     }
 
     [Theory]
@@ -204,7 +204,7 @@ public sealed class SourceOwnedStimulusRouterTests
         await harness.Wait("test-run", "isolated", "A", testRun: true);
         var result = await harness.Router.RouteSourceAsync(await harness.Source(correlation: "A"));
         Assert.Single(result.Starts); Assert.Equal("existing", Assert.Single(result.Resumes).WorkflowExecutionId);
-        var payload = harness.Actors.Accepted.Single(command => command.Command.Kind == WorkflowExecutionCommandKind.ResumeBookmark).Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var payload = harness.Actors.Accepted.Single(command => command.Command.Kind == WorkflowExecutionCommandKind.ResumeBookmark).Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("match", payload.BookmarkId); Assert.NotNull(await harness.Bookmarks.FindAsync("test-run", "isolated"));
     }
 
@@ -223,7 +223,7 @@ public sealed class SourceOwnedStimulusRouterTests
         else
         {
             await harness.Router.RouteSourceAsync(source);
-            var payload = Assert.Single(harness.Actors.Accepted).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+            var payload = Assert.Single(harness.Actors.Accepted).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
             Assert.Equal(WorkflowExecutableSourceProvenance.From(reference), payload.PinnedSource);
         }
     }
@@ -329,8 +329,8 @@ public sealed class SourceOwnedStimulusRouterTests
         }
         else await harness.Router.RouteSourceAsync(supplied);
         var command = Assert.Single(harness.Actors.Accepted).Command;
-        var input = resume ? command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.Input :
-            command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.StimulusInput;
+        var input = resume ? command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.Input :
+            command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.StimulusInput;
         Assert.Equal(source.Intent.Payload!.Value.GetRawText(), input!.Value.GetRawText());
         Assert.NotEqual(altered.Payload!.Value.GetRawText(), input.Value.GetRawText());
     }

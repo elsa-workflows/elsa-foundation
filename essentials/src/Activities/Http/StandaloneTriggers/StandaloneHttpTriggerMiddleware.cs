@@ -29,7 +29,7 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
     IWorkflowExecutionStateStore? executions = null, IActivityExecutionStateStore? activities = null,
     IRuntimeIngressDeliveryStore? deliveryStore = null) : IMiddleware
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly TimeProvider time = timeProvider ?? TimeProvider.System;
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
@@ -78,7 +78,7 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
                 waitOptions.RequestSizeLimit is { } waitLimit ? Math.Min(options.Value.MaxRequestBodyBytes, waitLimit) : options.Value.MaxRequestBodyBytes,
                 ["Authorization", "Proxy-Authorization", "Cookie", "Set-Cookie", "X-Api-Key"]);
             if (request is null) { await ProblemAsync(context, 413, "BodyTooLarge", "The HTTP request exceeds the configured body limit."); return; }
-            var payload = request.Body is null ? JsonSerializer.SerializeToElement<object?>(null) : bodyParser.Parse(context.Request.ContentType, request.Body);
+            var payload = request.Body is null ? JsonSerializer.SerializeToElement<object?>(null, options: Elsa.Serialization.Core.JsonBaseline.Options) : bodyParser.Parse(context.Request.ContentType, request.Body);
             if (payload is null) { await ProblemAsync(context, 400, "InvalidBody", "Use a supported content type and valid request body."); return; }
             var key = context.Request.Headers["Idempotency-Key"].ToString();
             if (string.IsNullOrEmpty(key)) key = Guid.NewGuid().ToString("N");

@@ -53,7 +53,9 @@ public class ProcessingFeature : IWebShellFeature
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, MaxDepth = 16 };
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, MaxDepth = 16 };
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.MakeReadOnly();
         endpoints.MapPost("/_acme/processing/records", async (HttpContext http, IProcessingRecords records) =>
             await Boundary(async () =>
             {
@@ -68,23 +70,28 @@ public class ProcessingFeature : IWebShellFeature
                 }
                 var input = JsonSerializer.Deserialize<ProcessingCreate>(bounded.ToArray(), options)
                     ?? throw new ProcessingException("validation", "A processing record is required.");
-                return Results.Json(new { id = await records.CreateAsync(input, http.RequestAborted) });
+                return Results.Json(new { id = await records.CreateAsync(input, http.RequestAborted) }, options: options);
             }));
         endpoints.MapGet("/_acme/processing/records/{id}", async (HttpContext http, IProcessingRecords records, string id) =>
-            await Boundary(async () => await records.FindAsync(id, http.RequestAborted) is { } record ? Results.Json(record) : Results.NotFound()));
+            await Boundary(async () => await records.FindAsync(id, http.RequestAborted) is { } record ? Results.Json(record, options: options) : Results.NotFound()));
         endpoints.MapGet("/_acme/processing/records", async (HttpContext http, IProcessingRecords records) =>
             await Boundary(async () =>
             {
                 var take = int.TryParse(http.Request.Query["take"], out var requested) ? requested : 25;
-                return Results.Json(await records.ReadAsync(take, http.Request.Query["cursor"].FirstOrDefault(), http.RequestAborted));
+                return Results.Json(await records.ReadAsync(take, http.Request.Query["cursor"].FirstOrDefault(), http.RequestAborted), options: options);
             }));
     }
 
     private static async Task<IResult> Boundary(Func<Task<IResult>> action)
     {
         try { return await action(); }
-        catch (ProcessingException exception) { return Results.Json(new { code = exception.Code, message = exception.Message }, statusCode: exception.Code == "denied" ? 403 : 400); }
-        catch (JsonException) { return Results.Json(new { code = "validation", message = "The processing input is invalid." }, statusCode: 400); }
+        catch (Elsa.Serialization.Core.JsonConversionException exception)
+        {
+            return Results.Json(new { code = exception.Code, message = exception.Message, path = exception.Path },
+                statusCode: 400, options: Elsa.Serialization.Core.JsonBaseline.Options);
+        }
+        catch (ProcessingException exception) { return Results.Json(new { code = exception.Code, message = exception.Message }, statusCode: exception.Code == "denied" ? 403 : 400, options: Elsa.Serialization.Core.JsonBaseline.Options); }
+        catch (JsonException) { return Results.Json(new { code = "validation", message = "The processing input is invalid." }, statusCode: 400, options: Elsa.Serialization.Core.JsonBaseline.Options); }
     }
 }
 

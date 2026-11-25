@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="../../../../../Serialization/Testing/Elsa.Serialization.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
   </ItemGroup>
   <ItemGroup>
@@ -25,5 +26,10 @@
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestFilter.cs" Link="EfSchemaFinalizationTestFilter.cs" />
     <!-- Updates and deletes rows whose LastModifiedAt is the concurrency token, shared with the native provider tests. -->
     <Compile Include="..\..\..\Tests\Infrastructure\ConcurrencyTokenScenarios.cs" Link="ConcurrencyTokenScenarios.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../../../../../../../specs/1207-json-data-integrity-baseline/evidence/workflow-library-binding-hash-vectors.json" LogicalName="S9WorkflowLibraryBindingVectors.json" />
+    <EmbeddedResource Include="../../../../../../../specs/1207-json-data-integrity-baseline/evidence/design-operation-hash-vectors.json" LogicalName="S9DesignOperationVectors.json" />
+    <EmbeddedResource Include="../../../../../../../specs/1207-json-data-integrity-baseline/evidence/nested-binding-hash-vectors.json" LogicalName="S9NestedBindingVectors.json" />
   </ItemGroup>
 </Project>

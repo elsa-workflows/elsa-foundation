@@ -52,7 +52,7 @@ public sealed class CandidateInspectionOutput
         body["participants"] = new JsonArray(source.GetProperty("participants").EnumerateArray()
             .Select(row => (JsonNode?)CopyFields(row, ParticipantFields)).ToArray());
         var rendered = format == "json"
-            ? JsonSerializer.Serialize(new { plan = projection, configurationResolution = body }, CompositionPlanCommand.JsonOptions)
+            ? JsonSerializer.Serialize(new { plan = projection, configurationResolution = body }, options: CompositionPlanCommand.JsonOptions)
             : CompositionPlanCommand.RenderText(projection) + Environment.NewLine +
               RenderConfiguration(JsonSerializer.SerializeToElement(body));
         capture.VerifyUnchanged();
@@ -62,7 +62,7 @@ public sealed class CandidateInspectionOutput
     private static JsonObject CopyFields(JsonElement source, IReadOnlyList<string> fields)
     {
         var result = new JsonObject();
-        foreach (var name in fields) result[name] = JsonSerializer.SerializeToNode(source.GetProperty(name));
+        foreach (var name in fields) result[name] = JsonSerializer.SerializeToNode(source.GetProperty(name), Elsa.Serialization.Core.JsonBaseline.Options);
         return result;
     }
 

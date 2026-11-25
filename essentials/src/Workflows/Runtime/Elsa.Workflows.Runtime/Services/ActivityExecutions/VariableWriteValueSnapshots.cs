@@ -101,7 +101,7 @@ public static class VariableWriteValueSnapshots
     private static JsonElement? Serialize(RuntimePayloadCaptureDecision decision, JsonElement? value, string valueName, RuntimeValueTypeDescriptor type) =>
         decision.Mode switch
         {
-            RuntimePayloadCaptureMode.Payload => value?.Clone() ?? JsonSerializer.SerializeToElement<object?>(null),
+            RuntimePayloadCaptureMode.Payload => value?.Clone() ?? JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options),
             RuntimePayloadCaptureMode.DiagnosticSnapshot => DefaultDiagnosticSnapshotFactory.Capture(value, valueName, type),
             _ => null
         };

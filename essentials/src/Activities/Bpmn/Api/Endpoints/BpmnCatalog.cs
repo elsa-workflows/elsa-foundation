@@ -87,12 +87,12 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
         RuntimeStorePageRequest.ValidateLimit(request.Limit, nameof(request.Limit));
         RuntimeStorePageRequest.ValidateContinuationToken(request.ContinuationToken, nameof(request.ContinuationToken));
         if (request.ArtifactId is not null) ArgumentException.ThrowIfNullOrWhiteSpace(request.ArtifactId);
-        var binding = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new[]
-            { scope.Value, identity.ActorId, identity.TenantId, request.ArtifactId, request.Limit.ToString(CultureInfo.InvariantCulture) })));
+        var binding = Elsa.Serialization.Core.JsonHashInput.Hash(new[]
+            { scope.Value, identity.ActorId, identity.TenantId, request.ArtifactId, request.Limit.ToString(CultureInfo.InvariantCulture) }).ToUpperInvariant();
         if (request.ContinuationToken is null) return (identity, scope, new(binding, null, clock.GetUtcNow().UtcTicks));
         try
         {
-            var cursor = JsonSerializer.Deserialize<Cursor>(continuations.Decode(purpose, request.ContinuationToken));
+            var cursor = JsonSerializer.Deserialize<Cursor>(continuations.DecodeJson(purpose, request.ContinuationToken));
             if (cursor is null || cursor.Binding != binding || cursor.Raw is null ||
                 cursor.LiveUtcTicks <= DateTimeOffset.MinValue.UtcTicks || cursor.LiveUtcTicks >= DateTimeOffset.MaxValue.UtcTicks)
                 throw new ArgumentException("Invalid catalog continuation.");
@@ -106,7 +106,7 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
     }
 
     private string? Next(string purpose, Cursor cursor, string? raw) => raw is null ? null :
-        continuations.Encode(purpose, JsonSerializer.SerializeToUtf8Bytes(cursor with { Raw = raw }));
+        continuations.EncodeJson(purpose, JsonSerializer.SerializeToUtf8Bytes(cursor with { Raw = raw }));
     private sealed record Cursor(string Binding, string? Raw, long LiveUtcTicks);
 }
 

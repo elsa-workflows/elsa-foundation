@@ -44,7 +44,7 @@ public static partial class RuleRecordCodec
                 .Take(RuleLimits.MaxRules + 1).Select(firing => new RuleFiringEvidence(String(firing, "ruleId"),
                     new(String(firing, "conclusion")))).ToArray(), String(root, "semanticReceiptSha256"));
         RequireCanonical(bytes, ReceiptRecordBytes(receipt));
-        Require(Hash(ReceiptBytes(receipt)) == receipt.SemanticReceiptSha256, "rules.receipt-integrity");
+        Require(JsonHash(ReceiptBytes(receipt)) == receipt.SemanticReceiptSha256, "rules.receipt-integrity");
         return receipt;
     }
 
@@ -79,7 +79,7 @@ public static partial class RuleRecordCodec
     }
 
     private static void RequireCanonical(ReadOnlyMemory<byte> bytes, byte[] canonical) =>
-        Require(bytes.Span.SequenceEqual(canonical), "rules.noncanonical-record");
+        Require(Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(bytes, canonical), "rules.noncanonical-record");
 
     private static RuleFact[] ReadFactArray(JsonElement element) => element.EnumerateArray()
         .Take(RuleLimits.MaxVocabularyFacts + 1).Select(value => new RuleFact(value.GetString()!)).ToArray();

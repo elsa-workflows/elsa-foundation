@@ -341,17 +341,20 @@ internal sealed class StimulusDeliverySnapshotJsonConverter : JsonConverter<Stim
     }
 
     public override void Write(Utf8JsonWriter writer, StimulusDeliverySnapshot value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, new Wire(value.Version, value.SourceOutboxItemId, value.IntentFingerprint, value.Scope,
-            value.SelectedAt, value.StimulusType, value.StimulusHash, value.Starts, value.Resumes,
-            value.RetentionAcceptanceVersion is { } version ? new(version) : null), options);
+        JsonSerializer.Serialize(writer, HashProjection(value), options);
 
-    private sealed record Wire([property: JsonRequired] int Version, [property: JsonRequired] string SourceOutboxItemId,
+    internal static Wire HashProjection(StimulusDeliverySnapshot value) =>
+        new Wire(value.Version, value.SourceOutboxItemId, value.IntentFingerprint, value.Scope,
+            value.SelectedAt, value.StimulusType, value.StimulusHash, value.Starts, value.Resumes,
+            value.RetentionAcceptanceVersion is { } version ? new(version) : null);
+
+    internal sealed record Wire([property: JsonRequired] int Version, [property: JsonRequired] string SourceOutboxItemId,
         [property: JsonRequired] string IntentFingerprint, [property: JsonRequired] StimulusDeliveryScope Scope,
         [property: JsonRequired] DateTimeOffset SelectedAt, [property: JsonRequired] string StimulusType,
         [property: JsonRequired] string StimulusHash, [property: JsonRequired] IReadOnlyList<StimulusStartRecipient> Starts,
         [property: JsonRequired] IReadOnlyList<StimulusResumeRecipient> Resumes,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RetentionAcceptanceWire? RetentionAcceptance = null);
-    private sealed record RetentionAcceptanceWire([property: JsonRequired] int Version);
+    internal sealed record RetentionAcceptanceWire([property: JsonRequired] int Version);
 }
 
 /// <summary>New cohort wire requires complete binding provenance without changing legacy binding readers.</summary>
@@ -372,14 +375,17 @@ internal sealed class StimulusStartRecipientJsonConverter : JsonConverter<Stimul
     }
 
     public override void Write(Utf8JsonWriter writer, StimulusStartRecipient value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, new Wire(BindingWire.From(value.Binding), value.Executable,
-            value.SourceProvenanceCaptured ? new(1, value.SourceProvenance is null ? null : ProvenanceWire.From(value.SourceProvenance)) : null), options);
+        JsonSerializer.Serialize(writer, HashProjection(value), options);
 
-    private sealed record Wire([property: JsonRequired] BindingWire Binding,
+    internal static Wire HashProjection(StimulusStartRecipient value) =>
+        new Wire(BindingWire.From(value.Binding), value.Executable,
+            value.SourceProvenanceCaptured ? new(1, value.SourceProvenance is null ? null : ProvenanceWire.From(value.SourceProvenance)) : null);
+
+    internal sealed record Wire([property: JsonRequired] BindingWire Binding,
         [property: JsonRequired] WorkflowExecutableIdentity Executable,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SourceCaptureWire? SourceCapture = null);
 
-    private sealed record SourceCaptureWire([property: JsonRequired] int Version,
+    internal sealed record SourceCaptureWire([property: JsonRequired] int Version,
         [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] ProvenanceWire? Provenance);
 
     internal sealed record ProvenanceWire([property: JsonRequired] string SourceReferenceId,
@@ -396,7 +402,7 @@ internal sealed class StimulusStartRecipientJsonConverter : JsonConverter<Stimul
             source.ArtifactVersion, source.PublicationId, source.SlotId);
     }
 
-    private sealed record BindingWire([property: JsonRequired] string TriggerBindingId,
+    internal sealed record BindingWire([property: JsonRequired] string TriggerBindingId,
         [property: JsonRequired] string ArtifactId, [property: JsonRequired] string DefinitionId,
         [property: JsonRequired] string ArtifactVersion, [property: JsonRequired] string ArtifactHash,
         [property: JsonRequired] string ExecutableNodeId, [property: JsonRequired] string StimulusType,
@@ -428,9 +434,12 @@ internal sealed class StimulusDeliveryScopeJsonConverter : JsonConverter<Stimulu
     }
 
     public override void Write(Utf8JsonWriter writer, StimulusDeliveryScope value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, new Wire(value.PersistenceScope, value.TenantId, value.Partition, value.RunKind, value.TestScope), options);
+        JsonSerializer.Serialize(writer, HashProjection(value), options);
 
-    private sealed record Wire([property: JsonRequired] PersistenceScope PersistenceScope,
+    internal static Wire HashProjection(StimulusDeliveryScope value) =>
+        new Wire(value.PersistenceScope, value.TenantId, value.Partition, value.RunKind, value.TestScope);
+
+    internal sealed record Wire([property: JsonRequired] PersistenceScope PersistenceScope,
         [property: JsonRequired] string? TenantId, [property: JsonRequired] WorkflowExecutionPartition? Partition,
         [property: JsonRequired] WorkflowRunKind RunKind, [property: JsonRequired] WorkflowTestScope? TestScope);
 }
@@ -453,11 +462,14 @@ internal sealed class StimulusResumeRecipientJsonConverter : JsonConverter<Stimu
     }
 
     public override void Write(Utf8JsonWriter writer, StimulusResumeRecipient value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, new Wire(value.WorkflowExecutionId, value.BookmarkId, value.ActivityExecutionId,
-            value.ExecutableNodeId, value.ResumeTargetId, value.StimulusType, value.StimulusHash, value.CreatedAt, value.ExpiresAt,
-            value.RegistrationCapture), options);
+        JsonSerializer.Serialize(writer, HashProjection(value), options);
 
-    private sealed record Wire([property: JsonRequired] string WorkflowExecutionId, [property: JsonRequired] string BookmarkId,
+    internal static Wire HashProjection(StimulusResumeRecipient value) =>
+        new Wire(value.WorkflowExecutionId, value.BookmarkId, value.ActivityExecutionId,
+            value.ExecutableNodeId, value.ResumeTargetId, value.StimulusType, value.StimulusHash, value.CreatedAt, value.ExpiresAt,
+            value.RegistrationCapture);
+
+    internal sealed record Wire([property: JsonRequired] string WorkflowExecutionId, [property: JsonRequired] string BookmarkId,
         [property: JsonRequired] string ActivityExecutionId, [property: JsonRequired] string ExecutableNodeId,
         [property: JsonRequired] string ResumeTargetId, [property: JsonRequired] string StimulusType,
         [property: JsonRequired] string StimulusHash, [property: JsonRequired] DateTimeOffset CreatedAt,

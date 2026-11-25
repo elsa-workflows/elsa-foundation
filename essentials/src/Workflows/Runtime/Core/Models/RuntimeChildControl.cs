@@ -207,11 +207,14 @@ internal sealed class RuntimeChildControlBatchJsonConverter : JsonConverter<Runt
     }
 
     public override void Write(Utf8JsonWriter writer, RuntimeChildControlBatch value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, new WireBatch(value.Version, value.ConsumerKey, value.ConsumerVersion,
-            value.ChildWorkflowExecutionId, value.RootActivityExecutionId, value.SourceWorkItemId,
-            value.Ordinal, value.IsTerminal, value.Notifications, value.AuthoredFailureCode), options);
+        JsonSerializer.Serialize(writer, HashProjection(value), options);
 
-    private sealed record WireBatch(int Version, string ConsumerKey, int ConsumerVersion,
+    internal static WireBatch HashProjection(RuntimeChildControlBatch value) =>
+        new WireBatch(value.Version, value.ConsumerKey, value.ConsumerVersion,
+            value.ChildWorkflowExecutionId, value.RootActivityExecutionId, value.SourceWorkItemId,
+            value.Ordinal, value.IsTerminal, value.Notifications, value.AuthoredFailureCode);
+
+    internal sealed record WireBatch(int Version, string ConsumerKey, int ConsumerVersion,
         string ChildWorkflowExecutionId, string RootActivityExecutionId, string SourceWorkItemId,
         long? Ordinal, bool? IsTerminal, IReadOnlyList<RuntimeChildControlNotification>? Notifications,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? AuthoredFailureCode);

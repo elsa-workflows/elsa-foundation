@@ -166,7 +166,7 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
         await System.Text.Json.JsonSerializer.SerializeAsync(
             context.Response.Body,
             problem,
-            WorkflowsPublishingJsonContext.Default.RuntimePreflightProblemDetails,
+            WorkflowsPublishingJsonContext.WireContext.RuntimePreflightProblemDetails,
             context.RequestAborted);
     }
 

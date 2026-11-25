@@ -306,7 +306,7 @@ public sealed partial class WorkflowAlterationActorIntegrationTests
             job.WorkflowExecutionId,
             WorkflowExecutionCommandKind.AlterWorkflow,
             Now,
-            JsonSerializer.SerializeToElement(new WorkflowAlterationActorCommand(job.JobId, claimToken ?? job.Claim!.Token)),
+            JsonSerializer.SerializeToElement(new WorkflowAlterationActorCommand(job.JobId, claimToken ?? job.Claim!.Token), Elsa.Serialization.Core.JsonBaseline.Options),
             new Dictionary<string, string>());
         return new WorkflowExecutionCommandEnvelope(
             "envelope-1",

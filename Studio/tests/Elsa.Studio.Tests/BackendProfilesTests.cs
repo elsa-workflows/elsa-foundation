@@ -23,7 +23,7 @@ public sealed class BackendProfilesTests : IAsyncLifetime
     private WebApplication? _app;
     private readonly IdentityBackend _identity = new();
 
-    private async Task<HttpClient> StartAsync(bool auth = true, bool personal = true, string? database = null, bool profilesOnly = false)
+    private async Task<HttpClient> StartAsync(bool auth = true, bool personal = true, string? database = null, bool profilesOnly = false, bool conflictingJson = false)
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production, ContentRootPath = AppContext.BaseDirectory });
         builder.WebHost.UseTestServer();
@@ -55,6 +55,12 @@ public sealed class BackendProfilesTests : IAsyncLifetime
         builder.Services.AddStudioBackendsHostConfiguration(builder.Configuration);
         studio.ConfigureShells(shells => shells.WithAssemblies(typeof(BackendsStudioFeature).Assembly));
         builder.Services.RouteAllBackendClientsThrough(_identity);
+        if (conflictingJson) builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+        {
+            options.SerializerOptions.WriteIndented = true;
+            options.SerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default;
+            options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+        });
         _app = builder.Build();
         if (database is not null)
         {
@@ -71,6 +77,27 @@ public sealed class BackendProfilesTests : IAsyncLifetime
     {
         profiles = new[] { new { id, name = "Personal backend", baseUrl = url, environment = "Test" } }
     };
+
+    [Fact]
+    public async Task Personal_profile_values_retain_raw_text_under_conflicting_host_JSON_options()
+    {
+        using var client = await StartAsync(conflictingJson: true);
+        const string raw = """{ "profiles" : [{"id":"m\u0069ne","name":"Ren\u00e9 <>&","baseUrl":"https://personal.example/shell-b/","environment":"Test"}] }""";
+        using var request = new HttpRequestMessage(HttpMethod.Put, Route)
+        {
+            Content = new StringContent("{\"schemaVersion\":1,\"value\":" + raw + "}", System.Text.Encoding.UTF8, "application/json")
+        };
+        request.Headers.Authorization = new("Bearer", "alice-a");
+        request.Headers.TryAddWithoutValidation("If-None-Match", "*");
+        using var saved = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        using var written = JsonDocument.Parse(await saved.Content.ReadAsStringAsync());
+        Assert.Equal(raw, written.RootElement.GetProperty("value").GetRawText());
+        using var read = await ReadAsync(client, "alice-a");
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        using var returned = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+        Assert.Equal(raw, returned.RootElement.GetProperty("value").GetRawText());
+    }
 
     private static async Task<HttpResponseMessage> ReadAsync(HttpClient client, string bearer, string? forgedHost = null)
     {

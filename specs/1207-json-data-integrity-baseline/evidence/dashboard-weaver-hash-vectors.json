@@ -1,0 +1,107 @@
+[
+  {
+    "name": "spelling-a",
+    "consumer": "json",
+    "json": "{ \"text\":\"\\u0061\", \"n\":1.0 }",
+    "canonical": "{\"n\":1e0,\"text\":\"a\"}",
+    "sha256": "f14a446e28dada50496083f909c072c9c6042b62bfcd7bb550f2c78d26ff1970"
+  },
+  {
+    "name": "spelling-b",
+    "consumer": "json",
+    "json": "{\"n\":1e0,\"text\":\"a\"}",
+    "canonical": "{\"n\":1e0,\"text\":\"a\"}",
+    "sha256": "f14a446e28dada50496083f909c072c9c6042b62bfcd7bb550f2c78d26ff1970"
+  },
+  {
+    "name": "empty",
+    "consumer": "json",
+    "json": "{}",
+    "canonical": "{}",
+    "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  {
+    "name": "present-null",
+    "consumer": "json",
+    "json": "{\"x\":null}",
+    "canonical": "{\"x\":null}",
+    "sha256": "c6b8df5aba33a39cbdee46ffaf77fae93ea2aa7d99d66408162b05a42105bd71"
+  },
+  {
+    "name": "array-forward",
+    "consumer": "json",
+    "json": "{\"x\":[1,2]}",
+    "canonical": "{\"x\":[1e0,2e0]}",
+    "sha256": "c664fee4fac3d3d7b498a4ec4625fbb7bba488a76c559e0473d656447f363cd8"
+  },
+  {
+    "name": "array-reverse",
+    "consumer": "json",
+    "json": "{\"x\":[2,1]}",
+    "canonical": "{\"x\":[2e0,1e0]}",
+    "sha256": "d7dafbd993f625e9b07bf5fcab11dbc152ea7768432bbd547fe08d454c5a8221"
+  },
+  {
+    "name": "large-a",
+    "consumer": "json",
+    "json": "{\"x\":9007199254740993}",
+    "canonical": "{\"x\":9007199254740993e0}",
+    "sha256": "928579d7a341f1ddbf25e0960a1014bd66696d39b45a44289bdfe010d2c9c9e2"
+  },
+  {
+    "name": "large-b",
+    "consumer": "json",
+    "json": "{\"x\":9007199254740992}",
+    "canonical": "{\"x\":9007199254740992e0}",
+    "sha256": "73ec2f2e3672d7eb0123620acd29246e0ba0f4023f43cf365f98f297a337f25c"
+  },
+  {
+    "name": "verbatim-keys",
+    "consumer": "json",
+    "json": "{\"OwnerKey\":\"Ren\\u00e9\",\"ownerKey\":null}",
+    "canonical": "{\"OwnerKey\":\"Ren\\u00E9\",\"ownerKey\":null}",
+    "sha256": "0a8cfb50ef707c3262cdc351f18b5eac81ec8d846138597e2eac67b23359773c"
+  },
+  {
+    "name": "question",
+    "consumer": "question",
+    "json": "{\"query\":{\"schemaVersion\":1,\"dataset\":{\"id\":\"fixture.records\",\"schemaRevision\":\"1\"},\"form\":\"records\",\"parameters\":[],\"filters\":null,\"fields\":[\"id\",\"amount\"],\"groupBy\":[],\"metrics\":[],\"time\":null,\"comparison\":null,\"having\":null,\"sort\":[],\"limit\":50},\"visualization\":{\"kind\":\"table\",\"x\":null,\"y\":[],\"label\":null},\"parameterValues\":{}}",
+    "canonical": "{\"parameterValues\":{},\"query\":{\"comparison\":null,\"dataset\":{\"id\":\"fixture.records\",\"schemaRevision\":\"1\"},\"fields\":[\"id\",\"amount\"],\"filters\":null,\"form\":\"records\",\"groupBy\":[],\"having\":null,\"limit\":5e1,\"metrics\":[],\"parameters\":[],\"schemaVersion\":1e0,\"sort\":[],\"time\":null},\"visualization\":{\"kind\":\"table\",\"label\":null,\"x\":null,\"y\":[]}}",
+    "sha256": "68450fbd0fab58d35ffb1a6a9a8a5ab3e855f6b63c518e00fb33c9ee1d1454c2"
+  },
+  {
+    "name": "question-field-order",
+    "consumer": "question",
+    "json": "{\"query\":{\"schemaVersion\":1,\"dataset\":{\"id\":\"fixture.records\",\"schemaRevision\":\"1\"},\"form\":\"records\",\"parameters\":[],\"filters\":null,\"fields\":[\"amount\",\"id\"],\"groupBy\":[],\"metrics\":[],\"time\":null,\"comparison\":null,\"having\":null,\"sort\":[],\"limit\":50},\"visualization\":{\"kind\":\"table\",\"x\":null,\"y\":[],\"label\":null},\"parameterValues\":{}}",
+    "canonical": "{\"parameterValues\":{},\"query\":{\"comparison\":null,\"dataset\":{\"id\":\"fixture.records\",\"schemaRevision\":\"1\"},\"fields\":[\"amount\",\"id\"],\"filters\":null,\"form\":\"records\",\"groupBy\":[],\"having\":null,\"limit\":5e1,\"metrics\":[],\"parameters\":[],\"schemaVersion\":1e0,\"sort\":[],\"time\":null},\"visualization\":{\"kind\":\"table\",\"label\":null,\"x\":null,\"y\":[]}}",
+    "sha256": "f4dce21ea69849ec2775c52d608eda6ececfcf87d7bd7fa5bba22aa32bc6e6ff"
+  },
+  {
+    "name": "question-parameter-key",
+    "consumer": "question",
+    "json": "{\"query\":{\"schemaVersion\":1,\"dataset\":{\"id\":\"fixture.records\",\"schemaRevision\":\"1\"},\"form\":\"records\",\"parameters\":[],\"filters\":null,\"fields\":[\"id\",\"amount\"],\"groupBy\":[],\"metrics\":[],\"time\":null,\"comparison\":null,\"having\":null,\"sort\":[],\"limit\":50},\"visualization\":{\"kind\":\"table\",\"x\":null,\"y\":[],\"label\":null},\"parameterValues\":{\"Amount\":{\"type\":\"decimal\",\"literal\":\"1.0\",\"parameter\":null}}}",
+    "canonical": "{\"parameterValues\":{\"Amount\":{\"literal\":\"1.0\",\"parameter\":null,\"type\":\"decimal\"}},\"query\":{\"comparison\":null,\"dataset\":{\"id\":\"fixture.records\",\"schemaRevision\":\"1\"},\"fields\":[\"id\",\"amount\"],\"filters\":null,\"form\":\"records\",\"groupBy\":[],\"having\":null,\"limit\":5e1,\"metrics\":[],\"parameters\":[],\"schemaVersion\":1e0,\"sort\":[],\"time\":null},\"visualization\":{\"kind\":\"table\",\"label\":null,\"x\":null,\"y\":[]}}",
+    "sha256": "2fab19d5521e8dd8f8ac2cceb3ddbb165decf00fca061ae7ec605408d3359254"
+  },
+  {
+    "name": "question-other-parameter-key",
+    "consumer": "question",
+    "json": "{\"query\":{\"schemaVersion\":1,\"dataset\":{\"id\":\"fixture.records\",\"schemaRevision\":\"1\"},\"form\":\"records\",\"parameters\":[],\"filters\":null,\"fields\":[\"id\",\"amount\"],\"groupBy\":[],\"metrics\":[],\"time\":null,\"comparison\":null,\"having\":null,\"sort\":[],\"limit\":50},\"visualization\":{\"kind\":\"table\",\"x\":null,\"y\":[],\"label\":null},\"parameterValues\":{\"amount\":{\"type\":\"decimal\",\"literal\":\"1.0\",\"parameter\":null}}}",
+    "canonical": "{\"parameterValues\":{\"amount\":{\"literal\":\"1.0\",\"parameter\":null,\"type\":\"decimal\"}},\"query\":{\"comparison\":null,\"dataset\":{\"id\":\"fixture.records\",\"schemaRevision\":\"1\"},\"fields\":[\"id\",\"amount\"],\"filters\":null,\"form\":\"records\",\"groupBy\":[],\"having\":null,\"limit\":5e1,\"metrics\":[],\"parameters\":[],\"schemaVersion\":1e0,\"sort\":[],\"time\":null},\"visualization\":{\"kind\":\"table\",\"label\":null,\"x\":null,\"y\":[]}}",
+    "sha256": "f3af42bbd1155dee7babd7dc99cfc58117220f24c38ca9eeae5e3542fecb981b"
+  },
+  {
+    "name": "dataset",
+    "consumer": "dataset",
+    "json": "{\"id\":\"fixture.records\",\"ownerModuleId\":\"Fixture\",\"schemaRevision\":\"1\",\"title\":\"Records\",\"description\":\"Dataset metadata\",\"availability\":\"ready\",\"unavailableReason\":null,\"fields\":[],\"metrics\":[],\"relationships\":[],\"time\":null,\"forms\":[\"aggregate\",\"records\"],\"supportsDrill\":false,\"supportsExport\":false,\"coverageDescription\":\"Collection and retention coverage is unknown.\"}",
+    "canonical": "{\"availability\":\"ready\",\"coverageDescription\":\"Collection and retention coverage is unknown.\",\"description\":\"Dataset metadata\",\"fields\":[],\"forms\":[\"aggregate\",\"records\"],\"id\":\"fixture.records\",\"metrics\":[],\"ownerModuleId\":\"Fixture\",\"relationships\":[],\"schemaRevision\":\"1\",\"supportsDrill\":false,\"supportsExport\":false,\"time\":null,\"title\":\"Records\",\"unavailableReason\":null}",
+    "sha256": "5f04fb4b58364722b0e52e3e19f7ea7ab6ff26cdf5c82f383f224ced04d927a5"
+  },
+  {
+    "name": "dataset-other-revision",
+    "consumer": "dataset",
+    "json": "{\"id\":\"fixture.records\",\"ownerModuleId\":\"Fixture\",\"schemaRevision\":\"2\",\"title\":\"Records\",\"description\":\"Dataset metadata\",\"availability\":\"ready\",\"unavailableReason\":null,\"fields\":[],\"metrics\":[],\"relationships\":[],\"time\":null,\"forms\":[\"aggregate\",\"records\"],\"supportsDrill\":false,\"supportsExport\":false,\"coverageDescription\":\"Collection and retention coverage is unknown.\"}",
+    "canonical": "{\"availability\":\"ready\",\"coverageDescription\":\"Collection and retention coverage is unknown.\",\"description\":\"Dataset metadata\",\"fields\":[],\"forms\":[\"aggregate\",\"records\"],\"id\":\"fixture.records\",\"metrics\":[],\"ownerModuleId\":\"Fixture\",\"relationships\":[],\"schemaRevision\":\"2\",\"supportsDrill\":false,\"supportsExport\":false,\"time\":null,\"title\":\"Records\",\"unavailableReason\":null}",
+    "sha256": "1bfe48fdd044365eb0c4f0afa4d62cb4800153fd2b904a2b84204595def44c4d"
+  }
+]

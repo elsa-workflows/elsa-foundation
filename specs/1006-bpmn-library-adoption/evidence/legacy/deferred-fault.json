@@ -6,14 +6,14 @@
   "interchangePackage": "0.1.1-preview.19",
   "stateAlias": "Elsa.Bpmn.ExecutionState",
   "stateVersion": 1,
-  "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51",
-  "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+  "databaseSha256": "96d05c27dea2e3e8753aae3d1d24a7984b818a5f05f9b44027d0a7ffbf57050b",
+  "compressedSha256": "015b8d97065dff2c972638bf2244b100d671ccc9f23b75eb8c8e7d38b1823b6b",
   "oldHostControl": "fresh provider over a separate exact database copy passed",
   "facts": {
     "parentId": "legacy-activity-0",
     "pendingFault": {
       "faultCode": "bpmn.gateway.no-flow-selected",
-      "message": "BPMN exclusive gateway \u0027decision\u0027 has multiple outbound flows but no bound decision activity and no default flow."
+      "message": "BPMN exclusive gateway 'decision' has multiple outbound flows but no bound decision activity and no default flow."
     },
     "canceledLoser": false,
     "queuedLoser": false,
@@ -34,5 +34,50 @@
     "queuedIds": [
       "2ddf67fdcaf4aa58:invoke:legacy-activity-0"
     ]
+  },
+  "s9Regeneration": {
+    "spec": 1207,
+    "inputDatabaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51",
+    "inputCompressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+    "changedContracts": 2,
+    "changedDescriptors": 4,
+    "changedFields": [
+      "workflow_executable.ContentJson/activityContract/schemaFingerprint",
+      "workflow_executable.ContentJson/descriptorPayload/typeAlias",
+      "activity_execution_state.ContentJson/contractIdentity/schemaFingerprint",
+      "activity_execution_state.ContentJson/inputSnapshot/contractFingerprint",
+      "activity_execution_state.ContentJson/completion/contractFingerprint",
+      "activity_execution_state.ContentJson/inputSnapshot/bindingFingerprint"
+    ],
+    "historicalControl": "oldHostControl applies to the original input capture, before the S-9 transformation",
+    "statePinsRegenerated": true,
+    "changedStateContractReferences": 2,
+    "changedBindingFingerprints": 1
+  },
+  "s9ProtocolRegeneration": {
+    "spec": 1207,
+    "inputCompressedSha256": "8edf91d4b3c6c22e13dacc2a62b84d3e8ef861a5b651789bedc125a8434a3495",
+    "inputDatabaseSha256": "5603c1696437e2875ff68d58886e34b7a4dbcbfe210fe9a37b49e29301652cc7",
+    "changedColumns": [
+      "elsa_runtime_post_commit_outbox.ContentJson",
+      "elsa_runtime_scheduler_work_item.ContentJson"
+    ],
+    "changes": [
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 1,
+        "renamedKeyTokens": 23,
+        "inputSha256": "8033bc4042118da77dbcc5f0ac7d76f34894c3bb017f81f459f3ad9fc360bcb9",
+        "outputSha256": "450201ef9dd5ca6dbb52b4033428c2e44c0c291bf3fe8a4824adcfb73dcf1ded"
+      },
+      {
+        "table": "elsa_runtime_scheduler_work_item",
+        "rowId": 2,
+        "renamedKeyTokens": 9,
+        "inputSha256": "138cd0825e153cf96fbed6e5df3e45330a6d82da7b839900807570a6e15f6a65",
+        "outputSha256": "4be51d07debd8db259cb88b998237731291150e136b919c42c5dcbc6cbf3ddae"
+      }
+    ],
+    "preserved": "Only declared RuntimeSchedulerWorkItem/typed command/identity/provenance key tokens change; every other JSON token and database column is unchanged. Historical old-host proof applies to the original capture."
   }
 }

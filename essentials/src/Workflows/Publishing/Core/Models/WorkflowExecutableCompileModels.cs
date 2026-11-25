@@ -13,6 +13,10 @@ public sealed record WorkflowExecutableCompileRequest(
     IReadOnlyDictionary<string, string>? CompatibilityMetadata = null,
     string? TenantId = null)
 {
+    /// <summary>Receives compilation diagnostics; it is not part of the executable or its conversion contract.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Elsa.Expressions.Core.Contracts.IExecutionWarningSink? Warnings { get; init; }
+
     /// <summary>Preserves the pre-tenant constructor shape for existing compiled callers.</summary>
     public WorkflowExecutableCompileRequest(
         string versionId,

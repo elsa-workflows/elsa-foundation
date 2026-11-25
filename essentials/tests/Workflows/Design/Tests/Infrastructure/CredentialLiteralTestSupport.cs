@@ -56,15 +56,15 @@ internal static partial class CredentialLiteralTestSupport
     public static ArgumentState Bind(string inputKey, string binding, string? literal = null) =>
         new(inputKey, binding switch
         {
-            "Literal" => new ArgumentValue(JsonSerializer.SerializeToElement(literal ?? Literal), "Literal"),
-            "Secret" => new ArgumentValue(JsonSerializer.SerializeToElement(new { name = "payments-reference" }), "Secret"),
-            "SecretText" => new ArgumentValue(JsonSerializer.SerializeToElement(literal ?? Literal), "Secret"),
-            "SecretWithExtraMember" => new ArgumentValue(JsonSerializer.SerializeToElement(new { name = "payments-reference", note = literal ?? Literal }), "Secret"),
-            "UnpickedSecret" => new ArgumentValue(null, "Secret"),
-            "EmptyLiteral" => new ArgumentValue(JsonSerializer.SerializeToElement(string.Empty), "Literal"),
-            "Object" => new ArgumentValue(JsonSerializer.SerializeToElement(new { note = Literal }), "Object"),
-            "Variable" => new ArgumentValue(JsonSerializer.SerializeToElement("variable-reference"), "Variable"),
-            "JavaScript" => new ArgumentValue(JsonSerializer.SerializeToElement($"'{Literal}'"), "JavaScript"),
+            "Literal" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(literal ?? Literal), "Literal"),
+            "Secret" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { name = "payments-reference" }), "Secret"),
+            "SecretText" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(literal ?? Literal), "Secret"),
+            "SecretWithExtraMember" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { name = "payments-reference", note = literal ?? Literal }), "Secret"),
+            "UnpickedSecret" => ArgumentValue.FromClr(null, "Secret"),
+            "EmptyLiteral" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(string.Empty), "Literal"),
+            "Object" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { note = Literal }), "Object"),
+            "Variable" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement("variable-reference"), "Variable"),
+            "JavaScript" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement($"'{Literal}'"), "JavaScript"),
             _ => throw new ArgumentOutOfRangeException(nameof(binding), binding, null)
         }, null, null, null, null);
 

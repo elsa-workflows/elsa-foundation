@@ -99,14 +99,14 @@ public sealed class RuleStoreIntegrityTests(RuleStoreTestFixture fixture) : ICla
                 terminalJson = Encoding.UTF8.GetString(RuleRecordCodec.TerminalBytes(alteredTerminal));
                 deliveryId = RuleRecordCodec.Hash(Encoding.UTF8.GetBytes("rules.delivery:1:" + terminalId));
                 deliveryJson = Encoding.UTF8.GetString(RuleRecordCodec.DeliveryRecordBytes(deliveryId, invocation.NativeDestination!, alteredTerminal));
-                deliveryHash = RuleRecordCodec.Hash(RuleRecordCodec.DeliveryBytes(deliveryId, invocation.NativeDestination!, alteredTerminal));
+                deliveryHash = RuleRecordCodec.JsonHash(RuleRecordCodec.DeliveryBytes(deliveryId, invocation.NativeDestination!, alteredTerminal));
             }
             else
             {
                 terminalJson = row.TerminalJson!;
                 deliveryId = DifferentSha256(deliveryId);
                 deliveryJson = Encoding.UTF8.GetString(RuleRecordCodec.DeliveryRecordBytes(deliveryId, invocation.NativeDestination!, original));
-                deliveryHash = RuleRecordCodec.Hash(RuleRecordCodec.DeliveryBytes(deliveryId, invocation.NativeDestination!, original));
+                deliveryHash = RuleRecordCodec.JsonHash(RuleRecordCodec.DeliveryBytes(deliveryId, invocation.NativeDestination!, original));
             }
 
             var encodedTerminal = RuleRecordCodec.ReadTerminal(Encoding.UTF8.GetBytes(terminalJson));

@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
@@ -12,7 +13,7 @@ internal static class PackageAssetEndpoints
 {
     private static readonly FileExtensionContentTypeProvider ContentTypes = new();
 
-    public static void Map(IEndpointRouteBuilder endpoints) => endpoints.MapGet("/_content/{packageId}/{**assetPath}", ReadAsync);
+    public static void Map(IEndpointRouteBuilder endpoints) => endpoints.MapGet("/_content/{packageId}/{**assetPath}", ReadAsync).WithElsaJsonResponseHeaders(normalizeContentType: false);
 
     private static async Task<IResult> ReadAsync(string packageId, string? assetPath, HttpContext context,
         IWebHostEnvironment environment, IOptions<FeedResolutionOptions> options, PackageContentReader reader)

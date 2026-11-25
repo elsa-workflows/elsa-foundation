@@ -42,7 +42,7 @@ public sealed class StudioPreferenceService(
         if (!definition.Validate(value))
             throw new StudioPreferenceValidationException($"Namespace '{definition.Name}' rejected the preference value.");
 
-        var actualBytes = JsonSerializer.SerializeToUtf8Bytes(value).Length;
+        var actualBytes = JsonSerializer.SerializeToUtf8Bytes(value, Elsa.Serialization.Core.JsonBaseline.Options).Length;
         var maximumBytes = Math.Min(definition.MaxBytes, SystemMaxBytes);
         if (actualBytes > maximumBytes)
             throw new StudioPreferenceQuotaExceededException(definition.Name, actualBytes, maximumBytes);

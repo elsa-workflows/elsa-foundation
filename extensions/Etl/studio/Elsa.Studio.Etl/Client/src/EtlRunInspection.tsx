@@ -56,7 +56,7 @@ export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
       <h3>Connector output progress</h3>
       <dl className="etl-facts">
         <dt>Run mode</dt><dd>{run.connector.mode === "continuous" ? "Continuous" : "Finite"}</dd>
-        {run.connector.completionRequestedAt ? <><dt>Completion requested</dt><dd><time dateTime={run.connector.completionRequestedAt}>{run.connector.completionRequestedAt}</time></dd></> : null}
+        {run.connector.completionRequestedAt ? <><dt>Completion requested</dt><dd><StudioTimestamp value={run.connector.completionRequestedAt} format="date-time" /></dd></> : null}
         <dt>Source type</dt><dd>{kindLabel(run.connector.sourceKind)}</dd>
         <dt>Main output type</dt><dd>{outputKindLabel(run.connector.mainKind)}</dd>
         <dt>Error output type</dt><dd>{outputKindLabel(run.connector.errorKind)}</dd>
@@ -65,7 +65,7 @@ export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
       </dl>
       <p>These counts describe settled output bodies, not records, attempts, or physical executions.</p>
     </section> : null}
-    {run.terminalResult && <p>Settled at <time dateTime={run.terminalResult.settledAt}>{run.terminalResult.settledAt}</time>.</p>}
+    {run.terminalResult && <p>Settled at <StudioTimestamp value={run.terminalResult.settledAt} format="date-time" />.</p>}
   </section>;
 }
 

@@ -6,6 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../../../../extensions/Weaver/src/Persistence/EntityFrameworkCore/Elsa.Weaver.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../../extensions/Agent/src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../../extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="MySql.EntityFrameworkCore" />
@@ -55,6 +56,8 @@
          and vice versa. This project already references all four provider engines and every module
          project, so it can also reference the tooling project rather than duplicating its factory list. -->
     <ProjectReference Include="..\..\..\..\..\..\tools\ef\Elsa.EntityFrameworkCore.Tooling\Elsa.EntityFrameworkCore.Tooling.csproj" />
+    <!-- Decisions links its own copy of ModuleDesignTimeFactory; keep both real CLR identities explicit. -->
+    <ProjectReference Include="../../../../../../extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj" Aliases="DecisionsTooling" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../../src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />

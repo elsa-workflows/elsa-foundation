@@ -66,7 +66,7 @@ public sealed class BpmnCatchEventTests
 
         var resumed = await fixture.ResumeAsync(
             bookmark,
-            JsonSerializer.SerializeToElement(new DurableTimerElapsed(bookmark.StimulusHash)));
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(bookmark.StimulusHash)));
 
         resumed.AssertCompleted("node-delay");
         resumed.AssertRan("node-after");

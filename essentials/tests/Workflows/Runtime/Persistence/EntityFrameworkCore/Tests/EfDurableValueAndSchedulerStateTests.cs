@@ -117,7 +117,26 @@ public sealed class EfDurableValueAndSchedulerStateTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Inline_values_keep_legacy_case_alias_and_last_member_semantics(bool lastNull)
+    public async Task Inline_values_read_exact_current_names_and_ignore_case_aliases(bool exactNull)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Values.SaveAsync(Value("value", "workflow-a"));
+        var row = await fixture.Context.DurableValueStates.SingleAsync();
+        var content = JsonNode.Parse(row.ContentJson)!.AsObject();
+        content["inlineValue"] = exactNull ? null : JsonNode.Parse("123");
+        content["InlineValue"] = exactNull ? JsonNode.Parse("456") : null;
+        row.ContentJson = content.ToJsonString(); await fixture.Context.SaveChangesAsync();
+        var found = (await fixture.Values.FindAsync("workflow-a", "value"))!;
+        Assert.True(found.InlineValue.HasValue);
+        if (exactNull) Assert.Equal(JsonValueKind.Null, found.InlineValue.Value.ValueKind);
+        else Assert.Equal(123, found.InlineValue.Value.GetInt32());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Inline_values_keep_the_last_exactly_named_member(bool lastNull)
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var fixture = database.Open("tenant-a");
@@ -125,9 +144,11 @@ public sealed class EfDurableValueAndSchedulerStateTests
         var row = await fixture.Context.DurableValueStates.SingleAsync();
         var content = JsonNode.Parse(row.ContentJson)!.AsObject();
         content["inlineValue"] = lastNull ? JsonNode.Parse("123") : null;
-        content["InlineValue"] = lastNull ? null : JsonNode.Parse("456");
-        row.ContentJson = content.ToJsonString(); await fixture.Context.SaveChangesAsync();
+        row.ContentJson = content.ToJsonString()[..^1] + (lastNull ? ",\"inlineValue\":null}" : ",\"inlineValue\":456}");
+        await fixture.Context.SaveChangesAsync();
+
         var found = (await fixture.Values.FindAsync("workflow-a", "value"))!;
+
         Assert.True(found.InlineValue.HasValue);
         if (lastNull) Assert.Equal(JsonValueKind.Null, found.InlineValue.Value.ValueKind);
         else Assert.Equal(456, found.InlineValue.Value.GetInt32());

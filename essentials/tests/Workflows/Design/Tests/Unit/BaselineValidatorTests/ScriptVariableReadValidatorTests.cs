@@ -72,7 +72,7 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
     [Fact]
     public async Task A_script_activity_body_is_checked_too()
     {
-        var script = new ArgumentState("script", new ArgumentValue("return variables.nope;", "Literal"), null, null, null, null);
+        var script = new ArgumentState("script", ArgumentValue.FromClr("return variables.nope;", "Literal"), null, null, null, null);
 
         var findings = await ValidateAsync(new ActivityNode("s", ScriptVersionId, [script], []));
 
@@ -95,7 +95,7 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
                     new Elsa.Activities.Switch.Models.SwitchAuthoredCase("Big")
                     {
                         CaseId = "big",
-                        Condition = new ArgumentState("condition", new ArgumentValue("variables.missingCondition > 1", "JavaScript"), null, null, null, null)
+                        Condition = new ArgumentState("condition", ArgumentValue.FromClr("variables.missingCondition > 1", "JavaScript"), null, null, null, null)
                     },
                     new Elsa.Activities.Switch.Models.SwitchAuthoredCase("Small")
                 ]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
@@ -175,9 +175,9 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
         return [.. await validator.Validate(new Draft(state), CancellationToken.None)];
     }
 
-    private static ArgumentState Body(string source) => new("script", new ArgumentValue(source, "Literal"), null, null, null, null);
+    private static ArgumentState Body(string source) => new("script", ArgumentValue.FromClr(source, "Literal"), null, null, null, null);
 
-    private static ArgumentState Js(string source) => new("Text", new ArgumentValue(source, "JavaScript"), null, null, null, null);
+    private static ArgumentState Js(string source) => new("Text", ArgumentValue.FromClr(source, "JavaScript"), null, null, null, null);
 
     private sealed class Draft(WorkflowDefinitionState state) : IWorkflowDefinitionDraft
     {

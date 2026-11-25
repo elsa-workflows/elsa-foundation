@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { sha256, sha256Hex } from "../sha256";
-import { getDraftContentRevision, getDraftRevision } from "../workflow-editor/editorHelpers";
+import { createDraftSnapshotId, getDraftContentRevision, getDraftRevision } from "../workflow-editor/editorHelpers";
+import { pageRevision } from "../workflow-editor/workflowLibraryWeaver";
 import type { WorkflowDraft } from "../workflowTypes";
 
 // FIPS 180-4 example vectors (NIST CSRC "SHA-256" examples and the FIPS 180-2 long-message vector).
@@ -28,12 +29,27 @@ describe("module-owned SHA-256", () => {
     expect(sha256Hex("é")).not.toBe(hex(sha256(Uint8Array.of(0xe9))));
   });
 
-  it("gives every working state a collision-resistant content revision, while the 32-bit hash stays for change detection", () => {
+  it("uses the shared JSON hash for content revisions and change detection", () => {
     const draft: WorkflowDraft = { id: "draft", definitionId: "definition", state: { rootActivity: null }, layout: [], validationErrors: [] };
     const moved: WorkflowDraft = { ...draft, layout: [{ nodeId: "a", x: 1, y: 2 }] };
     expect(getDraftContentRevision(draft)).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(getDraftContentRevision(draft)).toBe(getDraftContentRevision(structuredClone(draft)));
     expect(getDraftContentRevision(moved)).not.toBe(getDraftContentRevision(draft));
-    expect(getDraftRevision(draft)).toMatch(/^[0-9a-f]{8}$/);
+    expect(getDraftRevision(draft)).toMatch(/^[0-9a-f]{64}$/);
+    const freeze = "First-stable hash freeze: changes require an explicit identity/migration decision.";
+    expect(getDraftRevision(draft), freeze).toBe("02dd215eb5414c3301f89cc478313efec4fc176c1dbe394be1d633a8aaec0a0b");
+    expect(getDraftContentRevision(draft), freeze).toBe("sha256:02dd215eb5414c3301f89cc478313efec4fc176c1dbe394be1d633a8aaec0a0b");
+    expect(createDraftSnapshotId(draft), freeze).toBe("draft-73f3d6ce46030f48f6941aab312a854e69b895198ae3a433c5427e08a651f3b5");
+    expect(createDraftSnapshotId(moved)).toBe(createDraftSnapshotId(draft));
+    expect(createDraftSnapshotId({ ...draft, state: { rootActivity: null, workflowActivityOptions: { changed: true } } })).not.toBe(createDraftSnapshotId(draft));
+  });
+
+  it("pins the page revision projection and preserves array order and null presence", () => {
+    const body = { rows: [{ id: "a", count: 1 }], selection: [] };
+    expect(pageRevision(body), "First-stable hash freeze: changes require an explicit identity/migration decision.")
+      .toBe("sha256:12a5044a0af9b760d49e7366683a07217e3166d0c2fbf4dccca07b0963ad53a8");
+    expect(pageRevision({ selection: [], rows: [{ count: 1, id: "a" }] })).toBe(pageRevision(body));
+    expect(pageRevision({ ...body, selection: null })).not.toBe(pageRevision(body));
+    expect(pageRevision([1, 2])).not.toBe(pageRevision([2, 1]));
   });
 });

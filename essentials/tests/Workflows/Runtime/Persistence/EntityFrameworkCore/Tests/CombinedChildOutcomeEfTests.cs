@@ -389,17 +389,17 @@ public sealed partial class CombinedChildOutcomeEfTests : IDisposable
     private static RuntimeSchedulerWorkItem ReadParentOutcomeWorkItem(RuntimePostCommitOutboxItem item)
     {
         Assert.True(IsParentOutcome(item.Intent));
-        return Assert.IsType<RuntimeSchedulerWorkItem>(item.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>());
+        return Assert.IsType<RuntimeSchedulerWorkItem>(item.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     private static RuntimeCompleteActivityCommandPayload ReadCompletionPayload(RuntimeSchedulerWorkItem workItem) =>
         Assert.IsType<RuntimeCompleteActivityCommandPayload>(
-            workItem.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>());
+            workItem.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options));
 
     private static bool IsParentOutcome(RuntimePostCommitIntent intent) =>
         intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork &&
         intent.Payload is { } payload &&
-        payload.Deserialize<RuntimeSchedulerWorkItem>() is { CommandKind: WorkflowExecutionCommandKind.CompleteActivity } workItem &&
+        payload.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options) is { CommandKind: WorkflowExecutionCommandKind.CompleteActivity } workItem &&
         workItem.Payload is { } completionPayload &&
-        completionPayload.Deserialize<RuntimeCompleteActivityCommandPayload>()?.CompletionKind == SchedulerCompletionKind.ParentOutcomeEvaluation;
+        completionPayload.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)?.CompletionKind == SchedulerCompletionKind.ParentOutcomeEvaluation;
 }

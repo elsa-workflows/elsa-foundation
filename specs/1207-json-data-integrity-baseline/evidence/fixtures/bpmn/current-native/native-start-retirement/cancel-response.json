@@ -1,0 +1,12 @@
+{
+  "executionId": "bpmn:94d326c7600e03ec080e794d1086a33ff6e283a70a40fe24c271caa728b1d9cb",
+  "inputId": "cancel-before-native-admission",
+  "replay": false,
+  "pending": false,
+  "result": {
+    "status": "Accepted",
+    "code": null,
+    "revision": 2,
+    "lifecycle": "TerminalPendingSettlement"
+  }
+}

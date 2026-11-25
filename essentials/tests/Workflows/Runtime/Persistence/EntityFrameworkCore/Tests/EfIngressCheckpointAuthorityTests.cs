@@ -112,7 +112,7 @@ public sealed class EfIngressCheckpointAuthorityTests
         var start = new RuntimeSchedulerWorkItem(envelope.EnvelopeId, envelope.WorkflowExecutionId, envelope.Command.CommandId,
             envelope.Command.Kind, envelope.EnvelopeId, envelope.IdempotencyKey, envelope.EnqueuedAt, now, envelope.Sequence,
             envelope.Command.Payload, envelope.Command.Metadata, envelope.Metadata);
-        var initial = NativeIngressStartLineage.Build(start, envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!, root.ExecutableNodeId);
+        var initial = NativeIngressStartLineage.Build(start, envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(JsonBaseline.Options)!, root.ExecutableNodeId);
         await handler.HandleAsync(initial);
         var prior = (await executions.FindAsync(recipient.StartIdentity.WorkflowExecutionId))!;
         Assert.Equal(tenant, prior.TenantId);
@@ -183,9 +183,9 @@ public sealed class EfIngressCheckpointAuthorityTests
         Assert.Equal(tenant, stored.Scope.TenantId); Assert.Equal(scope, stored.Scope.PersistenceScope);
         Assert.Equal("target-binding", Assert.Single(stored.Starts).Binding.TriggerBindingId);
         Assert.Single(recording.Accepted);
-        Assert.Equal(tenant, recording.Accepted[0].Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.TenantId);
+        Assert.Equal(tenant, recording.Accepted[0].Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(JsonBaseline.Options)!.TenantId);
         var downstream = recording.Accepted[0];
-        var downstreamPayload = downstream.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var downstreamPayload = downstream.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(JsonBaseline.Options)!;
         Assert.NotNull(downstreamPayload.StimulusDeliveryOrigin);
         await ((IRuntimePostCommitOutboxClaimStore)outbox).RecordDeliveryResultAsync(eventClaim,
             new(eventClaim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, now));
@@ -202,22 +202,23 @@ public sealed class EfIngressCheckpointAuthorityTests
         var childCheckpoint = Assert.Single((await queue.ListAsync(new(downstream.WorkflowExecutionId))).Items);
         foreach (var changed in new Dictionary<string, JsonElement>
         {
-            [nameof(RuntimeCheckpointCommandPayload.CheckpointName)] = JsonSerializer.SerializeToElement("OtherCheckpoint"),
-            [nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin)] = JsonSerializer.SerializeToElement<object?>(null),
-            [nameof(RuntimeCheckpointCommandPayload.PostCommitIntents)] = TamperedRoot(childCheckpoint),
-            [nameof(RuntimeCheckpointCommandPayload.Authority)] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("different-system", "different-initiator")),
-            [nameof(RuntimeCheckpointCommandPayload.SeedInputs)] = JsonSerializer.SerializeToElement(new { forged = "input" }),
-            [nameof(RuntimeCheckpointCommandPayload.SeedStimulusInput)] = JsonSerializer.SerializeToElement(new { forged = "stimulus" }),
-            [nameof(RuntimeCheckpointCommandPayload.SeedTriggerMetadata)] = JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["forged"] = "metadata" })
+            ["checkpointName"] = JsonSerializer.SerializeToElement("OtherCheckpoint", JsonBaseline.Options),
+            ["stimulusDeliveryOrigin"] = JsonSerializer.SerializeToElement<object?>(null, JsonBaseline.Options),
+            ["postCommitIntents"] = TamperedRoot(childCheckpoint),
+            ["authority"] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("different-system", "different-initiator"), JsonBaseline.Options),
+            ["seedInputs"] = JsonSerializer.SerializeToElement(new { forged = "input" }, JsonBaseline.Options),
+            ["seedStimulusInput"] = JsonSerializer.SerializeToElement(new { forged = "stimulus" }, JsonBaseline.Options),
+            ["seedTriggerMetadata"] = JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["forged"] = "metadata" }, JsonBaseline.Options)
         })
         {
-            var changedPayload = childCheckpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
+            var changedPayload = childCheckpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>(JsonBaseline.Options)!;
+            Assert.True(changedPayload.ContainsKey(changed.Key));
             changedPayload[changed.Key] = changed.Value;
             var changedWork = new RuntimeSchedulerWorkItem(childCheckpoint.WorkItemId, childCheckpoint.WorkflowExecutionId, childCheckpoint.CommandId,
                 childCheckpoint.CommandKind, childCheckpoint.EnvelopeId, childCheckpoint.IdempotencyKey, childCheckpoint.EnqueuedAt, childCheckpoint.RecordedAt,
-                childCheckpoint.Sequence, JsonSerializer.SerializeToElement(changedPayload), childCheckpoint.CommandMetadata, childCheckpoint.EnvelopeMetadata);
+                childCheckpoint.Sequence, JsonSerializer.SerializeToElement(changedPayload, JsonBaseline.Options), childCheckpoint.CommandMetadata, childCheckpoint.EnvelopeMetadata);
             var refusal = await Record.ExceptionAsync(() => handler.HandleAsync(changedWork).AsTask());
-            if (changed.Key is nameof(RuntimeCheckpointCommandPayload.CheckpointName) or nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin))
+            if (changed.Key is "checkpointName" or "stimulusDeliveryOrigin")
             {
                 var domain = Assert.IsType<RuntimeCheckpointCommitValidationException>(refusal);
                 Assert.IsType<InvalidDataException>(domain.InnerException);
@@ -226,12 +227,13 @@ public sealed class EfIngressCheckpointAuthorityTests
             else Assert.IsType<InvalidDataException>(refusal);
             Assert.Null(await executions.FindAsync(downstream.WorkflowExecutionId));
         }
-        var forgedJson = childCheckpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
-        forgedJson[nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin)] = JsonSerializer.SerializeToElement(new RuntimeStimulusDeliveryOrigin(
-            1, scope, eventSource.OutboxItemId, eventContext.IntentFingerprint, "not-in-cohort"));
+        var forgedJson = childCheckpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>(JsonBaseline.Options)!;
+        Assert.True(forgedJson.ContainsKey("stimulusDeliveryOrigin"));
+        forgedJson["stimulusDeliveryOrigin"] = JsonSerializer.SerializeToElement(new RuntimeStimulusDeliveryOrigin(
+            1, scope, eventSource.OutboxItemId, eventContext.IntentFingerprint, "not-in-cohort"), JsonBaseline.Options);
         var forged = new RuntimeSchedulerWorkItem(childCheckpoint.WorkItemId, childCheckpoint.WorkflowExecutionId, childCheckpoint.CommandId,
             childCheckpoint.CommandKind, childCheckpoint.EnvelopeId, childCheckpoint.IdempotencyKey, childCheckpoint.EnqueuedAt, childCheckpoint.RecordedAt,
-            childCheckpoint.Sequence, JsonSerializer.SerializeToElement(forgedJson), childCheckpoint.CommandMetadata, childCheckpoint.EnvelopeMetadata);
+            childCheckpoint.Sequence, JsonSerializer.SerializeToElement(forgedJson, JsonBaseline.Options), childCheckpoint.CommandMetadata, childCheckpoint.EnvelopeMetadata);
         var forgedRefusal = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => handler.HandleAsync(forged).AsTask());
         Assert.IsType<InvalidDataException>(forgedRefusal.InnerException);
         Assert.Null(await executions.FindAsync(downstream.WorkflowExecutionId));
@@ -252,10 +254,11 @@ public sealed class EfIngressCheckpointAuthorityTests
 
     private static JsonElement TamperedRoot(RuntimeSchedulerWorkItem checkpoint)
     {
-        var intent = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!.PostCommitIntents.Single();
-        var json = JsonSerializer.SerializeToElement(intent).Deserialize<Dictionary<string, JsonElement>>()!;
-        json[nameof(RuntimePostCommitIntent.IntentId)] = JsonSerializer.SerializeToElement(intent.IntentId + ":forged");
-        return JsonSerializer.SerializeToElement(new[] { json });
+        var intent = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(JsonBaseline.Options)!.PostCommitIntents.Single();
+        var json = JsonSerializer.SerializeToElement(intent, JsonBaseline.Options).Deserialize<Dictionary<string, JsonElement>>(JsonBaseline.Options)!;
+        Assert.True(json.ContainsKey("intentId"));
+        json["intentId"] = JsonSerializer.SerializeToElement(intent.IntentId + ":forged", JsonBaseline.Options);
+        return JsonSerializer.SerializeToElement(new[] { json }, JsonBaseline.Options);
     }
 
     private sealed class TargetIndexer(IWorkflowTriggerBindingStore bindings, IRecurringTriggerScheduleStore schedules, DateTimeOffset now) : IWorkflowTriggerIndexer
@@ -314,7 +317,7 @@ public sealed class EfIngressCheckpointAuthorityTests
         var start = new RuntimeSchedulerWorkItem(envelope.EnvelopeId, id, envelope.Command.CommandId, envelope.Command.Kind,
             envelope.EnvelopeId, envelope.IdempotencyKey, envelope.EnqueuedAt, clock.GetUtcNow(), envelope.Sequence,
             envelope.Command.Payload, envelope.Command.Metadata, envelope.Metadata);
-        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(JsonBaseline.Options)!;
         var initial = NativeIngressStartLineage.Build(start, payload, (await materials.FindAsync(payload.PinnedExecutable.ArtifactId))!.RootActivity.ExecutableNodeId);
         var failure = new FailInitialCheckpoint();
         var failedCommitter = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), writer, ambient, [failure], []);

@@ -22,7 +22,7 @@ internal static class BpmnInterchangeProblemWriting
             "One or more errors occurred!",
             problem.StatusCode);
         return context.Response.WriteAsync(
-            JsonSerializer.Serialize(error, BpmnInterchangeJsonContext.Default.BpmnInterchangeError),
+            JsonSerializer.Serialize(error, BpmnInterchangeJsonContext.WireContext.BpmnInterchangeError),
             context.RequestAborted);
     }
 }

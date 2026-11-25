@@ -57,7 +57,7 @@ internal sealed class WorkflowControlNotificationExecutor(IPostCommitOutboxLooku
             var deliveryId = "child-control:v1:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(control.SourceOutboxItemId)));
             var command = new WorkflowExecutionCommand(deliveryId, control.ParentWorkflowExecutionId,
                 WorkflowExecutionCommandKind.DeliverChildControl, intent.RecordedAt,
-                JsonSerializer.SerializeToElement(payload), metadata);
+                JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options), metadata);
             var envelope = new WorkflowExecutionCommandEnvelope(deliveryId, control.ParentWorkflowExecutionId, command,
                 deliveryId, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, intent.RecordedAt, metadata: metadata,
                 partition: parent.Partition);

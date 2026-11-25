@@ -15,13 +15,6 @@ public sealed class ActivityAuthoringCapabilitiesReader(
     IActivityTypeKeyPolicy typeKeys,
     IActivityAuthoringContextAsync context) : IActivityAuthoringCapabilitiesReader
 {
-    // Serializing the snapshot with fresh Web-default options would cache this assembly's type
-    // metadata in the process-shared Web-defaults serializer cache and root the collectible
-    // module context. The owner context avoids that; it is bound to plain Web defaults (strict
-    // encoder, no wire converters) because the fingerprint bytes are a frozen contract.
-    private static readonly ActivitiesDesignJsonContext FingerprintContext =
-        new(new JsonSerializerOptions(JsonSerializerDefaults.Web));
-
     public async Task<ActivityAuthoringCapabilitiesView> GetAsync(GetActivityAuthoringCapabilities request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -74,8 +67,7 @@ public sealed class ActivityAuthoringCapabilitiesReader(
             providerViews,
             typeViews,
             drivers);
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, FingerprintContext.ActivityAuthoringCapabilitiesSnapshot);
-        var fingerprint = $"sha256:{Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()}";
+        var fingerprint = $"sha256:{Elsa.Serialization.Core.JsonHashInput.Hash(Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(snapshot, _ => null))}";
         return new ActivityAuthoringCapabilitiesView(
             snapshot.ContractSchemaVersions,
             snapshot.ActivityTypeKeyRules,

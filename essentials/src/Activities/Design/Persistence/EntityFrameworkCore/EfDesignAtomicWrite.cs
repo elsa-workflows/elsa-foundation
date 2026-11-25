@@ -102,7 +102,7 @@ public sealed class EfDesignAtomicWrite(
     IPersistenceAccessContextAccessor? accessContextAccessor = null,
     Func<CancellationToken, Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>>? transactionFactory = null) : IDesignAtomicWriter
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly Func<CancellationToken, Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>> beginTransaction =
         transactionFactory ?? (token => db.Database.BeginTransactionAsync(token));
 
@@ -254,11 +254,18 @@ public sealed class EfDesignAtomicWrite(
         if (!StringComparer.Ordinal.Equals(marker.TenantId, tenantId) || !StringComparer.Ordinal.Equals(marker.TenantScopeKey, ActivitiesDesignDbContext.NormalizeTenantKey(tenantId)) || !StringComparer.Ordinal.Equals(marker.OperationKind, request.Operation.OperationKind) || !StringComparer.Ordinal.Equals(marker.OperationKey, request.Operation.OperationKey))
             throw new InvalidDataException("The EF design operation marker identity does not match its key.");
         if (!StringComparer.Ordinal.Equals(marker.CanonicalRequestFingerprint, request.CanonicalRequestFingerprint) ||
-            !StringComparer.Ordinal.Equals(marker.MutatedUnitsJson, SerializeOrThrow(request.MutatedUnits, "atomic-replay")))
+            !SameMutatedUnits(marker.MutatedUnitsJson, SerializeOrThrow(request.MutatedUnits, "atomic-replay")))
             return EfDesignAtomicWriteResult.Conflict();
         return reconciled
             ? EfDesignAtomicWriteResult.Reconciled(marker.AuthoritativeResultFingerprint, marker.AuthoritativeResultJson)
             : EfDesignAtomicWriteResult.Replayed(marker.AuthoritativeResultFingerprint, marker.AuthoritativeResultJson);
+    }
+
+    private static bool SameMutatedUnits(string? stored, string current)
+    {
+        try { return Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(stored, current); }
+        // A damaged marker never matched a valid fresh serialization. Keep that conflict outcome.
+        catch (JsonException) { return false; }
     }
 
     private static string MarkerId(EfDesignOperationIdentity operation, string? tenantId)
@@ -312,7 +319,7 @@ public static class EfDesignAtomicCommand
         ArgumentNullException.ThrowIfNull(requestMaterial);
         ArgumentNullException.ThrowIfNull(mutatedUnits);
         ArgumentNullException.ThrowIfNull(stage);
-        var options = jsonOptions ?? new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = jsonOptions ?? new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         var requestJson = SerializeOrThrow(new { Kind = operationKind, Version = MaterialSchemaVersion, Value = requestMaterial }, options, operationKind);
         var result = await atomicWrite.ExecuteAsync(
             new(new EfDesignOperationIdentity(operationKind, operationKey.Value), Fingerprint(requestJson), mutatedUnits, tenantId),
@@ -332,7 +339,7 @@ public static class EfDesignAtomicCommand
         };
     }
 
-    private static string Fingerprint(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+    private static string Fingerprint(string value) => Elsa.Serialization.Core.JsonHashInput.HashJson(value).ToUpperInvariant();
 
     private static string SerializeOrThrow<T>(T value, JsonSerializerOptions options, string operation)
     {

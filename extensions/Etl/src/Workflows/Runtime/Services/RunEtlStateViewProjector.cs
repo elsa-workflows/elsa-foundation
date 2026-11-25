@@ -12,7 +12,7 @@ namespace Elsa.Etl.Workflows.Runtime.Services;
 /// <summary>Projects only a native invocation's ETL run reference after Runtime authorizes its activity context.</summary>
 internal sealed class RunEtlStateViewProjector : IActivityStateViewProjector
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly IServiceScopeFactory? scopes;
     private readonly IEtlRuntimeStore? store;
 
@@ -101,7 +101,7 @@ internal sealed class RunEtlStateViewProjector : IActivityStateViewProjector
                 return null;
             if (receipts[0].Payload.InlineValue is { } json)
             {
-                var completion = json.Deserialize<RunEtlCompletion>();
+                var completion = Elsa.Serialization.Core.JsonConversionContract.Deserialize<RunEtlCompletion>(json);
                 if (completion is null || completion.FormatVersion != EtlNativeBoundary.FormatVersion ||
                     EtlRuntimeIdentity.InvocationFingerprint(EtlRuntimeJson.Read<EtlInvocation>(completion.Invocation, EtlNativeBoundary.MaximumRequestBytes)) != fingerprint ||
                     EtlRuntimeJson.Read<EtlTerminalResult>(completion.Result, EtlNativeBoundary.MaximumResultBytes) != terminal)

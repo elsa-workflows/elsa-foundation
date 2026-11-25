@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Primitives.Models;
@@ -726,6 +725,21 @@ public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper o
         Assert.Same(durable, Assert.Single(second.Items));
         Assert.Null(second.NextContinuationToken);
         Assert.Single(inner.PageRequests);
+    }
+
+    [Fact]
+    public void Coalescing_continuation_pins_its_projection_and_refuses_a_null_cursor()
+    {
+        const string binding = "coalesced-activity-state:workflow:wfexec-1";
+        var token = CoalescingRuntimeStoreContinuation.Encode(binding, new("a", null, true));
+        Assert.True(token.Split('.')[2] == "aIrhJZzH3TP4JzGtuNi3h1kg6aMgmjrp2eD_H-mZnlM",
+            "First-stable hash freeze: changes require an explicit identity/migration decision.");
+        Assert.Equal(new CoalescingRuntimeStoreCursor("a", null, true),
+            CoalescingRuntimeStoreContinuation.Decode(token, binding, "continuation"));
+        var malformed = Encoding.UTF8.GetBytes("""{"binding":"coalesced-activity-state:workflow:wfexec-1","cursor":null}""");
+        var checksum = Convert.FromHexString(Elsa.Serialization.Core.JsonHashInput.HashUtf8(malformed));
+        var invalid = $"crsp1.{EncodeBase64Url(malformed)}.{EncodeBase64Url(checksum)}";
+        Assert.Throws<ArgumentException>(() => CoalescingRuntimeStoreContinuation.Decode(invalid, binding, "continuation"));
     }
 
     [Fact]
@@ -1727,7 +1741,7 @@ public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper o
             WorkflowExecutionId: "wfexec-1",
             Kind: WorkflowExecutionCommandKind.Start,
             EnqueuedAt: Now,
-            Payload: JsonSerializer.SerializeToElement(payload),
+            Payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             Metadata: metadata);
 
         return new(
@@ -1800,8 +1814,8 @@ public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper o
         {
             Binding = binding,
             Cursor = new { LastIdentity = lastIdentity, InnerContinuation = innerContinuation, InnerExhausted = exhausted }
-        });
-        return $"crsp1.{EncodeBase64Url(payload)}.{EncodeBase64Url(SHA256.HashData(payload))}";
+        }, Elsa.Serialization.Core.JsonBaseline.Options);
+        return $"crsp1.{EncodeBase64Url(payload)}.{EncodeBase64Url(Convert.FromHexString(Elsa.Serialization.Core.JsonHashInput.HashUtf8(payload)))}";
     }
 
     private static string DecodeCoalescingContinuationPayload(string token)
@@ -1948,7 +1962,7 @@ public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper o
             expiresAt: Now.AddMinutes(30),
             reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
             metadata: new Dictionary<string, string> { ["customer"] = "northwind" },
-            valueSnapshots: []));
+            valueSnapshots: []), Elsa.Serialization.Core.JsonBaseline.Options);
 
         var command = new WorkflowExecutionCommand(
             CommandId: "command-create-bookmark",

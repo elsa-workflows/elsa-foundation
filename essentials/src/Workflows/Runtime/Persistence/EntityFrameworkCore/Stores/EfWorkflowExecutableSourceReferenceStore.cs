@@ -609,11 +609,13 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
             WorkflowExecutableSourceReference value;
             if (sourceLimits is null)
             {
-                var envelope = JsonNode.Parse(content)?.AsObject() ?? throw new InvalidDataException("The persisted workflow executable source reference envelope is empty.");
+                using var envelopeDocument = JsonDocument.Parse(content);
+                var envelope = envelopeDocument.RootElement;
                 if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "workflowExecutableSourceReference") ||
-                    !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "artifactId")), Decode(row.ArtifactId)) || envelope["reference"] is null)
+                    !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "artifactId")), Decode(row.ArtifactId)) ||
+                    !envelope.TryGetProperty("reference", out var reference) || reference.ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
-                value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(envelope["reference"]!.ToJsonString());
+                value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(reference.GetRawText());
             }
             else
             {
@@ -676,19 +678,14 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
 
     private static string SerializeEnvelope(WorkflowExecutableSourceReference value)
     {
-        var reference = JsonNode.Parse(RuntimeArtifactJson.Serialize(value))
-                       ?? throw new InvalidDataException("The workflow executable source reference payload could not be serialized.");
-        return new JsonObject
-        {
-            ["collection"] = "workflowExecutableSourceReference",
-            ["artifactId"] = Encode(value.ArtifactId),
-            ["reference"] = reference
-        }.ToJsonString();
+        using var reference = JsonDocument.Parse(RuntimeArtifactJson.Serialize(value));
+        var json = JsonSerializer.Serialize(new { collection = "workflowExecutableSourceReference", artifactId = Encode(value.ArtifactId), reference = reference.RootElement }, Elsa.Serialization.Core.JsonBaseline.Options);
+        using var validated = JsonDocument.Parse(json); // Validate the wrapper depth before it can become a persisted unreadable row.
+        return json;
     }
 
-    private static string ReadString(JsonObject node, string property) =>
-        node[property] is JsonValue value &&
-        value.TryGetValue<string>(out var text) &&
+    private static string ReadString(JsonElement node, string property) =>
+        node.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { } text &&
         !string.IsNullOrWhiteSpace(text)
             ? text
             : throw new InvalidDataException($"The source-reference envelope is missing '{property}'.");
@@ -734,7 +731,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         return Hash(shape);
     }
 
-    private string EncodeCursor(string binding, string scopeKey, string key, string id) => continuationCodec.Encode(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new Cursor(1, binding, scopeKey, key, id))));
+    private string EncodeCursor(string binding, string scopeKey, string key, string id) => continuationCodec.EncodeJson(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new Cursor(1, binding, scopeKey, key, id))));
 
     private Cursor? Decode(string? token, string binding)
     {
@@ -742,7 +739,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
             return null;
         try
         {
-            var cursor = RuntimeArtifactJson.Deserialize<Cursor>(Encoding.UTF8.GetString(continuationCodec.Decode(ContinuationPurpose, token)));
+            var cursor = RuntimeArtifactJson.Deserialize<Cursor>(Encoding.UTF8.GetString(continuationCodec.DecodeJson(ContinuationPurpose, token)));
             if (cursor.Version != 1 || cursor.Binding != binding || string.IsNullOrWhiteSpace(cursor.ScopeKeyOrderKey) || string.IsNullOrWhiteSpace(cursor.Key) || string.IsNullOrWhiteSpace(cursor.Id))
                 throw new FormatException();
             return cursor;

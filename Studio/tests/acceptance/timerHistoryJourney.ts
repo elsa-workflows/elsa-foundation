@@ -4,6 +4,7 @@ import type { RuntimeHistoryBookmarkPage, RuntimeHistoryPage } from "../../src/e
 import type { WorkflowInstanceDetails } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { expectQualifiedTimelineCoverage } from "./expectQualifiedTimelineCoverage";
 import { waitCapturedPlaybackReady } from "./waitCapturedPlaybackReady";
+import { expectedStudioDate, selectStudioTimeZone } from "./studioDateAssertions";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 
@@ -20,6 +21,8 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
     return response.status() === 204 ? undefined as T : await response.json() as T;
   };
   await api("/_elsa/identity/login", "POST", { username: "admin", password: "Password123!" });
+  await page.goto("/settings/appearance");
+  await page.getByLabel("Time zone", { exact: true }).selectOption("Europe/Amsterdam");
   const type = "Elsa.Activities.Scheduling.Activities.Delay";
   const catalog = await api<{ items: { definition: { activityTypeKey: string; headVersionId: string } }[] }>(
     `/design/activities/definitions?search=${encodeURIComponent(type)}`);
@@ -61,8 +64,17 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
   const bookmarkId = active.items[0].bookmark.identity.bookmarkId;
 
   const eventUrl = (id: string) => `/workflows/instances/${run.workflowExecutionId}?view=timeline&historyEvent=${encodeURIComponent(id)}`;
+  const summaryRead = page.waitForResponse(response => response.request().method() === "GET" &&
+    new URL(response.url()).pathname === `${runPath}/history/bookmarks` && new URL(response.url()).searchParams.get("status") === "Active");
   await page.goto(eventUrl(scheduled.historyEventId));
   await waitCapturedPlaybackReady(page);
+  const summary = await (await summaryRead).json() as RuntimeHistoryBookmarkPage;
+  await expect(page.locator(".wf-history-run-summary")).toContainText((await expectedStudioDate(page, summary.readAt, "Europe/Amsterdam")).full);
+  const waitingObservation = page.locator(".wf-history-run-summary p").filter({ hasText: "Waiting handles observed" });
+  await waitingObservation.scrollIntoViewIfNeeded();
+  await expect(waitingObservation).toBeInViewport();
+  await capture(page, info, "timer-waiting-summary");
+  expect(waiting.instance.completedAt, "A waiting run has no invented completion instant").toBeNull();
   const details = page.getByRole("region", { name: "History event details", exact: true });
   await expect(details.getByRole("heading", { name: "Timer scheduled", exact: true })).toBeVisible();
   await details.getByRole("button", { name: "Inspect owning execution →", exact: true }).click();
@@ -72,6 +84,13 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
     .getByText("Bookmark created", { exact: true });
   await journalCreation.scrollIntoViewIfNeeded();
   await expect(journalCreation).toBeInViewport();
+  const journal = page.getByRole("region", { name: "Activity journal", exact: true });
+  const scheduledTime = journal.locator(`[data-history-event-id="${scheduled.historyEventId}"] time`);
+  await expect(scheduledTime).toHaveAttribute("datetime", scheduled.occurredAt!);
+  const scheduledDate = await expectedStudioDate(page, scheduled.occurredAt!, "Europe/Amsterdam");
+  await expect(scheduledTime).toHaveText(scheduledDate.time);
+  await expect(scheduledTime).toHaveAttribute("title", `${scheduledDate.full} · ${scheduled.occurredAt}`);
+  await expect(journal).toContainText(scheduledDate.date);
   await capture(page, info, "timer-waiting-journal");
   await views.getByRole("tab", { name: "Bookmarks", exact: true }).click();
   const inventory = page.getByRole("region", { name: "Activity bookmark history", exact: true });
@@ -80,6 +99,7 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
   await expect(activeBadge).toHaveCount(1);
   await activeBadge.scrollIntoViewIfNeeded();
   await expect(activeBadge).toBeInViewport();
+  await expect(inventory).toContainText((await expectedStudioDate(page, active.items[0].bookmark.createdAt, "Europe/Amsterdam")).full);
   await capture(page, info, "timer-active-bookmark");
 
   await expect.poll(async () => (await api<WorkflowInstanceDetails>(runPath)).instance.status,
@@ -107,6 +127,10 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
   await dispatchHeading.scrollIntoViewIfNeeded();
   await expect(dispatchHeading).toBeInViewport();
   await capture(page, info, "timer-dispatched");
+  const dispatchedTime = details.getByText(`${(await expectedStudioDate(page, dispatched.occurredAt!, "Europe/Amsterdam")).full} · ${dispatched.occurredAt}`, { exact: true });
+  await dispatchedTime.scrollIntoViewIfNeeded();
+  await expect(dispatchedTime).toBeInViewport();
+  await capture(page, info, "timer-dispatched-time");
   await details.getByRole("button", { name: "Inspect causal event →", exact: true }).click();
   await expect(details.getByRole("heading", { name: "Timer scheduled", exact: true })).toBeVisible();
   await details.getByText("Technical details", { exact: true }).click();
@@ -123,6 +147,16 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
   await expect(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true })).toBeVisible();
   await lifecycle.locator('[data-status="Consumed"]').scrollIntoViewIfNeeded();
   await expect(lifecycle.locator('[data-status="Consumed"]')).toBeInViewport();
+  const fact = (label: string) => lifecycle.locator("dt").filter({ hasText: new RegExp(`^${label}$`) }).locator("xpath=following-sibling::dd[1]");
+  const created = active.items[0].bookmark.createdAt;
+  const ended = consumed.items[0].endedAt!;
+  expect(ended, "Retained consumed bookmark end time").toBeTruthy();
+  await expect(fact("Created")).toContainText((await expectedStudioDate(page, created, "Europe/Amsterdam")).full);
+  await expect(fact("Ended")).toContainText((await expectedStudioDate(page, ended, "Europe/Amsterdam")).full);
+  await selectStudioTimeZone(page, "UTC");
+  await expect(fact("Created")).toContainText((await expectedStudioDate(page, created, "UTC")).full);
+  await expect(fact("Ended")).toContainText((await expectedStudioDate(page, ended, "UTC")).full);
+  expect((await api<RuntimeHistoryBookmarkPage>(bookmarkPath)).items[0].bookmark.createdAt).toBe(created);
   await capture(page, info, "timer-consumed-bookmark");
   const oraclePath = info.outputPath("timer-history-oracle.json");
   writeFileSync(oraclePath, JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA, submitted, published, run,

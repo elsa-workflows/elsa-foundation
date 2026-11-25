@@ -124,7 +124,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         }
         var commandMetadata = CreateWorkflowStartCommandMetadata(workItem.CommandMetadata, now);
         var rootLineage = dispatchId ?? (ingress is null ? null : ingress.Recipient.StartIdentity.WorkflowExecutionId);
-        var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, rootLineage, now, commandMetadata);
+        var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, rootLineage, now, commandMetadata, startPayload.InputWarnings);
         var postCommitIntents = new[] { NewRootActivityPostCommitIntent(workItem, rootActivityWorkItem, rootActivityId, now) };
 
         var checkpointWorkItem = NewWorkflowStartedCheckpointWorkItem(workItem, startPayload, postCommitIntents, now, commandMetadata);
@@ -258,7 +258,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             requiresPayloadMessage: "Start scheduler work item requires a start command payload.",
             resolvedToNullMessage: "Start scheduler work item payload resolved to null.",
             invalidPayloadMessage: "Start scheduler work item payload is not a valid start command payload.",
-            deserialize: static (_, payload) => payload.Deserialize<WorkflowExecutionStartCommandPayload>(),
+            deserialize: static (_, payload) => payload.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options),
             // #412 (Start exception-masking): narrowed to a ParamName whitelist mirroring the sibling handlers.
             // Previously ANY ArgumentException raised during deserialization was misreported as "invalid payload,"
             // masking unrelated bugs. Only the payload's own constructor-validation ParamNames are treated as a
@@ -289,7 +289,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         string rootActivityId,
         string? dispatchId,
         DateTimeOffset now,
-        IReadOnlyDictionary<string, string> commandMetadata)
+        IReadOnlyDictionary<string, string> commandMetadata,
+        IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning>? inputWarnings)
     {
         var activityExecutionId = dispatchId is null
             ? _idGenerator.NewActivityExecutionId()
@@ -310,7 +311,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             rootActivityId,
             activityExecutionId,
             RuntimeScheduleActivityCommandPayload.WorkflowStartReason,
-            schedulingProvenance: provenance);
+            schedulingProvenance: provenance) { InputWarnings = inputWarnings };
 
         return new RuntimeSchedulerWorkItem(
             workItemId: RuntimeChainId.Derive(startWorkItem.WorkItemId, $"schedule:{rootActivityId}"),
@@ -322,7 +323,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             enqueuedAt: now,
             recordedAt: startWorkItem.RecordedAt,
             sequence: startWorkItem.Sequence is { } sequence ? sequence + 2 : null,
-            payload: JsonSerializer.SerializeToElement(payload),
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: commandMetadata,
             envelopeMetadata: startWorkItem.EnvelopeMetadata,
             executionScopeId: null,
@@ -342,7 +343,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             recordedAt: now,
             activityExecutionId: null,
             idempotencyKey: rootActivityWorkItem.IdempotencyKey,
-            payload: JsonSerializer.SerializeToElement(rootActivityWorkItem),
+            payload: JsonSerializer.SerializeToElement(rootActivityWorkItem, Elsa.Serialization.Core.JsonBaseline.Options),
             metadata: new Dictionary<string, string>
             {
                 ["runtime.sourceSchedulerWorkItemId"] = startWorkItem.WorkItemId,
@@ -408,7 +409,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             // handler is still awaiting its ack-delete.
             recordedAt: startWorkItem.RecordedAt,
             sequence: startWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            payload: JsonSerializer.SerializeToElement(payload),
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: commandMetadata,
             envelopeMetadata: startWorkItem.EnvelopeMetadata);
     }

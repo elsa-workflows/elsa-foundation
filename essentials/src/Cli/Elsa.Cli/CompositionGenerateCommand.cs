@@ -12,13 +12,13 @@ namespace Elsa.Cli;
 /// <summary>Reviews a source-preserving local host-file candidate before publishing it.</summary>
 internal static class CompositionGenerateCommand
 {
-    private static readonly JsonSerializerOptions s_json = new()
+    private static readonly JsonSerializerOptions s_json = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
         Converters = { new JsonStringEnumConverter() }
     };
-    private static readonly JsonSerializerOptions s_handoffJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private static readonly JsonSerializerOptions s_handoffJson = new(Elsa.Serialization.Core.JsonBaseline.Options) { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     public static Command Build()
     {

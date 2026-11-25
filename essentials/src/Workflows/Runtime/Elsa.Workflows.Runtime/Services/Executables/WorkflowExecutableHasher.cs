@@ -38,7 +38,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
         IncidentStrategyReference? incidentStrategy = null) =>
         ComputeBehavioralHash(rootActivity, inputContract, dependencies, persistenceMode, workflowVariables,
-            incidentStrategy, includeInputContracts: true);
+            incidentStrategy);
 
     public string ComputeHash(
         ExecutableNode rootActivity,
@@ -49,7 +49,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         IncidentStrategyReference? incidentStrategy,
         WorkflowValuePolicies valuePolicies) =>
         ComputeBehavioralHash(rootActivity, inputContract, dependencies, persistenceMode, workflowVariables,
-            incidentStrategy, includeInputContracts: true, valuePolicies);
+            incidentStrategy, valuePolicies);
 
     public bool MatchesHash(WorkflowExecutable executable)
     {
@@ -57,28 +57,9 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         if (executable.InputContract is not { } contract)
             return false;
 
-        // Retained V1/V2 artifacts use their original nullability bit encoding. Enabled policies are new behavior.
-        if (!executable.ValuePolicies.DefaultOnNull && !executable.ValuePolicies.UndefinedAsNull)
-        {
-            if (!ReadsAnyMember(executable))
-            {
-                var historicalV1 = ComputeBehavioralHash(executable.RootActivity, contract, executable.Dependencies,
-                    executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy,
-                    includeInputContracts: false, legacyInputNullability: true);
-                if (StringComparer.Ordinal.Equals(historicalV1, executable.Identity.ArtifactHash)) return true;
-            }
-            var historicalV2 = ComputeBehavioralHash(executable.RootActivity, contract, executable.Dependencies,
-                executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy,
-                includeInputContracts: true, legacyInputNullability: true);
-            if (StringComparer.Ordinal.Equals(historicalV2, executable.Identity.ArtifactHash)) return true;
-        }
         return StringComparer.Ordinal.Equals(ComputeHash(executable.RootActivity, contract, executable.Dependencies,
             executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy, executable.ValuePolicies), executable.Identity.ArtifactHash);
     }
-
-    private static bool ReadsAnyMember(WorkflowExecutable executable) =>
-        executable.Nodes.SelectMany(node => node.InputBindings.Values).Any(binding => binding.Selection is not null) ||
-        executable.WorkflowVariables.Any(variable => variable.InitialBinding?.Selection is not null);
 
     private static string ComputeBehavioralHash(
         ExecutableNode rootActivity,
@@ -87,9 +68,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         PersistenceMode? persistenceMode,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
         IncidentStrategyReference? incidentStrategy,
-        bool includeInputContracts,
-        WorkflowValuePolicies? valuePolicies = null,
-        bool legacyInputNullability = false)
+        WorkflowValuePolicies? valuePolicies = null)
     {
         ArgumentNullException.ThrowIfNull(rootActivity);
         ArgumentNullException.ThrowIfNull(inputContract);
@@ -105,8 +84,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
                 persistenceMode,
                 workflowVariables,
                 incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference,
-                includeInputContracts,
-                valuePolicies, legacyInputNullability);
+                valuePolicies);
 
         return Hash(stream.ToArray());
     }
@@ -124,14 +102,12 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
 
     private static string Hash(string payload)
     {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
-        return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
+        return ArtifactHashPrefix + Elsa.Serialization.Core.JsonHashInput.HashFramed(Encoding.UTF8.GetBytes(payload));
     }
 
     private static string Hash(byte[] payload)
     {
-        var hash = SHA256.HashData(payload);
-        return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
+        return ArtifactHashPrefix + Elsa.Serialization.Core.JsonHashInput.HashUtf8(payload);
     }
 
     public string CreateArtifactId(string artifactIdPrefix, string artifactHash)
@@ -226,7 +202,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             : $"{expression.ResultType.Kind}:{expression.ResultType.Id}:{CanonicalJson(expression.ResultType.Schema)}";
         var parameters = string.Join(',', expression.Parameters
             .OrderBy(item => item.Key, StringComparer.Ordinal)
-            .Select(item => $"{item.Key}={CanonicalJson(JsonSerializer.SerializeToElement(item.Value, typeof(Elsa.Expressions.Core.Models.ExpressionParameterBinding)))}"));
+            .Select(item => $"{item.Key}={CanonicalJson(Elsa.Serialization.Core.JsonHashInput.SerializeToElement(item.Value, typeof(Elsa.Expressions.Core.Models.ExpressionParameterBinding)))}"));
         // The fallback marker changes what the runtime loads and records (spec 1222), so it is behavior; it is appended
         // only when present, so an expression without one hashes as before.
         var fallback = expression.VariableReadFallback is { } marker
@@ -253,7 +229,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         var metadata = string.Join(',', capture.Metadata
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select(item => $"{item.Key}={item.Value}"));
-        var schema = capture.Type.Schema?.GetRawText() ?? string.Empty;
+        var schema = CanonicalJson(capture.Type.Schema);
         var conversion = capture.ConversionPlan is null ? string.Empty : $":conversion={capture.ConversionPlan.Fingerprint}";
         return $"{output.Key}={capture.OutputName}:{capture.ValueId}:{capture.Type.Kind}:{capture.Type.Id}:{schema}:" +
                $"{capture.Lifecycle}:{capture.Storage}:{capture.StorageDriverKey}:{capture.CaptureOnSuccessfulCompletion}[{metadata}]{conversion}";
@@ -285,7 +261,9 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             ? string.Empty
             : $":executionPlacement={node.ExecutionPlacement}";
         var legacyShape = $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.Descriptor.ConsumerKey}:{node.Descriptor.SchemaVersion}:{CanonicalJson(node.Descriptor.Payload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}{outputCapturePayload}{executionPlacement}";
-        var nodeShape = intrinsic.Length == 0 ? legacyShape : $"{legacyShape}:{intrinsic}";
+        var behaviorMetadata = RuntimeJsonHashProjection.ProjectExecutableMetadata(node.Metadata);
+        var metadataPayload = behaviorMetadata.EnumerateObject().Any() ? $":behaviorMetadata:{CanonicalJson(behaviorMetadata)}" : string.Empty;
+        var nodeShape = (intrinsic.Length == 0 ? legacyShape : $"{legacyShape}:{intrinsic}") + metadataPayload;
         return node.ActivityContract is null
             ? nodeShape
             : $"{nodeShape}:contract:{node.ActivityContract.SchemaFingerprint}";
@@ -299,12 +277,10 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         PersistenceMode? persistenceMode,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
         IncidentStrategyReference incidentStrategy,
-        bool includeInputContracts,
-        WorkflowValuePolicies? valuePolicies,
-        bool legacyInputNullability)
+        WorkflowValuePolicies? valuePolicies)
     {
         writer.WriteStartObject();
-        writer.WriteNumber("schemaVersion", !includeInputContracts ? 1 : legacyInputNullability || inputContract.Inputs.Count == 0 ? 2 : 3);
+        writer.WriteNumber("schemaVersion", inputContract.Inputs.Count == 0 ? 2 : 3);
         writer.WriteString("rootNodeId", rootActivity.ExecutableNodeId);
 
         if (valuePolicies is { DefaultOnNull: true } or { UndefinedAsNull: true })
@@ -350,7 +326,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
 
         writer.WriteStartArray("nodes");
         foreach (var node in FlattenExecutableActivities(rootActivity).OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal))
-            WriteNode(writer, node, includeInputContracts);
+            WriteNode(writer, node);
         writer.WriteEndArray();
 
         writer.WriteStartObject("inputContract");
@@ -364,8 +340,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             writer.WriteString("collectionKind", input.Type.CollectionKind.ToString());
             writer.WriteBoolean("isRequired", input.IsRequired);
             writer.WriteBoolean("hasDefaultValue", input.DefaultValue.HasValue);
-            if (legacyInputNullability ? input.IsNullable : !input.IsNullable)
-                writer.WriteBoolean("isNullable", legacyInputNullability);
+            if (!input.IsNullable)
+                writer.WriteBoolean("isNullable", false);
             writer.WritePropertyName("defaultValue");
             if (input.DefaultValue is { } defaultValue)
                 WriteCanonicalJson(writer, defaultValue);
@@ -394,7 +370,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         writer.WriteEndObject();
     }
 
-    private static void WriteNode(Utf8JsonWriter writer, ExecutableNode node, bool includeInputContracts)
+    private static void WriteNode(Utf8JsonWriter writer, ExecutableNode node)
     {
         writer.WriteStartObject();
         writer.WriteString("nodeId", node.ExecutableNodeId);
@@ -403,7 +379,21 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         if (node.ExecutionPlacement != ActivityExecutionPlacement.Inline)
             writer.WriteString("executionPlacement", node.ExecutionPlacement.ToString());
         if (node.ActivityContract is { } activityContract)
+        {
             writer.WriteString("sideEffectProfile", activityContract.SideEffectProfile.ToString());
+            if (activityContract.SupportsBackgroundExecution)
+                writer.WriteBoolean("supportsBackgroundExecution", true);
+            if (activityContract.AccessesUndeclaredVariables)
+                writer.WriteBoolean("accessesUndeclaredVariables", true);
+            if (activityContract.AccessesWorkflowState)
+                writer.WriteBoolean("accessesWorkflowState", true);
+        }
+        var behaviorMetadata = RuntimeJsonHashProjection.ProjectExecutableMetadata(node.Metadata);
+        if (behaviorMetadata.EnumerateObject().Any())
+        {
+            writer.WritePropertyName("behaviorMetadata");
+            WriteCanonicalJson(writer, behaviorMetadata);
+        }
         writer.WriteStartObject("descriptor");
         writer.WriteString("consumerKey", node.Descriptor.ConsumerKey);
         writer.WriteString("schemaVersion", node.Descriptor.SchemaVersion);
@@ -429,15 +419,12 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         {
             writer.WriteStartObject();
             writer.WriteString("name", inputName);
-            if (includeInputContracts)
-            {
-                // Canonical structured JSON covers the complete binding, including destination type,
-                // policy, source reference and portable expression contracts. Explicit metadata keeps
-                // this independent of host serializer options and available without reflection.
-                writer.WritePropertyName("contract");
-                WriteCanonicalJson(writer, JsonSerializer.SerializeToElement(binding,
-                    WorkflowExecutableHashJsonContext.Default.RuntimeInputBinding));
-            }
+
+            // Canonical structured JSON covers the complete binding, including destination type,
+            // policy, source reference and portable expression contracts. Explicit metadata keeps
+            // this independent of host serializer options and available without reflection.
+            writer.WritePropertyName("contract");
+            WriteCanonicalJson(writer, Elsa.Serialization.Core.JsonHashInput.SerializeToElement(binding));
             writer.WriteString("source", binding.Source.ToString());
             writer.WritePropertyName("payload");
             if (binding.Source == RuntimeInputBindingSource.Expression)
@@ -516,46 +503,13 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
 
     private static void WriteCanonicalJson(Utf8JsonWriter writer, JsonElement element)
     {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
-                {
-                    writer.WritePropertyName(property.Name);
-                    WriteCanonicalJson(writer, property.Value);
-                }
-                writer.WriteEndObject();
-                break;
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in element.EnumerateArray())
-                    WriteCanonicalJson(writer, item);
-                writer.WriteEndArray();
-                break;
-            default:
-                element.WriteTo(writer);
-                break;
-        }
+        writer.WriteRawValue(Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(element), skipInputValidation: true);
     }
 
     private static string CanonicalJson(JsonElement? element)
     {
-        if (!element.HasValue)
-            return string.Empty;
-
-        var node = JsonNode.Parse(element.Value.GetRawText());
-        return node is null ? "null" : SortNode(node).ToJsonString();
+        return element.HasValue ? Encoding.UTF8.GetString(Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(element.Value)) : string.Empty;
     }
-
-    private static JsonNode SortNode(JsonNode node) => node switch
-    {
-        JsonObject obj => new JsonObject(obj
-            .OrderBy(item => item.Key, StringComparer.Ordinal)
-            .Select(item => KeyValuePair.Create(item.Key, item.Value is null ? null : SortNode(item.Value)))),
-        JsonArray array => new JsonArray(array.Select(item => item is null ? null : SortNode(item)).ToArray()),
-        _ => node.DeepClone()
-    };
 
     private static IEnumerable<ExecutableNode> FlattenExecutableActivities(ExecutableNode rootActivity)
     {

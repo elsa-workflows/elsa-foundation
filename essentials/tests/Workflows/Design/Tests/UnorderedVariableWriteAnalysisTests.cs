@@ -134,7 +134,7 @@ public sealed class UnorderedVariableWriteAnalysisTests
 
     private static ArgumentState VariableOutput(string outputKey, string variableKey, string? scope = "workflow") =>
         new(outputKey,
-            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = variableKey, declaringScopeId = scope }), "Variable"),
+            ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = variableKey, declaringScopeId = scope }), "Variable"),
             null, null, null, null);
 
     // Containers are unordered (Parallel-like) unless listed as ordered (by child position) or self-overlapping.

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Switch.Models;
 using Elsa.Primitives.Models;
@@ -17,7 +16,7 @@ namespace Elsa.Activities.Switch.Internal;
 /// </summary>
 internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivity.StructureSchemaVersion) : IActivityStructureHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         // Authored ArgumentState.Conversion enums (AuthoredValueConversionMode) arrive as camelCase
         // strings from the global web JSON options; nested structure payload reads must match.
@@ -46,7 +45,7 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
             // the Boolean default without mutating the authored payload or its storage policy.
             var state = item.Condition!;
             if (IsUnboundPredicate(state))
-                state = state with { Value = new(false, "Literal"), Conversion = null };
+                state = state with { Value = Elsa.Expressions.Core.Models.ArgumentValue.FromClr(false, "Literal"), Conversion = null };
             inputs.Add(new(key, definition, state));
         }
         if (structure.Cases.Any(item => item.Condition is null))
@@ -98,16 +97,24 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var current = ReadAuthoredStructure(activity);
-        var payload = activity.Structure is null ? new JsonObject() : JsonNode.Parse(activity.Structure.Payload.GetRawText()) as JsonObject
-            ?? throw new ArgumentException("Switch authored structure must be an object.");
-        var cases = payload["cases"] as JsonArray ?? new JsonArray();
+        var payload = activity.Structure is null ? new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+            : activity.Structure.Payload.ValueKind == JsonValueKind.Object
+                ? activity.Structure.Payload.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal)
+                : throw new ArgumentException("Switch authored structure must be an object.");
+        var cases = payload.TryGetValue("cases", out var authoredCases) && authoredCases.ValueKind == JsonValueKind.Array
+            ? authoredCases.EnumerateArray().Select(item => item.Clone()).ToArray() : [];
         foreach (var (item, index) in current.Cases.Select((item, index) => (item, index)))
         {
             var branch = SingleBranch(childProjections, SwitchActivity.CaseSlotName(item.Match));
-            if (cases[index] is JsonObject record) record["activity"] = JsonSerializer.SerializeToNode(branch, SerializerOptions);
+            if (cases[index].ValueKind == JsonValueKind.Object)
+            {
+                var record = cases[index].EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+                record["activity"] = JsonSerializer.SerializeToElement(branch, SerializerOptions);
+                cases[index] = JsonSerializer.SerializeToElement(record, SerializerOptions);
+            }
         }
-        if (payload["cases"] is null) payload["cases"] = cases;
-        payload["default"] = JsonSerializer.SerializeToNode(SingleBranch(childProjections, SwitchActivity.DefaultSlotName), SerializerOptions);
+        payload["cases"] = JsonSerializer.SerializeToElement(cases, SerializerOptions);
+        payload["default"] = JsonSerializer.SerializeToElement(SingleBranch(childProjections, SwitchActivity.DefaultSlotName), SerializerOptions);
 
         return activity with
         {

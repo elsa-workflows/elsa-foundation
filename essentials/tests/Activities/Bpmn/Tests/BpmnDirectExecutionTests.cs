@@ -75,14 +75,13 @@ public sealed partial class BpmnDirectExecutionTests : IDisposable
     [InlineData(true)]
     public async Task An_in_flight_native_start_from_the_actual_cancelled_capture_requires_positive_retirement(bool removeCancellationSource)
     {
-        await using (var raw = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ActualNativeStartRetirement.sqlite.gz")))
-        await using (var zipped = new System.IO.Compression.GZipStream(raw, System.IO.Compression.CompressionMode.Decompress))
-        await using (var target = File.Create(database)) await zipped.CopyToAsync(target);
+        var captured = await RestoreCurrentNativeAsync("native-start-retirement");
         await using var host = await OpenAsync(configure: services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(TimeProvider.System)),
             activityIds: ["retired-root-1", "retired-root-2"]);
         await using var scope = await ScopeAsync(host);
         var db = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
         var model = Assert.Single((await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().ListPageAsync(new())).Items);
+        Assert.Equal(JsonSerializer.Serialize(captured, Web), JsonSerializer.Serialize(model, Web));
         var cancellation = Assert.Single(BpmnDirectExecutionDriver.Read(model).Cancellations!);
         var origin = cancellation.Origin;
         if (removeCancellationSource)

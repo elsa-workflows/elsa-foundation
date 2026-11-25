@@ -19,7 +19,7 @@ public static class ApiCapabilitiesApi
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
         var api = endpoints.MapEndpointGroup(
             OwnerId,
-            ApiCapabilitiesJsonContext.Default,
+            ApiCapabilitiesJsonContext.WireContext,
             jsonContentType: "application/json",
             tag: string.IsNullOrWhiteSpace(applicationName) ? null : applicationName);
 

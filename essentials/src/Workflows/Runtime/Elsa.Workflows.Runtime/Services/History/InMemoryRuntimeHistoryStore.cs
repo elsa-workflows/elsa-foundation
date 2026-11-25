@@ -330,14 +330,14 @@ internal sealed partial class InMemoryRuntimeHistoryStore(
     private static string Binding(params object?[] fields) => RuntimeHistoryIdentity.CreateBinding(fields
         .Select(field => field is IFormattable formatted ? formatted.ToString(null, CultureInfo.InvariantCulture) : field?.ToString()).ToArray());
 
-    private string Encode(string purpose, Cursor cursor) => codec.Encode(purpose, JsonSerializer.SerializeToUtf8Bytes(cursor));
+    private string Encode(string purpose, Cursor cursor) => codec.EncodeJson(purpose, JsonSerializer.SerializeToUtf8Bytes(cursor, options: Elsa.Serialization.Core.JsonBaseline.Options));
 
     private Cursor? Decode(string purpose, string? token, string binding)
     {
         if (token is null) return null;
         try
         {
-            var cursor = JsonSerializer.Deserialize<Cursor>(codec.Decode(purpose, token));
+            var cursor = JsonSerializer.Deserialize<Cursor>(codec.DecodeJson(purpose, token), options: Elsa.Serialization.Core.JsonBaseline.Options);
             if (cursor is null || cursor.Binding != binding || cursor.After < 0 || cursor.Upper < cursor.After)
                 throw new FormatException();
             return cursor;

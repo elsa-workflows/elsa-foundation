@@ -71,7 +71,7 @@ public sealed class RuntimeSchedulerPostCommitIntentDispatcher(
 
         try
         {
-            return payload.Deserialize<RuntimeSchedulerWorkItem>()
+            return payload.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)
                    ?? throw new InvalidOperationException("Scheduler work post-commit intent payload resolved to null.");
         }
         catch (Exception exception) when (

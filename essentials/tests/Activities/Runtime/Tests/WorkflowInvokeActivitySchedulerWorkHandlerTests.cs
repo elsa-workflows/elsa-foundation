@@ -166,7 +166,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         var commit = Assert.Single(
             _checkpointWriter.ListCommits(),
             write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCancelled).Commit;
-        var cancelWork = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var cancelWork = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.Cancel, cancelWork.CommandKind);
     }
 
@@ -962,9 +962,9 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         var intents = _checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents).ToArray();
         var work = intents.Length == 0
             ? Assert.Single(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")))
-            : Assert.Single(intents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+            : Assert.Single(intents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, work.CommandKind);
-        return work.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+        return work.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
     }
 
     private ServiceProvider NewProvider(
@@ -1020,7 +1020,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             _now,
             30,
             JsonSerializer.SerializeToElement(new RuntimeInvokeActivityCommandPayload(
-                pinnedExecutable ?? NewIdentity(), "node-start", "actexec-1", RuntimeInvokeActivityCommandPayload.StartedActivityReason)),
+                pinnedExecutable ?? NewIdentity(), "node-start", "actexec-1", RuntimeInvokeActivityCommandPayload.StartedActivityReason), Elsa.Serialization.Core.JsonBaseline.Options),
             new Dictionary<string, string> { ["source"] = "test" },
             new Dictionary<string, string> { ["transport"] = "in-process" });
 
@@ -1047,7 +1047,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
                 outcomeNames: [ActivityOutcomes.Done],
                 RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
                 SchedulerCompletionKind.ParentCompletionEvaluation,
-                completedChildActivityExecutionId: completedChildActivityExecutionId)),
+                completedChildActivityExecutionId: completedChildActivityExecutionId), Elsa.Serialization.Core.JsonBaseline.Options),
             new Dictionary<string, string>(),
             new Dictionary<string, string>());
 
@@ -1073,7 +1073,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
                 notifyingChildIterationId: null,
                 code: "test-notification",
                 payload: null,
-                reason: RuntimeNotifyParentCommandPayload.NotifyParentReason)),
+                reason: RuntimeNotifyParentCommandPayload.NotifyParentReason), Elsa.Serialization.Core.JsonBaseline.Options),
             new Dictionary<string, string>(),
             new Dictionary<string, string>());
 

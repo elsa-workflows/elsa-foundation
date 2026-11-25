@@ -185,7 +185,7 @@ public sealed partial class StimulusDeliveryStoreTests
         var actors = new StartActors();
         var result = await SavedDispatcher(harness, actors, new StartPolicy()).DispatchAsync(SavedRequest(source, publisher: legacy));
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
-        var payload = Assert.Single(actors.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = Assert.Single(actors.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Null(payload.TenantId); Assert.Null(payload.TestScope); Assert.Equal(WorkflowRunKind.PublishedRun, payload.RunKind);
         Assert.Equal(new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue), payload.Partition);
     }
@@ -334,7 +334,7 @@ public sealed partial class StimulusDeliveryStoreTests
         await harness.Delivery.InstallAsync(source, candidate);
         var actors = new StartActors(); var result = await SavedDispatcher(harness, actors, new StartPolicy()).DispatchAsync(SavedRequest(source));
         Assert.Null(result.PinnedSource); Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
-        var payload = Assert.Single(actors.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = Assert.Single(actors.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Null(payload.PinnedSource); Assert.Equal(WorkflowExecutableStartAuthorityKind.StimulusDelivery, payload.StartAuthority!.Kind);
     }
 
@@ -356,7 +356,7 @@ public sealed partial class StimulusDeliveryStoreTests
         await handler.HandleAsync(new("admitted-start", envelope.WorkflowExecutionId, envelope.Command.CommandId, envelope.Command.Kind,
             envelope.EnvelopeId, envelope.IdempotencyKey, envelope.EnqueuedAt, Now, 1, envelope.Command.Payload, envelope.Command.Metadata, envelope.Metadata));
         var checkpoint = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery(envelope.WorkflowExecutionId)));
-        var payload = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var payload = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, payload.CheckpointName); Assert.Equal(Pin, payload.PinnedExecutable);
         Assert.Equal(SelectedSource(), payload.PinnedSource); Assert.Equal(AdmissionMetadata, payload.SeedTriggerMetadata);
         Assert.Null(payload.ParentWorkflowExecutionId); Assert.Equal("tenant", payload.TenantId);

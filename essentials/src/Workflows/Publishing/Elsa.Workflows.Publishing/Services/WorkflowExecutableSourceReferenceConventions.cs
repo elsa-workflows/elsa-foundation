@@ -99,5 +99,5 @@ public sealed class WorkflowExecutableAuthoredInputsSidecar(ActivityTreeProjecto
     }
 
     private static JsonElement CopyValue(object? value) =>
-        value is JsonElement json ? json.Clone() : JsonSerializer.SerializeToElement(value);
+        value is JsonElement json ? json.Clone() : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value);
 }

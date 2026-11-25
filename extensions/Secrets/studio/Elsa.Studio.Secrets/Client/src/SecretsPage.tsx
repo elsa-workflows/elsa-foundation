@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { StatusChip, StudioAlert, SkeletonRows, studioRowInteraction, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, KeyRound, Plus, RefreshCw } from "lucide-react";
@@ -14,6 +16,7 @@ const secretStatuses: SecretStatus[] = ["Active", "Retired", "Expired", "Revoked
 const MAX_SECRETS_PER_LOAD = 100;
 
 export function SecretsPage({ context, dialogs, navigate, notifications }: { context: StudioEndpointContext; dialogs: StudioDialogApi; navigate?(path: string): void; notifications?: StudioNotificationApi }) {
+  useStudioTimeZone();
   const location = useStudioRouteLocation();
   const tab = useStudioWorkspaceTab();
   const initialBrowse = readSecretBrowse(location.search);
@@ -362,6 +365,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
 }
 
 function FilterSelect({ label, value, options, helpText, description, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; helpText?: string; description?: string; onChange(value: string): void }) {
+
   const id = useId();
   const combinedDescription = helpText ? (description ? `${helpText}. ${description}` : helpText) : description;
   return (

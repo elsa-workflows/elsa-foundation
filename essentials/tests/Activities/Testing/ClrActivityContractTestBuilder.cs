@@ -79,7 +79,7 @@ public static class ClrActivityContractTestBuilder
             activityType.FullName!,
             "1.0.0",
             descriptorType,
-            JsonSerializer.SerializeToElement(new ClrActivityDescriptor(alias)),
+            JsonSerializer.SerializeToElement(new ClrActivityDescriptor(alias), Elsa.Serialization.Core.JsonBaseline.Options),
             inputs,
             new ActivityResultContract(
                 ValueType(resultType),

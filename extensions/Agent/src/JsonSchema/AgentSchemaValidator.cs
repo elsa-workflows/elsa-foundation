@@ -37,7 +37,7 @@ internal sealed class AgentSchemaValidator
             AgentJsonBounds.Check(schema, MaximumSchemaBytes, MaximumSchemaNodes);
             var remaining = MaximumSchemaNodes;
             var expanded = Expand(schema, schema, "$", 0, new(StringComparer.Ordinal), ref remaining);
-            var json = JsonSerializer.SerializeToElement(expanded);
+            var json = JsonSerializer.SerializeToElement(expanded, Elsa.Serialization.Core.JsonBaseline.Options);
             AgentJsonBounds.Check(json, MaximumSchemaBytes, MaximumSchemaNodes);
             var built = EngineSchema.Build(json, new BuildOptions
             {

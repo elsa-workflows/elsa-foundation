@@ -190,7 +190,7 @@ A project that fits **none** of these classes and is below the guidance size is 
 
 ## Sanctioned patterns catalog
 
-Supports framework §2.24, still draft pending ratification (owner decision D4, #2578). Moved verbatim from framework constitution v5.0.1: the full table and the adoption steps.
+Supports framework §2.24, still draft pending ratification (owner decision D4, #2578). The original table and adoption steps moved from framework constitution v5.0.1; the shared serialization baseline records accepted ADR 0091.
 
 The framework recognises a **closed catalog** of architectural patterns for resolving the recurring problems of modular design. **Code MUST resolve problems using a pattern from this catalog.** If a recurring problem genuinely does not fit any catalogued pattern, that gap is brought to the architects, evaluated, documented (with use case + criteria + worked example), ratified, and added to the catalog *before* the new pattern is adopted across the codebase. **Ad-hoc patterns invented at the call site are not permitted.**
 
@@ -215,10 +215,26 @@ This rule is a **discipline rule**, not a behaviour rule. It does not change wha
 | 12 | **Domain-level shadow properties** | §2.9.1 | Persistence-only field that exists on the CLR entity but is hidden from the read interface. | Use real CLR property + omit from `I<Entity>` — never the provider's shadow mechanism. |
 | 13 | **CQS at persistence boundary** | §2.10 | Split persistence contracts into commands (mutate) and queries (read). | Every persistence-facing interface. Combined-mutate-and-query methods are a smell. |
 | 14 | **Integration vs Consumption-Shape — separate modules** | §2.14 | Integration code (`<App>.<Integration>`) and the consumption-shape (`<App>.<Integration>.<Consumer>`) ship as separate modules. | Activities or other consumer-facing modules adapting an external-system integration. |
+| 15 | **Shared read-only serialization baseline with registered deviations** | §2.24.2 | Modules preserve consistent JSON semantics while adding metadata for their own contracts. | Start from an immutable baseline; register justified protected-setting deviations. User-type conversion settings remain scoped; JSON hashes use independent explicit settings. |
 
 **Patterns not in the catalog are not sanctioned.** A code reviewer who sees a pattern not in this catalog applied to a problem MUST flag it. The fix is either (a) refactor to use a catalogued pattern, or (b) bring the pattern to the architects per §2.24.3.
 
 **The catalog is not a coding style guide.** Naming conventions, test discipline, refactor rules, versioning, packaging — all governed by their own § identifiers (§2.2, §2.16, §2.17, §2.21, §2.22, §2.23, §4) — are not *patterns* in this catalog's sense. The catalog enumerates **structural solution shapes** for cross-feature composition and modular decomposition.
+
+### Shared read-only serialization baseline
+
+Use this pattern when independently composed modules carry the same JSON data through APIs, stores and exports. Each module constructs options from a copy of one immutable baseline and adds metadata for the types it owns. This avoids each module inventing settings or mutating the host's options to impose its own convention. A reasoned deviation register records differences in protected settings.
+
+It does not select a user type's naming or matching contract, and hash inputs keep independently specified settings. For the application rules and alternatives, see [ADR 0091](../adr/0091-json-data-passes-through-unchanged-and-every-serializer-derives-from-one-baseline.md).
+
+Illustrative construction (the API planned by spec 1207, not a claim of completed implementation):
+
+```csharp
+var options = JsonBaseline.CreateCopy();
+var context = new OrdersJsonContext(options);
+```
+
+`JsonBaseline.Options` stays read-only. Constructing the module's context cannot mutate the baseline or another module's options. A module contributes only its own metadata to host resolution.
 
 ### §2.24.3 Adding a new pattern
 

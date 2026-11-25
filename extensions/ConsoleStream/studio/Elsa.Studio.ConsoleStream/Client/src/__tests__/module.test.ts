@@ -16,30 +16,31 @@ import {
   resolveTargetUrl,
   type ConsoleEntry
 } from "../module";
-import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioHttpClient, StudioNavigationContribution, StudioRouteContribution, StudioPanelContribution } from "@elsa-workflows/studio-sdk";
+import { createHttpClient, createContributionRegistry } from "@elsa-workflows/studio-sdk";
 
 describe("console stream module", () => {
   it("preserves full backend shell paths for the SignalR hub and keeps Studio root paths",()=>{
-    const context={baseUrl:"https://api.example/shell-b/",http:{getJson:async()=>({})}};
+    const context={baseUrl:"https://api.example/shell-b/",http:stubHttp()};
     expect(resolveTargetUrl({id:"server",label:"Server",context,endpointPrefix:"/_elsa/server/diagnostics/console-logs"},"/_elsa/server/diagnostics/console-logs/hub")).toBe("https://api.example/shell-b/_elsa/server/diagnostics/console-logs/hub");
     expect(resolveTargetUrl({id:"studio",label:"Studio",context,endpointPrefix:"/_elsa/studio/diagnostics/console-logs"},"/_elsa/studio/diagnostics/console-logs/hub")).toBe("https://api.example/_elsa/studio/diagnostics/console-logs/hub");
   });
   it("registers navigation, route, and bottom panel contributions", () => {
-    const navigation: unknown[] = [];
-    const routes: unknown[] = [];
-    const panels: unknown[] = [];
+    const navigation = createContributionRegistry<StudioNavigationContribution>();
+    const routes = createContributionRegistry<StudioRouteContribution>();
+    const panels = createContributionRegistry<StudioPanelContribution>();
     const api = {
-      host: { http: { getJson: async () => ({}) } },
-      backend: { http: { getJson: async () => ({}) } },
-      navigation: { add: (item: unknown) => navigation.push(item) },
-      routes: { add: (route: unknown) => routes.push(route) },
-      panels: { add: (panel: unknown) => panels.push(panel) }
+      host: { baseUrl: "https://studio.example", http: stubHttp() },
+      backend: { baseUrl: "https://server.example", http: stubHttp() },
+      navigation,
+      routes,
+      panels
     } as ElsaStudioModuleApi;
 
     register(api);
 
-    expect(navigation).toHaveLength(1);
-    expect(navigation[0]).toMatchObject({
+    expect(navigation.list()).toHaveLength(1);
+    expect(navigation.list()[0]).toMatchObject({
       id: "console",
       label: "Console",
       path: "/diagnostics/console",
@@ -47,14 +48,14 @@ describe("console stream module", () => {
       parentId: "diagnostics",
       order: 840
     });
-    expect(routes).toHaveLength(1);
-    expect(routes[0]).toMatchObject({
+    expect(routes.list()).toHaveLength(1);
+    expect(routes.list()[0]).toMatchObject({
       id: "console",
       label: "Console",
       path: "/diagnostics/console"
     });
-    expect(panels).toHaveLength(1);
-    expect(panels[0]).toMatchObject({
+    expect(panels.list()).toHaveLength(1);
+    expect(panels.list()[0]).toMatchObject({
       id: "console-stream",
       title: "Console",
       order: 1000
@@ -176,7 +177,7 @@ describe("console stream module", () => {
     const requestResponse=vi.fn((_url:string,init?:RequestInit)=>new Promise<Response>((_resolve,reject)=>{
       observed=init;init?.signal?.addEventListener("abort",()=>reject(new DOMException("Aborted","AbortError")),{once:true});
     }));
-    const options=createConsoleConnectionOptions({baseUrl:"https://server.example/shell/",http:{getJson:async()=>({}),requestResponse}});
+    const options=createConsoleConnectionOptions({baseUrl:"https://server.example/shell/",http:{...stubHttp(),requestResponse}});
     const signal:{aborted:boolean;onabort:(()=>void)|null}={aborted:false,onabort:null};
     const pending=options.httpClient!.send({url:"https://server.example/shell/hub",method:"GET",abortSignal:signal});
     expect(observed?.credentials).toBe("omit");
@@ -189,22 +190,22 @@ describe("console stream module", () => {
     vi.useFakeTimers();
     try {
       const requestResponse=vi.fn((_url:string,init?:RequestInit)=>new Promise<Response>((_resolve,reject)=>init?.signal?.addEventListener("abort",()=>reject(new DOMException("Aborted","AbortError")),{once:true})));
-      const options=createConsoleConnectionOptions({baseUrl:"https://server.example/",http:{getJson:async()=>({}),requestResponse}});
+      const options=createConsoleConnectionOptions({baseUrl:"https://server.example/",http:{...stubHttp(),requestResponse}});
       const pending=expect(options.httpClient!.send({url:"https://server.example/hub",method:"GET",timeout:100})).rejects.toBeInstanceOf(TimeoutError);
       await vi.advanceTimersByTimeAsync(100);await pending;
     } finally {vi.useRealTimers();}
   });
 
   it("uses cookie-free polling for anonymous hubs instead of native credentialed transports",()=>{
-    const options=createConsoleConnectionOptions({baseUrl:"https://server.example/shell/",http:{getJson:async()=>({})}});
+    const options=createConsoleConnectionOptions({baseUrl:"https://server.example/shell/",http:stubHttp()});
     expect(options.withCredentials).toBe(false);
     expect(options.transport).toBe(HttpTransportType.LongPolling);
   });
 
   it("passes endpoint headers to SignalR connection options", () => {
-    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", headers: { "X-Elsa-Module-Management-Key": "secret" }, http: { getJson: async () => ({}) } }).headers)
+    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", headers: { "X-Elsa-Module-Management-Key": "secret" }, http: stubHttp() }).headers)
       .toEqual({ "x-elsa-module-management-key": "secret" });
-    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", http: { getJson: async () => ({}) } }).headers)
+    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", http: stubHttp() }).headers)
       .toBeUndefined();
   });
 
@@ -213,7 +214,7 @@ describe("console stream module", () => {
     const options = createConsoleConnectionOptions({
       baseUrl: "https://server.example",
       headers: { "X-Elsa-Module-Management-Key": "secret" },
-      http: { getJson: async () => ({}) },
+      http: stubHttp(),
       accessTokenFactory
     });
 
@@ -230,7 +231,7 @@ describe("console stream module", () => {
     const options = createConsoleConnectionOptions({
       baseUrl: "https://server.example",
       headers: { "X-Elsa-Module-Management-Key": "secret" },
-      http: { getJson: async () => ({}) }
+      http: stubHttp()
     });
 
     expect(options.accessTokenFactory).toBeUndefined();
@@ -239,7 +240,7 @@ describe("console stream module", () => {
   });
 
   it("omits accessTokenFactory on the anonymous context", () => {
-    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", http: { getJson: async () => ({}) } }).accessTokenFactory)
+    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", http: stubHttp() }).accessTokenFactory)
       .toBeUndefined();
   });
 
@@ -267,4 +268,10 @@ function entry(sequence: number): ConsoleEntry {
     sourceId: null,
     sourceLabel: null
   };
+}
+
+function stubHttp(): StudioHttpClient {
+  const client = createHttpClient("https://unused.example", { fetch: async () => { throw new Error("Unexpected HTTP request in console unit test."); } });
+  delete client.requestResponse;
+  return client;
 }

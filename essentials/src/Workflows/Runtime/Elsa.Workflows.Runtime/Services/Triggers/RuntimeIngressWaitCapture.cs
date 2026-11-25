@@ -81,7 +81,7 @@ internal static class RuntimeIngressWaitCapture
         if (registration.InvocationId != state.InvocationId || registration.ResumeTargetKey != bookmark.ResumeTargetId ||
             registration.StimulusType != bookmark.StimulusType || registration.StimulusHash != bookmark.StimulusHash ||
             registration.PayloadType.Alias != payloadType.Alias || registration.PayloadType.CollectionKind != payloadType.CollectionKind ||
-            registration.PayloadType.SchemaVersion != payloadType.SchemaVersion || registration.PayloadType.Schema?.GetRawText() != payloadType.Schema?.GetRawText())
+            registration.PayloadType.SchemaVersion != payloadType.SchemaVersion || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(registration.PayloadType.Schema, payloadType.Schema))
             throw Unresumable();
         if (state.TriggerDeliveries?.Any(delivery => delivery.RegistrationId == registration.RegistrationId &&
             delivery.Status is ActivityTriggerDeliveryStatus.Received or ActivityTriggerDeliveryStatus.Consumed &&

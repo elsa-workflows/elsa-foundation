@@ -32,8 +32,8 @@ public sealed class NativeStandaloneTriggerTargetTests
 
     [Theory]
     [InlineData("{}")]
-    [InlineData("{\"StartAuthority\":{}}")]
-    [InlineData("{\"StartAuthority\":{\"StandaloneTrigger\":null}}")]
+    [InlineData("{\"startAuthority\":{}}")]
+    [InlineData("{\"startAuthority\":{\"standaloneTrigger\":null}}")]
     public async Task An_opaque_legacy_start_keeps_its_duplicate_response(string json)
     {
         var executor = new WitnessExecutor();
@@ -54,7 +54,7 @@ public sealed class NativeStandaloneTriggerTargetTests
     {
         var envelope = new WorkflowExecutionCommandEnvelope("claimed", "running",
             new("command", "running", WorkflowExecutionCommandKind.Start, Now,
-                JsonDocument.Parse("{\"StartAuthority\":{\"StandaloneTrigger\":{}}}").RootElement.Clone(), new Dictionary<string, string>()),
+                JsonDocument.Parse("{\"startAuthority\":{\"standaloneTrigger\":{}}}").RootElement.Clone(), new Dictionary<string, string>()),
             "claimed-key", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now);
         Assert.ThrowsAny<Exception>(() => NativeIngressTargetEvidence.Origin(envelope));
     }
@@ -96,10 +96,10 @@ public sealed class NativeStandaloneTriggerTargetTests
         var seal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(seal);
         var start = StartItem(NativeIngressTargetEvidence.ReadEnvelope(seal));
         var payload = System.Text.Json.Nodes.JsonNode.Parse(start.Payload!.Value.GetRawText())!;
-        payload["StartAuthority"] = System.Text.Json.Nodes.JsonNode.Parse("{\"Kind\":" + (int)WorkflowExecutableStartAuthorityKind.ModelWork + ",\"ModelWork\":{\"FormatVersion\":999}}");
+        payload["startAuthority"] = System.Text.Json.Nodes.JsonNode.Parse("{\"kind\":" + (int)WorkflowExecutableStartAuthorityKind.ModelWork + ",\"modelWork\":{\"formatVersion\":999}}");
         var future = new RuntimeSchedulerWorkItem(start.WorkItemId, start.WorkflowExecutionId, start.CommandId, start.CommandKind,
             start.EnvelopeId, start.IdempotencyKey, start.EnqueuedAt, start.RecordedAt, start.Sequence,
-            JsonSerializer.SerializeToElement(payload), start.CommandMetadata, start.EnvelopeMetadata);
+            JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options), start.CommandMetadata, start.EnvelopeMetadata);
         var poison = new InMemoryWorkflowSchedulerPoisonStore();
         await fixture.Queue.EnqueueAsync(future);
         var drain = await new WorkflowSchedulerDrainer(fixture.Queue, [fixture.StartHandler], fixture.Executions, poison,
@@ -132,7 +132,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         Assert.Empty((await fixture.Queue.ListAsync(new(fixture.Recipient.StartIdentity.WorkflowExecutionId))).Items);
         fixture.Seal(first);
         var envelope = NativeIngressTargetEvidence.ReadEnvelope(first);
-        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(Now, envelope.EnqueuedAt);
         Assert.Equal(fixture.Recipient.StartIdentity.CommandId, envelope.Command.CommandId);
         Assert.Equal("business-value", payload.Inputs["AccountId"].GetString());
@@ -194,12 +194,12 @@ public sealed class NativeStandaloneTriggerTargetTests
         await fixture.StartHandler.HandleAsync(start);
         await fixture.Queue.DeleteAsync(start.WorkflowExecutionId, start.WorkItemId);
         var checkpoint = Assert.Single((await fixture.Queue.ListAsync(new(start.WorkflowExecutionId))).Items);
-        var checkpointPayload = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var checkpointPayload = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.True(payloadOrigin(seal).IsEquivalentTo(checkpointPayload.IngressOrigin));
         Assert.Equal(Now, checkpoint.EnqueuedAt);
         Assert.Equal(RuntimeMetadataKeys.CheckpointRequirementMandatory, checkpoint.CommandMetadata[RuntimeMetadataKeys.CheckpointRequirement]);
-        var root = Assert.Single(checkpointPayload.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
-        var rootPayload = root.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        var root = Assert.Single(checkpointPayload.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
+        var rootPayload = root.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal($"{start.WorkflowExecutionId}:activity:root", rootPayload.ActivityExecutionId);
         Assert.False(root.CommandMetadata.ContainsKey(RuntimeMetadataKeys.CheckpointRequirement));
         var successor = await fixture.Target.ReconcileAsync(fixture.Item, fixture.Recipient, seal);
@@ -214,7 +214,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         Assert.Equal(start.WorkflowExecutionId, state!.EvidenceId);
 
         static RuntimeIngressCommandOrigin payloadOrigin(RuntimeDispatchSeal captured) =>
-            NativeIngressTargetEvidence.ReadEnvelope(captured).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.StartAuthority!.StandaloneTrigger!;
+            NativeIngressTargetEvidence.ReadEnvelope(captured).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!.StartAuthority!.StandaloneTrigger!;
     }
 
     [Fact]
@@ -223,12 +223,12 @@ public sealed class NativeStandaloneTriggerTargetTests
         using var fixture = await Fixture.CreateAsync();
         var seal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(seal);
         var start = StartItem(NativeIngressTargetEvidence.ReadEnvelope(seal));
-        var expected = NativeIngressStartLineage.Build(start, start.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!, "root");
-        var json = expected.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
-        json["PostCommitIntents"] = JsonSerializer.SerializeToElement(Array.Empty<RuntimePostCommitIntent>());
+        var expected = NativeIngressStartLineage.Build(start, start.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!, "root");
+        var json = expected.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
+        json["postCommitIntents"] = JsonSerializer.SerializeToElement(Array.Empty<RuntimePostCommitIntent>(), options: Elsa.Serialization.Core.JsonBaseline.Options);
         var corrupt = new RuntimeSchedulerWorkItem(expected.WorkItemId, expected.WorkflowExecutionId, expected.CommandId,
             expected.CommandKind, expected.EnvelopeId, expected.IdempotencyKey, expected.EnqueuedAt, expected.RecordedAt,
-            expected.Sequence, JsonSerializer.SerializeToElement(json), expected.CommandMetadata, expected.EnvelopeMetadata);
+            expected.Sequence, JsonSerializer.SerializeToElement(json, options: Elsa.Serialization.Core.JsonBaseline.Options), expected.CommandMetadata, expected.EnvelopeMetadata);
         await fixture.Queue.EnqueueAsync(corrupt);
         await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.Target.ReconcileAsync(fixture.Item, fixture.Recipient, seal).AsTask());
     }
@@ -257,7 +257,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         using var fixture = await Fixture.CreateAsync();
         var seal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(seal);
         var origin = NativeIngressTargetEvidence.ReadEnvelope(seal).Command.Payload!.Value
-            .Deserialize<WorkflowExecutionStartCommandPayload>()!.StartAuthority!.StandaloneTrigger!;
+            .Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!.StartAuthority!.StandaloneTrigger!;
         var alleged = new WorkflowExecutionState(fixture.Recipient.StartIdentity.WorkflowExecutionId, fixture.Recipient.Material,
             WorkflowExecutionStatus.Running, null, Now, Now, Now, null, null, null, "tenant", new Dictionary<string, string>())
         { IngressOrigin = origin, RunKind = WorkflowRunKind.PublishedRun, Partition = fixture.Recipient.Partition,
@@ -415,11 +415,11 @@ public sealed class NativeStandaloneTriggerTargetTests
         var parent = (await fixture.Executions.FindAsync(parentStart.WorkflowExecutionId))!;
         var scope = fixture.Recipient.StartIdentity.Scope;
         var childPin = new WorkflowExecutableIdentity("child-artifact", "child-definition", "child-version", "1", "child-hash");
-        var node = new ExecutableNode("child-root", "child-root", "test", "1", "test", JsonSerializer.SerializeToElement(new { }),
+        var node = new ExecutableNode("child-root", "child-root", "test", "1", "test", JsonSerializer.SerializeToElement(new { }, options: Elsa.Serialization.Core.JsonBaseline.Options),
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
         await fixture.Executables.SaveAsync(new(childPin, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now,
-            new Dictionary<string, string>(), new WorkflowExecutableInputContract(1, [new("DefaultCode", new("String"), false, JsonSerializer.SerializeToElement("default"))]), [], IncidentStrategyBuiltIns.FaultReference));
-        var intent = new RuntimePostCommitIntent("send", parent.WorkflowExecutionId, "publish", Now, null, "saved-child-key", JsonSerializer.SerializeToElement(new { }));
+            new Dictionary<string, string>(), new WorkflowExecutableInputContract(1, [new("DefaultCode", new("String"), false, JsonSerializer.SerializeToElement("default", options: Elsa.Serialization.Core.JsonBaseline.Options))]), [], IncidentStrategyBuiltIns.FaultReference));
+        var intent = new RuntimePostCommitIntent("send", parent.WorkflowExecutionId, "publish", Now, null, "saved-child-key", JsonSerializer.SerializeToElement(new { }, options: Elsa.Serialization.Core.JsonBaseline.Options));
         const string sourceId = "saved-child-source:send";
         var fingerprint = RuntimeCheckpointCommitFingerprint.ComputeIntent(intent);
         var binding = new WorkflowTriggerBinding("ordinary-binding", childPin.ArtifactId, childPin.DefinitionId, childPin.ArtifactVersion,
@@ -427,12 +427,12 @@ public sealed class NativeStandaloneTriggerTargetTests
         var snapshot = new StimulusDeliverySnapshot(1, sourceId, fingerprint, StimulusDeliveryScope.From(parent, scope), Now, "event", "named",
             [new(binding, childPin, (WorkflowExecutableSourceProvenance?)null)], [], StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
         // One workflow source owns an independent subscription and an ordinary saved start.
-        var independentJson = JsonSerializer.SerializeToElement(fixture.Recipient).Deserialize<Dictionary<string, JsonElement>>()!;
-        independentJson[nameof(RuntimeSubscriptionRecipient.StartIdentity)] = JsonSerializer.SerializeToElement(new RuntimeSubscriptionStartIdentity(1, scope, sourceId, fixture.Recipient.SubscriptionId));
-        var independent = JsonSerializer.SerializeToElement(independentJson).Deserialize<RuntimeSubscriptionRecipient>()!;
+        var independentJson = JsonSerializer.SerializeToElement(fixture.Recipient, options: Elsa.Serialization.Core.JsonBaseline.Options).Deserialize<Dictionary<string, JsonElement>>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
+        independentJson["startIdentity"] = JsonSerializer.SerializeToElement(new RuntimeSubscriptionStartIdentity(1, scope, sourceId, fixture.Recipient.SubscriptionId), options: Elsa.Serialization.Core.JsonBaseline.Options);
+        var independent = JsonSerializer.SerializeToElement(independentJson, options: Elsa.Serialization.Core.JsonBaseline.Options).Deserialize<RuntimeSubscriptionRecipient>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         var combined = new RuntimeSubscriptionDelivery(1, sourceId, fingerprint, scope, [independent], [],
             [new(independent.RecipientId, RuntimeRecipientPhase.Pending)], resourceCaptures:
-            [new("trigger", 1, 1, 1, [independent.SubscriptionId], JsonSerializer.SerializeToElement(new { }))]);
+            [new("trigger", 1, 1, 1, [independent.SubscriptionId], JsonSerializer.SerializeToElement(new { }, options: Elsa.Serialization.Core.JsonBaseline.Options))]);
         // Physical accepted-cohort fixture; seal through the real source port before ending its claim.
         fixture.Executions.CheckpointState.OutboxItems[sourceId] = new(sourceId, intent, RuntimePostCommitOutboxStatus.Delivering,
             Now, Now, null, 1, "previous-owner", Now, null, null, null, 1, Now.AddMinutes(5), 1, scope, snapshot, null, 1, combined);
@@ -441,7 +441,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         var key = KeyedWorkflowStartIdentity.For("saved-child-key", childPin.ArtifactId);
         var savedOrigin = new RuntimeStimulusDeliveryOrigin(1, scope, sourceId, fingerprint, binding.TriggerBindingId);
         var payload = new WorkflowExecutionStartCommandPayload(childPin, childPin.ArtifactId,
-            new Dictionary<string, JsonElement>(), new Dictionary<string, JsonElement> { ["DefaultCode"] = JsonSerializer.SerializeToElement("default") }, intent.Payload, node.ExecutableNodeId,
+            new Dictionary<string, JsonElement>(), new Dictionary<string, JsonElement> { ["DefaultCode"] = JsonSerializer.SerializeToElement("default", options: Elsa.Serialization.Core.JsonBaseline.Options) }, intent.Payload, node.ExecutableNodeId,
             WorkflowRunKind.PublishedRun, null, null, null, tenant, fixture.Recipient.Partition, new("publish", "publish"),
             new WorkflowExecutableStartAuthority(WorkflowExecutableStartAuthorityKind.StimulusDelivery, null,
                 new WorkflowExecutableStimulusDeliveryAuthority(sourceId, fingerprint, scope, "previous-owner", 1, binding.TriggerBindingId)), 0)
@@ -453,22 +453,22 @@ public sealed class NativeStandaloneTriggerTargetTests
                 HistoryCaptureEnabledAtAdmission = historyEnabled
             };
         var authority = payload.StartAuthority!.StimulusDelivery!;
-        var initialMetadata = new Dictionary<string, string> { [SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin) };
+        var initialMetadata = new Dictionary<string, string> { [SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin, options: Elsa.Serialization.Core.JsonBaseline.Options) };
         var proposed = new WorkflowExecutionCommandEnvelope(key.EnvelopeId, key.WorkflowExecutionId,
-            new(key.CommandId, key.WorkflowExecutionId, WorkflowExecutionCommandKind.Start, Now, JsonSerializer.SerializeToElement(payload), initialMetadata),
+            new(key.CommandId, key.WorkflowExecutionId, WorkflowExecutionCommandKind.Start, Now, JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options), initialMetadata),
             key.StartKey, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now, metadata: initialMetadata, partition: fixture.Recipient.Partition);
         foreach (var changed in new Dictionary<string, JsonElement>
         {
-            [nameof(WorkflowExecutionStartCommandPayload.Authority)] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("other-system", "other-initiator")),
-            [nameof(WorkflowExecutionStartCommandPayload.Variables)] = JsonSerializer.SerializeToElement(new { forged = "variable" }),
-            [nameof(WorkflowExecutionStartCommandPayload.Inputs)] = JsonSerializer.SerializeToElement(new { forged = "input" }),
-            [nameof(WorkflowExecutionStartCommandPayload.StimulusInput)] = JsonSerializer.SerializeToElement(new { forged = "stimulus" })
+            [nameof(WorkflowExecutionStartCommandPayload.Authority)] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("other-system", "other-initiator"), options: Elsa.Serialization.Core.JsonBaseline.Options),
+            [nameof(WorkflowExecutionStartCommandPayload.Variables)] = JsonSerializer.SerializeToElement(new { forged = "variable" }, options: Elsa.Serialization.Core.JsonBaseline.Options),
+            [nameof(WorkflowExecutionStartCommandPayload.Inputs)] = JsonSerializer.SerializeToElement(new { forged = "input" }, options: Elsa.Serialization.Core.JsonBaseline.Options),
+            [nameof(WorkflowExecutionStartCommandPayload.StimulusInput)] = JsonSerializer.SerializeToElement(new { forged = "stimulus" }, options: Elsa.Serialization.Core.JsonBaseline.Options)
         })
         {
-            var changedPayload = proposed.Command.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
-            changedPayload[changed.Key] = changed.Value;
+            var changedPayload = proposed.Command.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
+            changedPayload[JsonNamingPolicy.CamelCase.ConvertName(changed.Key)] = changed.Value;
             var tampered = new WorkflowExecutionCommandEnvelope(proposed.EnvelopeId, proposed.WorkflowExecutionId,
-                proposed.Command with { Payload = JsonSerializer.SerializeToElement(changedPayload) }, proposed.IdempotencyKey,
+                proposed.Command with { Payload = JsonSerializer.SerializeToElement(changedPayload, options: Elsa.Serialization.Core.JsonBaseline.Options) }, proposed.IdempotencyKey,
                 proposed.DeliveryMode, proposed.EnqueuedAt, metadata: proposed.Metadata, partition: proposed.Partition);
             var refused = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() => fixture.CheckpointStore.SealSavedStartAsync(authority, tampered).AsTask());
             Assert.IsType<InvalidDataException>(refused.InnerException);
@@ -502,7 +502,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         using var childDrain = fixture.BeginCheckpoint(key.WorkflowExecutionId);
         await fixture.StartHandler.HandleAsync(start);
         var checkpoint = Assert.Single((await fixture.SelectedQueue.ListAsync(new(key.WorkflowExecutionId))).Items);
-        var handed = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var handed = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(historyEnabled, handed.HistoryCaptureEnabledAtAdmission);
         Assert.Equal(payload.HistoryCapturePolicy is null, handed.HistoryCapturePolicy is null);
         var physicalContext = new WorkflowRuntimePipelineContext(checkpoint);
@@ -644,21 +644,22 @@ public sealed class NativeStandaloneTriggerTargetTests
         }
         foreach (var changed in new Dictionary<string, JsonElement>
         {
-            [nameof(RuntimeCheckpointCommandPayload.CheckpointName)] = JsonSerializer.SerializeToElement("OtherCheckpoint"),
-            [nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin)] = JsonSerializer.SerializeToElement<object?>(null),
+            [nameof(RuntimeCheckpointCommandPayload.CheckpointName)] = JsonSerializer.SerializeToElement("OtherCheckpoint", options: Elsa.Serialization.Core.JsonBaseline.Options),
+            [nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin)] = JsonSerializer.SerializeToElement<object?>(null, options: Elsa.Serialization.Core.JsonBaseline.Options),
             [nameof(RuntimeCheckpointCommandPayload.PostCommitIntents)] = TamperedRoot(checkpoint),
-            [nameof(RuntimeCheckpointCommandPayload.Authority)] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("different-system", "different-initiator")),
-            [nameof(RuntimeCheckpointCommandPayload.SeedInputs)] = JsonSerializer.SerializeToElement(new { forged = "input" }),
-            [nameof(RuntimeCheckpointCommandPayload.SeedStimulusInput)] = JsonSerializer.SerializeToElement(new { forged = "stimulus" }),
-            [nameof(RuntimeCheckpointCommandPayload.SeedTriggerMetadata)] = JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["forged"] = "metadata" })
+            [nameof(RuntimeCheckpointCommandPayload.Authority)] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("different-system", "different-initiator"), options: Elsa.Serialization.Core.JsonBaseline.Options),
+            [nameof(RuntimeCheckpointCommandPayload.SeedInputs)] = JsonSerializer.SerializeToElement(new { forged = "input" }, options: Elsa.Serialization.Core.JsonBaseline.Options),
+            [nameof(RuntimeCheckpointCommandPayload.SeedStimulusInput)] = JsonSerializer.SerializeToElement(new { forged = "stimulus" }, options: Elsa.Serialization.Core.JsonBaseline.Options),
+            [nameof(RuntimeCheckpointCommandPayload.SeedTriggerMetadata)] = JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["forged"] = "metadata" }, options: Elsa.Serialization.Core.JsonBaseline.Options)
         })
         {
-            var changedPayload = checkpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
-            changedPayload[changed.Key] = changed.Value;
+            var changedPayload = checkpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
+            changedPayload[JsonNamingPolicy.CamelCase.ConvertName(changed.Key)] = changed.Value;
             var changedWork = new RuntimeSchedulerWorkItem(checkpoint.WorkItemId, checkpoint.WorkflowExecutionId, checkpoint.CommandId,
                 checkpoint.CommandKind, checkpoint.EnvelopeId, checkpoint.IdempotencyKey, checkpoint.EnqueuedAt, checkpoint.RecordedAt,
-                checkpoint.Sequence, JsonSerializer.SerializeToElement(changedPayload), checkpoint.CommandMetadata, checkpoint.EnvelopeMetadata);
+                checkpoint.Sequence, JsonSerializer.SerializeToElement(changedPayload, options: Elsa.Serialization.Core.JsonBaseline.Options), checkpoint.CommandMetadata, checkpoint.EnvelopeMetadata);
             var refusal = await Record.ExceptionAsync(() => fixture.CheckpointHandler.HandleAsync(changedWork).AsTask());
+            Assert.True(refusal is not null, "Tampered saved checkpoint field was accepted: " + changed.Key);
             if (changed.Key is nameof(RuntimeCheckpointCommandPayload.CheckpointName) or nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin))
             {
                 var domain = Assert.IsType<RuntimeCheckpointCommitValidationException>(refusal);
@@ -668,12 +669,12 @@ public sealed class NativeStandaloneTriggerTargetTests
             else Assert.IsType<InvalidDataException>(refusal);
             Assert.Null(await fixture.Executions.FindAsync(key.WorkflowExecutionId));
         }
-        var forgedJson = checkpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
-        forgedJson[nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin)] = JsonSerializer.SerializeToElement(new RuntimeStimulusDeliveryOrigin(
-            1, scope, sourceId, fingerprint, "not-in-cohort"));
+        var forgedJson = checkpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
+        forgedJson["stimulusDeliveryOrigin"] = JsonSerializer.SerializeToElement(new RuntimeStimulusDeliveryOrigin(
+            1, scope, sourceId, fingerprint, "not-in-cohort"), options: Elsa.Serialization.Core.JsonBaseline.Options);
         var forged = new RuntimeSchedulerWorkItem(checkpoint.WorkItemId, checkpoint.WorkflowExecutionId, checkpoint.CommandId,
             checkpoint.CommandKind, checkpoint.EnvelopeId, checkpoint.IdempotencyKey, checkpoint.EnqueuedAt, checkpoint.RecordedAt,
-            checkpoint.Sequence, JsonSerializer.SerializeToElement(forgedJson), checkpoint.CommandMetadata, checkpoint.EnvelopeMetadata);
+            checkpoint.Sequence, JsonSerializer.SerializeToElement(forgedJson, options: Elsa.Serialization.Core.JsonBaseline.Options), checkpoint.CommandMetadata, checkpoint.EnvelopeMetadata);
         var forgedRefusal = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => fixture.CheckpointHandler.HandleAsync(forged).AsTask());
         Assert.IsType<InvalidDataException>(forgedRefusal.InnerException);
         Assert.Null(await fixture.Executions.FindAsync(key.WorkflowExecutionId));
@@ -681,8 +682,8 @@ public sealed class NativeStandaloneTriggerTargetTests
         await fixture.CheckpointHandler.HandleAsync(checkpoint);
         await fixture.Queue.DeleteAsync(key.WorkflowExecutionId, checkpoint.WorkItemId);
         var admittedCommit = Assert.Single(fixture.CheckpointStore.ListCommits(), item => item.Commit.WorkflowExecutionId == key.WorkflowExecutionId).Commit;
-        Assert.Equal(JsonSerializer.Serialize(savedOrigin), admittedCommit.Metadata[SavedStimulusStartSeal.OriginMetadata]);
-        var rootWork = admittedCommit.PostCommitIntents.Single().Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(JsonSerializer.Serialize(savedOrigin, options: Elsa.Serialization.Core.JsonBaseline.Options), admittedCommit.Metadata[SavedStimulusStartSeal.OriginMetadata]);
+        var rootWork = admittedCommit.PostCommitIntents.Single().Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.False(rootWork.CommandMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata));
         Assert.False(rootWork.EnvelopeMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata));
         var child = (await fixture.Executions.FindAsync(key.WorkflowExecutionId))!;
@@ -710,15 +711,15 @@ public sealed class NativeStandaloneTriggerTargetTests
         var ambient = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
         using var owned = ambient.Push(lease);
         var start = StartItem(envelope);
-        var initial = NativeIngressStartLineage.Build(start, envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!,
-            (await fixture.Executables.FindAsync(envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.PinnedExecutable.ArtifactId))!.RootActivity.ExecutableNodeId);
+        var initial = NativeIngressStartLineage.Build(start, envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!,
+            (await fixture.Executables.FindAsync(envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!.PinnedExecutable.ArtifactId))!.RootActivity.ExecutableNodeId);
         var work = failStart ? start : initial;
         // A physical parked-decision fixture follows the same work ids/kinds as the real start/checkpoint handlers.
         var record = new RuntimeSchedulerPoisonRecord(id, work.WorkItemId, work.CommandKind,
             failStart ? WorkflowStartSchedulerWorkHandler.HandlerName : WorkflowCheckpointSchedulerWorkHandler.HandlerName,
             new RuntimeFaultInfo("System.InvalidOperationException", "initial checkpoint failed"), 1,
             RuntimeSchedulerPoisonDisposition.Poisoned, fixture.Clock.GetUtcNow(), fixture.Clock.GetUtcNow(), null,
-            new Dictionary<string, string> { [InitialStartFaultAuthority.WorkSnapshotMetadata] = JsonSerializer.Serialize(work) });
+            new Dictionary<string, string> { [InitialStartFaultAuthority.WorkSnapshotMetadata] = JsonSerializer.Serialize(work, options: Elsa.Serialization.Core.JsonBaseline.Options) });
         await poison.RecordFencedAsync(record, lease.ToFence());
         var capture = new FaultCaptureStore();
         var observer = new PoisonedSchedulerWorkIncidentObserver(poison, fixture.Incidents,
@@ -739,7 +740,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         Assert.False(unsupported.Called);
         var changes = candidate.StateChanges;
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
-        var unwanted = new RuntimePostCommitIntent("unrelated", id, "publish", fixture.Clock.GetUtcNow(), null, "unrelated", JsonSerializer.SerializeToElement("bad"));
+        var unwanted = new RuntimePostCommitIntent("unrelated", id, "publish", fixture.Clock.GetUtcNow(), null, "unrelated", JsonSerializer.SerializeToElement("bad", options: Elsa.Serialization.Core.JsonBaseline.Options));
         var extra = RuntimePostCommitOutboxItems.CreatePendingChanges(candidate with { PostCommitIntents = [unwanted] });
         foreach (var refused in new[]
         {
@@ -763,7 +764,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         var state = (await fixture.Executions.FindAsync(id))!;
         Assert.Equal(WorkflowExecutionStatus.Faulted, state.Status);
         Assert.Equal(envelope.EnqueuedAt, state.CreatedAt); Assert.Equal(envelope.EnqueuedAt, state.StartedAt);
-        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.True(NativeIngressTargetEvidence.Equal(payload.StartAuthority?.StandaloneTrigger, state.IngressOrigin));
         Assert.True(NativeIngressTargetEvidence.Equal(payload.StimulusDeliveryOrigin, state.StimulusDeliveryOrigin));
         Assert.Equal(payload.PinnedSource, state.PinnedSource);
@@ -879,13 +880,13 @@ public sealed class NativeStandaloneTriggerTargetTests
             var fixture = new Fixture();
             var contract = new WorkflowExecutableInputContract(1, [new("AccountId", new("String"), true)]);
             var identity = new WorkflowExecutableIdentity("artifact", "producer-definition", "producer-version", "1", "hash");
-            var node = new ExecutableNode("root", "authored-root", "test", "1", "test", JsonSerializer.SerializeToElement(new { }),
+            var node = new ExecutableNode("root", "authored-root", "test", "1", "test", JsonSerializer.SerializeToElement(new { }, options: Elsa.Serialization.Core.JsonBaseline.Options),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
             await fixture.Executables.SaveAsync(new(identity, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now,
                 new Dictionary<string, string>(), contract, [], IncidentStrategyBuiltIns.FaultReference));
             var scope = new PersistenceScope("tenant"); var partition = new WorkflowExecutionPartition("tenant");
             var schema = new ValueTypeDescriptor("Test.Payload", schemaVersion: 1);
-            var payload = JsonSerializer.SerializeToElement(new { payload = new { account = inputValue } });
+            var payload = JsonSerializer.SerializeToElement(new { payload = new { account = inputValue } }, options: Elsa.Serialization.Core.JsonBaseline.Options);
             var authority = new WorkflowExecutionAuthoritySnapshot("standalone-trigger", "source-actor");
             var fingerprint = RuntimeStandaloneIngressSource.ComputeRequestFingerprint(scope, tenant, "trigger", "test", "occurrence", schema, payload, authority);
             var source = new RuntimeStandaloneIngressSource(1, "admission", "dispatch", Now, scope, tenant, partition,
@@ -893,7 +894,7 @@ public sealed class NativeStandaloneTriggerTargetTests
             fixture.Recipient = new("recipient", "subscription", 1, 1, "definition", "native", "slot", 1, "activation", identity,
                 new("reference", "Published", "publication", "1", "definition", "version", "1", "activation", "slot"),
                 RuntimeIngressAdmission.ComputeInputContractFingerprint(contract), 1, 1,
-                new Dictionary<string, JsonElement> { ["AccountId"] = JsonSerializer.SerializeToElement(inputValue) }, authority,
+                new Dictionary<string, JsonElement> { ["AccountId"] = JsonSerializer.SerializeToElement(inputValue, options: Elsa.Serialization.Core.JsonBaseline.Options) }, authority,
                 tenant, partition, new(1, scope, source.OutboxItemId, "subscription"));
             var delivery = new RuntimeSubscriptionDelivery(1, source.OutboxItemId, source.Fingerprint, scope, [fixture.Recipient], [],
                 [new(fixture.Recipient.RecipientId, RuntimeRecipientPhase.Pending)]);
@@ -933,10 +934,10 @@ public sealed class NativeStandaloneTriggerTargetTests
     }
     private static JsonElement TamperedRoot(RuntimeSchedulerWorkItem checkpoint)
     {
-        var intent = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!.PostCommitIntents.Single();
-        var json = JsonSerializer.SerializeToElement(intent).Deserialize<Dictionary<string, JsonElement>>()!;
-        json[nameof(RuntimePostCommitIntent.IntentId)] = JsonSerializer.SerializeToElement(intent.IntentId + ":forged");
-        return JsonSerializer.SerializeToElement(new[] { json });
+        var intent = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!.PostCommitIntents.Single();
+        var json = JsonSerializer.SerializeToElement(intent, options: Elsa.Serialization.Core.JsonBaseline.Options).Deserialize<Dictionary<string, JsonElement>>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
+        json["intentId"] = JsonSerializer.SerializeToElement(intent.IntentId + ":forged", options: Elsa.Serialization.Core.JsonBaseline.Options);
+        return JsonSerializer.SerializeToElement(new[] { json }, options: Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     private sealed class SavedEventAdapter : IStimulusDeliveryIntentAdapter

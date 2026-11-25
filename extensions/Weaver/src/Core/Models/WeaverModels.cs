@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Weaver.Core.Contracts;
 
@@ -332,9 +333,23 @@ public sealed record WeaverContextAttachment(
     WeaverContextSensitivity Sensitivity,
     string Scope,
     string Summary,
-    object? Content,
+    JsonElement? Content,
     IReadOnlyDictionary<string, string> References)
 {
+    private JsonElement? _content = SnapshotContent(Content);
+    public JsonElement? Content
+    {
+        get => _content;
+        init => _content = SnapshotContent(value);
+    }
+
+    private static JsonElement? SnapshotContent(JsonElement? value)
+    {
+        if (value is { ValueKind: JsonValueKind.Undefined })
+            throw new JsonException("Weaver context content must be defined JSON.");
+        return value?.Clone();
+    }
+
     /// <summary>Original source identity stamped by installed admission, never accepted from caller transport.</summary>
     public string? ContributorId { get; init; }
     public string ModuleId { get; init; } = string.Empty;
@@ -361,7 +376,7 @@ public sealed record WeaverActionProposal(
     WeaverRisk Risk,
     string? BaseRevision,
     IReadOnlyCollection<WeaverActionChange> Changes,
-    IReadOnlyCollection<IReadOnlyDictionary<string, object?>> Operations,
+    IReadOnlyCollection<JsonElement> Operations,
     IReadOnlyCollection<string> Risks,
     string? Rollback,
     IReadOnlyCollection<string> RequiredPermissions,
@@ -374,6 +389,26 @@ public sealed record WeaverActionProposal(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
+    private IReadOnlyCollection<JsonElement> _operations = SnapshotOperations(Operations);
+    public IReadOnlyCollection<JsonElement> Operations
+    {
+        get => _operations;
+        init => _operations = SnapshotOperations(value);
+    }
+
+    private static IReadOnlyCollection<JsonElement> SnapshotOperations(IReadOnlyCollection<JsonElement> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        var snapshot = new List<JsonElement>();
+        foreach (var value in values)
+        {
+            if (value.ValueKind != JsonValueKind.Object)
+                throw new JsonException("A Weaver proposal operation must be a JSON object.");
+            snapshot.Add(value.Clone());
+        }
+        return snapshot.AsReadOnly();
+    }
+
     public WeaverPreparedToolInvocation? PreparedInvocation { get; init; }
     public WeaverResourceTarget? ResourceTarget => PreparedInvocation?.Target;
     public string? ResultRendererId { get; init; }
@@ -687,7 +722,7 @@ public sealed record WeaverProposalRecord(WeaverActionProposal Proposal)
 /// both: <see cref="Canonical"/> is the canonical JSON text (sorted keys, raw scalars) the digest was taken over, and a
 /// store keeps it byte-identical, so a recorded fingerprint stays verifiable after any number of restarts.
 /// </summary>
-/// <param name="Digest">The lowercase hexadecimal SHA-256 of <see cref="Canonical"/> as UTF-8.</param>
+/// <param name="Digest">The lowercase JsonHashInput digest of the JSON value in <see cref="Canonical"/>.</param>
 public sealed record WeaverDisclosureSnapshotRecord(string Digest, string Canonical)
 {
     /// <summary>The snapshot's recorded size in bytes; it counts toward the session's disclosure size limit.</summary>

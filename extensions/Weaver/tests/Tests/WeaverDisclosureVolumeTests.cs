@@ -331,7 +331,7 @@ public sealed class WeaverDisclosureVolumeTests(ITestOutputHelper output)
 
         private static WeaverContextAttachment Attachment(string value)
             => new("evidence", Module, "resource-1", "Owned resource", "volume.resource", WeaverContextSensitivity.Internal, "selection",
-                "Evidence", new { value = Marker + value }, new Dictionary<string, string>())
+                "Evidence", WeaverJsonData.From(new { value = Marker + value }), new Dictionary<string, string>())
             { ModuleId = Module, Target = new(Module, "resource", "resource-1", "revision-1") };
     }
 

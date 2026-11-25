@@ -121,7 +121,7 @@ public sealed class DispatchWorkflowDesignTests
                     activityVersionId,
                     [new ArgumentState(
                         nameof(Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow.WorkflowDefinitionId),
-                        new ArgumentValue("child-definition", "Literal"),
+                        ArgumentValue.FromClr("child-definition", "Literal"),
                         null,
                         null,
                         null,

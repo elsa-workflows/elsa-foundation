@@ -14,7 +14,7 @@ public sealed class RuntimeConfigurationCollectibilityTests
     public void Runtime_projection_releases_module_owned_configuration_metadata()
     {
         var (type, assembly, json) = SerializeModuleConfiguration();
-        Assert.Equal("{\"extensions\":{\"acme\":{\"Label\":\"module-owned\"}}}", json);
+        Assert.Equal("{\"extensions\":{\"acme\":{\"label\":\"module-owned\"}}}", json);
         var timeout = Stopwatch.StartNew();
         while ((type.IsAlive || assembly.IsAlive) && timeout.Elapsed < TimeSpan.FromSeconds(10))
         {

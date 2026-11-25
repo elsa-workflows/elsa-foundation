@@ -8,7 +8,7 @@ namespace Elsa.Etl.Design.Api;
 
 internal sealed class EtlCamelCaseEnumConverter() : JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false);
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata,
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata,
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     Converters = new[] { typeof(EtlCamelCaseEnumConverter), typeof(EtlPipelineV2JsonConverter) })]
 [JsonSerializable(typeof(EtlPageRequest))]
@@ -34,13 +34,19 @@ internal sealed class EtlCamelCaseEnumConverter() : JsonStringEnumConverter(Json
 [JsonSerializable(typeof(EtlApiProblem))]
 internal partial class EtlDesignJsonContext : JsonSerializerContext
 {
-    internal static EtlDesignJsonContext WireContext => Wire.Context;
+    internal static EtlDesignJsonContext WireContext { get; } = new(CreateWireOptions());
 
-    // Initialize after the generated context's own static defaults, irrespective of partial-file order.
-    private static class Wire
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
     {
-        internal static readonly EtlDesignJsonContext Context = new(new JsonSerializerOptions(Default.Options));
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        options.Converters.Add(new EtlCamelCaseEnumConverter());
+        options.Converters.Add(new EtlPipelineV2JsonConverter());
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
     }
+
+
 }
 
 /// <summary>Uses the bounded canonical v2 codec for API pipeline input and output.</summary>
@@ -58,5 +64,5 @@ internal sealed class EtlPipelineV2JsonConverter : JsonConverter<EtlPipelineV2>
     }
 
     public override void Write(Utf8JsonWriter writer, EtlPipelineV2 value, JsonSerializerOptions options) =>
-        EtlArtifactV2Json.Write(value).WriteTo(writer);
+        JsonSerializer.Serialize(writer, EtlArtifactV2Json.Write(value), Elsa.Serialization.Core.JsonBaseline.Options);
 }

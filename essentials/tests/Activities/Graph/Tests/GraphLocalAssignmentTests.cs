@@ -25,8 +25,8 @@ public sealed partial class GraphActivityProviderTests
         {
             ScopedVariables = new Dictionary<string, IReadOnlyCollection<VariableDefinition>>
             {
-                [bodyId] = [new("local", "Local", new("Decimal"), null, new ArgumentValue(0m, "Literal"))],
-                ["sibling"] = [new("local", "Sibling local", new("Decimal"), null, new ArgumentValue(0m, "Literal"))]
+                [bodyId] = [new("local", "Local", new("Decimal"), null, ArgumentValue.FromClr(0m, "Literal"))],
+                ["sibling"] = [new("local", "Sibling local", new("Decimal"), null, ArgumentValue.FromClr(0m, "Literal"))]
             }
         }, new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
         var payload = JsonNode.Parse("""

@@ -39,7 +39,7 @@ public static class InvokeHandlerInterruptions
 
     private static bool Invokes(RuntimeSchedulerWorkItem workItem, string executableNodeId) =>
         workItem.Payload is { } payload &&
-        payload.TryGetProperty(nameof(RuntimeInvokeActivityCommandPayload.ExecutableNodeId), out var nodeId) &&
+        payload.TryGetProperty("executableNodeId", out var nodeId) &&
         nodeId.GetString() == executableNodeId;
 
     private sealed class OneTime

@@ -179,6 +179,97 @@ public sealed class RuntimeCheckpointCommitTests
             RuntimeCheckpointCommitFingerprint.Compute(second));
     }
 
+    [Theory]
+    [InlineData("workflowStateEffects", "[\"outputs\",\"instanceName\"]", "[ \"outputs\", \"instanceName\" ]", true)]
+    [InlineData("workflowStateEffects", "[\"outputs\",\"instanceName\"]", "[\"instanceName\",\"outputs\"]", false)]
+    [InlineData("workflowStateEffects", "[]", "null", false)]
+    [InlineData("workflowStateEffectReceipts", "[{\"Transition\":\"Completion\",\"AttemptId\":\"Ren\\u00e9\"}]", "[ {\"AttemptId\":\"René\",\"Transition\":\"Completion\"} ]", true)]
+    [InlineData("workflowStateEffectReceipts", "[{\"AttemptId\":null}]", "[{}]", false)]
+    [InlineData("workflowStateEffectReceipts", "[{\"future\":9007199254740993}]", "[{\"future\":9007199254740992}]", false)]
+    [InlineData("ordinary", "{}", "{ }", false)]
+    public void Checkpoint_and_actual_alteration_revision_interpret_only_owned_json_metadata(string key, string first, string second, bool equal)
+    {
+        var originalMetadata = new Dictionary<string, string> { [key] = first, ["opaque\ud800"] = "value\ud801" };
+        var before = _activityState with { Metadata = originalMetadata };
+        var after = before with { Metadata = new Dictionary<string, string>(originalMetadata) { [key] = second } };
+        string Hash(ActivityExecutionState state) => RuntimeCheckpointCommitFingerprint.Compute(
+            NewCommit(RuntimeCheckpointNames.ActivityCompleted) with { StateChanges = NewStateChanges(activityState: state) });
+        Assert.Equal(equal, Hash(before) == Hash(after));
+        Assert.Equal(equal, AlterationRevision(before) == AlterationRevision(after));
+        Assert.Equal(first, originalMetadata[key]);
+        Assert.Equal("value\ud801", originalMetadata["opaque\ud800"]);
+        if (key != "ordinary")
+        {
+            var missing = before with { Metadata = new Dictionary<string, string>() };
+            Assert.NotEqual(Hash(missing), Hash(before));
+            Assert.NotEqual(AlterationRevision(missing), AlterationRevision(before));
+        }
+    }
+
+    [Theory]
+    [InlineData("workflowStateEffects", "sensitive-broken-json")]
+    [InlineData("workflowStateEffectReceipts", "{\"sensitive\":")]
+    [InlineData("workflowStateEffectReceipts", "{\"sensitive\":\"\\ud800\"}")]
+    public void Known_metadata_canonical_failures_refuse_both_hash_consumers_without_disclosing_or_mutating_text(string key, string raw)
+    {
+        var state = _activityState with { Metadata = new Dictionary<string, string> { [key] = raw } };
+        var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with { StateChanges = NewStateChanges(activityState: state) };
+        var failure = Assert.Throws<JsonException>(() => RuntimeCheckpointCommitFingerprint.Compute(commit));
+        Assert.DoesNotContain("sensitive", failure.ToString(), StringComparison.Ordinal);
+        Assert.Throws<JsonException>(() => AlterationRevision(state));
+        Assert.Equal(raw, state.Metadata[key]);
+    }
+
+    private static string AlterationRevision(ActivityExecutionState state)
+    {
+        var type = typeof(WorkflowExecutableHasher).Assembly.GetType("Elsa.Workflows.Runtime.Services.Alterations.WorkflowAlterationCapturedConcurrencyValidator", throwOnError: true)!;
+        var capture = type.GetMethod("CaptureActivities")!.CreateDelegate<Func<IReadOnlyCollection<ActivityExecutionState>, IReadOnlyDictionary<string, string>>>();
+        return capture([state])[state.Execution.ActivityExecutionId];
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Activity_metadata_hashes_refuse_literal_unpaired_UTF16_without_rewriting_it(bool key)
+    {
+        var raw = key ? "{\"\ud800\":\"sensitive\"}" : "{\"sensitive\":\"\ud800\"}";
+        foreach (var metadataKey in new[] { StepWorkflowStateEffects.MetadataKey, StepWorkflowStateEffects.ReceiptsMetadataKey })
+        {
+            var state = _activityState with { Metadata = new Dictionary<string, string> { [metadataKey] = raw } };
+            var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with { StateChanges = NewStateChanges(activityState: state) };
+            Assert.Throws<JsonException>(() => RuntimeCheckpointCommitFingerprint.Compute(commit));
+            Assert.Throws<JsonException>(() => AlterationRevision(state));
+            Assert.Equal(raw, state.Metadata[metadataKey]);
+        }
+    }
+
+    [Fact]
+    public void Cleanup_only_changes_participate_in_the_checkpoint_identity()
+    {
+        RuntimeCheckpointStateChangeSet Changes(string scope) => new(null, null, [], [], [], [], [],
+            activityScopeCleanups: [new("wfexec-1", scope, [], [], [], [])]);
+        var first = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with { StateChanges = Changes("scope-a") };
+        var changed = first with { StateChanges = Changes("scope-b") };
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(first), RuntimeCheckpointCommitFingerprint.Compute(changed));
+    }
+
+    [Fact]
+    public async Task An_absent_intent_payload_and_explicit_JSON_null_refuse_checkpoint_replay()
+    {
+        RuntimePostCommitIntent Intent(JsonElement? payload) => new("intent-1", "wfexec-1", "DispatchBookmarkRegistration", _now,
+            "actexec-1", "idempotent", payload);
+        var absent = Intent(null); var explicitNull = Intent(Json("null"));
+        Assert.False(absent.IsEquivalentTo(explicitNull));
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.ComputeIntent(absent), RuntimeCheckpointCommitFingerprint.ComputeIntent(explicitNull));
+        var first = NewCommit(RuntimeCheckpointNames.ActivityCompleted, [absent]);
+        var replay = NewCommit(RuntimeCheckpointNames.ActivityCompleted, [explicitNull]);
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(first), RuntimeCheckpointCommitFingerprint.Compute(replay));
+        var writer = new InMemoryRuntimeCheckpointCommitStore();
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        await writer.CommitAsync(first, decision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => writer.CommitAsync(replay, decision).AsTask());
+    }
+
     [Fact]
     public void RuntimeCheckpointCommitFingerprint_ExcludesExpectedFence()
     {

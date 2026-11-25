@@ -31,5 +31,5 @@ internal static class DynamicValueMaterializer
     private static JsonNode? MaterializeElement(JsonElement element) =>
         element.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
             ? null
-            : element.Deserialize<JsonNode>();
+            : element.Deserialize<JsonNode>(Elsa.Serialization.Core.JsonBaseline.Options);
 }

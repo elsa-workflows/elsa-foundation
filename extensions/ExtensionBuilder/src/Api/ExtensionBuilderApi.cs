@@ -11,12 +11,22 @@ namespace Elsa.ExtensionBuilder.Api;
 
 public static class ElsaExtensionBuilderApi
 {
+    private static readonly System.Text.Json.JsonSerializerOptions WireJson = CreateWireJson();
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.MakeReadOnly();
+        return options;
+    }
+
     private const string CallerItemKey = "__ElsaExtensionBuilderCaller";
     private const string ElsaIdentityRoleClaimType = "elsa.identity.role";
 
     public static IEndpointRouteBuilder MapElsaExtensionBuilderApi(this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/_elsa/extension-builder");
+        var group = endpoints.MapGroup("/_elsa/extension-builder").WithElsaJsonResponseHeaders();
         group.WithHostOwner("Elsa.Workbench")
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(
@@ -75,13 +85,13 @@ public static class ElsaExtensionBuilderApi
     }
 
     internal static IResult GetCapabilities(HttpContext httpContext, [FromServices] IExtensionBuilderService service) =>
-        Results.Ok(service.GetCapabilities(GetCaller(httpContext)));
+        Results.Json(service.GetCapabilities(GetCaller(httpContext)), options: WireJson);
 
     private static async Task<IResult> ListTemplatesAsync([FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
-        Results.Ok(await service.ListTemplatesAsync(cancellationToken));
+        Results.Json(await service.ListTemplatesAsync(cancellationToken), options: WireJson);
 
     private static async Task<IResult> ListRepositoriesAsync(HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
-        Results.Ok(await service.ListRepositoriesAsync(GetCaller(httpContext), cancellationToken));
+        Results.Json(await service.ListRepositoriesAsync(GetCaller(httpContext), cancellationToken), options: WireJson);
 
     private static async Task<IResult> CreateWorkspaceAsync(
         HttpContext httpContext,
@@ -91,11 +101,11 @@ public static class ElsaExtensionBuilderApi
     {
         try
         {
-            return Results.Ok(await service.CreateWorkspaceAsync(GetCaller(httpContext), request, cancellationToken));
+            return Results.Json(await service.CreateWorkspaceAsync(GetCaller(httpContext), request, cancellationToken), options: WireJson);
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
@@ -107,19 +117,19 @@ public static class ElsaExtensionBuilderApi
     {
         try
         {
-            return Results.Ok(await service.AttachServerLocalRepositoryAsync(GetCaller(httpContext), request, cancellationToken));
+            return Results.Json(await service.AttachServerLocalRepositoryAsync(GetCaller(httpContext), request, cancellationToken), options: WireJson);
         }
         catch (UnauthorizedAccessException ex)
         {
-            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), statusCode: StatusCodes.Status403Forbidden);
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), statusCode: StatusCodes.Status403Forbidden, options: WireJson);
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
@@ -131,28 +141,28 @@ public static class ElsaExtensionBuilderApi
     {
         try
         {
-            return Results.Ok(await service.CloneRepositoryAsync(GetCaller(httpContext), request, cancellationToken));
+            return Results.Json(await service.CloneRepositoryAsync(GetCaller(httpContext), request, cancellationToken), options: WireJson);
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
     private static async Task<IResult> ListWorkspacesAsync(HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
-        Results.Ok(await service.ListWorkspacesAsync(GetCaller(httpContext), cancellationToken));
+        Results.Json(await service.ListWorkspacesAsync(GetCaller(httpContext), cancellationToken), options: WireJson);
 
     private static async Task<IResult> GetWorkspaceAsync(string workspaceId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
         ToFoundResult(await service.GetWorkspaceAsync(GetCaller(httpContext), workspaceId, cancellationToken), $"Workspace '{workspaceId}' was not found.");
 
     private static async Task<IResult> DeleteWorkspaceAsync(string workspaceId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
         await service.DeleteWorkspaceAsync(GetCaller(httpContext), workspaceId, cancellationToken)
-            ? Results.Ok(new ExtensionBuilderDeleteResponse(true, "Workspace authoring state deleted. Promoted packages are unchanged."))
-            : Results.NotFound(new ExtensionBuilderErrorResponse($"Workspace '{workspaceId}' was not found."));
+            ? Results.Json(new ExtensionBuilderDeleteResponse(true, "Workspace authoring state deleted. Promoted packages are unchanged."), options: WireJson)
+            : Results.Json(new ExtensionBuilderErrorResponse($"Workspace '{workspaceId}' was not found."), options: WireJson, statusCode: 404);
 
     private static async Task<IResult> ListWorkingCopiesAsync(
         string workspaceId,
@@ -175,11 +185,11 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 409);
         }
     }
 
@@ -196,7 +206,7 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
@@ -208,7 +218,7 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
@@ -220,7 +230,7 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
@@ -232,15 +242,15 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
         catch (IOException ex)
         {
-            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 409);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 409);
         }
     }
 
@@ -252,11 +262,11 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
         catch (IOException ex)
         {
-            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 409);
         }
     }
 
@@ -265,12 +275,12 @@ public static class ElsaExtensionBuilderApi
         try
         {
             return await service.DeleteRepositoryFileAsync(GetCaller(httpContext), workspaceId, path, cancellationToken)
-                ? Results.Ok(new ExtensionBuilderDeleteResponse(true, "Repository file deleted."))
-                : Results.NotFound(new ExtensionBuilderErrorResponse($"Repository file '{path}' was not found."));
+                ? Results.Json(new ExtensionBuilderDeleteResponse(true, "Repository file deleted."), options: WireJson)
+                : Results.Json(new ExtensionBuilderErrorResponse($"Repository file '{path}' was not found."), options: WireJson, statusCode: 404);
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
@@ -291,7 +301,7 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
@@ -303,11 +313,11 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 409);
         }
     }
 
@@ -319,11 +329,11 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 409);
         }
     }
 
@@ -335,7 +345,7 @@ public static class ElsaExtensionBuilderApi
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 409);
         }
     }
 
@@ -347,11 +357,11 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 409);
         }
     }
 
@@ -363,7 +373,7 @@ public static class ElsaExtensionBuilderApi
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 409);
         }
     }
 
@@ -375,7 +385,7 @@ public static class ElsaExtensionBuilderApi
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 409);
         }
     }
 
@@ -387,11 +397,11 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 409);
         }
     }
 
@@ -404,15 +414,15 @@ public static class ElsaExtensionBuilderApi
     {
         try
         {
-            return Results.Ok(await service.CreateProjectAsync(GetCaller(httpContext), workspaceId, request, cancellationToken));
+            return Results.Json(await service.CreateProjectAsync(GetCaller(httpContext), workspaceId, request, cancellationToken), options: WireJson);
         }
         catch (KeyNotFoundException ex)
         {
-            return Results.NotFound(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 404);
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
@@ -421,8 +431,8 @@ public static class ElsaExtensionBuilderApi
 
     private static async Task<IResult> DeleteProjectAsync(string projectId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
         await service.DeleteProjectAsync(GetCaller(httpContext), projectId, cancellationToken)
-            ? Results.Ok(new ExtensionBuilderDeleteResponse(true, "Project authoring state deleted. Promoted packages are unchanged."))
-            : Results.NotFound(new ExtensionBuilderErrorResponse($"Project '{projectId}' was not found."));
+            ? Results.Json(new ExtensionBuilderDeleteResponse(true, "Project authoring state deleted. Promoted packages are unchanged."), options: WireJson)
+            : Results.Json(new ExtensionBuilderErrorResponse($"Project '{projectId}' was not found."), options: WireJson, statusCode: 404);
 
     private static async Task<IResult> ListProjectFilesAsync(string projectId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
         ToFoundResult(await service.ListProjectFilesAsync(GetCaller(httpContext), projectId, cancellationToken), $"Project '{projectId}' was not found.");
@@ -435,7 +445,7 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
@@ -447,7 +457,7 @@ public static class ElsaExtensionBuilderApi
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
@@ -456,12 +466,12 @@ public static class ElsaExtensionBuilderApi
         try
         {
             return await service.DeleteProjectFileAsync(GetCaller(httpContext), projectId, path, cancellationToken)
-                ? Results.Ok(new ExtensionBuilderDeleteResponse(true, "Project file deleted."))
-                : Results.NotFound(new ExtensionBuilderErrorResponse($"Project file '{path}' was not found."));
+                ? Results.Json(new ExtensionBuilderDeleteResponse(true, "Project file deleted."), options: WireJson)
+                : Results.Json(new ExtensionBuilderErrorResponse($"Project file '{path}' was not found."), options: WireJson, statusCode: 404);
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+            return Results.Json(new ExtensionBuilderErrorResponse(ex.Message), options: WireJson, statusCode: 400);
         }
     }
 
@@ -475,7 +485,7 @@ public static class ElsaExtensionBuilderApi
     {
         var log = await service.GetBuildLogAsync(GetCaller(httpContext), buildId, cancellationToken);
         return log is null
-            ? Results.NotFound(new ExtensionBuilderErrorResponse($"Build log for '{buildId}' was not found."))
+            ? Results.Json(new ExtensionBuilderErrorResponse($"Build log for '{buildId}' was not found."), options: WireJson, statusCode: 404)
             : Results.Text(log, "text/plain");
     }
 
@@ -483,7 +493,7 @@ public static class ElsaExtensionBuilderApi
     {
         var artifact = await service.GetBuildArtifactAsync(GetCaller(httpContext), buildId, cancellationToken);
         return artifact is null
-            ? Results.NotFound(new ExtensionBuilderErrorResponse($"Build artifact for '{buildId}' was not found."))
+            ? Results.Json(new ExtensionBuilderErrorResponse($"Build artifact for '{buildId}' was not found."), options: WireJson, statusCode: 404)
             : Results.File(artifact.Path, "application/octet-stream", artifact.FileName);
     }
 
@@ -564,7 +574,7 @@ public static class ElsaExtensionBuilderApi
     }
 
     private static IResult ToFoundResult<T>(T? value, string notFoundMessage) =>
-        value is null ? Results.NotFound(new ExtensionBuilderErrorResponse(notFoundMessage)) : Results.Ok(value);
+        value is null ? Results.Json(new ExtensionBuilderErrorResponse(notFoundMessage), options: WireJson, statusCode: 404) : Results.Json(value, options: WireJson);
 
     private static bool IsInRole(ClaimsPrincipal user, string role) =>
         user.IsInRole(role) ||

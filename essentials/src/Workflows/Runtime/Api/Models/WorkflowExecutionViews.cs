@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -119,7 +120,7 @@ public sealed record WorkflowInstanceDetailsView(
 /// policy's reason — never silently absent.
 /// </summary>
 public sealed record WorkflowOutputView(
-    object? Value,
+    JsonElement? Value,
     bool IsRedacted,
     string? RedactionReason,
     DateTimeOffset CapturedAt)
@@ -438,8 +439,8 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
     string CaptureState,
     RuntimeValueTypeDescriptor? Type,
     DateTimeOffset CapturedAt,
-    object? Payload,
-    object? Snapshot,
+    JsonElement? Payload,
+    JsonElement? Snapshot,
     string CaptureReason,
     bool IsSensitive,
     IReadOnlyDictionary<string, string> Metadata,

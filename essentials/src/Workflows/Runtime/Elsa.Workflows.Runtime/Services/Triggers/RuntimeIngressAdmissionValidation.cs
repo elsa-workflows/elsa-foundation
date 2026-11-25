@@ -61,7 +61,7 @@ internal static class RuntimeIngressAdmissionValidation
         if (request.WaitCandidate is { } waits)
         {
             if (!candidate.StandaloneIngress.CanonicalPayload.TryGetProperty("waitCandidate", out var waitEnvelope) ||
-                !Same(waitEnvelope, System.Text.Json.JsonSerializer.SerializeToElement(waits, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))))
+                !Same(waitEnvelope, System.Text.Json.JsonSerializer.SerializeToElement(waits, new System.Text.Json.JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options))))
                 throw new InvalidDataException("The ordinary wait candidate differs from its trusted captured source context.");
             if (request.Reservation is { } reservation && (reservation.StimulusType != waits.StimulusType || reservation.StimulusHash != waits.StimulusHash))
                 throw new InvalidDataException("The ordinary wait candidate differs from the exact protected source reservation.");
@@ -81,10 +81,10 @@ internal static class RuntimeIngressAdmissionValidation
             !source.CanonicalPayload.TryGetProperty("source", out var sourceEnvelope) ||
             RuntimeStandaloneIngressSource.ComputeRequestFingerprint(source.Scope, source.TenantId, source.TriggerId, source.SourceFamily,
                 source.SourceKey, source.PayloadSchema, submittedIntent, source.SourceActorAttribution) != source.RequestFingerprint ||
-            !JsonElement.DeepEquals(sourceEnvelope, JsonSerializer.SerializeToElement(new
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(sourceEnvelope, JsonSerializer.SerializeToElement(new
             {
                 family = source.SourceFamily, key = source.SourceKey, recordedAt = source.RecordedAt, actor = source.SourceActorAttribution
-            }, new JsonSerializerOptions(JsonSerializerDefaults.Web))))
+            }, new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options))))
             throw new InvalidDataException("The prepared source envelope differs from its exact submitted intent.");
     }
 
@@ -100,12 +100,12 @@ internal static class RuntimeIngressAdmissionValidation
             throw new NotSupportedException("Resource schedules require their actual server-owned occurrence claim before admission.");
         if (aggregate.Trigger.TypeKey == "http" && (request.Reservation is null || request.WaitCandidate?.ObservedWaits is null))
             throw new NotSupportedException("HTTP admission requires its protected route and complete authorized ordinary-wait observation.");
-        if (!source.CanonicalPayload.TryGetProperty("trigger", out var triggerEnvelope) || !JsonElement.DeepEquals(triggerEnvelope,
+        if (!source.CanonicalPayload.TryGetProperty("trigger", out var triggerEnvelope) || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(triggerEnvelope,
             JsonSerializer.SerializeToElement(new
             {
                 aggregate.Trigger.Id, aggregate.Trigger.Name, aggregate.Trigger.TypeKey, aggregate.Trigger.SchemaVersion,
                 aggregate.Trigger.Revision, aggregate.Trigger.ConfigurationRevision, aggregate.Trigger.AssociationRevision, aggregate.Trigger.Configuration
-            }, new JsonSerializerOptions(JsonSerializerDefaults.Web))))
+            }, new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options))))
             throw new InvalidDataException("The prepared trigger envelope differs from its actual resource revision.");
         var enabled = aggregate.Subscriptions.Where(subscription => subscription.Enabled).ToDictionary(subscription => subscription.Id, StringComparer.Ordinal);
         if (!enabled.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(request.Targets.Select(target => target.SubscriptionId)) ||
@@ -324,5 +324,5 @@ internal static class RuntimeIngressAdmissionValidation
                 delivery.Progress.Single(progress => progress.RecipientId == id).Seal is not null).ToArray()));
     }
 
-    internal static bool Same<T>(T? left, T? right) => JsonElement.DeepEquals(JsonSerializer.SerializeToElement(left), JsonSerializer.SerializeToElement(right));
+    internal static bool Same<T>(T? left, T? right) => Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(left, options: Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(right, options: Elsa.Serialization.Core.JsonBaseline.Options));
 }

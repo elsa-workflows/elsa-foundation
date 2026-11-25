@@ -22,4 +22,7 @@
     <InternalsVisibleTo Include="Elsa.Weaver.Persistence.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../../essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

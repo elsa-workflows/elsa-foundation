@@ -18,7 +18,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Stores;
 /// </remarks>
 internal static class MemberReportJson
 {
-    private static readonly JsonSerializerOptions Options = new()
+    private static readonly JsonSerializerOptions Options = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,

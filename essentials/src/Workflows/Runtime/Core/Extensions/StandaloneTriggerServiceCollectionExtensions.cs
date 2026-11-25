@@ -24,8 +24,8 @@ internal sealed class StandaloneTriggerSourceRegistrar(IServiceCollection servic
         var registrations = services.Where(x => x.ServiceType == typeof(StandaloneTriggerSourceDescriptor) && x.IsKeyedService).ToArray();
         var existing = registrations.Where(x => Equals(x.ServiceKey, typeof(TSource)))
             .Select(x => x.KeyedImplementationInstance).OfType<StandaloneTriggerSourceDescriptor>().ToArray();
-        if (registrations.Count(x => Equals(x.ServiceKey, typeof(TSource))) != existing.Length || existing.Length > 1 || existing.Length == 1 && !JsonElement.DeepEquals(
-                JsonSerializer.SerializeToElement(existing[0]), JsonSerializer.SerializeToElement(descriptor)))
+        if (registrations.Count(x => Equals(x.ServiceKey, typeof(TSource))) != existing.Length || existing.Length > 1 || existing.Length == 1 && !Elsa.Serialization.Core.JsonCanonicalForm.Equals(
+                JsonSerializer.SerializeToElement(existing[0], options: Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(descriptor, options: Elsa.Serialization.Core.JsonBaseline.Options)))
             throw new InvalidOperationException("A source producer already owns a different standalone trigger registration.");
         if (registrations.Any(x => !Equals(x.ServiceKey, typeof(TSource)) &&
             x.KeyedImplementationInstance is StandaloneTriggerSourceDescriptor other && other.SourceFamily == descriptor.SourceFamily))

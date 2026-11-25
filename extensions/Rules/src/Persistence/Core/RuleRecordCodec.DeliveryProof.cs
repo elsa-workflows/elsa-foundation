@@ -12,12 +12,13 @@ public static partial class RuleRecordCodec
         ArgumentNullException.ThrowIfNull(destination);
         if (destination.FormatVersion != 1)
             throw new NotSupportedException("rules.destination-schema");
-        var bytes = RuleJson.Write(writer => WriteDestination(writer, destination), RuleLimits.MaxStateMetadataBytes);
+        using var document = JsonDocument.Parse(RuleJson.Write(writer => WriteDestination(writer, destination), RuleLimits.MaxStateMetadataBytes));
+        var bytes = Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(document.RootElement);
         var prefix = Encoding.UTF8.GetBytes("rules.destination:1:");
         var framed = new byte[prefix.Length + bytes.Length];
         prefix.CopyTo(framed, 0);
         bytes.CopyTo(framed, prefix.Length);
-        return Hash(framed);
+        return Elsa.Serialization.Core.JsonHashInput.HashFramed(framed);
     }
 
     /// <summary>Writes the bounded canonical durable proof retained by a delivery acknowledgement.</summary>

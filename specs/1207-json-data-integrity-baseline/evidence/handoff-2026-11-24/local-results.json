@@ -1,0 +1,606 @@
+{
+  "sourceCheckpoint": "3f3f7b9cca4a77b488408b20dc8db31bbc666097",
+  "status": "Stopped by owner; qualification incomplete",
+  "runs": [
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/raw-controls-6ed2755d79/mapping/tests.trx",
+      "counters": {
+        "total": "21",
+        "executed": "21",
+        "passed": "21",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": []
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/raw-controls-6ed2755d79/native-negative/tests.trx",
+      "counters": {
+        "total": "3",
+        "executed": "3",
+        "passed": "0",
+        "failed": "3",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [
+        {
+          "test": "Elsa3.Mapping.Tests.Elsa3NativeStructureRawDataTests.Converted_native_sequences_preserve_nested_unknown_literal_data_and_scoped_defaults(depth: 3)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"OwnerKey\":\"Ren\\\\u00e9<+>\", \"N\":1.0, \"x\"\"\u00b7\u00b7\u00b7\nActual:   \"{\"OwnerKey\":\"Ren\u00e9<+>\",\"N\":1.0,\"x\":null,\"r\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa3.Mapping.Tests.Elsa3NativeStructureRawDataTests.Collection_conditions_children_and_payload_fields_keep_raw_tokens_and_native_slot_semantics",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"OwnerKey\":\"Ren\\\\u00e9<+>\", \"N\":1.0, \"x\"\"\u00b7\u00b7\u00b7\nActual:   \"{\"OwnerKey\":\"Ren\u00e9<+>\",\"N\":1.0,\"x\":null,\"r\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa3.Mapping.Tests.Elsa3NativeStructureRawDataTests.Converted_native_sequences_preserve_nested_unknown_literal_data_and_scoped_defaults(depth: 1)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"OwnerKey\":\"Ren\\\\u00e9<+>\", \"N\":1.0, \"x\"\"\u00b7\u00b7\u00b7\nActual:   \"{\"OwnerKey\":\"Ren\u00e9<+>\",\"N\":1.0,\"x\":null,\"r\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        }
+      ]
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/raw-controls-6ed2755d79/native-restored/tests.trx",
+      "counters": {
+        "total": "3",
+        "executed": "3",
+        "passed": "3",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": []
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/raw-controls-6ed2755d79/switch/tests.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": []
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/raw-controls-6ed2755d79/switch-negative/tests.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "0",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [
+        {
+          "test": "Elsa.Activities.Switch.Tests.SwitchStructureHandlerTests.Replacing_children_keeps_carried_condition_child_and_extension_tokens_exact",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"OwnerKey\":\"Ren\\\\u00e9<+>\", \"N\":1.0, \"wi\"\u00b7\u00b7\u00b7\nActual:   \"{\"OwnerKey\":\"Ren\u00e9<+>\",\"N\":1.0,\"wide\":1234\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        }
+      ]
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/raw-controls-6ed2755d79/switch-restored/tests.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": []
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/raw-controls-eac6168a95/graph/tests.trx",
+      "counters": {
+        "total": "7",
+        "executed": "7",
+        "passed": "3",
+        "failed": "4",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [
+        {
+          "test": "Elsa.Activities.Graph.Tests.GraphActivityProviderTests.Compilation_preserves_raw_nested_literals_and_defaults_in_stored_payloads(schema: \"1\")",
+          "message": "Assert.Empty() Failure: Collection was not empty\nCollection: [ActivityDiagnostic { Code = activity.contract.type-unavailable, Severity = Error, Message = The selected type alias is not available for contract authoring., Subject = ActivityDiagnosticSubject { Kind = ActivityDraft, Id = draft, DefinitionId = definition, VersionId = , Revision = 1 }, Location = ActivityDiagnosticLocation { ProviderKey = , JsonPointer = /variables/0/type/alias, ReferenceKey = state, NodeOrigin = , DependencyPath =  }, Remediation = , Metadata = System.Collections.Generic.Dictionary`2[System.String,System.String] }]"
+        },
+        {
+          "test": "Elsa.Activities.Graph.Tests.GraphActivityProviderTests.Explicit_manifest_canonical_output_uses_the_exact_shared_number_contract",
+          "message": "Assert.Equal() Failure: Strings differ\n           \u2193 (pos 0)\nExpected: \"e243dab372e5ddabf9df321e2a63f0f8e9fbb0224\"\u00b7\u00b7\u00b7\nActual:   \"5a1f77b7e19f1380b4ad6c678e1d5767319db4ab3\"\u00b7\u00b7\u00b7\n           \u2191 (pos 0)"
+        },
+        {
+          "test": "Elsa.Activities.Graph.Tests.GraphActivityProviderTests.Compiling_scoped_variables_preserves_the_compilers_raw_initial_binding_and_structure_siblings",
+          "message": "Assert.Empty() Failure: Collection was not empty\nCollection: [ActivityDiagnostic { Code = activity.contract.type-unavailable, Severity = Error, Message = The selected type alias is not available for contract authoring., Subject = ActivityDiagnosticSubject { Kind = ActivityDraft, Id = draft, DefinitionId = definition, VersionId = , Revision = 1 }, Location = ActivityDiagnosticLocation { ProviderKey = , JsonPointer = /variables/0/type/alias, ReferenceKey = state, NodeOrigin = , DependencyPath =  }, Remediation = , Metadata = System.Collections.Generic.Dictionary`2[System.String,System.String] }]"
+        },
+        {
+          "test": "Elsa.Activities.Graph.Tests.GraphActivityProviderTests.Compilation_preserves_raw_nested_literals_and_defaults_in_stored_payloads(schema: \"2\")",
+          "message": "Assert.Empty() Failure: Collection was not empty\nCollection: [ActivityDiagnostic { Code = activity.contract.type-unavailable, Severity = Error, Message = The selected type alias is not available for contract authoring., Subject = ActivityDiagnosticSubject { Kind = ActivityDraft, Id = draft, DefinitionId = definition, VersionId = , Revision = 1 }, Location = ActivityDiagnosticLocation { ProviderKey = , JsonPointer = /variables/0/type/alias, ReferenceKey = state, NodeOrigin = , DependencyPath =  }, Remediation = , Metadata = System.Collections.Generic.Dictionary`2[System.String,System.String] }]"
+        }
+      ]
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/raw-controls-9dd5614740/graph/tests.trx",
+      "counters": {
+        "total": "7",
+        "executed": "7",
+        "passed": "7",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": []
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/raw-controls-9dd5614740/graph-negative/tests.trx",
+      "counters": {
+        "total": "7",
+        "executed": "7",
+        "passed": "0",
+        "failed": "7",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [
+        {
+          "test": "Elsa.Activities.Graph.Tests.GraphActivityProviderTests.Compilation_preserves_raw_nested_literals_and_defaults_in_stored_payloads(schema: \"1\")",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/\\\\u003C\",\"fraction\":1,\"neste\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Graph.Tests.GraphActivityProviderTests.Exact_reference_rewrite_preserves_other_literal_and_default_payloads",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/\\\\u003C\",\"fraction\":1,\"neste\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Graph.Tests.GraphActivityProviderTests.Compiling_scoped_variables_preserves_the_compilers_raw_initial_binding_and_structure_siblings",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Graph.Tests.GraphActivityProviderTests.Compilation_preserves_raw_nested_literals_and_defaults_in_stored_payloads(schema: \"2\")",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/\\\\u003C\",\"fraction\":1,\"neste\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Graph.Tests.GraphActivityProviderTests.Manifest_migration_preserves_carried_json_without_canonicalizing_stored_data(targetSchema: \"2\")",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/\\\\u003C\",\"fraction\":1,\"neste\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Graph.Tests.GraphActivityProviderTests.Explicit_manifest_canonical_output_uses_the_exact_shared_number_contract",
+          "message": "Assert.Equal() Failure: Strings differ\n           \u2193 (pos 0)\nExpected: \"5a1f77b7e19f1380b4ad6c678e1d5767319db4ab3\"\u00b7\u00b7\u00b7\nActual:   \"d14f9e3ff1df1d99e7f1a01933fbf3536b50212c5\"\u00b7\u00b7\u00b7\n           \u2191 (pos 0)"
+        },
+        {
+          "test": "Elsa.Activities.Graph.Tests.GraphActivityProviderTests.Manifest_migration_preserves_carried_json_without_canonicalizing_stored_data(targetSchema: \"1\")",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/\\\\u003C\",\"fraction\":1,\"neste\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        }
+      ]
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/raw-controls-9dd5614740/graph-restored/tests.trx",
+      "counters": {
+        "total": "7",
+        "executed": "7",
+        "passed": "7",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": []
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/raw-controls-9dd5614740/placement/tests.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "0",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [
+        {
+          "test": "Elsa.Workflows.Publishing.Api.Tests.ActivityTemplatePlacementTests.Placement_preserves_raw_compiled_scoped_variable_initial_bindings_while_routing_children",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        }
+      ]
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/final-3f3f7b9cca/http/tests.trx",
+      "counters": {
+        "total": "16",
+        "executed": "16",
+        "passed": "15",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [
+        {
+          "test": "Elsa.Http.Tests.JsonHttpContentParserTests.Explicit_mutable_JSON_targets_refuse_incompatible_shapes(target: typeof(System.Text.Json.Nodes.JsonValue), raw: \"{}\")",
+          "message": "Assert.ThrowsAny() Failure: Exception type was not compatible\nExpected: typeof(System.Text.Json.JsonException)\nActual:   typeof(System.InvalidOperationException)\n---- System.InvalidOperationException : The element cannot be an object or array."
+        }
+      ]
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/final-3f3f7b9cca/placement/tests.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": []
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/final-3f3f7b9cca/placement-negative/tests.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "0",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [
+        {
+          "test": "Elsa.Workflows.Publishing.Api.Tests.ActivityTemplatePlacementTests.Placement_preserves_raw_compiled_scoped_variable_initial_bindings_while_routing_children",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        }
+      ]
+    },
+    {
+      "path": "/tmp/elsa-s9-integrated-775/results/final-3f3f7b9cca/placement-restored/tests.trx",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": []
+    },
+    {
+      "path": "/tmp/elsa-s9-exact-0c3173a2f2/review-bpmn-9198bf43a3/codec-negative/tests.trx",
+      "counters": {
+        "total": "6",
+        "executed": "6",
+        "passed": "0",
+        "failed": "6",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [
+        {
+          "test": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Writing_typed_loop_snapshots_preserves_each_item_without_a_prior_read(version: 1)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Continuing_state_records_new_identity_without_rewriting_snapshotted_loop_items(version: 1)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Continuing_state_records_new_identity_without_rewriting_snapshotted_loop_items(version: 2)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Reading_and_cold_rereading_loop_snapshots_preserves_exact_item_JSON(version: 2)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Reading_and_cold_rereading_loop_snapshots_preserves_exact_item_JSON(version: 1)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Bpmn.Tests.BpmnStateCodecTests.Writing_typed_loop_snapshots_preserves_each_item_without_a_prior_read(version: 2)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        }
+      ]
+    },
+    {
+      "path": "/tmp/elsa-s9-exact-0c3173a2f2/review-bpmn-9198bf43a3/document-negative/tests.trx",
+      "counters": {
+        "total": "6",
+        "executed": "6",
+        "passed": "1",
+        "failed": "5",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [
+        {
+          "test": "Elsa.Activities.Bpmn.Tests.BpmnDocumentJsonIntegrityTests.Actual_child_identity_replacement_routes_the_binding_and_preserves_carried_raw_data(withScope: False)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Bpmn.Tests.BpmnDocumentJsonIntegrityTests.No_op_child_replacement_preserves_raw_literals_defaults_and_extensions(withScope: False)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Bpmn.Tests.BpmnDocumentJsonIntegrityTests.Explicit_empty_scope_headers_remain_present_after_no_op_replacement",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Bpmn.Tests.BpmnDocumentJsonIntegrityTests.No_op_child_replacement_preserves_raw_literals_defaults_and_extensions(withScope: True)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        },
+        {
+          "test": "Elsa.Activities.Bpmn.Tests.BpmnDocumentJsonIntegrityTests.Actual_child_identity_replacement_routes_the_binding_and_preserves_carried_raw_data(withScope: True)",
+          "message": "Assert.Equal() Failure: Strings differ\n            \u2193 (pos 1)\nExpected: \"{ \"escaped\" : \"\\\\u0061\\\\/\\\\u003c\", \"number\" \"\u00b7\u00b7\u00b7\nActual:   \"{\"escaped\":\"a/<\",\"number\":123456789012345\"\u00b7\u00b7\u00b7\n            \u2191 (pos 1)"
+        }
+      ]
+    },
+    {
+      "path": "/tmp/elsa-s9-exact-0c3173a2f2/review-bpmn-9198bf43a3/positive/tests.trx",
+      "counters": {
+        "total": "12",
+        "executed": "12",
+        "passed": "12",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": []
+    },
+    {
+      "path": "/tmp/elsa-s9-exact-0c3173a2f2/review-bpmn-9198bf43a3/restored/tests.trx",
+      "counters": {
+        "total": "6",
+        "executed": "6",
+        "passed": "6",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": []
+    },
+    {
+      "path": "/tmp/elsa-s9-exact-0c3173a2f2/review-final-04ae1285c2/bpmn-whole/tests.trx",
+      "counters": {
+        "total": "877",
+        "executed": "877",
+        "passed": "877",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": []
+    },
+    {
+      "path": "/tmp/elsa-s9-exact-0c3173a2f2/review-58b0b1d23d/guard-controls/controls.trx",
+      "counters": {
+        "total": "333",
+        "executed": "333",
+        "passed": "330",
+        "failed": "3",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [
+        {
+          "test": "Elsa.Architecture.Tests.EvaluatedHashInputsResultFileTests.Missing_or_invalid_structured_results_are_refused_without_a_console_fallback(content: \"{\\\"Items\\\":{}} {}\")",
+          "message": "Assert.Throws() Failure: Exception type was not an exact match\nExpected: typeof(System.Text.Json.JsonException)\nActual:   typeof(System.Text.Json.JsonReaderException)\n---- System.Text.Json.JsonReaderException : '{' is invalid after a single JSON value. Expected end of data. LineNumber: 0 | BytePositionInLine: 13."
+        },
+        {
+          "test": "Elsa.Architecture.Tests.EvaluatedHashInputsResultFileTests.Missing_or_invalid_structured_results_are_refused_without_a_console_fallback(content: \"{\\\"Items\\\":{}}\\nSDK warning after JSON\")",
+          "message": "Assert.Throws() Failure: Exception type was not an exact match\nExpected: typeof(System.Text.Json.JsonException)\nActual:   typeof(System.Text.Json.JsonReaderException)\n---- System.Text.Json.JsonReaderException : 'S' is invalid after a single JSON value. Expected end of data. LineNumber: 1 | BytePositionInLine: 0."
+        },
+        {
+          "test": "Elsa.Architecture.Tests.EvaluatedHashInputsResultFileTests.Missing_or_invalid_structured_results_are_refused_without_a_console_fallback(content: \"\")",
+          "message": "Assert.Throws() Failure: Exception type was not an exact match\nExpected: typeof(System.Text.Json.JsonException)\nActual:   typeof(System.Text.Json.JsonReaderException)\n---- System.Text.Json.JsonReaderException : The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0."
+        }
+      ]
+    }
+  ]
+}

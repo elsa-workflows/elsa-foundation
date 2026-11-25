@@ -27,6 +27,79 @@ namespace Elsa.Activities.Design.Tests.Unit;
 public sealed class ActivitySerializedShapeSourceTests
 {
     [Fact]
+    public async Task Scoped_type_conversion_is_opaque_instead_of_advertising_default_member_names()
+    {
+        var wire = JsonConversionContract.SerializeToElement(new ScopedTypePayload());
+        Assert.True(wire.TryGetProperty("external-name", out _));
+        Assert.False(wire.TryGetProperty("displayName", out _));
+        using var host = ResultHost(typeof(ScopedTypeResultActivity));
+        var version = host.Version<ScopedTypeResultActivity>();
+        foreach (var path in new[] { Array.Empty<string>(), new[] { "displayName" }, new[] { "external-name" } })
+        {
+            var shape = (await host.Source.DescribeResultAsync(version, "$result", [.. path], new()))!;
+            Assert.Equal(ActivitySerializedShapeState.Unknown, shape.State);
+            Assert.Equal("activity.shape.conversion-contract-opaque", shape.ReasonCode);
+            Assert.Empty(shape.Members);
+        }
+    }
+
+    [Fact]
+    public async Task Scoped_member_conversion_is_opaque_for_whole_and_selected_metadata()
+    {
+        var wire = JsonConversionContract.SerializeToElement(new ScopedMemberPayload());
+        Assert.True(wire.GetProperty("value").TryGetProperty("selected-name", out _));
+        using var host = ResultHost(typeof(ScopedMemberResultActivity));
+        var version = host.Version<ScopedMemberResultActivity>();
+        var root = (await host.Source.DescribeResultAsync(version, "$result", [], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Known, root.State);
+        Assert.Equal("activity.shape.conversion-contract-opaque", Member(root, "value").ReasonCode);
+        foreach (var path in new[] { new[] { "value" }, new[] { "value", "displayName" }, new[] { "value", "selected-name" } })
+        {
+            var shape = (await host.Source.DescribeResultAsync(version, "$result", [.. path], new()))!;
+            Assert.Equal(ActivitySerializedShapeState.Unknown, shape.State);
+            Assert.Equal("activity.shape.conversion-contract-opaque", shape.ReasonCode);
+            Assert.Empty(shape.Members);
+        }
+    }
+
+    [JsonConversion(MemberMappings = ["external-name=DisplayName"])]
+    public sealed class ScopedTypePayload { public string DisplayName { get; set; } = "typed"; }
+    public sealed class PlainScopedPayload { public string DisplayName { get; set; } = "member"; }
+    public sealed class ScopedMemberPayload
+    {
+        [JsonConversion(MemberMappings = ["selected-name=DisplayName"])]
+        public PlainScopedPayload Value { get; set; } = new();
+    }
+    public sealed class ScopedTypeResultActivity : MetadataResultActivity<ScopedTypePayload>;
+    public sealed class ScopedMemberResultActivity : MetadataResultActivity<ScopedMemberPayload>;
+
+    [Fact]
+    public async Task Scoped_member_conversion_inherits_across_an_ancestor_without_a_declaration()
+    {
+        var wire = JsonConversionContract.SerializeToElement(new ScopedDerivedPayload());
+        Assert.True(wire.GetProperty("value").TryGetProperty("inherited-name", out _));
+        using var host = ResultHost(typeof(ScopedDerivedResultActivity));
+        var version = host.Version<ScopedDerivedResultActivity>();
+        var root = (await host.Source.DescribeResultAsync(version, "$result", [], new()))!;
+        Assert.Equal("activity.shape.conversion-contract-opaque", Member(root, "value").ReasonCode);
+        var selected = (await host.Source.DescribeResultAsync(version, "$result", ["value", "displayName"], new()))!;
+        Assert.Equal(ActivitySerializedShapeState.Unknown, selected.State);
+        Assert.Equal("activity.shape.conversion-contract-opaque", selected.ReasonCode);
+    }
+
+    public class ScopedBasePayload
+    {
+        [JsonConversion(MemberMappings = ["inherited-name=DisplayName"])]
+        public virtual PlainScopedPayload Value { get; set; } = new();
+    }
+    public class ScopedMiddlePayload : ScopedBasePayload;
+    public sealed class ScopedDerivedPayload : ScopedMiddlePayload
+    {
+        public override PlainScopedPayload Value { get; set; } = new();
+    }
+    public sealed class ScopedDerivedResultActivity : MetadataResultActivity<ScopedDerivedPayload>;
+
+    [Fact]
     public async Task Nullable_enum_converter_is_opaque_for_whole_and_property_metadata_without_constructing_the_converter()
     {
         ObjectEnumConverter.ResetConstructionCount();

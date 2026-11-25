@@ -22,7 +22,7 @@ public sealed class WorkflowInputReadPublicationRunTests
 
     private static ActivityNode Root() => new("reader", "reader-version",
         [new(nameof(MemberReadPublicationRunTests.MemberReader.Value),
-            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "greeting-ref" }), "Input"), null, null, null, null)], []);
+            ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "greeting-ref" }), "Input"), null, null, null, null)], []);
 
     [Fact]
     public async Task A_published_Input_read_is_a_request_read_of_the_inputs_name_and_reads_the_supplied_value()

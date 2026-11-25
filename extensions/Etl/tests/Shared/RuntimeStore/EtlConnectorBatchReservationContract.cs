@@ -102,7 +102,7 @@ public abstract partial class EtlRuntimeStoreContract
         var run = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
         EtlConnectorBatchRange range = CurrentHttpRange(lease, startItem: 0, endItemExclusive: 1);
         long inputBytes = 7;
-        var inputHash = EtlRuntimeRecordCodec.HashText("measured-http-input");
+        var inputHash = Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes("measured-http-input"));
         switch (defect)
         {
             case "wrong-type": range = new EtlConnectorFileBatchRange(1, 2); break;
@@ -294,7 +294,7 @@ public abstract partial class EtlRuntimeStoreContract
             admission.Invocation.Scope, admission.Invocation.RunId, "worker-a"));
         var position = Assert.IsType<EtlConnectorFilePosition>(lease.Position);
         var range = new EtlConnectorFileBatchRange(position.NextOrdinal, position.NextOrdinal + 2);
-        var inputHash = EtlRuntimeRecordCodec.HashText("canonical-csv-input");
+        var inputHash = Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes("canonical-csv-input"));
         var prepared = (await store.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId))!.Prepared!;
         var batch = ConnectorBatch(admission, prepared, lease, range, 11, inputHash);
 
@@ -327,7 +327,7 @@ public abstract partial class EtlRuntimeStoreContract
     {
         var range = CurrentHttpRange(lease, 0, endItemExclusive);
         return ConnectorBatch(admission, prepared, lease, range, inputBytes,
-            EtlRuntimeRecordCodec.HashText(marker ?? "canonical-http-input"));
+            Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes(marker ?? "canonical-http-input")));
     }
 
     private protected static EtlConnectorHttpBatchRange CurrentHttpRange(EtlConnectorPartitionLease lease,

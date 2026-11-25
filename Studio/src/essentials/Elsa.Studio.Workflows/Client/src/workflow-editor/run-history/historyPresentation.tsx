@@ -1,3 +1,4 @@
+import { formatStudioDate, formatStudioDateParts, resolveStudioTimeZone, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { Activity, BookmarkCheck, CircleAlert, CircleCheck, CirclePlay, Clock3, Inbox, ListPlus, Pause, RotateCcw, Workflow } from "lucide-react";
 import type { RuntimeHistoryCoverage, RuntimeHistoryEvent } from "../../runtimeHistoryTypes";
 import { formatDuration, humanizeTypeName } from "../../workflowFormatting";
@@ -91,23 +92,24 @@ export function historyAuthorityLabel(value: string) {
 export function historyClock(value: string | null) {
   if (!value) return "Time unknown";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  return Number.isNaN(date.getTime()) ? value : formatStudioDateParts(date).time;
 }
 export function historyDate(value: string | null) {
   if (!value) return "Occurrence time unknown";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString([], { weekday: "short", year: "numeric", month: "short", day: "numeric", timeZoneName: "shortOffset" });
+  return Number.isNaN(date.getTime()) ? value : formatStudioDateParts(date).date;
 }
 export function historyInstant(value?: string | null) {
   if (!value) return "Not recorded";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : `${date.toLocaleString()} · ${value}`;
+  return Number.isNaN(date.getTime()) ? value : `${formatStudioDate(date)} · ${value}`;
 }
-export function historyZone() { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Local time"; }
+export function historyZone() { return resolveStudioTimeZone(); }
 
 export function HistoryCoverage({ coverage, scopeComplete = true, scopeLimitation, readAt }: {
   coverage: RuntimeHistoryCoverage; scopeComplete?: boolean; scopeLimitation?: string | null; readAt?: string;
 }) {
+  useStudioTimeZone();
   const settled = coverage.settledSequence >= coverage.lastSequence;
   const emptyRetainedRange = coverage.firstSequence === 0 && coverage.lastSequence === 0 || coverage.firstSequence > coverage.lastSequence;
   const availablePositions = emptyRetainedRange
@@ -158,6 +160,7 @@ export function HistoryEventList({ items, selectedEventId, onSelect, labelForEve
   items: RuntimeHistoryEvent[]; selectedEventId?: string | null; onSelect(event: RuntimeHistoryEvent): void;
   labelForEvent?(event: RuntimeHistoryEvent): string | null; compact?: boolean; unloadedAfterSequence?: number; hideActivityExecutionId?: string;
 }) {
+  useStudioTimeZone();
   const creations = new Map(items.filter(event => event.name === "BookmarkCreated" && event.bookmarkId).map(event => [event.bookmarkId, event]));
   return <ol className={`wf-history-events${compact ? " wf-history-events-compact" : ""}`} aria-label={compact ? "Activity journal events" : "Run history events"}>
     {items.map((event, index) => {

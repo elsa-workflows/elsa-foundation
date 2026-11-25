@@ -119,12 +119,12 @@ internal static class HumanReviewRecords
         var consumed = activity.TriggerDeliveries?.Where(delivery => delivery.Status == ActivityTriggerDeliveryStatus.Consumed).ToArray() ?? [];
         return consumed.Length == 1 && consumed[0].DeliveryId == metadata.DeliveryId && consumed[0].ProviderId == metadata.ProviderId &&
             consumed[0].DeduplicationKey == metadata.DeduplicationKey && SameType(consumed[0].PayloadType, metadata.PayloadType) &&
-            consumed[0].Payload.InlineValue is { } stored && payload.Input is { } incoming && JsonElement.DeepEquals(stored, incoming);
+            consumed[0].Payload.InlineValue is { } stored && payload.Input is { } incoming && Elsa.Serialization.Core.JsonCanonicalForm.Equals(stored, incoming);
     }
 
     private static bool SameType(ValueTypeDescriptor left, ValueTypeDescriptor right) =>
         left.Alias == right.Alias && left.CollectionKind == right.CollectionKind && left.SchemaVersion == right.SchemaVersion &&
-        left.Schema?.GetRawText() == right.Schema?.GetRawText();
+        Elsa.Serialization.Core.JsonCanonicalForm.Equals(left.Schema, right.Schema);
 }
 
 /// <summary>The decision native admission consumed for one review.</summary>

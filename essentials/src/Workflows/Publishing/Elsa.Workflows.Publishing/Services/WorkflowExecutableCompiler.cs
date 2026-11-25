@@ -171,6 +171,7 @@ public sealed class WorkflowExecutableCompiler(
             // Single tree walk: children are projected once here and reused for both flattening and node
             // compilation, replacing the former double ProjectChildren traversal.
             var projection = activityTreeProjector.Project(rootActivity);
+            policyNodeCompiler.SetConversionWarningSink(projection, request.Warnings);
             ActivityTreeProjector.Validate(projection.Nodes);
             policyNodeCompiler.ValidateIntrinsicVariableTargets(state, projection.Nodes);
 
@@ -212,7 +213,7 @@ public sealed class WorkflowExecutableCompiler(
                     projection,
                     state.Variables,
                     activity.NodeId,
-                    CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, policyBindingCompiler, callWorkflowInputs, out var effectiveInputs));
+                    CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, policyNodeCompiler.ConversionCompilerFor(template.Root.Descriptor, request.Warnings, activity.NodeId), callWorkflowInputs, out var effectiveInputs));
                 compiledBoundaryInputs.Add(activity.NodeId, effectiveInputs);
                 var outputCaptures = outputCaptureCompiler.CompileBoundaryOutputs(
                     activity.NodeId,
@@ -399,7 +400,7 @@ public sealed class WorkflowExecutableCompiler(
             ArgumentState? inputState = authoredByKey.TryGetValue(input.ReferenceKey, out var state)
                 ? state
                 : input.Default is not null
-                    ? new(input.ReferenceKey, new ArgumentValue(input.Default.Value, input.Default.Syntax), null, null, null, null)
+                    ? new(input.ReferenceKey, ArgumentValue.FromClr(input.Default.Value, input.Default.Syntax), null, null, null, null)
                     : null;
             if (inputState is null)
             {

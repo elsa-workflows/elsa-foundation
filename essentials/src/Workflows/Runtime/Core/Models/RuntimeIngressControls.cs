@@ -59,7 +59,7 @@ public sealed class RuntimeIngressControlFacts
             previous.Transport.Any(item => !Transport.Any(next => Same(next, item))))
             throw new InvalidOperationException("Source operation and exchange facts cannot be erased or replaced.");
     }
-    private static bool Same<T>(T left, T right) => JsonElement.DeepEquals(JsonSerializer.SerializeToElement(left), JsonSerializer.SerializeToElement(right));
+    private static bool Same<T>(T left, T right) => Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(left, options: Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(right, options: Elsa.Serialization.Core.JsonBaseline.Options));
 }
 
 public static class RuntimeIngressInspection

@@ -21,7 +21,7 @@ internal static class BpmnTaskBindingMetadata
     private const int MaximumBytes = 16 * 1024;
     private const int MaximumDepth = 32;
     private const int MaximumIdLength = 512;
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>The BPMN task types whose bound child is the author's own work; every other element's child is re-established by import.</summary>
     public static readonly IReadOnlySet<string> TaskTypes = new HashSet<string>(StringComparer.Ordinal)
@@ -47,7 +47,7 @@ internal static class BpmnTaskBindingMetadata
     public static LibModel.BpmnForeignAttribute ToAttribute(string activityVersionId, IReadOnlyList<ArgumentState> inputs, string? nodeId = null) =>
         new(new LibModel.BpmnQName(LibInterchange.BpmnXmlNames.VendorNamespaceName, AttributeName), JsonSerializer.Serialize(new Carried(
             activityVersionId,
-            inputs.ToDictionary(input => input.ReferenceKey, input => JsonSerializer.SerializeToElement(input.Value.Value), StringComparer.Ordinal), nodeId), Web));
+            inputs.ToDictionary(input => input.ReferenceKey, input => Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(input.Value.Value), StringComparer.Ordinal), nodeId), Web));
 
     /// <summary>Whether a catalog input declaration may travel with a literal value: never a sensitive, credential, masked or connection input.</summary>
     public static bool IsPortable(InputDefinition declaration) =>
@@ -114,7 +114,7 @@ internal static class BpmnTaskBindingMetadata
             inputs = root.TryGetProperty("inputs", out var values)
                 ? values.EnumerateObject()
                     .Where(input => !string.IsNullOrWhiteSpace(input.Name))
-                    .Select(input => new ArgumentState(input.Name, new ArgumentValue(input.Value.Clone(), "Literal"), null, null, null, null))
+                    .Select(input => new ArgumentState(input.Name, ArgumentValue.FromClr(input.Value.Clone(), "Literal"), null, null, null, null))
                     .ToArray()
                 : [];
             return true;

@@ -38,7 +38,7 @@ public sealed class EtlExecutableReaderTests
     }
 
     [Fact]
-    public void Reader_rejects_a_noncanonical_pipeline_even_when_its_content_hash_matches()
+    public void Reader_accepts_equivalent_json_spelling_and_still_refuses_a_changed_value()
     {
         var artifact = CreateArtifact(EtlTestPipelines.Create());
         using var document = JsonDocument.Parse(artifact.Pipeline.GetRawText().Replace(",", ", ", StringComparison.Ordinal));
@@ -46,9 +46,14 @@ public sealed class EtlExecutableReaderTests
             artifact.DefinitionId, artifact.DefinitionVersion, document.RootElement);
         using var runtime = CreateRuntime();
 
-        var exception = Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(noncanonical));
-
-        Assert.Equal("etl.executable.noncanonical-pipeline", exception.Code);
+        Assert.Equal(artifact.ContentHash, EtlArtifactJson.Hash(document.RootElement));
+        Assert.NotNull(runtime.Reader.Read(noncanonical));
+        var changed = System.Text.Json.Nodes.JsonNode.Parse(document.RootElement.GetRawText())!;
+        changed["limits"]!["maxBatchRecords"] = EtlTestPipelines.Create().Limits.MaxBatchRecords + 1;
+        using var changedDocument = JsonDocument.Parse(changed.ToJsonString());
+        var different = new EtlArtifact(artifact.FormatVersion, artifact.ArtifactId, artifact.ContentHash,
+            artifact.DefinitionId, artifact.DefinitionVersion, changedDocument.RootElement);
+        Assert.Equal("etl.executable.provenance-invalid", Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(different)).Code);
     }
 
     [Fact]

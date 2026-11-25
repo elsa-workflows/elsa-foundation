@@ -111,7 +111,11 @@ public sealed partial class AgentPublicationTests
             new DefaultActivityStructureService([]), new RuntimeInputBindingCompiler(types), new RuntimeOutputCaptureCompiler(fixture.Drivers), types);
         var placed = await placer.PlaceAsync(new(publication, template, source,
             new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-v1")]), publication.ActivityTypeKey,
-            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                ["brief-key"] = new("brief-key", new("String"), ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(new("String"), Json("\"moss gardens\""), ValueProtectionPolicy.InstanceInline))
+            }, new Dictionary<string, RuntimeOutputCapture>()));
         Assert.Equal(publication.DefinitionVersionId, placed.Root.DescriptorPayload.GetProperty("definitionVersionId").GetString());
         Assert.Equal(template.TemplateHash, placed.Root.DescriptorPayload.GetProperty("templateHash").GetString());
         Assert.Equal(publication.SourceReferenceId, placed.Root.Metadata["activity.sourceReferenceId"]);
@@ -355,6 +359,12 @@ public sealed partial class AgentPublicationTests
             await publishing.DisposeAsync();
             await runtime.DisposeAsync();
             await design.DisposeAsync();
+            // Pooled connections keep the files open on Windows; clear only this fixture's pools (#2185).
+            foreach (var file in new[] { "design.db", "runtime.db", "publishing.db" })
+            {
+                using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + Path.Combine(directory, file));
+                Microsoft.Data.Sqlite.SqliteConnection.ClearPool(connection);
+            }
             Directory.Delete(directory, true);
         }
     }

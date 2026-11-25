@@ -136,7 +136,7 @@ public sealed class WeaverTurnOrchestratorTests
         var clock = new TurnTestClock();
         var tool = new PendingClientTool();
         var attachment = new WeaverContextAttachment("client-snapshot", "test", "resource-1", "Local resource", "test.snapshot", WeaverContextSensitivity.Internal,
-            "selection", "Local resource snapshot", new { revision = "revision-1" }, new Dictionary<string, string>())
+            "selection", "Local resource snapshot", WeaverJsonData.From(new { revision = "revision-1" }), new Dictionary<string, string>())
         { ModuleId = tool.Descriptor.ModuleId, Target = tool.Target, Client = tool.Binding, Origin = WeaverContextOrigin.ClientSnapshot };
         var source = new WeaverTestContextSource(PendingClientTool.ContextSourceId, tool.Descriptor.ModuleId, [attachment], [tool]);
         using var root = WeaverTestServices.Create(services =>

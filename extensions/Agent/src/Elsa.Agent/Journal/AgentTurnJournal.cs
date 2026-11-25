@@ -27,7 +27,7 @@ internal sealed class AgentTurnJournal(IAgentTurnStore store, ISecretValueProtec
             throw Failure("agent.session.disallowed", "This published agent does not allow conversation continuity.");
         var handle = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         var candidate = new AgentTurnDocument(handle, key, hash, request.Identity,
-            protector.Protect(JsonSerializer.Serialize(new RequestEnvelope(DeliveryRequestPurpose, request.Identity, hash, request), AgentJson.Options)),
+            protector.Protect(JsonSerializer.Serialize(new RequestEnvelope(DeliveryRequestPurpose, request.Identity, hash, request), options: AgentJson.Options)),
             now.AddMilliseconds(limits.TimeoutMilliseconds)) { MaximumModelCalls = limits.MaximumModelCalls,
                 Conversation = request.Descriptor.AllowContinuity ? request.Continuation ?? new(handle, 0) : null,
                 DeliveryProtocol = 1, Deliveries = [new(request.Identity)] };
@@ -49,7 +49,7 @@ internal sealed class AgentTurnJournal(IAgentTurnStore store, ISecretValueProtec
         if (document.ContentPurgedAt is not null)
             throw Failure("agent.journal.content-unavailable", "The agent operation is retained, but its protected content has expired.");
         RequestEnvelope? envelope;
-        try { envelope = JsonSerializer.Deserialize<RequestEnvelope>(protector.Unprotect(document.ProtectedRequest!), AgentJson.Options); }
+        try { envelope = JsonSerializer.Deserialize<RequestEnvelope>(protector.Unprotect(document.ProtectedRequest!), options: AgentJson.Options); }
         catch (Exception exception) { throw Failure("agent.journal.protection", "The staged agent request cannot be authenticated.", exception); }
         if (envelope is null || envelope.Purpose != (document.DeliveryProtocol == 1 ? DeliveryRequestPurpose : RequestPurpose) || envelope.Identity != document.Identity || envelope.Request.Identity != document.Identity ||
             !AgentTurnDeliveryRules.SameLogical(document.Identity, identity) || !AgentTurnDeliveryRules.Admits(document, identity) || envelope.Hash != document.RequestHash ||
@@ -68,7 +68,7 @@ internal sealed class AgentTurnJournal(IAgentTurnStore store, ISecretValueProtec
         if (document.Status != AgentTurnStatus.Accepted || !BoundToChild(document, identity, childInvocationId) || document.ProtectedResult is null)
             throw Failure("agent.turn.unaccepted", "This native child has no accepted agent turn.");
         ResultEnvelope? envelope;
-        try { envelope = JsonSerializer.Deserialize<ResultEnvelope>(protector.Unprotect(document.ProtectedResult), AgentJson.Options); }
+        try { envelope = JsonSerializer.Deserialize<ResultEnvelope>(protector.Unprotect(document.ProtectedResult), options: AgentJson.Options); }
         catch (Exception exception) { throw Failure("agent.journal.protection", "The agent result cannot be authenticated.", exception); }
         if (envelope is null || envelope.Purpose != (document.DeliveryProtocol == 1 ? DeliveryResultPurpose : ResultPurpose) || envelope.Identity != document.Identity || envelope.RequestHash != document.RequestHash ||
             envelope.ChildInvocationId != document.ChildInvocationId || envelope.Fence != document.Fence || envelope.AdmissionGeneration != document.AdmissionGeneration ||
@@ -126,7 +126,7 @@ internal sealed class AgentTurnJournal(IAgentTurnStore store, ISecretValueProtec
         var envelope = new ResultEnvelope(document.DeliveryProtocol == 1 ? DeliveryResultPurpose : ResultPurpose, document.Identity, document.RequestHash,
             document.ChildInvocationId!, document.Fence!, result, document.AdmissionGeneration,
             document.DeliveryProtocol == 1 ? AgentTurnDeliveryRules.DispatchIdentity(document) : null);
-        return store.AcceptAsync(document.Handle, document.Identity, AgentTurnLeaseRules.Token(document), protector.Protect(JsonSerializer.Serialize(envelope, AgentJson.Options)), now, cancellationToken);
+        return store.AcceptAsync(document.Handle, document.Identity, AgentTurnLeaseRules.Token(document), protector.Protect(JsonSerializer.Serialize(envelope, options: AgentJson.Options)), now, cancellationToken);
     }
 
     public async ValueTask<AgentTurnRequest> PrepareSessionAsync(AgentTurnDocument document, AgentTurnRequest request, CancellationToken cancellationToken)
@@ -166,10 +166,8 @@ internal sealed class AgentTurnJournal(IAgentTurnStore store, ISecretValueProtec
         document.DeliveryProtocol == 0 ? document.Identity == identity && document.ChildInvocationId == child :
         document.Deliveries!.Any(x => x.Identity == identity && x.ChildInvocationId == child);
 
-    private static string RequestHash(AgentTurnRequest request, string purpose) => Hash(JsonSerializer.Serialize(
-        purpose == DeliveryRequestPurpose ? request with { Identity = request.Identity with { ActivityExecutionId = "" } } : request, AgentJson.Options));
-
-    private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
+    private static string RequestHash(AgentTurnRequest request, string purpose) => Elsa.Serialization.Core.JsonHashInput.Hash(
+        purpose == DeliveryRequestPurpose ? request with { Identity = request.Identity with { ActivityExecutionId = "" } } : request);
     private static AgentTurnException Failure(string code, string message, Exception? innerException = null) => AgentModelRunner.Failure(code, message, innerException);
     private sealed record RequestEnvelope(string Purpose, AgentInvocationIdentity Identity, string Hash, AgentTurnRequest Request);
     private sealed record ResultEnvelope(string Purpose, AgentInvocationIdentity Identity, string RequestHash, string ChildInvocationId, string Fence, AgentTurnResult Result, int AdmissionGeneration = 0, AgentInvocationIdentity? DispatchIdentity = null);

@@ -62,7 +62,7 @@ public sealed class WorkflowAlterationActorCommandExecutor(
         if (envelope.Command.Payload is not { } payload)
             throw new ArgumentException("An AlterWorkflow command requires an actor payload.", nameof(envelope));
 
-        var actorCommand = payload.Deserialize<WorkflowAlterationActorCommand>()
+        var actorCommand = payload.Deserialize<WorkflowAlterationActorCommand>(Elsa.Serialization.Core.JsonBaseline.Options)
             ?? throw new ArgumentException("The AlterWorkflow command payload is invalid.", nameof(envelope));
         actorCommand.Validate();
 

@@ -42,7 +42,7 @@ internal sealed partial class EfEtlRuntimeStore(
         {
             ValidateRun(existing, invocation.Scope, invocation.RunId);
             var status = StringComparer.Ordinal.Equals(existing.InvocationFingerprint, fingerprint) &&
-                         StringComparer.Ordinal.Equals(existing.BindingsJson, bindingsJson)
+                         Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(existing.BindingsJson, bindingsJson)
                 ? EtlStoreStatus.Replay
                 : EtlStoreStatus.Conflict;
             return new(status, await ReadViewAsync(existing, cancellationToken));
@@ -1014,7 +1014,7 @@ internal sealed partial class EfEtlRuntimeStore(
     {
         var seed = EtlRuntimeRecordCodec.Write(new { Version = "etl-terminal-v1", run.InvocationFingerprint, outcome, diagnostic,
             run.AcceptedRecords, run.RejectedRecords, run.FilteredRecords });
-        return new(HashAscii(seed), outcome, run.AcceptedRecords, run.RejectedRecords, run.FilteredRecords,
+        return new(Elsa.Serialization.Core.JsonHashInput.HashJson(seed), outcome, run.AcceptedRecords, run.RejectedRecords, run.FilteredRecords,
             diagnostic, EtlRuntimeRecordCodec.ReadUtc(now));
     }
 
@@ -1144,7 +1144,7 @@ internal sealed partial class EfEtlRuntimeStore(
 
     private static long Expiry(long now, TimeSpan duration) => checked(now + duration.Ticks);
     private long NowTicks() => clock.GetUtcNow().UtcDateTime.Ticks;
-    private static string HashAscii(string value) => EtlRuntimeRecordCodec.HashText(value);
+    private static string HashAscii(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     private static string DeliveryId(string resultId) => HashAscii("etl-delivery-v1|" + resultId);
     private static string OutboxHash(string invocationJson, string resultJson) => EtlRuntimeJson.ResultEnvelopeHash(invocationJson, resultJson);
     private static void EnsureSchema(string schemaVersion) => EtlRuntimeRecordCodec.EnsureSchema(schemaVersion);

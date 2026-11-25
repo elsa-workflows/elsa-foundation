@@ -7,6 +7,8 @@ using Elsa.Serialization.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using System.Text.Json;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Expressions.Tests.Unit;
 
@@ -22,6 +24,29 @@ public sealed class VariableMapperTests
     }
 
     private static Type ClosedTypeOf(IVariable variable) => variable.GetType().GetGenericArguments()[0];
+
+    [Fact]
+    public void Typed_defaults_round_trip_as_values_instead_of_type_names_or_json_strings()
+    {
+        IVariable[] variables = [
+            new Variable<int>("Total", 42, "total"),
+            new Variable<bool>("Enabled", true, "enabled"),
+            new Variable<string>("Text", "{\"n\":1}", "text"),
+            new Variable<int[]>("Numbers", [1, 2], "numbers"),
+            new Variable<Dictionary<string, string>>("Map", new() { ["OrderID"] = "René" }, "map")
+        ];
+        foreach (var original in variables)
+        {
+            var definition = _mapper.Map(original);
+            var retained = Assert.IsType<JsonElement>(definition.Default!.Value);
+            var expected = JsonConversionContract.SerializeToElement(original.DefaultValue, original.GetVariableType());
+            Assert.True(JsonCanonicalForm.Equals(expected, retained));
+            var restored = _mapper.Map(definition);
+            Assert.Equal(original.GetVariableType(), restored.GetVariableType());
+            Assert.True(JsonCanonicalForm.Equals(expected, JsonConversionContract.SerializeToElement(restored.DefaultValue, restored.GetVariableType())));
+        }
+        Assert.Null(_mapper.Map(new Variable<string>("Empty", null!, "empty")).Default);
+    }
 
     [Theory]
     [InlineData("String", CollectionKind.Single, typeof(string))]

@@ -42,7 +42,7 @@ internal sealed class PrimitiveReleaseOccurrenceInspector(IReleaseRuntimeSiteRea
             var alias = site.Site.Discriminator; const string inputKey = "text";
             if (contract.ActivityTypeKey != node.ActivityType || contract.ContractVersion != node.ActivityTypeVersion ||
                 contract.DescriptorKind != typeof(ClrActivityDescriptor).FullName || contract.Activation.DescriptorKind != contract.DescriptorKind ||
-                contract.Activation.Capability != alias || !JsonElement.DeepEquals(contract.DescriptorPayload, node.DescriptorPayload) ||
+                contract.Activation.Capability != alias || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(contract.DescriptorPayload, node.DescriptorPayload) ||
                 contract.SideEffectProfile != SideEffectProfile.ReplaySafe ||
                 contract.Result.Type != new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(ActivityUnit))) ||
                 !contract.Result.IsRequired || contract.Result.Projections.Count != 0 || !contract.Outcomes.ToHashSet(StringComparer.Ordinal).SetEquals(["Done"]) ||
@@ -68,7 +68,7 @@ internal sealed class PrimitiveReleaseOccurrenceInspector(IReleaseRuntimeSiteRea
                 if (binding.Source == RuntimeInputBindingSource.Literal && binding.LiteralValue is null) return ValueTask.FromResult(Failed("primitive_literal_missing"));
                 if (binding.LiteralValue is { } literal && !Text(literal, input.IsNullable)) return ValueTask.FromResult(Failed("primitive_literal_mismatch"));
             }
-            var key = JsonSerializer.Serialize(new object?[] { site.Member.Kind, site.Member.Identity, site.Origin, site.Node, "activity-module", "ActivitiesPrimitives" });
+            var key = JsonSerializer.Serialize(new object?[] { site.Member.Kind, site.Member.Identity, site.Origin, site.Node, "activity-module", "ActivitiesPrimitives" }, options: Elsa.Serialization.Core.JsonBaseline.Options);
             return ValueTask.FromResult(new ReleaseOccurrenceFacts(ReleaseSemanticStatus.Verified, prerequisites:
                 [new(key, site.Member, "activity-module", "ActivitiesPrimitives", "opaque", "required")]));
         }

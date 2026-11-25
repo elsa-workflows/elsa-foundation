@@ -7,8 +7,8 @@
   "interchangePackage": "0.1.1-preview.19",
   "stateAlias": "Elsa.Bpmn.ExecutionState",
   "stateVersion": 1,
-  "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404",
-  "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+  "databaseSha256": "6ae5cf91172fa180cdf4bda62bb7f450d9ffa81bdf420e0f2a149c6db7e7d1cc",
+  "compressedSha256": "75e41d27f3ad5a01ca670853472715df8250be9b5120e71b22657a2486e3203e",
   "oldHostControl": "fresh provider over a separate exact database copy passed",
   "facts": {
     "parentId": "legacy-activity-0",
@@ -98,7 +98,7 @@
         "fault": {
           "code": "bpmn.child.faulted",
           "exceptionType": "Elsa.Activities.Runtime.Core.Models.ActivityFault",
-          "message": "BPMN process faulted because child node \u0027node-listener\u0027 faulted: a faulted child cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+          "message": "BPMN process faulted because child node 'node-listener' faulted: a faulted child cannot complete, so its token — and any downstream join that requires it — can no longer proceed.",
           "sanitizedStackTrace": null,
           "isRetryable": false,
           "metadata": {}
@@ -163,7 +163,7 @@
           "metadata": {}
         },
         "failureType": "ActivityReturnedFault",
-        "message": "BPMN process faulted because child node \u0027node-listener\u0027 faulted: a faulted child cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+        "message": "BPMN process faulted because child node 'node-listener' faulted: a faulted child cannot complete, so its token — and any downstream join that requires it — can no longer proceed.",
         "createdAt": "2026-10-28T15:23:27.644631+00:00",
         "resolvedAt": null,
         "metadata": {
@@ -176,7 +176,7 @@
           "runtime.executableNodeId": "node-bpmn",
           "runtime.faultSubStatus": "ActivityReturnedFault",
           "runtime.faultType": "Elsa.Activities.Runtime.Services.ActivityTransitionFaultException",
-          "runtime.faultMessage": "BPMN process faulted because child node \u0027node-listener\u0027 faulted: a faulted child cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed."
+          "runtime.faultMessage": "BPMN process faulted because child node 'node-listener' faulted: a faulted child cannot complete, so its token — and any downstream join that requires it — can no longer proceed."
         },
         "isActive": true,
         "isBlocking": true
@@ -219,5 +219,101 @@
         "isBlocking": true
       }
     ]
+  },
+  "s9Regeneration": {
+    "spec": 1207,
+    "inputDatabaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404",
+    "inputCompressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+    "changedContracts": 4,
+    "changedDescriptors": 8,
+    "changedFields": [
+      "workflow_executable.ContentJson/activityContract/schemaFingerprint",
+      "workflow_executable.ContentJson/descriptorPayload/typeAlias",
+      "activity_execution_state.ContentJson/contractIdentity/schemaFingerprint",
+      "activity_execution_state.ContentJson/inputSnapshot/contractFingerprint",
+      "activity_execution_state.ContentJson/completion/contractFingerprint",
+      "activity_execution_state.ContentJson/inputSnapshot/bindingFingerprint",
+      "activity_execution_state.ContentJson/privateState/value/inlineValue: EventWaitState.EventName→eventName or LegacyCheckpointOutcomeWaitState.Name→name only"
+    ],
+    "historicalControl": "oldHostControl applies to the original input capture, before the S-9 transformation",
+    "statePinsRegenerated": true,
+    "changedStateContractReferences": 12,
+    "changedBindingFingerprints": 5,
+    "changedLeafStateMemberNames": 2
+  },
+  "s9ProtocolRegeneration": {
+    "spec": 1207,
+    "inputCompressedSha256": "05b6d207738bafa975de8ae1efffeea193a3ebf5862d59b1a869a0139904dc6b",
+    "inputDatabaseSha256": "f49fafe546dcc03261a68df74a015cd762b7bf1f2ddd7b086cb718e074db97f3",
+    "changedColumns": [
+      "elsa_runtime_post_commit_outbox.ContentJson",
+      "elsa_runtime_scheduler_work_item.ContentJson"
+    ],
+    "changes": [
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 1,
+        "renamedKeyTokens": 23,
+        "inputSha256": "4ec1328d6c954138b929ef2c0f9dffde05fe75e7f7e489639a433fe278fee9df",
+        "outputSha256": "ee8e2bda1243e5da21e093bf52253ef8942a19980ff06190dc2116f89a68bbad"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 2,
+        "renamedKeyTokens": 23,
+        "inputSha256": "90d7ae1455800fa53d2776946cec6c001635060e8c5e42bbeaba0577af5a7ab1",
+        "outputSha256": "cc3e815f68e2af1568fe450c8565d519110229c731568ed63231d610b704d282"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 3,
+        "renamedKeyTokens": 32,
+        "inputSha256": "97293797c52ced0f604cada6c6ca2bbbb0ab830245d8e4cb877cad1a3e10ed30",
+        "outputSha256": "0b9273c36f6c0ebea3aa5d72523d131db9ffab95b7a0f7fa5f2190d4d7b7ddb1"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 4,
+        "renamedKeyTokens": 32,
+        "inputSha256": "2fdb463470c2f875f585a31cfed6717090192d79d83ef6250ae6ab5d9e969123",
+        "outputSha256": "96b030f1a818721cbb794f23abf794a5d8c34e2a896970e3d2149f4c39f58a67"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 5,
+        "renamedKeyTokens": 23,
+        "inputSha256": "20ece9be0133887d7919b741d788193e3e436898007775bb1b350d01edc37030",
+        "outputSha256": "7bc6a4132fdda8602ced5f121fafdebcb4325bf5f21cd7de527ae5e4fd0324cf"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 6,
+        "renamedKeyTokens": 23,
+        "inputSha256": "c2b342d1fb932aa5ef1df056606678e51ae3d54a4f285b982294ea673cfac47f",
+        "outputSha256": "6cfd637a4b3e9c408769eba11af0834ee768499ba73808a7e06842fc80ac8470"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 7,
+        "renamedKeyTokens": 32,
+        "inputSha256": "7d0709f7e0086b91f2f09b08c5e8895f4a3f1792f35438ff7fcf5028cfe70d0c",
+        "outputSha256": "b64e08f85834377818639cabe1d7261bf7efe4e8b31c55532242ae5851d710b1"
+      },
+      {
+        "table": "elsa_runtime_post_commit_outbox",
+        "rowId": 8,
+        "renamedKeyTokens": 28,
+        "inputSha256": "d494bc9a54b3e3cb0ab9dae7084a6da8cbc4fc5cb04936aba0fdf3ee1cf7532b",
+        "outputSha256": "eeb26f496878094993c5eb3150a935d35634fedb990f413c7fb2ddfe152d62b0"
+      },
+      {
+        "table": "elsa_runtime_scheduler_work_item",
+        "rowId": 2,
+        "renamedKeyTokens": 14,
+        "inputSha256": "2d72e25f1bfac4611b37c02c5999d913a9ade3f481df9b9e5ec58515f85b009c",
+        "outputSha256": "f9ab27e100fcdefc3bbc3c1edd4a546e0448750fe6e423b675562bfa23fbe0e0"
+      }
+    ],
+    "preserved": "Only declared RuntimeSchedulerWorkItem/typed command/identity/provenance key tokens change; every other JSON token and database column is unchanged. Historical old-host proof applies to the original capture."
   }
 }

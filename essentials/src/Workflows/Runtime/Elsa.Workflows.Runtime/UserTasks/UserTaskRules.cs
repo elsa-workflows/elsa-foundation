@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.UserTasks;
 
 internal static class UserTaskRules
 {
-    internal static string Id(params string[] parts) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(parts))));
+    internal static string Id(params string[] parts) => Elsa.Serialization.Core.JsonHashInput.Hash(parts);
     internal static bool Terminal(UserTaskRecord task) => task.Status is UserTaskStatus.Completed or UserTaskStatus.Cancelled;
     internal static bool CanSee(UserTaskRecord task, string user, IReadOnlySet<string> groups, bool manage = false) => manage ||
         (NormalizeAssignment(task.GroupId) is { } group ? groups.Contains(group) && (task.ClaimantId is null || task.ClaimantId == user) : task.AssigneeId == user);
@@ -43,6 +43,6 @@ internal static class UserTaskRules
             throw new UserTaskException("validation", "Select a published version for the task form.");
     }
 
-    internal static T Copy<T>(T value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value))!;
+    internal static T Copy<T>(T value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value, Elsa.Serialization.Core.JsonBaseline.Options), Elsa.Serialization.Core.JsonBaseline.Options)!;
     internal static string? NormalizeAssignment(string? assignment) => string.IsNullOrWhiteSpace(assignment) ? null : assignment;
 }

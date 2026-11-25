@@ -18,7 +18,7 @@ public sealed partial class InMemoryDurableTimerStore
             {
                 try
                 {
-                    cursor = JsonSerializer.Deserialize<DuePageCursor>(Convert.FromBase64String(token)) ?? throw new FormatException();
+                    cursor = JsonSerializer.Deserialize<DuePageCursor>(Convert.FromBase64String(token), options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new FormatException();
                     if (cursor.Binding != binding || cursor.Due < 0 || cursor.Due > asOf.UtcTicks ||
                         cursor.Key is null || cursor.Key.Length != 64 || cursor.Key.Any(c => !(c is >= '0' and <= '9' or >= 'a' and <= 'f')))
                         throw new FormatException();
@@ -39,7 +39,7 @@ public sealed partial class InMemoryDurableTimerStore
             var more = rows.Length > page.Limit;
             if (more) rows = rows[..page.Limit];
             var next = more ? Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new DuePageCursor(binding,
-                rows[^1].Timer.DueTime.UtcTicks, rows[^1].Key))) : null;
+                rows[^1].Timer.DueTime.UtcTicks, rows[^1].Key), options: Elsa.Serialization.Core.JsonBaseline.Options)) : null;
             cancellationToken.ThrowIfCancellationRequested();
             return ValueTask.FromResult(new RuntimeStorePage<DurableTimer>(page, rows.Select(item => item.Timer).ToArray(), next));
         }

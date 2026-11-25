@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { StudioAlert, StudioPageHeader, StudioButton, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { useStudioRouteLocation, useStudioWorkspaceTab, studioNavigationRequestedEvent, type StudioNavigationRequest, type StudioDialogApi, type StudioEndpointContext, type StudioNotificationApi } from "@elsa-workflows/studio-sdk";
@@ -44,6 +46,7 @@ export function EtlDefinitionsPage({ context, dialogs, notifications, navigate, 
 function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, TBinding extends EtlBindingSummary>({
   context, dialogs, notifications, profile, definition, showDefinition, routed
 }: { definition:string | null; showDefinition:(id:string | null)=>void; routed:boolean; context: StudioEndpointContext; dialogs: StudioDialogApi; notifications?: StudioNotificationApi; profile: EtlAuthoringProfile<TPipeline, TBinding> }) {
+  useStudioTimeZone();
   const { listEtlBindings, listEtlDefinitions, listEtlVersions, getEtlDefinition, createEtlDefinition,
     updateEtlDraft, validateEtlDraft, publishEtlDefinition, getEtlVersion } = profile.api;
   const PipelineEditor = profile.Editor;
@@ -766,6 +769,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
 }
 
 function FailureNotice({ failure, subject, onRetry }: { failure: RequestFailure; subject: string; onRetry(): void }) {
+
   const message = failure.kind === "forbidden"
     ? `You do not have permission to read ${subject}.`
     : failure.kind === "unavailable"

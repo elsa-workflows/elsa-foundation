@@ -9,14 +9,10 @@ namespace Elsa.Activities.Design.Persistence.Core.Services;
 
 /// <summary>
 /// Default implementation of <see cref="IActivityDefinitionHasher"/>. Computes a SHA-256
-/// hash over a canonicalised JSON serialisation of the (definition, version) pair —
-/// "canonical" meaning every object's properties are sorted alphabetically (ordinal) at
-/// every level. Native .NET only: no third-party canonicalisation library.
+/// hash of the (definition, version) projection through the shared JsonHashInput exact canonical form.
 /// </summary>
 /// <remarks>
-/// This is the sanctioned exception to the "all JSON via IPayloadSerializer" rule: hashing needs a
-/// canonical sorted-key serialisation that the payload serializer does not produce, and the JSON is
-/// consumed only here (it is never persisted or read by another component — only the SHA-256 is).
+/// Hash projections use JsonHashInput; canonical hash bytes are never persisted as domain data.
 /// Excluded from the hash: <c>LastModifiedAt</c>/<c>CreatedAt</c>/<c>RowNumber</c>, provenance,
 /// identity fields such as <c>Id</c> and <c>Version</c>, nested versions on the parent, and the
 /// presentation-only <c>elsa.activity-icon</c> design facet. Input <c>Tier</c> is hashed so a
@@ -30,11 +26,6 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
         nameof(Primitives.Entities.Entity.CreatedAt),
         nameof(Primitives.Entities.Entity.RowNumber),
     };
-    private static readonly JsonSerializerOptions options = new()
-    {
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-    };
-
     public string Hash(IActivityDefinition definition, IActivityDefinitionVersion version)
     {
         var payload = new
@@ -43,13 +34,7 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
             Version = ProjectVersion(version),
         };
 
-        var json = JsonSerializer.Serialize(payload, options);
-
-        var canonical = Canonicalise(json);
-        var bytes = Encoding.UTF8.GetBytes(canonical);
-        var digest = SHA256.HashData(bytes);
-
-        return Convert.ToHexString(digest);
+        return Elsa.Serialization.Core.JsonHashInput.Hash(payload).ToUpperInvariant();
     }
 
     // Projects the definition to a plain object containing only the content-bearing fields.
@@ -81,42 +66,4 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
         facets.Where(facet => !string.Equals(facet.Kind, ActivityIconName.FacetKind, StringComparison.Ordinal)
             && !string.Equals(facet.Kind, "elsa.activity-palette", StringComparison.Ordinal));
 
-    private static string Canonicalise(string json)
-    {
-        var node = JsonNode.Parse(json)
-            ?? throw new InvalidOperationException("Hasher: input JSON parsed to null.");
-        var sorted = SortNode(node);
-        return sorted.ToJsonString();
-    }
-
-    private static JsonNode SortNode(JsonNode node)
-    {
-        return node switch
-        {
-            JsonObject obj => SortObject(obj),
-            JsonArray arr => SortArray(arr),
-            _ => node.DeepClone(),
-        };
-    }
-
-    private static JsonObject SortObject(JsonObject src)
-    {
-        var dest = new JsonObject();
-        foreach (var key in src.Select(kv => kv.Key)
-                                .Where(k => !ExcludedPropertyNames.Contains(k))
-                                .OrderBy(k => k, StringComparer.Ordinal))
-        {
-            var value = src[key];
-            dest[key] = value is null ? null : SortNode(value);
-        }
-        return dest;
-    }
-
-    private static JsonArray SortArray(JsonArray src)
-    {
-        var dest = new JsonArray();
-        foreach (var item in src)
-            dest.Add(item is null ? null : SortNode(item));
-        return dest;
-    }
 }
