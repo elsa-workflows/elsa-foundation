@@ -52,7 +52,7 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         }
         catch (Exception)
         {
-            Volatile.Write(ref _reported, 1);     // a later dispose does not report the same failure again
+            Interlocked.Exchange(ref _reported, 1);     // a later dispose does not report the same failure again
             throw;
         }
     }
@@ -61,6 +61,7 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     public static readonly TimeSpan KillGrace = TimeSpan.FromSeconds(2);
 
     private int _reported;
+    private readonly CancellationTokenSource _killNode = new();     // a dispose deadline kills the node's stop, whoever started it
 
     private async Task EscalateUnlessStoppedAsync(Task shutdown, string reason)
     {
@@ -70,19 +71,21 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
 
     /// <summary>
     /// A stop bounded by <see cref="LoopOptions.DisposeDeadline"/>, for a host disposed without <see cref="StopAsync"/>
-    /// (a later service failed to start): at the deadline the stop becomes a kill, and the process policy runs if it
-    /// still has not finished.
+    /// (a later service failed to start): at the deadline the stop becomes a kill, also when a stop was already under way,
+    /// and the process policy runs if it still has not finished after <see cref="KillGrace"/>. A failure is reported once:
+    /// a dispose does not rethrow what a stop or an earlier dispose received.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
         using var deadline = new CancellationTokenSource((options ?? new LoopOptions()).DisposeDeadline);
+        using var kill = deadline.Token.Register(static state => ((CancellationTokenSource)state!).Cancel(), _killNode);
         var shutdown = RequestStop(deadline.Token);
         try { await shutdown.WaitAsync(deadline.Token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
             await EscalateUnlessStoppedAsync(shutdown, "The PostgreSQL preview node did not stop within its dispose deadline.");
         }
-        catch (Exception) when (Volatile.Read(ref _reported) == 1) { }
+        catch (Exception) when (Interlocked.Exchange(ref _reported, 1) == 1) { }
     }
 
     private Task RequestStop(CancellationToken deadline)
@@ -107,7 +110,9 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
             {
                 // Startup reports its own error. An owner that did start must be stopped even if cancellation failed.
                 await ((Task)startup).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-                if (startup.IsCompletedSuccessfully) await startup.Result.StopAsync(deadline);
+                // The caller's deadline and a dispose deadline both end the drain as a kill.
+                using var stop = CancellationTokenSource.CreateLinkedTokenSource(deadline, _killNode.Token);
+                if (startup.IsCompletedSuccessfully) await startup.Result.StopAsync(stop.Token);
             }
         }
         finally { _cancelStartup.Dispose(); }
