@@ -231,13 +231,12 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
   `OpenIddictEngineDatabases.cs` (today through a project reference to `Elsa.Workbench.csproj`) repoint to the library,
   and so do `essentials/tests/Modularity/Tests/` (`WorkbenchOpenIddictStoreProviderTests.cs`,
   `WorkbenchOpenIddictPruningTests.cs`, `WorkbenchOpenIddictVendorTests.cs`, `WorkbenchOpenIddictTestHost.cs`,
-  `HostOwnedServicesAreSharedWithShellsTests.cs`), which reach the moved internals through the Workbench's `InternalsVisibleTo
-  Elsa.Modularity.Tests`. The library keeps those types internal and grants `InternalsVisibleTo` to
-  `Elsa.Modularity.Tests` only, added next to `("Elsa.Workbench", "Elsa.Modularity.Tests")` in the exception list of
-  `ArchitectureGuardTests.InternalsVisibleTo_grants_stay_within_the_granting_domain`; the tests follow the neutral
-  names. `OpenIddictPersistenceArchitectureTests` is updated as above.
-- **Pinned vendor lists**: the store library pins today's `WorkbenchOpenIddictEfPackages` (the EF provider packages
-  and `OpenIddict.EntityFrameworkCore` its contexts need); the Workbench keeps its list unchanged (direct references
+  `HostOwnedServicesAreSharedWithShellsTests.cs`). The moved types are public today (only `TakeOverAutoMigrate` is internal, and no test uses it) and stay public,
+  since the Workbench calls the registrations from its own assembly, so the library needs no `InternalsVisibleTo`
+  grant; the tests follow the neutral names. `OpenIddictPersistenceArchitectureTests` is updated as above.
+- **Pinned vendor lists**: the store library pins today's `WorkbenchOpenIddictEfPackages` without
+  `MySql.EntityFrameworkCore` (the store refuses MySQL and no moved file uses it), that is the EF provider packages and
+  `OpenIddict.EntityFrameworkCore` its contexts need; the Workbench keeps its list unchanged (direct references
   kept); the essentials engine host references no EF vendor package directly, so its pinned list is empty.
 - **Admission**: `EfCoreDependencyGuardTests` reads each project's full restore graph. The library, the composition
   library and the essentials engine host each are admitted: a name in `AllowedEfConsumers`, a reviewed

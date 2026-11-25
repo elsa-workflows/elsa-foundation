@@ -141,7 +141,7 @@ reference; each host is a thin composition over existing features. The OpenIddic
 (Program.cs and its OpenIddict files) into `apps/Elsa.Essentials.OpenIddict`. Nothing in `essentials/src` changes. Outside the new
 projects, the code that changes is the Workbench host and these tests: the architecture guards
 (`OpenIddictPersistenceArchitectureTests`, `EfCoreDependencyGuardTests`, `HostProvidedPackagesGuardTests`,
-`ArchitectureGuardTests` with its `InternalsVisibleTo` list), `essentials/tests/Modularity/ProviderTests` and
+`ArchitectureGuardTests`), `essentials/tests/Modularity/ProviderTests` and
 `essentials/tests/Modularity/Tests/` (`WorkbenchOpenIddictStoreProviderTests.cs`,
 `WorkbenchOpenIddictPruningTests.cs`, `WorkbenchOpenIddictVendorTests.cs`, `WorkbenchOpenIddictTestHost.cs`,
 `HostOwnedServicesAreSharedWithShellsTests.cs`). Configuration and documentation files the tasks name change too.

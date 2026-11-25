@@ -61,11 +61,10 @@ worktree path on Windows (MSB3030).
   repoint `essentials/tests/Modularity/ProviderTests/WorkbenchOpenIddictEngineTests.cs` and `OpenIddictEngineDatabases.cs`,
   and `essentials/tests/Modularity/Tests/` (`WorkbenchOpenIddictStoreProviderTests.cs`,
   `WorkbenchOpenIddictPruningTests.cs`, `WorkbenchOpenIddictVendorTests.cs`, `WorkbenchOpenIddictTestHost.cs`,
-  `HostOwnedServicesAreSharedWithShellsTests.cs`) to the library and its neutral names;
-  grant `InternalsVisibleTo` `Elsa.Modularity.Tests` from the library and add that pair to the exception list of
-  `ArchitectureGuardTests.InternalsVisibleTo_grants_stay_within_the_granting_domain`;
+  `HostOwnedServicesAreSharedWithShellsTests.cs`) to the library and its neutral names; keep the moved types
+  public as they are today (no `InternalsVisibleTo` grant);
   change `OpenIddictPersistenceArchitectureTests.Workbench_owns_the_vendor_package` so it pins the EF vendor package lists of the store library
-  (today's `WorkbenchOpenIddictEfPackages`), the Workbench (unchanged) and the engine host (empty), keeping the Identity test project's pinned list and its named-project
+  (today's `WorkbenchOpenIddictEfPackages` without `MySql.EntityFrameworkCore`), the Workbench (unchanged) and the engine host (empty), keeping the Identity test project's pinned list and its named-project
   shape (no repository-wide scan; R-13); admit the library in `EfCoreDependencyGuardTests` (its name in `AllowedEfConsumers`, its reviewed
   package array and an arm in `ReviewedEfPackages`) and leave the Workbench's unchanged; add it to the guard's `ExpectedProjectPath`/`ExpectedSolutionFolder`. Confirm the Workbench's
   tests and an existing Workbench SQLite token store still migrate and issue tokens unchanged (FR-017).
