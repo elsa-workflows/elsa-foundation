@@ -60,6 +60,8 @@ internal static class HostJobDrainChecks
             ("abandon-fault-after-kill", AbandonFaultAfterKillAsync),
             ("bound-expiry-fault", BoundExpiryFaultAsync),
             ("loss-in-both-drains", LossInBothDrainsAsync),
+            ("job-drain-loss-then-abandon", () => JobDrainLossNotDroppedAsync(killInRelease: false)),
+            ("job-drain-loss-then-kill", () => JobDrainLossNotDroppedAsync(killInRelease: true)),
             ("answer-put-back", () => AnswerPutBackAsync(newerAfterConsumption: false)),
             ("dispose-max-deadline", DisposeMaxDeadlineAsync),
             ("canceled-halt", CanceledHaltAsync),
@@ -1828,6 +1830,64 @@ internal static class HostJobDrainChecks
         await DisposeQuietlyAsync(node);
         Check(reported is ScopeOwnershipLostException,
             $"a fence lost in both drains is reported as one ScopeOwnershipLostException ({reported?.GetType().Name ?? "nothing"})");
+    }
+
+    // The job drain judges a lost fence before any kill. Then either the turn drain's abandon fault ends the stop, or the
+    // deadline kills it during the release that follows. Either way the loss is recorded once, when it was judged.
+    private static async Task JobDrainLossNotDroppedAsync(bool killInRelease)
+    {
+        const int partitions = 2;
+        var fixture = new Fixture(partitions);
+        var type = new JobProbe();
+        var jobPartition = -1;
+        var releasing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var store = new CountingStore(fixture.Store, static () => { }, observeCommit: (batch, landed) =>
+        {
+            if (!landed) return;
+            foreach (var turn in batch.Turns)
+                if (turn.Sent.Any(message => message.Kind == Kinds.Job)) Volatile.Write(ref jobPartition, batch.PartitionOf(turn));
+        }, afterRelease: async () =>
+        {
+            if (!killInRelease || Volatile.Read(ref jobPartition) < 0 || !type.Exited.Task.IsCompleted) return;
+            releasing.TrySetResult();
+            await finishRelease.Task;     // the stop's release, held until after the kill
+        });
+        var abandon = new InvalidOperationException("injected turn drain fault");
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var node = new RuntimeNode("job-drain-loss", store, partitions, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, beforeRelease: killInRelease ? null : _ => Task.FromException(abandon), onFault: logged.Enqueue);
+        await node.StartAsync(fixture.Host(node, type, store, ownedSet: true));
+        await WaitFor(() => fixture.Store.Partitions.All(row => row.Owner == node.Node));
+        await fixture.StartActorAsync(node);
+        await type.Entered.Task.WaitAsync(Timeout);
+        using var deadline = new CancellationTokenSource();
+        var stop = node.StopAsync(deadline.Token).AsTask();
+        try
+        {
+            await type.Canceled.Task.WaitAsync(Timeout);
+            var row = fixture.Store.Partitions[Volatile.Read(ref jobPartition)];
+            (row.Owner, row.Epoch) = ("sibling", row.Epoch + 1);     // the job drain loses this fence
+            await RenewedAsync(node, node.Heartbeats.Renewed);
+            await Task.Delay(300);
+        }
+        finally { type.Finish.TrySetResult(); }
+        Exception? outcome;
+        if (killInRelease)
+        {
+            await releasing.Task.WaitAsync(Timeout);     // the loss was judged; the release of the other fence is in flight
+            deadline.Cancel();
+            outcome = await OutcomeAsync(stop);
+            finishRelease.TrySetResult();
+        }
+        else outcome = await OutcomeAsync(stop);
+        await Task.Delay(300);
+        await DisposeQuietlyAsync(node);
+        var losses = logged.Count(entry => entry is ScopeOwnershipLostException);
+        Check(losses == 1 && (killInRelease ? outcome is null : ReferenceEquals(outcome, abandon) && logged.Count(entry => ReferenceEquals(entry, abandon)) == 1),
+            $"a fence the job drain lost before the kill is recorded once{(killInRelease ? ", though the kill lands in the release" : ", though the turn drain's fault ends the stop")} (stop {outcome?.GetType().Name ?? "returned"}, logged [{string.Join(", ", logged.Select(entry => entry.GetType().Name))}])");
     }
 
     // A judgement takes a newer answer, one that names a loss, than the one a drain round read before; then a transient
