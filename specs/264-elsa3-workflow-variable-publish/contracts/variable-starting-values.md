@@ -22,7 +22,7 @@ container variables and the variables of a reusable activity's graph manifest.
 | Message (items) | `Variable '{name}' has the starting value '{value}', whose items cannot be converted to '{element}'.` |
 | Message (dictionary) | `Variable '{name}' has the starting value '{value}', which is not a JSON object.` Guidance shows an example object |
 | Message (value) | `Variable '{name}' has the starting value '{value}', which cannot be converted to its type '{typeName}'.` Strict conversion: a value that only converts by falling back to the type's default is refused |
-| Message (type) | `Variable '{name}' has the starting value '{value}', but its type '{typeName}' is not known in Elsa 4, and the value is not JSON, so it cannot start as it did in Elsa 3.` A JSON value on such a type converts to `Object` |
+| Message (type) | `Variable '{name}' has the starting value '{value}', but its type '{typeName}' is not known in Elsa 4, and the value is not a JSON object or array, so it cannot start as it did in Elsa 3.` A JSON object or array on such a type converts to `Object` (now Any, spec 1228); any other value, a JSON number such as `42` included, is refused (clarification 2026-11-24, #5684) |
 | Guidance | `In the Elsa 3 workflow, change the variable's starting value to one its type accepts, or change its type to Object to keep the value as text. Elsa 3 started such a variable with its type's default or empty.` |
 | Metadata | the plan's usual metadata, plus `VariableName` |
 

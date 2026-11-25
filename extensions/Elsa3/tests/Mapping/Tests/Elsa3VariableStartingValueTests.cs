@@ -13,8 +13,10 @@ namespace Elsa3.Mapping.Tests;
 
 /// <summary>
 /// Spec 264 (#3122): a converted variable has no starting value when Elsa 3 had none, and otherwise the value Elsa 3
-/// gave it, as a <c>Literal</c> publication accepts. A collection starts from a JSON array and a dictionary from a JSON
-/// object, never from comma-separated text. A value that cannot start as it did in Elsa 3 is refused with how to fix it.
+/// gave it, as a <c>Literal</c> publication accepts. A collection whose element type Elsa 4 knows starts from a JSON array
+/// and a dictionary from a JSON object; any other type Elsa 4 does not know, a resource aside, is Any and starts from a
+/// JSON object or array. Text is never split on commas. A value that cannot start as it did in Elsa 3 is refused with how
+/// to fix it.
 /// </summary>
 public sealed class Elsa3VariableStartingValueTests
 {
@@ -146,9 +148,13 @@ public sealed class Elsa3VariableStartingValueTests
         { "FormFile[]", """[{"name":"a.txt"}]""", "a resource", "#3194" },
         { "ObjectDictionary", "a=1", "is not a JSON object", """for example {"key": "value"}""" },
         { "HttpHeaders", "Accept: text/plain", "is not a JSON object", """for example {"Accept": ["application/json"]}""" },
-        // A type Elsa 4 does not know runs as Object, which can only hold JSON as Elsa 3 had it.
-        { "System.DayOfWeek", "Monday", "is not known in Elsa 4, and the value is not JSON", "change the variable's type to Object" },
-        { "Acme.Orders.Order, Acme", "order-1", "is not known in Elsa 4, and the value is not JSON", "as a JSON object or array" }
+        // A type Elsa 4 does not know runs as Any, which can only hold a JSON object or array as Elsa 3 had it (spec 264 FR-004).
+        { "System.DayOfWeek", "Monday", "is not known in Elsa 4, and the value is not a JSON object or array", "change the variable's type to Object" },
+        { "Acme.Orders.Order, Acme", "order-1", "is not known in Elsa 4, and the value is not a JSON object or array", "as a JSON object or array" },
+        // A JSON scalar is not an object or array: Elsa 3 read it in a way the converter cannot know, so it is refused too.
+        { "Acme.Orders.Order, Acme", "42", "is not known in Elsa 4, and the value is not a JSON object or array", "as a JSON object or array" },
+        // A nested collection is Any as well, under the same rule, and its text is never split on commas.
+        { "List<List<String>>", "a, b", "is not known in Elsa 4, and the value is not a JSON object or array", "as a JSON object or array" }
     };
 
     [Theory]
