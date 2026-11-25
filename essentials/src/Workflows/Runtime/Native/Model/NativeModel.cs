@@ -78,6 +78,14 @@ public class NativeExecutionOptions
     /// commit may start a version published in between.
     /// </summary>
     public Func<string, string?>? ServedWorkflow { get; init; }
+
+    /// <summary>
+    /// The workflow for an id the registry does not hold, which the host loads (null when it has none). A publishing host's
+    /// registry holds, after a restart, the versions its slots serve, and an instance started on an earlier version still runs
+    /// that version: the host loads it from its artifacts. Consulted before a turn or a job whose workflow the registry lacks;
+    /// what it returns joins the registry. A migration's check reads the registry only.
+    /// </summary>
+    public Func<string, CancellationToken, ValueTask<Workflow?>>? ResolveWorkflow { get; init; }
 }
 
 // ---- the state: live frames, scheduled work, waits, variables, results ---------------------------------------------

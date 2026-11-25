@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using static Elsa.Workflows.Runtime.KernelHost.Tests.Compiled;
+using Contract = Kernel.Foundation.Contracts;
 using Models = Kernel.Model.Contracts;
 using Native = Kernel.Native;
 
@@ -121,10 +122,13 @@ public sealed class KernelCoordinatorTests
         public KernelActivationCoordinator Coordinator = null!;
         public RecordingObserver Observer = null!;
         private readonly ActivationChannelOptions? _channels;
+        private readonly string? _schedulesUnavailable;
 
-        public Host(ActivationChannelOptions? channels = null)
+        /// <param name="schedulesUnavailable">Set, the host runs no schedule actor, and its serving refuses a Timer or Cron with this reason.</param>
+        public Host(ActivationChannelOptions? channels = null, string? schedulesUnavailable = null)
         {
             _channels = channels;
+            _schedulesUnavailable = schedulesUnavailable;
             References = new(Executables, Clock);
             Switch = new(Authority, References, Clock, Bindings, RecurringSchedules);
             Restart();
@@ -132,7 +136,7 @@ public sealed class KernelCoordinatorTests
 
         public void Restart()
         {
-            Serving = new KernelServing(expression => expression == "0 * * * * *" ? null : "not a cron expression this host reads");
+            Serving = new KernelServing(expression => expression == "0 * * * * *" ? null : "not a cron expression this host reads", _schedulesUnavailable);
             Schedules = new RecordingSchedules();
             Observer = new RecordingObserver();
             Coordinator = NewCoordinator(Switch);
@@ -523,19 +527,90 @@ public sealed class KernelCoordinatorTests
     }
 
     [Fact]
-    public async Task A_host_without_schedule_actors_refuses_a_timer_at_serving_with_its_reason()
+    public async Task A_host_without_schedule_actors_refuses_a_timer_at_the_serving_check_with_its_reason()
     {
-        var host = new Host();
-        host.Coordinator = host.NewCoordinator(host.Switch, new UnavailableScheduleActors("Timer and Cron do not run on this preview. Remove the Timer."));
+        const string reason = "Timer and Cron triggers don't run on this host yet. Remove the Timer.";
+        var host = new Host(schedulesUnavailable: reason);
+        host.Coordinator = host.NewCoordinator(host.Switch, new UnavailableScheduleActors(reason));
 
         var timer = await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
         var http = await host.ActivateAsync(Orders("orders@1"), "orders-1");
 
-        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.ProjectionActivation), (timer.Outcome, timer.FailedStep));
-        Assert.StartsWith("Timer and Cron do not run on this preview. Remove the Timer.", timer.Diagnostic, StringComparison.Ordinal);
+        // Refused before anything is minted: no reference, and the slot never moved.
+        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.ServingCheck), (timer.Outcome, timer.FailedStep));
+        Assert.Equal(reason, timer.Diagnostic);
         Assert.Null(timer.Slot.ActiveActivationId);
+        Assert.Null(await host.ReferenceAsync("ticks-1"));
         Assert.Null(host.Serving.ServedWorkflow("ticks"));
         Assert.Equal(WorkflowActivationOutcome.Activated, http.Outcome);
+        // Unpublishing what serves stops no schedule and unregisters no run, which the stand-in takes without failing.
+        Assert.True((await host.DeactivateAsync(Orders("orders@1"))).Succeeded);
+    }
+
+    [Fact]
+    public async Task The_stand_in_takes_a_stop_and_an_unregister_and_refuses_a_set()
+    {
+        var schedules = new UnavailableScheduleActors("no schedules here");
+
+        await schedules.StopAsync("schedule:ticks:tick", 3);
+        await schedules.RegisterRunAsync("schedule-start:ticks:tick", null);
+
+        Assert.Equal("no schedules here", (await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            schedules.SetAsync("schedule:ticks:tick", 3, new RecurringSchedule("interval", "PT1M"), "schedule-start:ticks:tick").AsTask())).Message);
+        Assert.Equal("no schedules here", (await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            schedules.RegisterRunAsync("schedule-start:ticks:tick", Native.NativeExecutionModel.Start("ticks@1")).AsTask())).Message);
+    }
+
+    private static WorkflowExecutable Waits(string artifact, string text) => ExecutableOf(artifact, "waits", Sequence("root",
+        Node("delay", Types.Delay, [Literal("Duration", "00:00:05", "TimeSpan")]),
+        SetOutput("done", "Result", Literal("value", text, "String"))));
+
+    /// <summary>The Native model of a host over its serving state, loading what its registry lacks from the host's executable store.</summary>
+    private static Native.NativeExecutionModel ModelOf(Host host) => new(host.Serving.Registry, new Native.NativeExecutionOptions
+    {
+        ResolveWorkflow = (workflow, token) => NativeExecutableMapper.MapStoredAsync(host.Executables, workflow, token),
+    });
+
+    [Fact]
+    public async Task Instances_in_flight_continue_after_a_restart_on_the_served_version_and_on_an_older_one()
+    {
+        var host = new Host();
+        await host.ActivateAsync(Waits("waits@1", "first"), "waits-1");
+        var older = await NativeTurn.StartAsync(ModelOf(host), host.Serving.Registry.Get("waits@1"));
+        await host.ActivateAsync(Waits("waits@2", "second"), "waits-2");
+        var served = await NativeTurn.StartAsync(ModelOf(host), host.Serving.Registry.Get("waits@2"));
+        Assert.Equal((Contract.ActorStatus.Running, Contract.ActorStatus.Running), (older.Status, served.Status));
+
+        host.Restart();
+        await host.Coordinator.ServeActiveSlotsAsync();
+        Assert.True(host.Serving.Registry.Contains("waits@2"));
+        Assert.False(host.Serving.Registry.Contains("waits@1"));
+
+        // Each delay's timer comes due on the restarted host: each instance runs on to its end, on the version it started on.
+        var model = ModelOf(host);
+        var olderNext = await older.ResumeAsync(model);
+        var servedNext = await served.ResumeAsync(model);
+
+        Assert.Equal((Contract.ActorStatus.Finished, Contract.ActorStatus.Finished), (olderNext.Status, servedNext.Status));
+        Assert.Equal("first", olderNext.Output?["Result"]?.GetValue<string>());
+        Assert.Equal("second", servedNext.Output?["Result"]?.GetValue<string>());
+        // The older version joined the registry, and serves nothing: its definition's route and Dispatch reach the served one.
+        Assert.True(host.Serving.Registry.Contains("waits@1"));
+        Assert.Equal("waits@2", host.Serving.ServedWorkflow("waits"));
+    }
+
+    [Fact]
+    public async Task A_turn_of_a_workflow_the_host_has_no_artifact_for_faults_as_before()
+    {
+        var host = new Host();
+        await host.ActivateAsync(Waits("waits@1", "first"), "waits-1");
+        var turn = await NativeTurn.StartAsync(ModelOf(host), host.Serving.Registry.Get("waits@1"));
+
+        // Another host, whose store never held the artifact.
+        var other = new Host();
+        var missing = await Assert.ThrowsAsync<InvalidOperationException>(() => turn.ResumeAsync(ModelOf(other)));
+
+        Assert.Equal("No workflow 'waits@1'.", missing.Message);
     }
 
     [Fact]

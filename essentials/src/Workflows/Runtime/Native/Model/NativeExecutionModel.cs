@@ -69,12 +69,37 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     }
 
     public ValueTask TurnAsync(Models.ITurn turn, CancellationToken cancellationToken) =>
+        Resolves(turn.Instance.Workflow) ? ResolvedTurnAsync(turn, cancellationToken) : RunTurnAsync(turn, cancellationToken);
+
+    private async ValueTask ResolvedTurnAsync(Models.ITurn turn, CancellationToken cancellationToken)
+    {
+        await ResolveAsync(turn.Instance.Workflow, cancellationToken);
+        await RunTurnAsync(turn, cancellationToken);
+    }
+
+    private ValueTask RunTurnAsync(Models.ITurn turn, CancellationToken cancellationToken) =>
         new Burst(registry, _options, new ContractTurn(turn, outbound, definitionOf: DefinitionOf), cancellationToken).RunAsync();
 
     private string? DefinitionOf(string workflow) => registry.TryGet(workflow, out var found) ? found.Definition : null;
 
-    public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
-        ExecuteBackground(registry, job.Actor, job.Arguments, cancellationToken, _options.Http);
+    /// <summary>Whether <paramref name="workflow"/> is one the registry lacks and the host may load (<see cref="NativeExecutionOptions.ResolveWorkflow"/>).</summary>
+    private bool Resolves(string workflow) => _options.ResolveWorkflow is not null && !registry.Contains(workflow);
+
+    private async ValueTask ResolveAsync(string workflow, CancellationToken cancellationToken)
+    {
+        if (await _options.ResolveWorkflow!(workflow, cancellationToken) is not { } found) return;
+        if (!StringComparer.Ordinal.Equals(found.Id, workflow))
+            throw new InvalidOperationException($"The host resolved workflow '{workflow}' to '{found.Id}'.");
+        registry.Add(found);
+    }
+
+    public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+    {
+        if (_options.ResolveWorkflow is not null && job.Arguments is { } arguments &&
+            JsonSerializer.Deserialize<BackgroundArgs>(arguments) is { } args && Resolves(args.Workflow))
+            await ResolveAsync(args.Workflow, cancellationToken);
+        return await ExecuteBackground(registry, job.Actor, job.Arguments, cancellationToken, _options.Http);
+    }
 
     internal static async ValueTask<object?> ExecuteBackground(WorkflowRegistry registry, Contract.ActorRef actor,
         string? arguments, CancellationToken cancellationToken, NativeHttpOptions? http = null)

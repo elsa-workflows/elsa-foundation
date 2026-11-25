@@ -349,15 +349,17 @@ the preview database. Existing workflow and Studio endpoints still use their cur
 Set `Elsa__CorePreview__Publications=true`, beside `Elsa__CorePreview__Enabled=true`, to run the default shell's
 publications on the kernel (K10). The one switch composes both sides. The host shares one `KernelServing` between the
 preview node, which runs the registry it serves into, and the default shell. The default shell enables the
-`WorkflowsRuntimeKernel` feature, which replaces its activation coordinator and trigger extractor with the kernel's and
-leaves out the old core's HTTP route table. Once the node runs, the default shell serves every slot its publications left
-active. Studio's toolbox hides the activities the kernel does not run (`kernel-unsupported`). Two limits stand until the
-owner decides them:
+`WorkflowsRuntimeKernel` feature, which replaces its default activation coordinator and trigger extractor with the
+kernel's and leaves out the old core's HTTP route table; the Workbench logs once at startup that it composed the feature.
+Before the node runs a turn, the default shell serves every slot its publications left active. An instance started on a
+version no slot serves any more loads that version from the default shell's executable store at its next turn. Studio's
+toolbox in the default shell hides the activities the kernel does not run (`kernel-unsupported`). Two limits stand,
+each with its own slice coming:
 
 - **No HTTP edge yet.** A served start route is in `KernelServing.Routes`, and nothing in the Workbench routes requests to
   it.
-- **No schedule actor.** The PostgreSQL foundation hosts no schedule actor, so a Timer or Cron publish fails at serving,
-  and the refusal names the limit.
+- **No schedule actor.** The PostgreSQL foundation hosts no schedule actor yet, so a Timer or Cron publish is refused at
+  the serving check, before anything is minted, and the refusal says what to change.
 
 Run `PG_PREVIEW_PROFILE=publications bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release` to check
 that a Workbench with publications on serves its default shell on the kernel.

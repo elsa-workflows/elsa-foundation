@@ -201,6 +201,7 @@ not automatic constitution violations.
 | Workflows runtime API — executable inspection and diagnostics services | [`essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
 | Workflows runtime distributed EF Core placement persistence | [`essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
+| Workflows runtime — kernel host (publications on the clean-slate kernel: coordinator, trigger extractor, schedule actors, shell feature) | [`essentials/src/Workflows/Runtime/KernelHost/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/KernelHost/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
 
 ### Rules

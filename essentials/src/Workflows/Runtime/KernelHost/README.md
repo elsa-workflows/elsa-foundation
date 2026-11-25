@@ -6,7 +6,9 @@ the Native model's definitions.
 
 - `NativeExecutableMapper` maps a `WorkflowExecutable` to a `Kernel.Native.Workflow`, or refuses it with a
   `NativeMappingRefusedException` (`activity-unsupported` or `binding-unsupported`) that names the node and, where it
-  matters, the input.
+  matters, the input. `MapStoredAsync` maps a stored artifact by its id, which a host passes as
+  `NativeExecutionOptions.ResolveWorkflow`: after a restart the registry holds what the slots serve, and an instance
+  started on an earlier version loads that version from the executable store at its next turn.
 - `KernelActivationCoordinator` is a kernel host's `IWorkflowActivationCoordinator`. It maps first, checks the routes
   and schedules over the serving set, moves the slot through `IWorkflowActivationSwitch` with empty projections, and
   then serves. `ServeActiveSlotsAsync` serves every active slot when a host starts.
@@ -20,10 +22,18 @@ the Native model's definitions.
   host's ingress.
 - `KernelTriggerBindingExtractor` reports no old-core triggers, so the publication preflight checks only the slot.
 - `WorkflowsRuntimeKernelFeature` (`WorkflowsRuntimeKernel`) composes the kernel into a shell. After every other feature
-  has registered, it replaces the activation coordinator and the trigger extractor with the kernel's, and drops the old
-  core's HTTP route-table observer. It requires the host to share its `KernelServing` and `IScheduleActors` by instance.
-- `UnavailableScheduleActors` is for a host that runs no schedule actor. Each call throws its reason, so a Timer or Cron
-  publish fails at serving with that reason.
+  has registered, it replaces the old core's default activation coordinator and trigger extractor with the kernel's.
+  A shell that registers any other implementation of either is refused with that implementation named, since one
+  implementation serves per shell. It drops the old core's HTTP route-table observer, and refuses a shell that composes
+  the old core's HTTP feature without an observer of that name. It requires the host to share its `KernelServing`
+  and `IScheduleActors` by instance. `IsComposedIn` tells a host whether a shell composes it: the Workbench hides the
+  activities the kernel does not run from that shell's toolbox, since the toolbox's options are a design contract that
+  a runtime project does not reference.
+- `UnavailableScheduleActors` is for a host that runs no schedule actor. Such a host gives its `KernelServing` the same
+  reason, so a Timer or Cron publish is refused at the serving check, before anything is minted. Setting a schedule
+  throws the reason; stopping one and unregistering a run do nothing, so unpublishing never fails on them.
+
+The contracts this project implements and the seams it adds are in [EXTENSION_POINTS.md](EXTENSION_POINTS.md).
 
 The mapping rules are in [definitions on the kernel](../../../../../docs/architecture/definitions-on-the-kernel.md#mapping-rules).
 
@@ -57,7 +67,12 @@ Each is refused with the node and input named, and the refusal says what to chan
 - A Dispatch reaches the workflow its definition's `default` slot serves. When no `default` slot serves the definition,
   it reaches the one slot that does. When several other slots do, it reaches none, and the child starts the id itself.
 - When a host starts, `ServeActiveSlotsAsync` finds the definitions with activations from the live activation source
-  references, and their slots from the slot authority. It serves each active slot as `EnsureServingAsync` does.
+  references, and their slots from the slot authority. It serves each active slot as `EnsureServingAsync` does. A host
+  runs it before its node runs a turn, so a due turn of an instance in flight finds its workflow served.
+- After a restart the registry holds the versions the slots serve. An instance started on an earlier version loads it at
+  its next turn, through `NativeExecutionOptions.ResolveWorkflow` (`NativeExecutableMapper.MapStoredAsync` over the
+  executable store). The loaded version joins the registry and serves no route or schedule. A migration's check reads
+  the registry only, so it names such a version unavailable until a turn has loaded it.
 - A definition serves one scheduled channel in release 1. Its schedule actors are keyed by definition and trigger, so a
   second slot that would schedule the same trigger is refused at the serving check, and the refusal says to publish
   the scheduled definition to one channel.

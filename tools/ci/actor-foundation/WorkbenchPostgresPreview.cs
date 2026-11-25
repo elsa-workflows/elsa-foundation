@@ -479,10 +479,18 @@ internal static class WorkbenchPostgresPreview
         }
     }
 
-    // With publications on, the default shell composes the kernel's coordinator, which serves its active slots once the node runs.
-    private static async Task RequireKernelServingAsync(WorkbenchProcess workbench, CancellationToken token) =>
-        Require((await workbench.WaitForKernelServingAsync(token)).Contains("shell default on the kernel", StringComparison.Ordinal),
-            "the default shell serves its publications on the kernel");
+    // With publications on, the default shell composes the kernel's coordinator, which serves its active slots before the node runs.
+    private static async Task RequireKernelServingAsync(WorkbenchProcess workbench, CancellationToken token)
+    {
+        Require(workbench.KernelComposed is { } composed && composed.Contains("into shell default", StringComparison.Ordinal),
+            "the Core Preview composes the kernel's feature into the default shell");
+        var line = await workbench.WaitForKernelServingAsync(token);
+        if (line.Contains("could not serve the publications", StringComparison.Ordinal))
+            throw new InvalidOperationException($"the default shell could not serve its publications on the kernel: {line.Trim()}");
+        if (line.Contains("does not compose the WorkflowsRuntimeKernel feature", StringComparison.Ordinal))
+            throw new InvalidOperationException($"the default shell does not compose the kernel's feature: {line.Trim()}");
+        Require(line.Contains("shell default on the kernel", StringComparison.Ordinal), "the default shell serves its publications on the kernel");
+    }
 
     private static async Task CheckEntryBeforeListeningAsync()
     {
@@ -499,6 +507,7 @@ internal static class WorkbenchPostgresPreview
         internal readonly TaskCompletionSource<JobEntry> Entry = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource<string> Listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource<string> KernelServing = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal volatile string? KernelComposed;
 
         internal async Task ReadAsync(TextReader reader)
         {
@@ -507,7 +516,11 @@ internal static class WorkbenchPostgresPreview
                 if (line.StartsWith(DirectApprovalWorkflow.ActiveJobEntry, StringComparison.Ordinal) &&
                     line[DirectApprovalWorkflow.ActiveJobEntry.Length..].Split(' ', 2) is [var actor, var key])
                     Entry.TrySetResult(new(actor, key));
+                if (line.Contains("composed the WorkflowsRuntimeKernel feature into shell", StringComparison.Ordinal))
+                    KernelComposed = line;
+                // The serving outcome: served, or one of the two ways it fails, which the check names instead of timing out.
                 if (line.Contains("serves the publications of shell", StringComparison.Ordinal) ||
+                    line.Contains("could not serve the publications of shell", StringComparison.Ordinal) ||
                     line.Contains("does not compose the WorkflowsRuntimeKernel feature", StringComparison.Ordinal))
                     KernelServing.TrySetResult(line);
                 const string listening = "Now listening on: ";
@@ -526,6 +539,7 @@ internal static class WorkbenchPostgresPreview
         internal int Id => process.Id;
         internal Task<JobEntry> WaitForJobEntryAsync(CancellationToken token) =>
             WaitForOutputAsync(output.Entry.Task, "entering the timed job", token);
+        internal string? KernelComposed => output.KernelComposed;
         internal Task<string> WaitForKernelServingAsync(CancellationToken token) =>
             WaitForOutputAsync(output.KernelServing.Task, "serving its publications on the kernel", token);
 

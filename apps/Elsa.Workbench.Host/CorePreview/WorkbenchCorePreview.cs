@@ -1,6 +1,5 @@
 using CShells.Lifecycle;
 using Elsa.ActorFoundation.Hosting;
-using Elsa.Activities.Design.Core.Options;
 using Elsa.Workbench.Readiness;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.KernelHost;
@@ -22,24 +21,43 @@ internal static class WorkbenchCorePreview
     /// </summary>
     internal const string PublicationsKey = "Elsa:CorePreview:Publications";
 
-    /// <summary>Why a Timer or Cron publish fails on the Core Preview: its PostgreSQL foundation hosts no schedule actor.</summary>
+    /// <summary>Why a Timer or Cron publish is refused on the Core Preview, whose PostgreSQL foundation hosts no schedule actor yet.</summary>
     internal const string SchedulesUnavailable =
-        "Timer and Cron start triggers do not run on the PostgreSQL Core Preview in release 1: its foundation hosts no schedule actor. " +
-        "Remove the Timer or Cron, or start the workflow another way (an HTTP endpoint, an event or a dispatch).";
+        "Timer and Cron triggers don't run on this host yet. Remove the Timer or Cron, or start the workflow from an HTTP endpoint, an event or a Dispatch.";
 
     internal static bool ServesPublications(IConfiguration configuration) =>
         configuration.GetValue<bool>("Elsa:CorePreview:Enabled") && configuration.GetValue<bool>(PublicationsKey);
 
     /// <summary>
     /// Enables the kernel's shell feature in the default shell when the Core Preview serves publications, so that one switch
-    /// composes both sides: the host's serving state here, and the shell's coordinator there.
+    /// composes both sides: the host's serving state here, and the shell's coordinator there. The feature is written as
+    /// shells.json writes one with no settings, an empty object. Returns the shell it composed the feature into, or null.
     /// </summary>
-    internal static void ComposeKernelShell(IConfigurationManager configuration)
+    internal static string? ComposeKernelShell(IConfigurationManager configuration)
     {
-        if (!ServesPublications(configuration)) return;
+        if (!ServesPublications(configuration)) return null;
         var shell = configuration[$"{ShellReadinessOptions.SectionName}:{nameof(ShellReadinessOptions.DefaultShellName)}"] is { Length: > 0 } named ? named : "default";
-        configuration.AddInMemoryCollection([new($"CShells:Shells:{shell}:Features:{WorkflowsRuntimeKernelFeature.FeatureName}", "true")]);
+        var json = new System.Text.Json.Nodes.JsonObject
+        {
+            ["CShells"] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["Shells"] = new System.Text.Json.Nodes.JsonObject
+                {
+                    [shell] = new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["Features"] = new System.Text.Json.Nodes.JsonObject { [WorkflowsRuntimeKernelFeature.FeatureName] = new System.Text.Json.Nodes.JsonObject() },
+                    },
+                },
+            },
+        };
+        configuration.AddJsonStream(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json.ToJsonString())));
+        return shell;
     }
+
+    /// <summary>The startup line that says the Core Preview composed the kernel's feature into the default shell.</summary>
+    internal static void LogKernelShell(ILogger logger, string shell) =>
+        logger.LogInformation("The Core Preview composed the {Feature} feature into shell {Shell}: its publications serve on the kernel.",
+            WorkflowsRuntimeKernelFeature.FeatureName, shell);
 
     internal static void AddWorkbenchCorePreview(this IServiceCollection services, IConfiguration configuration)
     {
@@ -58,17 +76,13 @@ internal static class WorkbenchCorePreview
         // With publications on, the kernel's serving state is shared by this host's node and the default shell, which publishes:
         // the node runs the registry it serves into. Registered by instance, so each shell resolves this one.
         var publications = configuration.GetValue<bool>(PublicationsKey);
-        var serving = publications ? new KernelServing(CronosCalendar.Error) : null;
+        // Its foundation hosts no schedule actor yet, so serving refuses a Timer or Cron before anything is minted.
+        var serving = publications ? new KernelServing(CronosCalendar.Error, SchedulesUnavailable) : null;
         if (serving is not null)
         {
             services.AddSingleton(serving);
             services.AddSingleton<IScheduleActors>(new UnavailableScheduleActors(SchedulesUnavailable));
-            // Studio's toolbox hides the activities the kernel does not run in release 1 (NativeActivityCatalog).
-            services.Configure<ActivityAvailabilityOptions>(options =>
-            {
-                options.Sets[NativeActivityCatalog.KernelUnsupportedSet] = [.. NativeActivityCatalog.Unsupported];
-                options.Exclude.Sets = [.. options.Exclude.Sets.Where(set => set != NativeActivityCatalog.KernelUnsupportedSet), NativeActivityCatalog.KernelUnsupportedSet];
-            });
+            KernelToolbox.Register(services);
         }
         var workflows = (serving?.Registry ?? new WorkflowRegistry()).Add(DirectApprovalWorkflow.Build());
         if (nativeJobs) workflows.Add(DirectApprovalWorkflow.BuildWithJob());
@@ -112,20 +126,31 @@ internal static class WorkbenchCorePreview
                 Expressions = expressions,
                 // A Dispatch names a definition; the child starts the version the definition serves.
                 ServedWorkflow = serving is null ? null : serving.ServedWorkflow,
+                // An instance started on a version no slot serves since the restart runs it from the default shell's artifacts.
+                ResolveWorkflow = serving is null ? null : (workflow, token) => ResolveWorkflowAsync(shells, shellName, workflow, token),
             });
             // The node starts once the default shell is active, so its first turns find the evaluator.
             var logger = provider.GetRequiredService<ILogger<PostgresPreviewHostedService>>();
             return new ShellGatedHostedService(new PostgresPreviewHostedService(Open, node, new WorkflowActor([model]), Environment.FailFast,
                     logger: logger),
                 token => shells.GetOrActivateAsync(shellName, token), Environment.FailFast,
-                // Once the node runs, the default shell serves every slot its publications left active.
-                started: serving is null ? null : token => ServeActiveSlotsAsync(shells, shellName, logger, token));
+                // Before the node runs a turn, the default shell serves every slot its publications left active, so a due turn
+                // of an instance in flight finds its workflow served.
+                starting: serving is null ? null : token => ServeActiveSlotsAsync(shells, shellName, logger, token));
         });
         if (configuration["Elsa:CorePreview:ReadsTenant"] is { } readsTenant)
             services.AddSingleton(new WorkbenchCorePreviewReads(Open, EmbeddedTenant.Bind(readsTenant)));
 
         KernelDb Open() => timedJobs ? PostgresPreviewHosting.CreateTimedNativeJobContext(options) :
             nativeJobs ? PostgresPreviewHosting.CreateNativeJobContext(options) : new(options);
+    }
+
+    /// <summary>The workflow an instance runs, from the default shell's executable store, for one the registry does not hold.</summary>
+    private static async ValueTask<Workflow?> ResolveWorkflowAsync(IShellRegistry shells, string shellName, string workflow, CancellationToken cancellationToken)
+    {
+        var shell = shells.GetActive(shellName) ?? throw new InvalidOperationException($"The shell '{shellName}' is not active.");
+        await using var scope = shell.BeginScope();
+        return await NativeExecutableMapper.MapStoredAsync(scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>(), workflow, cancellationToken);
     }
 
     /// <summary>
