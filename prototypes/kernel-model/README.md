@@ -365,7 +365,7 @@ each with its own slice coming:
   `KernelHostCapabilities`, so a publish with a Timer or Cron, a Delay or a Dispatch Workflow is refused where it is
   mapped (`definition_unsupported`), naming the node and what to change. Without self-sends the Native model does not
   split a burst at the activity cap: it runs on to the next wait, bounded by the state and history size limits and by
-  10,000 activities or 5 s, past which the workflow faults with `native.burst.limit` (`pg-held-callers` finishes a ForEach
+  10,000 activities (with a 30 s backstop that keeps a turn from holding its node), past which the workflow faults with `native.burst.limit` (`pg-held-callers` finishes a ForEach
   over 1,200 items and faults a `While(true)` on format 24).
 - **A Faulted end commits on format 24** (profiles 9, 18 and 24): its held callers get the Faulted end, and a job issued
   in the same turn is dropped. A timed job still registered at any end, a cancelled one included, is settled in the

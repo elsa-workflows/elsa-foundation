@@ -40,9 +40,10 @@ the Native model's definitions.
     it, or start the other workflow from an HTTP endpoint or an event."
   - without self-sends, nothing is refused: a turn that reaches the activity cap cannot continue in a self-send, so the
     host sets `NativeExecutionOptions.SelfSends` to false and the Native model runs a burst on to its next wait. The
-    state and history size limits still bound the turn, and so do `MaxActivitiesPerBurst` (10,000) and
-    `MaxBurstDuration` (5 s): past either the workflow faults with `native.burst.limit`, saying how long it ran and what
-    to change. The 1,000-item ForEach cap stands. A PostgreSQL host reads whether its store format takes self-sends from
+    state and history size limits still bound the turn, and so does `MaxActivitiesPerBurst` (10,000 activities, the
+    same however loaded the host is). `MaxBurstDuration` (30 s) is a backstop that keeps one turn from holding its node,
+    not a correctness bound. Past either the workflow faults with `native.burst.limit`, saying what it ran and what to
+    change. The 1,000-item ForEach cap stands. A PostgreSQL host reads whether its store format takes self-sends from
     `PostgresPreviewHosting.TakesSelfSends`.
 - `UnavailableScheduleActors` is for a host that runs no schedule actor. Such a host also says `Schedules: false`, so a
   Timer or Cron never reaches it. Setting a schedule throws the reason; stopping one and unregistering a run do nothing,
