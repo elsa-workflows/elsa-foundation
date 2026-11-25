@@ -23,7 +23,8 @@ public static class PostgresPreviewHosting
     /// must terminate the process if the watchdog cannot clear a stuck owner call.
     /// </summary>
     public static async Task<RuntimeNode> StartAsync(Func<KernelDb> create, string node, Contract.IActorType actor,
-        Action<string> endProcess, LoopOptions? options = null, CancellationToken cancellationToken = default)
+        Action<string> endProcess, LoopOptions? options = null, CancellationToken cancellationToken = default,
+        Action<Exception>? onFault = null)
     {
         ArgumentNullException.ThrowIfNull(create);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -60,7 +61,7 @@ public static class PostgresPreviewHosting
             rootTimedJobClock: store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null);
         var host = DurableHost.ForNode(node, watched, adapter, partitions);
         var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
-            beforeRelease: host.DrainEnteredTurnsAsync);
+            beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault);
         try
         {
             await runtime.StartAsync(host, cancellationToken);

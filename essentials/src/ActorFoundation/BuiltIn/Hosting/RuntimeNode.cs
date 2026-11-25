@@ -58,6 +58,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private Task? _loop, _heartbeats, _halted;
     private readonly Func<CancellationToken, Task>? _beside;
     private readonly Func<CancellationToken, Task>? _beforeRelease;
+    private readonly Action<Exception>? _onFault;
+    private readonly TimeSpan _disposeDeadline;
+    private readonly HashSet<Exception> _faults = new(ReferenceEqualityComparer.Instance);     // each fault is recorded once
     private readonly CancellationTokenSource _besideEnd = new();     // A1: cancelled at the end of the stop, or on a kill
     private Task? _besideRun;
     private readonly object _halting = new();
@@ -68,14 +71,18 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// owner-path call's connection at twice the lease and ends the process, by the host's policy, only when it cannot.</param>
     /// <param name="beforeRelease">Optional graceful drain after the last scheduler pass and before returning
     /// ownership. It may await work entered by a pass that has already returned.</param>
+    /// <param name="onFault">Called once for each fault the node records about its stop: the stop's own fault (also one
+    /// that ends cancelled without a kill), a dispose that returned at its bound, and a fault that lands after a kill.
+    /// The host logs it; the fault is also on <see cref="LastError"/>.</param>
     public RuntimeNode(string node, IMembership membership, int partitions, LoopOptions? options = null, IWakeSignal? wake = null,
-        Func<CancellationToken, Task>? beside = null, Func<CancellationToken, Task>? beforeRelease = null)
+        Func<CancellationToken, Task>? beside = null, Func<CancellationToken, Task>? beforeRelease = null, Action<Exception>? onFault = null)
     {
         _beside = beside;
         _beforeRelease = beforeRelease;
+        _onFault = onFault;
         _heartbeatsExit = CancellationTokenSource.CreateLinkedTokenSource(_kill.Token);
         _options = options ?? new LoopOptions();
-        ValidDisposeDeadline(_options.DisposeDeadline);     // fail fast: a refused deadline would leave dispose unable to stop
+        _disposeDeadline = ValidDisposeDeadline(_options.DisposeDeadline);     // fail fast: a refused deadline would leave dispose unable to stop
         _runtime = new PartitionRuntime(node, membership, partitions, _options.Window, wake);
         _due = new long[partitions];
         _oldestWaiting = new long?[partitions];
@@ -225,25 +232,32 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        using var deadline = new CancellationTokenSource(_options.DisposeDeadline);
+        using var deadline = new CancellationTokenSource(_disposeDeadline);
         // The wait is bounded too: a pass stuck past the kill (a call that ignores cancellation) cannot hold the dispose.
         // An infinite dispose deadline is an infinite bound.
-        using var bound = new CancellationTokenSource(WithGrace(_options.DisposeDeadline, DisposeGrace));
+        using var bound = new CancellationTokenSource(WithGrace(_disposeDeadline, DisposeGrace));
         var halted = HaltAsync();
         using (deadline.Token.Register(_kill.Cancel))
             try { await halted.WaitAsync(bound.Token); }
             catch (Exception) { }     // a fault is recorded by the halt itself; the bound's cancellation is noted below
         if (!halted.IsCompleted)
-            RecordError(new TimeoutException($"The dispose returned {DisposeGrace.TotalSeconds:0.#} s after its deadline while the killed stop had not ended."));
+            RecordFault(new TimeoutException($"The dispose returned {DisposeGrace.TotalSeconds:0.#} s after its deadline while the killed stop had not ended."));
     }
 
-    /// <summary>A deadline plus a grace; an infinite deadline stays infinite. Deadlines are validated when the node is made.</summary>
-    internal static TimeSpan WithGrace(TimeSpan deadline, TimeSpan grace) =>
-        deadline == Timeout.InfiniteTimeSpan ? Timeout.InfiniteTimeSpan : deadline + grace;
+    // The longest delay a CancellationTokenSource accepts; a deadline beyond it is treated as infinite.
+    private static readonly TimeSpan LongestDelay = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
 
-    /// <summary>A dispose deadline is positive or infinite; anything else is refused when the node or its host is made.</summary>
+    /// <summary>A deadline plus a grace, overflow-safe; an infinite deadline, or one past the longest delay, stays infinite.</summary>
+    internal static TimeSpan WithGrace(TimeSpan deadline, TimeSpan grace) =>
+        deadline == Timeout.InfiniteTimeSpan || deadline > LongestDelay - grace ? Timeout.InfiniteTimeSpan : deadline + grace;
+
+    /// <summary>
+    /// A dispose deadline is positive or infinite; anything else is refused when the node or its host is made. One past the
+    /// longest delay a timer accepts (about 49.7 days) is treated as infinite.
+    /// </summary>
     public static TimeSpan ValidDisposeDeadline(TimeSpan deadline) =>
-        deadline > TimeSpan.Zero || deadline == Timeout.InfiniteTimeSpan ? deadline
+        deadline == Timeout.InfiniteTimeSpan || deadline > LongestDelay ? Timeout.InfiniteTimeSpan
+        : deadline > TimeSpan.Zero ? deadline
         : throw new ArgumentOutOfRangeException(nameof(deadline), deadline, "LoopOptions.DisposeDeadline must be positive or infinite.");
 
     /// <summary>How long a dispose waits past its deadline for the killed stop to end before it returns.</summary>
@@ -255,19 +269,35 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         lock (_halting) return _halted ??= StartHalt();
     }
 
-    // The halt records its own fault, exactly once, whoever waits for it and whether anyone does.
+    // The halt records its own fault, exactly once, whoever waits for it and whether anyone does. A halt that ends
+    // cancelled though no kill asked for it (a drain that threw a cancellation of its own) is a fault too.
     private Task StartHalt()
     {
         var halted = HaltOnceAsync();
-        _ = halted.ContinueWith(static (stopped, node) => ((RuntimeNode)node!).RecordError(stopped.Exception!.InnerException ?? stopped.Exception),
-            this, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        _ = halted.ContinueWith(static (stopped, state) =>
+        {
+            var node = (RuntimeNode)state!;
+            if (stopped.IsFaulted) node.RecordFault(stopped.Exception!.InnerException ?? stopped.Exception);
+            else if (!node._kill.IsCancellationRequested)
+                node.RecordFault(new OperationCanceledException("The node's stop ended cancelled although no kill or deadline asked for it."));
+        }, this, CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         return halted;
     }
 
     // A drain or release that the kill stopped waiting for may still fault: record it when it does.
     private void RecordLater(Task work) =>
-        _ = work.ContinueWith(static (ended, node) => ((RuntimeNode)node!).RecordError(ended.Exception!.InnerException ?? ended.Exception),
+        _ = work.ContinueWith(static (ended, node) => ((RuntimeNode)node!).RecordFault(ended.Exception!.InnerException ?? ended.Exception),
             this, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+    // A fault about the stop: recorded on LastError and reported to the host's callback, once per exception.
+    private void RecordFault(Exception fault)
+    {
+        lock (_faults)
+            if (!_faults.Add(fault)) return;
+        RecordError(fault);
+        try { _onFault?.Invoke(fault); }
+        catch (Exception) { }     // a failing log must not hide the fault, which LastError keeps
+    }
 
     private async Task HaltOnceAsync()     // A1: the watchdog guards the last pass and the releases, so it ends after them
     {
