@@ -228,7 +228,10 @@ public sealed class GraphActivity : CompositeActivity, IExitBoundary
                 throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' needs unique, non-empty input and variable names ('{name}').");
         if (graph.Outputs.Select(o => o.Name).Distinct(StringComparer.Ordinal).Count() != graph.Outputs.Count || graph.Outputs.Any(o => string.IsNullOrEmpty(o.Name)))
             throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' needs unique, non-empty output names.");
-        if (graph.OutcomeMappings.Concat(graph.CompleteOutcomes).Any(p => string.IsNullOrWhiteSpace(p.Key) || string.IsNullOrEmpty(p.Value)))
+        // Inputs are bound by name without case, so two inputs may not differ by case alone.
+        if (graph.Inputs.Select(i => i.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != graph.Inputs.Count)
+            throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' declares inputs whose names differ only by case.");
+        if (graph.OutcomeMappings.Concat(graph.CompleteOutcomes).Any(p => string.IsNullOrWhiteSpace(p.Key) || string.IsNullOrWhiteSpace(p.Value)))
             throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' maps from a blank outcome or key, or to an empty outcome.");
         // An input bound under a name the boundary does not declare is a mistake, as the old core refuses unknown input keys.
         if (node.Inputs.Keys.FirstOrDefault(key => !graph.Inputs.Any(i => string.Equals(i.Name, key, StringComparison.OrdinalIgnoreCase))) is { } unknown)

@@ -132,8 +132,10 @@ internal static class GraphChecks
             "a GraphActivity without a declaration, with other than one body, or with an input and a variable of one name, and a declaration on another node, are refused");
         check(Refused(() => Workflow("typo", GraphActivity("g", Pricing, Set("s", "x", 1), ("amout", 5)))) &&
               Refused(() => Workflow("blank-key", GraphActivity("g", new GraphBoundary { CompleteOutcomes = new Dictionary<string, string> { [" "] = "X" } }, Set("s", "x", 1)))) &&
+              Refused(() => Workflow("cased", GraphActivity("g", new GraphBoundary { Inputs = [new("a"), new("A")] }, Set("s", "x", 1)))) &&
+              Refused(() => Workflow("spaces", GraphActivity("g", new GraphBoundary { OutcomeMappings = new Dictionary<string, string> { ["Done"] = " " } }, Set("s", "x", 1)))) &&
               Refused(() => Workflow("captured", GraphActivity("g", Approval, Complete("c", "approve").Capture("x")))),
-            "an input bound under a name the boundary does not declare, a blank outcome key, and a capture on a Complete are refused");
+            "an input bound under a name the boundary does not declare, inputs that differ only by case, a blank outcome or key, and a capture on a Complete are refused");
 
         foreach (var mode in new[] { Modes.Ephemeral, Modes.Balanced, Modes.Durable })
         {
