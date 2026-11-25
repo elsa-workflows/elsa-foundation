@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -107,7 +108,7 @@ public sealed partial class StepVariableWriteValidationTests
     {
         "unbound" => Sequence("root", new ActivityNode("writer", WriterVersion, [], [])),
         "undeclared" => Sequence("root", Writer("writer", "missing")),
-        "literal" => Sequence("root", new ActivityNode("writer", WriterVersion, [new ArgumentState("Balance", new ArgumentValue(5, "Literal"), null, null, null, null)], [])),
+        "literal" => Sequence("root", new ActivityNode("writer", WriterVersion, [new ArgumentState("Balance", new ArgumentValue(JsonSerializer.SerializeToElement(5), "Literal"), null, null, null, null)], [])),
         "wrong-type" => Sequence("root", Writer("writer", "total")),
         "overlap" => Sequence("root", Writer("writer", "balance") with { Outputs = [VariableOutput("Result", "balance")] }),
         "script-overlap" => Sequence("root", Script("script", "setVariable('total', 2); return 1;") with { Outputs = [VariableOutput("result", "total")] }),
