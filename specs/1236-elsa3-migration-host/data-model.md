@@ -34,8 +34,8 @@ data-model.md):
 | Engine | `Elsa 4` |
 | Commit | The initiative head the host was built from |
 | Source | `Elsa.Migration.Host`, the migration CLI version that wrote `migrated/`, and whether spec 1207 is implemented on the commit |
-| Environment file | The migration host's environment file, committed next to the S-15 Elsa 4 one (R-10) |
+| Environment file | `environments/elsa4.json`, with the host's URL and the development administrator as variable values (R-10) |
 | jtest, Scope, Result, Receipt | As spec 1235 defines them |
-| Notes | The Workbench run on the same commit it is compared with |
+| Notes | The Workbench run on the same commit it is compared with, and the base URL and user name used |
 
 No secret values. A failed run stays recorded.

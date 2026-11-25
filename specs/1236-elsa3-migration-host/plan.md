@@ -49,7 +49,7 @@ activity reconciliation, main's OpenIddict store library (R-7), and `jtest` for 
 | §E2.2 Runtime takes no Design reference | PASS | No runtime project changes; the host composes existing features. |
 | §E5 packaging, reserved `Elsa.Server` name | PASS | The host isn't packed or published, and doesn't take the reserved name. |
 | §E7 CI test tiers | PASS | The new test project goes into `tools/ci/test-tiers.json` as PR tier, with no child host of 2 minutes or more. |
-| §2.2 project paths follow the domain tree; §E2.1 groupings | PASS with an in-unit amendment | `ArchitectureGuardTests.ExpectedProjectPath` and `ExpectedSolutionFolder` name each `apps/` host; T002 adds `Elsa.Migration.Host`. The test project's path is name-derived. The implementing PR adds `Elsa.Migration` to the §E2.1 host and test groupings (R-1, R-11, T016). |
+| §2.2 project paths follow the domain tree; §E2.1 groupings | PASS | `ArchitectureGuardTests.ExpectedProjectPath` and `ExpectedSolutionFolder` name each `apps/` host; T002 adds `Elsa.Migration.Host`. The test project's path is name-derived. §E2.1 is unchanged, as for main's other `apps/` hosts (R-1, R-11). |
 | §2.5, §2.23.1 every feature composes | PASS | No feature is added. |
 | Framework gate §2.20 "Only admitted projects resolve EF Core packages"; ADR 0073 | PASS | The host resolves EF through the composed features, so it is admitted in `EfCoreDependencyGuardTests`: its name in `AllowedEfConsumers`, a reviewed package array, and an arm in `ReviewedEfPackages` (R-9, T004). |
 | §2.23 risk-based tests | PASS | Tests cover composition drift, reasons, Elsa 3 leakage and the folder settings (R-5). |
@@ -99,6 +99,7 @@ apps/Elsa.Migration.Host/
 ├── Program.cs                      # host wiring (R-2)
 ├── MigrationHostEfToolingShellDefaults.cs
 ├── appsettings.json                # persistence, logging
+├── appsettings.Development.json    # development overrides (read by the host-services guard)
 ├── Properties/launchSettings.json  # Development, fixed local URL (R-2)
 ├── shells.json                     # the composition (R-3, R-6)
 ├── composition-reasons.json        # feature → reason (R-3)
@@ -115,16 +116,15 @@ essentials/tests/Migration/Host/Tests/
 
 essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs   # host admission (R-9)
 essentials/tests/Architecture/Tests/ArchitectureGuardTests.cs      # host path entries (R-1)
-essentials/tests/Modularity/Tests/HostOwnedServicesAreSharedWithShellsTests.cs # + the host (R-2)
-.specify/memory/constitution.md                                     # §E2.1 grouping (R-11)
+essentials/tests/Modularity/Tests/HostOwnedServicesAreSharedWithShellsTests.cs # + the host, FoundationNuplaneHosts (R-2)
 tools/ci/test-tiers.json                                            # + the test project
 Elsa.Server.slnx, solution filters, dependency map                  # + the two projects (regenerated)
 extensions/Elsa3/tests/JTest/ledger/runs.md                         # migration-host run rows (after S-15 merges)
 ```
 
 **Structure Decision**: one thin host over existing features, in `apps/` with the other hosts. Nothing in
-`essentials/src` changes. Outside the two new projects, only the guard tests named above, the §E2.1 line (R-11), and
-the generated solution and map files change.
+`essentials/src` changes. Outside the two new projects, only the guard tests named above and the generated solution and
+map files change.
 
 ## Complexity Tracking
 

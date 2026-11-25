@@ -12,15 +12,18 @@ acceptance set and templates from the merged S-15, or from the head current at t
   Q1, Q3, Q11). Its README calls it the Elsa 3 migration host.
 - **Why `apps/`.** `extensions/README.md` puts optional modules in `extensions/` and deployable hosts in `apps/`, and
   `ExtensionBoundaryTests` treats `apps` as the host root. A host under `extensions/Elsa3/src` would be scanned as an
-  extension module, so any reference outside `essentials/` would fail `Extension_to_extension_references_are_declared`.
-  That would block an engineer adding an extension feature (FR-005). It would also conflict with §E2.7, which allows
+  extension module of the `Elsa3` bucket, so a reference to another extension bucket (Secrets, for example) would fail
+  `Extension_to_extension_references_are_declared` unless declared. That would get in the way of an engineer adding an
+  extension feature (FR-005). It would also conflict with §E2.7, which allows
   only import adapters and shared support in the `Elsa3` domain.
 - **Guard entries.** On main, `ArchitectureGuardTests.ExpectedProjectPath` and `ExpectedSolutionFolder` name each
   `apps/` host explicitly (`Elsa.Workbench.Host`, `Elsa.Foundation.Host`, `Elsa.Essentials.Host`). T002 adds
   `Elsa.Migration.Host` the same way. The test project's path is name-derived under `essentials/tests/`, like the
   Workbench's tests under `essentials/tests/Workbench/`. Constitution §E2.1 lists the host and test groupings that are
-  not domains (`Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples`, `Elsa.Testing`), so the implementing PR adds
-  `Elsa.Migration` there (R-11).
+  not domains (`Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples`, `Elsa.Testing`); the implementing PR adds
+  nothing there, as main's precedent for `Elsa.Essentials.Host` and `Elsa.Foundation.Host` shows (R-11). The
+  generated dependency map classifies the host as domain `Elsa.Migration`, role feature/implementation, as it does the
+  essentials host today; no map change is made for it.
 - **Elsa 3 boundary.** The host references no `Elsa3.*` project and no Elsa 3 package (FR-003). A test checks its
   dependency closure (R-5), in addition to `Elsa3MigrationBoundaryTests`.
 - **Alternatives.**
@@ -44,14 +47,20 @@ acceptance set and templates from the merged S-15, or from the head current at t
     is active, which is what *Refusing to start* in the spec relies on;
   - `AddEfPersistenceResources`, with a migration-host `IEfToolingShellDefaults` type and its
     `[assembly: EfToolingShellDefaults(...)]` attribute, as `WorkbenchEfToolingShellDefaults` is for the Workbench;
-  - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` and `AddShellStartupValidation`, with the
-    host added to `HostOwnedServicesAreSharedWithShellsTests`, which names its hosts explicitly;
+  - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` (EF key store) and
+    `AddShellStartupValidation`;
   - `AddAuthentication`/`AddAuthorization`, and the OpenIddict token store from main's
     `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore` (`AddOpenIddictEntityFrameworkCoreStore`, R-7);
   - a CORS policy for the repository's Studio host (R-8);
-  - the services the composed features resolve from the host, as main's essentials host registers them
-    (`AddEfSchemaReadability`, `AddConfiguredClusterMembership`, `AddWorkflowRuntimeRunnabilityReport` and the CShells
-    ASP.NET Core endpoints), kept or dropped by what the composed features need.
+  - `AddEfSchemaReadability`, `AddConfiguredClusterMembership` and `AddWorkflowRuntimeRunnabilityReport`, and the
+    shell-activation attention contributor (`ShellActivationAttentionContributor`, from `Elsa.Attention.Core`), as
+    main's essentials host registers them.
+
+  These are required, not optional: the host joins `HostOwnedServicesAreSharedWithShellsTests` and its
+  `FoundationNuplaneHosts` list, whose theories compare `ShellActivationTracker`, an `IAttentionContributor`, the
+  durable cluster membership arm, `IClusterMembership`, `IEfSchemaFleet` and the EF data protection key repository
+  and migrator between host and shells. That test copies `appsettings.json` and `appsettings.Development.json` from
+  `apps/<host>/`, so the host has both files.
 
   It leaves out the boot timeline, the composition observation endpoints, Weaver, the OpenTelemetry bridge, Nuplane
   package loading (R-6) and the module-management API.
@@ -141,7 +150,8 @@ folder and a temporary migrated folder. Its tests:
   naming it (SC-005).
 - **Reasons.** `composition-reasons.json` and `shells.json` list the same features, in both directions: a composed feature
   without a row, and a row for a feature that isn't composed, each fail naming the feature (FR-004).
-- **No Elsa 3.** No assembly in the host's dependency closure is an `Elsa3.*` assembly or an Elsa 3 package (SC-004).
+- **No Elsa 3.** The host's `project.assets.json` holds no `Elsa3.*` package or project and no `Elsa*` package of
+  major version 3, the Elsa 3 packages sharing their `Elsa.*` ids with Elsa 4 (SC-004).
   This is in addition to `Elsa3MigrationBoundaryTests`.
 - **No extras.** None of the feature families FR-002 names is composed.
 - **US1 scenarios.**
@@ -228,8 +238,9 @@ The host references no EF vendor package directly, so `OpenIddictPersistenceArch
 ## R-10 Acceptance run
 
 - **Decision.** Use the S-15 Elsa 4 templates and environment unchanged, except base URL and credentials (the
-  development administrator from R-6), in an environment file committed next to the S-15 Elsa 4 one, with the host's
-  fixed URL (R-2). The run record is a row in the S-15 ledger,
+  development administrator from R-6). The S-15 environment file `environments/elsa4.json` already reads the base URL
+  and credentials from `${ELSA_API_BASE_URL}`, `${ADMIN_USERNAME}` and `${ADMIN_PASSWORD}`, so the run reuses it with
+  the host's fixed URL (R-2) and the development administrator; the Notes column records those values (no secret). The run record is a row in the S-15 ledger,
   `extensions/Elsa3/tests/JTest/ledger/runs.md`, in its existing columns: Engine `Elsa 4`; Source names the migration
   host, the CLI version that wrote `migrated/`, and whether spec 1207 is implemented; Notes names the Workbench run it is
   compared with. Both runs on one head then sit side by side, and spec 1235's ledger format doesn't change. Capture is set through the diagnostics settings API after start, as in S-15.
@@ -240,5 +251,6 @@ The host references no EF vendor package directly, so `OpenIddictPersistenceArch
 ## R-11 Constitution
 
 The host lives in `apps/` with the other hosts, so §E2.7 (the `Elsa3` domain holds import adapters and shared
-support) and the domain tree are unchanged. Constitution §E2.1 lists the host and test groupings that are not domains;
-the implementing PR adds `Elsa.Migration` to that list, next to `Elsa.Workbench`, in the same unit (T016).
+support) and the domain tree are unchanged. §E2.1's list of host and test groupings is not read by any guard, and on
+main it names neither `Elsa.Essentials.Host` nor `Elsa.Foundation.Host`, so this host follows that precedent and adds
+nothing. No constitution text changes.

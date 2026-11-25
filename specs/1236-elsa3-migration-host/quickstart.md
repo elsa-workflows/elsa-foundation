@@ -23,7 +23,8 @@ dotnet run --project apps/Elsa.Migration.Host
      --CShells:Shells:default:Features:JsonActivityReconciliation:Options:FilePath=/abs/path/migrated/activities/activities.json
    ```
 
-3. **Your own activities.** Add a project reference to your feature project in your clone. Then add the feature to the composition in a local settings source: a git-ignored
+3. **Your own activities.** In your clone, add a project reference to your feature project in
+   `apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj` (restore updates its `packages.lock.json`). Then add the feature to the composition in a local settings source: a git-ignored
    `shells.Local.json` next to `shells.json`, `dotnet user-secrets`, or an environment variable.
 4. Delete `data/` to start from an empty store; the host creates it again at startup.
 

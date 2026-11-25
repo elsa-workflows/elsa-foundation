@@ -55,8 +55,10 @@ short worktree path (MSB3030).
   - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` and `AddShellStartupValidation`;
   - authentication, authorization and `AddOpenIddictEntityFrameworkCoreStore`;
   - the Studio CORS policy;
-  - the host services the composed features resolve (R-2), each kept or dropped by need, and the host added to
-    `HostOwnedServicesAreSharedWithShellsTests`;
+  - `AddEfSchemaReadability`, `AddConfiguredClusterMembership`, `AddWorkflowRuntimeRunnabilityReport` and the
+    shell-activation attention contributor (R-2);
+  - the host added to `HostOwnedServicesAreSharedWithShellsTests` and its `FoundationNuplaneHosts` list, with an
+    `appsettings.Development.json` beside `appsettings.json`;
   - creating `data/` when missing, and logging the absolute workflows folder, activities file and data paths.
 
   `AddFoundationNuplane` with no feed and no shared assemblies, so no package loads (R-6).
@@ -86,7 +88,8 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   - scenario 6: a missing workflows folder means the host refuses to start, naming it; so does a missing activities
     file.
 - [ ] T008 [US1] Check by hand with the quickstart, and record the steps and results in the PR:
-  - scenario 3: a feature from a project reference to the engineer's own project;
+  - scenario 3: a feature from a project reference the engineer adds to the host project, listed in
+    `shells.Local.json`;
   - SC-002: from a fresh clone, run a workflow from another `migrated/` folder by setting only the two folder settings
     (in `shells.Local.json` and in user secrets), with `git status` clean afterwards.
 
@@ -96,7 +99,8 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   - every feature in `shells.json` has an entry in `composition-reasons.json`, and every entry names a composed
     feature; either failure names the feature (no test reads the README, framework §2.23.2);
   - every listed feature resolves, and a test fails naming any that doesn't;
-  - no `Elsa3.*` assembly or Elsa 3 package is in the host's dependency closure;
+  - the host's `project.assets.json` has no `Elsa3.*` package or project and no `Elsa*` package of major version 3
+    (R-5);
   - none of the feature families FR-002 names is composed.
 
 ## Phase 5: User Story 4 - Studio (P3)
@@ -115,8 +119,8 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   Then convert the S-15 acceptance definitions with `inventory`, with the approved adjusted copies in place of their
   originals (FR-013).
 - [ ] T012 [US2] Start the host from that head with an empty `data/` folder and the `inventory` output as its migrated
-  folder. Run `jtest run` with the S-15 Elsa 4 templates and an environment file, committed next to the S-15 Elsa 4
-  one, that differs only in base URL (the host's fixed URL) and credentials. Record the run in `extensions/Elsa3/tests/JTest/ledger/runs.md` in the ledger's existing columns
+  folder. Run `jtest run` with the S-15 Elsa 4 templates and `environments/elsa4.json`, with `ELSA_API_BASE_URL` set to the
+  host's fixed URL and the admin variables to the development administrator. Record the run in `extensions/Elsa3/tests/JTest/ledger/runs.md` in the ledger's existing columns
   (data-model.md, FR-015).
 - [ ] T013 [US2] For each suite that passes on the Workbench and fails on the host, find the cause and route it as
   FR-014 says. Add a missing feature or setting to the composition with its reason, then rerun from T012. Keep every
@@ -137,8 +141,7 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   Link the README from the migration docs that spec 1238 owns, if they exist by then.
 - [ ] T015 [P] Confirm FR-017 (no file under the Workbench host or its settings changed, and the S-15 Workbench run is
   unchanged) and FR-016 (no JTest project or step in `tools/ci/test-tiers.json` or the CI workflows).
-- [ ] T016 Add `Elsa.Migration` to the host and test groupings in constitution §E2.1, next to `Elsa.Workbench` (R-11).
-- [ ] T017 Set this spec's status to `Implemented` in the finishing PR.
+- [ ] T016 Set this spec's status to `Implemented` in the finishing PR.
 
 ## Dependencies
 

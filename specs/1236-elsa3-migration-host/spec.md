@@ -50,8 +50,8 @@ folder holds one Elsa 4 workflow with an HTTP trigger. Call the trigger and see 
 2. **Given** a `migrated/` folder whose activities file holds a reusable composite and whose workflows folder holds a
    workflow that uses it, **When** the host starts, **Then** both load, the workflow is published, and running it runs
    the composite.
-3. **Given** a feature of the engineer's own (custom activities), provided as a project reference in their clone and
-   listed in the host's settings, **When** the host starts, **Then** that
+3. **Given** a feature of the engineer's own (custom activities), provided as a project reference they add to the host
+   project in their clone and listed in a local settings source, **When** the host starts, **Then** that
    feature is active and its activities are available to the imported workflows.
 4. **Given** a settings change in a local, uncommitted settings source (user secrets, environment variables or a local
    settings file), **When** the host starts, **Then** the changed value applies and every other setting keeps its
@@ -158,11 +158,12 @@ returns 200, and the log names the setting, feature or file and the reason. The 
   the host, so other tools in this repository (the migration CLI, the skill) can read it. Each composed feature's
   reason MUST be recorded in a machine-readable reasons file next to it, which the README shows, and a test MUST fail, naming the feature, when a composed feature has
   no reason or a reason names a feature that isn't composed.
-- **FR-005**: An engineer MUST be able to change any setting and add features through the standard ASP.NET Core
-  configuration sources (a local settings file, user secrets, environment variables, the command line), without
-  editing committed files. A feature the engineer adds MUST come from a project reference in their clone; the host loads no
-  packages at runtime, because its audience builds from source. When such a feature can't be found, the host MUST
-  refuse to start and name it.
+- **FR-005**: An engineer MUST be able to change any setting, and list added features, through the standard ASP.NET
+  Core configuration sources (a local settings file, user secrets, environment variables, the command line), without
+  editing committed files. The code of a feature the engineer adds MUST come from a project reference they add to the
+  host project in their own clone (an edit to their clone, with its lock file); the host loads no packages at runtime,
+  because its audience builds from source. When a listed feature can't be found, the host MUST refuse to start and name
+  it.
 - **FR-006**: The host MUST run locally with the identity features in development mode and seeded development
   credentials, as the Workbench does in its committed settings. It MUST hold no production secret. Its README MUST say
   it is a local migration tool and must not be deployed.
