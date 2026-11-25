@@ -9,11 +9,13 @@ namespace Elsa3.Activities.Design.Import.Integration.Tests;
 /// <summary>
 /// #5790: a script bound to an Elsa 3 <c>HttpHeaders</c> or <c>ObjectDictionary</c> input declares the Elsa 4
 /// dictionary member's type, so the imported workflow publishes and Elsa 4 converts the script's value at run time.
+/// #5803: like Elsa 3, a header value may be a single string or an array.
 /// </summary>
 public sealed class DictionaryInputExpressionTests
 {
     [Theory]
     [InlineData("return { 'X-Demo': ['one', 'two'] };", new[] { "one", "two" })]
+    [InlineData("return { 'X-Demo': 'one' };", new[] { "one" })]
     public async Task A_script_on_Elsa3_response_headers_publishes_and_sets_the_headers(string script, string[] expected)
     {
         await using var host = await Elsa3ImportHost.StartAsync(withHttp: true);

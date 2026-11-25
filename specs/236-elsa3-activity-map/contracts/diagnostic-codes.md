@@ -37,7 +37,6 @@ skips and reports by code, so a code is never renamed or reused. Each diagnostic
 | `FormPostNotParsed` | `ELS3-BEHAVIOUR-FORM-POST-NOT-PARSED` | HttpEndpoint.ParsedContent |
 | `RequestSizeNoOutcome` | `ELS3-BEHAVIOUR-REQUEST-SIZE-NO-OUTCOME` | HttpEndpoint.RequestSizeLimit |
 | `HttpOutcomeSingle` | `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE` | SendHttpRequest outcomes (Done no longer co-fires; non-2xx → Failed). Narrowed by spec 1208 (S-3), 2026-11: only "without expected codes, a non-2xx response goes to Failed"; with codes, `Done` maps onto every code and the unmatched status code |
-| `HttpHeaderValueArray` | `ELS3-BEHAVIOUR-HTTP-HEADER-VALUE-ARRAY` | WriteHttpResponse.ResponseHeaders bound to an expression or captured value: Elsa 4 needs an array per header, Elsa 3 also accepted a single string (#5790) |
 | `AuthHeaderUnvalidated` | `ELS3-BEHAVIOUR-AUTH-HEADER-UNVALIDATED` | SendHttpRequest.DisableAuthorizationHeaderValidation absent or false |
 | `WhilePersistedCondition` | `ELS3-BEHAVIOUR-WHILE-PERSISTED-CONDITION` | While.Condition |
 | `ForZeroStepFaults` | `ELS3-BEHAVIOUR-FOR-ZERO-STEP-FAULTS` | For.Step |

@@ -16,9 +16,12 @@ public sealed class JsonConversionContract
     private readonly (string Json, string Member)[] mappings;
     private readonly Type? rootType;
     private readonly bool memberOverride;
+    private readonly JsonConverter? memberConverter;
 
-    private JsonConversionContract(JsonConversionAttribute? selection, Type? rootType = null, bool memberOverride = false)
+    private JsonConversionContract(JsonConversionAttribute? selection, Type? rootType = null, bool memberOverride = false,
+        JsonConverter? memberConverter = null)
     {
+        this.memberConverter = memberConverter;
         namingPolicy = selection?.NamingPolicy ?? JsonKnownNamingPolicy.CamelCase;
         caseInsensitive = selection?.CaseInsensitive ?? false;
         RefuseUnmatchedMembers = selection?.RefuseUnmatchedMembers ?? false;
@@ -80,6 +83,9 @@ public sealed class JsonConversionContract
             } }
         };
         options.Converters.Insert(0, new ScopedConverterFactory(converterRootType ?? rootType, polymorphicTypes, this, operation));
+        // A nested member's [JsonConverter] is honoured by its property metadata. A root member has no property
+        // metadata, so its converter reads and writes the member's whole value here, ahead of every other converter.
+        if (memberConverter is not null && converterRootType is null) options.Converters.Insert(0, memberConverter);
         StrictDateTimeConverters.Configure(options);
         options.MakeReadOnly();
         return options;
@@ -95,13 +101,30 @@ public sealed class JsonConversionContract
     public bool RefuseUnmatchedMembers { get; }
 
     /// <summary>Resolves a member override, otherwise the target type's contract. The cache does not pin unloadable types.</summary>
+    /// <remarks>A member's <see cref="JsonConverterAttribute"/> reads and writes that member's value at this boundary, just
+    /// as System.Text.Json applies it to a nested property. It must be able to convert the requested type.</remarks>
     public static JsonConversionContract For(Type type, MemberInfo? member = null)
     {
         ArgumentNullException.ThrowIfNull(type);
         type = Nullable.GetUnderlyingType(type) ?? type;
-        if (member?.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null)
-            return Members.GetValue(member, _ => new()).GetValue(type, key => new(member.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key, memberOverride: true));
+        var selection = member?.GetCustomAttribute<JsonConversionAttribute>(inherit: true);
+        var converter = member?.GetCustomAttribute<JsonConverterAttribute>(inherit: true);
+        if (selection is not null || converter is not null)
+            return Members.GetValue(member!, _ => new()).GetValue(type, key => new(
+                selection ?? key.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key, memberOverride: selection is not null,
+                converter is null ? null : MemberConverter(converter, key, member!)));
         return Types.GetValue(type, key => new(key.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key));
+    }
+
+    private static JsonConverter MemberConverter(JsonConverterAttribute attribute, Type type, MemberInfo member)
+    {
+        var converter = attribute.CreateConverter(type) ??
+            (attribute.ConverterType is { } converterType ? (JsonConverter?)Activator.CreateInstance(converterType) : null) ??
+            throw new InvalidOperationException($"The JSON converter on member '{member.DeclaringType?.FullName}.{member.Name}' could not be created.");
+        if (!converter.CanConvert(type))
+            throw new InvalidOperationException(
+                $"The JSON converter '{converter.GetType().FullName}' on member '{member.DeclaringType?.FullName}.{member.Name}' cannot convert '{type.FullName}'.");
+        return converter;
     }
 
     /// <summary>Resolves a nested declared type or member while retaining the enclosing scope for unannotated types.</summary>
@@ -127,7 +150,7 @@ public sealed class JsonConversionContract
         // These fixed BCL contracts have no member naming, custom converter or temporal policy.
         // Reusing their baseline metadata avoids rebuilding a reflection resolver on every scalar input.
         // User, enum, collection and object contracts remain operation-local, including nested collectible types.
-        if (IsBaselineScalar(Nullable.GetUnderlyingType(type) ?? type))
+        if (contract.memberConverter is null && IsBaselineScalar(Nullable.GetUnderlyingType(type) ?? type))
         {
             _ = Naming(contract.namingPolicy); // Invalid selections must still refuse even though scalar naming has no effect.
             if (value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
