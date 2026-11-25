@@ -177,6 +177,10 @@ it("edits JSON arguments without coercion and retains the last valid value on in
   expect(container.querySelector("[role='status']")?.textContent).toContain("Invalid JSON");
   expect(onChange).toHaveBeenCalledTimes(1);
 
+  flushSync(() => replaceActivity({ ...onChange.mock.lastCall![0], other: "changed" }));
+  expect(editor.value).toBe('{"broken":');
+  expect(container.querySelector("[role='status']")?.textContent).toContain("Invalid JSON");
+
   changeTextArea(editor, '"true"');
   expect(onChange.mock.lastCall?.[0].arguments.expression.value).toBe('"true"');
   changeTextArea(editor, "null");

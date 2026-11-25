@@ -150,9 +150,18 @@ export function GenericObjectExpandedEditor({ descriptor, value, disabled = fals
   const [draft, setDraft] = useState(() => readDraft(context.activity, descriptor.name) ?? formatJsonEditorValue(value, rawJson, wireJson));
   const [diagnostic, setDiagnostic] = useState<StudioCodeDiagnostic | null>(() => diagnoseJson(draft, uri, rawJson));
   const emittedKey = useRef<string | null>(null);
+  const invalidRawDraft = useRef<string | null>(null);
+  const previousKey = useRef(externalKey);
   const document: StudioCodeDocument = { uri, language: "json", value: draft };
 
   useEffect(() => {
+    const sameValue = previousKey.current === externalKey;
+    previousKey.current = externalKey;
+    if (rawJson && invalidRawDraft.current != null && sameValue) {
+      writeDraft(context.activity, descriptor.name, invalidRawDraft.current);
+      return;
+    }
+    if (rawJson && !sameValue) invalidRawDraft.current = null;
     if (emittedKey.current === externalKey) {
       emittedKey.current = null;
       return;
@@ -173,10 +182,12 @@ export function GenericObjectExpandedEditor({ descriptor, value, disabled = fals
     const parsed = parse(nextDocument.value);
     if (parsed.ok) {
       emittedKey.current = rawJson ? nextDocument.value : serializeValue(parsed.value);
+      invalidRawDraft.current = null;
       writeDraft(context.activity, descriptor.name, null);
       setDiagnostic(null);
       onChange(rawJson ? nextDocument.value : parsed.value);
     } else {
+      if (rawJson) invalidRawDraft.current = nextDocument.value;
       writeDraft(context.activity, descriptor.name, nextDocument.value);
       setDiagnostic(toDiagnostic(parsed.error, uri));
     }

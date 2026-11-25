@@ -1282,6 +1282,7 @@ function PropertyRow({
       )
   ) : rawJson ? (
     <GenericObjectExpandedEditor
+      key={`${draftId}\u001f${activity.nodeId}\u001f${propertyKey}`}
       descriptor={effectiveInput}
       syntax="Literal"
       value={value}
