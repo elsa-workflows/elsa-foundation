@@ -35,7 +35,8 @@ host.
 
 ## Studio
 
-Start the repository's Studio host (named in the host's README) and sign in with the development administrator. The
+Start the repository's Studio host (named in the host's README) with its backend URL set to the migration host's
+fixed URL, as the README shows, and sign in with the development administrator. The
 definitions list shows what the host imported.
 
 ## Acceptance run (coordinator)

@@ -37,7 +37,7 @@ activity reconciliation, main's OpenIddict store library (R-7), and `jtest` for 
 - no JTest CI tier (FR-016);
 - implementation starts after a main sync, which also renames the Workbench host and changes the guard lists (R-7).
 
-**Scale/Scope**: about 70 features (R-4); the S-15 acceptance set.
+**Scale/Scope**: about 55–60 features (R-4, before `DependsOn` additions); the S-15 acceptance set.
 
 ## Constitution Check
 

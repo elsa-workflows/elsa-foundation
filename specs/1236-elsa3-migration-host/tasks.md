@@ -145,7 +145,8 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   - adding your own features by project reference (FR-005);
   - the development sign-in;
   - the reasons, shown from `composition-reasons.json`;
-  - the Studio host to use;
+  - the Studio host to use, and how to point it at the migration host's fixed URL (its `BackendBaseUrl`, or the
+    equivalent setting of the Studio flavor after the sync);
   - a pointer to #5800 for the GA composition.
 
   Link the README from the migration docs that spec 1238 owns, if they exist by then.
