@@ -1,6 +1,9 @@
 using System.Text.Json.Serialization;
+using CShells.Features;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Workbench.ActivityDataSelectionProof;
@@ -50,3 +53,22 @@ public sealed class EchoValue : Activity<EchoValueResult>
 }
 
 public sealed record EchoValueResult([property: Output(Key = "Result", Path = "result")] string Result);
+
+// TEST ONLY. Makes Customer a selectable variable type, single or list, so a workflow can declare a typed
+// collection variable. Enabled only by the composed runner for the typed collection completion journey.
+[ShellFeature("ActivityDataSelectionProofTypes")]
+public sealed class ActivityDataSelectionProofTypesFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services) =>
+        services.AddSingleton<IVariableTypeDescriptorProvider, ProofVariableTypes>();
+}
+
+public sealed class ProofVariableTypes : IVariableTypeDescriptorProvider
+{
+    public IEnumerable<TypeDescriptor> GetDescriptors() =>
+    [
+        new(typeof(Customer).FullName!, typeof(Customer), "Proof customer", "Proof", "json",
+            new HashSet<CollectionKind> { CollectionKind.Single, CollectionKind.List }, true, true,
+            new HashSet<string>(StringComparer.Ordinal) { "elsa.json" })
+    ];
+}
