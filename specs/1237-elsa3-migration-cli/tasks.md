@@ -47,7 +47,8 @@
   feature never composes next to `Elsa3JsonReconciliation` there (both would apply the publishing authorization
   decoration). Create `MTests/Tests/Elsa3.Migration.Tests.csproj` (xunit); it references the CLI project, so the host's
   features come into its `deps.json` for `WithHostAssemblies()`, and the T003 fixture feature project.
-  Add all three to the solution, regenerate the solution filters and `dependency-map.json`, and check the CI tier
+  Add all four (with the T003 fixture project) to the solution, with a `RelocatedTestProjects` entry for any whose
+  `ArchitectureGuardTests` derived path differs from where it lives, regenerate the solution filters and `dependency-map.json`, and check the CI tier
   placement (§E7). Add the guard entries of R-7: the CLI in `EfCoreDependencyGuardTests.AllowedEfConsumers` with a
   reviewed package array and an arm in `ReviewedEfPackages`, a reviewed closure for the tooling next to
   `Adr0073Elsa3ImportEf`, and one for the test project (the host's closure plus SQLite); and the CLI as a build-only
@@ -83,8 +84,10 @@
   identities that the report may name (FR-019): definition ids and names, including the dispatch target's id, type
   names, function names and member names (input, output, variable and property names, and literal keys that name a
   target member or input).
-- [ ] T003 [P] Build the fixture feature project in `MTests/Fixtures/AcmeFeature/`. It registers the custom
-  activity under its Elsa 3 type name, `acme.`-prefixed JavaScript host functions for the undeclared function and for `getConfig`, and a variable type
+- [ ] T003 [P] Build the fixture feature project in `MTests/Fixtures/AcmeFeature/`. Name it (for example `Acme.Elsa3MigrationFixture`) and add it in T001.
+  It contributes the custom activity under its Elsa 3 type name through an `IActivityReconciliationSource` its feature
+  registers, not as a CLR type the host's build-folder scan finds, so the activity is cataloged only when the feature
+  is enabled and `inventory` reports it as unmapped (assert this in T021). It also registers `acme.`-prefixed JavaScript host functions for the undeclared function and for `getConfig`, and a variable type
   alias. The test project references it, and a test-only host folder (the host's committed files plus a
   `shells.Local.json` that lists the feature and its settings) is passed through the tooling's internal seam (R-5).
 
@@ -173,7 +176,11 @@
      `file:elsa3-migration-<guid>;Mode=Memory;Cache=Shared`, which means `ConnectionStrings:<name>` for the
      `DefaultConnectionName` of every EF module `EfModuleCatalog` finds over the composed assemblies (the Elsa 3 import
      ledger's is `ElsaElsa3Import`, which the host's configuration never names) as well as each per-feature connection
-     setting the configuration holds, the migrate policy set to apply, JSON workflow
+     setting the configuration holds; for every EF feature the composed configuration lists, and for the host-level EF
+     settings (Data Protection's EF store, cluster membership) where configured, it sets `Provider` to `Sqlite` and an
+     explicit `ConnectionString` to the run database, which wins over any `ConnectionName` a local source sets (keys
+     only for listed features, as for the lock folder); test with a local source that sets `ConnectionName` and
+     `Provider`, the migrate policy set to apply, JSON workflow
      reconciliation's `FolderPath` at an empty `workflows/` folder and JSON activity reconciliation's `FilePath` at an
      activities file holding `[]`, both in a run-scoped temporary folder outside `--out` that it deletes on every
      path, the `Tasks` feature's `StartupTasksOnly` (T009a), and, when the composed configuration lists
@@ -369,7 +376,8 @@
   with `dotnet run`. Check that every definition has one bucket, and that the published versions equal what startup
   reconciliation publishes from the same input on the same composition (SC-002). Produce that baseline in the
   migration test project through the tooling's internal seam, with an addition list that swaps
-  `Elsa3MigrationImportRun` for `Elsa3JsonReconciliation` (its `SourceId` set and `FolderPath` at the export), and
+  `Elsa3MigrationImportRun` for `Elsa3JsonReconciliation` (its `SourceId` set and a `Files` list of the same `*.json`
+  files the CLI's `ExportInputReader` reads, because the folder reader is not recursive and reads no zip), and
   compare its published versions with the CLI run's. Record the result in the PR evidence, and check the two-minute goal.
 - [ ] T034 Add the smoke test (SC-003). From a clean build, run
   `dotnet run --project extensions/Elsa3/src/Migration/Cli -- workflows inventory` with the fixture export and a

@@ -149,7 +149,10 @@ memory (1236 R-6), so the run leaves the store as the host wires it. The run rep
 `ConnectionStrings:<name>` for the default connection name of every EF module `EfModuleCatalog` finds over the
 composed assemblies (the Elsa 3 import ledger's `ElsaElsa3Import` is in no host setting, so without it the ledger falls
 back to a file in the current directory and the shared transaction refuses the mismatched target), and every
-per-feature persistence connection setting with the in-memory database. The host's root services include its
+per-feature persistence connection setting with the in-memory database. For every EF feature the composed
+configuration lists, and the host-level EF settings where configured, it also sets `Provider` to `Sqlite` and an
+explicit `ConnectionString`, which `EfConnectionDefaults.ResolveConnectionString` prefers over `ConnectionName`, so a
+local source that names another connection or provider cannot point the run at a real database. The host's root services include its
 Data Protection (`AddConfiguredDataProtection`, 1236 R-2): without the EF key store enabled, it keeps keys where
 ASP.NET Core keeps them by default, on disk. After `AddHostServices` the run replaces it at root with an ephemeral key
 ring. The connection strings are not replaced after the fact: they are set in the run-override configuration layer

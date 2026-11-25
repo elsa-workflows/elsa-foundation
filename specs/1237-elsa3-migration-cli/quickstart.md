@@ -17,7 +17,8 @@ The last line printed is the output path. Open `../migration/report.html`, or re
 - Exit code 2: the tool refused to run, and standard error says why.
 
 `inventory` runs on the migration host's committed composition plus the Elsa 3 additions. It ignores your local
-settings.
+settings. Activity classes in a project you have added to the host are part of the build, so the host's CLR activity
+scan catalogs them in both commands; what your local settings add (features and their settings) only `assess` sees.
 
 ## Assess with your own features
 

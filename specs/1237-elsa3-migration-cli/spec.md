@@ -249,7 +249,9 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   folder as content root and the Development environment, that starts no web server, and composes one shell:
   - `inventory` composes the host's committed composition only: `appsettings*.json`, `shells.json` and
     `shells.Development.json` from the host project folder, plus the Elsa 3 addition list. It ignores the engineer's
-    local sources;
+    local sources. Both commands share one build, so the host's CLR activity scan, which reads the build output
+    folder, catalogs the CLR activities of every project the host references in both; what `inventory` leaves out is
+    the local configuration: the features those sources enable and their settings;
   - `assess` composes with the host's full configuration stack, in the host's order (lowest first):
     `appsettings*.json`, `shells.json`, `shells.Development.json`, `shells.Local.json`, the host's user secrets (from
     its `UserSecretsId`), environment variables, plus the Elsa 3 addition list. The CLI passes the host no
