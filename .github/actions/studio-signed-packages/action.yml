@@ -1,0 +1,33 @@
+name: Verify signed Studio candidates
+description: Download the exact protected release snapshot and verify a package set before using it.
+inputs:
+  artifact-id:
+    required: true
+    description: Immutable snapshot ID selected by the protected signing job
+  kind:
+    required: true
+    description: npm or nuget
+  receipt-sha256:
+    required: true
+    description: SHA-256 of the selected signed package receipt
+  version:
+    required: true
+    description: Validated release version
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      with:
+        artifact-ids: ${{ inputs.artifact-id }}
+        merge-multiple: true
+        path: Studio/packages
+    - shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        KIND: ${{ inputs.kind }}
+        RECEIPT_SHA: ${{ inputs.receipt-sha256 }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        printf '%s  %s\n' "$RECEIPT_SHA" "Studio/packages/$KIND/$KIND-subjects.json" | sha256sum -c
+        python3 tools/versioning/package-evidence/studio_archives.py "Studio/packages/$KIND" --check "$KIND" --signed-retry

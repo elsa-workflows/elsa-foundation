@@ -12,4 +12,7 @@
   <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Sim" />     <!-- test-only witness hooks, such as LoopOptions.ErrorReportClock -->
+  </ItemGroup>
 </Project>

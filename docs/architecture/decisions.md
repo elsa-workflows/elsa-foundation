@@ -372,6 +372,14 @@ A finite Park deadline makes expiry eligible. The first resolution to open in a 
 
 A job restarted at Open becomes eligible after recovery completes. The D-2(a) case follows its completion, reuse of the same job key at a higher generation, and recovery from a later Park. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7091685100)
 
+## Owner decisions on the release 1 activities and labels (25 November)
+
+The four palette intrinsics besides Set Variable run on the kernel: Set Output, Set Correlation Id, Set Instance Name and Finish. A model sets its own labels through `ITurn.SetLabel`; the workflow actor gives a model two of the header's four, and keeps the state version in its type data only. Backwards compatibility is not a concern before GA. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7153124235)
+
+## Owner decisions on definitions on the kernel (25 November)
+
+A kernel host replaces `IWorkflowActivationCoordinator` with a kernel coordinator that maps the compiled executable to a Native workflow and serves it. Designer expressions, JavaScript and Liquid, run as one host-evaluated binding kind through the portable expression evaluator. [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7153650829); [Designer definitions on the kernel](definitions-on-the-kernel.md)
+
 ## Process
 
 | Date | Rule | Source |
