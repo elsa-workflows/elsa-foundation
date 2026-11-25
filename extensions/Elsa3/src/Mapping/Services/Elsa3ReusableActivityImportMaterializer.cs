@@ -83,8 +83,8 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                     pathSegments: [new(Elsa3MigrationPathSegmentKind.SourceVersion, id)])).ToArray());
         var convertedById = new Dictionary<string, Elsa3ConvertedDefinition>(StringComparer.Ordinal);
 
-        // A dispatch pins the target's newest published version; this import publishes each workflow's versions oldest
-        // first, so the newest selected version is the one a literal input map must fit (#5808).
+        // A dispatch pins the target's newest published version, and this import publishes the newest selected version of
+        // each workflow, so that is the one a literal input map must fit (#5808).
         var dispatchTargetInputs = sourceById.Values
             .GroupBy(x => x.DefinitionId, StringComparer.Ordinal)
             .ToDictionary(
