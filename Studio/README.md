@@ -20,9 +20,10 @@ The host is composed from independently enabled Studio capabilities:
 - `Elsa.Studio.Api` exposes `GET /_elsa/studio/modules`.
 - `Elsa.Studio.Hosting` serves the prebuilt root-mounted browser; `Elsa.Studio.Hosting.Distribution` composes it with backend profiles, Nuplane add-ons and the Theme Store for the shipped apps.
 - `Elsa.Studio.Workbench.Host` selects every Studio module; [`Elsa.Studio.Essentials.Host`](src/apps/Elsa.Studio.Essentials.Host/README.md) pairs with `Elsa.Essentials.Host`; [`Elsa.Studio.Foundation.Host`](src/apps/Elsa.Studio.Foundation.Host/README.md) is the bare shell that pairs with `Elsa.Foundation.Host`.
-- `Elsa.Studio.Dashboard` owns `/dashboard`, the Dashboard Widget slot, host-owned frames, loading, refresh, layout, and scoped preferences.
+- `Elsa.Studio.Hosting` also owns Home (`/`, `/dashboard`, `/overview`) and its widget area: the frames, loading, refresh, the saved layout and the empty state. Every Studio flavor has it.
+- `Elsa.Studio.Dashboard` adds saved questions and named dashboards (`/questions`, `/dashboards`); it needs the backend's `elsa.api.studio-dashboard` capability and leaves Home to the shell.
 - `Elsa.Studio.Attention` contributes the ordinary wide/full Attention widget.
-- `Elsa.Studio.Workflows.Dashboard` contributes workflow portfolio and run-health widgets.
+- `Elsa.Studio.Workflows.Dashboard` contributes the workflow task group and workflow widgets on Home: Get started, Quick actions, Recent workflows, Recent runs, Needs attention, Tasks, portfolio and run health.
 - `Elsa.Studio.Samples.WeatherForecast` contributes a frontend route and deterministic sample endpoint.
 - `Elsa.Studio.Decisions` contributes the Decisions collection, table authoring, cases, explanations and published-version workflow selector; see its [module guide](../Extensions/Decisions/studio/Elsa.Studio.Decisions/README.md).
 - `Elsa.Studio.ConsoleStream` demonstrates a backend-scoped console stream module.

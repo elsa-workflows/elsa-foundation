@@ -14,7 +14,6 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 import "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/styles.css";
 import "../../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
-import "../../src/essentials/Elsa.Studio.Dashboard/Client/src/styles.css";
 
 const params = new URLSearchParams(location.search);
 writeAppearancePreferences({ themeId: "classic", mode: params.get("theme") === "dark" ? "dark" : "light", navigation: "left" });

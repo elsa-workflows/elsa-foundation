@@ -2,31 +2,31 @@ import { StudioPageHeader, StudioButton, StudioDialog, StudioField } from "@elsa
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { House, Plus, RefreshCw } from "lucide-react";
 import {
-  homeWidgetIds,
+  isHomeWidgetFeatureEnabled,
   useAuthSession,
   usePermissions,
   type ElsaStudioModuleApi,
   type StudioDashboardWidgetContribution
 } from "@elsa-workflows/studio-sdk";
-import { homeLayoutPermissions } from "./hostControl";
-import { HomeTaskGroup } from "./HomeTaskGroup";
 import {
   HomeLayoutStore,
   createHomeLayoutScope,
-  isHomeWidgetFeatureEnabled,
+  homeLayoutPermissions,
   reconcileHomeLayout,
   type HomeLayoutDocument,
   type HomeWidgetLayoutEntry
 } from "./homeLayout";
 import { WidgetFrame } from "./WidgetFrame";
-import { clearDashboardWidgetCache, retainDashboardWidgetCache } from "./useDashboardWidgets";
-import type { GetStartedSnapshot } from "./widgets/GetStartedWidget";
-import { getStartedSteps } from "./widgets/GetStartedWidget";
+import { clearDashboardWidgetCache, retainDashboardWidgetCache } from "./useHomeWidget";
+import "./home.css";
 
+/** The shell's Home at `/`: module sections above a user-arranged grid of the widgets modules contribute. */
 export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   const session = useAuthSession();
   const permissions = usePermissions();
-  const registered = useMemo(() => (api.homeWidgets ?? api.dashboardWidgets).list(), [api]);
+  const registered = useMemo(() => api.homeWidgets.list(), [api]);
+  // Every installed widget, including those the backend, a feature gate or a permission keeps off this Home.
+  const contributedCount = useMemo(() => api.homeWidgets.compose({ includeUnavailable: true, includeHidden: true }).length, [api]);
   const enabledFeatures = api.runtime.enabledFeatures;
   const available = useMemo(
     () => registered.filter(widget =>
@@ -59,7 +59,8 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [refreshIntervalMs, setRefreshIntervalMs] = useState(api.runtime.dashboard?.defaultRefreshIntervalMs ?? 300_000);
   const [active, setActive] = useState(!globalThis.document.hidden);
-  const [getStartedSnapshot, setGetStartedSnapshot] = useState<GetStartedSnapshot | null>(null);
+  const [completedWidgetIds, setCompletedWidgetIds] = useState<ReadonlySet<string>>(() => new Set());
+  const markComplete = useCallback((id: string) => setCompletedWidgetIds(current => current.has(id) ? current : new Set([...current, id])), []);
   const widgetSettings = useMemo(() => {
     const contributions = new Map(available.map(widget => [widget.id, widget]));
     return new Map((document?.value.widgets ?? []).flatMap(entry => {
@@ -87,22 +88,23 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   useEffect(() => () => clearDashboardWidgetCache(cacheScopeKey), [cacheScopeKey]);
   useEffect(() => retainDashboardWidgetCache(cacheScopeKey, new Set(available.map(widget => widget.id))), [available, cacheScopeKey]);
   useEffect(() => {
-    if (!document || !getStartedSnapshot) return;
-    const entry = document.value.widgets.find(item => item.id === homeWidgetIds.getStarted);
-    if (!entry?.visible || entry.options?.keepVisible === true) return;
-    if (!getStartedSteps(getStartedSnapshot).every(step => step.done)) return;
+    if (!document || completedWidgetIds.size === 0) return;
+    const hide = new Set(document.value.widgets
+      .filter(item => completedWidgetIds.has(item.id) && item.visible && item.options?.keepVisible !== true)
+      .map(item => item.id));
+    if (hide.size === 0) return;
     const next = {
       ...document,
       source: "user" as const,
       value: {
-        widgets: document.value.widgets.map(item => item.id === homeWidgetIds.getStarted
+        widgets: document.value.widgets.map(item => hide.has(item.id)
           ? { ...item, visible: false, options: { ...item.options, autoHidden: true } }
           : item)
       }
     };
     setDocument(next);
     void store.save(next).catch(() => setPreferenceError("Home layout could not be saved."));
-  }, [document, getStartedSnapshot, store]);
+  }, [completedWidgetIds, document, store]);
   useEffect(() => {
     if (!moveFocus) return;
     const root = pageRef.current ?? globalThis.document;
@@ -114,7 +116,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
 
   if (!document) return <section className="studio-page dashboard-page home-page">
     <StudioPageHeader headingLevel={2} title={<>Home</>} description={<>What to know and do next.</>} />
-    <HomeTaskGroup api={api} />
+    <HomeSections api={api} />
     <div role="status">Loading Home layout…</div>
   </section>;
 
@@ -185,7 +187,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
 
   return (
     <section ref={pageRef} className={`studio-page dashboard-page home-page${editing ? " home-page--editing" : ""}`}>
-      <StudioPageHeader headingLevel={2} title="Home" description={editing ? "Add, remove and reorder widgets. Changes save as you go." : "What to know and do next."} actions={<>
+      <StudioPageHeader headingLevel={2} title="Home" description={editing ? "Add, remove and reorder widgets. Changes save as you go." : "What to know and do next."} actions={available.length || editing ? <>
           <StudioField label="Refresh interval"><select value={refreshIntervalMs} onChange={event => setRefreshIntervalMs(Number(event.target.value))}>
             {([[0, "Off"], [60_000, "1 minute"], [300_000, "5 minutes"], [900_000, "15 minutes"], [1_800_000, "30 minutes"]] as const)
               .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -199,8 +201,8 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
               <StudioButton type="button" onClick={() => { setEditing(false); closePicker(); }}>Done</StudioButton>
             </>
           ) : <StudioButton type="button" onClick={() => setEditing(true)}>Edit home</StudioButton>}
-        </>} />
-      <HomeTaskGroup api={api} />
+        </> : undefined} />
+      <HomeSections api={api} />
       <div className="visually-hidden" aria-live="polite">{liveMessage}</div>
       {preferenceError ? <div role="status">{preferenceError}</div> : null}
       <div className="dashboard-grid">
@@ -223,17 +225,19 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
               onHide={() => patchEntry(entry.id, { visible: false, options: { ...entry.options, dismissed: true } })}
               onSize={size => patchEntry(entry.id, { size })}
               onSettings={settings => patchEntry(entry.id, { options: settings as Record<string, unknown> })}
-              onSnapshot={widget.id === homeWidgetIds.getStarted
-                ? snapshot => setGetStartedSnapshot(snapshot as GetStartedSnapshot)
+              onSnapshot={widget.isComplete
+                ? snapshot => { if (widget.isComplete?.(snapshot)) markComplete(widget.id); }
                 : undefined}
             />
           );
-        }) : (
+        }) : available.length ? (
           <div className="dashboard-empty">
             <House size={22} />
             <span>No Home widgets are visible.</span>
             <StudioButton type="button" onClick={() => { setEditing(true); setPickerOpen(true); }}>Add widget</StudioButton>
           </div>
+        ) : (
+          <HomeUnavailable contributedCount={contributedCount} discoveryError={api.backendSession?.capabilities ? undefined : api.backendSession?.discoveryError} />
         )}
         {editing ? (
           <StudioButton type="button" className="home-add-slot" onClick={() => { setPickerOpen(true); setPickerQuery(""); }}>
@@ -251,6 +255,33 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
       ) : null}
     </section>
   );
+}
+
+/** Home with nothing to show: no module contributes a widget, or the installed widgets are all unavailable here. */
+function HomeUnavailable({ contributedCount, discoveryError }: { contributedCount: number; discoveryError?: string }) {
+  const message = contributedCount === 0
+    ? "No installed module adds content to Home yet. Install or enable a module that contributes Home widgets, such as the workflow dashboard."
+    : discoveryError
+      ? "Home content is unavailable because the backend's capabilities could not be discovered."
+      : "The installed Home widgets need a backend capability, a module feature or a permission that this session lacks.";
+  return (
+    <div className="dashboard-empty" role="status">
+      <House size={22} />
+      <span>{message}</span>
+      {contributedCount > 0 && discoveryError ? <span className="home-unavailable-reason">{discoveryError}</span> : null}
+    </div>
+  );
+}
+
+function HomeSections({ api }: { api: ElsaStudioModuleApi }) {
+  const enabledFeatures = api.runtime.enabledFeatures;
+  const sections = useMemo(
+    () => api.homeSections.list()
+      .filter(section => isHomeWidgetFeatureEnabled(section, enabledFeatures))
+      .sort((left, right) => (left.order ?? 500) - (right.order ?? 500)),
+    [api, enabledFeatures]
+  );
+  return <>{sections.map(({ id, component: Section }) => <Section key={id} />)}</>;
 }
 
 function AddWidgetGroup({
@@ -301,4 +332,3 @@ function isSettingsRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-export { HomePage as DashboardPage };

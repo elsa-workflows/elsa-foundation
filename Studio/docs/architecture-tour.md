@@ -110,7 +110,7 @@ A Dashboard Contribution should be admitted only when it:
 - satisfies the Slot Owner's shape and ordering rules; and
 - remains available after Module Policy and Host Policy are applied.
 
-Accepted Contributions are ordered by explicit `order` and stable fallback values, never by module load order. Modules may contribute zero, one, or multiple Dashboard widgets. Dashboard Contributions are optional, and there is no one-widget-per-module rule. The host renders a valid empty state when no Dashboard widgets are registered.
+Accepted Contributions are ordered by explicit `order` and stable fallback values, never by module load order. Modules may contribute zero, one, or multiple Home widgets. Widget Contributions are optional, and there is no one-widget-per-module rule. Home and its widget area belong to the shell (`Elsa.Studio.Hosting`), so every Studio flavor has them; the shell renders a valid empty state when no widgets are registered. The Dashboard module adds saved dashboards and questions and does not replace Home.
 
 See [ADR 0004](adr/0004-keep-dashboard-and-diagnostics-as-separate-slots.md) for the boundary between Dashboard summaries and Diagnostics signals.
 

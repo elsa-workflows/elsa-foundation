@@ -111,6 +111,19 @@ and other installed options remain unchanged. Addons must also check actual conf
 before writing; a file path alone does not establish that its values control the running shell.
 
 
+## Home
+
+The standard browser owns Home at `/`, `/dashboard` and `/overview`, with its Home navigation entry, in every Studio flavor. Modules fill it with widgets (`registerHomeWidget`) and fixed sections (`api.homeSections`); see [Home in the SDK guide](Client/src/sdk/README.md#home-widget-and-section-contributions). The bare shell, with no module contributing, shows an empty state that names the next step. The Dashboard module adds saved dashboards and questions beside Home and does not replace it.
+
+A widget is offered only when its `requiresFeature` list is enabled and the session holds all declared permissions. Feature slugs match `Elsa.Studio.*` assembly ids only (`workflows` matches `Elsa.Studio.Workflows`, not `Contoso.Workflows`; `user-tasks` matches `Elsa.Studio.UserTasks`). A missing `enabledFeatures` list hides gated widgets. Unregistered ids (a module that is not installed, a widget the session cannot see) stay in the saved layout and are skipped at render time.
+
+The built-in default layout lists Get started, Workflow run health, Workflow portfolio, Quick actions, Needs attention, Recent runs, Recent workflows and Tasks. The workflow dashboard module contributes those widgets and the workflow task group above the grid; Tasks only renders when user tasks are enabled. Other widgets, such as Attention, appear under Add widget.
+
+Signed-in users read and write `/_elsa/studio/home-layout`. Admins with `studio/preferences/defaults:manage` (or `*`) read and write `/_elsa/studio/home-layout/default`. **Reset to default** deletes the user document so the admin default, then the built-in layout, applies. When GET falls back to the admin default it still returns that document's ETag; the first user PUT uses `If-None-Match: *`. The reserved subject `__admin_default__` cannot call the per-user route. When the backend has no Studio Preferences API, Home keeps the layout on the device.
+
+When sign-in is off the client never calls the Home layout API. The layout is stored in `localStorage` under `elsa-studio:home-layout:` (scoped by host, backend, tenant and subject). If that key is missing, Home uses the built-in default. A reset clears the local key. See [Studio Preferences API](../../../../essentials/src/Studio/Preferences/Api/README.md) for the HTTP surface.
+
+
 ## Branding
 
 The standard browser supports public host branding and independent Linen/palette/appearance defaults.

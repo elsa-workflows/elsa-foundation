@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { ArrowRight, CircleAlert, LoaderCircle, Plus, Workflow } from "lucide-react";
-import { evaluateBackendRequirements, useAuthSession, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { isHomeWidgetFeatureEnabled } from "./homeLayout";
+import { evaluateBackendRequirements, isHomeWidgetFeatureEnabled, useAuthSession, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { StudioButton, StudioDialog, StudioDialogFooter } from "@elsa-workflows/studio-ui";
-import { loadRecentWorkflows, navigateStudioPath, type HomeWorkflowSummary } from "./widgets/homeData";
+import { loadRecentWorkflows, navigateStudioPath, type HomeWorkflowSummary } from "./homeData";
 
 const designRead = "workflows/design:read";
 const designManage = "workflows/design:manage";

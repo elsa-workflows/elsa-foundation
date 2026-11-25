@@ -1,26 +1,6 @@
 import { flushSync } from "react-dom";
 import { expect, vi } from "vitest";
-import type { ElsaStudioModuleApi, StudioDashboardWidgetContribution } from "@elsa-workflows/studio-sdk";
-import { homeLayoutLocalStoragePrefix } from "../homeLayout";
-
-export function widget(overrides: Partial<StudioDashboardWidgetContribution> = {}): StudioDashboardWidgetContribution {
-  return {
-    id: "workflows.runs",
-    moduleId: "Elsa.Studio.Workflows.Dashboard",
-    title: "Workflow runs",
-    defaultVisible: true,
-    defaultSize: "wide",
-    supportedSizes: ["medium", "wide"],
-    settings: {
-      schemaVersion: 1,
-      defaults: { range: "7d" },
-      descriptors: [],
-      validate: value => (value as { range?: string })?.range === "7d" ? value as { range: string } : null
-    },
-    component: () => null,
-    ...overrides
-  };
-}
+import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
 export function stubApi(): ElsaStudioModuleApi {
   const makeRegistry = <T,>() => {
@@ -57,21 +37,6 @@ export function stubApi(): ElsaStudioModuleApi {
     dashboardRecordLinks: makeRegistry(),
     settingEditors: makeRegistry()
   } as unknown as ElsaStudioModuleApi;
-}
-
-export function seedHomeLayout(api: ElsaStudioModuleApi, widgetIds: string[], subjectId = "anonymous") {
-  const scope = {
-    studioHostId: api.runtime.hostId ?? "default",
-    backendBaseUrl: api.backend.baseUrl,
-    subjectId,
-    tenantId: "default"
-  };
-  localStorage.setItem(`${homeLayoutLocalStoragePrefix}${encodeURIComponent(JSON.stringify(scope))}`, JSON.stringify({
-    source: "local",
-    namespace: "home-layout",
-    schemaVersion: 1,
-    value: { widgets: widgetIds.map(id => ({ id, size: "wide", visible: true })) }
-  }));
 }
 
 export async function flush() {

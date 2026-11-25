@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuthSession, usePermissions, useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceWhenActive, studioNavigationRequestedEvent, notifyStudioNavigationGuardReleased, type StudioDashboardRecordLinkContribution, type StudioNavigationRequest, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { StudioNewResourceDialog, type StudioResourceMetadata, studioRowInteraction, OverflowMenu, PeerViewSwitch, SkeletonRows, StudioButton, StudioDialogFooter, StudioField, StudioTimestamp, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
-import { createHomeLayoutScope } from "../homeLayout";
 import { DashboardApi } from "./api";
 import { QueryControls } from "./QueryControls";
 import { ResultView } from "./ResultView";
@@ -23,7 +22,7 @@ export function NamedDashboardsRoute(props: RouteProps) {
   const session = useAuthSession();
   const location = useStudioRouteLocation();
   const pathname = location.pathname;
-  const scope = JSON.stringify(createHomeLayoutScope(props.api, session));
+  const scope = JSON.stringify({ studioHostId: props.api.runtime.hostId ?? "default", backendBaseUrl: props.api.backend.baseUrl, subjectId: session.subject ?? "anonymous", tenantId: session.tenantId ?? "default" });
   const segments = pathname.split("/").filter(Boolean);
   const id = props.view === "detail" || props.view === "edit" ? decodeURIComponent(segments[segments.length - (props.view === "edit" ? 2 : 1)] ?? "") : undefined;
   const initialQuestionId = props.kind === "dashboard" && props.view === "create" ? location.searchParams.get("questionId")?.trim() || undefined : undefined;

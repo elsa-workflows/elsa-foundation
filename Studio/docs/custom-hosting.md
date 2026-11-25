@@ -30,7 +30,7 @@ That C# is the whole composition root. The sample still needs the downloaded `Cu
 | Package | When to use it |
 | --- | --- |
 | `Elsa.Studio.Hosting` | Common hosting, selected-shell activation, runtime configuration, authorization/bridge, discovery and standard browser assets. Api/Core arrive transitively. |
-| `Elsa.Studio.Dashboard` | The sample's Home module. Select other existing Studio module packages deliberately. |
+| `Elsa.Studio.Dashboard` | The sample's example module: saved questions and dashboards. Home itself comes from `Elsa.Studio.Hosting`. Select other existing Studio module packages deliberately. |
 | `Elsa.Studio.Hosting.Themes` | Optional Theme Store, directory sources, picker and management capabilities. Independent of Nuplane. |
 | `Elsa.Studio.Hosting.Nuplane` | Optional package/feature administration using the shared CShells/Nuplane adapter and native store protection. Independent of themes. |
 | `Elsa.Studio.FeatureManagement` | Optional in-box management UI for package/feature administration (shell feature ID `FeatureManagement`). Pair with the Nuplane server addon when you want that UI. |
