@@ -63,7 +63,19 @@ public sealed partial class EfStore
 
     private sealed record KeptRow(string Id, short KeptBy, string Digest, string Envelope, long Bytes);
 
-    private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding);
+    private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding, string? Clearing, long? Cleared);
+
+    // A page clears or restores at most 170 rows and 4 MiB of stored rows, and always has room for its first row.
+    private static int PageLength(IEnumerable<KeptRow> rows)
+    {
+        var (count, bytes) = (0, 0L);
+        foreach (var row in rows)
+        {
+            if (count > 0 && (count >= InMemoryStore.ParkPageLimit || bytes + row.Bytes > ParkRecoveryCredit.LimitBytes)) break;
+            (count, bytes) = (count + 1, bytes + row.Bytes);
+        }
+        return count;
+    }
 
     private static Task<List<KeptRow>> ReadKeptAsync(KernelDb db, string actor, int partition, bool lockRows, CancellationToken token) =>
         db.Database.SqlQueryRaw<KeptRow>($"""
@@ -103,22 +115,25 @@ public sealed partial class EfStore
                 messages.Add(item);
                 continue;
             }
-            var park = await db.Database.SqlQuery<ParkMarkRow>($"""
+            var clearing = RereadsParkFacts(db) ? """ "FoundationParkClearing" AS "Clearing", "FoundationParkCleared" AS "Cleared" """
+                : """ NULL::text AS "Clearing", NULL::bigint AS "Cleared" """;
+            var park = await db.Database.SqlQueryRaw<ParkMarkRow>($"""
                 SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision",
                     "Jobs" IS NOT NULL OR "Children" IS NOT NULL OR "CustomHandles" IS NOT NULL
-                        OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding" FROM "Instances"
-                WHERE "Id" = {message.Target.Id} AND "Partition" = {message.Target.Partition} AND NOT "Retired"
-                """).SingleOrDefaultAsync(token);
+                        OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding",
+                    {clearing} FROM "Instances"
+                WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
+                """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
             var kept = await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token);
             // A page restores at most 170 rows and 4 MiB of stored rows, and always has room for its first restored row.
             // A recover charges only restored (Arrived) rows, since the cleared fault input is never restored. A Terminate
             // clears every kept row, so it charges them all.
             var charged = message.Kind == Kinds.Terminate ? kept.ToArray() : kept.Where(row => row.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
-            var fits = charged.Length <= InMemoryStore.ParkPageLimit &&
-                (charged.Length <= 1 || charged.Sum(row => row.Bytes) <= ParkRecoveryCredit.LimitBytes);
+            var page = PageLength(charged);
+            var fits = page == charged.Length;
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived), kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
-                fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Rereads = RereadsParkFacts(db) };
+                fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }
         return polled with { Messages = messages };

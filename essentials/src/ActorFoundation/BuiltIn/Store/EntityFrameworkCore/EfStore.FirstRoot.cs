@@ -156,14 +156,14 @@ public sealed partial class EfStore
             CREATE OR REPLACE TRIGGER kernel_require_root_journal_revision BEFORE INSERT ON "Journal"
             FOR EACH ROW EXECUTE FUNCTION kernel_require_root_journal_revision();
             """.Replace("/*root-park-continues*/", db.UsesRootParkArrivals ? """
-                (OLD."Status" = 2 AND NEW."Status" = OLD."Status" AND NOT NEW."Retired"
+                (OLD."Status" = 2 AND NEW."Status" = OLD."Status" AND NOT NEW."Retired" /*parked-clearing-continues*/
                     AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0
                     AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationParkRevision" = OLD."FoundationParkRevision"
                     AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
                     AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
                     AND NEW."History" IS NOT DISTINCT FROM OLD."History")
                 """ : db.UsesRootParkedOperators ? """
-                (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND OLD."FoundationParkAt" IS NOT NULL
+                (OLD."Status" = 2 AND NEW."Status" = 2 AND NOT NEW."Retired" AND OLD."FoundationParkAt" IS NOT NULL /*parked-clearing-pinned*/
                     AND NEW."FoundationParkAt" = OLD."FoundationParkAt" AND NEW."FoundationTerminalRevision" IS NULL
                     AND NEW."State" = OLD."State" AND NEW."StateVersion" = OLD."StateVersion" AND NEW."FoundationHeader" = OLD."FoundationHeader"
                     AND NEW."Fault" IS NOT DISTINCT FROM OLD."Fault" AND NEW."Suspended" = OLD."Suspended"
@@ -229,6 +229,9 @@ public sealed partial class EfStore
             // S5b: a Terminate that names the Park ends a parked root in one commit, journalled "terminated" at its revision.
             .Replace("/*root-parked-terminated-journal*/", db.UsesRootParkedOperators ? ParkedTerminatedJournal : "", StringComparison.Ordinal)
             .Replace("/*root-parked-terminate*/", db.UsesRootParkedOperators ? ParkedTerminateCheckpoint(db) : "false", StringComparison.Ordinal)
+            // S5b-2: a refusal leaves an open clearing as it is, and no keep or other write moves a root whose Park is being cleared.
+            .Replace("/*parked-clearing-continues*/", db.UsesRootParkedOperators ? ParkedClearingPinned + ParkedClearingKeeps : "", StringComparison.Ordinal)
+            .Replace("/*parked-clearing-pinned*/", db.UsesRootParkedOperators ? ParkedClearingPinned : "", StringComparison.Ordinal)
             .Replace("/*root-retirement*/", db.UsesRootRetirement ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-atomic-retirement*/", db.UsesRootTerminateThenDelete ? "true" : "false", StringComparison.Ordinal)
             .Replace("/*root-retirement-wire*/", db.UsesRootRetirement ? """AND NEW."FoundationStateWire" IS NULL""" : "", StringComparison.Ordinal)

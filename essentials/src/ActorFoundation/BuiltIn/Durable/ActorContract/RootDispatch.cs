@@ -85,8 +85,9 @@ internal sealed partial class ActorAdapter
     // Any other command is consumed and refused with a journalled reason at the next revision, and the Park and checkpoint
     // stay as they are: "parked" for one that names no Park (admitted before the Park opened), "selection" for a stale
     // Park, "outstanding" for a row with jobs, children or custom handles (the end cannot cancel or cascade them yet, and
-    // retirement refuses them), "page" for a Park larger than one page. A held caller of a refused command is answered
-    // with the refusal.
+    // retirement refuses them), "clearing" for one that names a Park being cleared. A held caller of a refused command is
+    // answered with the refusal. S5b-2: a Park larger than one page opens a clearing ("clearing" entry, held caller answered
+    // "started"); each store control clears the next page, and the page that leaves nothing kept ends the root.
     private Durable.TurnOutcome? RefuseOnParkedRoot(Durable.TurnInput input)
     {
         if (roots is not { RefusesParkedOperators: true } || input.Row is not
@@ -94,9 +95,20 @@ internal sealed partial class ActorAdapter
             input.Taken is not [{ Durable: true, Message: var control } refused] ||
             !IsRootControl(control) || control.Target.Id != row.Id) return null;
         var revision = checked(row.Revision + 1);
-        var (mark, facts) = (control.Operator!.RootParkMark, control.Operator.RootParkFacts);
+        var (mark, facts, clear) = (control.Operator!.RootParkMark, control.Operator.RootParkFacts, control.Operator.RootParkClear);
         var reason = control.Kind != Durable.Kinds.Terminate || mark is null || facts is null ? "parked"
-            : facts.Mark != mark ? "selection" : facts.Outstanding ? "outstanding" : !facts.FitsPage ? "page" : null;
+            : clear ? facts.Clearing != control.Id || facts.Mark != mark ? "selection" : null
+            : facts.Clearing is not null ? "clearing" : facts.Mark != mark ? "selection" : facts.Outstanding ? "outstanding" : null;
+        if (reason is null && !facts!.FitsPage)
+        {
+            var page = new Durable.TurnOutcome(input.Actor)
+            {
+                Expected = row.Revision, Row = row with { Revision = revision }, Revision = revision, Status = row.Status, Consumed = [refused],
+                Journal = clear ? null : Durable.Json.Write(new { Outcome = "clearing", Operation = control.Id, Cleared = facts.Page })
+            };
+            page.ReplyTo(refused, "started");
+            return page;
+        }
         if (reason is null)
         {
             var ended = row with
@@ -107,7 +119,7 @@ internal sealed partial class ActorAdapter
             var terminated = new Durable.TurnOutcome(input.Actor)
             {
                 Expected = row.Revision, Row = ended, Revision = revision, Status = ended.Status, Consumed = [refused], Unsubscribe = true,
-                Journal = Durable.Json.Write(new { Outcome = "terminated", Operation = control.Id, Cleared = facts!.Arrived + facts.Consumed })
+                Journal = Durable.Json.Write(new { Outcome = "terminated", Operation = control.Id, Cleared = facts!.Cleared + facts.Arrived + facts.Consumed })
             };
             terminated.ReplyTo(refused, "terminated");
             return terminated;
@@ -120,7 +132,7 @@ internal sealed partial class ActorAdapter
         if (control.ReplyTo is not null)
             outcome.ReplyTo(refused, new Durable.CreationResult(input.Actor, reason switch
             {
-                "selection" => "StaleSelection", "outstanding" => "ParkOutstanding", "page" => "ParkPageLimit", _ => "Parked"
+                "selection" => "StaleSelection", "outstanding" => "ParkOutstanding", "clearing" => "ResolutionOpen", _ => "Parked"
             }, control.TargetCreation, row.Creation), creationRefusal: true);
         return outcome;
     }

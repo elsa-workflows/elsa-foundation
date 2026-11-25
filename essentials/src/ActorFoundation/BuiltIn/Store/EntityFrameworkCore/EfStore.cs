@@ -829,14 +829,16 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
              {(db.UsesRootOperatorProtocol ? db.UsesRootParkRecovery ? RootRecoveryOperatorPollFilter
-                 : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : RootOperatorPollFilter : "")}
+                 : WithholdsParkInputs(db) ? RootParkedOperatorPollFilter : ClearsParkInPages(db) ? RootClearingOperatorPollFilter
+                 : RootOperatorPollFilter : "")}
              AND (m."InboxScope" = 0 OR (m."InboxScope" IN ({RootInputScopes}) AND EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
                  WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"
                    {(WithholdsParkInputs(db) ? """AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%')"""
-                       : db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL""" : "")}
+                       : db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL"""
+                       : ClearsParkInPages(db) ? RootClearingInputFilter : "")}
                    {(db.UsesRootParkRecovery ? RootReleasedCohortFilter : "")})))
             """;
     // Commands are exposed only when database time makes them due. On a suspended root the
@@ -865,6 +867,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private static bool WithholdsParkInputs(KernelDb db) => db.UsesRootParkedOperators && !db.UsesRootParkArrivals;
     private static readonly string RootParkedOperatorPollFilter = RootOperatorPollFilter.Replace("/*withheld-prior*/",
         """AND (target."FoundationParkAt" IS NULL OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);
+    // S5b-2: while a parked root's Park is being cleared it receives only operator rows (its clearing's controls among them),
+    // so nothing is kept mid-clearing; every other input stays pending in Seq order and, after the end, settles as Ended.
+    // Without Park arrivals a parked root already withholds them. Recovery sets admit no Terminate, so they never clear.
+    private static bool ClearsParkInPages(KernelDb db) => db.UsesRootParkedOperators && db.UsesRootParkArrivals && !db.UsesRootParkRecovery;
+    private const string RootClearingInputFilter = """AND (i."FoundationParkClearing" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%')""";
+    private static readonly string RootClearingOperatorPollFilter = RootOperatorPollFilter.Replace("/*withheld-prior*/",
+        """AND (target."FoundationParkClearing" IS NULL OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);
     // A released row of the root's current generation goes before every control: an earlier operator row waits for the cohort.
     private static readonly string RootRecoveryOperatorPollFilter = RootOperatorPollFilter.Replace("/*released-cohort*/",
         """m."FoundationReleasedBy" = target."FoundationParkGeneration" OR """, StringComparison.Ordinal);
