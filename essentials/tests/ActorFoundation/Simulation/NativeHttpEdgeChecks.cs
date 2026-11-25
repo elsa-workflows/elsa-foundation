@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Kernel.Foundation.InMemory;
 using Kernel.Native;
+using Kernel.Native.Run;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -73,6 +74,22 @@ internal static partial class NativeHttpEdgeChecks
                 Wf.HttpEndpoint("resume", "greet-later/resume", "GET"),
                 Wf.Respond("greeting", Binding.Expr("$resume.Query.name + '@' + $resume.Headers['x-tenant']"),
                     headers: Binding.Literal(new JsonObject { ["X-Resumed"] = "yes" })))))
+            .Add(Wf.Workflow("designed", Wf.Flowchart("flow",
+                [Wf.Respond("accepted", Binding.Expr("'accepted ' + $start.Query.id"), status: 201), Wf.HttpEndpoint("start", "designed")],
+                [new Connection("start", "accepted")])))
+            .Add(Wf.Workflow("enrich", Wf.Sequence("main", Wf.HttpEndpoint("start", "orders/{id}/enrich"),
+                Wf.Respond("enriched", Binding.Expr("'enrich ' + $start.RouteValues.id")))))
+            .Add(Wf.Workflow("list", Wf.Sequence("main", Wf.HttpEndpoint("start", "items/list"), Wf.Respond("listed", "the list"))))
+            .Add(Wf.Workflow("item", Wf.Sequence("main", Wf.HttpEndpoint("start", "items/{id}"), Wf.Respond("item-out", Binding.Expr("'item ' + $start.RouteValues.id")))))
+            .Add(Wf.Workflow("ship", Wf.Sequence("main", Wf.HttpEndpoint("start", "orders/{id}/ship"),
+                Wf.Respond("shipping", Binding.Expr("'shipping ' + $start.RouteValues.id"), 202),
+                Wf.HttpEndpoint("cancel", "orders/{id}/cancel", routeValues: Binding.Result("start", "RouteValues")),
+                Wf.Respond("cancelled", Binding.Expr("'cancelled ' + $start.RouteValues.id + ' by ' + $cancel.RouteValues.id")))))
+            .Add(Wf.Workflow("ship-computed", Wf.Sequence("main", Wf.HttpEndpoint("start", "ship-computed").Capture("order", "Body"),
+                Wf.Respond("computed-waiting", "waiting"), Wf.HttpEndpoint("cancel", Binding.Expr("'orders/' + order.id + '/cancel'")),
+                Wf.Respond("computed-cancelled", Binding.Expr("'computed ' + order.id"))), ("order", null)))
+            .Add(Wf.Workflow("fetch", Wf.Sequence("main", Wf.HttpEndpoint("start", "fetch/{*url}"),
+                Wf.Respond("fetched", Binding.Expr("'fetch ' + $start.RouteValues.url")))))
             .Add(Wf.Workflow("bad-headers", Wf.Sequence("main",
                 Wf.HttpEndpoint("start", "bad-headers"),
                 Wf.Respond("refused", "never sent", headers: Binding.Literal(new JsonObject { ["Content-Type"] = "text/html" })))));
@@ -238,6 +255,52 @@ internal static partial class NativeHttpEdgeChecks
             var control = await RawPostAsync("echo-headers", "X-Bad: a\u0001b");
             Require(control.Status == 400,
                 $"A request header the model's rules refuse, here a control character Kestrel lets through, is answered 400. Observed {control.Status}.");
+            using (var designed = await PostAsync("designed?id=7"))
+                Require(designed.StatusCode == HttpStatusCode.Created && await designed.Content.ReadAsStringAsync(token) == "accepted 7",
+                    $"A request starts a designer-shaped root Flowchart at its HttpEndpoint start node through the public ingress. Observed {(int)designed.StatusCode}.");
+            using (var enriched = await PostAsync("Orders/42/Enrich"))
+                Require(enriched.StatusCode == HttpStatusCode.OK && await enriched.Content.ReadAsStringAsync(token) == "enrich 42",
+                    "A start on a route template gets its route value through the Kestrel edge.");
+            using (var listed = await PostAsync("items/list"))
+            using (var item = await PostAsync("items/7"))
+                Require(await listed.Content.ReadAsStringAsync(token) == "the list" && await item.Content.ReadAsStringAsync(token) == "item 7",
+                    "The most specific template wins: items/list goes to its literal route, items/7 to items/{id}.");
+            foreach (var order in new[] { "41", "42", "a b", "A", "%41", "A/42" })
+                using (var shipping = await PostAsync($"orders/{Uri.EscapeDataString(order)}/ship"))
+                    Require(shipping.StatusCode == HttpStatusCode.Accepted && await shipping.Content.ReadAsStringAsync(token) == $"shipping {order}",
+                        $"Order '{order}' is shipping and waits for its own cancel.");
+            using (var cancelled = await PostAsync("orders/42/cancel"))
+                Require(await cancelled.Content.ReadAsStringAsync(token) == "cancelled 42 by 42",
+                    "A cancel on orders/42/cancel resumes only the instance waiting for order 42.");
+            using (var again = await PostAsync("orders/42/cancel"))
+            using (var spaced = await PostAsync("orders/a%20b/cancel"))
+            using (var other = await PostAsync("orders/41/cancel"))
+                Require(again.StatusCode == HttpStatusCode.NotFound && await spaced.Content.ReadAsStringAsync(token) == "cancelled a b by a b" &&
+                        await other.Content.ReadAsStringAsync(token) == "cancelled 41 by 41",
+                    $"A finished order's cancel finds nothing, and the other order is still there for its own cancel. Observed {(int)again.StatusCode}.");
+            using (var percent = await PostAsync("orders/%2541/cancel"))
+            using (var plain = await PostAsync("orders/A/cancel"))
+            using (var slashed = await PostAsync("orders/A%2F42/cancel"))
+                Require(await percent.Content.ReadAsStringAsync(token) == "cancelled %41 by %41" && await plain.Content.ReadAsStringAsync(token) == "cancelled A by A" &&
+                        await slashed.Content.ReadAsStringAsync(token) == "cancelled A/42 by A/42",
+                    "Escaped ids are decoded exactly once: %2541 is order '%41', not order 'A', and A%2F42 is order 'A/42'.");
+            var dots = await RawPostAsync("orders/%2E%2E/cancel");
+            Require(dots.Status == 404, $"A '..' segment sent as the client wrote it is no id for the matcher. Observed {dots.Status}.");
+            foreach (var order in new[] { "%41", "A" })
+                using (var shipping = await PostAsync($"orders/{Uri.EscapeDataString(order)}/ship"))
+                    Require(shipping.StatusCode == HttpStatusCode.Accepted, $"Order '{order}' ships again.");
+            var absolute = await RawPostAsync($"{client.BaseAddress!.GetLeftPart(UriPartial.Authority)}/orders/%2541/cancel");
+            var stepped = await RawPostAsync("orders/x/../A/cancel");
+            var url = await RawPostAsync("fetch/https://example.com/orders/1");
+            Require(url is { Status: 200, Body: "fetch https://example.com/orders/1" },
+                $"An origin-form path that holds '://' is matched as it is, here by a catch-all start. Observed {url.Status} '{url.Body}'.");
+            Require(absolute is { Status: 200, Body: "cancelled %41 by %41" } && stepped is { Status: 200, Body: "cancelled A by A" },
+                $"An absolute-form target is decoded once too, and a literal '..' step is removed as Kestrel removes it. Observed {absolute.Status} '{absolute.Body}', {stepped.Status} '{stepped.Body}'.");
+            using (var computed = new HttpRequestMessage(HttpMethod.Post, "ship-computed") { Content = JsonContent.Create(new { id = "Zz" }) })
+                Require((await client.SendAsync(computed, token)).StatusCode == HttpStatusCode.OK, "A workflow waits on a cancel path it computes.");
+            using (var computedCancel = await PostAsync("orders/Zz/cancel"))
+                Require(await computedCancel.Content.ReadAsStringAsync(token) == "computed Zz",
+                    "A computed wait that shares the cancel template's shape is reached by the edge's literal retry.");
             using (var refused = await PostAsync("bad-headers"))
                 Require(refused.StatusCode == HttpStatusCode.InternalServerError &&
                         await refused.Content.ReadAsStringAsync(token) == "the workflow faulted",
@@ -272,14 +335,28 @@ internal static partial class NativeHttpEdgeChecks
             using var socket = new System.Net.Sockets.TcpClient();
             await socket.ConnectAsync(address.Host, address.Port, token);
             await using var stream = socket.GetStream();
-            var head = $"POST /{path} HTTP/1.1\r\nHost: {address.Authority}\r\n{string.Concat(headerLines.Select(line => line + "\r\n"))}Content-Length: 0\r\nConnection: close\r\n\r\n";
+            var target = path.StartsWith("http://", StringComparison.Ordinal) ? path : "/" + path;     // an absolute-form target as given
+            var head = $"POST {target} HTTP/1.1\r\nHost: {address.Authority}\r\n{string.Concat(headerLines.Select(line => line + "\r\n"))}Content-Length: 0\r\nConnection: close\r\n\r\n";
             await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(head), token);
             using var reader = new StreamReader(stream);
             var text = await reader.ReadToEndAsync(token);
             var status = int.Parse(text.Split(' ', 3)[1]);
-            var payload = text[(text.IndexOf("\r\n\r\n", StringComparison.Ordinal) + 4)..];
-            var body = payload.IndexOf('{') is >= 0 and var from ? payload[from..(payload.LastIndexOf('}') + 1)] : payload;     // past any chunk framing
-            return (status, body);
+            var split = text.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+            var payload = text[(split + 4)..];
+            if (text[..split].Contains("Transfer-Encoding: chunked", StringComparison.OrdinalIgnoreCase))
+            {
+                var decoded = new System.Text.StringBuilder();
+                for (var at = 0; at < payload.Length;)
+                {
+                    var line = payload.IndexOf("\r\n", at, StringComparison.Ordinal);
+                    var size = Convert.ToInt32(payload[at..line].Split(';', 2)[0].Trim(), 16);     // without any chunk extension
+                    if (size == 0) break;
+                    decoded.Append(payload, line + 2, size);
+                    at = line + 2 + size + 2;
+                }
+                payload = decoded.ToString();
+            }
+            return (status, payload);
         }
 
         async Task<HttpResponseMessage> PostApprovalRetryAsync(string name)
@@ -317,15 +394,31 @@ internal static partial class NativeHttpEdgeChecks
         catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: refused.OverBound ? StatusCodes.Status414UriTooLong : 400); }
         try { headers = HttpFields.RequestHeaders(request.Headers.SelectMany(field => field.Value.Select(value => KeyValuePair.Create(field.Key, value ?? "")))); }
         catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: refused.OverBound ? StatusCodes.Status431RequestHeaderFieldsTooLarge : 400); }
-        var message = new Kernel.Native.HttpRequest(request.Method, request.Path, body) { Query = query, Headers = headers };
+        // The route templates are matched on the path as the client sent it, so that the matcher decodes it once: Request.Path
+        // is already decoded but for %2F, and a value of '%41' sent as %2541 would be decoded twice.
+        var sent = SentPath(context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? request.Path.ToUriComponent());
+        var match = HttpRouteMatcher.Match(routes, request.Method, sent);
+        Kernel.Native.HttpRequest message;
+        try { message = new Kernel.Native.HttpRequest(request.Method, request.Path, body) { Query = query, Headers = headers, RouteValues = match.Values }; }
+        catch (HttpFieldsException refused) { return Results.Text(refused.Message, statusCode: StatusCodes.Status414UriTooLong); }
+        // The edge picks each request's event id; route values never go into it.
         var id = Guid.NewGuid().ToString("N");
-        var options = new Contract.RequestOptions(null, deadline, routes.BeforeCommit(message.Method, message.Path));
-        var reply = routes.TryStart(message.Method, message.Path, out var route)
-            ? await ingress.RequestAsync(scope, new Contract.Target.Start(PublicWorkflow.Start(
+        Contract.Reply reply;
+        if (match.Route is { Start: true } route)
+            reply = await ingress.RequestAsync(scope, new Contract.Target.Start(PublicWorkflow.Start(
                     NativeExecutionModel.Start(route.Workflow, triggerNode: route.Node, trigger: Values.From(message)))),
-                id, Contract.Kinds.Start, null, null, options, token)
-            : await ingress.RequestAsync(scope, new Contract.Target.Event(HttpRoutes.Key(message.Method, message.Path)),
-                eventId ?? id, Contract.Kinds.Event, JsonSerializer.Serialize(message), eventOptions, options, token);
+                id, Contract.Kinds.Start, null, null, new Contract.RequestOptions(null, deadline, route.RespondBeforeCommit), token);
+        else
+        {
+            reply = await ingress.RequestAsync(scope, new Contract.Target.Event(match.Key), eventId ?? id, Contract.Kinds.Event, JsonSerializer.Serialize(message),
+                eventOptions, new Contract.RequestOptions(null, deadline, match.Route?.RespondBeforeCommit ?? false), token);
+            // A computed wait may share a wait template's shape: with no waiter on the template's key, the request goes to
+            // its literal key, without route values (design card 1; a "no waiter" publishes nothing, FC-C2).
+            var literal = HttpRouteMatcher.Literal(request.Method, sent);
+            if (match.Route is not null && reply.Error == "no waiter" && literal.Key != match.Key)
+                reply = await ingress.RequestAsync(scope, new Contract.Target.Event(literal.Key), eventId ?? id, Contract.Kinds.Event,
+                    JsonSerializer.Serialize(message with { RouteValues = literal.Values }), eventOptions, new Contract.RequestOptions(null, deadline, false), token);
+        }
 
         return reply switch
         {
@@ -338,6 +431,21 @@ internal static partial class NativeHttpEdgeChecks
             { Error: null, Item: null } => Results.NoContent(),
             _ => Results.StatusCode(500)
         };
+    }
+
+    // The path of the request target as the client sent it: without the scheme and authority of an absolute-form target
+    // and without the query, and with the literal '.' and '..' segments removed as Kestrel removes them (RFC 3986,
+    // 5.2.4); an escaped %2E%2E stays a segment, which the matcher takes for no value.
+    private static string SentPath(string target)
+    {
+        var path = target.Split('?', 2)[0];
+        if (path is not ['/', ..] && path.IndexOf("://", StringComparison.Ordinal) is var scheme and >= 0)
+            path = path.IndexOf('/', scheme + 3) is var start and >= 0 ? path[start..] : "/";
+        var kept = new List<string>();
+        foreach (var segment in path.Split('/'))
+            if (segment == "..") { if (kept.Count > 1) kept.RemoveAt(kept.Count - 1); }
+            else if (segment != ".") kept.Add(segment);
+        return string.Join('/', kept);
     }
 
     private static List<KeyValuePair<string, string>> QueryPairs(string? queryString)
