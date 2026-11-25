@@ -32,7 +32,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore
                 if (!NativeIngressCheckpointAuthority.HasBoundScope(publisher, scope.Value))
                     throw new InvalidDataException("The publisher has no protected source-bound scope.");
                 var material = _retentionMaterial is null ? null : await _retentionMaterial.FindAsync(
-                    candidate.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.RequestedArtifactId, token);
+                    candidate.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!.RequestedArtifactId, token);
                 if (material is null) throw new NotSupportedException("Saved starts need actual retained material.");
                 lock (_state.SyncRoot)
                 {

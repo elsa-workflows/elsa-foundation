@@ -28,7 +28,7 @@ internal sealed class MemoryUserTaskStore(UserTaskMemoryState state, IPersistenc
         cancellationToken.ThrowIfCancellationRequested();
         if (record.Revision != (expectedRevision ?? 0) + 1) throw new ArgumentException("A conditional task write must advance exactly one revision.");
         var key = (Scope, record.TenantId, record.Id);
-        var json = JsonSerializer.Serialize(record);
+        var json = JsonSerializer.Serialize(record, Elsa.Serialization.Core.JsonBaseline.Options);
         if (expectedRevision is null) return ValueTask.FromResult(state.Tasks.TryAdd(key, json));
         return ValueTask.FromResult(state.Tasks.TryGetValue(key, out var prior) && Read(prior).Revision == expectedRevision && state.Tasks.TryUpdate(key, json, prior));
     }
@@ -53,7 +53,7 @@ internal sealed class MemoryUserTaskStore(UserTaskMemoryState state, IPersistenc
     public ValueTask<UserTaskFormVersion?> FindFormAsync(string tenantId, string id, string version, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(version != UserTaskProtocol.FormDraftVersion && state.Forms.TryGetValue((Scope, tenantId, id, version), out var json) ? JsonSerializer.Deserialize<UserTaskFormVersion>(json) : null);
+        return ValueTask.FromResult(version != UserTaskProtocol.FormDraftVersion && state.Forms.TryGetValue((Scope, tenantId, id, version), out var json) ? JsonSerializer.Deserialize<UserTaskFormVersion>(json, Elsa.Serialization.Core.JsonBaseline.Options) : null);
     }
 
     public ValueTask<UserTaskFormPage> ListFormsAsync(string tenantId, int limit, string? after = null, CancellationToken cancellationToken = default)
@@ -63,7 +63,7 @@ internal sealed class MemoryUserTaskStore(UserTaskMemoryState state, IPersistenc
         var deleted = state.Forms.Where(x => x.Key.Scope == scope && x.Key.Tenant == tenantId && x.Key.Version == UserTaskProtocol.FormDraftVersion)
             .Select(x => ReadDraft(x.Value)).Where(x => x.Deleted).Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
         var rows = state.Forms.Where(x => x.Key.Scope == scope && x.Key.Tenant == tenantId && x.Key.Version != UserTaskProtocol.FormDraftVersion)
-            .Select(x => new { Key = UserTaskRules.Id(scope, tenantId, x.Key.Id, x.Key.Version), Version = JsonSerializer.Deserialize<UserTaskFormVersion>(x.Value)! })
+            .Select(x => new { Key = UserTaskRules.Id(scope, tenantId, x.Key.Id, x.Key.Version), Version = JsonSerializer.Deserialize<UserTaskFormVersion>(x.Value, Elsa.Serialization.Core.JsonBaseline.Options)! })
             .Where(x => !deleted.Contains(x.Version.Form.Id))
             .Where(x => after is null || StringComparer.Ordinal.Compare(x.Key, after) > 0).OrderBy(x => x.Key, StringComparer.Ordinal).Take(limit + 1).ToArray();
         return ValueTask.FromResult(new UserTaskFormPage(rows.Take(limit).Select(x => x.Version).ToArray(), rows.Length > limit ? rows[limit - 1].Key : null));
@@ -76,7 +76,7 @@ internal sealed class MemoryUserTaskStore(UserTaskMemoryState state, IPersistenc
         if (state.Forms.TryGetValue((scope, tenantId, id, UserTaskProtocol.FormDraftVersion), out var draftJson) && ReadDraft(draftJson).Deleted)
             return ValueTask.FromResult(new UserTaskFormPage([], null));
         var rows = state.Forms.Where(x => x.Key.Scope == scope && x.Key.Tenant == tenantId && x.Key.Id == id && x.Key.Version != UserTaskProtocol.FormDraftVersion)
-            .Select(x => new { Key = UserTaskRules.Id(scope, tenantId, x.Key.Id, x.Key.Version), Version = JsonSerializer.Deserialize<UserTaskFormVersion>(x.Value)! })
+            .Select(x => new { Key = UserTaskRules.Id(scope, tenantId, x.Key.Id, x.Key.Version), Version = JsonSerializer.Deserialize<UserTaskFormVersion>(x.Value, Elsa.Serialization.Core.JsonBaseline.Options)! })
             .Where(x => after is null || StringComparer.Ordinal.Compare(x.Key, after) > 0).OrderBy(x => x.Key, StringComparer.Ordinal).Take(limit + 1).ToArray();
         return ValueTask.FromResult(new UserTaskFormPage(rows.Take(limit).Select(x => x.Version).ToArray(), rows.Length > limit ? rows[limit - 1].Key : null));
     }
@@ -89,7 +89,7 @@ internal sealed class MemoryUserTaskStore(UserTaskMemoryState state, IPersistenc
         {
             if (state.Forms.TryGetValue((Scope, version.TenantId, version.Form.Id, UserTaskProtocol.FormDraftVersion), out var draftJson) && ReadDraft(draftJson).Deleted)
                 return ValueTask.FromResult(false);
-            return ValueTask.FromResult(state.Forms.TryAdd((Scope, version.TenantId, version.Form.Id, version.Form.Version), JsonSerializer.Serialize(version)));
+            return ValueTask.FromResult(state.Forms.TryAdd((Scope, version.TenantId, version.Form.Id, version.Form.Version), JsonSerializer.Serialize(version, Elsa.Serialization.Core.JsonBaseline.Options)));
         }
     }
 
@@ -122,7 +122,7 @@ internal sealed class MemoryUserTaskStore(UserTaskMemoryState state, IPersistenc
             var current = state.Forms.TryGetValue(key, out var prior) ? ReadDraft(prior) : null;
             if ((current?.Revision ?? 0) != expectedRevision) return ValueTask.FromResult(false);
             if (current?.Deleted == true) return ValueTask.FromResult(false);
-            var json = JsonSerializer.Serialize(draft);
+            var json = JsonSerializer.Serialize(draft, Elsa.Serialization.Core.JsonBaseline.Options);
             if (prior is null) return ValueTask.FromResult(state.Forms.TryAdd(key, json));
             return ValueTask.FromResult(state.Forms.TryUpdate(key, json, prior));
         }
@@ -143,8 +143,8 @@ internal sealed class MemoryUserTaskStore(UserTaskMemoryState state, IPersistenc
             var current = prior is null ? null : ReadDraft(prior);
             if ((current?.Revision ?? 0) != expectedRevision) return ValueTask.FromResult(false);
             if (current?.Deleted == true) return ValueTask.FromResult(false);
-            if (!state.Forms.TryAdd(versionKey, JsonSerializer.Serialize(version))) return ValueTask.FromResult(false);
-            var tombstone = JsonSerializer.Serialize(definitionState);
+            if (!state.Forms.TryAdd(versionKey, JsonSerializer.Serialize(version, Elsa.Serialization.Core.JsonBaseline.Options))) return ValueTask.FromResult(false);
+            var tombstone = JsonSerializer.Serialize(definitionState, Elsa.Serialization.Core.JsonBaseline.Options);
             if (prior is null ? state.Forms.TryAdd(draftKey, tombstone) : state.Forms.TryUpdate(draftKey, tombstone, prior)) return ValueTask.FromResult(true);
             state.Forms.TryRemove(versionKey, out _);
             return ValueTask.FromResult(false);
@@ -154,7 +154,7 @@ internal sealed class MemoryUserTaskStore(UserTaskMemoryState state, IPersistenc
     private static UserTaskFormDefinition Definition(string tenantId, string id, IEnumerable<KeyValuePair<(string Scope, string Tenant, string Id, string Version), string>> source)
     {
         var rows = source.ToArray();
-        var versions = rows.Where(x => x.Key.Version != UserTaskProtocol.FormDraftVersion).Select(x => JsonSerializer.Deserialize<UserTaskFormVersion>(x.Value)!).ToArray();
+        var versions = rows.Where(x => x.Key.Version != UserTaskProtocol.FormDraftVersion).Select(x => JsonSerializer.Deserialize<UserTaskFormVersion>(x.Value, Elsa.Serialization.Core.JsonBaseline.Options)!).ToArray();
         var latestNumeric = versions.Where(x => int.TryParse(x.Form.Version, out _)).OrderByDescending(x => int.Parse(x.Form.Version, System.Globalization.CultureInfo.InvariantCulture)).ThenByDescending(x => x.CreatedAt).FirstOrDefault();
         var latest = latestNumeric ?? versions.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Form.Version, StringComparer.Ordinal).FirstOrDefault();
         var draftJson = rows.FirstOrDefault(x => x.Key.Version == UserTaskProtocol.FormDraftVersion).Value;
@@ -165,9 +165,9 @@ internal sealed class MemoryUserTaskStore(UserTaskMemoryState state, IPersistenc
         };
     }
 
-    private static UserTaskFormDraft ReadDraft(string json) => JsonSerializer.Deserialize<UserTaskFormDraft>(json) ?? throw new InvalidDataException("The form draft is invalid.");
+    private static UserTaskFormDraft ReadDraft(string json) => JsonSerializer.Deserialize<UserTaskFormDraft>(json, Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new InvalidDataException("The form draft is invalid.");
 
-    private static UserTaskRecord Read(string json) => JsonSerializer.Deserialize<UserTaskRecord>(json)!;
+    private static UserTaskRecord Read(string json) => JsonSerializer.Deserialize<UserTaskRecord>(json, Elsa.Serialization.Core.JsonBaseline.Options)!;
     private static void ValidateLimit(int limit) { if (limit is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(limit)); }
     private static UserTaskPage Page(IEnumerable<UserTaskRecord> source, int limit, string? after)
     {

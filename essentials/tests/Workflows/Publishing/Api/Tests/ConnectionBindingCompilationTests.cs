@@ -174,5 +174,5 @@ public sealed class ConnectionBindingCompilationTests
         connectionType: "http");
 
     private static WorkflowArgumentState Bound(object? value, string expressionType) =>
-        new(InputKey, new ArgumentValue(JsonSerializer.SerializeToElement(value), expressionType), null, null, null, null);
+        new(InputKey, new ArgumentValue(JsonSerializer.SerializeToElement(value, Elsa.Serialization.Core.JsonBaseline.Options), expressionType), null, null, null, null);
 }

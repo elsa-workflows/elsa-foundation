@@ -9,7 +9,7 @@ namespace Elsa.Activities.Flowchart.Internal;
 
 public sealed class FlowchartGraph
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly IReadOnlyDictionary<string, ExecutableNode> _nodesById;
     private readonly IReadOnlyCollection<FlowchartConnection> _connections;
     // Publish-time routing indexes. The outcome→successor relation is precomputed at graph

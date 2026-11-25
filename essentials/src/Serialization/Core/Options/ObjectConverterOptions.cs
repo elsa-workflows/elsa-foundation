@@ -10,4 +10,10 @@ public record ObjectConverterOptions(
     IWellKnownTypeRegistry? WellKnownTypeRegistry = null,
     bool DeserializeJsonObjectToObject = false,
     bool? StrictMode = null
-);
+ )
+{
+    /// <summary>The scoped code-selected contract for a JSON boundary. SerializerOptions does not override this contract.</summary>
+    public JsonConversionContract? ConversionContract { get; init; }
+    /// <summary>The owning execution, import or response channel records these diagnostics.</summary>
+    public Action<JsonConversionDiagnostic>? ReportJsonDiagnostic { get; init; }
+}

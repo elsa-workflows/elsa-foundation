@@ -36,7 +36,7 @@ public sealed class StructureInputCompilerTests
     private static Task<WorkflowExecutable> Compile(bool condition)
     {
         var node = SecretBindingCompilerFixture.Node(typeof(WriteLine), new ArgumentState("text",
-            new("a stale, deliberately invalid source", "UnknownSyntax"), null, null, null, null));
+            Elsa.Expressions.Core.Models.ArgumentValue.FromClr("a stale, deliberately invalid source", "UnknownSyntax"), null, null, null, null));
         return SecretBindingCompilerFixture.CompileAsync(node, [typeof(WriteLine)], structures: new ProjectedStructure(condition));
     }
 
@@ -44,7 +44,7 @@ public sealed class StructureInputCompilerTests
     {
         public ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => new([
             new("Case:a:Condition", new InputDefinition("Case:a:Condition", "Condition", new("Boolean"), null, "Condition", null, false),
-                new("untrusted-authored-key", new(condition, "Literal"), null, null, null, null))], ["text"]);
+                new("untrusted-authored-key", Elsa.Expressions.Core.Models.ArgumentValue.FromClr(condition, "Literal"), null, null, null, null))], ["text"]);
         public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => [];
         public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
         public bool SupportsScopedVariables(ActivityNode activity) => false;

@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Bot, Plus, RefreshCw } from "lucide-react";
 import { StudioHttpError, useOptionalAuthContext, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -43,6 +45,7 @@ function restartReason(error: unknown): Restart {
  * Agent workspace, which uses the generic activity editor for revisions and permissions.
  */
 export function AgentsPage({ context, navigate }: { context: StudioEndpointContext; navigate(path: string): void }) {
+  useStudioTimeZone();
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [collection, setCollection] = useState<Collection>({ kind: "loading" });
@@ -186,6 +189,7 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
 }
 
 function AgentLatestVersion({ row }: { row: AgentRow }) {
+  useStudioTimeZone();
   const { head, draftCount } = row.lifecycle;
   const latest = head?.providerKey === agentProviderKey ? head
     : row.lifecycle.recommendation?.providerKey === agentProviderKey ? row.lifecycle.recommendation : null;
@@ -212,6 +216,7 @@ function AgentPublishedVersion({ row }: { row: AgentRow }) {
 }
 
 function AgentAuthority({ row }: { row: AgentRow }) {
+
   const allowed = (name: string) => row.actions.some(action => action.action === name && action.allowed);
   const configuration = isEnumValue(row.definition.contentAuthority.kind, "ProviderSource");
   return (
@@ -228,6 +233,7 @@ function CreateAgentForm({ context, authoring, onCancel, onCreated }: {
   onCancel(): void;
   onCreated(definitionId: string, draftId: string): void;
 }) {
+
   const nameId = useId();
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState("");

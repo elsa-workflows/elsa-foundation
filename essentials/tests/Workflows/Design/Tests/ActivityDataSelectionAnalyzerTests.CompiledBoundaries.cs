@@ -72,11 +72,11 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         var consumer = Node("consumer") with { Structure = new("elsa.sequence.structure", "1.0.0",
             JsonSerializer.SerializeToElement(new { activities = Array.Empty<ActivityNode>(), variables = new[] { Variable("private", "Private") } }, Web)) };
         var document = Document(Sequence(consumer)) with { Variables = [Variable("ancestor", "Ancestor")] };
-        var selected = Input(new(new VariableReference("private", "consumer"), "Variable"));
+        var selected = Input(Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("private", "consumer"), "Variable"));
         var rejected = await Analyzer(provider).AnalyzeAsync(document with
         { CompiledBoundaryInputs = ImmutableDictionary<string, ImmutableArray<ArgumentState>>.Empty.Add("consumer", [selected]) });
         Assert.Contains(rejected.Findings, finding => finding.Type == "Variable/UnresolvableReference");
-        selected = Input(new(new VariableReference("ancestor", "workflow"), "Variable"));
+        selected = Input(Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("ancestor", "workflow"), "Variable"));
         Assert.Empty((await Analyzer(provider).AnalyzeAsync(document with
         { CompiledBoundaryInputs = ImmutableDictionary<string, ImmutableArray<ArgumentState>>.Empty.Add("consumer", [selected]) })).Findings);
     }

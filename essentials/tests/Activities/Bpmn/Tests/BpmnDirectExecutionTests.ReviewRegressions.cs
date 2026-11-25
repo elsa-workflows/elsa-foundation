@@ -29,7 +29,7 @@ public sealed partial class BpmnDirectExecutionTests
     public async Task Owned_embedding_wrapper_errors_keep_the_public_checkpoint_and_retained_invocation_context(bool cancellation, bool wrongFormat)
     {
         var at = DateTimeOffset.UtcNow;
-        var payload = wrongFormat ? JsonSerializer.SerializeToElement(new { FormatVersion = "bad", Invocation = new { } })
+        var payload = wrongFormat ? JsonSerializer.SerializeToElement(new { formatVersion = "bad", invocation = new { } }, Elsa.Serialization.Core.JsonBaseline.Options)
             : JsonSerializer.SerializeToElement("malformed-wrapper");
         var retained = new ActivityExecutionState(new("wrapper-invocation", "wrapper-execution", "wrapper-node", "wrapper-authored", RunBpmn.ActivityType, "1.0.0"),
             ActivityExecutionStatus.Suspended, null, at, at, null, null, null, null, null, null, [], [], 0, 0, new Dictionary<string, string>())
@@ -191,14 +191,13 @@ public sealed partial class BpmnDirectExecutionTests
     [Fact]
     public async Task An_independently_cancelled_native_worker_cannot_settle_while_its_actual_downstream_cancel_is_pending()
     {
-        await using (var raw = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ActualIndependentNativeCancellation.sqlite.gz")))
-        await using (var zipped = new GZipStream(raw, CompressionMode.Decompress))
-        await using (var target = File.Create(database)) await zipped.CopyToAsync(target);
+        var captured = await RestoreCurrentNativeAsync("native-cancellation");
         await using var host = await OpenAsync(admitNewExecutions: false);
         await using var scope = await ScopeAsync(host);
         var services = scope.ServiceProvider;
         var reader = services.GetRequiredService<IRuntimeModelExecutionReader>();
         var before = Assert.Single((await reader.ListPageAsync(new())).Items);
+        Assert.Equal(JsonSerializer.Serialize(captured, Web), JsonSerializer.Serialize(before, Web));
         Assert.Empty(BpmnDirectExecutionDriver.Read(before).Cancellations ?? []);
         var origin = Assert.Single(BpmnDirectExecutionDriver.Read(before).Work).NativeWork!;
         var pending = await services.GetRequiredService<IRuntimePostCommitOutboxStore>()

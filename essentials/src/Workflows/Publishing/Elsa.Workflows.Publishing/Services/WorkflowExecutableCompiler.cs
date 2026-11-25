@@ -163,6 +163,7 @@ public sealed class WorkflowExecutableCompiler(
 
             var rootActivity = state.RootActivity
                 ?? throw new ArgumentException(ActivityTreeProjector.NoRootActivityMessage);
+            EnsureBuiltInStorageDrivers(state.Inputs, state.Outputs);
 
             var sourceAuthority = _dataSelectionAnalyzer
                 ?? throw new InvalidOperationException("Workflow compilation requires the scoped activity data selection analyzer. Compose WorkflowDesignValidations and use the source-authority constructor.");
@@ -170,6 +171,7 @@ public sealed class WorkflowExecutableCompiler(
             // Single tree walk: children are projected once here and reused for both flattening and node
             // compilation, replacing the former double ProjectChildren traversal.
             var projection = activityTreeProjector.Project(rootActivity);
+            policyNodeCompiler.SetConversionWarningSink(projection, request.Warnings);
             ActivityTreeProjector.Validate(projection.Nodes);
             policyNodeCompiler.ValidateIntrinsicVariableTargets(state, projection.Nodes);
 
@@ -211,7 +213,7 @@ public sealed class WorkflowExecutableCompiler(
                     projection,
                     state.Variables,
                     activity.NodeId,
-                    CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, policyBindingCompiler, callWorkflowInputs, out var effectiveInputs));
+                    CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, policyNodeCompiler.ConversionCompilerFor(template.Root.Descriptor, request.Warnings, activity.NodeId), callWorkflowInputs, out var effectiveInputs));
                 compiledBoundaryInputs.Add(activity.NodeId, effectiveInputs);
                 var outputCaptures = outputCaptureCompiler.CompileBoundaryOutputs(
                     activity.NodeId,
@@ -398,7 +400,7 @@ public sealed class WorkflowExecutableCompiler(
             ArgumentState? inputState = authoredByKey.TryGetValue(input.ReferenceKey, out var state)
                 ? state
                 : input.Default is not null
-                    ? new(input.ReferenceKey, new ArgumentValue(input.Default.Value, input.Default.Syntax), null, null, null, null)
+                    ? new(input.ReferenceKey, ArgumentValue.FromClr(input.Default.Value, input.Default.Syntax), null, null, null, null)
                     : null;
             if (inputState is null)
             {
@@ -605,6 +607,18 @@ public sealed class WorkflowExecutableCompiler(
         // Pin the descriptor identity so case-insensitive alias lookup cannot leak a non-canonical authored spelling
         // into an executable's durable behavior or identity hash.
         return descriptor.Reference;
+    }
+
+    // A workflow's own inputs and outputs are seeded and written inline; no other storage driver is implemented for
+    // them yet (#5698). Refuse the choice instead of storing the value inline against it.
+    private static void EnsureBuiltInStorageDrivers(IEnumerable<InputDefinition> inputs, IEnumerable<OutputDefinition> outputs)
+    {
+        foreach (var input in inputs)
+            if (!UnsupportedStorageDriverDiagnostics.IsBuiltIn(input.StorageDriverType))
+                throw UnsupportedStorageDriverDiagnostics.WorkflowInput(input.Name, input.StorageDriverType!);
+        foreach (var output in outputs)
+            if (!UnsupportedStorageDriverDiagnostics.IsBuiltIn(output.StorageDriverType))
+                throw UnsupportedStorageDriverDiagnostics.WorkflowOutput(output.Name, output.StorageDriverType!);
     }
 
     private WorkflowExecutableInputContract BuildInputContract(IEnumerable<InputDefinition> inputs)

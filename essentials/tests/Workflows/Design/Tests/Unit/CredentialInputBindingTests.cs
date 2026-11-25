@@ -112,7 +112,7 @@ public sealed class CredentialInputBindingTests
         Assert.True(CredentialInputBinding.IsAccepted(isCredential: false, state), row);
 
     private static ArgumentState Bound(object? value, string expressionType) =>
-        new(Key, new ArgumentValue(value, expressionType), null, null, null, null);
+        new(Key, ArgumentValue.FromClr(value, expressionType), null, null, null, null);
 
     private static JsonElement Json<T>(T value) => JsonSerializer.SerializeToElement(value);
 }

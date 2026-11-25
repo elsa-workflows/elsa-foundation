@@ -12,9 +12,10 @@ public sealed class ReleaseManifestTests
     public void Canonical_recipe_matches_pinned_unicode_null_and_array_vector()
     {
         using var document = JsonDocument.Parse("{\"β\":\"é\",\"null\":null,\"items\":[1,true,\"<\"]}");
-        const string canonical = "{\"items\":[1,true,\"\\u003C\"],\"null\":null,\"\\u03B2\":\"\\u00E9\"}";
+        const string canonical = "{\"items\":[1e0,true,\"\\u003C\"],\"null\":null,\"\\u03B2\":\"\\u00E9\"}";
         Assert.Equal(canonical, ReleaseManifest.CanonicalText(document.RootElement));
-        Assert.Equal("sha256:ea655576dff3d172bd93d6950f51d723ffd5a4bdebb8d008824d5a1e7e018db4", ReleaseManifest.HashManifest(document.RootElement));
+        Assert.True(ReleaseManifest.HashManifest(document.RootElement) == "sha256:77f9fef74f979d5eee7fa1b2424928d25487935551aa2a79ad90e509e0265fd7",
+            "First-stable hash freeze: changes require an explicit identity/migration decision.");
     }
 
     [Fact]
@@ -65,7 +66,7 @@ public sealed class ReleaseManifestTests
     [InlineData("{\"a\":/*c*/1}", "invalid_json")]
     [InlineData("{}{}", "invalid_json")]
     [InlineData("{\"value\":\"\\uD800\"}", "invalid_json")]
-    public void Invalid_blob_json_is_refused_even_when_its_digest_matches(string json, string code)
+    public void Invalid_blob_json_is_refused_before_it_can_receive_a_canonical_digest(string json, string code)
     {
         var fixture = new ReleaseBundleFixture(1);
         ReplaceBlob(fixture, Encoding.UTF8.GetBytes(json));
@@ -149,7 +150,7 @@ public sealed class ReleaseManifestTests
         Assert.Equal("blob_digest_mismatch", Assert.Throws<ReleaseBundleFormatException>(() => tampered.Validate()).Code);
         var missing = new ReleaseBundleFixture(); missing.Blobs.Remove(missing.Blobs.Keys.First());
         Assert.Equal("missing_blob", Assert.Throws<ReleaseBundleFormatException>(() => missing.Validate()).Code);
-        var extra = new ReleaseBundleFixture(); extra.Blobs.Add(ReleaseManifest.Hash("{}"u8), "{}"u8.ToArray());
+        var extra = new ReleaseBundleFixture(); extra.Blobs.Add(ReleaseManifest.Hash("{}"u8.ToArray()), "{}"u8.ToArray());
         Assert.Equal("unlisted_blob", Assert.Throws<ReleaseBundleFormatException>(() => extra.Validate()).Code);
         var length = new ReleaseBundleFixture(); length.Manifest["members"]![0]!["byteLength"] = 2;
         Assert.Equal("blob_length_mismatch", Assert.Throws<ReleaseBundleFormatException>(() => length.Validate()).Code);
@@ -186,7 +187,9 @@ public sealed class ReleaseManifestTests
 
     private static void ReplaceBlob(ReleaseBundleFixture fixture, byte[] bytes)
     {
-        var digest = ReleaseManifest.Hash(bytes); fixture.Blobs.Clear(); fixture.Blobs.Add(digest, bytes);
+        // Malformed input has no canonical identity. Supply a well-shaped placeholder descriptor
+        // so the actual transport boundary, rather than this fixture constructor, must refuse it.
+        var digest = "sha256:" + new string('f', 64); fixture.Blobs.Clear(); fixture.Blobs.Add(digest, bytes);
         fixture.Manifest["members"]![0]!["payloadDigest"] = digest; fixture.Manifest["members"]![0]!["byteLength"] = bytes.Length;
     }
 }

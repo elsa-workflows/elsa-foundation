@@ -38,7 +38,7 @@ public sealed partial class EfRuntimePostCommitOutboxStore
                     if (!NativeIngressCheckpointAuthority.HasBoundScope(publisher, scope.Value))
                         throw new InvalidDataException("The publisher has no protected source-bound scope.");
                     var material = await new EfWorkflowExecutableStore(context, accessContextAccessor).FindAsync(
-                        candidate.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.RequestedArtifactId, cancellationToken)
+                        candidate.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!.RequestedArtifactId, cancellationToken)
                         ?? throw new NotSupportedException("Saved starts need actual retained material.");
                     if (current.SubscriptionDeliveryProtocolVersion is not null)
                         RuntimeIngressAdmissionValidation.CheckSource(current, new(scope, publisher.TenantId));

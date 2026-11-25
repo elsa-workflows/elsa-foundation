@@ -56,7 +56,7 @@ public sealed class BpmnCommandAuthorizationOrderTests
             state.CreatedAt, state.CreatedAt, WorkflowExecutableReferenceScope.Published,
             AuthoredInputs: [new("node", "connector", "json", JsonSerializer.SerializeToElement("private-connector-input"), true)]);
         var inspection = Inspection(state, new(source));
-        var json = JsonSerializer.SerializeToElement(BpmnInspectionView.From(inspection), BpmnHostingJsonContext.Default.BpmnInspectionView);
+        var json = JsonSerializer.SerializeToElement(BpmnInspectionView.From(inspection), BpmnHostingJsonContext.WireContext.BpmnInspectionView);
         Assert.False(json.TryGetProperty("state", out _));
         Assert.False(json.GetProperty("execution").TryGetProperty("payload", out _));
         Assert.False(json.GetProperty("source").TryGetProperty("authoredInputs", out _));

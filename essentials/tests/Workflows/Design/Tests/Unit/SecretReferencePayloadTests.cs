@@ -12,6 +12,16 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 public sealed class SecretReferencePayloadTests
 {
     [Fact]
+    public void Clr_reference_metadata_uses_camel_case_while_raw_json_names_remain_exact()
+    {
+        var secret = SecretReferencePayload.Read(new { Name = "René <>&", TypeName = (string?)null, Scope = (string?)null });
+        Assert.Equal("René <>&", secret.Reference!.Name);
+        var connection = ConnectionReferencePayload.Read(new { Connection = "OrderTotal", Type = (string?)null });
+        Assert.Equal("OrderTotal", connection.Reference!.Name);
+        using var raw = JsonDocument.Parse("""{"Name":"René <>&"}""");
+        Assert.False(SecretReferencePayload.Read(raw.RootElement).IsWellFormed);
+    }
+    [Fact]
     public void A_well_formed_payload_reads_as_a_reference_with_its_name_kept_as_written()
     {
         var reading = SecretReferencePayload.Read(JsonSerializer.SerializeToElement(new { name = "  reference-name  ", typeName = "text" }));

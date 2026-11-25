@@ -63,9 +63,9 @@ internal sealed class RulesNativeDeliveryProofValidator(IPersistenceOperationSco
                 return false;
 
             var invocationBytes = RuleRecordCodec.InvocationBytes(invocation);
-            fingerprint = new(RuleRecordCodec.Hash(invocationBytes));
+            fingerprint = new(RuleRecordCodec.JsonHash(invocationBytes));
             var deliveryBytes = RuleRecordCodec.DeliveryBytes(envelope.DeliveryId, envelope.Destination, envelope.Result);
-            if (RuleRecordCodec.Hash(deliveryBytes) != envelope.CanonicalPayloadSha256)
+            if (RuleRecordCodec.JsonHash(deliveryBytes) != envelope.CanonicalPayloadSha256)
                 return false;
 
             return Enum.IsDefined(proof.Kind) &&

@@ -24,7 +24,7 @@ public sealed class OrdinalCollationMigrationTests
     private static readonly string[] CollatingModules =
     [
         "ExternalAuthentication",
-        "ActivitiesDesign", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
+        "ActivitiesDesign", "ClusterMembership", "Connections", "Decisions", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
         "PublishingSnapshotReview", "Secrets", "Agent", "Weaver", "WorkflowsDesign"
     ];
 
@@ -34,6 +34,12 @@ public sealed class OrdinalCollationMigrationTests
     /// </summary>
     private static readonly (string Module, string Table, string Column)[] MustBeOrdinal =
     [
+        // The record key, owner inventory and schema stamp are exact in both the model and provider migrations.
+        ("Decisions", "elsa_decisions", "TenantKey"),
+        ("Decisions", "elsa_decisions", "Kind"),
+        ("Decisions", "elsa_decisions", "Id"),
+        ("Decisions", "elsa_decisions", "OwnerId"),
+        ("Decisions", "elsa_decisions", "SchemaVersion"),
         ("ExternalAuthentication", "identity_authentication_sessions", "Id"),
         ("ExternalAuthentication", "identity_authentication_sessions", "TenantKey"),
         ("ExternalAuthentication", "identity_authentication_sessions", "UserKey"),

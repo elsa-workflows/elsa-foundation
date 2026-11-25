@@ -74,8 +74,8 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
         Assert.Single(journal.Items, item => item.Name == "BookmarkRetired");
         Assert.Contains(journal.Items, item => item.Name == "ActivityResumeClaimed");
         Assert.DoesNotContain(journal.Items, item => item.Name is "ActivityCompleted" or "ActivityFaulted");
-        Assert.DoesNotContain("private", JsonSerializer.Serialize(journal));
-        Assert.DoesNotContain("private", JsonSerializer.Serialize(consumed));
+        Assert.DoesNotContain("private", JsonSerializer.Serialize(journal, options: Elsa.Serialization.Core.JsonBaseline.Options));
+        Assert.DoesNotContain("private", JsonSerializer.Serialize(consumed, options: Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     [Fact]
@@ -139,7 +139,7 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
     {
         using var f = await Fixture.CreateAsync();
         var bookmark = new BookmarkState("before-capture", "run", "activity", "node", "resume", "task", "hash",
-            JsonSerializer.SerializeToElement("private payload"), new Dictionary<string, string>(), At.AddMinutes(-1), null);
+            JsonSerializer.SerializeToElement("private payload", options: Elsa.Serialization.Core.JsonBaseline.Options), new Dictionary<string, string>(), At.AddMinutes(-1), null);
         await f.Bookmarks.SaveAsync(bookmark);
         await f.Activities.SaveAsync(Activity() with { BookmarkIds = [bookmark.BookmarkId] });
         await f.Consumption.CommitAsync(await f.ClaimRequestAsync(bookmark));
@@ -165,7 +165,7 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
         var completePayload = new RuntimeCompleteActivityCommandPayload(Pin, "node", "activity", null, null, [],
             RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
         var continuation = new RuntimeSchedulerWorkItem("completion", "run", "complete-command", WorkflowExecutionCommandKind.CompleteActivity,
-            "complete-envelope", "complete-key", At, At, payload: JsonSerializer.SerializeToElement(completePayload));
+            "complete-envelope", "complete-key", At, At, payload: JsonSerializer.SerializeToElement(completePayload, options: Elsa.Serialization.Core.JsonBaseline.Options));
         await f.Consumption.CommitAsync(BookmarkConsumptionCheckpointRequest.ForStaleBookmarkConsumption(
             input.ResumeWorkItem, input.ResumePayload, bookmark, completed, continuation));
         Assert.Null(await f.Bookmarks.FindAsync("run", bookmark.BookmarkId));
@@ -203,7 +203,7 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
         using var f = await Fixture.CreateAsync();
         var state = Activity() with
         {
-            PrivateState = new("activity", 1, ValueEnvelope.Inline(new("test/state"), JsonSerializer.SerializeToElement("private"),
+            PrivateState = new("activity", 1, ValueEnvelope.Inline(new("test/state"), JsonSerializer.SerializeToElement("private", options: Elsa.Serialization.Core.JsonBaseline.Options),
                 ValueProtectionPolicy.InstanceInline), "initial-attempt", At),
             TriggerRegistrations = [Registration("first"), Registration("delayed")]
         };
@@ -276,7 +276,7 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
                 RunKind = WorkflowRunKind.PublishedRun, Partition = new(PersistenceScope.DefaultValue) });
             await f.Activities.SaveAsync(Activity());
             await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(new(Pin,
-                new("node", "authored", "test/activity", "1", "test", JsonSerializer.SerializeToElement(new { type = "test" }),
+                new("node", "authored", "test/activity", "1", "test", JsonSerializer.SerializeToElement(new { type = "test" }, options: Elsa.Serialization.Core.JsonBaseline.Options),
                     new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
                 new Dictionary<string, WorkflowExecutableResumeTarget> { ["resume"] = new("resume", "node", "handler", new Dictionary<string, string>()) },
                 At, new Dictionary<string, string>(), incidentStrategy: IncidentStrategyBuiltIns.FaultReference));
@@ -286,9 +286,9 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
         public RuntimeSchedulerWorkItem CreateWork(string id, DateTimeOffset? expiresAt = null)
         {
             var payload = new RuntimeCreateBookmarkCommandPayload(Pin, id, "activity", "node", "resume", "task", "hash",
-                JsonSerializer.SerializeToElement("private payload"), expiresAt, RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
+                JsonSerializer.SerializeToElement("private payload", options: Elsa.Serialization.Core.JsonBaseline.Options), expiresAt, RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
                 new Dictionary<string, string> { ["private"] = "private metadata" });
-            return Work($"create-{id}", WorkflowExecutionCommandKind.CreateBookmark, JsonSerializer.SerializeToElement(payload));
+            return Work($"create-{id}", WorkflowExecutionCommandKind.CreateBookmark, JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options));
         }
         public async Task<BookmarkState> CreateBookmarkAsync(string id, DateTimeOffset? expiresAt = null)
         {
@@ -300,10 +300,10 @@ public sealed class RuntimeHistoryBookmarkLifecycleOwnerTests
             var observation = (await Bookmarks.ObserveAsync("run", selected.BookmarkId))!;
             var workflow = (await Workflows.FindAsync("run"))!;
             var payload = new RuntimeResumeBookmarkCommandPayload(Pin, selected.BookmarkId, "activity", "node", "resume", "task", "hash",
-                JsonSerializer.SerializeToElement("private stimulus"), RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason)
+                JsonSerializer.SerializeToElement("private stimulus", options: Elsa.Serialization.Core.JsonBaseline.Options), RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason)
                 { ExpectedBookmarkResume = StimulusResumeRecipient.From(observation, workflow, new(PersistenceScope.DefaultValue)),
                   HistoryCausation = new(WorkflowExecutionId: "run", DeliveryId: "delivery") };
-            var work = Work($"resume-{selected.BookmarkId}", WorkflowExecutionCommandKind.ResumeBookmark, JsonSerializer.SerializeToElement(payload));
+            var work = Work($"resume-{selected.BookmarkId}", WorkflowExecutionCommandKind.ResumeBookmark, JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options));
             const string attempt = "resume-attempt";
             var prior = (await Activities.FindAsync("run", "activity"))!;
             var claimed = prior with { Status = ActivityExecutionStatus.Running, SubStatus = null, BookmarkIds = [], TriggerRegistrations = [],

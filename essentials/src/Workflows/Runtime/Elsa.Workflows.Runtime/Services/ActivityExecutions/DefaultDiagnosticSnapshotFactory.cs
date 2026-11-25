@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Services.ActivityExecutions;
 
 public static class DefaultDiagnosticSnapshotFactory
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly string[] SensitiveNameFragments = ["password", "secret", "token", "apikey", "api_key", "authorization", "credential"];
 
     public static JsonElement Capture(object? value, string? valueName = null, RuntimeValueTypeDescriptor? type = null, DiagnosticSnapshotLimits? limits = null)
@@ -28,7 +28,7 @@ public static class DefaultDiagnosticSnapshotFactory
 
             var json = value is JsonElement element
                 ? element.Clone()
-                : JsonSerializer.SerializeToElement(value, value.GetType());
+                : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value);
 
             var budget = new SnapshotBudget(limits.MaxTotalBytes);
             return CaptureJson(json, type?.Id ?? value.GetType().FullName, valueName, depth: 0, limits, budget);

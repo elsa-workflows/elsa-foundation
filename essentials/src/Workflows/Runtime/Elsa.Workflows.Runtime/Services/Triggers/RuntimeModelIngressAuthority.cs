@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// <summary>Protocol-neutral proof for the new sealed model root; legacy model starts retain their existing tenant policy.</summary>
 internal static class RuntimeModelIngressAuthority
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     internal static RuntimeIngressCommandOrigin? ReadOrigin(RuntimeModelExecutionCommand command)
     {
         if (command.InputKind != "start-trigger-v1") return command.IngressOrigin;

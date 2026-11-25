@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "../../sdk/timeZone";
+import { formatStudioDate } from "../../sdk/timeZone";
 import { StudioButton, StudioIconButton } from "../ui/forms/Button";
 import { AnchoredPopover } from "../ui/overlay/AnchoredPopover";
 import { enabledMenuIndexes, focusIndexedItem, stepEnabledIndex } from "../ui/disclosure/menuNavigation";
@@ -47,6 +49,7 @@ export function WeaverSurface({
   incomingPrompt?: (StudioWeaverPromptRequest & { id: string }) | null;
   onPromptConsumed?(id: string): void;
 }) {
+
   const session = useWeaverSession({ api, surface, client, subscribeStream });
   const resultRenderers = useMemo(() => api.weaver.resultRenderers.list(), [api]);
   const resultControls = useMemo(() => api.weaver.resultControls?.list() ?? [], [api]);
@@ -175,6 +178,7 @@ export function WeaverSurface({
  * only; a prompt, decision or resolution always needs its own explicit action.
  */
 function WeaverRecovery({ session }: { session: UseWeaverSession }) {
+  useStudioTimeZone();
   const notice = session.recoveryNotice;
   const offered = session.sessionId === null && session.chatState === "idle" ? session.recentSessions : [];
   if (!notice && offered.length === 0 && !session.reopening && (session.sessionId === null || session.chatState === "streaming")) return null;
@@ -227,7 +231,7 @@ function describeRecoveryScope(recovery: WeaverRecoveryMode | undefined): string
 }
 
 function describeSessionSummary(summary: WeaverSessionSummary) {
-  const updated = Number.isFinite(Date.parse(summary.updatedAt)) ? new Date(summary.updatedAt).toLocaleString() : summary.updatedAt;
+  const updated = Number.isFinite(Date.parse(summary.updatedAt)) ? formatStudioDate(summary.updatedAt) : summary.updatedAt;
   const reviews = summary.pendingReviewCount > 0 ? ` · ${summary.pendingReviewCount} awaiting review` : "";
   const status = summary.status === "active" ? "" : ` · ${summary.status}`;
   // Preview (#3441): a session at its documented limit is offered with that outcome, so reopening it is not a surprise.
@@ -272,6 +276,7 @@ function WeaverAutoApplyMenu({
   statusId?: string;
   onChange(mode: WeaverAutoApplyMode): void;
 }) {
+
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const menuId = useId();

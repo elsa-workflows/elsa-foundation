@@ -87,7 +87,13 @@ internal sealed class AuthoredMemberListJsonConverter<T> : JsonConverter<IEnumer
         {
             writer.WriteStartObject();
             foreach (var property in JsonSerializer.SerializeToElement(member, options).EnumerateObject())
-                if (!StringComparer.OrdinalIgnoreCase.Equals(property.Name, "isNullable")) property.WriteTo(writer);
+            {
+                if (StringComparer.OrdinalIgnoreCase.Equals(property.Name, "isNullable")) continue;
+                writer.WritePropertyName(property.Name);
+                // JsonProperty.WriteTo recursively renders carried JSON again. Re-enter the
+                // caller's element converter so defaults and UI metadata retain their raw text.
+                JsonSerializer.Serialize(writer, property.Value, options);
+            }
             writer.WriteEndObject();
         }
         writer.WriteEndArray();

@@ -127,7 +127,13 @@ public sealed class EfActivityPublicationDesignCommit
                 state.Authoring.RecommendedVersionId = publication.DefinitionVersionId;
             state.Authoring.LastModifiedAt = publication.PublishedAt;
 
-            await StageDependencyProjectionAsync(mutation, cancellationToken);
+            var sourceDraft = new ActivityDefinitionReference(
+                "ActivityDraft",
+                mutation.DefinitionId,
+                DraftId: mutation.DraftId,
+                Revision: mutation.ExpectedDraftRevision,
+                TenantId: publication.TenantId);
+            await StageDependencyProjectionAsync(publication, mutation.DirectDependencies, sourceDraft, cancellationToken);
             // The checkpoint writer saves every staged row, so the design rows and both projections land in
             // this one save inside the transaction.
             await managementProjection.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(
@@ -208,6 +214,12 @@ public sealed class EfActivityPublicationDesignCommit
 
         db.ActivityDefinitionVersionPublications.Add(commit.Publication);
         db.ActivityDefinitionVersionLayouts.Add(commit.Layout);
+        if (commit.DirectDependencies.Count > 0)
+        {
+            db.ActivityDependencyEdges.AddRange(commit.DirectDependencies);
+            // A source-owned version has no draft whose facts it replaces; it owns its edges itself.
+            await StageDependencyProjectionAsync(commit.Publication, commit.DirectDependencies, OwnerOf(commit.Publication), cancellationToken);
+        }
         await managementProjection.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(
             commit.Publication.PublishedAt,
             [new EfActivityManagementDefinitionChange(definition, authoring)],
@@ -379,6 +391,8 @@ public sealed class EfActivityPublicationDesignCommit
             await EnsurePublicationAbsentAsync(commit.Publication, cancellationToken);
             throw Conflict($"Activity version layout '{commit.Layout.Id}' already exists.");
         }
+        foreach (var edge in commit.DirectDependencies)
+            await EnsureAbsentAsync(db.ActivityDependencyEdges, edge.Id, edge.TenantId, $"Activity dependency edge '{edge.Id}'", cancellationToken);
         return new(definition, authoring, version is not null);
     }
 
@@ -413,23 +427,20 @@ public sealed class EfActivityPublicationDesignCommit
     }
 
     /// <summary>
-    /// Replaces the source draft's derived dependency facts with the published version's, mirroring what the
-    /// projection staged in the same commit. The EF projection is one global row holding every
-    /// tenant's facts, so an owner is matched on its tenant as well as its kind and identity.
+    /// Replaces the derived dependency facts of <paramref name="replacedOwner"/> with the published version's, mirroring
+    /// what the projection staged in the same commit: a draft publication replaces its source draft's facts, a source-owned
+    /// publication its own. The EF projection is one global row holding every tenant's facts, so an owner is matched on
+    /// its tenant as well as its kind and identity.
     /// </summary>
-    private async Task StageDependencyProjectionAsync(ActivityPublicationDesignMutation mutation, CancellationToken cancellationToken)
+    private async Task StageDependencyProjectionAsync(
+        ActivityDefinitionVersionPublication publication,
+        IReadOnlyList<ActivityDependencyEdge> edges,
+        ActivityDefinitionReference replacedOwner,
+        CancellationToken cancellationToken)
     {
-        var publication = mutation.Publication;
-        var owner = new ActivityDefinitionReference(
-            "ActivityVersion",
-            publication.DefinitionId,
-            publication.DefinitionVersionId,
-            publication.Version,
-            TemplateHash: publication.TemplateHash,
-            TenantId: publication.TenantId,
-            Lifecycle: publication.Lifecycle);
-        var items = new List<ActivityDependencyItem>(mutation.DirectDependencies.Count);
-        foreach (var edge in mutation.DirectDependencies.OrderBy(x => x.OccurrenceId, StringComparer.Ordinal))
+        var owner = OwnerOf(publication);
+        var items = new List<ActivityDependencyItem>(edges.Count);
+        foreach (var edge in edges.OrderBy(x => x.OccurrenceId, StringComparer.Ordinal))
         {
             var target = await ((IActivityDefinitionVersionPublicationStore)stores).FindAsync(edge.DependencyVersionId, cancellationToken)
                          ?? throw Conflict($"Dependency publication '{edge.DependencyVersionId}' was not found.");
@@ -444,15 +455,9 @@ public sealed class EfActivityPublicationDesignCommit
             items.Add(new(edge.Id, owner, dependency, new(edge.OccurrenceId, edge.NodeOrigin.ToArray()), true, 1, [owner, dependency]));
         }
 
-        var sourceDraft = new ActivityDefinitionReference(
-            "ActivityDraft",
-            mutation.DefinitionId,
-            DraftId: mutation.DraftId,
-            Revision: mutation.ExpectedDraftRevision,
-            TenantId: publication.TenantId);
         var current = await EfActivityDesignStores.ById(db.ActivityDependencyProjections, ActivityDependencyProjectionState.CurrentId)
             .SingleOrDefaultAsync(cancellationToken);
-        var next = current?.Items.Where(item => !SameOwner(item.Owner, sourceDraft)).ToList() ?? [];
+        var next = current?.Items.Where(item => !SameOwner(item.Owner, replacedOwner)).ToList() ?? [];
         next.AddRange(items);
         EfActivityDesignStores.ValidateProjectionItems(next);
         var ordered = next.OrderBy(EfActivityDesignStores.ItemSortKey, StringComparer.Ordinal).ToList();
@@ -487,6 +492,15 @@ public sealed class EfActivityPublicationDesignCommit
                SemVer.TryParse(current, out var currentVersion) &&
                candidateVersion > currentVersion;
     }
+
+    private static ActivityDefinitionReference OwnerOf(ActivityDefinitionVersionPublication publication) => new(
+        "ActivityVersion",
+        publication.DefinitionId,
+        publication.DefinitionVersionId,
+        publication.Version,
+        TemplateHash: publication.TemplateHash,
+        TenantId: publication.TenantId,
+        Lifecycle: publication.Lifecycle);
 
     private static bool SameOwner(ActivityDefinitionReference left, ActivityDefinitionReference right) =>
         StringComparer.Ordinal.Equals(left.Kind, right.Kind) &&

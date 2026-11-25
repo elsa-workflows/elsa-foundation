@@ -377,6 +377,8 @@ public sealed class RuntimeArtifactSchemaExtractionTests
     {
         public string Encode(string purpose, ReadOnlySpan<byte> payload) => throw new NotSupportedException();
         public byte[] Decode(string purpose, string token) => throw new NotSupportedException();
+        public string EncodeJson(string purpose, ReadOnlySpan<byte> payload) => Encode(purpose, payload);
+        public byte[] DecodeJson(string purpose, string token) => Decode(purpose, token);
     }
     private sealed class SingleCurrentMember : IEfSchemaFleet
     {

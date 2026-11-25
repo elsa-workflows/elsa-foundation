@@ -67,7 +67,7 @@ public sealed class RuntimeInputBinding
         LiteralValue = literal switch
         {
             { Presence: ValuePresence.Present } => literal.InlineValue,
-            { Presence: ValuePresence.ExplicitNull } => JsonSerializer.SerializeToElement<object?>(null),
+            { Presence: ValuePresence.ExplicitNull } => JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options),
             _ => null
         };
         WorkflowRequest = workflowRequest;
@@ -330,7 +330,7 @@ public sealed class RuntimeExpressionBinding
         var unknownPlans = ParameterConversionPlans.Keys.Except(Parameters.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         if (unknownPlans.Length > 0)
             throw new ArgumentException($"Runtime expression conversion plans reference unknown parameters: [{string.Join(", ", unknownPlans)}].", nameof(parameterConversionPlans));
-        Options = options?.Clone() ?? JsonSerializer.SerializeToElement(new { });
+        Options = options?.Clone() ?? JsonSerializer.SerializeToElement(new { }, Elsa.Serialization.Core.JsonBaseline.Options);
         if (Options.ValueKind != JsonValueKind.Object)
             throw new ArgumentException("Runtime expression evaluator options must be a JSON object.", nameof(options));
         CapabilityProfile = string.IsNullOrWhiteSpace(capabilityProfile)

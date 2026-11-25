@@ -134,7 +134,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
     IOptions<WeaverTurnOptions> options,
     IWeaverAuditSink? auditSink = null) : IWeaverStreamingService, IWeaverSessionPolicyParticipant
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly InMemoryWeaverSessionService? _owner = sessions as InMemoryWeaverSessionService;
 
     InMemoryWeaverSessionService? IWeaverSessionPolicyParticipant.PolicyOwner => WeaverSessionPolicyParticipation.SameOwner(_owner, toolInvoker, proposals);

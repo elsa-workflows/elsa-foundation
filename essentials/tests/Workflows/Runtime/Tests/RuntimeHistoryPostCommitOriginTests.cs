@@ -22,8 +22,8 @@ public sealed class RuntimeHistoryPostCommitOriginTests
         var options = web ? new JsonSerializerOptions(JsonSerializerDefaults.Web) : new JsonSerializerOptions();
         var absent = Intent(null);
         var present = Intent(Origin);
-        Assert.False(JsonSerializer.SerializeToElement(absent, options).TryGetProperty(web ? "historyCausation" : "HistoryCausation", out _));
-        var restored = JsonSerializer.Deserialize<RuntimePostCommitIntent>(JsonSerializer.Serialize(present, options), options)!;
+        Assert.False(JsonSerializer.SerializeToElement(absent, options: options).TryGetProperty(web ? "historyCausation" : "HistoryCausation", out _));
+        var restored = JsonSerializer.Deserialize<RuntimePostCommitIntent>(JsonSerializer.Serialize(present, options: options), options: options)!;
         Assert.Equal(Origin, restored.HistoryCausation);
         Assert.True(present.IsEquivalentTo(restored));
         Assert.Equal(RuntimeCheckpointCommitFingerprint.ComputeIntent(present), RuntimeCheckpointCommitFingerprint.ComputeIntent(restored));
@@ -44,7 +44,7 @@ public sealed class RuntimeHistoryPostCommitOriginTests
             new BookmarkResumeDispatchRequest("run", "stimulus", "hash") { ChildHistorySource = source }];
         foreach (var request in requests)
         {
-            var wire = JsonSerializer.Serialize(request, options);
+            var wire = JsonSerializer.Serialize(request, options: options);
             Assert.DoesNotContain("private-owner", wire); Assert.DoesNotContain("ChildHistorySource", wire, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("FencingToken", wire, StringComparison.OrdinalIgnoreCase);
         }
@@ -55,8 +55,8 @@ public sealed class RuntimeHistoryPostCommitOriginTests
     {
         var legacy = new RuntimeCheckpointCommit("commit", new("checkpoint", "name", "waiter", At, [], new Dictionary<string, string>()),
             new(null, null, [], [], [], [], []), [], new Dictionary<string, string>());
-        // Existing compiled-parent golden shared by the history-free checkpoint/owner contract controls.
-        Assert.Equal("af976cb76bbef3f226bc15cbbdae5d8b330ec98ae9f287ff18e15aadc2df1f1a", RuntimeCheckpointCommitFingerprint.Compute(legacy));
+        // Approved pre-stable migration pin shared by the history-free checkpoint controls.
+        RuntimeCheckpointHashGoldenTests.AssertEmptyCommitPin(legacy);
         // Frozen v1 byte fixture: length-framed UTF-16 fields, UTC ticks639285696000000000,
         // absent activity/key/dependency/wait/not-before/payload, metadata count0. Not a new format oracle.
         var legacyIntent = new RuntimePostCommitIntent("legacy", "run", "test.send", At, null, null, null);
@@ -117,7 +117,7 @@ public sealed class RuntimeHistoryPostCommitOriginTests
         var original = Complete(Intent(Origin));
         var retained = new RetainedOriginInput(original.CommitId, original.Checkpoint, Assert.Single(original.PostCommitIntents),
             Assert.Single(original.StateChanges.PostCommitOutbox).State, original.Metadata);
-        var restored = JsonSerializer.Deserialize<RetainedOriginInput>(JsonSerializer.Serialize(retained, options), options)!.Reconstruct();
+        var restored = JsonSerializer.Deserialize<RetainedOriginInput>(JsonSerializer.Serialize(retained, options: options), options: options)!.Reconstruct();
         RuntimeCheckpointCommitValidator.Validate(restored);
         Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(original), RuntimeCheckpointCommitFingerprint.Compute(restored));
         var state = new InMemoryRuntimeCheckpointStoreState();
@@ -140,7 +140,7 @@ public sealed class RuntimeHistoryPostCommitOriginTests
         "work" => Origin with { SchedulerWorkItemId = value }, _ => throw new ArgumentOutOfRangeException(nameof(field))
     };
     private static RuntimePostCommitIntent Intent(RuntimeHistoryCausation? origin) =>
-        new("send", "run", "test.send", At, "activity", "key", JsonSerializer.SerializeToElement(new { value = "retained" })) { HistoryCausation = origin };
+        new("send", "run", "test.send", At, "activity", "key", JsonSerializer.SerializeToElement(new { value = "retained" }, options: Elsa.Serialization.Core.JsonBaseline.Options)) { HistoryCausation = origin };
     private static RuntimeCheckpointCommit Envelope(RuntimePostCommitIntent intent) =>
         new("commit", new("checkpoint", "name", "run", At, [], new Dictionary<string, string>()),
             new(null, null, [], [], [], [], []), [intent], new Dictionary<string, string>());

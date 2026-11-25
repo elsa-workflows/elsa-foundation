@@ -79,13 +79,37 @@
           "Microsoft.Extensions.Primitives": "10.0.10"
         }
       },
+      "elsa.events.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Pipelines.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.pipelines.core": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.primitives": {
+        "type": "Project"
+      },
       "elsa.rules.core": {
         "type": "Project"
       },
       "elsa.rules.persistence.core": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Rules.Core": "[4.0.0-dev, )"
+          "Elsa.Rules.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.serialization.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
       "elsa.tasks.core": {

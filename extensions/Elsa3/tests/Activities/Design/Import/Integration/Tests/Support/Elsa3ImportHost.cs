@@ -24,6 +24,7 @@ using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
 using Elsa.Api.Capabilities;
+using Elsa.Api.AspNetCore;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Expressions.JavaScript;
@@ -248,6 +249,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             builder.Logging.AddProvider(warnings);
             builder.Configuration.AddConfiguration(configuration);
             builder.Services.AddSingleton<IConfiguration>(configuration);
+            builder.Services.AddElsaJsonResponseHeaders();
             builder.Services.AddSingleton<IDistributedLockProvider, ProcessLockProvider>();
             // An instance, not a type: a shell copies the host's registrations, and the tests read the one its seam uses.
             builder.Services.AddSingleton(refusals);

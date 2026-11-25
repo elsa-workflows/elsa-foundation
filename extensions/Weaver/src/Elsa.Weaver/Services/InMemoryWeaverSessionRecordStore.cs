@@ -16,7 +16,7 @@ internal sealed class InMemoryWeaverSessionRecordStore(TimeProvider? clock = nul
     internal static readonly TimeSpan LeaseDuration = TimeSpan.FromSeconds(30);
 
     // Default options keep the canonical shape the integrity digests read.
-    private static readonly JsonSerializerOptions JsonOptions = new();
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly object _gate = new();
     private readonly Dictionary<string, Aggregate> _sessions = new(StringComparer.Ordinal);

@@ -28,8 +28,8 @@ public sealed class EtlBatchBuilderTests
         Assert.Equal(2, batch.Batch.EndRecordOrdinalExclusive);
         Assert.Equal(1, batch.Batch.RecordCount);
         Assert.Equal(firstRowPayloadBytes, batch.Batch.CanonicalInputBytes);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(expectedPayload))).ToLowerInvariant(),
-            batch.Batch.ContentHash);
+        Assert.True(batch.Batch.ContentHash == "59d99c37c97d870be82f3ed4249d01a2c8e7e606165a4bcd5ac5dc176ce4be62",
+            "First-stable hash freeze: changes require an explicit identity/migration decision.");
         var record = Assert.Single(batch.Batch.Records);
         Assert.Equal(1, record.RecordOrdinal);
         Assert.Equal(new[] { "A", "1" }, record.Fields);
@@ -75,8 +75,8 @@ public sealed class EtlBatchBuilderTests
 
         Assert.True(result.Succeeded, result.Diagnostic?.ToString());
         Assert.Equal(Encoding.UTF8.GetByteCount(expectedPayload), result.Batch!.CanonicalInputBytes);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(expectedPayload))).ToLowerInvariant(),
-            result.Batch.ContentHash);
+        Assert.True(result.Batch.ContentHash == "ed8b12dc2b017f75d51886898382801d3684c0ff00b21a55faefa4809104b257",
+            "First-stable hash freeze: changes require an explicit identity/migration decision.");
     }
 
     [Fact]

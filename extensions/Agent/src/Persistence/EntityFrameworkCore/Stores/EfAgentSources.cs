@@ -12,7 +12,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfAgentSources<TContext>(TContext db, IPersistenceAccessContextAccessor access) : IAgentSourceReader, IAgentSourceWriter where TContext : DbContext
 {
     public const string Profile = "elsa.agent-source/1";
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private EfSourceRevisions Store()
     {
         if (access.Current.AcrossScopes) throw new SourceRevisionException("scope-required");

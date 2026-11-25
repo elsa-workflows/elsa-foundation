@@ -10,7 +10,7 @@ namespace Elsa.Decisions.Persistence.EntityFrameworkCore;
 
 internal sealed class EfDecisionStore<TContext>(IDbContextFactory<TContext> factory) : IDecisionReader, IDecisionWriter where TContext : DbContext
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private const int MaximumInventory = 1000;
 
     public ValueTask<IReadOnlyList<DecisionAsset>> ListAssetsAsync(string tenantId, CancellationToken ct = default) => List<DecisionAsset>(tenantId, "asset", null, ct);
@@ -279,7 +279,7 @@ internal sealed class EfDecisionStore<TContext>(IDbContextFactory<TContext> fact
     }
     private static string Revision() => Guid.NewGuid().ToString("N");
     private static string Hash(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-    private static string OperationId(DecisionOperation operation) => Hash(JsonSerializer.Serialize(new[] { operation.ActorId, operation.OperationId }, Json));
+    private static string OperationId(DecisionOperation operation) => Elsa.Serialization.Core.JsonHashInput.Hash(new[] { operation.ActorId, operation.OperationId });
     private static void ValidateOperation(DecisionOperation operation) { Text(operation.TenantId, 256); Text(operation.ActorId, 128); Text(operation.OperationId, 128); }
     private static void Text(string value, int max) { if (string.IsNullOrWhiteSpace(value) || value.Length > max) throw Invalid(); }
     private static DecisionDesignException Invalid() => new("invalid", "The decision request exceeds a supported bound or is malformed.");
@@ -287,17 +287,6 @@ internal sealed class EfDecisionStore<TContext>(IDbContextFactory<TContext> fact
     private static DecisionDesignException Unavailable(Exception ex) => new("unavailable", "The Decisions store is unavailable.", ex);
     private static string Fingerprint(object value)
     {
-        var element = JsonSerializer.SerializeToElement(value, Json);
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream)) Canonical(element, writer);
-        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
-    }
-    private static void Canonical(JsonElement value, Utf8JsonWriter writer)
-    {
-        if (value.ValueKind == JsonValueKind.Object)
-        { writer.WriteStartObject(); foreach (var property in value.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal)) { writer.WritePropertyName(property.Name); Canonical(property.Value, writer); } writer.WriteEndObject(); }
-        else if (value.ValueKind == JsonValueKind.Array)
-        { writer.WriteStartArray(); foreach (var item in value.EnumerateArray()) Canonical(item, writer); writer.WriteEndArray(); }
-        else value.WriteTo(writer);
+        return Elsa.Serialization.Core.JsonHashInput.Hash(Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(value, _ => null));
     }
 }

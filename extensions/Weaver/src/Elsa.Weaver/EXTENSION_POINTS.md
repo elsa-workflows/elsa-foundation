@@ -55,6 +55,12 @@ Known provider implementations:
 
 ## Implementable contributor interfaces
 
+Carried module data is JSON: `WeaverContextAttachment.Content` is a nullable `JsonElement`, and
+`WeaverActionProposal.Operations` contains JSON objects. These records detach document and collection lifetimes at
+construction and on `with` replacement. A producer converting a CLR value uses that type's
+[`JsonConversionContract`](../../../../essentials/src/Serialization/Core/JsonConversionContract.cs) before supplying it;
+received JSON passes through directly. See the shared [serialization contract](../../../../docs/serialization.md).
+
 ### `IWeaverContextProvider` *(Core — `Elsa.Weaver.Core`)*
 
 - **Kind:** Source; the existing interface name is retained. [Signature](../Core/Contracts/WeaverContracts.cs): `Descriptor: WeaverContextProviderDescriptor`, derived `ScopeKind`, and `CollectAsync(WeaverContextRequest): ValueTask<WeaverContextContribution>`.

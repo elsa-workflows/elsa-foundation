@@ -17,8 +17,8 @@ internal static class CoalescingRuntimeStoreContinuation
         ArgumentNullException.ThrowIfNull(cursor);
         ArgumentException.ThrowIfNullOrWhiteSpace(cursor.LastIdentity);
 
-        var payload = JsonSerializer.SerializeToUtf8Bytes(new Payload(binding, cursor));
-        return $"crsp1.{Encode(payload)}.{Encode(SHA256.HashData(payload))}";
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new Payload(binding, cursor), Elsa.Serialization.Core.JsonBaseline.Options);
+        return $"crsp1.{Encode(payload)}.{Encode(Convert.FromHexString(Elsa.Serialization.Core.JsonHashInput.HashUtf8(payload)))}";
     }
 
     public static CoalescingRuntimeStoreCursor? Decode(string? token, string binding, string parameterName)
@@ -33,18 +33,18 @@ internal static class CoalescingRuntimeStoreContinuation
                 throw new FormatException();
             var bytes = Decode(encodedPayload);
             var suppliedChecksum = Decode(encodedChecksum);
-            var expectedChecksum = SHA256.HashData(bytes);
+            var expectedChecksum = Convert.FromHexString(Elsa.Serialization.Core.JsonHashInput.HashUtf8(bytes));
             if (suppliedChecksum.Length != expectedChecksum.Length ||
                 !CryptographicOperations.FixedTimeEquals(suppliedChecksum, expectedChecksum))
                 throw new FormatException();
 
-            var payload = JsonSerializer.Deserialize<Payload>(bytes) ?? throw new FormatException();
+            var payload = JsonSerializer.Deserialize<Payload>(bytes, Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new FormatException();
             if (!StringComparer.Ordinal.Equals(payload.Binding, binding) ||
-                string.IsNullOrWhiteSpace(payload.Cursor.LastIdentity))
+                payload.Cursor is null || string.IsNullOrWhiteSpace(payload.Cursor.LastIdentity))
                 throw new FormatException();
             return payload.Cursor;
         }
-        catch (Exception exception) when (exception is FormatException or JsonException or ArgumentException)
+        catch (Exception exception) when (exception is FormatException or JsonException or ArgumentException or InvalidOperationException)
         {
             throw new ArgumentException(
                 "The runtime store continuation token is invalid or belongs to another query.",

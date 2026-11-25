@@ -1,5 +1,5 @@
 import type { StudioWeaverClientExecutionResult, StudioWeaverContextAttachment, StudioWeaverPreparedInvocation } from "@elsa-workflows/studio-sdk";
-import { sha256Hex } from "../sha256";
+import { hashJson } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDefinitionBrowseLocation } from "./workflowDefinitionBrowseLocation";
 import type { CreateWorkflowDraft } from "./editorTypes";
 import { getCreateMetadataEdits } from "./createWorkflowMetadata";
@@ -93,14 +93,7 @@ export function buildLibraryContent(input: LibraryContextInput) {
 
 /** A page revision: SHA-256 over the canonical visible state, so any visible change is a new revision. */
 export function pageRevision(body: unknown) {
-  return `sha256:${sha256Hex(canonical(body))}`;
-}
-
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value && typeof value === "object")
-    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(",")}}`;
-  return JSON.stringify(value ?? null);
+  return `sha256:${hashJson(body)}`;
 }
 
 function attachment(kind: string, resourceType: string, resourceId: string, content: { revision: string } & Record<string, unknown>, client: { clientId: string; generationId: string },

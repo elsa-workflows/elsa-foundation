@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Primitives.Versioning;
@@ -105,7 +106,8 @@ public sealed class EfAddWorkflowDefinitionCommand(WorkflowsDesignDbContext db, 
         ArgumentNullException.ThrowIfNull(definition); ArgumentNullException.ThrowIfNull(draft); definition.TenantId = WriteTenant(definition.TenantId); draft.TenantId = WriteTenant(draft.TenantId);
         if (!WorkflowDefinitionIdentity.Equals(definition.Id, draft.WorkflowDefinitionId)) throw new ArgumentException("The first draft must belong to the definition.", nameof(draft));
         draft.WorkflowDefinitionId = definition.Id;
-        Serializer = serializer; SaveDraftState(draft, draft.State, "workflow.definition.create.v1"); var normalizedPresentation = ActivityPresentationRecord.NormalizeCollection(presentation); EfDesignSupport.Stamp(definition, Now); EfDesignSupport.Stamp(draft, Now);
+        var operation = folderId is null ? "workflow.definition.create.v1" : "workflow.definition.create-in-folder.v1";
+        Serializer = serializer; SaveDraftState(draft, draft.State, operation); var normalizedPresentation = ActivityPresentationRecord.NormalizeCollection(presentation); EfDesignSupport.Stamp(definition, Now); EfDesignSupport.Stamp(draft, Now);
         var requestMaterial = new CreateWorkflowDefinitionRequestMaterial(
             definition.Name,
             definition.Description,
@@ -113,10 +115,9 @@ public sealed class EfAddWorkflowDefinitionCommand(WorkflowsDesignDbContext db, 
             definition.DeletedReason,
             definition.IsSourceOwned,
             draft.SourceVersionId,
-            draft.StateSource!,
+            EfDesignSupport.StateHashValue(draft.StateSource!, operation),
             EfDesignSupport.LayoutMaterial(layout),
             EfDesignSupport.PresentationMaterial(normalizedPresentation));
-        var operation = folderId is null ? "workflow.definition.create.v1" : "workflow.definition.create-in-folder.v1";
         object material = folderId is null ? requestMaterial : new { requestMaterial, folderId, actorId };
         return await Atomic.ExecuteAsync(key, operation, material, [DesignPersistenceUnitNames.Definitions, DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async token =>
         {
@@ -169,7 +170,7 @@ public sealed class EfCreateDraftCommand(WorkflowsDesignDbContext db, IPersisten
     private async Task<string> ExecuteCore(DesignOperationKey key, string definitionId, string? sourceVersionId, WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout, CancellationToken ct)
     {
         IReadOnlyList<ValidationError> errors = [];
-        var outcome = await Atomic.ExecuteAsync(key, "workflow.draft.create.v1", new CreateDraftRequestMaterial(definitionId, draft.StateSource!, EfDesignSupport.LayoutMaterial(layout), sourceVersionId), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
+        var outcome = await Atomic.ExecuteAsync(key, "workflow.draft.create.v1", new CreateDraftRequestMaterial(definitionId, EfDesignSupport.StateHashValue(draft.StateSource!, "workflow.draft.create.v1"), EfDesignSupport.LayoutMaterial(layout), sourceVersionId), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
         {
             var definitionKey = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definitionId));
             var definition = await Scoped(Db.Definitions.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == definitionKey, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId);
@@ -275,7 +276,7 @@ public sealed class EfAddWorkflowDefinitionVersionCommand(WorkflowsDesignDbConte
     {
         var stateJson = EfDesignSupport.WriteState(serializer, state, "workflow.version.add.v1");
         string? allocatedVersion = null;
-        var outcome = await Atomic.ExecuteAsync(key, "workflow.version.add.v1", new AddWorkflowDefinitionVersionRequestMaterial(definitionId, stateJson), [DesignPersistenceUnitNames.Versions], async (_, token) =>
+        var outcome = await Atomic.ExecuteAsync(key, "workflow.version.add.v1", new AddWorkflowDefinitionVersionRequestMaterial(definitionId, EfDesignSupport.StateHashValue(stateJson, "workflow.version.add.v1")), [DesignPersistenceUnitNames.Versions], async (_, token) =>
         {
             var definitionKey = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definitionId));
             var definition = await Scoped(Db.Definitions.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == definitionKey, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId);
@@ -309,7 +310,7 @@ public sealed class EfMaterializeWorkflowDefinitionVersionCommand(WorkflowsDesig
 {
     public const string OperationKind = "workflow.version.materialize.v1";
 
-    public async Task<WorkflowDefinitionVersionAdded> Execute(DesignOperationKey key, WorkflowDefinitionVersion version, CancellationToken ct = default) { ArgumentNullException.ThrowIfNull(version); version.TenantId = WriteTenant(version.TenantId); version.StateSource ??= EfDesignSupport.WriteState(serializer, version.State, OperationKind); EfDesignSupport.Stamp(version, Now); return await Atomic.ExecuteAsync(key, OperationKind, new MaterializeWorkflowDefinitionVersionRequestMaterial(version.DefinitionId, version.Id, version.Version, version.SourceDraftId, version.SourceCreatedAt, version.StateSource), [DesignPersistenceUnitNames.Versions], async token => { var definitionKey = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(version.DefinitionId)); var definition = await Scoped(Db.Definitions.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == definitionKey, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), version.DefinitionId); EfDesignSupport.EnsureDefinitionIdentity(version.DefinitionId, definition.Id, "workflow definition version materialization lookup"); var normalizedVersion = WorkflowDefinitionVersion.From(version, definition.Id); normalizedVersion.TenantId = definition.TenantId; normalizedVersion.CreatedAt = version.CreatedAt; normalizedVersion.LastModifiedAt = version.LastModifiedAt; normalizedVersion.StateSource = version.StateSource; Db.Versions.Add(normalizedVersion); await Task.CompletedTask; return new WorkflowDefinitionVersionAdded(normalizedVersion.DefinitionId, normalizedVersion.Id, normalizedVersion.Version); }, ct); }
+    public async Task<WorkflowDefinitionVersionAdded> Execute(DesignOperationKey key, WorkflowDefinitionVersion version, CancellationToken ct = default) { ArgumentNullException.ThrowIfNull(version); version.TenantId = WriteTenant(version.TenantId); version.StateSource ??= EfDesignSupport.WriteState(serializer, version.State, OperationKind); EfDesignSupport.Stamp(version, Now); return await Atomic.ExecuteAsync(key, OperationKind, new MaterializeWorkflowDefinitionVersionRequestMaterial(version.DefinitionId, version.Id, version.Version, version.SourceDraftId, version.SourceCreatedAt, EfDesignSupport.StateHashValue(version.StateSource, OperationKind)), [DesignPersistenceUnitNames.Versions], async token => { var definitionKey = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(version.DefinitionId)); var definition = await Scoped(Db.Definitions.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == definitionKey, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), version.DefinitionId); EfDesignSupport.EnsureDefinitionIdentity(version.DefinitionId, definition.Id, "workflow definition version materialization lookup"); var normalizedVersion = WorkflowDefinitionVersion.From(version, definition.Id); normalizedVersion.TenantId = definition.TenantId; normalizedVersion.CreatedAt = version.CreatedAt; normalizedVersion.LastModifiedAt = version.LastModifiedAt; normalizedVersion.StateSource = version.StateSource; Db.Versions.Add(normalizedVersion); await Task.CompletedTask; return new WorkflowDefinitionVersionAdded(normalizedVersion.DefinitionId, normalizedVersion.Id, normalizedVersion.Version); }, ct); }
 }
 
 public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer, IActivityStructureService activityStructureService, IDistributedLockProvider? lockProvider = null, IInlineEventPublisher? inlineEvents = null, IDeferredEventPublisher? deferredEvents = null) : EfDesignCommand(db, access, atomic), IUpdateDraftCommand
@@ -342,7 +343,7 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
     {
         IReadOnlyList<ValidationError> errors = [];
         var stateJson = EfDesignSupport.WriteState(serializer, request.State, "workflow.draft.replace.v1");
-        var outcome = await Atomic.ExecuteAsync(key, "workflow.draft.replace.v1", new UpdateDraftRequestMaterial(request.DraftId, stateJson, EfDesignSupport.LayoutMaterial(request.Layout), EfDesignSupport.PresentationMaterial(request.ActivityPresentation ?? [])), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
+        var outcome = await Atomic.ExecuteAsync(key, "workflow.draft.replace.v1", new UpdateDraftRequestMaterial(request.DraftId, EfDesignSupport.StateHashValue(stateJson, "workflow.draft.replace.v1"), EfDesignSupport.LayoutMaterial(request.Layout), EfDesignSupport.PresentationMaterial(request.ActivityPresentation ?? [])), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
         {
             var row = await Scoped(Db.Drafts, x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(request.DraftId), token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), request.DraftId);
             EfDesignSupport.EnsureExactIdentity(request.DraftId, row.Id, "workflow draft update lookup");
@@ -619,7 +620,7 @@ public sealed class EfSubmitWorkflowDefinitionCommand(WorkflowsDesignDbContext d
         var result = await Atomic.ExecuteAsync<SubmittedWorkflowDefinition>(
             key,
             "workflow.definition.submit.v1",
-            new SubmitWorkflowDefinitionRequestMaterial(name, description, draft.StateSource!),
+            new SubmitWorkflowDefinitionRequestMaterial(name, description, EfDesignSupport.StateHashValue(draft.StateSource!, "workflow.definition.submit.v1")),
             [DesignPersistenceUnitNames.Definitions, DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts, DesignPersistenceUnitNames.Versions, DesignPersistenceUnitNames.VersionLayouts],
             async (_, token) =>
             {
@@ -657,7 +658,7 @@ internal sealed record CreateWorkflowDefinitionRequestMaterial(
     string? DeletedReason,
     bool IsSourceOwned,
     string? SourceVersionId,
-    string StateJson,
+    JsonElement StateJson,
     IReadOnlyCollection<DesignLayoutMaterial> Layout,
     IReadOnlyCollection<DesignActivityPresentationMaterial> ActivityPresentation);
 
@@ -688,7 +689,7 @@ internal sealed record SaveWorkflowDefinitionRequestMaterial(
 
 internal sealed record CreateDraftRequestMaterial(
     string WorkflowDefinitionId,
-    string StateJson,
+    JsonElement StateJson,
     IReadOnlyCollection<DesignLayoutMaterial> Layout,
     string? SourceVersionId);
 
@@ -696,7 +697,7 @@ internal sealed record CloneDraftRequestMaterial(string SourceVersionId);
 
 internal sealed record AddWorkflowDefinitionVersionRequestMaterial(
     string DefinitionId,
-    string StateJson);
+    JsonElement StateJson);
 
 internal sealed record MaterializeWorkflowDefinitionVersionRequestMaterial(
     string DefinitionId,
@@ -704,11 +705,11 @@ internal sealed record MaterializeWorkflowDefinitionVersionRequestMaterial(
     string Version,
     string? SourceDraftId,
     DateTimeOffset? SourceCreatedAt,
-    string StateJson);
+    JsonElement StateJson);
 
 internal sealed record UpdateDraftRequestMaterial(
     string DraftId,
-    string StateJson,
+    JsonElement StateJson,
     IReadOnlyCollection<DesignLayoutMaterial> Layout,
     IReadOnlyCollection<DesignActivityPresentationMaterial> ActivityPresentation);
 
@@ -724,4 +725,4 @@ internal sealed record PromoteDraftRequestMaterial(
 internal sealed record SubmitWorkflowDefinitionRequestMaterial(
     string Name,
     string? Description,
-    string StateJson);
+    JsonElement StateJson);

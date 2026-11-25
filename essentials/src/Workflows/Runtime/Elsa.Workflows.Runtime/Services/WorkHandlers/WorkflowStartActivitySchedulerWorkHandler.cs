@@ -317,7 +317,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             requiresPayloadMessage: "StartActivity scheduler work item requires a start activity payload.",
             resolvedToNullMessage: "StartActivity scheduler work item payload resolved to null.",
             invalidPayloadMessage: "StartActivity scheduler work item payload is not a valid start activity payload.",
-            deserialize: static (_, payload) => payload.Deserialize<RuntimeStartActivityCommandPayload>(),
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeStartActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options),
             isPayloadValidationException: static exception =>
                 exception is JsonException or NotSupportedException ||
                 exception is ArgumentException argumentException && IsStartPayloadValidationException(argumentException));
@@ -499,7 +499,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
             enqueuedAt: now,
             recordedAt: now,
             sequence: startWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            payload: JsonSerializer.SerializeToElement(payload),
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: startWorkItem.CommandMetadata,
             envelopeMetadata: startWorkItem.EnvelopeMetadata,
             executionScopeId: startWorkItem.ExecutionScopeId,

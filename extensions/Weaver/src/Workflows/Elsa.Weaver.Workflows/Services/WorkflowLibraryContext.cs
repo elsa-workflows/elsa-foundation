@@ -30,7 +30,7 @@ internal static class WorkflowLibraryContext
     /// <summary>Each admitted client context's bound on its JSON text, well under the host's 32 KiB per-attachment budget.</summary>
     internal const int ContentLimit = 16 * 1024;
 
-    internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>One admitted client context: its kind, exact target, client binding and the admitted projection.</summary>
     internal sealed record Admitted(string Kind, WeaverResourceTarget Target, WeaverClientBinding Client, JsonElement Content);
@@ -70,9 +70,7 @@ internal static class WorkflowLibraryContext
             || target.ResourceId != ResourceIdOf(attachment.ContentType) || !Valid(target.Revision, 256)
             || attachment.Client is not { } client || !Valid(client.ClientId, 256) || !Valid(client.GenerationId, 256))
             return false;
-        JsonElement body;
-        try { body = attachment.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(attachment.Content, JsonOptions); }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
+        if (attachment.Content is not { } body) return false;
         if (body.ValueKind != JsonValueKind.Object || body.GetRawText().Length > ContentLimit || Text(body, "revision") != target.Revision)
             return false;
         JsonObject? projection = attachment.ContentType switch

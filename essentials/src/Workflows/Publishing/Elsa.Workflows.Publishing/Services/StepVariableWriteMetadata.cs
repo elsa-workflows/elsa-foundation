@@ -70,7 +70,7 @@ internal static class StepVariableWriteMetadata
         return metadata;
     }
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     private sealed record MayWriteTarget(string ScopeId, string VariableKey, string Name);
 }

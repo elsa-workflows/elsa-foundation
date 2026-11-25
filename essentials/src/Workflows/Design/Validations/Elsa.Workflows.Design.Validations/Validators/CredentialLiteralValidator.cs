@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Validations.Internal;
@@ -13,13 +14,16 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// the nested ones a registered structure handler projects), reads each input the catalog version declares a credential
 /// (<c>InputDefinition.IsCredential</c>) and refuses its binding unless <see cref="CredentialInputBinding.IsAccepted"/>
 /// accepts it. Each finding is <see cref="CredentialLiteralFinding"/>'s, keyed by <c>{NodeId}/inputs/{ReferenceKey}</c>.
+/// A state with a node whose argument list is missing is not judged: it returns only the
+/// <c>Graph/MalformedArgumentList</c> findings, over the whole tree.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Engine intrinsics have no catalog version, and a node whose version the catalog does not hold cannot be judged: both
 /// are skipped, as <see cref="RequiredInputOutputValidator"/> skips them. <see cref="UnknownActivityVersionValidator"/>
 /// reports the unresolvable node, and publication refuses it because it cannot compile it. Recurses through the iterative
-/// <see cref="ActivityTreeWalker"/>; max depth is <see cref="WorkflowDesignValidatorOptions.MaxRecursionDepth"/>.
+/// <see cref="ActivityTreeWalker"/>; max depth is <see cref="WorkflowDesignValidatorOptions.MaxRecursionDepth"/> (the
+/// malformed-list check walks the whole tree, as the validation gate does).
 /// </para>
 /// <para>
 /// Registered as <see cref="ICredentialLiteralValidator"/>, which the admitting writers of workflow state take, and as an
@@ -37,6 +41,12 @@ public sealed class CredentialLiteralValidator(
     public async ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(state);
+        // Admission fails closed: a node whose argument list is missing cannot be checked, so the state is refused with
+        // that finding instead (the validation gate reports the same one and runs no validator on such a tree).
+        var malformed = activityTreeWalker.Walk(state.RootActivity, int.MaxValue).SelectMany(ActivityArgumentLists.Refusals).ToArray();
+        if (malformed.Length > 0)
+            return malformed;
+
         var findings = new List<ValidationError>();
         var catalogNodes = activityTreeWalker
             .Walk(state.RootActivity, options.Value.MaxRecursionDepth)

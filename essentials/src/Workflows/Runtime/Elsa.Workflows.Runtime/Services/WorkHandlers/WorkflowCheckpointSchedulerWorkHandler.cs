@@ -189,7 +189,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
         };
         if (payload.StimulusDeliveryOrigin is { } savedOrigin)
-            commitMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin);
+            commitMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin, options: Elsa.Serialization.Core.JsonBaseline.Options);
         return new RuntimeCheckpointCommit(
             CommitId: commitId,
             Checkpoint: new RuntimeCheckpoint(
@@ -487,7 +487,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             requiresPayloadMessage: "Checkpoint scheduler work item requires a checkpoint payload.",
             resolvedToNullMessage: "Checkpoint scheduler work item payload resolved to null.",
             invalidPayloadMessage: "Checkpoint scheduler work item payload is not a valid checkpoint payload.",
-            deserialize: static (_, payload) => payload.Deserialize<RuntimeCheckpointCommandPayload>(),
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options),
             isPayloadValidationException: static exception =>
                 exception is JsonException or NotSupportedException or RuntimeCheckpointCommandPayloadValidationException);
 }

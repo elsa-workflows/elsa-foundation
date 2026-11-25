@@ -142,7 +142,7 @@ public static class EtlRuntimeIdentity
         var address = invocation.ResultAddress;
         return Hash("etl-invocation-v1", invocation.Scope.TenantId, invocation.Scope.PersistencePartition,
             invocation.RunId, Number(artifact.FormatVersion), artifact.ArtifactId, artifact.ContentHash,
-            artifact.DefinitionId, Number(artifact.DefinitionVersion), artifact.Pipeline.GetRawText(),
+            artifact.DefinitionId, Number(artifact.DefinitionVersion), "json-sha256:" + Elsa.Serialization.Core.JsonHashInput.Hash(artifact.Pipeline),
             Number(address.FormatVersion), address.WorkflowExecutionId, address.ActivityExecutionId,
             address.ExecutableId, address.ExecutableHash, address.NodeId, address.BookmarkId,
             address.RegistrationId, address.ResumeTargetId, address.StimulusType, address.StimulusHash,
@@ -189,7 +189,7 @@ public static class EtlRuntimeIdentity
 
     private static string Hash(params string?[] values)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var frame = new MemoryStream();
         Span<byte> size = stackalloc byte[sizeof(int)];
         foreach (var value in values)
         {
@@ -204,10 +204,10 @@ public static class EtlRuntimeIdentity
                     BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(index * sizeof(char), sizeof(char)), value[index]);
             }
             BinaryPrimitives.WriteInt32LittleEndian(size, bytes?.Length ?? -1);
-            hash.AppendData(size);
+            frame.Write(size);
             if (bytes is not null)
-                hash.AppendData(bytes);
+                frame.Write(bytes);
         }
-        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+        return Elsa.Serialization.Core.JsonHashInput.HashFramed(frame.GetBuffer().AsSpan(0, checked((int)frame.Length)));
     }
 }

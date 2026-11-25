@@ -21,7 +21,7 @@ internal sealed class JsonContentFactory : IHttpContentFactory
     [RequiresUnreferencedCode("The JsonSerializer type is not trim-compatible.")]
     public HttpContent CreateHttpContent(object content, string contentType)
     {
-        var text = content as string ?? JsonSerializer.Serialize(content);
+        var text = content as string ?? Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(content).GetRawText();
 
         if (string.IsNullOrWhiteSpace(contentType))
             contentType = MediaTypeNames.Application.Json;

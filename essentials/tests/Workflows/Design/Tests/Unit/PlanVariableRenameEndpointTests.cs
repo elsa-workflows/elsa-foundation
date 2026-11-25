@@ -22,7 +22,7 @@ public sealed class PlanVariableRenameEndpointTests
 {
     private static readonly WorkflowDefinitionState State = new(
         [new VariableDefinition("order-key", "order", new TypeReference("Any"), null, null)],
-        new ActivityNode("script", "av-script", [new ArgumentState("script", new ArgumentValue("return variables.order;", "Literal"), null, null, null, null)], []),
+        new ActivityNode("script", "av-script", [new ArgumentState("script", ArgumentValue.FromClr("return variables.order;", "Literal"), null, null, null, null)], []),
         [],
         [],
         null);

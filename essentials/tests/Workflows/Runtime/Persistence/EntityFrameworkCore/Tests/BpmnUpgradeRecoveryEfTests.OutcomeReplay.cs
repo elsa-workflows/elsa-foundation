@@ -68,7 +68,7 @@ public sealed partial class BpmnUpgradeRecoveryEfTests
                 capture.ParentId = parentId; capture.ChildId = childId;
                 await first.ResumeAsync(selected, JsonSerializer.SerializeToElement(new LegacyCheckpointOutcomeTrigger("fault")));
                 callback = Assert.Single(capture.WorkItems);
-                var payload = Assert.IsType<RuntimeCompleteActivityCommandPayload>(callback.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>());
+                var payload = Assert.IsType<RuntimeCompleteActivityCommandPayload>(callback.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options));
                 Assert.Equal(current.InvocationId, payload.CompletedChildActivityExecutionId);
                 Assert.Equal(parent.InvocationId, payload.ActivityExecutionId);
                 var after = await store.ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);

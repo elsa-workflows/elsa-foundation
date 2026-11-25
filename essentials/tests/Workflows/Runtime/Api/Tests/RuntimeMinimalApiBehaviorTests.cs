@@ -102,6 +102,9 @@ public sealed class RuntimeMinimalApiBehaviorTests
         Assert.Equal(2, json.RootElement.GetProperty("items")[0].GetProperty("position").GetInt64());
         Assert.Equal("ae-2", json.RootElement.GetProperty("items")[0].GetProperty("execution").GetProperty("activityExecutionId").GetString());
         var cursor = Uri.EscapeDataString(json.RootElement.GetProperty("previousCursor").GetString()!);
+        using (var binding = JsonDocument.Parse(codec.DecodeJson("elsa-runtime-activity-execution-browser-v1", Uri.UnescapeDataString(cursor))))
+            Assert.True(binding.RootElement.GetProperty("Binding").GetString() == "F44327AC9306EF927BDB79B10E1AE80B4079A54339E618F857E1B14CC7939090",
+                "Activity browser binding [wf-1,node,null,null,1,tenant-a,browser-test,structure-only]: First-stable hash freeze requires an explicit identity/migration decision.");
         using var earlier = await host.Client.GetAsync(path + "&cursor=" + cursor);
         Assert.Equal(HttpStatusCode.OK, earlier.StatusCode);
         using var earlierJson = JsonDocument.Parse(await earlier.Content.ReadAsStringAsync());
@@ -614,7 +617,8 @@ public sealed class RuntimeMinimalApiBehaviorTests
     {
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(status, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         Assert.Equal(
             new[] { "type", "title", "status", "detail", "instance", "errorCode", "traceId", "diagnostics", "cursor" },
             body.EnumerateObject().Select(property => property.Name));

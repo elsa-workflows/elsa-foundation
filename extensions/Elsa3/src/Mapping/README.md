@@ -43,8 +43,9 @@ Nothing throws for input or catalog content. Every cause is a diagnostic:
 - `ELS3-ACTIVITY-*` errors make the item unconvertible;
 - `ELS3-BEHAVIOUR-*` warnings mean it converts, but Elsa 4 behaves differently at run time;
 - `VF-IMP-*` are value-flow errors;
-- `ELS3-VARIABLE-TYPE-UNREGISTERED` (an info) and `ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED` (an error) name a variable's
-  custom type that Elsa 4 does not register, or its storage driver other than the default (#5666);
+- `ELS3-VARIABLE-TYPE-UNREGISTERED` (an info) names a variable's custom type that Elsa 4 does not register (#5666);
+- `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED` and `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` (warnings) name a
+  variable, input or output whose Elsa 3 Memory or custom storage driver became Elsa 4's default storage;
 - `ELS3-UNTYPED-RESULT` (an error) is an untyped activity result bound to a typed input whose kind is not known to match
   (spec 1228 US6, #4898); `ELS3-SCRIPT-OUTCOME-*` are about a script's computed outcomes.
 
@@ -105,22 +106,30 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   `ObjectDictionary[]`) gets none, and neither do Elsa 3's JSON types (`JsonElement`, `JsonNode`, `JsonObject`,
   `JsonArray`, `ExpandoObject`), which Any holds faithfully.
 
-  A variable on an Elsa 3 storage driver other than the default (`WorkflowInstanceStorageDriver`) is refused with
-  `ELS3-VARIABLE-STORAGE-DRIVER-UNMAPPED`: Elsa 4 cannot store a variable outside the workflow instance yet (publication
-  refuses it with VF-ACT-005), so the guidance is to set the variable back to the default storage (#5666). The default
-  driver becomes no storage driver.
+  Every Elsa 3 storage driver becomes Elsa 4's default storage: no storage driver, which a reusable workflow's contract
+  publishes as `elsa.json`. This holds for workflow and container variables, inputs and outputs, reusable workflow or
+  not. The converter never carries a driver over, even one an Elsa 4 host registers: Elsa 4 honours storage drivers only
+  on a reusable activity's members, and proper support is #5698. The default `WorkflowInstanceStorageDriver` and the
+  obsolete `WorkflowStorageDriver` kept the value with the instance too, so they convert silently. The Memory driver
+  never persisted the value; it converts with the warning `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED`. Any other driver
+  kept the value outside the instance; it converts with `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED`. Both warnings
+  carry `VariableName`, `InputName` or `OutputName` and `StorageDriverType` (the trimmed Elsa 3 driver type) as
+  metadata, plus `ComponentKind` (`storage-driver`) and `ComponentName` (the same type) for the migration report's
+  component inventory. What to do instead is the migrator's choice:
+  [Elsa 3 storage drivers](../../../../docs/migration/elsa3-storage-drivers.md) walks through it.
 
   A resource type (`FormFile`, `IFormFile`, `Stream`, `byte[]` or `Byte` with the array flag, alone, as a collection
   element or as a CLR generic type argument) is refused with or without a starting value: it stands for a file, a stream or raw bytes, which Elsa 4 cannot hold yet (#3194).
 
   Text is never split on commas. `ELS3-ACTIVITY-VARIABLE-VALUE-UNCONVERTIBLE` refuses, with the exact fix, a starting
   value that:
-  - is not a JSON array for a collection (the guidance shows the array the author most likely meant: `a, b` →
+  - is not a JSON array for a collection whose element type Elsa 4 knows (the guidance shows the array the author most likely meant: `a, b` →
     `["a","b"]`);
   - has an item that does not convert to the element type;
   - is not a JSON object for a dictionary;
   - does not convert to its scalar type (`"abc"` for an `Int32`, which Elsa 3 silently started as `0`);
-  - is not JSON, on a type Elsa 4 does not know: Elsa 3 converted such text in a way the converter cannot know.
+  - is not a JSON object or array (`42` included), on a type Elsa 4 does not know: Elsa 3 converted such a value in a
+    way the converter cannot know.
 
   Any other variable with no starting value converts.
 - **HttpEndpoint headers and query string.** A captured `Headers` or `QueryStringData` gets a synthesized `set` node
@@ -299,7 +308,7 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | `isNullOrEmpty(x)`, `isNullOrWhiteSpace(x)` | An inline function with .NET's semantics, including .NET's whitespace characters |
 | `newGuid()`, `newGuidString()`, `getGuidString()`, `newShortGuid()`, `getShortGuid()`, `parseGuid(s)` | The Elsa 4 built-ins of the same name, which return Elsa 3's text as a string: the canonical 36-character form, or Elsa 3's short form (Base64 of the GUID's bytes without `/`, `+`, `=`). A GUID used as text (`'id-' + newGuid()`, `newGuid().toString()`) gives the same text |
 | `stringToBase64(s)`, `stringFromBase64(s)` | The Elsa 4 built-ins of the same name: UTF-8 text and standard Base64, as in Elsa 3 |
-| A custom function `getSettings(…)` that a registered host function declares it replaces (`new JavaScriptHostFunctionDeclaration("acme.getSettings", …) { ReplacesGlobalFunctions = ["getSettings"] }`) | A call to that host function, `acme.getSettings(…)`, with its arguments converted as written. Elsa 4 host functions carry a namespace prefix (ADR 0045 §5 D-5); the migration plan records which prefix each function gets. Two functions claiming one name, a variable or input whose generated accessor has the same name, or a script that declares the namespace root are refused as ambiguous (`VF-IMP-002`) |
+| A custom function `getSettings(…)` with a registered host function of the same name after its namespace prefix (`new JavaScriptHostFunctionDeclaration("acme.getSettings", …)`) | A call to that host function, `acme.getSettings(…)`, with its arguments converted as written. Elsa 4 host functions carry a namespace prefix (ADR 0045 §5 D-5); the migration plan records which prefix each function gets. No mapping is declared: the name after the prefix is the match. A name the converter converts itself (`toJson`, `getVariable`, `isNullOrEmpty`, the Elsa 4 built-ins such as `newGuid`), the setters (`setVariable`, `setOutput`, …), `getOutputFrom`, the outcome setters and instance-state helpers (`setOutcome`, `setCorrelationId`, `getWorkflowInstanceName`, …), the read roots (`variables`, `input`, `activities`, `workflow`, `args`), the CLR, lodash and moment globals, or a standard JavaScript global (`String`, `encodeURIComponent`, …) is never matched. Two namespaces carrying one name, a variable, input or activity output whose generated accessor has the same name, or a script that declares the namespace root are refused as ambiguous (`VF-IMP-002`) |
 | `toJson(x)` | `JSON.stringify(x)`, with the warning `ELS3-BEHAVIOUR-TOJSON-STRINGIFY`: Elsa 3 escaped `<`, `>`, `&`, `'`, `+`, `` ` `` and characters outside the Basic Multilingual Plane, trimmed a `Date`'s fractional seconds, wrote `undefined` as `null` and failed on `NaN`. Elsa 4 has no `toJson` |
 | `Math.random()` | Native `Math.random()` |
 | `Date.now()`, `new Date()` as an instant, `getTime()`, epoch arithmetic, `new Date(number)`, `Date.UTC(…)`, `toISOString()`, the `getUTC*`/`setUTC*` methods, parsing text with `Z` or an offset, parsing a date-only text | Native `Date` on the host clock, under every date interpretation |
@@ -328,8 +337,10 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | `setOutcome(…)`, `setOutcomes(…)` in an input expression | `VF-IMP-005` | Move the call into a RunJavaScript, or route with a Decision or Switch activity. Only a RunJavaScript script selects outcomes in Elsa 4 |
 | `setOutcome(…)`, `setOutcomes(…)` with a computed name in a RunJavaScript whose possible outcomes are empty | `VF-IMP-005` | List every outcome the script can set in the activity's possible outcomes |
 | A RunJavaScript body that calls `setOutcome` and declares its own `complete` | `VF-IMP-005` | Rename the script's `complete`. Elsa 4 reserves it for the returned completion form |
-| Byte and stream helpers (`bytesToString`, `bytesToBase64`, `streamToBytes`, …) | `VF-IMP-005` | Move the conversion into an activity. Binary data is not a JSON value |
-| `getConfig(…)`, `getConfiguration(…)`, definition and instance-name readers, `getLastResult()` | `VF-IMP-005` | Pass the value in as a workflow input, or capture the producing output into a variable. A host that rebuilt one of them as a prefixed host function can declare it replaces the name (`ReplacesGlobalFunctions`) instead |
+| Byte and stream helpers (`bytesToString`, `bytesToBase64`, `streamToBytes`, …) | `VF-IMP-005` | Move the conversion into an activity. Binary data is not a JSON value. A host that rebuilt one of them registers it under the same name with a namespace prefix, and the call converts instead |
+| A custom function a host function replaces (same name after the prefix), used other than in a direct call: `const f = getSettings`, `items.map(getSettings)`, `o.fn = getSettings` | `ELS3-REPLACED-FUNCTION-REFERENCE` | Call it directly, for example `items.map(item => getSettings(item))`. The converter rewrites only direct calls |
+| `getConfig(…)`, `getConfiguration(…)`, definition and instance-name readers, `getLastResult()` | `VF-IMP-005` | Pass the value in as a workflow input, or capture the producing output into a variable. A host that rebuilt `getConfig`, `getConfiguration`, a definition reader or `getLastResult` registers it under the same name with a namespace prefix (`acme.getConfig`), and the call converts instead; the instance-name readers are never matched |
+| `set{Name}(…)` where `Name` is a standalone workflow's input and no variable has the name (Elsa 3 generated `set{Name}` for variables only; inputs are read-only) | `VF-IMP-005` | Copy the input into a declared variable and set that variable. If `set{Name}` was a custom function, register it under the same name with a namespace prefix (`acme.setStatus`), and the call converts instead; the converter's own setters (`setInput`, `setOutcome`, …) are never matched. In a standalone workflow where a variable has the name too, `set{Name}` writes the variable, as in Elsa 3, while `get{Name}` reads the input; in a reusable workflow `get{Name}` is ambiguous (`VF-IMP-002`), and `set{Name}` is refused as a write, since a reusable workflow's script cannot set variables yet |
 | `setVariable`, `set{Name}(…)`, mutating a value read from the workflow, in an input expression | `VF-IMP-005` | Move the assignment into a Set Variable activity, or into a RunJavaScript, whose script can set variables. Elsa 4 input expressions only read |
 | The same in a RunJavaScript body of a reusable workflow; a member mutation through a variable alias, local helper or loop; passing workflow state or nested callbacks to opaque code; dynamic code or engine-global exposure; executing a generator that can yield a workflow-owned value | `VF-IMP-005` | Return the value from the script and capture the result. A step cannot write a reusable workflow's variables yet (#4805). Opaque execution and generator ownership exposure are refused conservatively when their read-only behavior cannot be established; a refusal does not claim they definitely mutate the value. Pure local helper reads/returns and mutations of independent local copies remain convertible |
 | `setVariable('x', v)` for a variable the workflow does not declare (Elsa 3 created it on its first write) | `ELS3-SETTER-UNDECLARED-VARIABLE` | Declare the variable in the Elsa 3 workflow |
@@ -341,7 +352,7 @@ workflow whose scripts the setting decided gets the info `ELS3-DATE-INTERPRETATI
 | A script that declares its own `args` or `variables` around a converted read, a Liquid loop variable named `variables`, or a Liquid input or output named `variables` | `VF-IMP-002` | Rename the script's own name, or the input or output (#3296) |
 | A variable or input whose accessor is a built-in name (`CorrelationId`) | `VF-IMP-002` | Rename it |
 | lodash `_`, `moment`, CLR globals, Elsa 3 `args` | `VF-IMP-005` | Rewrite with plain JavaScript and declared reads |
-| Any other undeclared function | `VF-IMP-005` | If the host rebuilt it for Elsa 4, register it as a prefixed host function that declares the name it replaces (`ReplacesGlobalFunctions`); otherwise replace it with plain JavaScript, or move it into an activity |
+| Any other undeclared function | `VF-IMP-005` | If the host rebuilt it for Elsa 4, register a host function named `<prefix>.<name>` (for example `acme.getSettings`); a standard JavaScript or CLR global cannot be taken over this way. Otherwise replace it with plain JavaScript, or move it into an activity |
 | Syntax that only parses in sloppy mode: `with`, a legacy octal literal such as `010`, duplicate parameter names, `delete` of a variable, a reserved word such as `let`, `static` or `yield` as a name | `VF-IMP-007` | Rewrite it without that syntax (write `0o10` or `8` for an octal literal). Elsa 4 runs JavaScript in strict mode |
 | An assignment to a name the script never declares (`total = 1`) | `VF-IMP-007` | Declare it with `let` first. Elsa 3 created a global; Elsa 4's strict mode fails |
 | `this` or `arguments` outside a function | `VF-IMP-007` | Read the value through `getVariable`, `getInput` or a local variable |

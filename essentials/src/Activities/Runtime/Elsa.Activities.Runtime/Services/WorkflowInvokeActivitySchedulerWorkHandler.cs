@@ -118,11 +118,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
     private static ActivityTransition MaterializeBackgroundTransition(
         IServiceProvider services,
         ActivityContract contract,
-        BackgroundActivityWorkTerminalResult result) => result.Kind switch
+        BackgroundActivityWorkTerminalResult result, Elsa.Expressions.Core.Contracts.IExecutionWarningSink warnings) => result.Kind switch
     {
         BackgroundActivityWorkResultKind.Complete => services.GetRequiredService<BackgroundActivityCompletionCodec>().Deserialize(
             contract, result.ResultJson ?? "null", result.Selection ?? OutcomeSelection.Unspecified,
-            services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BackgroundActivityWorkerOptions>>().Value.MaximumResultBytes),
+            services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BackgroundActivityWorkerOptions>>().Value.MaximumResultBytes, warnings),
         BackgroundActivityWorkResultKind.Fault => ActivityTransition.Fault<ActivityUnit>(new ActivityFault(
             result.Fault!.Code, result.Fault.Message, result.Fault.IsRetryable,
             result.Fault.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey),
@@ -245,7 +245,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 state = activationClaim.State;
                 valueFlowAttempt = activationClaim.Attempt;
                 activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                    new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: invokePayload.ActivityExecutionId, activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor),
+                    new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: invokePayload.ActivityExecutionId, activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor) { Warnings = stepWarnings },
                     cancellationToken);
                 activity = activationLease.Activity;
             }
@@ -254,7 +254,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 // The worker already activated and executed the original body. Only its immutable typed
                 // transition enters the usual native projection/fault path; no second activation or effect.
                 valueFlowAttempt = backgroundResult.Request.Attempt;
-                committedTransition = MaterializeBackgroundTransition(serviceProvider, activityContract, backgroundResult.Result!);
+                foreach (var warning in backgroundResult.Result!.Warnings) stepWarnings.Report(warning);
+                committedTransition = MaterializeBackgroundTransition(serviceProvider, activityContract, backgroundResult.Result, stepWarnings);
             }
 
             if (activity is not null)
@@ -289,7 +290,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     triggerMetadata: projections.TriggerMetadata,
                     scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies).WithWarnings(stepWarnings);
                 stepSession = await StepVariableSessions.CreateAsync(
-                    serviceProvider, scopeService, activity, executable, executableNode, executionContextState, persistedDurableValues, cancellationToken);
+                    serviceProvider, scopeService, activity, executable, executableNode, executionContextState, persistedDurableValues, cancellationToken, warnings: stepWarnings);
                 stateSession = await StepWorkflowState.CreateAsync(serviceProvider, scopeService, activity, executableNode,
                     executionContextState, persistedDurableValues, stepSession, cancellationToken);
                 stepSession?.SetWarnings(stepWarnings);
@@ -314,7 +315,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineActivationFailure(exception, disposalException, canceled: false);
             var subStatus = disposalException is null ? "ActivityConstructionFailed" : "ActivityDisposalFailed";
-            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken);
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, state.WithWarnings(stepWarnings.Warnings), fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
 
@@ -1207,7 +1208,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 enqueuedAt: now,
                 recordedAt: now,
                 sequence: invokeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
-                payload: JsonSerializer.SerializeToElement(payload),
+                payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
                 commandMetadata: MergeMetadata(invokeWorkItem.CommandMetadata, request),
                 envelopeMetadata: invokeWorkItem.EnvelopeMetadata);
         }
@@ -1533,7 +1534,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.InvokeReason] = invokePayload.Reason;
         metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;
-        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(outcomeNames);
+        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(outcomeNames, Elsa.Serialization.Core.JsonBaseline.Options);
 
         if (skipped)
             metadata[RuntimeMetadataKeys.InvokeSkipped] = bool.TrueString;

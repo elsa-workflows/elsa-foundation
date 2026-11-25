@@ -166,7 +166,7 @@ public sealed class WeaverContextCollectionBoundsTests
         var attachments = Enumerable.Range(0, count).Select(index => Attachment("bounded-" + index) with
         {
             Summary = boundary == "summary" ? new string('s', 4096 + (exceeds ? 1 : 0)) : "A bounded summary.",
-            Content = boundary == "content" ? new string('c', 32766 + (exceeds ? 1 : 0)) : "A bounded body."
+            Content = WeaverJsonData.From(boundary == "content" ? new string('c', 32766 + (exceeds ? 1 : 0)) : "A bounded body.")
         }).ToList();
         var source = new Source("bounded", (_, _) => ValueTask.FromResult(new WeaverContextContribution(attachments, [])));
         using var root = Create(source);
@@ -192,7 +192,7 @@ public sealed class WeaverContextCollectionBoundsTests
     public async Task A_completed_source_cannot_change_its_evidence_while_a_later_source_is_pending()
     {
         var body = new Dictionary<string, string> { ["value"] = "accepted" };
-        var first = new Source("first", (_, _) => ValueTask.FromResult(new WeaverContextContribution([Attachment("first") with { Content = body }], [])));
+        var first = new Source("first", (_, _) => ValueTask.FromResult(new WeaverContextContribution([Attachment("first") with { Content = WeaverJsonData.From(body) }], [])));
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource<WeaverContextContribution>(TaskCreationOptions.RunContinuationsAsynchronously);
         var later = new Source("later", (_, _) =>
@@ -221,7 +221,7 @@ public sealed class WeaverContextCollectionBoundsTests
         var references = new Dictionary<string, string> { ["resource"] = "original" };
         var attachments = new List<WeaverContextAttachment>
         {
-            Attachment("snapshot") with { Content = body, References = references }
+            Attachment("snapshot") with { Content = WeaverJsonData.From(body), References = references }
         };
         var source = new Source("snapshot", (_, _) => ValueTask.FromResult(new WeaverContextContribution(attachments, [])));
         using var root = Create(source);
@@ -241,7 +241,7 @@ public sealed class WeaverContextCollectionBoundsTests
     }
 
     private static WeaverContextAttachment Attachment(string id) => new(id, "module.bounds", null, "Bounded context", "bounds.context",
-        WeaverContextSensitivity.Internal, "bounds", "A bounded summary.", "A bounded body.", new Dictionary<string, string>())
+        WeaverContextSensitivity.Internal, "bounds", "A bounded summary.", WeaverJsonData.From("A bounded body."), new Dictionary<string, string>())
     { ModuleId = "module.bounds", SchemaVersion = "1", Origin = WeaverContextOrigin.ResourceData };
 
     private static WeaverContextRequest Request() => new("bounds-session", "unbound", new Dictionary<string, string>());

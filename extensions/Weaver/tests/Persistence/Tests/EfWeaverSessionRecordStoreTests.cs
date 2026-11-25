@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Elsa.Weaver.Core.Contracts;
 using Elsa.Weaver.Core.Models;
 using Elsa.Weaver.Persistence.EntityFrameworkCore.Stores;
@@ -15,6 +16,35 @@ namespace Elsa.Weaver.Persistence.Tests;
 public sealed class EfWeaverSessionRecordStoreTests
 {
     private const string Owner = "owner-a";
+
+    [Fact]
+    public async Task A_cold_store_keeps_raw_context_and_proposal_JSON_without_reinterpreting_data()
+    {
+        const string raw = """{ "OrderID":9007199254740993, "nil":null, "text":"\u0061 <+>", "amount":1.00 }""";
+        using var database = new WeaverSqliteDatabase();
+        var session = Records.Session("json-integrity");
+        WeaverContextAttachment attachment;
+        WeaverActionProposal proposal;
+        using (var document = JsonDocument.Parse(raw))
+        {
+            attachment = Records.Attachment("raw") with { Content = document.RootElement };
+            proposal = Records.Proposal(session.Id, "raw-proposal", WeaverActionProposalStatus.AwaitingApproval)
+                with { Operations = [document.RootElement] };
+        }
+        Assert.True((await database.RecordStore().CreateAsync(new(session)
+        {
+            Context = [attachment], Proposals = [new(proposal)]
+        }, Owner)).Succeeded);
+
+        using var restarted = database.NewContexts();
+        var loaded = (await database.RecordStore(contexts: restarted).LoadAsync(session.Id))!;
+        var content = Assert.Single(loaded.Context).Content!.Value;
+        Assert.Equal(raw, content.GetRawText());
+        Assert.Equal(raw, Assert.Single(Assert.Single(loaded.Proposals).Proposal.Operations).GetRawText());
+        Assert.Equal(9007199254740993L, content.GetProperty("OrderID").GetInt64());
+        Assert.Equal(JsonValueKind.Null, content.GetProperty("nil").ValueKind);
+        Assert.False(content.TryGetProperty("missing", out _));
+    }
 
     [Fact]
     public void The_restart_scenarios_in_this_assembly_run_over_the_EF_store()
@@ -62,7 +92,9 @@ public sealed class EfWeaverSessionRecordStoreTests
         var clock = new RestartTestClock();
         // Canonical text with escapes, non-ASCII and a separator character, digested exactly as the owner does.
         var canonical = "{\"a\":1.50,\"b\":\"café \\u2028 \u2028 ñ\",\"c\":[true,null]}";
-        var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
+        // Independently pinned SHA-256 of the exact canonical JSON value (15e-1 and fixed escaping).
+        const string digest = "101427b142a3d93cd51ff11add3dce81945a1a10f6ba29c87ebbb4127cca0bc0";
+        Assert.Equal(digest, WeaverInvocationIntegrity.DigestCanonical(canonical));
         var session = Records.Session("session-1") with { Workspace = "workspace-1", ContinuedFrom = "session-0", PolicyRevision = 3 };
         var message = new WeaverMessageRecord(Records.Message(session.Id, "message-1") with
         {
@@ -375,8 +407,8 @@ internal static class Records
     public static WeaverMessage Message(string sessionId, string id, string content = "hello") => new(id, sessionId, WeaverRole.User, content,
         WeaverMessageStatus.Pending, null, DateTimeOffset.UtcNow, null, null, [], [], []) { RequestId = "request-1", HasDisclosureProvenance = true };
 
-    public static WeaverContextAttachment Attachment(string id, object? content = null) => new(id, "test", null, "Label", "test.kind",
-        WeaverContextSensitivity.Internal, "scope", "Summary", content ?? new { value = 1.50, text = "kept" }, new Dictionary<string, string> { ["ref"] = "1" });
+    public static WeaverContextAttachment Attachment(string id, JsonElement? content = null) => new(id, "test", null, "Label", "test.kind",
+        WeaverContextSensitivity.Internal, "scope", "Summary", content ?? Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new { value = 1.50, text = "kept" }), new Dictionary<string, string> { ["ref"] = "1" });
 
     public static WeaverActionProposal Proposal(string sessionId, string id, WeaverActionProposalStatus status) => new(id, sessionId, null, "tool",
         "tool-invocation", "Title", "Summary", WeaverRisk.ReviewRequired, "revision-1", [], [], [], null, [], "test.resource", "resource-1", true,

@@ -54,6 +54,7 @@ public sealed class Elsa3ConversionDiagnosticsTests
         Elsa3ActivityDiagnosticCodes.BreakStopsAtParallel,
         Elsa3ActivityDiagnosticCodes.ForkWaitAnyCancellation,
         Elsa3ActivityDiagnosticCodes.ExecuteWorkflowDurable,
+        Elsa3ActivityDiagnosticCodes.DispatchInputNames,
     ];
 
     [Theory]
@@ -247,6 +248,9 @@ public sealed class Elsa3ConversionDiagnosticsTests
                 return Sequence("root", fork);
             case Elsa3ActivityDiagnosticCodes.ExecuteWorkflowDurable:
                 return Sequence("root", Activity("node", "Elsa.ExecuteWorkflow", ("workflowDefinitionId", Literal("child"))));
+            case Elsa3ActivityDiagnosticCodes.DispatchInputNames:
+                return Sequence("root", Activity("node", "Elsa.DispatchWorkflow", ("workflowDefinitionId", Literal("child")),
+                    ("input", Expression("JavaScript", "return { OrderId: 1 };", "ObjectDictionary"))));
             default:
                 throw new ArgumentOutOfRangeException(nameof(code), code, null);
         }

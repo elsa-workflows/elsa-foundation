@@ -37,7 +37,7 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// </summary>
 public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = null) : IBpmnDocumentExporter
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
@@ -417,26 +417,23 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
     private static double ReadNumber(JsonElement element, string property, double fallback = 0) =>
         element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetDouble() : fallback;
 
-    /// <summary>Reads a synthesized child's literal string input, tolerating both the in-memory raw value and the round-tripped <see cref="JsonElement"/> form.</summary>
+    /// <summary>Reads a synthesized child's JSON literal string input.</summary>
     private static string? ReadLiteralString(ActivityNode node, string referenceKey) =>
         node.Inputs.FirstOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, referenceKey))?.Value.Value switch
         {
             null => null,
-            string text => text,
             JsonElement { ValueKind: JsonValueKind.String } json => json.GetString(),
             { } other => other.ToString()
         };
 
-    /// <summary>Reads a synthesized child's literal bool input, tolerating both the in-memory raw value and the round-tripped <see cref="JsonElement"/> form.</summary>
+    /// <summary>Reads a synthesized child's JSON literal bool input.</summary>
     private static bool? ReadLiteralBool(ActivityNode node, string referenceKey) =>
         node.Inputs.FirstOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, referenceKey))?.Value.Value switch
         {
             null => null,
-            bool value => value,
             JsonElement { ValueKind: JsonValueKind.True } => true,
             JsonElement { ValueKind: JsonValueKind.False } => false,
             JsonElement { ValueKind: JsonValueKind.String } json => bool.TryParse(json.GetString(), out var parsed) ? parsed : null,
-            string text => bool.TryParse(text, out var parsed) ? parsed : null,
             _ => null
         };
 

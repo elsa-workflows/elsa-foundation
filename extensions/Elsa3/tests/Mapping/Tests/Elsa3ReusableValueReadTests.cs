@@ -79,7 +79,7 @@ public sealed class Elsa3ReusableValueReadTests
     }
 
     private static ExpressionDefinition ReadExpression(Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition> result) =>
-        ToElement(Input(Node(result.Value!.State, "write"), "text").Value.Value).Deserialize<ExpressionDefinition>()!;
+        ToElement(Input(Node(result.Value!.State, "write"), "text").Value.Value).Deserialize<ExpressionDefinition>(Elsa.Serialization.Core.JsonBaseline.Options)!;
 
     private static JsonElement ToElement(object? value) =>
         value is JsonElement element ? element : JsonSerializer.SerializeToElement(value);

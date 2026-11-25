@@ -85,5 +85,5 @@ public sealed class BuiltInBackgroundAssessmentTests
     };
 
     private static WorkflowArgumentState Literal(string key, string value) =>
-        new(key, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
+        new(key, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
 }

@@ -10,4 +10,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

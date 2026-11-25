@@ -34,7 +34,7 @@ public static class StructuredLogsApi
         // their own reads and writes; the group supplies the shared metadata.
         var api = endpoints.MapEndpointGroup(
             StructuredLogsPermissions.OwnerId,
-            StructuredLogsJsonContext.Default,
+            StructuredLogsJsonContext.WireContext,
             jsonContentType: "application/json");
 
         api.MapUnboundOperation("GET", options.RecentPath, "Recent",

@@ -22,7 +22,7 @@ internal static class WorkflowActivityCatalog
     private const string Missing = "The activity authoring catalog is not installed: no IActivityAuthoringCatalog (Activities Design API) is registered.";
     private const string Ambiguous = "The activity authoring catalog is ambiguous: several IActivityAuthoringCatalog implementations are registered.";
     private const string Failed = "The activity authoring catalog could not be read.";
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     internal enum Status { Available, Denied, Unavailable }
 

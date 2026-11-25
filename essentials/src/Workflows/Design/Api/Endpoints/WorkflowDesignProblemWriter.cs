@@ -23,7 +23,7 @@ internal sealed class WorkflowDesignProblemWriter : IEndpointProblemWriter
     {
         context.Response.StatusCode = problem.StatusCode;
         var error = new WorkflowDesignError(problem.Errors, "One or more errors occurred!", problem.StatusCode, errorCode);
-        var typeInfo = WorkflowsDesignJsonContext.Default.GetTypeInfo(typeof(WorkflowDesignError))
+        var typeInfo = WorkflowsDesignJsonContext.WireContext.GetTypeInfo(typeof(WorkflowDesignError))
                        ?? throw new InvalidOperationException($"No source-generated JSON metadata exists for '{typeof(WorkflowDesignError).FullName}'.");
         return Results.Json(error, typeInfo, ProblemJsonContentType).ExecuteAsync(context);
     }

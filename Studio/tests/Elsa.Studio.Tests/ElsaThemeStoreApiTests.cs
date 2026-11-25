@@ -22,8 +22,31 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     private bool _started;
     private readonly StudioThemeStoreOptions _themeConfig = new();
     private string? _rawMode;
+    private bool _conflictingJson;
     private static readonly HashSet<string> BuiltInIds = new(StringComparer.OrdinalIgnoreCase) { "linen", "builtin:porcelain", "builtin:atelier", "builtin:graphite", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk", "space" };
     private HttpClient _client = null!;
+
+    [Fact]
+    public async Task Authored_theme_strings_and_nulls_use_the_owned_wire_profile_on_write_and_reopen()
+    {
+        _conflictingJson = true;
+        await RestartHostAsync();
+        var theme = CustomTheme() with { Name = "René <>&", Description = null };
+        using var saved = await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{theme.Id}", theme);
+        saved.EnsureSuccessStatusCode();
+        await AssertThemeAsync(saved);
+        using var read = await _client.GetAsync("/_elsa/theme-store");
+        read.EnsureSuccessStatusCode();
+        await AssertThemeAsync(read);
+
+        async Task AssertThemeAsync(HttpResponseMessage response)
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var item = json.RootElement.GetProperty("themes").EnumerateArray().Single(item => item.GetProperty("id").GetString() == theme.Id);
+            Assert.Equal("\"René <>&\"", item.GetProperty("name").GetRawText());
+            Assert.Equal(JsonValueKind.Null, item.GetProperty("description").ValueKind);
+        }
+    }
 
     [Theory]
     [InlineData("BuiltInsOnly", "custom-appearance")]
@@ -485,6 +508,13 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
             if (_rawMode is null) options.ThemesMode = _themeConfig.ThemesMode;
             options.DefaultThemeId = _themeConfig.DefaultThemeId;
         });
+        if (_conflictingJson)
+            builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+            {
+                options.SerializerOptions.WriteIndented = true;
+                options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+                options.SerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default;
+            });
         _app = builder.Build();
         _app.UseElsaStudio();
         _app.MapElsaStudio();

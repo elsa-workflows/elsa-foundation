@@ -6,9 +6,7 @@ using System.Text.Json.Serialization;
 namespace Elsa.Diagnostics.OpenTelemetry;
 
 [JsonSourceGenerationOptions(
-    JsonSerializerDefaults.Web,
     UseStringEnumConverter = true,
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(OpenTelemetryResourceFilter))]
 [JsonSerializable(typeof(OpenTelemetryTraceFilter))]
@@ -29,4 +27,14 @@ namespace Elsa.Diagnostics.OpenTelemetry;
 [JsonSerializable(typeof(OpenTelemetryDroppedItemSummary))]
 internal partial class OpenTelemetryJsonContext : JsonSerializerContext
 {
+    internal static OpenTelemetryJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.Converters.Add(new JsonStringEnumConverter());
+        return options;
+    }
+
 }

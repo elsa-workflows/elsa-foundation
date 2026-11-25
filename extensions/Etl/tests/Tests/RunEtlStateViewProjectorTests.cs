@@ -190,7 +190,7 @@ public sealed class RunEtlStateViewProjectorTests
         var type = EtlNativeBoundary.CompletionType;
         activity = activity with { PrivateState = null, Status = ActivityExecutionStatus.Cancelled, TriggerRegistrations = [],
             TriggerDeliveries = [new("delivery", invocation.ResultAddress.RegistrationId, type,
-                payloadRetired ? ValueEnvelope.Absent(type, ValueProtectionPolicy.InstanceInline) : ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(completion), ValueProtectionPolicy.InstanceInline),
+                payloadRetired ? ValueEnvelope.Absent(type, ValueProtectionPolicy.InstanceInline) : ValueEnvelope.Inline(type, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(completion), ValueProtectionPolicy.InstanceInline),
                 EtlNativeResultAddress.CompletionProviderId, EtlNativeTestFixture.Now, "stable-result", ActivityTriggerDeliveryStatus.Consumed)] };
         var node = Node(invocation.ResultAddress.NodeId, invocation.Artifact);
         return new(workflow, activity, node, [], false);

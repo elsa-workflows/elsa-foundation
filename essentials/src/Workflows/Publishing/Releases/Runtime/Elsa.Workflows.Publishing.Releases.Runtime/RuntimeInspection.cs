@@ -121,8 +121,8 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, RuntimeCaptured
         var template = TemplateByPin(activity.TemplateId, activity.TemplateHash, activity.Scope);
         if (template.ProviderFingerprint != activity.CompilerFingerprint) Invalid("activity_compiler_fingerprint_mismatch");
         Edge(new(ReleaseRuntimeCodecs.TemplateKind, template.TemplateId), ReleaseEdgeRelation.Association, "");
-        _sites.Add(new(member, [], "$catalog", null, new(ReleaseRuntimeSiteKinds.PublicContract, "elsa.activity-contract", 1), JsonSerializer.SerializeToElement(new { versionId = activity.VersionId })));
-        _sites.Add(new(member, [], "$catalog", null, new(ReleaseRuntimeSiteKinds.Provider, activity.ProviderKey, 1), JsonSerializer.SerializeToElement(new { versionId = activity.VersionId })));
+        _sites.Add(new(member, [], "$catalog", null, new(ReleaseRuntimeSiteKinds.PublicContract, "elsa.activity-contract", 1), JsonSerializer.SerializeToElement(new { versionId = activity.VersionId }, options: Elsa.Serialization.Core.JsonBaseline.Options)));
+        _sites.Add(new(member, [], "$catalog", null, new(ReleaseRuntimeSiteKinds.Provider, activity.ProviderKey, 1), JsonSerializer.SerializeToElement(new { versionId = activity.VersionId }, options: Elsa.Serialization.Core.JsonBaseline.Options)));
     }
 
     private ExecutableActivityTemplate TemplateByPin(string id, string hash, ReleaseRuntimeContentScope scope)
@@ -211,7 +211,7 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, RuntimeCaptured
         { Invalid("invalid_child_control_consumer"); return; }
         if (_sites.Count >= MaximumSites) throw ReleaseRuntimeArtifactCodec.Refuse("runtime_site_limit");
         _sites.Add(new(member, origin, node.ExecutableNodeId, null, new(ReleaseRuntimeSiteKinds.ChildControlConsumer, key, version),
-            JsonSerializer.SerializeToElement(new { nodeId = node.ExecutableNodeId })));
+            JsonSerializer.SerializeToElement(new { nodeId = node.ExecutableNodeId }, options: Elsa.Serialization.Core.JsonBaseline.Options)));
     }
 
     private bool Intrinsic(ExecutableNode node)
@@ -315,26 +315,26 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, RuntimeCaptured
     private void Type(string alias) => Require("value-type", alias, "opaque", "required");
     private void Require(string kind, string identity, string scheme, string constraint)
     {
-        var key = JsonSerializer.Serialize(new[] { member.Kind, member.Identity, kind, identity, scheme, constraint });
+        var key = JsonSerializer.Serialize(new[] { member.Kind, member.Identity, kind, identity, scheme, constraint }, options: Elsa.Serialization.Core.JsonBaseline.Options);
         _prerequisites.Add(new(key, member, kind, identity, scheme, constraint));
     }
     private void Resource(IReadOnlyList<string> origin, string reference, string kind)
     {
-        var key = JsonSerializer.Serialize(new object[] { origin, reference, kind });
+        var key = JsonSerializer.Serialize(new object[] { origin, reference, kind }, options: Elsa.Serialization.Core.JsonBaseline.Options);
         _resources.TryAdd(key, new(member, origin, reference, kind, "1"));
     }
     public void ModelSite(RuntimeModelMaterial model) => _sites.Add(new(member, [], "$model", null,
-        new(ReleaseRuntimeSiteKinds.ModelProtocol, model.Protocol.Key, model.Protocol.Version), JsonSerializer.SerializeToElement(new { protocolKey = model.Protocol.Key, protocolVersion = model.Protocol.Version })));
+        new(ReleaseRuntimeSiteKinds.ModelProtocol, model.Protocol.Key, model.Protocol.Version), JsonSerializer.SerializeToElement(new { protocolKey = model.Protocol.Key, protocolVersion = model.Protocol.Version }, options: Elsa.Serialization.Core.JsonBaseline.Options)));
     private void Site(ExecutableNode node, IReadOnlyList<string> origin, string? input, string kind, string discriminator)
     {
         if (_sites.Count >= MaximumSites) throw ReleaseRuntimeArtifactCodec.Refuse("runtime_site_limit");
-        _sites.Add(new(member, origin, node.ExecutableNodeId, input, new(kind, discriminator, 1), JsonSerializer.SerializeToElement(new { nodeId = node.ExecutableNodeId })));
+        _sites.Add(new(member, origin, node.ExecutableNodeId, input, new(kind, discriminator, 1), JsonSerializer.SerializeToElement(new { nodeId = node.ExecutableNodeId }, options: Elsa.Serialization.Core.JsonBaseline.Options)));
     }
     private static IReadOnlyList<string> NodeOrigin(ExecutableNode node)
     {
         if (!node.Metadata.TryGetValue("activity.invocationOrigin", out var text)) return [node.ExecutableNodeId];
         ReleaseRuntimeArtifactCodec.CheckJson(System.Text.Encoding.UTF8.GetBytes(text), new());
-        var segments = JsonSerializer.Deserialize<ActivityInvocationOriginSegment[]>(text) ?? throw ReleaseRuntimeArtifactCodec.Refuse("invalid_placement_origin");
+        var segments = JsonSerializer.Deserialize<ActivityInvocationOriginSegment[]>(text, options: RuntimePlacementReleaseInspector.OriginJson) ?? throw ReleaseRuntimeArtifactCodec.Refuse("invalid_placement_origin");
         var origin = new ActivityInvocationOrigin(segments);
         if (segments.Any(x => !Enum.IsDefined(x.Kind) || string.IsNullOrWhiteSpace(x.Id)) ||
             !node.Metadata.TryGetValue("activity.placementNamespace", out var stored) || stored != origin.ComputePlacementNamespace() ||
@@ -342,5 +342,5 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, RuntimeCaptured
             throw ReleaseRuntimeArtifactCodec.Refuse("invalid_placement_origin");
         return Origin(origin);
     }
-    private static IReadOnlyList<string> Origin(ActivityInvocationOrigin origin) => origin.Segments.Select(x => JsonSerializer.Serialize(new object[] { (byte)x.Kind, x.Id })).ToArray();
+    private static IReadOnlyList<string> Origin(ActivityInvocationOrigin origin) => origin.Segments.Select(x => JsonSerializer.Serialize(new object[] { (byte)x.Kind, x.Id }, options: Elsa.Serialization.Core.JsonBaseline.Options)).ToArray();
 }

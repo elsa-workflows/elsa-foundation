@@ -25,8 +25,9 @@ internal static class Elsa3ConversionDiagnostics
         string message,
         string guidance,
         string? property = null,
-        string? withinProperty = null) =>
-        Create(Elsa3MigrationDiagnosticSeverity.Warning, plan, node, code, message, guidance, property, withinProperty);
+        string? withinProperty = null,
+        IReadOnlyDictionary<string, string>? extra = null) =>
+        Create(Elsa3MigrationDiagnosticSeverity.Warning, plan, node, code, message, guidance, property, withinProperty, extra);
 
     public static Elsa3MigrationDiagnostic Info(
         Elsa3ConversionPlan plan,
@@ -62,9 +63,12 @@ internal static class Elsa3ConversionDiagnostics
         string message,
         string guidance,
         string? property,
-        string? withinProperty)
+        string? withinProperty,
+        IReadOnlyDictionary<string, string>? extra = null)
     {
         var metadata = Metadata(plan);
+        foreach (var (key, value) in extra ?? new Dictionary<string, string>())
+            metadata[key] = value;
         metadata["ActivityNodeId"] = NodeId(node.Node);
         metadata["Elsa3Type"] = node.Node.Type ?? string.Empty;
         if (property is not null)

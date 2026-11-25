@@ -232,11 +232,11 @@ public sealed partial class StimulusDeliveryStoreTests
             WorkflowRunKind.PublishedRun, recipient.SourceProvenance, null, null, recipient.TenantId, recipient.Partition,
             recipient.Authority, WorkflowExecutableStartAuthority.FromStandaloneTrigger(origin), 0);
         var command = new WorkflowExecutionCommand(recipient.StartIdentity.CommandId, recipient.StartIdentity.WorkflowExecutionId,
-            WorkflowExecutionCommandKind.Start, source.RecordedAt, JsonSerializer.SerializeToElement(payload), new Dictionary<string, string>());
+            WorkflowExecutionCommandKind.Start, source.RecordedAt, JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options), new Dictionary<string, string>());
         var envelope = new WorkflowExecutionCommandEnvelope(recipient.StartIdentity.EnvelopeId, recipient.StartIdentity.WorkflowExecutionId,
             command, recipient.StartIdentity.IdempotencyKey, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, source.RecordedAt, partition: recipient.Partition);
         return new(1, source.OutboxItemId, source.SourceFingerprint, source.SubscriptionDelivery.SelectionFingerprint, recipient.RecipientId,
-            recipient.StartIdentity, source.RecordedAt, NativeStandaloneTriggerRuntimeTarget.Protocol, 1, JsonSerializer.SerializeToElement(envelope));
+            recipient.StartIdentity, source.RecordedAt, NativeStandaloneTriggerRuntimeTarget.Protocol, 1, JsonSerializer.SerializeToElement(envelope, Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     private sealed record IngressFixture(IRuntimeIngressDeliveryStore Port, IStandaloneTriggerStore Resources,

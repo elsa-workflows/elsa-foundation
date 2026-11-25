@@ -1,0 +1,142 @@
+[
+  {
+    "name": "absent",
+    "presence": 0,
+    "json": null,
+    "canonical": "{\"presence\":0}",
+    "sha256": "507194781176a4dd678e5fb85a0b0b5a40dc1579307eb51b90bb31bf06c23c12"
+  },
+  {
+    "name": "explicit-null",
+    "presence": 1,
+    "json": null,
+    "canonical": "{\"presence\":1e0}",
+    "sha256": "3049f39a20b9b0fcd491d96bd7ee81e19b6c0a88ab011d53ab568fca8d5d69e1"
+  },
+  {
+    "name": "inline-null",
+    "presence": 2,
+    "json": "null",
+    "canonical": "{\"inline\":null,\"presence\":2e0}",
+    "sha256": "3ba881d307c236d25a1d3d5750d1230d73cb17aab65e28cc569c5fab5d878cda"
+  },
+  {
+    "name": "spelling-a",
+    "presence": 2,
+    "json": "{ \"text\":\"\\u0061\", \"n\":1.0 }",
+    "canonical": "{\"inline\":{\"n\":1e0,\"text\":\"a\"},\"presence\":2e0}",
+    "sha256": "1c0b74ca29ccc194fd53593aa39ed4664952a8043b67c3738ca629795cfd82ec"
+  },
+  {
+    "name": "spelling-b",
+    "presence": 2,
+    "json": "{\"n\":1e0,\"text\":\"a\"}",
+    "canonical": "{\"inline\":{\"n\":1e0,\"text\":\"a\"},\"presence\":2e0}",
+    "sha256": "1c0b74ca29ccc194fd53593aa39ed4664952a8043b67c3738ca629795cfd82ec"
+  },
+  {
+    "name": "empty",
+    "presence": 2,
+    "json": "{}",
+    "canonical": "{\"inline\":{},\"presence\":2e0}",
+    "sha256": "de678d04c160b25b5be6a415e4d0784cc4762bc3579b6ec03077d71d24023de6"
+  },
+  {
+    "name": "present-null",
+    "presence": 2,
+    "json": "{\"x\":null}",
+    "canonical": "{\"inline\":{\"x\":null},\"presence\":2e0}",
+    "sha256": "12134068eb719e1ef3b64edb209faba1df6193a908063cf63e6720681765345b"
+  },
+  {
+    "name": "array-forward",
+    "presence": 2,
+    "json": "[1,2]",
+    "canonical": "{\"inline\":[1e0,2e0],\"presence\":2e0}",
+    "sha256": "9f63b2da661375046032d974b4b6c02c33551a706e3843e92323a7951c6841a2"
+  },
+  {
+    "name": "array-reverse",
+    "presence": 2,
+    "json": "[2,1]",
+    "canonical": "{\"inline\":[2e0,1e0],\"presence\":2e0}",
+    "sha256": "fb98217e9715d8c014d49889057db996caf4fd337ddf59e83a8b418e04fe2c3a"
+  },
+  {
+    "name": "large-a",
+    "presence": 2,
+    "json": "9007199254740993",
+    "canonical": "{\"inline\":9007199254740993e0,\"presence\":2e0}",
+    "sha256": "b915ab6207f277838705b69f5a52b8b1d2455e24579b100be52d78592e942bc9"
+  },
+  {
+    "name": "large-b",
+    "presence": 2,
+    "json": "9007199254740992",
+    "canonical": "{\"inline\":9007199254740992e0,\"presence\":2e0}",
+    "sha256": "1d77f544e7e682eb7e37f2cc703f6be95411a6afcca8459690cf979fd845f6fe"
+  },
+  {
+    "name": "fraction",
+    "presence": 2,
+    "json": "0.10000000000000000000000000001",
+    "canonical": "{\"inline\":10000000000000000000000000001e-29,\"presence\":2e0}",
+    "sha256": "c38283a17049b0dbf015412dee25bca04964d9c3cee3063657d0ae9b4e2eaad7"
+  },
+  {
+    "name": "negative-zero",
+    "presence": 2,
+    "json": "-0.000e999999999999999999999",
+    "canonical": "{\"inline\":0,\"presence\":2e0}",
+    "sha256": "25c257b7d2ee82141a0744bc73a477fac538d58069a25fdd3ed805bcc2f2f2a1"
+  },
+  {
+    "name": "zero",
+    "presence": 2,
+    "json": "0",
+    "canonical": "{\"inline\":0,\"presence\":2e0}",
+    "sha256": "25c257b7d2ee82141a0744bc73a477fac538d58069a25fdd3ed805bcc2f2f2a1"
+  },
+  {
+    "name": "unbounded-exponent",
+    "presence": 2,
+    "json": "1.2300e999999999999999999999",
+    "canonical": "{\"inline\":123e999999999999999999997,\"presence\":2e0}",
+    "sha256": "cb39f18f076997282c9bbe09b40486aac8027ae655a8667d22c677bf899f17e3"
+  },
+  {
+    "name": "unicode",
+    "presence": 2,
+    "json": "{\"text\":\"René <雪>\",\"items\":[1,null]}",
+    "canonical": "{\"inline\":{\"items\":[1e0,null],\"text\":\"Ren\\u00E9 \\u003C\\u96EA\\u003E\"},\"presence\":2e0}",
+    "sha256": "5386e965ece02ce960d924dbc40399048e9457609fb95ac902a228974574637e"
+  },
+  {
+    "name": "external",
+    "presence": 2,
+    "json": null,
+    "canonical": "{\"external\":{\"locator\":\"object-1\",\"metadata\":{\"OwnerKey\":\"Ren\\u00E9\"},\"storageProfile\":\"blob\"},\"presence\":2e0}",
+    "sha256": "11819f34ed2e9a43ec841c8b44893b24a65bf4f397979821a472057eab9eda4c"
+  },
+  {
+    "name": "withheld-policy",
+    "presence": 3,
+    "json": null,
+    "canonical": "{\"presence\":3e0,\"withheld\":{\"kind\":\"PolicyRequiresEncryption\"}}",
+    "sha256": "e7cbcb3367f074950accd596b568eaffd029d4f70bccd4ecef9cd2e689ae335b"
+  },
+  {
+    "name": "withheld-secret-plan",
+    "presence": 3,
+    "json": null,
+    "canonical": "{\"presence\":3e0,\"withheld\":{\"conversionPlan\":{\"fingerprint\":\"sha256:396d0ad07cbbf5b8074a8be3c6163e4db086b2b9445730c7d71794be59b22736\",\"limits\":{\"maxCollectionItems\":1e4,\"maxDepth\":64e0,\"maxPayloadBytes\":1048576e0},\"mode\":\"Auto\",\"operation\":\"Identity\",\"options\":{},\"profile\":null,\"schemaVersion\":1e0,\"sourceRepresentation\":\"TextValue\",\"sourceType\":{\"alias\":\"String\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null},\"targetType\":{\"alias\":\"String\",\"collectionKind\":\"Single\",\"schema\":null,\"schemaVersion\":null}},\"kind\":\"SecretReference\",\"secret\":{\"name\":\"api-key\",\"scope\":\"tenant-a\",\"typeName\":\"String\"}}}",
+    "sha256": "d1ba68a7013509642f21e75cf4f7dffbc6a202366b41e35cb87f9775f33f2e9b"
+  },
+  {
+    "name": "withheld-secret-plan-absent-schema",
+    "presence": 3,
+    "json": null,
+    "canonical": "{\"presence\":3e0,\"withheld\":{\"conversionPlan\":{\"fingerprint\":\"sha256:396d0ad07cbbf5b8074a8be3c6163e4db086b2b9445730c7d71794be59b22736\",\"limits\":{\"maxCollectionItems\":1e4,\"maxDepth\":64e0,\"maxPayloadBytes\":1048576e0},\"mode\":\"Auto\",\"operation\":\"Identity\",\"options\":{},\"profile\":null,\"schemaVersion\":1e0,\"sourceRepresentation\":\"TextValue\",\"sourceType\":{\"alias\":\"String\",\"collectionKind\":\"Single\",\"schemaVersion\":null},\"targetType\":{\"alias\":\"String\",\"collectionKind\":\"Single\",\"schemaVersion\":null}},\"kind\":\"SecretReference\",\"secret\":{\"name\":\"api-key\",\"scope\":\"tenant-a\",\"typeName\":\"String\"}}}",
+    "sha256": "8db24023ae3e315f95949fc8be5d42315ed3feebb48475dd4e3ef386cd382ae5"
+  }
+]

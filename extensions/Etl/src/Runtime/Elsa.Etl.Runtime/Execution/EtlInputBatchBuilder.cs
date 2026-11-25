@@ -449,8 +449,7 @@ internal sealed class EtlInputBatchBuilder : IAsyncDisposable
 
     private static (long ByteLength, string ContentHash) HashCanonicalBatch(IReadOnlyList<CsvRecord> records, long maxBytes)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        using var stream = new EtlBoundedHashingStream(hash, maxBytes);
+        using var stream = new EtlBoundedHashingStream(maxBytes);
         using (var writer = NewJsonWriter(stream))
         {
             writer.WriteStartObject();
@@ -467,13 +466,13 @@ internal sealed class EtlInputBatchBuilder : IAsyncDisposable
             writer.WriteEndObject();
             writer.Flush();
         }
-        return (stream.ByteLength, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
+        return (stream.ByteLength, stream.ContentHash());
     }
 
     private static Utf8JsonWriter NewJsonWriter(Stream stream) => new(stream, new JsonWriterOptions
     {
         Indented = false,
-        Encoder = JavaScriptEncoder.Default
+        Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder
     });
 
     private static void WriteRecord(Utf8JsonWriter writer, CsvRecord record)

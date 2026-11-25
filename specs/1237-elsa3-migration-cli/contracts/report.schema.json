@@ -1,0 +1,473 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "elsa3-migration-workflows-report-v1",
+  "title": "Elsa 3 workflows migration report, schema version 1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "tool",
+    "command",
+    "exitCode",
+    "redacted",
+    "options",
+    "summary",
+    "components",
+    "definitions",
+    "notConverted",
+    "missingTargets",
+    "inputFindings",
+    "run",
+    "runFindings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "tool": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "const": "elsa3-migration-cli"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "command": {
+      "enum": [
+        "inventory",
+        "assess"
+      ]
+    },
+    "exitCode": {
+      "enum": [
+        0,
+        1
+      ]
+    },
+    "redacted": {
+      "const": true
+    },
+    "options": {
+      "type": "object",
+      "required": [
+        "allVersions"
+      ],
+      "properties": {
+        "allVersions": {
+          "type": "boolean"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "definitions",
+        "goesSmoothly",
+        "published",
+        "exported",
+        "blockedByDependency",
+        "notConverted",
+        "byCategory",
+        "byBucket"
+      ],
+      "properties": {
+        "definitions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "goesSmoothly": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "published": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exported": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blockedByDependency": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "notConverted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byCategory": {
+          "type": "object",
+          "required": [
+            "mustFix",
+            "reconsider",
+            "takeIntoAccount"
+          ],
+          "properties": {
+            "mustFix": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reconsider": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "takeIntoAccount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "byBucket": {
+          "type": "object",
+          "required": [
+            "convertAsIs",
+            "convertWithAdjustments",
+            "incompatible"
+          ],
+          "properties": {
+            "convertAsIs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "convertWithAdjustments": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "incompatible": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/component"
+      }
+    },
+    "definitions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/definition"
+      }
+    },
+    "notConverted": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "definitionId",
+          "version",
+          "sourceVersionId"
+        ],
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "sourceVersionId": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "missingTargets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "definitionId",
+          "referencedBy"
+        ],
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "referencedBy": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "inputFindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "file",
+          "finding"
+        ],
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "finding": {
+            "$ref": "#/$defs/finding"
+          }
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": [
+        "features",
+        "settingKeys",
+        "persistenceOverridden"
+      ],
+      "properties": {
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "settingKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "persistenceOverridden": {
+          "type": "boolean"
+        }
+      }
+    },
+    "runFindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": [
+        "code",
+        "severity",
+        "category",
+        "stage",
+        "path",
+        "message",
+        "guidance"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "category": {
+          "enum": [
+            "mustFix",
+            "reconsider",
+            "takeIntoAccount"
+          ]
+        },
+        "remedy": {
+          "enum": [
+            "patch-definition",
+            "build-component",
+            "none"
+          ]
+        },
+        "componentKind": {
+          "enum": [
+            "activity",
+            "javascript-function",
+            "variable-type",
+            "storage-driver"
+          ]
+        },
+        "componentName": {
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "input",
+            "conversion",
+            "import",
+            "publish"
+          ]
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "guidance": {
+          "type": "string"
+        },
+        "publishStoppedHere": {
+          "type": "boolean"
+        },
+        "routine": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "mustFix"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "remedy"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "remedy"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "componentKind"
+            ]
+          },
+          "then": {
+            "required": [
+              "componentName"
+            ]
+          }
+        }
+      ]
+    },
+    "definition": {
+      "type": "object",
+      "required": [
+        "definitionId",
+        "name",
+        "version",
+        "sourceVersionId",
+        "isReusable",
+        "bucket",
+        "blockedBy",
+        "published",
+        "exportedTo",
+        "wrapperExportedTo",
+        "findings"
+      ],
+      "properties": {
+        "definitionId": {
+          "type": "string"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": "integer"
+        },
+        "sourceVersionId": {
+          "type": "string"
+        },
+        "isReusable": {
+          "type": "boolean"
+        },
+        "bucket": {
+          "enum": [
+            "convert-as-is",
+            "convert-with-adjustments",
+            "incompatible"
+          ]
+        },
+        "blockedBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "published": {
+          "type": "boolean"
+        },
+        "exportedTo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        },
+        "wrapperExportedTo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "component": {
+      "type": "object",
+      "required": [
+        "kind",
+        "name",
+        "definitions",
+        "usages"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "activity",
+            "javascript-function",
+            "variable-type",
+            "storage-driver"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "definitions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "usages": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  },
+  "description": "Consumers ignore unknown properties; adding one does not change schemaVersion. The implementation's tests also check the exact shape."
+}

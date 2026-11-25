@@ -63,12 +63,12 @@ internal sealed class NativeIngressTargetEvidence(IWorkflowSchedulerWorkQueue qu
         // Probe only our explicit marker. Ordinary command payloads retain their original decoder.
         if (envelope.Command.Kind != WorkflowExecutionCommandKind.Start || envelope.Command.Payload is not { } payload ||
             payload.ValueKind != JsonValueKind.Object ||
-            !payload.TryGetProperty(nameof(WorkflowExecutionStartCommandPayload.StartAuthority), out var authority) ||
+            !payload.TryGetProperty("startAuthority", out var authority) ||
             authority.ValueKind != JsonValueKind.Object ||
-            !authority.TryGetProperty(nameof(WorkflowExecutableStartAuthority.StandaloneTrigger), out var marker) ||
+            !authority.TryGetProperty("standaloneTrigger", out var marker) ||
             marker.ValueKind == JsonValueKind.Null)
             return null;
-        return payload.Deserialize<WorkflowExecutionStartCommandPayload>()?.StartAuthority?.StandaloneTrigger;
+        return payload.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)?.StartAuthority?.StandaloneTrigger;
     }
 
     internal static void ValidateSelection(RuntimePostCommitOutboxItem source, RuntimeSubscriptionRecipient recipient)
@@ -87,17 +87,17 @@ internal sealed class NativeIngressTargetEvidence(IWorkflowSchedulerWorkQueue qu
     internal static WorkflowExecutionCommandEnvelope ReadEnvelope(RuntimeDispatchSeal seal)
     {
         if (seal.CommandProtocol != NativeStandaloneTriggerRuntimeTarget.Protocol || seal.CommandProtocolVersion != 1) throw Unsupported();
-        try { return seal.Command.Deserialize<WorkflowExecutionCommandEnvelope>() ?? throw Invalid(); }
+        try { return seal.Command.Deserialize<WorkflowExecutionCommandEnvelope>(options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw Invalid(); }
         catch (JsonException exception) { throw new TriggerOperationException("conflict", "The sealed native command is invalid.", innerException: exception); }
     }
     internal static void ValidateEnvelope(RuntimeCommittedRecipient committed, WorkflowExecutionCommandEnvelope envelope)
     {
         var recipient = committed.Recipient; var seal = committed.Seal; var id = recipient.StartIdentity;
-        if (!Equal(JsonSerializer.SerializeToElement(envelope), seal.Command) || envelope.Command.Kind != WorkflowExecutionCommandKind.Start ||
+        if (!Equal(JsonSerializer.SerializeToElement(envelope, options: Elsa.Serialization.Core.JsonBaseline.Options), seal.Command) || envelope.Command.Kind != WorkflowExecutionCommandKind.Start ||
             envelope.WorkflowExecutionId != id.WorkflowExecutionId || envelope.Command.CommandId != id.CommandId || envelope.EnvelopeId != id.EnvelopeId ||
             envelope.IdempotencyKey != id.IdempotencyKey || envelope.EnqueuedAt != seal.CommittedAt || envelope.Command.EnqueuedAt != seal.CommittedAt ||
             envelope.Partition != recipient.Partition || envelope.Command.Payload is not { } json) throw Invalid();
-        var payload = json.Deserialize<WorkflowExecutionStartCommandPayload>() ?? throw Invalid();
+        var payload = json.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw Invalid();
         if (payload.StartAuthority?.Kind != WorkflowExecutableStartAuthorityKind.StandaloneTrigger ||
             !Origin(committed.Item, recipient).IsEquivalentTo(payload.StartAuthority.StandaloneTrigger) ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(payload.PinnedExecutable, recipient.Material) ||
@@ -118,7 +118,7 @@ internal sealed class NativeIngressTargetEvidence(IWorkflowSchedulerWorkQueue qu
     }
     internal static void ValidateExecutable(RuntimeCommittedRecipient committed, WorkflowExecutable executable)
     {
-        var payload = ReadEnvelope(committed.Seal).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = ReadEnvelope(committed.Seal).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         var defaults = WorkflowExecutionStartCommandPayload.ToJsonValues(new RuntimeVariableDeclarationProjector()
             .ProjectDeclaredVariableDefaultsByName(executable.WorkflowVariables));
         if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(executable.Identity, committed.Recipient.Material) ||
@@ -131,8 +131,8 @@ internal sealed class NativeIngressTargetEvidence(IWorkflowSchedulerWorkQueue qu
     internal static async ValueTask ValidateCheckpointAsync(RuntimeCommittedRecipient committed, RuntimeSchedulerWorkItem item,
         IWorkflowExecutableStore? executableStore, CancellationToken cancellationToken)
     {
-        var envelope = ReadEnvelope(committed.Seal); var payload = item.Payload?.Deserialize<RuntimeCheckpointCommandPayload>() ?? throw Invalid();
-        var start = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var envelope = ReadEnvelope(committed.Seal); var payload = item.Payload?.Deserialize<RuntimeCheckpointCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw Invalid();
+        var start = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         if (item.CommandKind != WorkflowExecutionCommandKind.Checkpoint || item.WorkflowExecutionId != envelope.WorkflowExecutionId ||
             item.EnvelopeId != envelope.EnvelopeId || item.CommandId != RuntimeChainId.Derive(envelope.Command.CommandId, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}") ||
             item.IdempotencyKey != RuntimeChainId.Derive(envelope.IdempotencyKey, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}") ||
@@ -154,7 +154,7 @@ internal sealed class NativeIngressTargetEvidence(IWorkflowSchedulerWorkQueue qu
     internal static void ValidateState(RuntimeCommittedRecipient committed, WorkflowExecutionState state)
     {
         var recipient = committed.Recipient;
-        var start = ReadEnvelope(committed.Seal).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var start = ReadEnvelope(committed.Seal).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         if (state.WorkflowExecutionId != recipient.StartIdentity.WorkflowExecutionId ||
             state.HistoryCaptureEnabledAtAdmission != start.HistoryCaptureEnabledAtAdmission ||
             !(start.HistoryCapturePolicy?.IsEquivalentTo(state.HistoryCapturePolicy) ?? state.HistoryCapturePolicy is null) ||
@@ -164,7 +164,7 @@ internal sealed class NativeIngressTargetEvidence(IWorkflowSchedulerWorkQueue qu
             state.TenantId != recipient.TenantId || state.Partition != recipient.Partition || state.ParentWorkflowExecutionId is not null ||
             state.RunKind != WorkflowRunKind.PublishedRun || state.TestScope is not null) throw Invalid();
     }
-    internal static bool Equal<T>(T left, T right) => JsonElement.DeepEquals(JsonSerializer.SerializeToElement(left), JsonSerializer.SerializeToElement(right));
+    internal static bool Equal<T>(T left, T right) => Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(left, options: Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(right, options: Elsa.Serialization.Core.JsonBaseline.Options));
     private static TriggerOperationException Invalid() => new("conflict", "Native ingress responsibility differs from its exact committed origin.");
     private static TriggerOperationException Unsupported() => new("unavailable", "The selected native target evidence boundary is unsupported.");
 }

@@ -416,5 +416,5 @@ internal sealed partial class EfEtlRuntimeStore
     }
 
     private static long MetadataBytes(string json) => Encoding.UTF8.GetByteCount(json);
-    private static string MetadataDigest(string json) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+    private static string MetadataDigest(string json) => Elsa.Serialization.Core.JsonHashInput.HashJson(json);
 }

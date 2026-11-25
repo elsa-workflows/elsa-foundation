@@ -75,7 +75,7 @@ public sealed partial class EfActivityDesignStores(
     private readonly IPersistenceAccessContextAccessor? access = accessContextAccessor;
     private readonly IDesignAtomicWriter? atomic = atomicWriter;
     private readonly EfActivityManagementProjectionWriter? projections = projectionWriter;
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly DefaultActivityDefinitionHasher SharedActivityDefinitionHasher = new();
     private const int MaximumPageSize = 500;
     private const int IntegrityValidationBatchSize = 256;
@@ -325,7 +325,7 @@ public sealed partial class EfActivityDesignStores(
         // validate full material in bounded, stable-order batches before applying page bounds.
         // This prevents a valid-looking provider marker with a stale digest from shifting totals
         // or page offsets without an unbounded materialization or parameter list.
-        rows = rows.Where(x => x.ContentAuthorityIsValid && x.ContentAuthorityJson != null && x.ContentAuthorityJson == x.ContentAuthorityCanonicalJson);
+        rows = WithValidAuthorityWitness(rows);
         var items = new List<ActivityDefinitionManagementProjectionRevision>(query.Limit);
         var total = 0L;
         string? lastSortKey = null;
@@ -382,8 +382,7 @@ public sealed partial class EfActivityDesignStores(
         var sequence = snapshotSequence ?? (await GetCurrentSnapshotAsync(cancellationToken)).Sequence;
         var rows = Access(db.ActivityDefinitionManagementProjections.AsNoTracking())
             .Where(x => x.ValidFromSequence <= sequence && x.ValidToSequenceExclusive > sequence);
-        rows = ByReference(rows, nameof(ActivityDefinitionManagementProjectionRevision.ResourceId), definitionId)
-            .Where(x => x.ContentAuthorityIsValid && x.ContentAuthorityJson != null && x.ContentAuthorityJson == x.ContentAuthorityCanonicalJson);
+        rows = WithValidAuthorityWitness(ByReference(rows, nameof(ActivityDefinitionManagementProjectionRevision.ResourceId), definitionId));
         rows = ApplyVisibility(rows, tenantId);
         var row = await rows.FirstOrDefaultAsync(cancellationToken);
         return row is not null && HasValidContentAuthority(row) ? row : null;
@@ -701,12 +700,18 @@ public sealed partial class EfActivityDesignStores(
         var stored = await ById(Access(db.ActivityDefinitionVersions.AsNoTracking()), version.Id).SingleAsync(cancellationToken);
         // Restrict this exception to the palette facet. Even a direct caller cannot replace structure,
         // outcome, icon or other descriptor content through this presentation refresh.
-        static string OtherFacets(string? source) => JsonSerializer.Serialize(
+        static JsonElement OtherFacets(string? source) => JsonSerializer.SerializeToElement(
             (JsonSerializer.Deserialize<ActivityDesignFacet[]>(source ?? "[]", Json) ?? [])
-            .Where(facet => facet.Kind != "elsa.activity-palette"));
-        if (stored.Hash != version.Hash || OtherFacets(stored.DesignFacetsSource) != OtherFacets(incomingFacetsSource))
+            .Where(facet => facet.Kind != "elsa.activity-palette"), Json);
+        static bool SameFacets(string? left, string? right)
+        {
+            using var a = JsonDocument.Parse(left ?? "[]");
+            using var b = JsonDocument.Parse(right ?? "[]");
+            return Elsa.Serialization.Core.JsonCanonicalForm.Equals(a.RootElement, b.RootElement);
+        }
+        if (stored.Hash != version.Hash || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(OtherFacets(stored.DesignFacetsSource), OtherFacets(incomingFacetsSource)))
             throw new InvalidOperationException("A palette refresh cannot change executable identity or other design facets.");
-        if (stored.DesignFacetsSource == incomingFacetsSource)
+        if (SameFacets(stored.DesignFacetsSource, incomingFacetsSource))
         {
             version.LastModifiedAt = stored.LastModifiedAt;
             return;
@@ -725,7 +730,7 @@ public sealed partial class EfActivityDesignStores(
             return;
         }
         stored = await ById(Access(db.ActivityDefinitionVersions.AsNoTracking()), version.Id).SingleAsync(cancellationToken);
-        if (stored.Hash == version.Hash && stored.DesignFacetsSource == incomingFacetsSource)
+        if (stored.Hash == version.Hash && SameFacets(stored.DesignFacetsSource, incomingFacetsSource))
         {
             version.LastModifiedAt = stored.LastModifiedAt;
             return;
@@ -1633,7 +1638,7 @@ public sealed partial class EfActivityDesignStores(
 
     private static IQueryable<T> ApplyVisibility<T>(IQueryable<T> rows, string? tenantId)
         where T : ActivityManagementProjectionRevision => tenantId is null ? rows.Where(x => x.TenantId == null) : rows.Where(x => x.TenantId == null || x.TenantId == tenantId);
-    private static string Fingerprint(ActivityDependencyProjectionState projection) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { projection.RebuildId, projection.Sequence, projection.AsOf, projection.Items }, Json))));
+    private static string Fingerprint(ActivityDependencyProjectionState projection) => Elsa.Serialization.Core.JsonHashInput.Hash(new { projection.RebuildId, projection.Sequence, projection.AsOf, projection.Items }).ToUpperInvariant();
 
     private static bool IsIncluded(string kind, bool drafts, bool versions) =>
         kind.EndsWith("Draft", StringComparison.Ordinal) ? drafts : versions;
@@ -1643,8 +1648,20 @@ public sealed partial class EfActivityDesignStores(
             ? !string.IsNullOrWhiteSpace(owner.DraftId)
             : !string.IsNullOrWhiteSpace(owner.VersionId);
 
+    private IQueryable<ActivityDefinitionManagementProjectionRevision> WithValidAuthorityWitness(IQueryable<ActivityDefinitionManagementProjectionRevision> rows)
+    {
+        // This is a physical same-write witness, not logical JSON equality. The database's
+        // default collation must not admit a case-only edit before paging or bounded hydration.
+        var collation = EfOrdinalCollation.ForProvider(db.Database.ProviderName!);
+        return collation is null
+            ? rows.Where(x => x.ContentAuthorityIsValid && x.ContentAuthorityJson != null && x.ContentAuthorityJson == x.ContentAuthorityCanonicalJson)
+            : rows.Where(x => x.ContentAuthorityIsValid && x.ContentAuthorityJson != null &&
+                EF.Functions.Collate(x.ContentAuthorityJson, collation) == EF.Functions.Collate(x.ContentAuthorityCanonicalJson, collation));
+    }
+
     private static bool HasValidContentAuthority(ActivityDefinitionManagementProjectionRevision row)
     {
+        if (!StringComparer.Ordinal.Equals(row.ContentAuthorityJson, row.ContentAuthorityCanonicalJson)) return false;
         var authority = row.ContentAuthority;
         if (authority is null || authority.Kind != row.ContentAuthorityKind || !Enum.IsDefined(authority.Kind) || string.IsNullOrWhiteSpace(authority.AuthorityKey))
             return false;

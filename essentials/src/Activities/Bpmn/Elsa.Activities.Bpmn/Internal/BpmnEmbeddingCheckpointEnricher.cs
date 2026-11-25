@@ -31,7 +31,7 @@ internal sealed class BpmnEmbeddingCheckpointEnricher(IActivityExecutionStateSto
                 var previous = activity.PrivateState!;
                 var frozen = new RunBpmnState(1, BpmnEmbeddingJson.Write(invocation));
                 activity = activity with { PrivateState = new(previous.InvocationId, previous.StateVersion,
-                    ValueEnvelope.Inline(previous.Value.Type, JsonSerializer.SerializeToElement(frozen), previous.Value.Policy),
+                    ValueEnvelope.Inline(previous.Value.Type, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(frozen), previous.Value.Policy),
                     previous.ProducedByAttemptId, previous.CommittedAt) };
                 changes[change.StateId] = change with { State = activity };
                 Add(Intent(invocation, false, previous.CommittedAt));

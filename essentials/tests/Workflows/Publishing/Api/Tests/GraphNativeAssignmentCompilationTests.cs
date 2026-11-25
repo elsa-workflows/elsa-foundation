@@ -37,7 +37,7 @@ public sealed class GraphNativeAssignmentCompilationTests
             : new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "amount" }), "Input");
         var assignment = new ActivityNode("assign", "elsa.intrinsic.set@1", [new("value", value, null, null, null, null)], [])
         { Intrinsic = new(AuthoredWorkflowIntrinsicKind.Set, new("Elsa.Any"), new("text", ownerId)) };
-        VariableDefinition[] declarations = [new("number", "Number", new("Double"), null, new(1.5, "Literal")), new("text", "Text", new("String"), null, new("", "Literal"))];
+        VariableDefinition[] declarations = [new("number", "Number", new("Double"), null, global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr(1.5, "Literal")), new("text", "Text", new("String"), null, global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr("", "Literal"))];
         var root = new ActivityNode(ownerId, "sequence-version", [], [], new("owned", "1", JsonSerializer.SerializeToElement(new { activities = new[] { assignment }, variables = declarations }, Options)));
         var contract = new DesignContract("1", source == "request" ? [new("amount", "Amount", new("Double"), true, false, null, "elsa.json")] : [], [], [new("done", "Done", true)]);
         var dependency = new ActivityResolvedDependency("sequence-definition", "sequence-version", "1.0.0", "sequence-template", "sequence-hash",
@@ -66,7 +66,7 @@ public sealed class GraphNativeAssignmentCompilationTests
     [InlineData(null, true)]
     public async Task Graph_local_set_keeps_the_native_intrinsic_input_policy(string? storageProfile, bool? isSensitive)
     {
-        var value = new ArgumentValue("one", "Literal");
+        var value = global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr("one", "Literal");
         var result = await CompileLocalSetAsync([new("value", value, null, null, storageProfile, isSensitive)]);
 
         Assert.Empty(result.Diagnostics);
@@ -90,7 +90,7 @@ public sealed class GraphNativeAssignmentCompilationTests
     [InlineData("secret", "workflow intrinsics write their values into persisted workflow state")]
     public async Task Graph_local_set_refuses_intrinsic_inputs_that_native_Set_refuses(string shape, string message)
     {
-        var literal = new ArgumentValue("one", "Literal");
+        var literal = global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr("one", "Literal");
         ArgumentState[] inputs = shape switch
         {
             "missing" => [],
@@ -118,7 +118,7 @@ public sealed class GraphNativeAssignmentCompilationTests
             services.GetRequiredService<IServiceScopeFactory>());
         var assignment = new ActivityNode("assign", "elsa.intrinsic.set@1", inputs, [])
         { Intrinsic = new(AuthoredWorkflowIntrinsicKind.Set, new("Elsa.Any"), new("text", "body")) };
-        VariableDefinition[] declarations = [new("text", "Text", new("String"), null, new("", "Literal"))];
+        VariableDefinition[] declarations = [new("text", "Text", new("String"), null, global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr("", "Literal"))];
         var root = new ActivityNode("body", "sequence-version", [], [], new("owned", "1", JsonSerializer.SerializeToElement(new { activities = new[] { assignment }, variables = declarations }, Options)));
         var contract = new DesignContract("1", [], [], [new("done", "Done", true)]);
         var dependency = new ActivityResolvedDependency("sequence-definition", "sequence-version", "1.0.0", "sequence-template", "sequence-hash",

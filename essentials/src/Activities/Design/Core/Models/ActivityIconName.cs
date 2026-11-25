@@ -51,7 +51,7 @@ public static partial class ActivityIconName
 
         var payload = JsonSerializer.SerializeToElement(
             new Dictionary<string, string>(StringComparer.Ordinal) { [PayloadProperty] = normalized },
-            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options));
         return new ActivityDesignFacet(FacetKind, FacetSchemaVersion, payload);
     }
 

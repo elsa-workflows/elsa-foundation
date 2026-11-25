@@ -11,7 +11,7 @@ namespace Elsa.Activities.Switch.Internal;
 /// </summary>
 internal static class SwitchAuthoredStructureReader
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         // Authored ArgumentState.Conversion enums (AuthoredValueConversionMode) arrive as camelCase
         // strings from the global web JSON options; nested structure payload reads must match.

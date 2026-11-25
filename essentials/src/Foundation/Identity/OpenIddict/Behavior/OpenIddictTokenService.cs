@@ -46,6 +46,17 @@ public sealed class OpenIddictTokenService(
     IAuthenticationSessionStore? sessions = null,
     ICanonicalUserSignInService? canonical = null) : ITokenService
 {
+    // This protected owner metadata retains its established CLR member names. Carried JSON
+    // still uses the shared baseline; no tolerant reader or workflow conversion policy is added.
+    private static readonly JsonSerializerOptions RetainedJson = CreateRetainedJson();
+    private static JsonSerializerOptions CreateRetainedJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.PropertyNamingPolicy = null;
+        options.MakeReadOnly();
+        return options;
+    }
+
     public async ValueTask<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken = default)
     {
         var subject = SubjectOf(request);
@@ -82,7 +93,7 @@ public sealed class OpenIddictTokenService(
         RefreshTokenPayload payload;
         try
         {
-            payload = JsonSerializer.Deserialize<RefreshTokenPayload>(payloadJson) ?? throw InvalidRefreshToken();
+            payload = JsonSerializer.Deserialize<RefreshTokenPayload>(payloadJson, options: RetainedJson) ?? throw InvalidRefreshToken();
         }
         catch (JsonException)
         {
@@ -262,7 +273,7 @@ public sealed class OpenIddictTokenService(
     {
         var referenceId = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
         var payload = JsonSerializer.Serialize(new RefreshTokenPayload(
-            request.TenantId, request.Scopes.ToArray(), request.CanonicalUserId, request.SubjectId, request.Provider, request.SubjectIssuer, request.SessionId));
+            request.TenantId, request.Scopes.ToArray(), request.CanonicalUserId, request.SubjectId, request.Provider, request.SubjectIssuer, request.SessionId), options: RetainedJson);
         var expiresAt = now.Add(options.Value.RefreshTokenLifetime);
         if (sessionExpiresAt is { } absolute && absolute < expiresAt) expiresAt = absolute;
 

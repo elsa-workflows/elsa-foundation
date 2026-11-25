@@ -5,7 +5,7 @@
     <SnapshotReaderProject>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../../../../../tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj'))</SnapshotReaderProject>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-10/corrections/delayed-retry-original/queued-result.sqlite.gz"
+    <None Include="../../../../../../specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/delayed-compensation.sqlite.gz"
           Link="Fixtures/delayed-compensation/queued-result.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-9/correctness/prior-cancellation/deliver-worker-result.sqlite.gz"
           Link="Fixtures/prior-scope-cancel/queued-result.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />

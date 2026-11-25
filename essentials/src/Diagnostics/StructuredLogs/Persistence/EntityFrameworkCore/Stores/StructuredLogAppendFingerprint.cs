@@ -24,10 +24,11 @@ public static class StructuredLogAppendFingerprint
         foreach (var item in items)
         {
             Append(builder, item.RecordToken);
-            Append(builder, item.PayloadJson);
+            using var payload = JsonDocument.Parse(item.PayloadJson);
+            Append(builder, Encoding.UTF8.GetString(Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(payload.RootElement)));
         }
 
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString())));
+        return Elsa.Serialization.Core.JsonHashInput.HashFramed(Encoding.UTF8.GetBytes(builder.ToString())).ToUpperInvariant();
     }
 
     private static void Append(StringBuilder builder, string value)

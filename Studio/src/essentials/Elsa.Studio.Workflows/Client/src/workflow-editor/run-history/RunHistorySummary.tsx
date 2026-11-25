@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { useStudioTimeZone, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { ActivityExecutionStateSummary, WorkflowInstanceSummary } from "../../workflowTypes";
 import { listWorkflowHistoryBookmarks } from "../../api/runtimeHistory";
@@ -11,6 +11,7 @@ export function RunHistorySummary({ context, instance, name, activities, activit
   context: StudioEndpointContext; instance: WorkflowInstanceSummary; name: string;
   activities: ActivityExecutionStateSummary[]; activitiesLimited: boolean; onBookmark(id: string): void; labelForActivity?(activity: ActivityExecutionStateSummary): string; enabled: boolean;
 }) {
+  useStudioTimeZone();
   const bookmarks = useHistoryResource(context, JSON.stringify([instance.workflowExecutionId, "waiting-summary"]),
     signal => listWorkflowHistoryBookmarks(context, instance.workflowExecutionId, { status: "Active", limit: 100 }, signal), true, enabled);
   const [expanded, setExpanded] = useState<{ run: string; value: boolean } | null>(null);

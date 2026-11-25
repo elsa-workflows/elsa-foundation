@@ -63,14 +63,16 @@ internal sealed class DashboardAudienceDirectory(DashboardAudienceCursors cursor
 
 internal sealed class DashboardAudienceCursors
 {
-    private readonly byte[] key = RandomNumberGenerator.GetBytes(32);
+    private readonly byte[] key;
+    public DashboardAudienceCursors() : this(RandomNumberGenerator.GetBytes(32)) { }
+    internal DashboardAudienceCursors(byte[] signingKey) => key = signingKey.ToArray();
     public static string Scope(DashboardActor actor, string kind, string? search) =>
-        Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new[] { actor.TenantId, actor.UserId, kind, search ?? "" })));
+        Elsa.Serialization.Core.JsonHashInput.Hash(new[] { actor.TenantId, actor.UserId, kind, search ?? "" });
 
     public string Write(string scope, int skip)
     {
-        var payload = JsonSerializer.SerializeToUtf8Bytes(new Cursor(scope, skip));
-        return Convert.ToBase64String(payload) + "." + Convert.ToBase64String(HMACSHA256.HashData(key, payload));
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new Cursor(scope, skip), options: Elsa.Serialization.Core.JsonBaseline.Options);
+        return Convert.ToBase64String(payload) + "." + Convert.ToBase64String(Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(payload, key));
     }
 
     public int Read(string token, string scope)
@@ -82,12 +84,12 @@ internal sealed class DashboardAudienceCursors
             if (parts.Length != 2) throw Invalid();
             var payload = Convert.FromBase64String(parts[0]);
             var signature = Convert.FromBase64String(parts[1]);
-            if (!CryptographicOperations.FixedTimeEquals(HMACSHA256.HashData(key, payload), signature)) throw Invalid();
-            var cursor = JsonSerializer.Deserialize<Cursor>(payload);
+            if (!CryptographicOperations.FixedTimeEquals(Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(payload, key), signature)) throw Invalid();
+            var cursor = JsonSerializer.Deserialize<Cursor>(payload, options: Elsa.Serialization.Core.JsonBaseline.Options);
             if (cursor is null || cursor.Scope != scope || cursor.Skip < 0) throw Invalid();
             return cursor.Skip;
         }
-        catch (Exception error) when (error is FormatException or JsonException) { throw Invalid(); }
+        catch (Exception error) when (error is FormatException or JsonException or InvalidOperationException) { throw Invalid(); }
     }
 
     private static DashboardResourceException Invalid() => new("validation", "The audience continuation is invalid or expired. Restart the search.");

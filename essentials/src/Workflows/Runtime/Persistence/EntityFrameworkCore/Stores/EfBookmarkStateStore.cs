@@ -405,15 +405,15 @@ public sealed class EfBookmarkStateStore(
             var state = JsonSerializer.Deserialize<BookmarkState>(content, Json)
                         ?? throw new JsonException("Bookmark content was null.");
             var projectedPayload = DeserializePayload(payloadJson);
-            var contentPayloadMatchesProjection = SerializePayload(state.Payload) == payloadJson ||
+            var contentPayloadMatchesProjection = Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(SerializePayload(state.Payload), payloadJson) ||
                                                   state.Payload is null && projectedPayload is { ValueKind: JsonValueKind.Null };
             var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(metadataJson, Json)
                            ?? throw new JsonException("Bookmark metadata was null.");
             if (state.BookmarkId != row.BookmarkId || state.WorkflowExecutionId != row.WorkflowExecutionId ||
                 state.ActivityExecutionId != row.ActivityExecutionId || state.ExecutableNodeId != row.ExecutableNodeId ||
                 state.ResumeTargetId != row.ResumeTargetId || state.StimulusType != row.StimulusType || state.StimulusHash != row.StimulusHash ||
-                !contentPayloadMatchesProjection || SerializePayload(projectedPayload) != payloadJson ||
-                JsonSerializer.Serialize(state.Metadata, Json) != metadataJson ||
+                !contentPayloadMatchesProjection || !Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(SerializePayload(projectedPayload), payloadJson) ||
+                !Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(JsonSerializer.Serialize(state.Metadata, Json), metadataJson) ||
                 state.CreatedAt.UtcTicks != row.CreatedAtUtcTicks || state.CreatedAt.Offset.TotalMinutes != row.CreatedAtOffsetMinutes ||
                 state.ExpiresAt?.UtcTicks != row.ExpiresAtUtcTicks ||
                 state.ExpiresAt?.Offset.TotalMinutes != row.ExpiresAtOffsetMinutes)
@@ -517,7 +517,7 @@ public sealed class EfBookmarkStateStore(
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
     }

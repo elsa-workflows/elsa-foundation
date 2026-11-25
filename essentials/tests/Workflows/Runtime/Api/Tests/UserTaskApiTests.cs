@@ -26,6 +26,31 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 public sealed class UserTaskApiTests
 {
     [Fact]
+    public async Task Task_read_and_list_keep_raw_data_inside_the_public_view_without_exposing_the_authoritative_recipient()
+    {
+        const string raw = """{ "OrderID":9007199254740993, "amount":1.00, "nil":null, "text":"\u0061 <+>" }""";
+        using var document = JsonDocument.Parse(raw);
+        await using var host = await Host.Start();
+        host.SignIn("alice");
+        await host.Rewrite(task => task with
+        {
+            Prefill = document.RootElement.Clone(),
+            Decision = new("request", "alice", new("task", "completion", "Approve", document.RootElement.Clone()), DateTimeOffset.UnixEpoch)
+        });
+        var task = await host.Client.GetFromJsonAsync<JsonElement>("/runtime/user-tasks/task");
+        var page = await host.Client.GetFromJsonAsync<JsonElement>("/runtime/user-tasks?view=queue&limit=1");
+        foreach (var view in new[] { task, Assert.Single(page.GetProperty("items").EnumerateArray()) })
+        {
+            Assert.Equal(raw, view.GetProperty("prefill").GetRawText());
+            Assert.Equal(raw, view.GetProperty("decision").GetProperty("response").GetProperty("data").GetRawText());
+            Assert.False(view.TryGetProperty("recipient", out _));
+            Assert.False(view.TryGetProperty("authoritativeRecipient", out _));
+            Assert.False(view.TryGetProperty("operationKey", out _));
+            Assert.False(view.TryGetProperty("tenantId", out _));
+        }
+    }
+
+    [Fact]
     public async Task Trusted_canonical_identity_and_current_membership_control_claims_not_body_or_token_roles()
     {
         await using var host = await Host.Start();
@@ -138,6 +163,24 @@ public sealed class UserTaskApiTests
         var result = (await discarded.Content.ReadFromJsonAsync<UserTaskFormDefinition>())!;
         Assert.Equal(4, result.Revision); Assert.Null(result.Draft); Assert.Equal("Purchase request", result.LatestPublished!.Form.Name);
         Assert.Equal(HttpStatusCode.Conflict, (await host.Client.PostAsJsonAsync("/runtime/user-task-forms/purchase/draft", new { revision = 3, form = draft })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Draft_configuration_keeps_raw_object_text_and_refuses_present_null_while_accepting_absence()
+    {
+        await using var host = await Host.Start(); host.SignIn("alice");
+        const string raw = """{ "MixedKey": "Ren\u00e9 <>&", "number": 1.0, "rows": [null, 9007199254740993] }""";
+        static string Body(string configuration) => """{"revision":0,"form":{"id":"raw","version":"1","name":"Raw","provider":"elsa.basic-forms/1","fields":[{"key":"value","label":"Value","kind":"text" """ + configuration + "}]}}";
+        using var nullRequest = new StringContent(Body(",\"configuration\":null"), System.Text.Encoding.UTF8, "application/json");
+        var refused = await host.Client.PostAsync("/runtime/user-task-forms/raw/draft", nullRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        using var objectRequest = new StringContent(Body(",\"configuration\":" + raw), System.Text.Encoding.UTF8, "application/json");
+        var saved = await host.Client.PostAsync("/runtime/user-task-forms/raw/draft", objectRequest);
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var read = await host.Client.GetFromJsonAsync<JsonElement>("/runtime/user-task-forms/raw/definition");
+        Assert.Equal(raw, read.GetProperty("draft").GetProperty("form").GetProperty("fields")[0].GetProperty("configuration").GetRawText());
+        using var absentRequest = new StringContent(Body("").Replace("\"raw\"", "\"absent\"", StringComparison.Ordinal), System.Text.Encoding.UTF8, "application/json");
+        Assert.Equal(HttpStatusCode.OK, (await host.Client.PostAsync("/runtime/user-task-forms/absent/draft", absentRequest)).StatusCode);
     }
 
     [Fact]

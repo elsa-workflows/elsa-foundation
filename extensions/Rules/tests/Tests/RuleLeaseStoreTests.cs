@@ -83,7 +83,7 @@ public sealed class RuleLeaseStoreTests : IAsyncLifetime
             var first = await db.Runs.OrderBy(row => row.RunKey).FirstAsync();
             // Simulate a retained future envelope; this worker cannot reconstruct its canonical representation.
             first.InvocationJson = first.InvocationJson.Replace("\"invocationSchemaVersion\":1", "\"invocationSchemaVersion\":2", StringComparison.Ordinal);
-            first.Fingerprint64 = RuleRecordCodec.Hash(Encoding.UTF8.GetBytes(first.InvocationJson));
+            first.Fingerprint64 = RuleRecordCodec.JsonHash(Encoding.UTF8.GetBytes(first.InvocationJson));
             await db.SaveChangesAsync();
         }
         var before = await SnapshotAsync(invocations[0].Identity);

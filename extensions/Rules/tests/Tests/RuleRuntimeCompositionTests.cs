@@ -139,7 +139,7 @@ public sealed partial class RuleRuntimeCompositionTests
             Assert.Equal(RuleRunReadDisposition.NotFound, (await reader.FindAsync(mismatched.Identity)).Disposition);
 
             var malformedArtifactBytes = "{}"u8.ToArray();
-            var malformedArtifactHash = RuleRecordCodec.Hash(malformedArtifactBytes);
+            var malformedArtifactHash = RuleRecordCodec.JsonHash(malformedArtifactBytes);
             var semanticallyInvalid = Copy(Invocation(), identity: NewIdentity("invalid-artifact"), artifact:
                 new RuleArtifactSnapshot(1, "rules:" + malformedArtifactHash, malformedArtifactHash, malformedArtifactBytes));
             Assert.Equal(RuleAdmissionDisposition.Refused,

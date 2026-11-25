@@ -17,6 +17,7 @@
   <ItemGroup>
     <!-- SchemaWriteRefusedException, the persistence-agnostic write refusal every owner answers with a 409. -->
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="../../Serialization/Core/Elsa.Serialization.Core.csproj" />
   </ItemGroup>
 
 </Project>

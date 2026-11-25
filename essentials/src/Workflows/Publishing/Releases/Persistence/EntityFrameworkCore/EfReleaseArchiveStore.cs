@@ -200,7 +200,7 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
             ArchiveSqliteFunctions.BinaryStorageType(x.Manifest) == "blob" &&
             x.BlobCount == header.BlobCount && x.AttachmentCount == header.AttachmentCount && x.SchemaVersion == header.SchemaVersion)
             .Select(x => x.Manifest).SingleOrDefaultAsync(cancellationToken);
-        if (manifest is null || Hash(manifest) != header.ManifestDigest) throw new ReleaseArchiveStoreException("archive_stored_content_invalid");
+        if (manifest is null || JsonDigest(manifest) != header.ManifestDigest) throw new ReleaseArchiveStoreException("archive_stored_content_invalid");
         foreach (var entry in rows)
         {
             var bytes = await context.Set<ReleaseArchiveEntryRow>().AsNoTracking().Where(x => x.Key == entry.Key && x.ArchiveKey == identity.ArchiveKey &&
@@ -209,7 +209,7 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
                 x.ContentDigest == entry.ContentDigest && x.ContentByteLength == entry.ContentByteLength && (long)x.Content.Length == entry.ActualContentLength &&
                 ArchiveSqliteFunctions.BinaryStorageType(x.Content) == "blob" &&
                 x.SchemaVersion == entry.SchemaVersion).Select(x => x.Content).SingleOrDefaultAsync(cancellationToken);
-            if (bytes is null || Hash(bytes) != entry.ContentDigest) throw new ReleaseArchiveStoreException("archive_stored_content_invalid");
+            if (bytes is null || ContentDigest(entry.EntryKind, bytes) != entry.ContentDigest) throw new ReleaseArchiveStoreException("archive_stored_content_invalid");
             var collection = entry.EntryKind switch
             {
                 BlobKind => blobs,
@@ -318,7 +318,7 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
             Key = identity.ArchiveKey, ScopeKey = identity.ScopeKey, Authority = identity.Authority, Partition = identity.Partition,
             TenantId = identity.Tenant, Kind = identity.Kind, CaptureId = identity.EncodedCaptureId, ReleaseDigest = transport.Digest,
             CreatedAt = (timeProvider ?? TimeProvider.System).GetUtcNow().ToString("O", CultureInfo.InvariantCulture), Manifest = manifest,
-            ManifestDigest = Hash(manifest), ManifestByteLength = manifest.LongLength,
+            ManifestDigest = JsonDigest(manifest), ManifestByteLength = manifest.LongLength,
             BlobCount = transport.Members.Select(x => x.PayloadDigest).Distinct(StringComparer.Ordinal).Count(), AttachmentCount = transport.AttachmentPaths.Count
         };
     }
@@ -336,7 +336,7 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
         Key = EntryKey(identity, kind, name), ArchiveKey = identity.ArchiveKey, ScopeKey = identity.ScopeKey,
         Authority = identity.Authority, Partition = identity.Partition, TenantId = identity.Tenant,
         Kind = identity.Kind, CaptureId = identity.EncodedCaptureId, EntryKind = kind, Name = EfRelationalIdentity.Encode(name), Content = content,
-        ContentDigest = Hash(content), ContentByteLength = content.LongLength
+        ContentDigest = ContentDigest(kind, content), ContentByteLength = content.LongLength
     };
 
     private static string EntryKey(ArchiveIdentity identity, int kind, string name) =>
@@ -350,7 +350,20 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
         catch (InvalidOperationException exception) { throw new ReleaseArchiveStoreException("archive_stored_content_invalid", exception); }
     }
 
-    private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+    // Manifest and member content are JSON; attachments retain their arbitrary-byte integrity protocol.
+    // Actual retained bytes, lengths and bounded SQL predicates remain independent storage witnesses.
+    private static string JsonDigest(byte[] bytes)
+    {
+        try { return Elsa.Serialization.Core.JsonHashInput.HashUtf8(bytes); }
+        catch (Exception error) when (error is System.Text.Json.JsonException or InvalidOperationException)
+        { throw new ReleaseArchiveStoreException("archive_stored_content_invalid", error); }
+    }
+    private static string ContentDigest(int kind, byte[] bytes) => kind switch
+    {
+        BlobKind => JsonDigest(bytes),
+        AttachmentKind => Convert.ToHexStringLower(SHA256.HashData(bytes)),
+        _ => throw new ReleaseArchiveStoreException("archive_stored_content_invalid")
+    };
 
     private static long EncodedLength(string value) => ((long)value.Length * 2 + 2) / 3 * 4;
 

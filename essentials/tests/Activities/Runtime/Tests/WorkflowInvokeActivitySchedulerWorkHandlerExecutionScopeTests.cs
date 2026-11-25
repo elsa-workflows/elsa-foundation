@@ -47,10 +47,10 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             _checkpointWriter.ListCommits(),
             write => write.Commit.Checkpoint.Metadata["runtime.checkpointReason"] == "ChildActivityScheduling").Commit;
         var scheduledChild = Assert.Single(commit.PostCommitIntents)
-            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("actexec-1", scheduledChild.ExecutionScopeId);
 
-        var payload = scheduledChild.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        var payload = scheduledChild.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("actexec-1", payload.SchedulingProvenance.ExecutionScopeId);
     }
 
@@ -99,9 +99,9 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             _checkpointWriter.ListCommits(),
             write => write.Commit.Checkpoint.Metadata["runtime.checkpointReason"] == "ChildActivityScheduling").Commit;
         var scheduledChild = Assert.Single(commit.PostCommitIntents)
-            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("actexec-1", scheduledChild.ExecutionScopeId);
-        var payload = scheduledChild.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        var payload = scheduledChild.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("branch-1", payload.SchedulingProvenance.BranchId);
         Assert.Equal("actexec-1", payload.SchedulingProvenance.ExecutionScopeId);
     }

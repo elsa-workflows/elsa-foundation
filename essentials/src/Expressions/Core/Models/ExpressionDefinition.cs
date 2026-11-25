@@ -15,7 +15,6 @@ namespace Elsa.Expressions.Core.Models;
 /// </summary>
 public sealed class ExpressionDefinition : IEquatable<ExpressionDefinition>
 {
-    private static readonly JsonSerializerOptions FingerprintSerializerOptions = new(JsonSerializerDefaults.Web);
 
     [JsonConstructor]
     public ExpressionDefinition(
@@ -95,23 +94,9 @@ public sealed class ExpressionDefinition : IEquatable<ExpressionDefinition>
 
     public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Fingerprint);
 
-    private string ComputeFingerprint()
-    {
-        var node = JsonSerializer.SerializeToNode(this, FingerprintSerializerOptions)
-            ?? throw new InvalidOperationException("Expression definition serialization produced no canonical payload.");
-        var canonical = SortNode(node).ToJsonString(FingerprintSerializerOptions);
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
-        return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
-    }
+    private string ComputeFingerprint() => "sha256:" + Elsa.Serialization.Core.JsonHashInput.Hash(this);
 
-    private static JsonNode SortNode(JsonNode node) => node switch
-    {
-        JsonObject obj => new JsonObject(obj
-            .OrderBy(item => item.Key, StringComparer.Ordinal)
-            .Select(item => KeyValuePair.Create(item.Key, item.Value is null ? null : SortNode(item.Value)))),
-        JsonArray array => new JsonArray(array.Select(item => item is null ? null : SortNode(item)).ToArray()),
-        _ => node.DeepClone()
-    };
+
 }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]

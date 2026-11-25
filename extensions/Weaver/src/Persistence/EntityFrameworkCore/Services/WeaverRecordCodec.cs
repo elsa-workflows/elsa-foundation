@@ -13,8 +13,8 @@ namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Services;
 internal sealed class WeaverRecordCodec(ISecretValueProtector protector)
 {
     // Default options keep the canonical shape the owner's integrity digests read, exactly as the default store does.
-    private static readonly JsonSerializerOptions ValueOptions = new();
-    private static readonly JsonSerializerOptions EnvelopeOptions = new() { MaxDepth = 8 };
+    private static readonly JsonSerializerOptions ValueOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
+    private static readonly JsonSerializerOptions EnvelopeOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { MaxDepth = 8 };
 
     public const string SessionPurpose = "elsa.weaver.session/1";
     public const string PausedTurnPurpose = "elsa.weaver.paused-turn/1";

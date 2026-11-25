@@ -1,3 +1,4 @@
+import { formatStudioDate, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { useId } from "react";
 import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw } from "lucide-react";
 import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
@@ -11,6 +12,7 @@ import "./activityPlayback.css";
 export function ActivityPlaybackControls({ playback, scopeLabel, labelFor }: {
   playback: ActivityPlayback; scopeLabel: string; labelFor(entry: PlaybackOccurrence): string;
 }) {
+  useStudioTimeZone();
   const id = useId();
   const cursor = playback.cursor, page = playback.page;
   const range = page ? safePlaybackRange(page) : null;
@@ -28,7 +30,7 @@ export function ActivityPlaybackControls({ playback, scopeLabel, labelFor }: {
   const stateLabel = playback.playing ? loading ? "Buffering" : "Playing" : playback.phase === "ended" ? "End of available segment" : playback.phase === "unavailable" ? "Unavailable" : "Paused";
   const instant = cursor?.occurredAtKnown === false ? null : cursor?.occurredAt;
   const displayedInstant = instant ?? cursor?.recordedAt;
-  const compactInstant = displayedInstant ? new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "medium" }).format(new Date(displayedInstant)) : "Unknown";
+  const compactInstant = displayedInstant ? formatStudioDate(displayedInstant) : "Unknown";
   const coverageLabels: Record<string, string> = { disabled: "Recording was disabled for this admission.",
     uncaptured: "No recording was captured for this admission.", unsupported: "Recorded history is unsupported by this host.",
     pending: "Recording is pending.", invalid: "Recorded history could not be verified.", partial: "Only partial recorded history is available.",

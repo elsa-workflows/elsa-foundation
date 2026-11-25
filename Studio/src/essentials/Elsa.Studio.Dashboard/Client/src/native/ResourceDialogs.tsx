@@ -1,3 +1,4 @@
+import { formatStudioDate, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useState } from "react";
 import { TechnicalDetails } from "@elsa-workflows/studio-ui";
 import { StudioField, StudioMultiSelectField, StatusChip, StudioButton, StudioDialog, StudioDialogFooter, StudioVersionHistory } from "@elsa-workflows/studio-ui";
@@ -79,6 +80,7 @@ export function ShareDialog({ api, resource, onClose, onSaved }: { api: Dashboar
 }
 
 export function HistoryDialog({ api, resource, onClose, onRestored, onAccessLost, hasUnsavedChanges = false }: { api: DashboardApi; resource: DashboardResource; onClose(): void; onRestored(resource: DashboardResource): void; onAccessLost(message: string): void; hasUnsavedChanges?: boolean }) {
+  useStudioTimeZone();
   const lifetime = useRequestLifetime();
   const [items, setItems] = useState<DefinitionRevision[]>();
   const [error, setError] = useState<string>();
@@ -131,7 +133,7 @@ export function HistoryDialog({ api, resource, onClose, onRestored, onAccessLost
   </> : <div className="named-history-detail">
     <div><StatusChip tone={selected.revision === resource.revision ? "accent" : "neutral"}>{selected.revision === resource.revision ? "Current" : "Saved revision"}</StatusChip></div>
     <h4>{selected.name}</h4>
-    <p>Revision {selected.revision} · <time dateTime={selected.updatedAt}>{new Date(selected.updatedAt).toLocaleString()}</time></p>
+    <p>Revision {selected.revision} · <time dateTime={selected.updatedAt}>{formatStudioDate(selected.updatedAt)}</time></p>
     {selected.description ? <p>{selected.description}</p> : null}
     {selected.kind === "question" && selected.definition ? <dl className="named-history-summary">
       <div><dt>Dataset</dt><dd>{selected.definition.query.dataset.id || "Not selected"}</dd></div>
@@ -160,7 +162,7 @@ export function HistoryDialog({ api, resource, onClose, onRestored, onAccessLost
         id: item.revision,
         ariaLabel: `Inspect revision ${item.revision}`,
         title: `Revision ${item.revision}`,
-        subtitle: <time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleString()}</time>,
+        subtitle: <time dateTime={item.updatedAt}>{formatStudioDate(item.updatedAt)}</time>,
         status: item.revision === resource.revision ? <StatusChip tone="accent">Current</StatusChip> : undefined
       }))}
       selectedId={selectedRevision}

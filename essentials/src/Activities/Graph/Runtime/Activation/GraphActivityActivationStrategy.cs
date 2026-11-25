@@ -14,7 +14,7 @@ namespace Elsa.Activities.Graph.Runtime.Activation;
 /// <summary>Creates one fresh graph boundary activity for a pinned <c>elsa.graph-activity/1</c> descriptor.</summary>
 public sealed class GraphActivityActivationStrategy(IServiceScopeFactory scopeFactory) : IActivityActivationStrategy
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public string ConsumerKey => WellKnownRuntimeActivityConsumers.GraphActivity;
     public IReadOnlyCollection<string> SupportedSchemaVersions => [RuntimeActivityDescriptor.InitialSchemaVersion];

@@ -56,7 +56,7 @@ internal sealed class StudioExtensionBuilderCapabilitiesClient(
     // surfaced to the browser.
     private const string BackendCapabilitiesPath = StudioExtensionBuilderBridge.BackendRoot + "/capabilities";
 
-    private static readonly JsonSerializerOptions BackendJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions BackendJsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     private static readonly StudioBackendReadSurface CapabilitiesSurface = new(
         Path: BackendCapabilitiesPath,

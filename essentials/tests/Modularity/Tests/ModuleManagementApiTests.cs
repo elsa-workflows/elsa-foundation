@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using CShells.Features;
 using Elsa.Api.AspNetCore;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Nuplane.Admin;
+using Nuplane.Store.Cleanup;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
@@ -20,6 +22,54 @@ public sealed class ModuleManagementApiTests
 {
     private const string ApiKey = "custom-host-management-key";
     private const string HostOwner = "CustomElsaHost";
+
+    [Fact]
+    public async Task Saved_retention_policy_survives_configuration_read_and_drives_the_next_prune()
+    {
+        var contentRoot = Directory.CreateTempSubdirectory("elsa-retention-contract-").FullName;
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(contentRoot, "appsettings.json"), "{\"Nuplane\":{}}");
+            var admin = new FakeNuplaneAdminOperations();
+            foreach (var (version, days) in new[] { ("1.0.0", 30), ("2.0.0", 20), ("3.0.0", 10) })
+            {
+                var directory = Directory.CreateDirectory(Path.Combine(contentRoot, "packages", "sample", version));
+                directory.LastWriteTimeUtc = DateTime.UtcNow.AddDays(-days);
+                if (version == "3.0.0") admin.Packages.Add(new("sample", version, "local", "drop", directory.FullName,
+                    DateTimeOffset.UtcNow, "corr", "graph", "gen", default, [], [], true));
+            }
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = contentRoot });
+            builder.WebHost.UseTestServer();
+            builder.Configuration[ManagementApiKeyAuthentication.ConfigurationKey] = ApiKey;
+            builder.Services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog());
+            builder.Services.AddSingleton<INuplaneAdminOperations>(admin);
+            builder.Services.Configure<CleanupPolicyOptions>(options =>
+            { options.RetainLastNVersions = 99; options.RetainYoungerThanDays = 365; options.ProtectLastKnownGood = true; });
+            builder.Services.AddElsaModuleManagement(options => options.HostOwner = HostOwner);
+            await using var app = builder.Build();
+            app.MapElsaModuleManagement();
+            await app.StartAsync();
+            using var client = app.GetTestClient();
+            client.DefaultRequestHeaders.Add(ManagementApiKeyAuthentication.HeaderName, ApiKey);
+            using var update = await client.PutAsJsonAsync("/_elsa/module-management/retention-policy", new
+            { retainLastNVersions = 1, retainYoungerThanDays = 1, mode = "Automatic", protectLastKnownGood = false });
+            update.EnsureSuccessStatusCode();
+            using var saved = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(contentRoot, "appsettings.json")));
+            Assert.Equal(1, saved.RootElement.GetProperty("Nuplane").GetProperty("CleanupPolicy").GetProperty("RetainLastNVersions").GetInt32());
+            using var registry = JsonDocument.Parse(await client.GetStringAsync("/_elsa/module-management/registry"));
+            var policy = registry.RootElement.GetProperty("retentionPolicy");
+            Assert.Equal(1, policy.GetProperty("retainLastNVersions").GetInt32());
+            Assert.Equal(1, policy.GetProperty("retainYoungerThanDays").GetInt32());
+            Assert.False(policy.GetProperty("protectLastKnownGood").GetBoolean());
+            using var prune = await client.PostAsJsonAsync("/_elsa/module-management/prune", new { dryRun = true });
+            prune.EnsureSuccessStatusCode();
+            using var result = JsonDocument.Parse(await prune.Content.ReadAsStringAsync());
+            var decisions = result.RootElement.GetProperty("decisions").EnumerateArray().ToArray();
+            Assert.Equal(2, decisions.Count(row => row.GetProperty("action").GetString() == "would-delete"));
+            Assert.All(decisions, row => Assert.True(Directory.Exists(row.GetProperty("path").GetString())));
+        }
+        finally { Directory.Delete(contentRoot, recursive: true); }
+    }
 
     [Fact]
     public async Task Custom_host_can_read_registry_and_routes_use_configured_owner()

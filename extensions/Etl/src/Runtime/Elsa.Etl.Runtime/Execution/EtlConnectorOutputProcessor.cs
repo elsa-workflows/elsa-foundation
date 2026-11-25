@@ -269,7 +269,7 @@ internal sealed class EtlConnectorOutputProcessor
         EtlConnectorBatchDescriptor descriptor, EtlOutputRoute route, EtlConnectorKind kind, long records,
         byte[] bytes, long maxBytes, CancellationToken cancellationToken)
     {
-        var contentHash = Hash(bytes);
+        var contentHash = RouteHash(kind, bytes);
         var effectId = EtlRuntimeIdentity.ConnectorEffectId(admission, descriptor.BatchId, route,
             contentHash, bytes.LongLength, records);
         var storageIdentity = RetainedBodyIdentity(kind, effectId);
@@ -280,7 +280,7 @@ internal sealed class EtlConnectorOutputProcessor
             throw new EtlEffectException("etl.effect-conflict", "The retained ETL route body conflicts with its content identity.");
 
         var verified = await bodyStore.ReadAsync(_snapshotRoot, storageIdentity, maxBytes, bytes.LongLength, cancellationToken);
-        if (verified is null || !verified.AsSpan().SequenceEqual(bytes) || Hash(verified) != contentHash)
+        if (verified is null || !verified.AsSpan().SequenceEqual(bytes) || RouteHash(kind, verified) != contentHash)
             throw new EtlEffectException("etl.effect-conflict", "The retained ETL route body could not be verified.");
         return new(kind, new EtlObjectReference(chunk.Key, chunk.ContentHash, chunk.ByteLength), records, effectId);
     }
@@ -488,9 +488,12 @@ internal sealed class EtlConnectorOutputProcessor
         if (route.Body.Key != store.KeyFor(identity) || route.Body.ByteLength <= 0 || route.Body.ByteLength > maxBytes)
             throw new EtlEffectException("etl.output-read-conflict", "The retained ETL route body reference is invalid.");
         var bytes = await store.ReadAsync(_snapshotRoot, identity, maxBytes, route.Body.ByteLength, cancellationToken);
-        if (bytes is null || Hash(bytes) != route.Body.ContentHash)
+        bool matches;
+        try { matches = bytes is not null && RouteHash(route.Kind, bytes) == route.Body.ContentHash; }
+        catch (Exception exception) when (exception is System.Text.Json.JsonException or InvalidOperationException) { matches = false; }
+        if (!matches)
             throw new EtlEffectException("etl.output-read-conflict", "The retained ETL route body failed integrity verification.");
-        return bytes;
+        return bytes!;
     }
 
     private static string? ValidateInput(EtlConnectorPartitionLease? lease, EtlConnectorRunAdmission? admission,
@@ -585,6 +588,13 @@ internal sealed class EtlConnectorOutputProcessor
     };
 
     private static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+    private static string RouteHash(EtlConnectorKind kind, byte[] bytes) => kind switch
+    {
+        EtlConnectorKind.Http or EtlConnectorKind.Sql or EtlConnectorKind.RabbitMq => Elsa.Serialization.Core.JsonHashInput.HashUtf8(bytes),
+        EtlConnectorKind.Jsonl or EtlConnectorKind.Csv => Hash(bytes),
+        _ => throw new EtlEffectException("etl.connector-output-invalid", "The connector route body kind is unsupported.")
+    };
 
     private static EtlConnectorOutputPreparationResult FromStore(EtlConnectorOutputResult result) =>
         new(result.Status, result.Output, result.Status switch
@@ -684,7 +694,7 @@ internal sealed class EtlConnectorOutputProcessor
 
             using var encoded = new MemoryStream();
             using (var bounded = new BoundedWriteStream(encoded, Math.Min(maxBytes, remainingOutputBytes)))
-            using (var writer = new Utf8JsonWriter(bounded, new JsonWriterOptions { Indented = false }))
+            using (var writer = new Utf8JsonWriter(bounded, new JsonWriterOptions { Indented = false, Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder }))
             {
                 writer.WriteStartObject();
                 writer.WriteNumber("recordOrdinal", error.RecordOrdinal);

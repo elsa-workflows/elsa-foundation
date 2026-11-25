@@ -10,11 +10,10 @@ namespace Elsa.Workflows.Runtime.Api;
 /// </summary>
 internal sealed class WorkflowsRuntimeJsonTypeInfoResolver : IJsonTypeInfoResolver
 {
-    private readonly WorkflowsRuntimeJsonContext _context = new();
+
 
     public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
     {
-        var typeInfo = ((IJsonTypeInfoResolver)_context).GetTypeInfo(type, options);
-        return typeInfo;
+        return Elsa.Serialization.Core.JsonModuleMetadata.Resolve(WorkflowsRuntimeJsonContext.WireContext, type, options, "Elsa.Workflows.Runtime");
     }
 }

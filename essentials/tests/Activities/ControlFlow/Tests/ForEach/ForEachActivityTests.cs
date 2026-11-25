@@ -17,6 +17,29 @@ namespace Elsa.Activities.ForEach.Tests;
 
 public sealed class ForEachActivityTests : IDisposable
 {
+    [Fact]
+    public async Task Iteration_items_select_scoped_clr_contracts_and_keep_raw_json_fragments()
+    {
+        var type = new ValueTypeDescriptor("Object", CollectionKind.List);
+        var binding = new RuntimeInputBinding(nameof(ForEachActivity.Collection), type, ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new RuntimeWorkflowRequestReference("items"));
+        var context = NewContext(new[] { new ScopedItem("one", null) }, binding);
+        await ExecuteAsync(context);
+        var item = Assert.Single(context.GetChildActivityScheduleRequests()).IterationFrame!.Values[ForEachActivity.CurrentItemVariableName].InlineValue!.Value;
+        Assert.Equal("one", item.GetProperty("item_id").GetString());
+        Assert.Equal(JsonValueKind.Null, item.GetProperty("note").ValueKind);
+
+        const string raw = "{ \"UpperKey\": \"\\u0061\", \"n\": 1.0, \"nil\": null }";
+        using var document = JsonDocument.Parse(raw);
+        var rawContext = NewContext(new[] { document.RootElement.Clone() }, binding);
+        await ExecuteAsync(rawContext);
+        var retained = Assert.Single(rawContext.GetChildActivityScheduleRequests()).IterationFrame!.Values[ForEachActivity.CurrentItemVariableName].InlineValue!.Value;
+        Assert.Equal(raw, retained.GetRawText());
+    }
+
+    [Elsa.Serialization.Core.JsonConversion(MemberMappings = ["item_id=ItemId"])]
+    private sealed record ScopedItem(string ItemId, string? Note);
+
     private const string ForEachNodeId = "node-foreach";
     private const string BodyNodeId = "node-body";
     private const string ForEachExecutionId = "actexec-foreach";

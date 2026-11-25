@@ -81,6 +81,35 @@ public sealed class ExtensionBuilderApiTests : IAsyncDisposable
     private readonly List<WebApplication> _apps = [];
 
     [Fact]
+    public async Task Template_manifest_is_raw_under_conflicting_host_json_options()
+    {
+        const string raw = """{ "OrderTotal":1.00, "text":"Ren\u00e9 <>&", "explicit":null, "large":9007199254740993 }""";
+        using var document = JsonDocument.Parse(raw);
+        var template = new ExtensionBuilderTemplateCatalog().List()[0];
+        template = template with { DefaultManifest = template.DefaultManifest with { Content = document.RootElement.Clone() } };
+        var client = Client(await StartAsync(ManagementKey, configureServices: services =>
+        {
+            services.AddSingleton<IExtensionBuilderTemplateCatalog>(new RawCatalog(template));
+            services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+            {
+                options.SerializerOptions.WriteIndented = true;
+                options.SerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default;
+                options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+            });
+        }), ManagementKey);
+        using var response = await client.GetAsync($"{Prefix}/templates");
+        response.EnsureSuccessStatusCode();
+        using var returned = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(raw, returned.RootElement[0].GetProperty("defaultManifest").GetProperty("content").GetRawText());
+    }
+
+    private sealed class RawCatalog(ExtensionTemplate template) : IExtensionBuilderTemplateCatalog
+    {
+        public IReadOnlyList<ExtensionTemplate> List() => [template];
+        public ExtensionTemplate? Find(string templateId) => templateId == template.Id ? template : null;
+    }
+
+    [Fact]
     public async Task Maps_exactly_the_routes_the_studio_relay_names()
     {
         var app = await StartAsync(ManagementKey);
@@ -147,7 +176,7 @@ public sealed class ExtensionBuilderApiTests : IAsyncDisposable
         Directory.Delete(_directory, recursive: true);
     }
 
-    private async Task<WebApplication> StartAsync(string? managementKey, string[]? trustedRoles = null)
+    private async Task<WebApplication> StartAsync(string? managementKey, string[]? trustedRoles = null, Action<IServiceCollection>? configureServices = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = _directory, EnvironmentName = Environments.Development });
         builder.WebHost.UseTestServer();
@@ -162,6 +191,7 @@ public sealed class ExtensionBuilderApiTests : IAsyncDisposable
         builder.Services.AddElsaExtensionBuilder(builder.Configuration);
         if (trustedRoles is not null)
             builder.Services.PostConfigure<ExtensionBuilderOptions>(options => options.TrustedRoles = trustedRoles);
+        configureServices?.Invoke(builder.Services);
 
         var app = builder.Build();
         _apps.Add(app);

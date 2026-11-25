@@ -45,10 +45,10 @@ internal sealed class ReleaseRuntimeArtifactCodec : IReleaseRuntimeArtifactCodec
             CheckClr(value, bounds);
             var output = new BoundedRuntimeJsonBuffer(bounds.MaxBlobBytes, "runtime_payload_byte_limit");
             using (var writer = new Utf8JsonWriter(output, new JsonWriterOptions { MaxDepth = bounds.MaxJsonDepth }))
-            { JsonSerializer.Serialize(writer, new { formatVersion = 1, content = value }, Options(bounds.MaxJsonDepth)); writer.Flush(); }
+            { JsonSerializer.Serialize(writer, new { formatVersion = 1, content = value }, options: Options(bounds.MaxJsonDepth)); writer.Flush(); }
             var bytes = output.Written.ToArray();
             CheckJson(bytes, bounds);
-            return new(new(kind, identity, codec, codecVersion, "sha256:" + Convert.ToHexStringLower(SHA256.HashData(bytes)), bytes.LongLength), version, bytes);
+            return new(new(kind, identity, codec, codecVersion, "sha256:" + Elsa.Serialization.Core.JsonHashInput.HashUtf8(bytes), bytes.LongLength), version, bytes);
         }
         catch (ReleaseRuntimeArtifactException) { throw; }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException or InvalidOperationException or TargetInvocationException)
@@ -70,7 +70,7 @@ internal sealed class ReleaseRuntimeArtifactCodec : IReleaseRuntimeArtifactCodec
             var options = Options(bounds.MaxJsonDepth);
             var result = content.Deserialize<T>(options) ?? throw Refuse("invalid_runtime_payload");
             // Detect ignored/contradictory computed aliases and unsupported default flattening without replacing retained bytes.
-            var reconstructed = JsonSerializer.SerializeToElement(result, options);
+            var reconstructed = JsonSerializer.SerializeToElement(result, options: options);
             if (ActivityTemplateHasher.ComputeCanonicalValueHash(content) != ActivityTemplateHasher.ComputeCanonicalValueHash(reconstructed))
                 throw Refuse("runtime_payload_not_lossless");
             CheckClr(result, bounds);
@@ -90,13 +90,12 @@ internal sealed class ReleaseRuntimeArtifactCodec : IReleaseRuntimeArtifactCodec
             for (var index = info.Properties.Count - 1; index >= 0; index--)
                 if (info.Properties[index].Name == "nodesById" || info.Type == typeof(WorkflowExecutable) && info.Properties[index].Name == "nodes") info.Properties.RemoveAt(index);
         });
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options)
         {
             PropertyNameCaseInsensitive = false, MaxDepth = depth, TypeInfoResolver = resolver,
             UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
-        options.Converters.Add(new RetainedJsonElementConverter());
         options.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
         return options;
     }
@@ -186,17 +185,6 @@ internal sealed class ReleaseRuntimeArtifactCodec : IReleaseRuntimeArtifactCodec
                 text = text[consumed..];
             } while (true);
         }
-    }
-
-    private sealed class RetainedJsonElementConverter : JsonConverter<JsonElement>
-    {
-        public override JsonElement Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        {
-            using var document = JsonDocument.ParseValue(ref reader);
-            return document.RootElement.Clone();
-        }
-        public override void Write(Utf8JsonWriter writer, JsonElement value, JsonSerializerOptions options) =>
-            writer.WriteRawValue(JsonMarshal.GetRawUtf8Value(value), skipInputValidation: true);
     }
 
     private static void Unicode(string text)

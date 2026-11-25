@@ -228,7 +228,7 @@ public sealed class RuntimePostCommitOutboxItem
         if (SavedStimulusStarts?.ContainsKey(envelope.WorkflowExecutionId) == true)
             throw new InvalidOperationException("A saved target's accepted command cannot be replaced.");
         var seals = SavedStimulusStarts?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
-        seals.Add(envelope.WorkflowExecutionId, JsonSerializer.SerializeToElement(envelope));
+        seals.Add(envelope.WorkflowExecutionId, JsonSerializer.SerializeToElement(envelope, options: Elsa.Serialization.Core.JsonBaseline.Options));
         return new(OutboxItemId, Intent, Status, RecordedAt, AvailableAt, RetryPolicy, DeliveryAttemptCount,
             DeliveringOwnerId, DeliveryStartedAt, DeliveredAt, LastFailureMessage, Metadata, DeliveryFencingToken,
             DeliveryVisibleAfter, StimulusDeliveryProtocolVersion, StimulusDeliverySourceScope, RecipientSnapshot,
@@ -407,7 +407,7 @@ public sealed class RuntimePostCommitOutboxItem
         SubscriptionDeliveryProtocolVersion == other.SubscriptionDeliveryProtocolVersion &&
         ((SavedStimulusStarts is null && other.SavedStimulusStarts is null) ||
          (SavedStimulusStarts is not null && other.SavedStimulusStarts is not null && SavedStimulusStarts.Count == other.SavedStimulusStarts.Count &&
-          SavedStimulusStarts.All(pair => other.SavedStimulusStarts.TryGetValue(pair.Key, out var value) && JsonElement.DeepEquals(pair.Value, value)))) &&
+          SavedStimulusStarts.All(pair => other.SavedStimulusStarts.TryGetValue(pair.Key, out var value) && Elsa.Serialization.Core.JsonCanonicalForm.Equals(pair.Value, value)))) &&
         (SubscriptionDelivery is null ? other.SubscriptionDelivery is null : SubscriptionDelivery.IsEquivalentTo(other.SubscriptionDelivery));
 
     /// <summary>

@@ -87,7 +87,7 @@ internal static class EtlRuntimeRecordCodec
         return invocation;
     }
 
-    public static string HashText(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+    public static string HashText(string value) => Elsa.Serialization.Core.JsonHashInput.HashJson(value);
 
     public static bool IsSha256(string? value) => value is { Length: 64 } && value.All(char.IsAsciiHexDigit);
 
@@ -120,7 +120,7 @@ internal static class EtlRuntimeRecordCodec
                     throw new ArgumentException("The ETL invocation carries an invalid typed pipeline.", nameof(invocation), exception);
                 }
                 canonicalPipeline = EtlArtifactJson.Write(pipeline);
-                if (!StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonicalPipeline.GetRawText()))
+                if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(artifact.Pipeline, canonicalPipeline))
                     throw new ArgumentException("The ETL invocation artifact pipeline is not in its typed canonical representation.", nameof(invocation));
                 if (!StringComparer.Ordinal.Equals(EtlArtifactJson.Hash(canonicalPipeline), artifact.ContentHash))
                     throw new ArgumentException("The ETL invocation artifact hash does not match its pipeline.", nameof(invocation));
@@ -161,7 +161,7 @@ internal static class EtlRuntimeRecordCodec
         var isV1Artifact = artifact.FormatVersion == EtlArtifact.CurrentFormatVersion;
         if (isV1Artifact)
             ValidatePipelineLimits(v1Limits!);
-        var artifactBytes = JsonSerializer.SerializeToUtf8Bytes(artifact).Length;
+        var artifactBytes = JsonSerializer.SerializeToUtf8Bytes(artifact, Elsa.Serialization.Core.JsonBaseline.Options).Length;
         if (artifactBytes > EtlArtifact.MaximumByteLength || isV1Artifact && artifactBytes > v1Limits!.MaxArtifactBytes)
             throw new ArgumentException("The ETL invocation artifact exceeds its configured serialized size limit.", nameof(invocation));
         if (Encoding.UTF8.GetByteCount(Write(invocation)) > EtlArtifact.MaximumByteLength + 64 * 1024)
@@ -176,7 +176,7 @@ internal static class EtlRuntimeRecordCodec
         {
             var pipeline = EtlArtifactV2Json.Read(artifact.Pipeline);
             var canonical = EtlArtifactV2Json.Write(pipeline);
-            if (!StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonical.GetRawText()))
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(artifact.Pipeline, canonical))
                 throw new ArgumentException("The ETL invocation v2 artifact pipeline is not in its typed canonical representation.");
             if (!StringComparer.Ordinal.Equals(EtlArtifactJson.Hash(canonical), artifact.ContentHash))
                 throw new ArgumentException("The ETL invocation v2 artifact hash does not match its pipeline.");

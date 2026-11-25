@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.UserTasks;
@@ -27,6 +28,7 @@ public sealed record UserTaskField(string Key, string Label, string Kind, bool R
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ControlId { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(NullableJsonElementConverter))]
     public JsonElement? Configuration { get; init; }
 }
 

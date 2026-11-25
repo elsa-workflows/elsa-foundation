@@ -14,7 +14,7 @@ namespace Elsa.Cli;
 /// <summary>Reviews edited selection intent and writes a fresh accepted composition.</summary>
 internal static class CompositionAcceptCommand
 {
-    private static readonly JsonSerializerOptions s_json = new()
+    private static readonly JsonSerializerOptions s_json = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true

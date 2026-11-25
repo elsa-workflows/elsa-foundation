@@ -26,7 +26,7 @@ public static class ReusableActivityImportApi
                               ?? typeof(ReusableActivityImportApi).Assembly.GetName().Name!;
         var api = endpoints.MapEndpointGroup(
             OwnerId,
-            ReusableActivityImportJsonContext.Default,
+            ReusableActivityImportJsonContext.WireContext,
             jsonContentType: "application/json; charset=utf-8",
             tag: applicationName);
 
@@ -94,7 +94,7 @@ public static class ReusableActivityImportHttp
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/json; charset=utf-8";
         return context.Response.WriteAsync(
-            JsonSerializer.Serialize(problem, ReusableActivityImportJsonContext.Default.ReusableActivityImportProblem),
+            JsonSerializer.Serialize(problem, ReusableActivityImportJsonContext.WireContext.ReusableActivityImportProblem),
             cancellationToken);
     }
 }

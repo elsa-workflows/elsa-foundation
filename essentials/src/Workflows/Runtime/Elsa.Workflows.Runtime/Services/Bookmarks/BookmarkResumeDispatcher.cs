@@ -333,10 +333,10 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason,
             triggerDelivery: triggerDelivery,
             testRunDelivery: request.TestRunDelivery)
-            { ExpectedBookmarkResume = saved?.Expected ?? request.ExpectedRecipient, HistoryCausation = historyCause });
+            { ExpectedBookmarkResume = saved?.Expected ?? request.ExpectedRecipient, HistoryCausation = historyCause }, Elsa.Serialization.Core.JsonBaseline.Options);
         // A known source origin must survive the ordinary command wire exactly, including opaque UTF-16 fields.
-        if (historyCause is not null && payload.GetProperty(nameof(RuntimeResumeBookmarkCommandPayload.HistoryCausation))
-                .Deserialize<RuntimeHistoryCausation>() != historyCause)
+        if (historyCause is not null && payload.GetProperty("historyCausation")
+                .Deserialize<RuntimeHistoryCausation>(Elsa.Serialization.Core.JsonBaseline.Options) != historyCause)
             throw new InvalidOperationException("The ordinary resume command cannot preserve its exact known history origin.");
         var command = new WorkflowExecutionCommand(
             CommandId: commandId,

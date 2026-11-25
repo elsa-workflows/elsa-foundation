@@ -93,7 +93,7 @@ internal sealed class HostRabbitMqBindings(IEnumerable<EtlHostRabbitMqBindingOpt
                 FormatVersion = 1, ScopeIdentity = EtlRuntimeIdentity.ScopeKey(Scope(binding)), binding.Alias, binding.Role,
                 binding.Revision, target.Host, target.Port, target.VirtualHost, target.User, AllowedExchanges = exchanges
             };
-        var handle = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(identity)));
+        var handle = Elsa.Serialization.Core.JsonHashInput.Hash(identity);
         return new(binding.Alias, binding.Revision, handle, _publisher, binding.ConnectionString) { Consumer = _consumer };
     }
 

@@ -117,8 +117,5 @@ internal sealed class TestRunTargetDispatcher(
     }
 
     private static string Digest(JsonElement? input)
-    {
-        var payload = input is { } element ? JsonSerializer.SerializeToUtf8Bytes(element) : "null"u8.ToArray();
-        return Convert.ToHexStringLower(SHA256.HashData(payload));
-    }
+        => TestRunDeliveryReceipt.Digest(input);
 }

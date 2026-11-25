@@ -375,7 +375,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(new GlobalPageCursor(
             state.WorkflowExecutionId,
-            state.ExecutionLivenessStateId));
+            state.ExecutionLivenessStateId), Elsa.Serialization.Core.JsonBaseline.Options);
         return Convert.ToBase64String(payload)
             .TrimEnd('=')
             .Replace('+', '-')
@@ -387,7 +387,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         var payload = JsonSerializer.SerializeToUtf8Bytes(new RecoveryPageCursor(
             selection.EligibleAt,
             selection.State.WorkflowExecutionId,
-            selection.State.ExecutionLivenessStateId));
+            selection.State.ExecutionLivenessStateId), Elsa.Serialization.Core.JsonBaseline.Options);
         return Convert.ToBase64String(payload)
             .TrimEnd('=')
             .Replace('+', '-')
@@ -409,7 +409,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
                 3 => "=",
                 _ => throw new FormatException()
             };
-            var cursor = JsonSerializer.Deserialize<GlobalPageCursor>(Convert.FromBase64String(base64));
+            var cursor = JsonSerializer.Deserialize<GlobalPageCursor>(Convert.FromBase64String(base64), Elsa.Serialization.Core.JsonBaseline.Options);
             if (cursor is null || string.IsNullOrWhiteSpace(cursor.WorkflowExecutionId) || string.IsNullOrWhiteSpace(cursor.OperationalStateId))
                 throw new FormatException();
             return cursor;
@@ -435,7 +435,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
                 3 => "=",
                 _ => throw new FormatException()
             };
-            var cursor = JsonSerializer.Deserialize<RecoveryPageCursor>(Convert.FromBase64String(base64));
+            var cursor = JsonSerializer.Deserialize<RecoveryPageCursor>(Convert.FromBase64String(base64), Elsa.Serialization.Core.JsonBaseline.Options);
             if (cursor is null || string.IsNullOrWhiteSpace(cursor.WorkflowExecutionId) || string.IsNullOrWhiteSpace(cursor.OperationalStateId))
                 throw new FormatException();
             return cursor;

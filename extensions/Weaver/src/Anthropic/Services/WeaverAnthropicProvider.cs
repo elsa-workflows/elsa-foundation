@@ -26,7 +26,7 @@ public sealed class WeaverAnthropicProvider(
 {
     public const string Id = "anthropic";
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public string ProviderId => Id;
 

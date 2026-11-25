@@ -46,7 +46,7 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]> { ["q"] = ["1"] },
             Body: """{"id":7}""");
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(liveRequest), triggerNodeId: NodeId);
 
         run.AssertCompleted(NodeId);
         run.AssertWorkflowCompleted();
@@ -71,7 +71,7 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]>(),
             Body: """{"orderId":7}""");
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(liveRequest), triggerNodeId: NodeId);
         run.AssertWorkflowCompleted();
 
         var parsed = await ParsedContentAsync(harness);
@@ -92,7 +92,7 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]>(),
             Body: "null");
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(liveRequest), triggerNodeId: NodeId);
         run.AssertWorkflowCompleted();
 
         var parsed = await ParsedContentAsync(harness);
@@ -111,7 +111,7 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]>(),
             Body: null);
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(liveRequest), triggerNodeId: NodeId);
         run.AssertWorkflowCompleted();
 
         var parsed = await ParsedContentAsync(harness);
@@ -197,7 +197,7 @@ public sealed class HttpEndpointExecutionTests
         await using var harness = NewHarness();
         var liveRequest = new HttpRequestModel("orders/webhook", "POST", new Dictionary<string, string[]>(), new Dictionary<string, string[]>(), """{"id":9}""");
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(liveRequest), triggerNodeId: NodeId);
 
         run.AssertCompleted(NodeId);
         run.AssertWorkflowCompleted();
@@ -366,7 +366,7 @@ public sealed class HttpEndpointExecutionTests
             Body: """{"ok":true}""",
             RouteData: new Dictionary<string, string> { ["id"] = "42" });
 
-        var run = await ResumeAsync(harness, JsonSerializer.SerializeToElement(resumeRequest));
+        var run = await ResumeAsync(harness, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(resumeRequest));
 
         run.AssertCompleted(NodeId);
         run.AssertWorkflowCompleted();

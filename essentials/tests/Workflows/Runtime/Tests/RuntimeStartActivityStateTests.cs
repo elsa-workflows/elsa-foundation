@@ -86,7 +86,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
 
         Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var pending = Assert.Single(await checkpointWriter.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1")));
-        var invokeWork = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var invokeWork = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.InvokeActivity, invokeWork.CommandKind);
     }
 
@@ -370,7 +370,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
                 pinnedExecutable ?? NewIdentity(),
                 executableNodeId,
                 "actexec-1",
-                RuntimeStartActivityCommandPayload.ScheduledActivityReason))
+                RuntimeStartActivityCommandPayload.ScheduledActivityReason), Elsa.Serialization.Core.JsonBaseline.Options)
             : (JsonElement?)null;
 
         return new RuntimeSchedulerWorkItem(

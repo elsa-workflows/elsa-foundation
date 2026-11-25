@@ -230,7 +230,7 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
     }
 
     private static string EncodeStimulusCursor(BookmarkState state) =>
-        JsonSerializer.Serialize(new BookmarkStimulusCursor(state.WorkflowExecutionId, state.BookmarkId));
+        JsonSerializer.Serialize(new BookmarkStimulusCursor(state.WorkflowExecutionId, state.BookmarkId), Elsa.Serialization.Core.JsonBaseline.Options);
 
     private static BookmarkStimulusCursor? DecodeStimulusCursor(string? cursor)
     {
@@ -239,7 +239,7 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
 
         try
         {
-            var decoded = JsonSerializer.Deserialize<BookmarkStimulusCursor>(cursor);
+            var decoded = JsonSerializer.Deserialize<BookmarkStimulusCursor>(cursor, Elsa.Serialization.Core.JsonBaseline.Options);
             return decoded is null ||
                    string.IsNullOrWhiteSpace(decoded.WorkflowExecutionId) ||
                    string.IsNullOrWhiteSpace(decoded.BookmarkId)

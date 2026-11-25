@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { qualifyStudioBackendPath, StudioHttpError, useStudioWorkspaceTab } from "@elsa-workflows/studio-sdk";
 import { StudioResultState, SkeletonRows, studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioDialog, StudioDialogFooter, StudioPageHeader, StudioSearchInput, StudioTimestamp, type OverflowMenuItem, StudioField } from "@elsa-workflows/studio-ui";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -51,6 +53,7 @@ export function openExecutableInspector(artifactId: string, sourceReferenceId?: 
 }
 
 export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange, canBrowseDefinitions = true, canManagePublications = false }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void; canBrowseDefinitions?: boolean; canManagePublications?: boolean }) {
+  useStudioTimeZone();
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [refreshing, setRefreshing] = useState(false);
   const workspaceTab = useStudioWorkspaceTab();
@@ -195,6 +198,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
       {executableRun.pending ? (
         <WorkflowRunInputDialog
           inputs={executableRun.pending.inputs}
+          returnFocusTo={executableRun.pending.opener}
           editors={runInputEditors}
           onSubmit={values => { void executableRun.confirm(values); }}
           onCancel={executableRun.cancel}
@@ -560,6 +564,7 @@ function collectExecutableIdentifiers(executable: WorkflowExecutableSummary): Wo
 }
 
 function WorkflowExecutableOrigins({ executable, definitionNames }: { executable: WorkflowExecutableSummary; definitionNames: ReadonlyMap<string, string> }) {
+
   const definitionIds = getExecutableDefinitionIds(executable);
 
   const openSourceDefinition = (definitionId: string) => {
@@ -590,6 +595,7 @@ function WorkflowExecutableOrigins({ executable, definitionNames }: { executable
 }
 
 export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitionId, publishedArtifactId }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionId: string; publishedArtifactId: string | null }) {
+  useStudioTimeZone();
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -705,6 +711,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
       {executableRun.pending ? (
         <WorkflowRunInputDialog
           inputs={executableRun.pending.inputs}
+          returnFocusTo={executableRun.pending.opener}
           editors={runInputEditors}
           onSubmit={values => { void executableRun.confirm(values); }}
           onCancel={executableRun.cancel}

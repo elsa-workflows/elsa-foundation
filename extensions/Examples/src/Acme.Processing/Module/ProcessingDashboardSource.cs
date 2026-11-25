@@ -17,7 +17,7 @@ internal sealed class ProcessingDashboardSource(IProcessingRecordReader records,
     private const string Dataset = "acme.processing.records";
     private const string Revision = "processing-v1";
     private static readonly byte[] ProofKey = RandomNumberGenerator.GetBytes(32);
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     public IReadOnlyCollection<DashboardDatasetOwner> Ownership => [new(Dataset, "Acme.Processing")];
 
     public async ValueTask CollectAsync(DashboardDatasetsCollecting context, CancellationToken cancellationToken)
@@ -298,7 +298,7 @@ internal sealed class ProcessingDashboardSource(IProcessingRecordReader records,
     private static DashboardResultColumn Column(DashboardQueryContext context, string field)
     { var declaration = context.Dataset.Fields.Single(item => item.Id == field); return new(field, declaration.Label, declaration.Type, declaration.Unit); }
     private static IReadOnlyDictionary<string, DashboardValue> Groups(Row row, DashboardQueryContext context) => context.Request.Query.GroupBy.ToDictionary(field => field, field => row.Values[field], StringComparer.Ordinal);
-    private static string GroupKey(IReadOnlyList<string> keys, IReadOnlyDictionary<string, DashboardValue> values) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(keys.Select(key => new { key, values[key].Type, values[key].Literal }), Json))).ToLowerInvariant();
+    private static string GroupKey(IReadOnlyList<string> keys, IReadOnlyDictionary<string, DashboardValue> values) => Elsa.Serialization.Core.JsonHashInput.Hash(keys.Select(key => new { key, values[key].Type, values[key].Literal }));
     private static bool InPeriod(Row row, DashboardQueryContext context, string role) => context.Periods.Count == 0 ? role == "current" : context.Periods.Any(period => period.Role == role && row.Record.StartedAt >= period.From && row.Record.StartedAt < period.To);
     private static bool Finished(ProcessingRecord record) => record.Status is "completed" or "failed";
     private static string Reference(string reference) => reference.StartsWith("current.", StringComparison.Ordinal) ? reference[8..] : reference;

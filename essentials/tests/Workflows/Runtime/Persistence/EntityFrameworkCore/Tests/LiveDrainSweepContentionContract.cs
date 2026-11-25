@@ -323,7 +323,7 @@ internal static class LiveDrainSweepContentionContract
     private static bool IsCreateBookmark(RuntimePostCommitIntent intent) =>
         intent.WorkflowExecutionId == WorkflowExecutionId &&
         intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork &&
-        intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>()?.CommandKind == WorkflowExecutionCommandKind.CreateBookmark;
+        intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)?.CommandKind == WorkflowExecutionCommandKind.CreateBookmark;
 
     /// <summary>
     /// Runs another deliverer's step where the pump's timer would run it: in its own scope, and with none of the drain's

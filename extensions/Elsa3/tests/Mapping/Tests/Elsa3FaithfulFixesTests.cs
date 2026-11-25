@@ -1,3 +1,8 @@
+using System.Text.Json;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Services;
 using Elsa3.Mapping.Tests.Support;
 using Elsa3.Models;
@@ -105,6 +110,64 @@ public sealed class Elsa3FaithfulFixesTests
         Assert.Contains("Name: 'x'", Source(Input(Node(state, "child"), "Inputs")));
     }
 
+    // #5790: a script on a dictionary member declares the member's own type, which publication requires verbatim.
+    [Theory]
+    [InlineData("ObjectDictionary")]
+    [InlineData("Object")]
+    public async Task A_dispatch_input_script_declares_the_Elsa4_dictionary_type(string typeName)
+    {
+        var node = Activity("child", "Elsa.DispatchWorkflow",
+            ("workflowDefinitionId", Literal("child-definition")),
+            ("input", Expression("JavaScript", "return { Name: 'x' };", typeName)));
+
+        var state = await ConvertAsync(Sequence("root", node));
+
+        Assert.Equal(MemberType("DispatchWorkflow", "Inputs"), ResultType(Input(Node(state, "child"), "Inputs")));
+    }
+
+    [Theory]
+    [InlineData("HttpHeaders")]
+    [InlineData("Elsa.Http.HttpHeaders, Elsa.Http")]
+    [InlineData("Object")]
+    public async Task A_response_headers_script_declares_the_Elsa4_dictionary_type(string typeName)
+    {
+        var respond = Activity("respond", "Elsa.WriteHttpResponse",
+            ("content", Literal("ok")),
+            ("responseHeaders", Expression("JavaScript", "return { 'X-Demo': ['elsa3'] };", typeName)));
+
+        var state = await ConvertAsync(Sequence("root", respond));
+
+        Assert.Equal(MemberType("WriteHttpResponse", "Headers"), ResultType(Input(Node(state, "respond"), "Headers")));
+    }
+
+    // #5803: Elsa 4 reads a single string per header at run time, so such a script converts as it is, with no warning.
+    [Fact]
+    public async Task A_single_string_response_headers_script_converts_without_a_behaviour_warning()
+    {
+        var respond = Activity("respond", "Elsa.WriteHttpResponse",
+            ("content", Literal("ok")),
+            ("responseHeaders", Expression("JavaScript", "return { 'X-Demo': 'elsa3' };", "HttpHeaders")));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", respond)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code.StartsWith("ELS3-BEHAVIOUR-", StringComparison.Ordinal));
+        Assert.Contains("'X-Demo': 'elsa3'", Source(Input(Node(result.Value!.State, "respond"), "Headers")));
+    }
+
+    [Fact]
+    public async Task A_response_headers_script_declared_as_a_string_is_still_refused()
+    {
+        var respond = Activity("respond", "Elsa.WriteHttpResponse",
+            ("content", Literal("ok")),
+            ("responseHeaders", Expression("JavaScript", "return 'X-Demo: elsa3';", "String")));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", respond)));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.IncompatibleValue);
+    }
+
     [Fact]
     public async Task A_json_only_member_declared_as_a_number_is_still_refused()
     {
@@ -151,6 +214,34 @@ public sealed class Elsa3FaithfulFixesTests
         Assert.Equal(elsa4, Text(headers));
     }
 
+    [Theory]
+    [InlineData("Literal")]
+    [InlineData("Object")]
+    public async Task A_static_response_header_map_converts_to_value_arrays(string expressionType)
+    {
+        var respond = Activity("respond", "Elsa.WriteHttpResponse",
+            ("content", Literal("ok")),
+            ("responseHeaders", Expression(expressionType, """{"X-Demo":"elsa3"}""", "HttpHeaders")));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", respond)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("""{"X-Demo":["elsa3"]}""", Text(Input(Node(result.Value!.State, "respond"), "Headers")));
+    }
+
+    [Fact]
+    public async Task An_empty_Object_response_header_map_is_left_unbound()
+    {
+        var respond = Activity("respond", "Elsa.WriteHttpResponse",
+            ("content", Literal("ok")),
+            ("responseHeaders", Expression("Object", "{}", "HttpHeaders")));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", respond)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(Node(result.Value!.State, "respond").Inputs, input => input.ReferenceKey == "Headers");
+    }
+
     [Fact]
     public async Task An_Elsa3_response_header_literal_that_is_not_a_map_is_refused()
     {
@@ -189,6 +280,15 @@ public sealed class Elsa3FaithfulFixesTests
 
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.IncompatibleValue);
     }
+
+    /// <summary>The type the shipped Elsa 4 activity <paramref name="activity"/> declares for <paramref name="input"/>.</summary>
+    private static TypeReference MemberType(string activity, string input) =>
+        RealActivityCatalog.Create().Versions
+            .Single(version => version.Definition.ActivityTypeKey.EndsWith("." + activity, StringComparison.Ordinal))
+            .Inputs.Single(definition => definition.ReferenceKey == input).Type;
+
+    private static TypeReference ResultType(ArgumentState argument) =>
+        Assert.IsType<JsonElement>(argument.Value.Value).Deserialize<ExpressionDefinition>(JsonBaseline.Options)!.ResultType;
 
     private static Elsa3Activity Marked(Elsa3Activity activity)
     {

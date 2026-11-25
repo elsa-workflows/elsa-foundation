@@ -71,6 +71,93 @@ virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.<Clone>$() -> Els
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.EqualityContract.get -> System.Type!
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.Equals(Elsa.Serialization.Core.Options.ObjectConverterOptions? other) -> bool
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.PrintMembers(System.Text.StringBuilder! builder) -> bool
+Elsa.Serialization.Core.JsonBaseline
+static Elsa.Serialization.Core.JsonBaseline.Options.get -> System.Text.Json.JsonSerializerOptions!
+static Elsa.Serialization.Core.JsonBaseline.CreateCopy() -> System.Text.Json.JsonSerializerOptions!
+Elsa.Serialization.Core.JsonCanonicalForm
+static Elsa.Serialization.Core.JsonCanonicalForm.Equals(System.Text.Json.JsonElement left, System.Text.Json.JsonElement right) -> bool
+static Elsa.Serialization.Core.JsonCanonicalForm.Equals(System.Text.Json.JsonElement? left, System.Text.Json.JsonElement? right) -> bool
+Elsa.Serialization.Core.JsonHashInput
+static Elsa.Serialization.Core.JsonHashInput.Hash(System.Text.Json.JsonElement value) -> string!
+static Elsa.Serialization.Core.JsonHashInput.Hash<T>(T value) -> string!
+static Elsa.Serialization.Core.JsonHashInput.Hash(object? value, System.Type! type) -> string!
+Elsa.Serialization.Core.JsonConversionAttribute
+Elsa.Serialization.Core.JsonConversionAttribute.CaseInsensitive.get -> bool
+Elsa.Serialization.Core.JsonConversionAttribute.CaseInsensitive.set -> void
+Elsa.Serialization.Core.JsonConversionAttribute.JsonConversionAttribute() -> void
+Elsa.Serialization.Core.JsonConversionAttribute.MemberMappings.get -> string![]!
+Elsa.Serialization.Core.JsonConversionAttribute.MemberMappings.set -> void
+Elsa.Serialization.Core.JsonConversionAttribute.NamingPolicy.get -> System.Text.Json.Serialization.JsonKnownNamingPolicy
+Elsa.Serialization.Core.JsonConversionAttribute.NamingPolicy.set -> void
+Elsa.Serialization.Core.JsonConversionAttribute.RefuseUnmatchedMembers.get -> bool
+Elsa.Serialization.Core.JsonConversionAttribute.RefuseUnmatchedMembers.set -> void
+Elsa.Serialization.Core.JsonConversionContract
+Elsa.Serialization.Core.JsonConversionContract.Options.get -> System.Text.Json.JsonSerializerOptions!
+Elsa.Serialization.Core.JsonConversionContract.Read(System.Text.Json.JsonElement value, System.Type! type, System.Action<Elsa.Serialization.Core.JsonConversionDiagnostic!>? report = null) -> object?
+Elsa.Serialization.Core.JsonConversionContract.RefuseUnmatchedMembers.get -> bool
+Elsa.Serialization.Core.JsonConversionContract.Write(object? value, System.Type! type) -> System.Text.Json.JsonElement
+Elsa.Serialization.Core.JsonConversionDiagnostic
+Elsa.Serialization.Core.JsonConversionDiagnostic.<Clone>$() -> Elsa.Serialization.Core.JsonConversionDiagnostic!
+Elsa.Serialization.Core.JsonConversionDiagnostic.Code.get -> string!
+Elsa.Serialization.Core.JsonConversionDiagnostic.Code.init -> void
+Elsa.Serialization.Core.JsonConversionDiagnostic.Equals(Elsa.Serialization.Core.JsonConversionDiagnostic? other) -> bool
+Elsa.Serialization.Core.JsonConversionDiagnostic.Path.get -> string!
+Elsa.Serialization.Core.JsonConversionDiagnostic.Path.init -> void
+Elsa.Serialization.Core.JsonConversionDiagnostic.TargetType.get -> System.Type!
+Elsa.Serialization.Core.JsonConversionDiagnostic.TargetType.init -> void
+Elsa.Serialization.Core.StrictDateTimeConverters
+Elsa.Serialization.Core.UnmatchedMemberScanner
+override Elsa.Serialization.Core.JsonConversionDiagnostic.Equals(object? obj) -> bool
+override Elsa.Serialization.Core.JsonConversionDiagnostic.GetHashCode() -> int
+override Elsa.Serialization.Core.JsonConversionDiagnostic.ToString() -> string!
+static Elsa.Serialization.Core.JsonConversionContract.Default.get -> Elsa.Serialization.Core.JsonConversionContract!
+static Elsa.Serialization.Core.JsonConversionContract.For(System.Type! type, System.Reflection.MemberInfo? member = null) -> Elsa.Serialization.Core.JsonConversionContract!
+Elsa.Serialization.Core.JsonConversionContract.ForNested(System.Type! type, System.Reflection.MemberInfo? member = null) -> Elsa.Serialization.Core.JsonConversionContract!
+static Elsa.Serialization.Core.JsonConversionContract.IsContractAdapter(System.Text.Json.Serialization.JsonConverter? converter) -> bool
+static Elsa.Serialization.Core.JsonConversionDiagnostic.operator !=(Elsa.Serialization.Core.JsonConversionDiagnostic? left, Elsa.Serialization.Core.JsonConversionDiagnostic? right) -> bool
+static Elsa.Serialization.Core.JsonConversionDiagnostic.operator ==(Elsa.Serialization.Core.JsonConversionDiagnostic? left, Elsa.Serialization.Core.JsonConversionDiagnostic? right) -> bool
+static Elsa.Serialization.Core.StrictDateTimeConverters.Configure(System.Text.Json.JsonSerializerOptions! options, bool apiMode = false) -> void
+static Elsa.Serialization.Core.UnmatchedMemberScanner.Scan(System.Text.Json.JsonElement value, System.Type! type, Elsa.Serialization.Core.JsonConversionContract! contract) -> System.Collections.Generic.IReadOnlyList<Elsa.Serialization.Core.JsonConversionDiagnostic!>!
+Elsa.Serialization.Core.IJsonConversionMemberMatcher
+Elsa.Serialization.Core.IJsonConversionMemberMatcher.TryGetMemberType(string! name, out System.Type! memberType) -> bool
+Elsa.Serialization.Core.JsonConversionDiagnostic.Converter.get -> string?
+Elsa.Serialization.Core.JsonConversionDiagnostic.Converter.init -> void
+Elsa.Serialization.Core.JsonConversionDiagnostic.Deconstruct(out string! Code, out string! Path, out System.Type! TargetType, out string? Converter) -> void
+Elsa.Serialization.Core.JsonConversionDiagnostic.JsonConversionDiagnostic(string! Code, string! Path, System.Type! TargetType, string? Converter = null) -> void
+static Elsa.Serialization.Core.JsonBaseline.Configure(System.Text.Json.JsonSerializerOptions! options) -> void
+static Elsa.Serialization.Core.JsonHashInput.HashJson(string! json) -> string!
+static Elsa.Serialization.Core.JsonHashInput.HashUtf8(System.ReadOnlyMemory<byte> json) -> string!
+static Elsa.Serialization.Core.JsonHashInput.SerializeToElement<T>(T value) -> System.Text.Json.JsonElement
+static Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(System.Text.Json.JsonElement value) -> byte[]!
+static Elsa.Serialization.Core.JsonHashInput.HashFramed(System.ReadOnlySpan<byte> frame) -> string!
+static Elsa.Serialization.Core.JsonHashInput.HashKeyed(System.Text.Json.JsonElement value, System.ReadOnlySpan<byte> key) -> byte[]!
+static Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(System.ReadOnlyMemory<byte> json, System.ReadOnlySpan<byte> key) -> byte[]!
+static Elsa.Serialization.Core.JsonHashInput.HashKeyedFramed(System.ReadOnlySpan<byte> frame, System.ReadOnlySpan<byte> key) -> byte[]!
+static Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(object? value, System.Type? type = null) -> System.Text.Json.JsonElement
+static Elsa.Serialization.Core.JsonConversionContract.SerializeToElement<T>(T value) -> System.Text.Json.JsonElement
+static Elsa.Serialization.Core.JsonConversionContract.Serialize(object? value) -> string!
+static Elsa.Serialization.Core.JsonConversionContract.Serialize(object? value, System.Type! type) -> string!
+static Elsa.Serialization.Core.JsonConversionContract.Deserialize(System.Text.Json.JsonElement value, System.Type! type) -> object?
+static Elsa.Serialization.Core.JsonConversionContract.Deserialize<T>(System.Text.Json.JsonElement value) -> T?
+static Elsa.Serialization.Core.JsonConversionContract.Deserialize(string! value, System.Type! type) -> object?
+static Elsa.Serialization.Core.JsonConversionContract.Deserialize<T>(string! value) -> T?
+static Elsa.Serialization.Core.JsonHashInput.SerializeToElement(object? value, System.Type! type) -> System.Text.Json.JsonElement
+Elsa.Serialization.Core.JsonConversionException
+Elsa.Serialization.Core.Options.ObjectConverterOptions.ConversionContract.get -> Elsa.Serialization.Core.JsonConversionContract?
+Elsa.Serialization.Core.Options.ObjectConverterOptions.ConversionContract.init -> void
+Elsa.Serialization.Core.Options.ObjectConverterOptions.ReportJsonDiagnostic.get -> System.Action<Elsa.Serialization.Core.JsonConversionDiagnostic!>?
+Elsa.Serialization.Core.Options.ObjectConverterOptions.ReportJsonDiagnostic.init -> void
+Elsa.Serialization.Core.JsonConversionException.JsonConversionException(string! code, string! message, string? path = null) -> void
+Elsa.Serialization.Core.JsonConversionException.Code.get -> string!
+static Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr<T>(T value, System.Func<object!, object?>! ownerProjection) -> System.Text.Json.JsonElement
+static Elsa.Serialization.Core.JsonHashInput.OpaqueString(string! value) -> string!
+Elsa.Serialization.Core.JsonModuleMetadata
+static Elsa.Serialization.Core.JsonModuleMetadata.Owns(System.Type! type, string! moduleNamespace) -> bool
+static Elsa.Serialization.Core.JsonModuleMetadata.Resolve(System.Text.Json.Serialization.JsonSerializerContext! context, System.Type! type, System.Text.Json.JsonSerializerOptions! hostOptions, string! moduleNamespace) -> System.Text.Json.Serialization.Metadata.JsonTypeInfo?
+override Elsa.Serialization.Core.JsonConversionException.Message.get -> string!
+static Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(System.Text.Json.Nodes.JsonNode? left, System.Text.Json.Nodes.JsonNode? right) -> bool
+static Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(string? left, string? right) -> bool
+static Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(System.ReadOnlyMemory<byte> left, System.ReadOnlyMemory<byte> right) -> bool
 
 Elsa.Serialization.Core.IRuntimeTypeNullability
 Elsa.Serialization.Core.IRuntimeTypeNullability.TryGetSupportsNull(string! alias, out bool supportsNull) -> bool

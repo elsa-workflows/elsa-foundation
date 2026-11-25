@@ -1,0 +1,1217 @@
+{
+  "formatVersion": 1,
+  "sourceSignature": "7fe0ac0daa602e8596223d6d3f763bf2f9b2b8507acc2e2ea12015b4a0debc94",
+  "rootSignature": "8a84053c1d76f4d8413cde4a5b175c47a31ad67408d6a7b03b3d7ba04c5c27f1",
+  "authoritySignature": "ac3db4cb26151340fe26cbfeb2e9ab70ab6daa3c77ddb3443d0ff849cde5f4e4",
+  "moduleSignature": "8beaf0303b954b056ba0abea2467a29d1fe98af150bceb05617d111abdfd4466",
+  "owners": [
+    {
+      "identity": "extensions/Agent/studio/Elsa.Studio.Agent/Client/src/playgroundApi.ts::newIdempotencyKey",
+      "classification": "random_identity",
+      "reason": "playground- UUID or timestamp/random idempotency identity; no message JSON input.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "extensions/Agent/studio/Elsa.Studio.Agent/Client/src/reviewsApi.ts::newRequestId",
+      "classification": "random_identity",
+      "reason": "review- UUID or timestamp/random request identity; no review JSON preimage.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionsApi.ts::operationId",
+      "classification": "random_identity",
+      "reason": "Decisions operation UUID; no DMN or JSON hashing.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionXml.ts::editTable",
+      "classification": "random_identity",
+      "reason": "DMN rule/input/output element UUID IDs with hyphens removed; XML identity allocation.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 3
+        }
+      ]
+    },
+    {
+      "identity": "extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionXml.ts::entry",
+      "classification": "random_identity",
+      "reason": "cell_ UUID without hyphens for input/output XML entries; not a content digest.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionXml.ts::newDecisionXml",
+      "classification": "random_identity",
+      "reason": "decision_ UUID seeds DMN document/decision/table/node IDs; no XML hashing.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/newDecisionHandoff.ts::token",
+      "classification": "random_identity",
+      "reason": "Single-use new-decision handoff UUID or timestamp/random token; stored JSON is separate.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 3
+        }
+      ]
+    },
+    {
+      "identity": "extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Client/src/extension-builder/helpers.ts::getExtensionBuilderSessionId",
+      "classification": "random_identity",
+      "reason": "Session-storage studio- UUID reused for Extension Builder session; no draft digest.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Client/src/previewReturn.ts::preparePreviewReturn",
+      "classification": "random_nonce",
+      "reason": "32 random bytes as lowercase hex authentication preview-return nonce; pending JSON is not hashed.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TaskDetailPage.tsx::act",
+      "classification": "random_identity",
+      "reason": "Independent user-task action request/retry UUIDs; completion body is separate.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Backends/Client/src/connections.ts::backendConnectionNonce",
+      "classification": "random_nonce",
+      "reason": "16 random bytes as lowercase hex backend connection generation ID; no payload digest.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/module.tsx::register",
+      "classification": "random_identity",
+      "reason": "Dashboard authoring client identity from Weaver clientId or fresh UUID.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/native/DashboardDependencyReview.tsx::copy",
+      "classification": "random_identity",
+      "reason": "Copy idempotency UUID retained per accepted name for retry; no question JSON preimage.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/native/NamedDashboards.tsx::uuid",
+      "classification": "random_identity",
+      "reason": "Native question/dashboard mutation UUID helper, unrelated to content.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/native/weaverAuthoring.tsx::dispatch",
+      "classification": "random_identity",
+      "reason": "dashboards-authoring: UUID requestId; bound origin/interpretation JSON is separate.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/useWeaverSession.ts::useWeaverSession",
+      "classification": "random_identity",
+      "reason": "Supplied requestId or UUID/timestamp-random message delivery identity; no message digest.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaverClient.ts::sendMessage",
+      "classification": "random_identity",
+      "reason": "One UUID request ID retained per request object for retries; no JSON hashing.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/workspace/model.ts::createTabId",
+      "classification": "random_identity",
+      "reason": "tab timestamp, sequence and UUID slice/random suffix; workspace identity allocation.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 3
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/workspace/useWorkspaceTabs.ts::onPopState",
+      "classification": "random_identity",
+      "reason": "Provisional history-traversal UUID indexes displaced navigation state during approval.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/backendConnection.ts::studioConnectionNonce",
+      "classification": "random_nonce",
+      "reason": "16 random bytes as lowercase hex SDK connection generation nonce.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts::createWeaverRegistry",
+      "classification": "random_identity",
+      "reason": "Weaver client UUID or studio timestamp/random identity; no context fingerprint.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/jsonHashInput.ts::hashJson",
+      "classification": "shared_json_authority",
+      "reason": "lowerhex SHA256 of UTF8(canonicalJsonValue(value)); finite JSON.stringify projection plus exact canonicalizer; no prefix.",
+      "goldenEvidence": [
+        "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/__tests__/jsonHashInput.test.ts",
+        "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/sha256.test.ts"
+      ],
+      "sites": [
+        {
+          "role": "digest-primitive",
+          "kind": "call",
+          "target": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/sha256.ts::sha256Hex@3260",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/jsonHashInput.ts::hashJsonText",
+      "classification": "shared_json_authority",
+      "reason": "lowerhex SHA256 of UTF8(canonicalJsonText(json)); exact number tokens and unique-member projection contract.",
+      "goldenEvidence": [
+        "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/__tests__/jsonHashInput.test.ts",
+        "specs/1207-json-data-integrity-baseline/evidence/json-hash-vectors.json"
+      ],
+      "sites": [
+        {
+          "role": "digest-primitive",
+          "kind": "call",
+          "target": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/sha256.ts::sha256Hex@3260",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/jsonHashInput.ts::hashJsonTextAsync",
+      "classification": "shared_json_authority",
+      "reason": "Canonicalize before await; SHA-256 WebCrypto over UTF8 canonical text or identical sha256Hex fallback; lowerhex.",
+      "goldenEvidence": [
+        "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/__tests__/jsonHashInput.test.ts",
+        "specs/1207-json-data-integrity-baseline/evidence/json-hash-vectors.json"
+      ],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 3
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 4
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::SubtleCrypto@1484917",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::SubtleCrypto@1484917",
+          "occurrence": 2
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::SubtleCrypto@1484917",
+          "occurrence": 3
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::SubtleCrypto@1484917",
+          "occurrence": 4
+        },
+        {
+          "role": "digest-primitive",
+          "kind": "call",
+          "target": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/sha256.ts::sha256Hex@3260",
+          "occurrence": 1
+        },
+        {
+          "role": "digest-primitive",
+          "kind": "call",
+          "target": "typescript/lib/lib.dom.d.ts::digest@1486399",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/notifications.ts::createNotificationController",
+      "classification": "random_identity",
+      "reason": "Injected createId or default notification UUID/timestamp-counter identity; no notification hash.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/sha256.ts::sha256Hex",
+      "classification": "shared_sha_implementation",
+      "reason": "lowerhex SHA256(utf8(text)); raw text primitive, JSON callers must route through canonical SDK authority.",
+      "goldenEvidence": [
+        "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/sha256.test.ts"
+      ],
+      "sites": [
+        {
+          "role": "digest-primitive",
+          "kind": "call",
+          "target": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/sha256.ts::sha256@1329",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionForkDialog.tsx::operationIdentity",
+      "classification": "random_identity",
+      "reason": "Caller prefix plus UUID/timestamp-random fork/proposal mutation identity.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionPublicationReview.tsx::createOperationKey",
+      "classification": "random_identity",
+      "reason": "UUID or activity-publish- plus 16 secure random bytes; refuses unavailable secure source.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 3
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 4
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionTestRunDialog.tsx::dispatch",
+      "classification": "random_identity",
+      "reason": "activity-test-run- UUID idempotency identity; activity test inputs are separate.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/activityUpgradeModel.ts::sha256",
+      "classification": "non_json_identifier_hash",
+      "reason": "Only callers derive activity-upgrade-receipt- plus lowerhex SHA256(UTF8(planId+U+001F+lowerhex SHA256(UTF8(idempotencyKey)))); opaque IDs, no JSON.",
+      "goldenEvidence": [
+        "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityUpgradeModel.test.ts"
+      ],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::SubtleCrypto@1484917",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::SubtleCrypto@1484917",
+          "occurrence": 2
+        },
+        {
+          "role": "digest-primitive",
+          "kind": "call",
+          "target": "typescript/lib/lib.dom.d.ts::digest@1486399",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityUpgradeWorkbenchPage.tsx::operationId",
+      "classification": "random_identity",
+      "reason": "Activity-upgrade UUID/timestamp-random operation idempotency identity.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/api/bpmnRuntime.ts::prepare",
+      "classification": "random_identity",
+      "reason": "Default BPMN request UUID bound to authenticated session/scope, or caller-supplied identity.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/api/workflowOrganization.ts::workflowOperationKey",
+      "classification": "random_identity",
+      "reason": "Workflow organization/folder/tag mutation UUID; no metadata digest.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/bpmnAdapter.ts::createBpmnElementId",
+      "classification": "random_identity",
+      "reason": "BPMN element type plus eight-character UUID slice; not XML/BPMN content hashing.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/bpmn/bpmnAdapter.ts::createBpmnFlowEdge",
+      "classification": "random_identity",
+      "reason": "flow- UUID slice allocates BPMN edge ID; source/target are separate fields.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/Elsa3ReusableImportPage.tsx::createIdempotencyKey",
+      "classification": "random_identity",
+      "reason": "Elsa3 import UUID or elsa3-import timestamp/random operation identity.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/NativeBlockCommands.tsx::preview",
+      "classification": "random_identity",
+      "reason": "Planned native-block node UUID; version/name/description are separate preview fields.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/operatorActions.ts::defaultRandomId",
+      "classification": "random_identity",
+      "reason": "Operator action UUID or timestamp/random correlation/idempotency identity.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 3
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/standalone-triggers/api.ts::operationId",
+      "classification": "random_identity",
+      "reason": "Standalone-trigger mutation UUID; configuration JSON is not hashed here.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/standalone-triggers/json.ts::parseLiteralJson",
+      "classification": "json_serialization_nonce",
+      "reason": "Temporary random namespace protects exact JSON number tokens while parsing; nonce is replaced, not a digest.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/standalone-triggers/json.ts::serializeTriggerPayload",
+      "classification": "json_serialization_nonce",
+      "reason": "Temporary random namespace for ExactJsonNumber JSON.stringify markers; removed from final wire text.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/switchOutcomePorts.ts::reconcileSwitchOutcomeConnections",
+      "classification": "random_identity",
+      "reason": "Additional split outcome edges get flow- UUID; first connection ID retained; no content hashing.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/DirectBpmnPublishAction.tsx::draftHash",
+      "classification": "json_routed",
+      "reason": "hashJsonTextAsync(getDraftSignature(savedDraft)); canonical {state,layout,activityPresentation}, undefined presentation omitted; lowerhex in retained client receipt.",
+      "goldenEvidence": [
+        "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/directBpmnPublication.test.tsx"
+      ],
+      "sites": [
+        {
+          "role": "json-hash-input",
+          "kind": "call",
+          "target": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/jsonHashInput.ts::hashJsonTextAsync@1026",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/DirectBpmnPublishAction.tsx::publish",
+      "classification": "random_identity",
+      "reason": "Independent promotionKey/publicationKey UUIDs retained before network mutation.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/duplicateActivities.ts::allocateActivityNodeId",
+      "classification": "random_identity",
+      "reason": "Sanitized activity prefix plus injected/default UUID slice with collision handling.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorHelpers.ts::createDraftSnapshotId",
+      "classification": "json_routed",
+      "reason": "draft.id+'-'+hashJson(draft.state); state behavior projection only, excludes layout/presentation/definitionId/validation errors.",
+      "goldenEvidence": [
+        "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/sha256.test.ts"
+      ],
+      "sites": [
+        {
+          "role": "json-hash-input",
+          "kind": "call",
+          "target": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/jsonHashInput.ts::hashJson@37",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorHelpers.ts::createNodeId",
+      "classification": "random_identity",
+      "reason": "Sanitized catalog activity display name plus UUID slice; no catalog JSON hash.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorHelpers.ts::getDraftContentRevision",
+      "classification": "json_routed",
+      "reason": "'sha256:'+hashJsonText(getDraftSignature(draft)); canonical {state,layout,activityPresentation}, undefined omitted; signature-keyed cache.",
+      "goldenEvidence": [
+        "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/sha256.test.ts"
+      ],
+      "sites": [
+        {
+          "role": "json-hash-input",
+          "kind": "call",
+          "target": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/jsonHashInput.ts::hashJsonText@807",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorHelpers.ts::getDraftRevision",
+      "classification": "json_routed",
+      "reason": "hashJsonText(getDraftSignature(draft)); same canonical state/layout/presentation preimage, lowerhex without prefix.",
+      "goldenEvidence": [
+        "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/sha256.test.ts"
+      ],
+      "sites": [
+        {
+          "role": "json-hash-input",
+          "kind": "call",
+          "target": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/jsonHashInput.ts::hashJsonText@807",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/httpWorkflowStarter.ts::createHttpStarterState",
+      "classification": "random_identity",
+      "reason": "Shared UUID suffix allocates linked HTTP endpoint/response starter nodes.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useTestRunRestoration.ts::snapshotDigest",
+      "classification": "json_routed",
+      "reason": "hashJsonTextAsync(signature), supplied by getDraftSignature(draft); lowerhex retained with authorized Test Run reference.",
+      "goldenEvidence": [
+        "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/testRunRestoration.test.tsx"
+      ],
+      "sites": [
+        {
+          "role": "json-hash-input",
+          "kind": "call",
+          "target": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/jsonHashInput.ts::hashJsonTextAsync@1026",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowContextBridge.ts::useWorkflowContextBridge",
+      "classification": "random_identity",
+      "reason": "Authoring-origin generation UUID/timestamp fallback for lifetime/auth invalidation.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowInspectionContext.ts::useWorkflowInspectionContext",
+      "classification": "random_identity",
+      "reason": "Inspection generation UUID/timestamp fallback scopes stale run/executable/version observations.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowLibraryWeaver.ts::useWorkflowPageWeaver",
+      "classification": "random_identity",
+      "reason": "Workflow library client generation UUID/timestamp fallback; pageRevision handles content separately.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowNativeBlockCommit.ts::useWorkflowNativeBlockCommit",
+      "classification": "random_identity",
+      "reason": "Pending native-block commit UUID binds promise/event completion to a request.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession.ts::useWorkflowDefinitionBrowseSession",
+      "classification": "random_identity",
+      "reason": "Browser history session UUID separates workflow navigation sessions.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowFolderDeletionDialog.tsx::submit",
+      "classification": "random_identity",
+      "reason": "Folder deletion operation UUID; previewRevision is opaque server concurrency authority.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowLibraryWeaver.ts::pageRevision",
+      "classification": "json_routed",
+      "reason": "'sha256:'+hashJson(body); entire caller-composed visible page/context body; array order/null presence retained.",
+      "goldenEvidence": [
+        "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/sha256.test.ts"
+      ],
+      "sites": [
+        {
+          "role": "json-hash-input",
+          "kind": "call",
+          "target": "Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/jsonHashInput.ts::hashJson@37",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTemplatesPage.tsx::WorkflowTemplatesPage",
+      "classification": "random_identity",
+      "reason": "Visible template-list origin generation UUID/timestamp fallback; content revision is separate pageRevision.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTestRunControls.tsx::createDeliveryId",
+      "classification": "random_identity",
+      "reason": "UUID or 16 random bytes with v4/variant bits encoded as hyphenated lowercase UUID; no JSON preimage.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 3
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 4
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter.ts::createWorkflowEdge",
+      "classification": "random_identity",
+      "reason": "flow-source-target-port plus UUID slice graph-edge identity, not connection JSON hashing.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowProperties.ts::generateId",
+      "classification": "random_identity",
+      "reason": "General workflow authoring UUID with random fallback; no authored property/value fingerprint.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 2
+        },
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 3
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowRunInputs.ts::serializeWorkflowExecutionPayload",
+      "classification": "json_serialization_nonce",
+      "reason": "Temporary UUID namespace preserves exact JSON numbers when JSON.rawJSON is absent; replaced markers are not retained hashes.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowTemplates.ts::deleteWorkflowTemplate",
+      "classification": "random_identity",
+      "reason": "Template deletion operation UUID; server expectedRevision is forwarded unchanged.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "identity": "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowTemplates.ts::saveWorkflowTemplate",
+      "classification": "random_identity",
+      "reason": "Template save operation UUID; state is separately canonicalized for wire serialization, not content-hashed here.",
+      "goldenEvidence": [],
+      "sites": [
+        {
+          "role": "crypto-authority",
+          "kind": "reference",
+          "target": "typescript/lib/lib.dom.d.ts::Crypto@336370",
+          "occurrence": 1
+        }
+      ]
+    }
+  ],
+  "rootCount": 824,
+  "sourceCount": 1522,
+  "goldenSignature": "0d1e48d482a7b3073ed4ee00d907d497d3abd2191f76bab9a529a0d89def56dc"
+}

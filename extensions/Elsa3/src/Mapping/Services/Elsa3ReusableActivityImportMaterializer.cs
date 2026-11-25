@@ -41,7 +41,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
     private const string SequenceStructureKind = "elsa.sequence.structure";
     private const string StructureSchemaVersion = "1.0.0";
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public async ValueTask<ReusableActivityImportMutation> MaterializeAsync(
         ReusableActivityImportCollection collection,
@@ -83,6 +83,16 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                     pathSegments: [new(Elsa3MigrationPathSegmentKind.SourceVersion, id)])).ToArray());
         var convertedById = new Dictionary<string, Elsa3ConvertedDefinition>(StringComparer.Ordinal);
 
+        // A dispatch pins the target's newest published version, and this import publishes the newest selected version of
+        // each workflow, so that is the one a literal input map must fit (#5808).
+        var dispatchTargetInputs = sourceById.Values
+            .GroupBy(x => x.DefinitionId, StringComparer.Ordinal)
+            .ToDictionary(
+                x => x.Key,
+                x => (IReadOnlyList<string>)(x.OrderByDescending(y => y.Version).ThenByDescending(y => y.Id, StringComparer.Ordinal).First()
+                    .Inputs ?? []).Select(input => input.Name).ToArray(),
+                StringComparer.Ordinal);
+
         foreach (var item in reusable.Concat(selection.Where(x => !x.IsReusable).OrderBy(x => x.SourceVersionId, StringComparer.Ordinal)))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -92,7 +102,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                 continue;
             var replacements = BuildReplacements(item, sourceById, selectedById, convertedById);
             var conversion = await converter.ConvertAsync(
-                new Elsa3ConversionRequest(source, item.IsReusable, replacements, DiagnosticMetadata(item)),
+                new Elsa3ConversionRequest(source, item.IsReusable, replacements, DiagnosticMetadata(item), dispatchTargetInputs),
                 cancellationToken);
             if (!conversion.Succeeded)
             {
@@ -256,10 +266,10 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                 ReusableActivityImportIdentity.Create("wrapper-output", $"{item.SourceVersionId}:{output.ReferenceKey}"),
                 "elsa.intrinsic.set-output@1",
                 [
-                    new ArgumentState("name", new ArgumentValue(output.ReferenceKey, "Literal"), null, null, null, null),
+                    new ArgumentState("name", ArgumentValue.FromClr(output.ReferenceKey, "Literal"), null, null, null, null),
                     new ArgumentState(
                         "value",
-                        new ArgumentValue(JsonSerializer.SerializeToElement(new
+                        ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new
                         {
                             producerNodeId = graphNode.NodeId,
                             projectionKey = output.ReferenceKey,
@@ -273,7 +283,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             });
         }
 
-        var payload = JsonSerializer.SerializeToElement(new { activities = children, variables = Array.Empty<object>() }, Elsa3NativeStructureBuilder.PayloadJsonOptions);
+        var payload = JsonSerializer.SerializeToElement(new { activities = children, variables = Array.Empty<object>() }, options: Elsa3NativeStructureBuilder.PayloadJsonOptions);
         var sequence = new ActivityNode(
             sequenceId,
             await SequenceVersionIdAsync(cancellationToken),
@@ -310,7 +320,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             inputs.Select(x => new ArgumentState(
                 x.ReferenceKey,
                 // The wrapper's own workflow request member: Elsa 4 JavaScript has no getInput.
-                new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey = x.Name }), "WorkflowRequest"),
+                ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { memberKey = x.Name }), "WorkflowRequest"),
                 null,
                 null,
                 x.StorageDriverType,

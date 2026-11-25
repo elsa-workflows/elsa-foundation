@@ -121,7 +121,7 @@ public sealed class RulesIntentHandlerTests
         Assert.Equal(RulesNativeBoundary.InvalidDeliveryId(fixture.Request, fixture.Address), dispatch.IdempotencyKey);
         Assert.Equal(RulesNativeBoundary.CompletionType, dispatch.PayloadType);
         Assert.Equal(RulesNativeBoundary.ProviderId, dispatch.ProviderId);
-        var completion = Assert.IsType<RunRulesCompletion>(dispatch.Input!.Value.Deserialize<RunRulesCompletion>());
+        var completion = Assert.IsType<RunRulesCompletion>(dispatch.Input!.Value.Deserialize<RunRulesCompletion>(Elsa.Serialization.Core.JsonConversionContract.Default.Options));
         Assert.Equal(fixture.Address, completion.Destination);
         Assert.Equal(RulesNativeBoundary.InvalidDeliveryId(fixture.Request, fixture.Address), completion.DeliveryId);
         Assert.Equal(RulesNativeBoundary.InvalidRoundLimit, completion.InvalidCode);
@@ -253,7 +253,7 @@ public sealed class RulesIntentHandlerTests
             var payload = payloadRetired
                 ? ValueEnvelope.Absent(RulesNativeBoundary.CompletionType, ValueProtectionPolicy.InstanceInline)
                 : ValueEnvelope.Inline(RulesNativeBoundary.CompletionType,
-                    JsonSerializer.SerializeToElement(completion), ValueProtectionPolicy.InstanceInline);
+                    Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(completion), ValueProtectionPolicy.InstanceInline);
             var receipt = new ActivityTriggerDelivery(nativeDeliveryId, Address.RegistrationId,
                 RulesNativeBoundary.CompletionType, payload, RulesNativeBoundary.ProviderId, Now,
                 RulesNativeBoundary.DeliveryDeduplicationKey(Address, completion.DeliveryId),
@@ -289,7 +289,7 @@ public sealed class RulesIntentHandlerTests
             var state = new RunRulesState(RulesNativeBoundary.FormatVersion, RulesNativeBoundary.Write(Request));
             var privateState = new ActivityPrivateState(ActivityId, 1,
                 ValueEnvelope.Inline(new(typeof(RunRulesState).FullName!, schemaVersion: 1),
-                    JsonSerializer.SerializeToElement(state), ValueProtectionPolicy.InstanceInline),
+                    Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(state), ValueProtectionPolicy.InstanceInline),
                 "initial-attempt-1", Now);
             var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
             {

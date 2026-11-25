@@ -21,7 +21,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
             expiresAt: change == "expired" ? At.AddSeconds(2) : null);
         await f.SeedPublisherAsync(); await f.PublishAsync(); Assert.Equal(1, (await f.ProcessPublicationsAsync()).DeliveredCount);
         var queued = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
-        var origin = queued.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.HistoryCausation!;
+        var origin = queued.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!.HistoryCausation!;
         await ChangeWaitAsync(f, change);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single((await f.DrainAsync()).Items).Status);
         Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
@@ -60,7 +60,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         Assert.Equal(observations.Length, observations.Select(item => item.HistoryEventId).Distinct(StringComparer.Ordinal).Count());
         Assert.All(observations, item => Assert.Equal(queued.WorkItemId, item.Causation!.SchedulerWorkItemId));
         Assert.Equal(2, control.Attempts.Count);
-        Assert.DoesNotContain("private", JsonSerializer.Serialize(observations));
+        Assert.DoesNotContain("private", JsonSerializer.Serialize(observations, options: Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     [Theory]

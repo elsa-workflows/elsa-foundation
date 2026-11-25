@@ -60,6 +60,27 @@ public sealed class UnknownAliasRoundTripTests
     }
 
     [Fact]
+    public void Variable_metadata_strings_keep_their_exact_authored_spelling()
+    {
+        const string name = "2026-07-18T12:15:00+02:00";
+        const string json = """{"referenceKey":"2026-07-18T12:15:00+02:00","name":"2026-07-18T12:15:00+02:00","type":{"alias":"String","collectionKind":"Single"}}""";
+        var variable = JsonSerializer.Deserialize<IVariable>(json, _options)!;
+        Assert.Equal(name, variable.Name);
+        Assert.Equal(name, variable.Id);
+    }
+
+    [Theory]
+    [InlineData("123")]
+    [InlineData("true")]
+    [InlineData("{}")]
+    public void Variable_metadata_does_not_coerce_other_json_kinds_into_strings(string value)
+    {
+        var json = "{\"referenceKey\":\"id\",\"name\":" + value + ",\"type\":{\"alias\":\"String\",\"collectionKind\":\"Single\"}}";
+        var exception = Assert.Throws<ArgumentDefinitionDeserializationException>(() => JsonSerializer.Deserialize<IVariable>(json, _options));
+        Assert.IsAssignableFrom<JsonException>(exception.InnerException);
+    }
+
+    [Fact]
     public void MalformedPayload_ThrowsDomainException_NotRawJsonException()
     {
         const string malformed = """{"name":"Broken","type":{"alias":"String","collectionKind":"#$ not valid #$"}}""";

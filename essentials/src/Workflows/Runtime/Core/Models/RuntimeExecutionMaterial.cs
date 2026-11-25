@@ -101,42 +101,9 @@ public sealed class RuntimeModelMaterial
     /// <summary>Hashes model behavior independently of producer identity and the unchanged native artifact format.</summary>
     public string ComputeContentHash()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-        options.Converters.Add(new ExactStringWriter());
-        var payload = JsonSerializer.SerializeToElement(new { Domain = "elsa.runtime.model-material/v1", FormatVersion,
-            Protocol, Profile, Definition, InputContract, Outputs, Dependencies, RuntimeRequirements }, options);
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream)) WriteCanonical(payload, writer);
-        return "sha256:" + Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
-    }
-
-    private static void WriteCanonical(JsonElement element, Utf8JsonWriter writer)
-    {
-        if (element.ValueKind == JsonValueKind.Object)
-        {
-            writer.WriteStartObject();
-            foreach (var property in element.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal))
-            { writer.WritePropertyName(property.Name); WriteCanonical(property.Value, writer); }
-            writer.WriteEndObject();
-        }
-        else if (element.ValueKind == JsonValueKind.Array)
-        {
-            writer.WriteStartArray(); foreach (var item in element.EnumerateArray()) WriteCanonical(item, writer); writer.WriteEndArray();
-        }
-        else element.WriteTo(writer);
-    }
-
-    private sealed class ExactStringWriter : JsonConverter<string>
-    {
-        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => throw new NotSupportedException();
-        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) => writer.WriteStringValue(Encode(value));
-        public override void WriteAsPropertyName(Utf8JsonWriter writer, string value, JsonSerializerOptions options) => writer.WritePropertyName(Encode(value));
-        private static string Encode(string value)
-        {
-            var bytes = new byte[checked(value.Length * sizeof(char))];
-            for (var i = 0; i < value.Length; i++) BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(i * sizeof(char), sizeof(char)), value[i]);
-            return Convert.ToBase64String(bytes);
-        }
+        var payload = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new { Domain = "elsa.runtime.model-material/v1", FormatVersion,
+            Protocol, Profile, Definition, InputContract, Outputs, Dependencies, RuntimeRequirements }, RuntimeJsonHashProjection.For);
+        return "sha256:" + Elsa.Serialization.Core.JsonHashInput.Hash(payload);
     }
 
     internal static void ValidatePin(WorkflowExecutableIdentity identity)

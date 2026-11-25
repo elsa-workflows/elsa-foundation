@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Elsa.Modularity.Core.Models;
 
 namespace Elsa.Modularity.Nuplane.Services;
@@ -18,7 +17,7 @@ public static class SecretSettingMask
     /// <summary>The value the catalog shows in place of a hidden value.</summary>
     public const string Placeholder = "********";
 
-    private static readonly JsonElement s_placeholder = JsonSerializer.SerializeToElement(Placeholder);
+    private static readonly JsonElement s_placeholder = JsonSerializer.SerializeToElement(Placeholder, Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>Returns <paramref name="configuration"/> with every set hidden value replaced by the placeholder.</summary>
     public static JsonElement MaskConfiguration(JsonElement configuration, IReadOnlyList<FeatureSettingDescriptor> settings)
@@ -59,15 +58,29 @@ public static class SecretSettingMask
         if (configuration.ValueKind is not JsonValueKind.Object)
             return configuration;
 
-        var result = new JsonObject();
+        var properties = new List<(string Name, JsonElement? Value)>();
+        var changed = false;
         foreach (var property in configuration.EnumerateObject())
         {
             var value = isVisible(property.Name) ? property.Value : rewriteHidden(property.Name, property.Value);
-            if (value is { } kept)
-                result[property.Name] = JsonNode.Parse(kept.GetRawText());
+            properties.Add((property.Name, value));
+            changed |= value is not { } kept || !StringComparer.Ordinal.Equals(kept.GetRawText(), property.Value.GetRawText());
         }
-
-        return JsonSerializer.SerializeToElement(result);
+        if (!changed) return configuration.Clone();
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder }))
+        {
+            writer.WriteStartObject();
+            foreach (var (name, value) in properties)
+                if (value is { } kept)
+                {
+                    writer.WritePropertyName(name);
+                    writer.WriteRawValue(kept.GetRawText(), skipInputValidation: true);
+                }
+            writer.WriteEndObject();
+        }
+        using var result = JsonDocument.Parse(stream.ToArray());
+        return result.RootElement.Clone();
     }
 
     private static JsonElement? FindProperty(JsonElement? configuration, string name) =>

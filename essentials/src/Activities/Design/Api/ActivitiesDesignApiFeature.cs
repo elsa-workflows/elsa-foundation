@@ -147,7 +147,11 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.AddRequestHandlersFrom(assembly);
         services.AddApiCapability(ActivityDesignApiCapabilities.StaticDeclaration);
         services.AddPermissionContributor<ActivityDesignPermissionContributor>();
-        services.ConfigureHttpJsonOptions(options => ActivitiesDesignJsonOptions.Configure(options.SerializerOptions));
+        services.ConfigureHttpJsonOptions(options =>
+        {
+            if (!options.SerializerOptions.TypeInfoResolverChain.Any(resolver => resolver is ActivitiesDesignJsonTypeInfoResolver))
+                options.SerializerOptions.TypeInfoResolverChain.Insert(0, new ActivitiesDesignJsonTypeInfoResolver());
+        });
     }
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>

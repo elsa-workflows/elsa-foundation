@@ -24,7 +24,7 @@ internal sealed class Elsa3ActivityResolver(
     Elsa3ReplacedActivityTypeIndex? aliasIndex = null)
 {
     private const string OutcomesFacetKind = "elsa.outcomes";
-    private static readonly JsonSerializerOptions FacetJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions FacetJsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly Dictionary<string, Elsa3Resolution> _byType = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Elsa3Resolution> _byTypeKey = new(StringComparer.Ordinal);
 

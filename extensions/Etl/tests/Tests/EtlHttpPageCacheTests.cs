@@ -9,11 +9,71 @@ namespace Elsa.Etl.Tests;
 
 public sealed class EtlHttpPageCacheTests : IDisposable
 {
+    // Independent canonical preimages wrap the literal data in an otherwise fixed valid HTTP page.
+    [Theory]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":[1,null]}""", "f53bd7a3fbae2b302966cce263f2db16b27898ab10da36d22ae2f1ff88a016fb")]
+    [InlineData(""" { "rows": [1e0,null], "n":9007199254740993.0,"OwnerKey":"Ren\u00e9" } """, "f53bd7a3fbae2b302966cce263f2db16b27898ab10da36d22ae2f1ff88a016fb")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993}""", "a14c1f5a47d073d9b8c6bd2d44bd097f19805fae37c11ecc9a403b8fc822c1ec")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":null}""", "9e372061fc650933dfc59d06ab5d45a428cb1caa68ce177af290058939577f93")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":[null,1]}""", "7d2f442c0941ced362ab06fc4feaf03e3760220f275b7b6efd6d31fe13d8c3ae")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740992,"rows":[1,null]}""", "6e7b96e79e8d463b9233d154a6c57c5b873408634dfe53444bb2a45dc5636254")]
+    public async Task Actual_page_publication_pins_whole_body_identity_and_preserves_unselected_data(string raw, string expected)
+    {
+        var body = Encoding.UTF8.GetBytes("{\"records\":[{\"id\":1,\"name\":\"Ada\"}],\"next\":\"cursor-1\",\"ownerData\":" + raw + "}");
+        var cache = Cache(Admission("page-hash-golden", new EtlScope("tenant-a", "golden")));
+        var published = await cache.PublishAsync(PageSequence, Request(), FirstAttempt, 1, ReceivedAt, body);
+        var read = await cache.ReadAsync(PageSequence, Request());
+        Assert.True(published.Descriptor.Body.ContentHash == expected && read?.Descriptor.Body.ContentHash == expected,
+            $"ETL HTTP page publication: First-stable hash freeze requires an explicit identity/migration decision. Expected {expected}; actual {published.Descriptor.Body.ContentHash}");
+        Assert.True(body.Length == published.Descriptor.Body.ByteLength, "ETL HTTP page physical length: First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True(body.SequenceEqual(published.RawBody.ToArray()), "ETL HTTP page publication bytes: First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True(body.SequenceEqual(read!.RawBody.ToArray()), "ETL HTTP page retained bytes: First-stable hash freeze requires an explicit identity/migration decision.");
+    }
+
     private const long PageSequence = 0;
     private static readonly Guid FirstAttempt = Guid.Parse("65a0e0be-f89b-4c10-8cf8-4878bffbc10c");
     private static readonly Guid SecondAttempt = Guid.Parse("82b82449-0870-4d8b-b67a-1a96eaf88ef0");
     private static readonly DateTimeOffset ReceivedAt = new(2026, 10, 21, 12, 30, 0, TimeSpan.Zero);
     private readonly string _root = Path.Combine(Path.GetTempPath(), "elsa-etl-http-page-cache-" + Guid.NewGuid().ToString("N"));
+
+    [Fact]
+    public async Task Equivalent_pages_share_a_value_hash_and_keep_each_pages_original_bytes()
+    {
+        var admission = Admission("raw-pages", new("tenant-a", "raw-pages"));
+        var firstBytes = ValidBody();
+        var secondBytes = Encoding.UTF8.GetBytes("""{ "next":"cursor-1", "records":[{ "name":"\u0041da", "id":1 }] }""");
+        var cache = Cache(admission);
+        var first = await cache.PublishAsync(0, Request(), FirstAttempt, 1, ReceivedAt, firstBytes);
+        var secondRequest = new EtlHttpRequest("shard-a", "cursor-1");
+        var second = await cache.PublishAsync(1, secondRequest, SecondAttempt, 2, ReceivedAt.AddMinutes(1), secondBytes);
+        Assert.Equal(first.Descriptor.Body.ContentHash, second.Descriptor.Body.ContentHash);
+        Assert.NotEqual(first.Descriptor.Body.Key, second.Descriptor.Body.Key);
+        Assert.Equal(firstBytes, (await cache.ReadAsync(0, Request()))!.RawBody.ToArray());
+        Assert.Equal(secondBytes, (await cache.ReadAsync(1, secondRequest))!.RawBody.ToArray());
+        Assert.Equal(firstBytes.Length, first.Descriptor.Body.ByteLength);
+        Assert.Equal(secondBytes.Length, second.Descriptor.Body.ByteLength);
+    }
+
+    [Fact]
+    public async Task Concurrent_equivalent_captures_return_the_winning_bytes_and_provenance()
+    {
+        var admission = Admission("raw-race", new("tenant-a", "raw-race"));
+        var firstBytes = ValidBody();
+        var secondBytes = Encoding.UTF8.GetBytes("""{ "next":"cursor-1", "records":[{ "name":"\u0041da", "id":1 }] }""");
+        var cache = Cache(admission);
+        var results = await Task.WhenAll(
+            cache.PublishAsync(0, Request(), FirstAttempt, 1, ReceivedAt, firstBytes).AsTask(),
+            cache.PublishAsync(0, Request(), SecondAttempt, 2, ReceivedAt.AddMinutes(1), secondBytes).AsTask());
+        var winner = (await cache.ReadAsync(0, Request()))!;
+        Assert.All(results, result =>
+        {
+            Assert.Equal(winner.Descriptor, result.Descriptor);
+            Assert.Equal(winner.Provenance, result.Provenance);
+            Assert.Equal(winner.RawBody.ToArray(), result.RawBody.ToArray());
+            Assert.Equal(result.RawBody.Length, result.Descriptor.Body.ByteLength);
+        });
+        Assert.Equal(winner.Provenance.AttemptId == FirstAttempt.ToString("N") ? firstBytes : secondBytes, winner.RawBody.ToArray());
+    }
 
     [Fact]
     public async Task Reopens_verified_raw_page_and_keeps_body_descriptor_distinct_from_manifest()
@@ -27,7 +87,7 @@ public sealed class EtlHttpPageCacheTests : IDisposable
 
         Assert.NotNull(reopened);
         Assert.Equal(body.Length, first.Descriptor.Body.ByteLength);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(body)).ToLowerInvariant(), first.Descriptor.Body.ContentHash);
+        Assert.Equal(Elsa.Serialization.Core.JsonHashInput.HashUtf8(body), first.Descriptor.Body.ContentHash);
         Assert.Equal(body, await File.ReadAllBytesAsync(Path.Combine(_root, first.Descriptor.Body.Key)));
         Assert.Equal(1, first.Descriptor.RecordCount);
         Assert.Equal("cursor-1", first.Descriptor.NextContinuation);
@@ -118,8 +178,9 @@ public sealed class EtlHttpPageCacheTests : IDisposable
     {
         var admission = Admission("cache-body-only", new EtlScope("tenant-a", "body-only"));
         var body = ValidBody();
-        var bodyHash = Convert.ToHexString(SHA256.HashData(body)).ToLowerInvariant();
-        var bodyIdentity = "etl-http-page-body-v1:" + bodyHash;
+        var bodyHash = Elsa.Serialization.Core.JsonHashInput.HashUtf8(body);
+        var pageIdentity = EtlRuntimeIdentity.ConnectorHttpPageId(admission, 0, PageSequence, Request());
+        var bodyIdentity = "etl-http-page-body-v2:" + pageIdentity + ":" + FirstAttempt.ToString("N") + ":1:" + bodyHash;
         var bodyStore = new FileChunkStore(".json");
         var chunk = await bodyStore.PublishAsync(_root, bodyIdentity, body.Length,
             (stream, ct) => stream.WriteAsync(body, ct));
@@ -253,10 +314,12 @@ public sealed class EtlHttpPageCacheTests : IDisposable
 
         Assert.NotEqual(ManifestPath(scopeA, Request()), ManifestPath(scopeB, Request()));
         Assert.NotEqual(ManifestPath(scopeA, Request()), ManifestPath(sourcePinB, Request()));
-        Assert.Equal(first.Descriptor.Body, second.Descriptor.Body);
-        Assert.Equal(first.Descriptor.Body, third.Descriptor.Body);
+        Assert.Equal(first.Descriptor.Body.ContentHash, second.Descriptor.Body.ContentHash);
+        Assert.Equal(first.Descriptor.Body.ContentHash, third.Descriptor.Body.ContentHash);
+        Assert.NotEqual(first.Descriptor.Body.Key, second.Descriptor.Body.Key);
+        Assert.NotEqual(first.Descriptor.Body.Key, third.Descriptor.Body.Key);
         Assert.Equal(3, Directory.GetFiles(_root, "*.page").Length);
-        Assert.Single(Directory.GetFiles(_root, "*.json"));
+        Assert.Equal(3, Directory.GetFiles(_root, "*.json").Length);
     }
 
     [Fact]

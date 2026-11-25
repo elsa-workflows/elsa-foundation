@@ -12,7 +12,7 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
     IWorkflowSchedulerWorkQueue queue, IBookmarkResumeDispatcher resumes,
     IWorkflowExecutionActorProvider actors, TimeProvider clock, IRuntimeModelExecutionReader? models = null) : IRuntimePostCommitDurableSourceIntentHandler
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     public async ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
     {
         try { await HandleCoreAsync(source, cancellationToken); }
@@ -33,12 +33,12 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
         BpmnEmbeddedInvocation invocation; string inputKind;
         if (source.Intent.Kind == BpmnEmbeddingBoundary.ResultKind)
         {
-            var completion = source.Intent.Payload?.Deserialize<RunBpmnCompletion>() ?? throw BpmnEmbeddingJson.Invalid();
+            var completion = source.Intent.Payload?.Deserialize<RunBpmnCompletion>(Elsa.Serialization.Core.JsonConversionContract.For(typeof(RunBpmnCompletion)).Options) ?? throw BpmnEmbeddingJson.Invalid();
             invocation = BpmnEmbeddingBoundary.Read(new RunBpmnState(1, completion.Invocation));
             var model = await boundary.RequireModelAsync(invocation, cancellationToken);
             BpmnEmbeddingBoundary.RequireWorkerCancellationSettled(model);
             if (completion.FormatVersion != 1 || source.Intent.WorkflowExecutionId != invocation.ExecutionId ||
-                model.TerminalResult is not { } terminal || !JsonElement.DeepEquals(terminal, completion.Result)) throw BpmnEmbeddingJson.Invalid();
+                model.TerminalResult is not { } terminal || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(terminal, completion.Result)) throw BpmnEmbeddingJson.Invalid();
             var proof = await boundary.ParentProofAsync(invocation, cancellationToken);
             if (!proof)
             {

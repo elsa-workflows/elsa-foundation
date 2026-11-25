@@ -1,8 +1,8 @@
 using System.Buffers;
-using System.Globalization;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Activities.Graph.Design.Models;
 
@@ -75,13 +75,15 @@ public sealed record ActivityGraphManifest(
     }
 
     /// <summary>
-    /// Serializes the selected schema in a deterministic form. Object properties are ordinally sorted at every
-    /// level while authored array order is preserved.
+    /// Serializes the selected schema with the shared exact JSON canonical form, preserving authored array order.
     /// </summary>
-    public byte[] ToCanonicalUtf8Bytes()
+    public byte[] ToCanonicalUtf8Bytes() => JsonHashInput.CanonicalBytes(ToJsonElement());
+
+    // Stored manifests retain carried JSON. Canonical output is an explicit hash projection only.
+    internal JsonElement ToJsonElement()
     {
         var buffer = new ArrayBufferWriter<byte>();
-        using var writer = new Utf8JsonWriter(buffer);
+        using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Encoder = JsonBaseline.Options.Encoder });
 
         writer.WriteStartObject();
         if (StringComparer.Ordinal.Equals(ManifestSchemaVersion, MultipleOutcomesSchemaVersion))
@@ -111,7 +113,7 @@ public sealed record ActivityGraphManifest(
         writer.WriteEndArray();
 
         writer.WritePropertyName("rootActivity");
-        ActivityGraphCanonicalJson.Write(writer, RootActivity);
+        writer.WriteRawValue(RootActivity.GetRawText(), skipInputValidation: true);
 
         writer.WritePropertyName("variables");
         writer.WriteStartArray();
@@ -137,12 +139,13 @@ public sealed record ActivityGraphManifest(
         writer.WriteEndObject();
         writer.Flush();
 
-        return buffer.WrittenSpan.ToArray();
+        using var document = JsonDocument.Parse(buffer.WrittenMemory, new JsonDocumentOptions { MaxDepth = 1000 });
+        return document.RootElement.Clone();
     }
 
     public JsonElement ToCanonicalJsonElement()
     {
-        using var document = JsonDocument.Parse(ToCanonicalUtf8Bytes());
+        using var document = JsonDocument.Parse(ToCanonicalUtf8Bytes(), new JsonDocumentOptions { MaxDepth = 1000 });
         return document.RootElement.Clone();
     }
 
@@ -151,7 +154,7 @@ public sealed record ActivityGraphManifest(
         writer.WriteStartObject();
         writer.WriteString("syntax", expression.Syntax);
         writer.WritePropertyName("value");
-        ActivityGraphCanonicalJson.Write(writer, expression.Value);
+        writer.WriteRawValue(expression.Value.GetRawText(), skipInputValidation: true);
         writer.WriteEndObject();
     }
 
@@ -373,114 +376,3 @@ public sealed record ActivityGraphOutcomeMapping(
     string BoundaryOutcomeReferenceKey);
 
 public sealed record ActivityGraphManifestError(string Code, string JsonPointer, string Message);
-
-internal static class ActivityGraphCanonicalJson
-{
-    public static void Write(Utf8JsonWriter writer, JsonElement element)
-    {
-        var pending = new Stack<WriteOperation>();
-        pending.Push(new(WriteOperationKind.Value, element));
-
-        while (pending.TryPop(out var operation))
-        {
-            if (operation.Kind == WriteOperationKind.PropertyName)
-            {
-                writer.WritePropertyName(operation.PropertyName!);
-                continue;
-            }
-
-            if (operation.Kind == WriteOperationKind.EndObject)
-            {
-                writer.WriteEndObject();
-                continue;
-            }
-
-            if (operation.Kind == WriteOperationKind.EndArray)
-            {
-                writer.WriteEndArray();
-                continue;
-            }
-
-            switch (operation.Element.ValueKind)
-            {
-                case JsonValueKind.Object:
-                {
-                    writer.WriteStartObject();
-                    pending.Push(new(WriteOperationKind.EndObject));
-                    var properties = operation.Element.EnumerateObject()
-                        .OrderBy(x => x.Name, StringComparer.Ordinal)
-                        .ToArray();
-                    for (var index = properties.Length - 1; index >= 0; index--)
-                    {
-                        pending.Push(new(WriteOperationKind.Value, properties[index].Value));
-                        pending.Push(new(WriteOperationKind.PropertyName, PropertyName: properties[index].Name));
-                    }
-                    break;
-                }
-                case JsonValueKind.Array:
-                {
-                    writer.WriteStartArray();
-                    pending.Push(new(WriteOperationKind.EndArray));
-                    var items = operation.Element.EnumerateArray().ToArray();
-                    for (var index = items.Length - 1; index >= 0; index--)
-                        pending.Push(new(WriteOperationKind.Value, items[index]));
-                    break;
-                }
-                case JsonValueKind.String:
-                    writer.WriteStringValue(operation.Element.GetString());
-                    break;
-                case JsonValueKind.Number:
-                    WriteNumber(writer, operation.Element);
-                    break;
-                case JsonValueKind.True:
-                    writer.WriteBooleanValue(true);
-                    break;
-                case JsonValueKind.False:
-                    writer.WriteBooleanValue(false);
-                    break;
-                case JsonValueKind.Null:
-                case JsonValueKind.Undefined:
-                    writer.WriteNullValue();
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(element));
-            }
-        }
-    }
-
-    private static void WriteNumber(Utf8JsonWriter writer, JsonElement element)
-    {
-        if (element.TryGetInt64(out var signed))
-        {
-            writer.WriteNumberValue(signed);
-            return;
-        }
-
-        if (element.TryGetUInt64(out var unsigned))
-        {
-            writer.WriteNumberValue(unsigned);
-            return;
-        }
-
-        if (element.TryGetDecimal(out var decimalValue))
-        {
-            writer.WriteRawValue(decimalValue.ToString("G29", CultureInfo.InvariantCulture), skipInputValidation: true);
-            return;
-        }
-
-        writer.WriteNumberValue(element.GetDouble());
-    }
-
-    private enum WriteOperationKind
-    {
-        Value,
-        PropertyName,
-        EndObject,
-        EndArray
-    }
-
-    private readonly record struct WriteOperation(
-        WriteOperationKind Kind,
-        JsonElement Element = default,
-        string? PropertyName = null);
-}

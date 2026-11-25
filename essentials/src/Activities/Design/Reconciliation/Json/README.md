@@ -65,8 +65,13 @@ When the Publishing API bridge is installed, an entry whose `providerKey` a regi
 provider compiler owns (for example `elsa.activity-graph`) is validated and compiled by that provider, as Studio
 content is, and a version it refuses is skipped with its diagnostics recorded; it is not published as a
 single-node root. Entries for keys no compiler owns, such as `elsa.clr-activity`, keep the single-node root.
-Source-owned publication records no activity dependency edges, so provider content that depends on other activity
-versions is refused (`activity.source.dependencies-unsupported`) on every pass. Author such composites in Studio.
+
+Provider content that uses other activity versions, such as a Graph composite whose nodes name CLR activities or other
+composites by exact version id, publishes with one dependency edge per occurrence, as Studio content does. The order
+entries appear in does not matter: a version refused because a version it uses is not yet published is tried again
+later in the same pass, in rounds, for as long as a round publishes something more, and only versions still refused at
+the end are recorded and logged. A version that uses an unknown, inactive or foreign version is refused with the
+template compiler's `activity.dependency.*` diagnostic naming that version; versions that use each other are refused.
 
 ## Registration
 

@@ -82,7 +82,7 @@ public sealed class ScriptVariableRenamePlannerTests : IDisposable
     public async Task A_liquid_read_is_flagged_for_manual_repair()
     {
         var plan = await PlanAsync(
-            State(Node("a", new ArgumentState("Text", new ArgumentValue("{{ variables.order }}", "Liquid"), null, null, null, null))),
+            State(Node("a", new ArgumentState("Text", ArgumentValue.FromClr("{{ variables.order }}", "Liquid"), null, null, null, null))),
             "order-key",
             "purchase");
 
@@ -176,14 +176,14 @@ public sealed class ScriptVariableRenamePlannerTests : IDisposable
                     new Elsa.Activities.Switch.Models.SwitchAuthoredCase("Big")
                     {
                         CaseId = "big",
-                        Condition = condition is null ? null : new ArgumentState("condition", new ArgumentValue(condition, "JavaScript"), null, null, null, null)
+                        Condition = condition is null ? null : new ArgumentState("condition", ArgumentValue.FromClr(condition, "JavaScript"), null, null, null, null)
                     }
                 ]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
 
     [Fact]
     public async Task A_script_body_is_planned_when_its_input_is_named()
     {
-        var node = Node("script", new ArgumentState("script", new ArgumentValue("return variables.order.total;", "Literal"), null, null, null, null));
+        var node = Node("script", new ArgumentState("script", ArgumentValue.FromClr("return variables.order.total;", "Literal"), null, null, null, null));
 
         var plan = await _planner.PlanAsync(State(node), VariableReference.WorkflowScopeId, "order-key", "purchase",
             (_, _) => ValueTask.FromResult<string?>("script"));
@@ -197,7 +197,7 @@ public sealed class ScriptVariableRenamePlannerTests : IDisposable
     private static WorkflowDefinitionState State(ActivityNode root, params VariableDefinition[] extra) =>
         new([new VariableDefinition("order-key", "order", new TypeReference("Any"), null, null), .. extra], root, [], [], null);
 
-    private static ArgumentState Js(string source) => new("Text", new ArgumentValue(source, "JavaScript"), null, null, null, null);
+    private static ArgumentState Js(string source) => new("Text", ArgumentValue.FromClr(source, "JavaScript"), null, null, null, null);
 
     private static ActivityNode Node(string nodeId, ArgumentState input) => new(nodeId, "activity-version-write", [input], []);
 

@@ -18,6 +18,9 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.Logging;
@@ -81,7 +84,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IRuntimeExecutionIdGenerator? executionIdGenerator = null,
     IServiceProvider? ambientServices = null,
     ITestRunRootCanceller? rootCanceller = null,
-    IWorkflowExecutionStateStore? executionStateStore = null)
+    IWorkflowExecutionStateStore? executionStateStore = null,
+    IActivityStructureService? activityStructures = null)
     : IWorkflowTestRunStarter
 {
     public const string RequestedBy = "workflow-designer-test-run";
@@ -152,6 +156,15 @@ public sealed class StartWorkflowTestRunRequestHandler(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        // The posted snapshot never passed the draft validation gate: refuse a node without an argument list before the
+        // compiler reads it, naming the node and the list instead of a generic compile failure.
+        if (ArgumentListRefusals(request.State) is { Count: > 0 } malformed)
+            return new DraftTestRunOptionsView(
+                string.Empty,
+                null,
+                [],
+                malformed.Select(refusal => new TestRunOptionsDiagnostic(refusal.Type, ActivityArgumentLists.Describe(refusal), AuthoredNodeId(refusal))).ToArray());
+
         var now = timeProvider.GetUtcNow();
         var expiresAt = now.Add(DefaultRetention);
         var sourceDefinitionVersionId = $"draft:{request.SnapshotId}";
@@ -419,6 +432,17 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var testRunId = ShortIdentityGenerator.Generate(now);
         var sourceDefinitionVersionId = $"draft:{request.SnapshotId}";
         var artifactVersion = request.ArtifactVersion ?? DraftArtifactVersion;
+        // Before expression validation and compilation read the posted snapshot, which never passed the draft gate.
+        if (ArgumentListRefusals(request.State) is { Count: > 0 } malformed)
+            return await RejectAsync(
+                testRunId,
+                request.DefinitionId,
+                sourceDefinitionVersionId,
+                now,
+                expiresAt,
+                string.Join(" ", malformed.Select(ActivityArgumentLists.Describe)),
+                cancellationToken);
+
         ExpressionDraftValidationResult? validation = null;
         if (expressionValidator is null)
         {
@@ -488,6 +512,21 @@ public sealed class StartWorkflowTestRunRequestHandler(
             cancellationToken,
             draftLayout: request.Layout);
     }
+
+    /// <summary>
+    /// The <c>Graph/MalformedArgumentList</c> refusals of a posted draft snapshot. Every node is checked when the structure
+    /// service is available (always, in a composed host); a handler constructed without it checks the root node only.
+    /// </summary>
+    private IReadOnlyList<Elsa.Workflows.Design.Validations.Core.Models.ValidationError> ArgumentListRefusals(WorkflowDefinitionState? state) =>
+        state?.RootActivity is not { } root
+            ? []
+            : activityStructures is null
+                ? ActivityArgumentLists.Refusals(root).ToArray()
+                : ActivityArgumentLists.Refusals(root, activityStructures);
+
+    // A refusal's path is "{NodeId}/inputs" or "{NodeId}/outputs"; the node id is the authored one (nothing is compiled).
+    private static string AuthoredNodeId(Elsa.Workflows.Design.Validations.Core.Models.ValidationError refusal) =>
+        refusal.Path[..refusal.Path.LastIndexOf('/')];
 
     private static bool CanProceed(ExpressionDraftValidationResult validation, bool acknowledgeUnavailable) =>
         validation.State == ExpressionDraftValidationState.Valid ||

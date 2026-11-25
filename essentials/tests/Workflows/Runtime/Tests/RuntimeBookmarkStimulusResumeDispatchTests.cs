@@ -61,7 +61,8 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         await store.SaveAsync(NewBookmark("bookmark-1"));
         await workflowStateStore.SaveAsync(NewWorkflowExecution());
         await executableStore.SaveAsync(NewExecutable());
-        var input = Json("""{"orderId":"order-123"}""");
+        const string raw = """{ "orderId":"order-123", "Exact":9007199254740993, "nil":null, "amount":1.00, "text":"Ren\u00e9" }""";
+        var input = Json(raw);
 
         var result = await dispatcher.DispatchAsync(new BookmarkResumeDispatchRequest(
             workflowExecutionId: "wfexec-1",
@@ -88,7 +89,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         Assert.Equal("command-1", envelope.Command.CommandId);
         Assert.Equal("resume-target:delivery", envelope.Command.Metadata["runtime.resumeTargetId"]);
         Assert.Equal("test", envelope.Command.Metadata["adapter"]);
-        var payload = envelope.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(_identity, payload.PinnedExecutable);
         Assert.Equal("bookmark-1", payload.BookmarkId);
         Assert.Equal("actexec-1", payload.ActivityExecutionId);
@@ -97,6 +98,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         Assert.Equal("delivery-status", payload.StimulusType);
         Assert.Equal("sha256:delivery-status:order-123", payload.StimulusHash);
         Assert.Equal("order-123", payload.Input!.Value.GetProperty("orderId").GetString());
+        Assert.Equal(raw, payload.Input.Value.GetRawText());
         Assert.DoesNotContain(
             typeof(RuntimeResumeBookmarkCommandPayload).GetProperties().Select(property => property.Name),
             propertyName => propertyName.Contains("Method", StringComparison.OrdinalIgnoreCase) || propertyName.Contains("Callback", StringComparison.OrdinalIgnoreCase));
@@ -202,7 +204,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
 
         Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, result.Status);
         var envelope = Assert.Single(agentProvider.Agent.Envelopes);
-        var payload = envelope.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         var delivery = Assert.IsType<RuntimeTypedTriggerDeliveryMetadata>(payload.TriggerDelivery);
         Assert.Equal("command-1", delivery.DeliveryId);
         Assert.Equal(payloadType, delivery.PayloadType);

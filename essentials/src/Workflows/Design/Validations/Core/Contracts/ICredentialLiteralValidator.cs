@@ -24,14 +24,17 @@ public sealed class CredentialLiteralValidatorReplacementContractAttribute : Att
 /// start: shell activation fails with <see cref="Exceptions.MultipleCredentialLiteralValidatorsException"/>, naming every
 /// registration, whatever order they were registered in. An implementation
 /// judges only the nodes whose activity version the catalog holds, and returns no finding for a node it cannot resolve
-/// (publication refuses such a node, because it cannot compile it).
+/// (publication refuses such a node, because it cannot compile it). A state whose node, resolvable or not, has a missing
+/// or null <c>inputs</c> or <c>outputs</c> list cannot be judged at all: an implementation fails closed and returns only
+/// one <c>Graph/MalformedArgumentList</c> finding per such list, keyed by <c>{NodeId}/inputs</c> or <c>{NodeId}/outputs</c>.
 /// </remarks>
 [CredentialLiteralValidatorReplacementContract]
 public interface ICredentialLiteralValidator
 {
     /// <summary>
     /// Returns one finding per refused binding, each naming the activity node and the input and never the bound value,
-    /// or an empty list when <paramref name="state"/> holds none.
+    /// or an empty list when <paramref name="state"/> holds none; for a state with a missing argument list, only the
+    /// malformed-list findings (see the remarks).
     /// </summary>
     ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken);
 }

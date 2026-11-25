@@ -65,7 +65,7 @@ public sealed record ReviewDecisionRequest(
     string? Comment,
     string RequestId);
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata,
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata,
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, UseStringEnumConverter = true)]
 [JsonSerializable(typeof(HumanReviewRequest))]
 [JsonSerializable(typeof(ReviewDecisionRequest))]
@@ -73,12 +73,18 @@ public sealed record ReviewDecisionRequest(
 [JsonSerializable(typeof(ReviewDecisionReceipt))]
 internal partial class HumanReviewApiJsonContext : JsonSerializerContext
 {
-    internal static HumanReviewApiJsonContext WireContext => Wire.Context;
+    internal static HumanReviewApiJsonContext WireContext { get; } = new(CreateWireOptions());
 
-    private static class Wire
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
     {
-        internal static readonly HumanReviewApiJsonContext Context = new(new JsonSerializerOptions(Default.Options));
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.Converters.Add(new JsonStringEnumConverter());
+        return options;
     }
+
+
 }
 
 /// <summary>Maps the API's known refusals to plain problems; anything else is an opaque server failure.</summary>

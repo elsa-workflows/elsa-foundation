@@ -171,7 +171,8 @@ public sealed class PublishingMinimalApiBehaviorTests
         using var response = await host.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         var body = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("private store payload", body, StringComparison.Ordinal);
         using var document = JsonDocument.Parse(body);

@@ -8,7 +8,7 @@ namespace Elsa.Activities.If.Authoring;
 
 public static class IfBuilderExtensions
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public static ActivityCall<object?> If(
         this ISequenceBuilder sequence,

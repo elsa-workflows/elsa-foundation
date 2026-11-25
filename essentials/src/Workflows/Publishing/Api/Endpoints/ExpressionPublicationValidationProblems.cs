@@ -36,7 +36,7 @@ internal static class ExpressionPublicationValidationProblems
         await System.Text.Json.JsonSerializer.SerializeAsync(
             response.Body,
             problem,
-            WorkflowsPublishingJsonContext.Default.ExpressionPublicationValidationProblemDetails,
+            WorkflowsPublishingJsonContext.WireContext.ExpressionPublicationValidationProblemDetails,
             cancellationToken);
     }
 

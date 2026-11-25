@@ -256,6 +256,9 @@ internal static class RuntimeCheckpointFenceCursorProviderSmoke
 
     private sealed class NoopContinuationCodec : IRuntimeRecoveryContinuationCodec
     {
+        public string EncodeJson(string purpose, ReadOnlySpan<byte> payload) => ((IRuntimeRecoveryContinuationCodec)this).Encode(purpose, payload);
+        public byte[] DecodeJson(string purpose, string token) => ((IRuntimeRecoveryContinuationCodec)this).Decode(purpose, token);
+
         public string Encode(string purpose, ReadOnlySpan<byte> payload) => Convert.ToBase64String(payload);
         public byte[] Decode(string purpose, string token) => Convert.FromBase64String(token);
     }

@@ -34,9 +34,11 @@ public sealed class InputReadLoweringTests
     public void An_input_read_becomes_the_whole_request_read()
     {
         var stored = InputReadLowering.Lower(new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "customer-ref" }), "Input"), Name);
-        var inProcess = InputReadLowering.Lower(new ArgumentValue(new VariableReference("customer-ref"), "Input"), Name);
+        var inProcess = InputReadLowering.Lower(global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("customer-ref"), "Input"), Name);
 
-        Assert.All([stored, inProcess], lowered =>
+        var anonymous = InputReadLowering.Lower(ArgumentValue.FromClr(new { referenceKey = "customer-ref" }, "Input"), Name);
+        var clrNamed = InputReadLowering.Lower(ArgumentValue.FromClr(new { ReferenceKey = "customer-ref" }, "Input"), Name);
+        Assert.All([stored, inProcess, anonymous, clrNamed], lowered =>
         {
             Assert.Equal("WorkflowRequest", lowered.ExpressionType);
             Assert.Equal("""{"memberKey":"customer"}""", Assert.IsType<JsonElement>(lowered.Value).GetRawText());
@@ -45,13 +47,10 @@ public sealed class InputReadLoweringTests
 
     public static TheoryData<string, object?> LeftAsAuthored => new()
     {
-        // An unknown reference key, a member path on the whole-value role, and payloads not in a handed-over form.
+        // An unknown reference key, a member path on the whole-value role, and unrelated expression roles.
         { "Input", JsonSerializer.SerializeToElement(new { referenceKey = "missing" }) },
         { "InputMember", JsonSerializer.SerializeToElement(new { referenceKey = "missing", memberPath = new[] { "a" } }) },
         { "Input", JsonSerializer.SerializeToElement(new { referenceKey = "customer-ref", memberPath = new[] { "a" } }) },
-        { "Input", new { referenceKey = "customer-ref" } },
-        { "Input", new { ReferenceKey = "customer-ref" } },
-        { "InputMember", new VariableReference("customer-ref") },
         { "Variable", JsonSerializer.SerializeToElement(new { referenceKey = "customer-ref" }) }
     };
 
@@ -59,9 +58,20 @@ public sealed class InputReadLoweringTests
     [MemberData(nameof(LeftAsAuthored))]
     public void Anything_else_is_left_as_authored(string role, object? payload)
     {
-        var value = new ArgumentValue(payload, role);
+        var value = global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr(payload, role);
 
         Assert.Same(value, InputReadLowering.Lower(value, Name));
+    }
+
+    [Fact]
+    public void A_clr_reference_without_a_member_path_keeps_the_missing_path_for_validation()
+    {
+        var value = ArgumentValue.FromClr(new VariableReference("customer-ref"), "InputMember");
+        var lowered = InputReadLowering.Lower(value, Name);
+        Assert.Equal("WorkflowRequestMember", lowered.ExpressionType);
+        var json = Assert.IsType<JsonElement>(lowered.Value);
+        Assert.Equal("customer", json.GetProperty("memberKey").GetString());
+        Assert.False(json.TryGetProperty("memberPath", out _));
     }
 
     [Fact]

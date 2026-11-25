@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "writerSourceSha": "39260424a786fab0fe4b47dc7f8ae35af4696367",
+  "packagingSourceSha": "05be2cd3d35a280c94deac3547ac4356254a3b65",
+  "manifestSha256": "c356f6428c7dd26527900f7b7d55567703c5bb21b1d5a0b76ffb0bbe025c7012",
+  "writers": [
+    {
+      "name": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "c1623d9d9e50c27c0891d84ce757f488a18ae3109780f15676556b1b1d7039c2"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.Core.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "3825dbb308d0fd3f580894af17ee7007c9bc6101dca617722df8e7b45c696161"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "1b26849e4e2f4bd191eb1e0c976462e9c8b8538b8174ff9d2082c2bc985be40a"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.Api.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "a6abae5dd3d6fa9950d64c1a559d330ec00f1100f27ef8e00961b27fe13af5ed"
+    },
+    {
+      "name": "Elsa.Serialization.Core.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "5a2435087639dc3cf4c9261e5bc59ae394ca601687f2ea56b363494970daa1d7"
+    },
+    {
+      "name": "Elsa.Activities.Runtime.Core.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "cf9d5cab77933d509570cbbd9df83914a4834ac280df94a678f55f62bd51fc66"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "6c14312be1fc34b263afe3560ab9d18132c013b534a2c4e56de45ca0ee06c490"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "8ff5087eff5e9ecbe5ed778230732262c4416ac343a1ade0806527d24289ca51"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "8f619279e413d8bb76851a10733f694a0c66d767575612acd25d758243e5e2df"
+    },
+    {
+      "name": "Elsa.Etl.Core.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "b19d6b00676fcce5a56e382d5dead885becf504e1d18b7cd72b9c668f2bf7351"
+    },
+    {
+      "name": "Elsa.Etl.Runtime.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "5f2a383f4be415ded2efe0397d493e6ea6353d2a6dde98a2bcfb45cea6664987"
+    },
+    {
+      "name": "Elsa.Etl.Workflows.Runtime.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "8edffbc76079d7fbaf0d9f9cd9a0f1dad69c7ec0ff44dc1b6fc79805a5635194"
+    },
+    {
+      "name": "Elsa.Etl.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "1c0ff4330f95d91aa262d8ba3a68d745f165441195b334cca7234c0fc6f8f464"
+    },
+    {
+      "name": "Elsa.Etl.Runtime.Api.dll",
+      "productVersion": "1.0.0+39260424a786fab0fe4b47dc7f8ae35af4696367",
+      "sha256": "d0cf0dfe4a5542cebc0cdaa613cd8b87a2bac332de4843fcd962c2d1bb098340"
+    }
+  ],
+  "verifierSourceHashes": {
+    "specs/1207-json-data-integrity-baseline/evidence/record-current-bpmn-native-fixtures.py": "5c5bfcb11abe2e2c3586a72f21fac74c3d2f3e0833166c6ae79dfbe3af664f75",
+    "e2e-tests/etl/verify_http_recovery.py": "2e81729e5c6500710ca48d83e244216ea5a82ec295ee0500783844e7c8dc1f68",
+    "e2e-tests/etl/verify_native_start_retirement.py": "b0bec27750627d90cba773198d2a06f7fc5bec63c4872e5d81413c165c07d396",
+    "e2e-tests/etl/qualify_http_recovery.py": "4bae6fc18b1c0c10c6f0473f65b9dceb06f6382bfb754c4d06f001ee376af85e",
+    "tools/bpmn/qualify-hosting.py": "cfdc50ea8fa40b788ca99039f45f75ac8e858d13915cbbaf3757253a2188b39a"
+  },
+  "verification": {
+    "sourceRevision": "39260424a786fab0fe4b47dc7f8ae35af4696367",
+    "originalUndeliveredStartRetirementProved": true,
+    "wholeStoresVerified": 9,
+    "actualWorkbenchProcesses": 3,
+    "nativeWorkflowsAdmitted": 0,
+    "etlRunsAdmitted": 0,
+    "queuedNativeStartRetirementProved": false,
+    "queuedNativeStage": null,
+    "admissionRaceProved": false,
+    "runBpmnEtlIntegrationProved": false,
+    "modelHeldFaultRetryProved": false
+  }
+}

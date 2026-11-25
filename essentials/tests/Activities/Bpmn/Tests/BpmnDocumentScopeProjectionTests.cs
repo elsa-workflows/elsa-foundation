@@ -39,6 +39,8 @@ public sealed class BpmnDocumentScopeProjectionTests : IDisposable
         new ActivitiesSequenceFeature().ConfigureServices(services);
         new EventsFeature().ConfigureServices(services);
         services.AddEventHandler<DraftValidating, ExecuteValidations>();
+        // ExecuteValidations walks the tree for malformed argument lists before any validator runs.
+        services.AddScoped<Elsa.Workflows.Design.Core.Contracts.IActivityStructureService, Elsa.Workflows.Design.Core.Services.DefaultActivityStructureService>();
         _provider = services.BuildServiceProvider();
         _structures = new(_provider.GetServices<IActivityStructureHandler>());
     }
@@ -198,7 +200,7 @@ public sealed class BpmnDocumentScopeProjectionTests : IDisposable
         var updated = _structures.ReplaceChildren(root, [new(Process.ActivitiesSlotName, children.Select(child => child.NodeId == a.NodeId ? edited : child).ToArray())]);
         var header = Document(updated).ScopeHeaders.Single(item => item.ScopeElementId == "A");
         Assert.Equal("exact-new-process-version", header.ActivityVersionId);
-        Assert.Equal("header-change", header.Inputs.Single().Value.Value is JsonElement json ? json.GetString() : header.Inputs.Single().Value.Value);
+        Assert.Equal("header-change", header.Inputs.Single().Value.Value!.Value.GetString());
         Assert.Equal("new-local", header.Variables.Single().ReferenceKey);
         Assert.Equal("scope-a", header.AdditionalProperties!["futureMetadata"].GetProperty("text").GetString());
         Assert.Equal(1, CountProperties(JsonSerializer.SerializeToElement(updated, Json), "documentXml"));
@@ -563,7 +565,7 @@ public sealed class BpmnDocumentScopeProjectionTests : IDisposable
     private static string? Value(ActivityNode node) => ((JsonElement)node.Inputs.Single().Value.Value!).GetString();
     private static VariableDefinition Variable(string id) => new(id, id, new TypeReference("String"), null, null);
     private static ArgumentState Literal(string key, string value) => new(key, new(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null);
-    private static ArgumentState Reference(string scope) => new("target", new(new VariableReference("value", scope), "Variable"), null, null, null, null);
+    private static ArgumentState Reference(string scope) => new("target", ArgumentValue.FromClr(new VariableReference("value", scope), "Variable"), null, null, null, null);
     private static void AssertJson(JsonElement left, JsonElement right) => Assert.True(JsonElement.DeepEquals(left, right));
 
     private static ActivityNode Owner(bool otherProcess = false)

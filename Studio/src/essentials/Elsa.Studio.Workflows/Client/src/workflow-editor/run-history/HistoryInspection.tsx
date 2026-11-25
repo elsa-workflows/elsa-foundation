@@ -1,3 +1,4 @@
+import { formatStudioDate, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, BookmarkCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -26,6 +27,7 @@ export function HistoryInspection({ context, workflowExecutionId, selection, onS
   onEventUnavailable?(target: Pick<PreparedHistoryEvent, "contextIdentity" | "workflowExecutionId" | "historyEventId">): void;
   refreshKey?: string | number; onFocusTimeline?(activityExecutionId: string): void; onIncident?(incidentId: string): void; navigate?(path: string): void;
 }) {
+  useStudioTimeZone();
   const container = useRef<HTMLDivElement>(null);
   const focusedSelection = useRef<string | null>(null);
   const focusRequest = useExecutionFocusRequest();
@@ -199,9 +201,7 @@ function BookmarkRecord({ item, onSelect }: { item: RuntimeHistoryBookmark; onSe
 
 function bookmarkMoment(value: string) {
   const time = new Date(value);
-  return Number.isFinite(time.getTime()) ? new Intl.DateTimeFormat(undefined, {
-    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "short"
-  }).format(time) : "Invalid recorded time";
+  return Number.isFinite(time.getTime()) ? formatStudioDate(time) : "Invalid recorded time";
 }
 
 function HistoryBookmarkInspection({ context, workflowExecutionId, bookmarkId, onSelect, onBack, onActivity, refreshKey, onReady }: {
@@ -270,6 +270,7 @@ function BookmarkEventJournal({ context, workflowExecutionId, bookmarkId, onSele
 export function ActivityBookmarkHistory({ context, workflowExecutionId, activityExecutionId, onSelect, refreshKey = 0 }: {
   context: StudioEndpointContext; workflowExecutionId: string; activityExecutionId: string; onSelect(selection: RunHistorySelection): void; refreshKey?: string | number;
 }) {
+  useStudioTimeZone();
   const [cursor, setCursor] = useState<string | null>(null);
   const [accumulated, setAccumulated] = useState<{ key: string; items: RuntimeHistoryBookmark[]; scopeComplete: boolean; scopeLimitation?: string | null; page: RuntimeHistoryBookmarkPage } | null>(null);
   const resource = useHistoryResource<RuntimeHistoryBookmarkPage>(context, JSON.stringify([workflowExecutionId, activityExecutionId, "bookmarks", cursor]),

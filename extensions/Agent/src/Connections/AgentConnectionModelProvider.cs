@@ -136,12 +136,12 @@ public abstract class AgentConnectionModelProvider(
         var configuration = AgentConnectionProfile.Read(connection, ConnectionTypeName, model);
         // Serialize framed values rather than concatenate delimiters. The operational incarnation
         // and revision bind each lease separately, so re-created support metadata can be republished.
-        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new object[]
+        var fingerprint = Elsa.Serialization.Core.JsonHashInput.Hash(new object[]
         {
             ProviderKey, ProtocolProfile, AgentProviderSchema.Profile, configuration.Endpoint.AbsoluteUri,
             configuration.ModelId, configuration.MaximumOutputTokens, configuration.StructuredResults, configuration.TemperatureSupported,
             connection.Hosts.Kind, connection.Hosts.Hosts.Order(StringComparer.Ordinal).ToArray()
-        }))));
+        }).ToUpperInvariant();
         return new(configuration.Endpoint, new(fingerprint, configuration.TemperatureSupported ? SettingsSchema : EmptySettingsSchema,
             configuration.StructuredResults, configuration.MaximumOutputTokens), configuration.TemperatureSupported, configuration.IncarnationId);
     }
@@ -168,8 +168,8 @@ public abstract class AgentConnectionModelProvider(
     {
         type = "object", additionalProperties = false,
         properties = new { temperature = new { type = "number", minimum = 0, maximum = 1 } }
-    });
-    private static readonly JsonElement EmptySettingsSchema = JsonSerializer.SerializeToElement(new { type = "object", additionalProperties = false, properties = new { } });
+    }, Elsa.Serialization.Core.JsonBaseline.Options);
+    private static readonly JsonElement EmptySettingsSchema = JsonSerializer.SerializeToElement(new { type = "object", additionalProperties = false, properties = new { } }, Elsa.Serialization.Core.JsonBaseline.Options);
     private static InvalidOperationException Unavailable() => new("The model connection does not satisfy the authorized agent profile.");
     private sealed record Profile(Uri Endpoint, AgentModelCapabilities Capabilities, bool TemperatureSupported, string IncarnationId);
     private sealed class OwnedHttpClient(HttpClient client) : IAsyncDisposable

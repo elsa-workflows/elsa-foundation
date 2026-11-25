@@ -38,13 +38,16 @@ public sealed partial class ActivityValueJsonTests
     }
 
     [Fact]
-    public void Hydrator_still_reads_PascalCase_members_written_with_default_options()
+    public void PascalCase_members_are_reported_without_overwriting_exact_members()
     {
-        // Literal, variable and secret envelopes are written with System.Text.Json defaults, so they keep PascalCase.
-        var activity = Hydrate(JsonSerializer.SerializeToElement(new Order { CustomerName = "Ann", Total = 5m }));
+        var warnings = new Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector();
+        var activity = Hydrate(Parse("""{"CustomerName":"Ann","total":5}"""), warnings);
 
-        Assert.Equal("Ann", activity.Order!.CustomerName);
+        Assert.Null(activity.Order!.CustomerName);
         Assert.Equal(5m, activity.Order.Total);
+        var warning = Assert.Single(warnings.Warnings);
+        Assert.Equal("json-unmatched-member", warning.Code);
+        Assert.Equal("args.order[\"CustomerName\"]", warning.Details!["path"]);
     }
 
     [Fact]
@@ -90,14 +93,14 @@ public sealed partial class ActivityValueJsonTests
             ActivityTransition.Complete(order),
             DateTimeOffset.UnixEpoch);
 
-    private static OrderConsumer Hydrate(JsonElement order)
+    private static OrderConsumer Hydrate(JsonElement order, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings = null)
     {
         var contract = ConsumerContract();
         var activity = new OrderConsumer();
         new ActivityInputHydrator().Hydrate(activity, contract, new ActivityInputSnapshot(
             "invocation-2", contract.SchemaFingerprint, "bindings",
             new Dictionary<string, ValueEnvelope> { ["order"] = ValueEnvelope.Inline(OrderType, order, ValueProtectionPolicy.InstanceInline) },
-            DateTimeOffset.UnixEpoch));
+            DateTimeOffset.UnixEpoch), warnings);
         return activity;
     }
 

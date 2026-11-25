@@ -70,9 +70,12 @@ public class RuleRecordReadTests
     [Theory]
     [InlineData("[\"seed\",\"left\"]")]
     [InlineData("[\"seed\",\"seed\"]")]
-    [InlineData("[\"seed\"] ")]
     public void Fact_records_reject_noncanonical_or_duplicate_data(string value) =>
         Assert.Throws<InvalidDataException>(() => RuleRecordCodec.ReadFacts(Encoding.UTF8.GetBytes(value)));
+
+    [Fact]
+    public void Fact_records_accept_equal_JSON_spelling() =>
+        Assert.Equal(RuleRecordCodec.FactsBytes(Facts("seed")), RuleRecordCodec.FactsBytes(RuleRecordCodec.ReadFacts(Encoding.UTF8.GetBytes(" [ \"s\\u0065ed\" ] "))));
 
     [Fact]
     public void Bounded_common_records_reject_unknown_fields_and_oversized_input()

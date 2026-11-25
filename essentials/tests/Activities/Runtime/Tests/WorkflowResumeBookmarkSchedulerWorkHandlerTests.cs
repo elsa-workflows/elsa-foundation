@@ -56,9 +56,9 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     private Task<RuntimeCompleteActivityCommandPayload> AssertCompletionWorkAsync()
     {
         var intent = Assert.Single(_checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents));
-        var work = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var work = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, work.CommandKind);
-        return Task.FromResult(work.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!);
+        return Task.FromResult(work.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!);
     }
 
     private ServiceProvider NewProvider(
@@ -119,7 +119,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         var payload = JsonSerializer.SerializeToElement(new RuntimeResumeBookmarkCommandPayload(
             NewIdentity(), "bookmark-1", "actexec-1", "node-wait", resumeTargetId,
             "delivery-status", "sha256:delivery-status:order-123",
-            input ?? Json("""{"orderId":"order-123"}"""), RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason, triggerDelivery));
+            input ?? Json("""{"orderId":"order-123"}"""), RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason, triggerDelivery), Elsa.Serialization.Core.JsonBaseline.Options);
         return new RuntimeSchedulerWorkItem(
             "resume-work", "wfexec-1", "command-1", commandKind, "envelope-1",
             "wfexec-1:resume:bookmark-1", _now, _now, 40, payload,

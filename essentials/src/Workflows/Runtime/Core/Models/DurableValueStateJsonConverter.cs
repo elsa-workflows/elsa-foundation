@@ -29,11 +29,13 @@ internal sealed class DurableValueStateJsonConverter : JsonConverter<DurableValu
     }
 
     public override void Write(Utf8JsonWriter writer, DurableValueState value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, new SerializationShape(value), options);
+        JsonSerializer.Serialize(writer, HashProjection(value), options);
+
+    internal static SerializationShape HashProjection(DurableValueState value) => new(value);
 
     // Match the model's constructor nullability/required parameters and get-only properties. The serializer
     // enforces required/null/unknown-member rules and its scalar/collection ignore behavior on this shape.
-    private sealed class SerializationShape
+    internal sealed class SerializationShape
     {
         [JsonConstructor]
         public SerializationShape(string durableValueId, string workflowExecutionId, string valueId, RuntimeValueTypeDescriptor type,

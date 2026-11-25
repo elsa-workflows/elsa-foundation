@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { OverflowMenu, StudioPageHeader, StudioButton, StudioField, StudioTimestamp, StudioToggleButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -125,6 +127,7 @@ export function register(api: ElsaStudioModuleApi) {
 }
 
 export function StructuredLogsPanel() {
+
   const state = useStructuredLogs({ includeInspector: false });
 
   return (
@@ -136,6 +139,7 @@ export function StructuredLogsPanel() {
 }
 
 export function StructuredLogsPage() {
+
   const state = useStructuredLogs({ includeInspector: true });
   const selectedEntry = state.rows.find(row => row.id === state.selectedEntryId) ?? null;
 
@@ -413,6 +417,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
 type StructuredLogsState = ReturnType<typeof useStructuredLogs>;
 
 function StructuredLogsHeader({ state, compactControls = false }: { state: StructuredLogsState; compactControls?: boolean }) {
+
   const statusLabel = getConnectionStatusLabel(state.status);
   const selectedRows = state.selectedEntryId ? state.rows.filter(row => row.id === state.selectedEntryId) : [];
   const levelSelect = (
@@ -481,6 +486,7 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
 }
 
 function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogsState; panelMode?: boolean }) {
+  useStudioTimeZone();
   const ready = state.status === "live" || state.status === "paused";
   const hasActiveFilters = Boolean(state.filters.sourceId || state.filters.category.trim() || (state.filters.minLevel && state.filters.minLevel !== defaultFilters.minLevel));
   const noMatches = ready && hasActiveFilters;
@@ -547,6 +553,7 @@ function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogs
 }
 
 function StructuredLogInspector({ entry, sources, onClose }: { entry: StructuredLogEntry; sources: StructuredLogSource[]; onClose(): void }) {
+  useStudioTimeZone();
   const source = sources.find(candidate => candidate.id === entry.sourceId);
 
   return (
@@ -569,7 +576,7 @@ function StructuredLogInspector({ entry, sources, onClose }: { entry: Structured
         <h4>Metadata</h4>
         <dl>
           <DetailRow name="Sequence" value={String(entry.sequence)} />
-          <DetailRow name="Timestamp" value={entry.timestamp} />
+          <dt>Timestamp</dt><dd><StudioTimestamp value={entry.timestamp} format="date-time" /></dd>
           <DetailRow name="Source" value={source ? formatStructuredLogSourceLabel(source) : entry.sourceId} />
           <DetailRow name="Source ID" value={entry.sourceId} />
           <DetailRow name="Category" value={entry.category} />
@@ -633,6 +640,7 @@ function handleStructuredLogRowKeyDown(event: React.KeyboardEvent<HTMLDivElement
 }
 
 function DetailRow({ name, value }: { name: string; value?: string | null }) {
+
   if (!value)
     return null;
 

@@ -30,6 +30,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
     IEnumerable<IElsa3NodeRewrite> rewrites,
     IWellKnownTypeRegistry wellKnownTypeRegistry,
     IObjectConverter objectConverter,
+    IOptions<Elsa3ConversionOptions> conversionOptions,
     IOptions<Elsa3MappingOptions>? options = null,
     IVariableTypeDescriptorCatalog? typeDescriptors = null)
 {
@@ -46,8 +47,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
     internal const int MaxSequenceNestingDepth = (MaxNodeJsonLevel - RootJsonLevel) / 4;
     private const string ParallelTypeKey = "Elsa.Activities.Parallel.Activities.Parallel";
 
-    private static readonly JsonSerializerOptions Elsa3JsonOptions = new(JsonSerializerDefaults.Web);
-    private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null);
+    private static readonly JsonSerializerOptions Elsa3JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
+    private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null, options: Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly IReadOnlyDictionary<Elsa3NodeRewriteKind, IElsa3NodeRewrite> _rewrites =
         rewrites.ToDictionary(rewrite => rewrite.Kind);
 
@@ -69,6 +70,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
 
         CheckWorkflowVariables(plan);
         CheckWorkflowInputs(plan);
+        CheckArgumentStorageDrivers(plan, plan.Definition.Inputs, "Input", "inputs");
+        CheckArgumentStorageDrivers(plan, plan.Definition.Outputs, "Output", "outputs");
 
         var pending = new Dictionary<Elsa3Activity, string>(ReferenceEqualityComparer.Instance);
         await VisitAsync(plan, clone.Root, "$.root", null, RootJsonLevel, pending, cancellationToken);
@@ -114,11 +117,24 @@ internal sealed partial class Elsa3ActivityNormalizer(
             context.Activity.AdditionalProperties[Elsa3IntrinsicContracts.ValueKey] = Elsa3TypedValues.CreateNull(type.Alias);
     }
 
+    /// <summary>
+    /// A workflow input or output on Elsa 3's Memory driver or a custom one converts to Elsa 4's default storage with a
+    /// behaviour warning (<see cref="Elsa3StorageDriverCorrections"/>), reusable workflow or not.
+    /// </summary>
+    private static void CheckArgumentStorageDrivers(Elsa3ConversionPlan plan, IList<Elsa3WorkflowArgumentDefinition>? arguments, string kind, string member)
+    {
+        for (var index = 0; index < (arguments?.Count ?? 0); index++)
+            if (Elsa3StorageDriverCorrections.Describe(kind, arguments![index].Name, arguments[index].StorageDriverType) is { } correction)
+                plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Warning,
+                    correction.Code, correction.Message, correction.Guidance, $"$.{member}[{index}]", correction.Metadata));
+    }
+
     private void CheckWorkflowVariables(Elsa3ConversionPlan plan)
     {
         var variables = plan.Definition.Variables;
         for (var index = 0; index < variables.Count; index++)
         {
+            var path = $"$.variables[{index}].value";
             var variableMetadata = new Dictionary<string, string> { ["VariableName"] = variables[index].Name };
             if (Elsa3VariableMapper.DescribeUnregisteredType(wellKnownTypeRegistry, variables[index]) is { } notice)
                 plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
@@ -129,8 +145,12 @@ internal sealed partial class Elsa3ActivityNormalizer(
                     notice.Guidance,
                     $"$.variables[{index}]",
                     variableMetadata));
-            if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variables[index], out var mapped, out var refusal, typeDescriptors))
+            if (Elsa3StorageDriverCorrections.Describe("Variable", variables[index].Name, variables[index].StorageDriverTypeName) is { } correction)
+                plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Warning,
+                    correction.Code, correction.Message, correction.Guidance, $"$.variables[{index}]", correction.Metadata));
+            if (TryMapVariable(plan, variables[index], path, out var mapped, out var refusal))
             {
+                plan.WorkflowVariables.Add(variables[index], mapped);
                 plan.WorkflowVariableTypes[variables[index]] = mapped.Type;
                 continue;
             }
@@ -143,6 +163,24 @@ internal sealed partial class Elsa3ActivityNormalizer(
                 $"$.variables[{index}]",
                 variableMetadata));
         }
+    }
+
+    private bool TryMapVariable(Elsa3ConversionPlan plan, Elsa3Variable source, string path,
+        out Elsa.Expressions.Core.Models.VariableDefinition mapped, out Elsa3VariableRefusal? refusal)
+    {
+        var notes = new List<Elsa3LiteralConversion.Note>();
+        var success = Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, source, out mapped, out refusal,
+            typeDescriptors: typeDescriptors, options: conversionOptions.Value, report: notes.Add);
+        foreach (var note in notes)
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, note.Severity, note.Code, note.Message, note.Guidance,
+                path + note.Path[1..], new Dictionary<string, string> { ["VariableName"] = source.Name }));
+        if (notes.Any(note => note.Code == LiteralDateInterpreted) && plan.Diagnostics.All(note => note.Code != Elsa3ImportDiagnosticCodes.DateInterpretationApplied))
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Info,
+                Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
+                $"The workflow's starting values were converted with {conversionOptions.Value.DateInterpretation}" +
+                (conversionOptions.Value.SourceTimeZone is null ? "." : $" '{conversionOptions.Value.SourceTimeZone}'."),
+                "Keep the same date interpretation when converting this workflow again.", path));
+        return success;
     }
 
     /// <summary>
@@ -780,6 +818,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
     {
         if (rule.Contract == Elsa3ValueContract.HttpResponseHeaders)
             return CheckHttpResponseHeaders(context, propertyName, value);
+        if (rule.Contract == Elsa3ValueContract.DispatchInputs)
+            return CheckDispatchInputs(context, rule, propertyName, value);
         if (CheckFocusedContract(context, rule, propertyName, value, out var focused))
             return focused;
         if (!Elsa3TypedValues.IsBound(value))
@@ -930,11 +970,13 @@ internal sealed partial class Elsa3ActivityNormalizer(
     /// <summary>
     /// Elsa 3 writes <c>{}</c> on save and sends no extra headers; Elsa 4 sends none when <c>Headers</c> is unbound, and
     /// cannot read the text <c>{}</c> as its header dictionary. A literal map is bound as an object, which publication
-    /// reads into the dictionary. An expression is carried as it is.
+    /// reads into the dictionary, and so is a static Object expression map. Any other expression is carried as it is: Elsa 4
+    /// reads a single string or an array per header at run time, as Elsa 3 did (#5803).
     /// </summary>
     private static JsonElement? CheckHttpResponseHeaders(Elsa3RewriteContext context, string propertyName, JsonElement value)
     {
-        if (!Elsa3TypedValues.TryGetLiteral(value, out var literal))
+        // An Object expression is a static JSON map, read like a literal one.
+        if (!Elsa3TypedValues.TryGetLiteral(value, out var literal) && !TryGetObjectExpression(value, out literal))
             return value;
         if (Elsa3TypedValues.IsEmptyLiteral(literal))
             return null;
@@ -946,6 +988,16 @@ internal sealed partial class Elsa3ActivityNormalizer(
             "Write the headers as a JSON object literal, such as {\"X-Header\": [\"value\"]}.",
             propertyName);
         return null;
+    }
+
+    private static bool TryGetObjectExpression(JsonElement value, out string? json)
+    {
+        json = null;
+        if (!Elsa3TypedValues.TryGetExpression(value, out var type, out var expressionValue) ||
+            !string.Equals(type, "Object", StringComparison.OrdinalIgnoreCase))
+            return false;
+        json = expressionValue.ValueKind == JsonValueKind.String ? expressionValue.GetString() : expressionValue.GetRawText();
+        return true;
     }
 
     private static bool TryMultiValueHeaders(string? literal, out string headers)
@@ -1039,7 +1091,9 @@ internal sealed partial class Elsa3ActivityNormalizer(
                     continue;
                 if (Elsa3VariableMapper.DescribeUnregisteredType(wellKnownTypeRegistry, variable) is { } notice)
                     context.Info(Elsa3ImportDiagnosticCodes.VariableTypeUnregistered, notice.Message, notice.Guidance, property);
-                if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variable, out var mapped, out var refusal, typeDescriptors))
+                if (Elsa3StorageDriverCorrections.Describe("Variable", variable.Name, variable.StorageDriverTypeName) is { } correction)
+                    context.Warning(correction.Code, correction.Message, correction.Guidance, property, metadata: correction.Metadata);
+                if (TryMapVariable(context.Plan, variable, $"{context.Node.JsonPath}{Elsa3ConversionDiagnostics.FormatProperty(property)}.value", out var mapped, out var refusal))
                     context.Node.Variables.Add(mapped);
                 else
                     context.Error(refusal!.Code, refusal.Message, refusal.Guidance, property);

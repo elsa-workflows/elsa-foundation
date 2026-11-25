@@ -305,7 +305,7 @@ public sealed class Elsa3VariableReadConversionTests
     {
         var argument = Input(Node(result.Value!.State, "node"), "text");
         return (argument.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(argument.Value.Value))
-            .Deserialize<ExpressionDefinition>()!;
+            .Deserialize<ExpressionDefinition>(Elsa.Serialization.Core.JsonBaseline.Options)!;
     }
 
     private sealed class Reader(Dictionary<string, JsonElement> values) : Elsa.Expressions.Core.Contracts.IExpressionVariableReader

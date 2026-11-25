@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { authSessionStartedEvent, StudioHttpError, type StudioActivityDefinitionImplementationEditorContribution, type StudioDialogApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { authSessionStartedEvent, formatStudioDate, StudioHttpError, type StudioActivityDefinitionImplementationEditorContribution, type StudioDialogApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityDefinitionsPage } from "../ActivityDefinitionsPage";
 import { activityDesignKeys } from "../api/activityDesign";
 import { clearApiCapabilityCache } from "../api/capabilities";
@@ -1589,7 +1589,7 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Visible inbound uses");
     const asOfLabel = [...rendered.container.querySelectorAll(".ad-review-facts dt")]
       .find(label => label.textContent === "Usage snapshot as of");
-    expect(asOfLabel?.nextElementSibling?.textContent).toBe(new Date("2026-07-18T12:00:00Z").toLocaleString());
+    expect(asOfLabel?.nextElementSibling?.textContent).toBe(formatStudioDate("2026-07-18T12:00:00Z"));
     expect(rendered.container.textContent).toContain("Immutable artifacts, identities, dependency evidence, and run data are preserved");
     change(controlByLabel<HTMLInputElement>(rendered.container, "Type semantic version"), "1.0.0");
     change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Reason"), "Security response");

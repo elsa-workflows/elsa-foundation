@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Design.Validations.Internal;
@@ -46,6 +47,15 @@ internal sealed class ActivityDataSelectionGraph(IActivityStructureService struc
                 break;
             }
             var children = structures.ProjectChildren(item.Node);
+            if (ActivityArgumentLists.AreMissing(item.Node))
+            {
+                // Refused at the node; its children are still walked so every malformed list is reported.
+                foreach (var error in ActivityArgumentLists.Refusals(item.Node))
+                    findings.Add(error);
+                foreach (var child in children.SelectMany(slot => slot.Activities).Reverse())
+                    pending.Push((child, null, item.Depth + 1));
+                continue;
+            }
             ImmutableArray<ArgumentState> inputs = default;
             var boundary = !string.IsNullOrWhiteSpace(item.Node.NodeId) && boundaries.TryGetValue(item.Node.NodeId, out inputs);
             if (boundary && (item.Node.Intrinsic is not null || children.SelectMany(slot => slot.Activities).Any()))

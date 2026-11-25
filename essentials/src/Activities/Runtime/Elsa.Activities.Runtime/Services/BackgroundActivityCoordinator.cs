@@ -70,7 +70,7 @@ internal sealed class BackgroundActivityCoordinator(
             RuntimeChainId.Derive(workItem.IdempotencyKey, "background-result"),
             occurredAt, occurredAt, workItem.Sequence is { } sequence ? sequence + 1 : null,
             JsonSerializer.SerializeToElement(new RuntimeInvokeActivityCommandPayload(
-                payload.PinnedExecutable, payload.ExecutableNodeId, payload.ActivityExecutionId, BackgroundActivityEligibility.ResultReason)),
+                payload.PinnedExecutable, payload.ExecutableNodeId, payload.ActivityExecutionId, BackgroundActivityEligibility.ResultReason), Elsa.Serialization.Core.JsonBaseline.Options),
             workItem.CommandMetadata, workItem.EnvelopeMetadata, workItem.ExecutionScopeId, workItem.Attempt);
         var request = new BackgroundActivityWorkRequest(
             workId, workItem.WorkflowExecutionId, payload.ActivityExecutionId, prepared.Claim.Attempt,
@@ -183,7 +183,7 @@ internal sealed class BackgroundActivityCoordinator(
             request.Executable != payload.PinnedExecutable || request.InvocationId != state.InvocationId ||
             request.ContractFingerprint != state.InputSnapshot?.ContractFingerprint ||
             state.Attempts?.Any(attempt => attempt.AttemptId == request.AttemptId && attempt.EndedAt is null) != true ||
-            !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(request.InputSnapshot), JsonSerializer.SerializeToElement(state.InputSnapshot)))
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(request.InputSnapshot, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(state.InputSnapshot, Elsa.Serialization.Core.JsonBaseline.Options)))
             throw new BackgroundActivityValidationException("BG-ACT-003: The receipt does not belong to the current pinned native invocation.");
     }
 }
