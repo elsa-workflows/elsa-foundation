@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Kernel.EntityFramework;
 using Microsoft.EntityFrameworkCore;
@@ -9,15 +10,28 @@ using Contract = Kernel.Foundation.Contracts;
 namespace Kernel.Native.Run;
 
 // S5a (#4229): operator commands reach a parked root in a composed set. An unshipped closed set carries Park opening and
-// inspection with terminal selection and termination; a second one carries Park inspection with jobs. A Terminate is
-// admitted with its receipt pinned, polled past withheld inputs, kept in its FIFO place while the Park opens, delivered
-// and refused with a journalled reason that S5b replaces. Shipped formats carry none of these paths.
+// inspection with the format 17 operator chain (terminal selection, termination, retirement and held replies); a second
+// carries Park arrivals with terminal selection and held replies; a third carries Park inspection with jobs. A Terminate is
+// admitted with its receipt pinned, polled past withheld inputs, kept in its FIFO place while the Park opens, delivered and
+// refused with a journalled reason that S5b replaces. A Park keeps the root's Suspended flag, as the in-memory reference does.
+// Held commands stay withheld on a parked root. Shipped formats carry none of these paths.
 internal static class PostgresRootParkedOperatorChecks
 {
     private static readonly StoreFormat Composed = StoreFormat.Current with { MessageProtocol = 95 };
     private static readonly StoreFormat ComposedJobs = StoreFormat.Current with { MessageProtocol = 94 };
+    private static readonly StoreFormat ComposedArrivals = StoreFormat.Current with { MessageProtocol = 93 };
     private const string JobsSchema = "parked_jobs";
+    private const string ArrivalsSchema = "parked_arrivals";
     private const string Fault = "deliberate actor failure";
+    private const string ProbeRefusal = """{"Outcome":"refused","Operation":"probe","Reason":"parked"}""";
+
+    // The checkpoint, journal and refusal-outcome triggers. A probe that fails any other way is the probe's own error.
+    private static readonly string[] TriggerMessages =
+    [
+        "Qualified actor checkpoint requires a qualified update",
+        "Qualified actor journal requires the next running checkpoint revision",
+        "An operator refusal entry requires the checkpoint write at its revision"
+    ];
 
     private sealed record InputRow(long Seq, string Id, string Kind, bool Done, short? KeptBy);
 
@@ -26,75 +40,135 @@ internal static class PostgresRootParkedOperatorChecks
         var connection = Environment.GetEnvironmentVariable("KERNEL_PREVIEW_POSTGRES")
             ?? throw new InvalidOperationException("Use an empty dedicated PostgreSQL database.");
         var options = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(connection).Options;
-        var capabilities = RootProfiles.Formats[StoreFormat.RootTerminalSelection] | RootProfiles.Formats[StoreFormat.RootParkInspection];
+        var capabilities = RootProfiles.Formats[StoreFormat.RootOperatorReplies] | RootProfiles.Formats[StoreFormat.RootParkInspection];
         KernelDb Open() => KernelDb.ForUnshippedComposition(options, Composed, capabilities);
-        EfStore Store() => new(Open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(240));
         var stop = timeout.Token;
         await using var db = Open();
         Check(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the parked-operator fixture uses an empty PostgreSQL database");
-        Check(db.UsesRootParkedOperators && !db.UsesRootParkArrivals && db.UsesRootTerminalSelection,
-            "the composed set carries Park opening and inspection with terminal selection and termination");
+        Check(RootProfiles.MissingPrerequisites(capabilities) == RootCapabilities.None && db.UsesRootParkedOperators &&
+                !db.UsesRootParkArrivals && db.UsesRootTerminalSelection && db.UsesRootOperatorReplies && db.UsesRootTerminateThenDelete,
+            "the closed composed set carries Park opening and inspection with the format 17 operator chain");
         ShippedFormatsUnchanged();
 
-        var cold = Store();
-        await cold.CreateAsync(1);
-        var admission = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
-        await admission.InstallAsync(stop);
         var tenant = EmbeddedTenant.Bind("parked");
-        var reads = new PostgresRootReads(cold, await admission.OpenJournalCursorAsync(stop), 12);
-        var ingress = await cold.OpenSelectedRootIngressAsync(Probe.Type, TimeSpan.FromHours(1), (scope, _) => ReferenceEquals(scope, tenant), stop);
-        var probe = new Probe();
-        async Task<Contract.ActorRef> Start(string id) =>
-            (await ingress.SendAsync(tenant, new Contract.Target.Start(new(Probe.Type, "{}")), id, Contract.Kinds.Start, cancellationToken: stop)).Actor!.Value;
-        var early = await Start("early");
-        var late = await Start("late");
-        var lone = await Start("lone");
-        probe.FailsOnTerminate.Add(lone.Id);
-        await using var owner = await Own();
-        var running = new Dictionary<Contract.ActorRef, EfStore.RootImage>();
-        foreach (var root in new[] { early, late, lone }) running[root] = await Drive(root, image => image is { Revision: 1, Status: InstanceStatus.Running });
-        var selections = new Dictionary<Contract.ActorRef, string>();
-        foreach (var root in new[] { early, late, lone }) selections[root] = (await reads.GetAsync(tenant, root, stop))!.Selection!;
+        var main = new Set("parked", Open, owned, inBatch, tenant, stop);
+        await main.InstallAsync(createTables: false);
+        await using var mainOwner = await main.OwnAsync();
+        var probe = main.Probe;
+        var early = await main.StartAsync("early");
+        var late = await main.StartAsync("late");
+        var lone = await main.StartAsync("lone");
+        var held = await main.StartAsync("held");
+        var suspendedTerminate = await main.StartAsync("suspended-terminate");
+        var suspendedResume = await main.StartAsync("suspended-resume");
+        var running = await main.StartAsync("running");
+        probe.FailsOn.Add((lone.Id, Contract.Kinds.Terminate));
+        probe.FailsOn.Add((suspendedTerminate.Id, Contract.Kinds.Terminate));
+        probe.FailsOn.Add((suspendedResume.Id, Contract.Kinds.Resume));
 
         // A Terminate admitted behind the failing input keeps its row and FIFO place while the Park opens, then is refused.
-        Check(await Send(early, "fail-early", "fail") && await Terminate(early, "terminate-early"),
+        Check(await main.SendAsync(early, "fail-early", "fail") && await main.TerminateAsync(early, "terminate-early"),
             "the failing input and a selected Terminate behind it are admitted while the root runs");
-        var stored = await StoredOperator(early);
-        await Drive(early, image => image is { Revision: 3, Status: InstanceStatus.Faulted });
-        await Settled(early, "terminate-early", running[early]);
-        Check(await Inputs(early) is [{ Kind: "fail", Done: true, KeptBy: (short)ParkKeepReason.Consumed } fail,
-                { Kind: Contract.Kinds.Terminate, Done: true, KeptBy: null } command] && fail.Seq < command.Seq && !probe.Saw(early, Contract.Kinds.Terminate),
+        var stored = await main.StoredOperatorAsync(early);
+        await main.DriveAsync(early, image => image is { Revision: 3, Status: InstanceStatus.Faulted });
+        await main.SettledAsync(early, "terminate-early");
+        Check(await main.InputsAsync(early) is [{ Kind: "fail", Done: true, KeptBy: (short)ParkKeepReason.Consumed } fail,
+                { Kind: Contract.Kinds.Terminate, Done: true, KeptBy: null } command] && fail.Seq < command.Seq &&
+                !probe.Saw(early, Contract.Kinds.Terminate),
             "the Park kept only the failing input; the Terminate kept its place and never reached the actor");
 
         // A Terminate admitted after the Park passes a withheld ordinary input and changes nothing else.
-        var due = (await cold.ReadFirstRootAsync(tenant.Tenant, late.Id, stop))!.AsOf + 1_500;
-        Check(await Send(late, "withheld", "ordinary", due) && await Send(late, "fail-late", "fail"), "a future input and a failing one are admitted");
-        var before = await Drive(late, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
-        while ((await cold.ReadFirstRootAsync(tenant.Tenant, late.Id, stop))!.AsOf <= due) await Task.Delay(100, stop);
+        var due = (await main.ImageAsync(late)).AsOf + 1_500;
+        Check(await main.SendAsync(late, "withheld", "ordinary", due) && await main.SendAsync(late, "fail-late", "fail"),
+            "a future input and a failing one are admitted");
+        var before = await main.DriveAsync(late, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+        while ((await main.ImageAsync(late)).AsOf <= due) await Task.Delay(100, stop);
         await ReceiptsPinned();
-        Check(await Terminate(late, "terminate-late"), "a Terminate with the root's running selection is admitted for the parked root");
-        Check(!await Terminate(early, "terminate-other", selections[late]), "a Terminate with another root's selection is refused at admission");
-        var inbox = (await cold.ReadRootInboxAsync(tenant.Tenant, late.Id, 0, "", 10, stop)).Rows;
+        Check(await main.TerminateAsync(late, "terminate-late"), "a Terminate with the root's running selection is admitted for the parked root");
+        Check(!await main.TerminateAsync(early, "terminate-other", main.Selections[late]), "a Terminate with another root's selection is refused at admission");
+        var inbox = (await main.Cold.ReadRootInboxAsync(tenant.Tenant, late.Id, 0, "", 10, stop)).Rows;
         Check(inbox is [{ Id: "withheld", KeptBy: null }, { Id: "fail-late", KeptBy: ParkKeepReason.Consumed }, { Id: "terminate-late", KeptBy: null }],
             "inspection lists the withheld input, the kept fault input and the pending Terminate in FIFO order");
-        var after = await Drive(late, image => image is { Revision: 3 });
-        await Settled(late, "terminate-late", running[late]);
-        Check(await Inputs(late) is [{ Id: var withheld, Done: false, KeptBy: null }, { Kind: "fail", KeptBy: (short)ParkKeepReason.Consumed }, { Done: true }] &&
+        var after = await main.DriveAsync(late, image => image is { Revision: 3 });
+        await main.SettledAsync(late, "terminate-late");
+        Check(await main.InputsAsync(late) is [{ Id: var withheld, Done: false, KeptBy: null }, { Kind: "fail", KeptBy: (short)ParkKeepReason.Consumed }, { Done: true }] &&
             withheld.StartsWith(late.Id, StringComparison.Ordinal) && !probe.Saw(late, "ordinary") && after.Revision == before.Revision + 1,
             "the refusal moves only the revision: the withheld input stays pending and the kept input stays kept");
 
         // A Terminate whose own turn fails opens the Park without it; the owner polls it again and refuses it.
-        Check(await Terminate(lone, "terminate-lone"), "a Terminate is admitted for the root whose terminate turn fails");
-        await Drive(lone, image => image is { Revision: 3, Status: InstanceStatus.Faulted });
-        await Settled(lone, "terminate-lone", running[lone]);
-        Check(await Inputs(lone) is [{ Kind: Contract.Kinds.Terminate, Done: true, KeptBy: null }] && probe.Saw(lone, Contract.Kinds.Terminate),
+        Check(await main.TerminateAsync(lone, "terminate-lone"), "a Terminate is admitted for the root whose terminate turn fails");
+        await main.DriveAsync(lone, image => image is { Revision: 3, Status: InstanceStatus.Faulted });
+        await main.SettledAsync(lone, "terminate-lone");
+        Check(await main.InputsAsync(lone) is [{ Kind: Contract.Kinds.Terminate, Done: true, KeptBy: null }] && probe.Saw(lone, Contract.Kinds.Terminate),
             "the failed Terminate opened the Park outside the kept set and settled on the parked root");
+
+        // A held command admitted while the root runs stays withheld on the parked root, and keeps a later command in its
+        // FIFO place. The owner neither delivers nor settles it, and the partition goes on: the roots below still progress.
+        Check(await main.SendAsync(held, "fail-held", "fail") &&
+                await main.OperateAsync(held, "held-terminate", Contract.Kinds.Terminate, main.Selections[held], reply: true),
+            "a failing input and a held Terminate behind it are admitted while the root runs");
+        var heldPark = await main.DriveAsync(held, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+        Check(await main.TerminateAsync(held, "after-held"), "an unheld Terminate is admitted behind the held one on the parked root");
+        await main.IdleAsync(6);
+        Check((await main.ImageAsync(held)).Revision == heldPark.Revision && await main.InputsAsync(held) is
+                [{ Kind: "fail", Done: true, KeptBy: (short)ParkKeepReason.Consumed }, { Kind: Contract.Kinds.Terminate, Done: false, KeptBy: null },
+                    { Id: var afterHeld, Kind: Contract.Kinds.Terminate, Done: false, KeptBy: null }] &&
+                afterHeld.StartsWith("operator/", StringComparison.Ordinal) && !probe.Saw(held, Contract.Kinds.Terminate),
+            "the owner withholds the held Terminate on the parked root and the later Terminate waits behind it");
+
+        // Admission on a parked root: only an unheld Terminate, or Terminate and delete, is admitted.
+        Check(!await main.OperateAsync(late, "suspend-parked", Contract.Kinds.Suspend) &&
+                !await main.OperateAsync(late, "resume-parked", Contract.Kinds.Resume),
+            "admission refuses a Suspend and a Resume for a parked root");
+        Check(!await main.OperateAsync(late, "held-parked", Contract.Kinds.Terminate, main.Selections[late], reply: true) &&
+                !await main.OperateAsync(late, "held-then-delete-parked", Contract.Kinds.Terminate, main.Selections[late], reply: true, thenDelete: true),
+            "admission refuses a held Terminate and a held Terminate and delete for a parked root");
+
+        // Two commands for one parked root are delivered one at a time in Seq order, each refused at its own revision.
+        Check(await main.TerminateAsync(lone, "pair-first") && await main.TerminateAsync(lone, "pair-second") &&
+                await main.OperateAsync(lone, "pair-then-delete", Contract.Kinds.Terminate, main.Selections[lone], thenDelete: true),
+            "two Terminates and an unheld Terminate and delete are admitted for the parked root");
+        var pair = await main.DriveAsync(lone, image => image is { Revision: 6 });
+        var pairJournal = await main.Cold.ReadJournalOfAsync(0, pair.Actor.Id, 0, stop);
+        Check(pairJournal is [.., var first, var second, var third] &&
+                first is { Revision: 4, Entries: """{"Outcome":"refused","Operation":"pair-first","Reason":"parked"}""" } &&
+                second is { Revision: 5, Entries: """{"Outcome":"refused","Operation":"pair-second","Reason":"parked"}""" } &&
+                third is { Revision: 6, Entries: """{"Outcome":"refused","Operation":"pair-then-delete","Reason":"parked"}""" } &&
+                await main.InputsAsync(lone) is { Length: 4 } pairInputs && pairInputs.All(row => row.Done) &&
+                pairInputs.Select(row => row.Seq).SequenceEqual(pairInputs.Select(row => row.Seq).Order()),
+            "the owner delivers the parked root's commands in Seq order and refuses each at the next revision");
+        await main.SettledAsync(lone, "pair-then-delete");
+
+        // A Terminate whose turn fails on a suspended root opens a Park that keeps Suspended. The owner refuses it there.
+        Check(await main.OperateAsync(suspendedTerminate, "suspend-first", Contract.Kinds.Suspend), "a Suspend is admitted for a running root");
+        var suspended = await main.DriveAsync(suspendedTerminate, image => image is { Revision: 2, Status: InstanceStatus.Running, Suspended: true });
+        Check(await main.TerminateAsync(suspendedTerminate, "terminate-suspended"), "a Terminate is admitted for the suspended root");
+        await main.DriveAsync(suspendedTerminate, image => image is { Revision: 4, Status: InstanceStatus.Faulted });
+        await main.SettledAsync(suspendedTerminate, "terminate-suspended", suspended.State, suspended: true);
+        Check(await main.InputsAsync(suspendedTerminate) is [{ Kind: Contract.Kinds.Suspend, Done: true }, { Kind: Contract.Kinds.Terminate, Done: true, KeptBy: null }] &&
+                probe.Saw(suspendedTerminate, Contract.Kinds.Terminate),
+            "the failed Terminate on the suspended root parked it suspended, outside the kept set, and settled there");
+
+        // A Resume whose turn fails parks the root suspended. The owner refuses it, and a later Terminate, on the suspended Park.
+        Check(await main.OperateAsync(suspendedResume, "suspend-second", Contract.Kinds.Suspend), "a Suspend is admitted for the second root");
+        suspended = await main.DriveAsync(suspendedResume, image => image is { Revision: 2, Suspended: true });
+        Check(await main.OperateAsync(suspendedResume, "resume-fails", Contract.Kinds.Resume), "a Resume is admitted for the suspended root");
+        await main.DriveAsync(suspendedResume, image => image is { Revision: 4, Status: InstanceStatus.Faulted });
+        await main.SettledAsync(suspendedResume, "resume-fails", suspended.State, suspended: true);
+        Check(!await main.OperateAsync(suspendedResume, "resume-parked", Contract.Kinds.Resume) &&
+                await main.TerminateAsync(suspendedResume, "terminate-suspended-park"),
+            "admission refuses a Resume and admits a Terminate for the root parked while suspended");
+        await main.DriveAsync(suspendedResume, image => image is { Revision: 5 });
+        await main.SettledAsync(suspendedResume, "terminate-suspended-park", suspended.State, suspended: true);
+
+        await RefusalTriggers();
+        await ParkedRootPredicates();
 
         // Format 22 still refuses Terminate at admission and at decode.
         var unreachable = new DbContextOptionsBuilder<KernelDb>().UseNpgsql("Host=parked-refusal.invalid").Options;
         Check(await new PostgresRootAdmission(() => KernelDb.ForPostgresRootParkRecovery(unreachable), TimeSpan.FromHours(1))
-                .AdmitRootOperatorAsync(tenant.Tenant, early.Id, "format-22", Contract.Kinds.Terminate, null, null, stop, selections[early]) is null,
+                .AdmitRootOperatorAsync(tenant.Tenant, early.Id, "format-22", Contract.Kinds.Terminate, null, null, stop, main.Selections[early]) is null,
             "format 22 refuses a Terminate at admission before it opens a connection");
         try
         {
@@ -105,6 +179,7 @@ internal static class PostgresRootParkedOperatorChecks
         {
             Check(true, "format 22 refuses a stored Terminate at decode");
         }
+        await ArrivalsSet();
         await JobsInspection();
         return 0;
 
@@ -128,7 +203,7 @@ internal static class PostgresRootParkedOperatorChecks
                 """, stop);
             try
             {
-                await admission.AdmitRootOperatorAsync(tenant.Tenant, late.Id, "pinned", Contract.Kinds.Terminate, null, null, stop, selections[late]);
+                await main.Admission.AdmitRootOperatorAsync(tenant.Tenant, late.Id, "pinned", Contract.Kinds.Terminate, null, null, stop, main.Selections[late]);
                 throw new InvalidOperationException("A Terminate was admitted beside an unpinned receipts relation.");
             }
             catch (StoreFormatException error) when (error.Message == "Park requires the source tables in the marker schema.")
@@ -141,6 +216,130 @@ internal static class PostgresRootParkedOperatorChecks
                     DROP VIEW "FoundationOperatorReceipts"; ALTER TABLE fixture_receipts RENAME TO "FoundationOperatorReceipts";
                     """, stop);
             }
+        }
+
+        // Raw writes against the checkpoint, journal and refusal-outcome triggers, each rolled back.
+        async Task RefusalTriggers()
+        {
+            var parked = await main.ImageAsync(early);
+            var live = await main.ImageAsync(running);
+            var suspendedPark = await main.ImageAsync(suspendedTerminate);
+            Check(!await main.TriggerProbeAsync(parked, null, Continue(parked)),
+                "the checkpoint trigger refuses a parked revision move with no refused entry");
+            Check(await main.TriggerProbeAsync(parked, ProbeRefusal, Continue(parked)) &&
+                    await main.TriggerProbeAsync(suspendedPark, ProbeRefusal, Continue(suspendedPark)),
+                "a refused entry with only the revision moved passes the triggers on a parked root, suspended or not (rolled back)");
+            // Every column of the row: the change alone passes on a Running root, beside a refused entry it is refused on both.
+            foreach (var (column, change) in RowChanges(wire: true, parkRevision: false))
+            {
+                Check(await main.TriggerProbeAsync(live, null, Change(live, change)) &&
+                        !await main.TriggerProbeAsync(live, ProbeRefusal, Change(live, change)) &&
+                        !await main.TriggerProbeAsync(parked, ProbeRefusal, Change(parked, change)),
+                    $"a refused entry is refused when {column} changes, on a Running and on a parked root");
+            }
+            // A lone refused entry passes the insert trigger but is refused at commit, so the next write at that revision still lands.
+            Check(!await main.LoneEntryCommitsAsync(parked, ProbeRefusal) && !await main.LoneEntryCommitsAsync(live, ProbeRefusal),
+                "a lone refused entry with no checkpoint write is refused at commit, on a parked and on a Running root");
+            Check(await main.TriggerProbeAsync(parked, ProbeRefusal, Continue(parked)) &&
+                    (await main.Cold.ReadJournalOfAsync(0, parked.Actor.Id, 0, stop)).All(entry => entry.Revision <= parked.Revision) &&
+                    (await main.Cold.ReadJournalOfAsync(0, live.Actor.Id, 0, stop)).All(entry => entry.Revision <= live.Revision),
+                "after a refused lone entry the parked and Running roots stay writable at the next revision");
+        }
+
+        // The parked-root admission predicates, each broken alone through a bypassed checkpoint write and then restored.
+        async Task ParkedRootPredicates()
+        {
+            var image = await main.ImageAsync(late);
+            var parkAt = await main.ParkAtAsync(image);
+            foreach (var (predicate, broken, restored) in new (string, string, string)[]
+            {
+                ("lacks a Park mark", """ "FoundationParkAt" = NULL """, $""" "FoundationParkAt" = {parkAt} """),
+                ("has a terminal revision", $""" "FoundationTerminalRevision" = {image.Revision} """, """ "FoundationTerminalRevision" = NULL """)
+            })
+            {
+                await main.BypassAsync(image, broken);
+                bool admitted;
+                try { admitted = await main.TerminateAsync(late, "predicate-" + predicate.Length); }
+                finally { await main.BypassAsync(image, restored); }
+                Check(!admitted, $"admission refuses a Terminate for a Faulted root that {predicate}");
+            }
+            Check(await main.TerminateAsync(late, "predicate-control"), "the restored parked root admits a Terminate again");
+        }
+
+        // A composed set with Park arrivals and termination journals the refusal through the arrivals branch and keeps
+        // arrivals on a parked root, suspended or not. A held command stays withheld and holds the later arrival back.
+        async Task ArrivalsSet()
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA " + ArrivalsSchema, stop);
+            var arrivalOptions = new DbContextOptionsBuilder<KernelDb>()
+                .UseNpgsql(new NpgsqlConnectionStringBuilder(connection) { SearchPath = ArrivalsSchema }.ConnectionString).Options;
+            var arrivalCapabilities = RootProfiles.Formats[StoreFormat.RootParkArrivals] | RootProfiles.Formats[StoreFormat.RootTerminalSelection] |
+                RootCapabilities.OperatorReplies;
+            KernelDb OpenArrivals() => KernelDb.ForUnshippedComposition(arrivalOptions, ComposedArrivals, arrivalCapabilities);
+            await using (var check = OpenArrivals())
+                Check(RootProfiles.MissingPrerequisites(arrivalCapabilities) == RootCapabilities.None && check.UsesRootParkedOperators &&
+                        check.UsesRootParkArrivals && !check.UsesRootParkRecovery && check.UsesRootStableBody,
+                    "the closed arrivals set carries Park arrivals with terminal selection, termination and held replies");
+            var set = new Set("parked-arrivals", OpenArrivals, owned, inBatch, tenant, stop);
+            await set.InstallAsync(createTables: true);
+            await using var owner = await set.OwnAsync();
+            var plain = await set.StartAsync("arrivals-plain");
+            var asleep = await set.StartAsync("arrivals-suspended");
+            var holding = await set.StartAsync("arrivals-held");
+            var awake = await set.StartAsync("arrivals-running");
+            set.Probe.FailsOn.Add((asleep.Id, Contract.Kinds.Resume));
+
+            Check(await set.SendAsync(plain, "arrivals-fail", "fail"), "the arrivals set admits a failing input");
+            await set.DriveAsync(plain, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.TerminateAsync(plain, "arrivals-terminate"), "the arrivals set admits a Terminate for the parked root");
+            await set.DriveAsync(plain, image => image is { Revision: 3 });
+            await set.SettledAsync(plain, "arrivals-terminate");
+            Check(await set.SendAsync(plain, "arrivals-after", "ordinary"), "the arrivals set admits an arrival for the parked root");
+            var arrived = await set.DriveAsync(plain, image => image is { Revision: 4 });
+            Check(await set.InputsAsync(plain) is [{ Kind: "fail", KeptBy: (short)ParkKeepReason.Consumed }, { Kind: Contract.Kinds.Terminate, Done: true, KeptBy: null },
+                    { Kind: "ordinary", Done: true, KeptBy: (short)ParkKeepReason.Arrived }] && arrived is { Status: InstanceStatus.Faulted, Suspended: false },
+                "the refusal leaves the Park to keep the next arrival");
+
+            Check(await set.OperateAsync(asleep, "arrivals-suspend", Contract.Kinds.Suspend), "the arrivals set admits a Suspend");
+            var sleeping = await set.DriveAsync(asleep, image => image is { Revision: 2, Suspended: true });
+            Check(await set.OperateAsync(asleep, "arrivals-resume", Contract.Kinds.Resume), "the arrivals set admits a Resume for the suspended root");
+            await set.DriveAsync(asleep, image => image is { Revision: 4, Status: InstanceStatus.Faulted });
+            await set.SettledAsync(asleep, "arrivals-resume", sleeping.State, suspended: true);
+            Check(await set.SendAsync(asleep, "arrivals-asleep", "ordinary"), "the arrivals set admits an arrival for the root parked while suspended");
+            var kept = await set.DriveAsync(asleep, image => image is { Revision: 5 });
+            Check(kept is { Status: InstanceStatus.Faulted, Suspended: true } && await set.InputsAsync(asleep) is
+                    [_, { Kind: Contract.Kinds.Resume, Done: true }, { Kind: "ordinary", Done: true, KeptBy: (short)ParkKeepReason.Arrived }],
+                "the Park keeps an arrival on the root parked while suspended, and the root stays suspended");
+            Check(await set.TerminateAsync(asleep, "arrivals-terminate-asleep"), "the arrivals set admits a Terminate for the root parked while suspended");
+            await set.DriveAsync(asleep, image => image is { Revision: 6 });
+            await set.SettledAsync(asleep, "arrivals-terminate-asleep", sleeping.State, suspended: true);
+
+            Check(await set.SendAsync(holding, "arrivals-held-fail", "fail") &&
+                    await set.OperateAsync(holding, "arrivals-held-terminate", Contract.Kinds.Terminate, set.Selections[holding], reply: true),
+                "the arrivals set admits a failing input and a held Terminate behind it");
+            var holdingPark = await set.DriveAsync(holding, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            Check(await set.SendAsync(holding, "arrivals-behind-held", "ordinary") &&
+                    !await set.OperateAsync(holding, "arrivals-held-parked", Contract.Kinds.Terminate, set.Selections[holding], reply: true),
+                "the arrivals set admits an arrival and refuses a held Terminate for the parked root");
+            await set.IdleAsync(6);
+            Check((await set.ImageAsync(holding)).Revision == holdingPark.Revision && await set.InputsAsync(holding) is
+                    [{ Kind: "fail", KeptBy: (short)ParkKeepReason.Consumed }, { Kind: Contract.Kinds.Terminate, Done: false }, { Kind: "ordinary", Done: false, KeptBy: null }] &&
+                    !set.Probe.Saw(holding, Contract.Kinds.Terminate),
+                "the owner withholds the held Terminate on the parked root and the later arrival waits behind it");
+            Check(await set.SendAsync(plain, "arrivals-progress", "ordinary"), "the arrivals set admits another arrival for the first parked root");
+            await set.DriveAsync(plain, image => image is { Revision: 5 });
+            Check(true, "the partition goes on past the withheld held Terminate");
+
+            var parked = await set.ImageAsync(plain);
+            var live = await set.ImageAsync(awake);
+            Check(await set.TriggerProbeAsync(parked, ProbeRefusal, Continue(parked)),
+                "in the arrivals set a refused entry with only the revision moved passes the triggers (rolled back)");
+            foreach (var (column, change) in RowChanges(wire: true, parkRevision: true))
+                Check(await set.TriggerProbeAsync(live, null, Change(live, change)) &&
+                        !await set.TriggerProbeAsync(live, ProbeRefusal, Change(live, change)) &&
+                        !await set.TriggerProbeAsync(parked, ProbeRefusal, Change(parked, change)),
+                    $"in the arrivals set a refused entry is refused when {column} changes, on a Running and on a parked root");
+            Check(!await set.LoneEntryCommitsAsync(parked, ProbeRefusal), "in the arrivals set a lone refused entry is refused at commit");
         }
 
         // A composed Park set with jobs inspects its direct inputs, kept and pending, and never lists its job rows.
@@ -196,74 +395,245 @@ internal static class PostgresRootParkedOperatorChecks
                 Check(true, "the shipped jobs format still refuses inbox inspection");
             }
         }
+    }
 
-        async Task<bool> Send(Contract.ActorRef root, string id, string kind, long? dueAt = null) =>
-            await ingress.SendAsync(tenant, new Contract.Target.Ref(root), id, kind, "{}", dueAt is null ? null : new(DueAt: dueAt), stop) is
-                { Outcome: Contract.AdmissionOutcome.Accepted };
+    private static FormattableString Continue(EfStore.RootImage root) => $"""
+        UPDATE "Instances" SET "Revision" = "Revision" + 1, "FoundationWriteRevision" = "Revision" + 1 WHERE "Id" = {root.Actor.Id}
+        """;
 
-        async Task<bool> Terminate(Contract.ActorRef root, string id, string? selection = null) =>
-            await ingress.SendAsync(tenant, new Contract.Target.Ref(root), id, Contract.Kinds.Terminate,
-                JsonSerializer.Serialize(new Contract.OperatorCommand(selection ?? selections[root])), cancellationToken: stop) is
-                { Outcome: Contract.AdmissionOutcome.Accepted };
+    private static FormattableString Change(EfStore.RootImage root, string change) => FormattableStringFactory.Create(
+        "UPDATE \"Instances\" SET \"Revision\" = \"Revision\" + 1, \"FoundationWriteRevision\" = \"Revision\" + 1, " + change +
+        " WHERE \"Id\" = {0}", root.Actor.Id);
 
-        async Task<MessageEntity> StoredOperator(Contract.ActorRef root)
+    // One change per Instances column besides the identity, revision and fence columns. The state wire exists with a stable
+    // body and the Park revision with Park arrivals. Retired has its own guard, the physical retirement trigger, which runs first.
+    private static IEnumerable<(string Column, string Change)> RowChanges(bool wire, bool parkRevision)
+    {
+        yield return ("Status", "\"Status\" = 3");
+        yield return ("Suspended", "\"Suspended\" = NOT \"Suspended\"");
+        yield return ("State", "\"State\" = \"State\" || ' '");
+        yield return ("StateVersion", "\"StateVersion\" = \"StateVersion\" + 1");
+        yield return ("FoundationHeader", "\"FoundationHeader\" = \"FoundationHeader\" || ' '");
+        yield return ("Fault", "\"Fault\" = coalesce(\"Fault\", '\"\"') || ' '");
+        yield return ("History", "\"History\" = CASE WHEN \"History\" = 0 THEN 1 ELSE 0 END");
+        yield return ("Jobs", "\"Jobs\" = coalesce(\"Jobs\", '') || 'x'");
+        yield return ("Children", "\"Children\" = coalesce(\"Children\", '') || 'x'");
+        yield return ("Parent", "\"Parent\" = coalesce(\"Parent\", '') || 'x'");
+        yield return ("FoundationParkAt", "\"FoundationParkAt\" = coalesce(\"FoundationParkAt\", 0) + 1");
+        yield return ("FoundationTerminalRevision", "\"FoundationTerminalRevision\" = \"Revision\" + 1");
+        yield return ("FoundationTerminalAt", "\"FoundationTerminalAt\" = coalesce(\"FoundationTerminalAt\", 0) + 1");
+        yield return ("Model", "\"Model\" = \"Model\" || 'x'");
+        yield return ("Definition", "\"Definition\" = \"Definition\" || 'x'");
+        yield return ("NextJobGeneration", "\"NextJobGeneration\" = coalesce(\"NextJobGeneration\", 0) + 1");
+        yield return ("CustomHandles", "\"CustomHandles\" = coalesce(\"CustomHandles\", '') || 'x'");
+        if (wire) yield return ("FoundationStateWire", "\"FoundationStateWire\" = coalesce(\"FoundationStateWire\", ''::bytea) || '\\x00'::bytea");
+        if (parkRevision) yield return ("FoundationParkRevision", "\"FoundationParkRevision\" = coalesce(\"FoundationParkRevision\", 0) + 1");
+    }
+
+    // One composed set: its store, admission, ingress, reads and the probe actor behind one owner of partition 0.
+    private static readonly TimeSpan FixtureLease = TimeSpan.FromSeconds(180);
+
+    private sealed class Set(string name, Func<KernelDb> open, bool owned, bool inBatch, Contract.BoundScope tenant, CancellationToken stop)
+    {
+        private Contract.IIngress _ingress = null!;
+        private IScopeActivation _owner = null!;
+        internal Probe Probe { get; } = new();
+        internal EfStore Cold { get; private set; } = null!;
+        internal PostgresRootAdmission Admission { get; private set; } = null!;
+        private PostgresRootReads _reads = null!;
+        internal Dictionary<Contract.ActorRef, string> Selections { get; } = [];
+        private readonly Dictionary<Contract.ActorRef, EfStore.RootImage> _running = [];
+
+        private EfStore Store() => new(open, postgres: true, fenceInBatch: inBatch) { CommitSql = owned ? CommitSql.Owned : CommitSql.EntityFramework };
+
+        internal async Task InstallAsync(bool createTables)
         {
-            await using var read = Open();
+            if (createTables)
+                await using (var created = open()) await created.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(stop);
+            Cold = Store();
+            await Cold.CreateAsync(1);
+            Admission = new PostgresRootAdmission(open, TimeSpan.FromHours(1));
+            await Admission.InstallAsync(stop);
+            _reads = new PostgresRootReads(Cold, await Admission.OpenJournalCursorAsync(stop), 12);
+            _ingress = await Cold.OpenSelectedRootIngressAsync(Probe.Type, TimeSpan.FromHours(1), (scope, _) => ReferenceEquals(scope, tenant), stop);
+        }
+
+        internal async Task<IScopeActivation> OwnAsync()
+        {
+            var store = Store();
+            var scope = (await store.BindWorkerPartitionAsync(0, stop)).Scope;
+            var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), Probe);
+            // One heartbeat covers the whole fixture: the default ten-second lease can lapse on a loaded machine.
+            var host = new DurableHost([new Worker(name, 0, store, adapter, new WorkerOptions { Partitions = 1, Lease = FixtureLease })]);
+            await host.HeartbeatAsync(FixtureLease, stop);
+            return _owner = await host.ActivateAsync(0, stop) ?? throw new InvalidOperationException("The fixture owner could not take its partition.");
+        }
+
+        internal async Task<Contract.ActorRef> StartAsync(string id)
+        {
+            var root = (await _ingress.SendAsync(tenant, new Contract.Target.Start(new(Probe.Type, "{}")), id, Contract.Kinds.Start, cancellationToken: stop)).Actor!.Value;
+            _running[root] = await DriveAsync(root, image => image is { Revision: 1, Status: InstanceStatus.Running });
+            Selections[root] = (await _reads.GetAsync(tenant, root, stop))!.Selection!;
+            return root;
+        }
+
+        internal async Task<EfStore.RootImage> ImageAsync(Contract.ActorRef root) =>
+            await Cold.ReadFirstRootAsync(tenant.Tenant, root.Id, stop) ?? throw new InvalidOperationException($"The root {root.Id} has no checkpoint.");
+
+        internal async Task<bool> SendAsync(Contract.ActorRef root, string id, string kind, long? dueAt = null) =>
+            await _ingress.SendAsync(tenant, new Contract.Target.Ref(root), id, kind, "{}", dueAt is null ? null : new(DueAt: dueAt), stop) is
+                { Outcome: Contract.AdmissionOutcome.Accepted };
+
+        internal async Task<bool> TerminateAsync(Contract.ActorRef root, string id, string? selection = null) =>
+            await _ingress.SendAsync(tenant, new Contract.Target.Ref(root), id, Contract.Kinds.Terminate,
+                JsonSerializer.Serialize(new Contract.OperatorCommand(selection ?? Selections[root])), cancellationToken: stop) is
+                { Outcome: Contract.AdmissionOutcome.Accepted };
+
+        // Admission without the ingress: Suspend and Resume, held commands and Terminate and delete.
+        internal async Task<bool> OperateAsync(Contract.ActorRef root, string id, string kind, string? selection = null, bool reply = false,
+            bool thenDelete = false)
+        {
+            var deadline = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 600_000;
+            return await Admission.AdmitRootOperatorAsync(tenant.Tenant, root.Id, id, kind, null, null, stop, selection, thenDelete,
+                reply: reply ? new(ReplyTo.Of("parked-caller", id, deadline), deadline) : null) is { Duplicate: false };
+        }
+
+        internal async Task<MessageEntity> StoredOperatorAsync(Contract.ActorRef root)
+        {
+            await using var read = open();
             return await read.Messages.AsNoTracking().SingleAsync(row => row.InboxScope == -4 && row.Id.StartsWith("operator/" + root.Id + "/"), stop);
         }
 
-        // The command settled at the next revision with a journalled refusal, and the parked checkpoint and its Park stayed put.
-        async Task Settled(Contract.ActorRef root, string operation, EfStore.RootImage runningImage)
+        // The command settled at the latest revision with a journalled refusal, and the parked checkpoint and its Park stayed put.
+        internal async Task SettledAsync(Contract.ActorRef root, string operation, string? state = null, bool suspended = false)
         {
-            var image = (await cold.ReadFirstRootAsync(tenant.Tenant, root.Id, stop))!;
-            var journal = await cold.ReadJournalOfAsync(0, image.Actor.Id, 0, stop);
-            var listed = (await cold.ReadRootActorAsync(tenant.Tenant, root.Id, stop))!.Value.Item;
-            using var entry = journal is [.., _, { Entries: var text }] ? JsonDocument.Parse(text) : null;
-            Check(journal is [.., { Entries: """["parked"]""" } park, var last] && last.Revision == park.Revision + 1 && entry?.RootElement is
-                { ValueKind: JsonValueKind.Object } refusal && refusal.GetProperty("Outcome").GetString() == "refused" &&
-                refusal.GetProperty("Operation").GetString() == operation && refusal.GetProperty("Reason").GetString() == "parked" &&
-                image is { Status: InstanceStatus.Faulted, Suspended: false, TerminalRevision: null } && image.State == runningImage.State &&
-                image.Revision == last.Revision && listed is { Status: InstanceStatus.Faulted, ParkFault: Fault, ParkAt: > 0 },
-                $"{operation} is refused on the parked root at the next revision with a journalled reason, and the Park stays");
+            var image = await ImageAsync(root);
+            var journal = await Cold.ReadJournalOfAsync(0, image.Actor.Id, 0, stop);
+            var listed = (await Cold.ReadRootActorAsync(tenant.Tenant, root.Id, stop))!.Value.Item;
+            using var entry = journal is [.., { Entries: var text }] ? JsonDocument.Parse(text) : null;
+            Check(journal.Any(row => row.Entries == """["parked"]""") && journal[^1].Revision == image.Revision && entry?.RootElement is
+                    { ValueKind: JsonValueKind.Object } refusal && refusal.GetProperty("Outcome").GetString() == "refused" &&
+                    refusal.GetProperty("Operation").GetString() == operation && refusal.GetProperty("Reason").GetString() == "parked" &&
+                    image is { Status: InstanceStatus.Faulted, TerminalRevision: null } && image.Suspended == suspended &&
+                    image.State == (state ?? _running[root].State) && listed is { Status: InstanceStatus.Faulted, ParkFault: Fault, ParkAt: > 0 },
+                $"{operation} is refused on the parked root at the next revision with a journalled reason, and the Park stays" +
+                    (suspended ? " suspended" : ""));
         }
 
-        async Task<InputRow[]> Inputs(Contract.ActorRef root)
+        internal async Task<InputRow[]> InputsAsync(Contract.ActorRef root)
         {
-            await using var read = Open();
-            var actor = (await cold.ReadFirstRootAsync(tenant.Tenant, root.Id, stop))!.Actor.Id;
+            await using var read = open();
+            var actor = (await ImageAsync(root)).Actor.Id;
             return await read.Database.SqlQuery<InputRow>($"""
                 SELECT "Seq", "Id", "Kind", "Done", "FoundationKeptBy" AS "KeptBy" FROM "Messages"
                 WHERE "Target" = {actor} AND "InboxScope" = -4 ORDER BY "Seq"
                 """).ToArrayAsync(stop);
         }
 
-        async Task<IScopeActivation> Own()
+        internal async Task<long> ParkAtAsync(EfStore.RootImage root)
         {
-            var store = Store();
-            var scope = (await store.BindWorkerPartitionAsync(0, stop)).Scope;
-            var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), probe);
-            var host = new DurableHost([new Worker("parked", 0, store, adapter, new WorkerOptions { Partitions = 1 })]);
-            await host.HeartbeatAsync(Defaults.Lease, stop);
-            return await host.ActivateAsync(0, stop) ?? throw new InvalidOperationException("The fixture owner could not take its partition.");
+            await using var read = open();
+            return await read.Database.SqlQuery<long>($"""SELECT "FoundationParkAt" AS "Value" FROM "Instances" WHERE "Id" = {root.Actor.Id}""").SingleAsync(stop);
         }
 
-        async Task<EfStore.RootImage> Drive(Contract.ActorRef root, Func<EfStore.RootImage?, bool> done)
+        // Passes run the actor turns off the caller, so the wait is bounded by time, not by a count of passes.
+        internal async Task<EfStore.RootImage> DriveAsync(Contract.ActorRef root, Func<EfStore.RootImage?, bool> done)
         {
-            for (var turn = 0; turn < 60; turn++)
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while (deadline.Elapsed < TimeSpan.FromSeconds(30))
             {
-                if (await cold.ReadFirstRootAsync(tenant.Tenant, root.Id, stop) is { } image && done(image)) return image;
-                await owner.WokenAsync(null, stop);
-                await owner.RunAsync(stop);
+                if (await Cold.ReadFirstRootAsync(tenant.Tenant, root.Id, stop) is { } image && done(image)) return image;
+                await _owner.WokenAsync(null, stop);
+                await _owner.RunAsync(stop);
+                await Task.Delay(10, stop);
             }
             throw new InvalidOperationException($"The root {root.Id} did not reach the expected checkpoint.");
         }
+
+        // Owner passes over at least the given time, so a withheld row has had its chances to be polled and delivered.
+        internal async Task IdleAsync(int passes)
+        {
+            for (var pass = 0; pass < passes; pass++)
+            {
+                await _owner.WokenAsync(null, stop);
+                await _owner.RunAsync(stop);
+                await Task.Delay(150, stop);
+            }
+        }
+
+        // A committed checkpoint write with the checkpoint trigger disabled, for one row of the fixture.
+        internal async Task BypassAsync(EfStore.RootImage root, string change)
+        {
+            await using var db = open();
+            await using var transaction = await db.Database.BeginTransactionAsync(stop);
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" DISABLE TRIGGER kernel_require_root_checkpoint_writer""", stop);
+            if (await db.Database.ExecuteSqlInterpolatedAsync(FormattableStringFactory.Create("UPDATE \"Instances\" SET " + change + " WHERE \"Id\" = {0}", root.Actor.Id), stop) != 1)
+                throw new InvalidOperationException("The bypass did not change exactly the root row.");
+            await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Instances" ENABLE TRIGGER kernel_require_root_checkpoint_writer""", stop);
+            await transaction.CommitAsync(stop);
+        }
+
+        // One raw journal entry at the next revision, then one write, in a transaction that is always rolled back after its
+        // deferred checks run. True when all pass the triggers; false when one of them refuses.
+        internal async Task<bool> TriggerProbeAsync(EfStore.RootImage root, string? entries, FormattableString? write)
+        {
+            await using var db = open();
+            await using var transaction = await db.Database.BeginTransactionAsync(stop);
+            try
+            {
+                if (entries is not null) await InsertEntryAsync(db, root, entries);
+                if (write is not null && await db.Database.ExecuteSqlInterpolatedAsync(write, stop) != 1)
+                    throw new InvalidOperationException("The trigger probe did not write exactly the root row.");
+                await db.Database.ExecuteSqlRawAsync("SET CONSTRAINTS ALL IMMEDIATE", stop);
+                return true;
+            }
+            catch (Exception error) when (IsTriggerRefusal(error))
+            {
+                return false;
+            }
+            finally
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+            }
+        }
+
+        // One raw journal entry at the next revision with no checkpoint write, committed. True when the commit lands.
+        internal async Task<bool> LoneEntryCommitsAsync(EfStore.RootImage root, string entries)
+        {
+            await using var db = open();
+            await using var transaction = await db.Database.BeginTransactionAsync(stop);
+            try
+            {
+                await InsertEntryAsync(db, root, entries);
+                await transaction.CommitAsync(stop);
+            }
+            catch (Exception error) when (IsTriggerRefusal(error))
+            {
+                return false;
+            }
+            // A landed probe entry would wedge the root at that revision; remove it so the fixture stays usable.
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                DELETE FROM "Journal" WHERE "Instance" = {root.Actor.Id} AND "Revision" = {root.Revision + 1}
+                """, stop);
+            return true;
+        }
+
+        private Task InsertEntryAsync(KernelDb db, EfStore.RootImage root, string entries) =>
+            db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Journal" ("Partition", "Position", "Instance", "Revision", "Entries")
+                SELECT 0, coalesce(max("Position"), 0) + 1, {root.Actor.Id}, {root.Revision + 1}, {entries} FROM "Journal" WHERE "Partition" = 0
+                """, stop);
+
+        private static bool IsTriggerRefusal(Exception error) =>
+            (error as PostgresException ?? error.InnerException as PostgresException) is { SqlState: "23514" } refused &&
+            TriggerMessages.Contains(refused.MessageText);
     }
 
     private sealed class Probe : Contract.IActorType
     {
         internal const string Type = "postgres-parked-operators";
         private readonly List<(string Actor, string Kind)> _seen = [];
-        public HashSet<string> FailsOnTerminate { get; } = new(StringComparer.Ordinal);
+        public HashSet<(string Actor, string Kind)> FailsOn { get; } = [];
         public bool Saw(Contract.ActorRef actor, string kind) => _seen.Contains((actor.Id, kind));
         string Contract.IActorType.Type => Type;
         public bool Withholds(Contract.ActorHeader header) => false;
@@ -275,8 +645,7 @@ internal static class PostgresRootParkedOperatorChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             _seen.AddRange(turn.Inbox.Select(input => (turn.Header.Ref.Id, input.Kind)));
-            if (turn.Inbox.Any(input => input.Kind == "fail") ||
-                FailsOnTerminate.Contains(turn.Header.Ref.Id) && turn.Inbox.Any(input => input.Kind == Contract.Kinds.Terminate))
+            if (turn.Inbox.Any(input => input.Kind == "fail" || FailsOn.Contains((turn.Header.Ref.Id, input.Kind))))
             {
                 turn.State = "null";
                 throw new InvalidOperationException(Fault);

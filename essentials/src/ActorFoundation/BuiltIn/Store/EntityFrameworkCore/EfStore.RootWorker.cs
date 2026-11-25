@@ -378,7 +378,9 @@ public sealed partial class EfStore
     private async Task<PreparedRoot?> PrepareWorkerTurnAsync(WorkerRoot root, TurnCommit turn, PartitionFence fence, CancellationToken cancellationToken)
     {
         if (turn.FoundationRootOperator is { Kind: Kinds.Recover }) return await PrepareRootParkRecoverAsync(root, turn, cancellationToken);
-        if (turn is { FoundationRootOperator: not null, Row.Status: InstanceStatus.Faulted, OpensPark: false, FoundationKept: null })
+        // A delete, or a retired marker, of an ended Faulted root goes on to retirement below.
+        if (turn is { FoundationRootOperator: not null, Row: { Status: InstanceStatus.Faulted, Retired: false }, OpensPark: false,
+                FoundationKept: null, Delete: false })
         {
             await using var profile = create();
             if (profile.UsesRootParkedOperators) return await PrepareRootParkedRefusalAsync(root, turn, cancellationToken);

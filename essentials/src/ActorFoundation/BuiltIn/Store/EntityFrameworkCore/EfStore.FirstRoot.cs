@@ -202,7 +202,8 @@ public sealed partial class EfStore
                 """.Replace("/*root-outcome-entry*/", RootOutcomeEntry, StringComparison.Ordinal)
                 // The state wire column exists only on stable-body profiles.
                 .Replace("/*new-wire*/", db.UsesRootStableBody ? """, NEW."FoundationStateWire" """ : "", StringComparison.Ordinal)
-                .Replace("/*old-wire*/", db.UsesRootStableBody ? """, OLD."FoundationStateWire" """ : "", StringComparison.Ordinal) : "", StringComparison.Ordinal)
+                .Replace("/*old-wire*/", db.UsesRootStableBody ? """, OLD."FoundationStateWire" """ : "", StringComparison.Ordinal)
+                : db.UsesRootParkedOperators ? ParkedRefusalRow(db) : "", StringComparison.Ordinal)
             .Replace("/*root-park-recover*/", db.UsesRootParkRecovery ? """
                 (OLD."Status" = 2 AND NEW."Status" = 0 AND NOT NEW."Retired" AND NOT OLD."Suspended" AND NOT NEW."Suspended"
                     AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationParkRevision" > 0

@@ -831,8 +831,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
                  WHERE i."Id" = m."Target" AND i."Partition" = m."Partition" AND NOT i."Retired"
-                   {(WithholdsParkInputs(db) ? """AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%')"""
-                       : db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL""" : "")}
+                   {(WithholdsParkInputs(db) ? """AND (i."FoundationParkAt" IS NULL OR m."InboxScope" = -4 AND m."Id" LIKE 'operator/%' AND m."ReplyTo" IS NULL)"""
+                       : db.UsesRootParkOpening && !db.UsesRootParkArrivals ? """AND i."FoundationParkAt" IS NULL"""
+                       : db.UsesRootParkedOperators ? """AND (i."FoundationParkAt" IS NULL OR m."ReplyTo" IS NULL OR m."Id" NOT LIKE 'operator/%')""" : "")}
                    {(db.UsesRootParkRecovery ? RootReleasedCohortFilter : "")})))
             """;
     // Commands are exposed only when database time makes them due. On a suspended root the
@@ -857,6 +858,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                    END)))
         """;
     // A parked root without Park arrivals withholds its ordinary inputs, so only an earlier operator row holds a command back.
+    // Every composed Park set withholds a held command on a parked root: its reply waits for S5b, and an earlier held row
+    // keeps a later command in its FIFO place.
     private static bool WithholdsParkInputs(KernelDb db) => db.UsesRootParkedOperators && !db.UsesRootParkArrivals;
     private static readonly string RootParkedOperatorPollFilter = RootOperatorPollFilter.Replace("/*withheld-prior*/",
         """AND (target."FoundationParkAt" IS NULL OR prior."Id" LIKE 'operator/%')""", StringComparison.Ordinal);

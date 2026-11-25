@@ -80,10 +80,12 @@ internal sealed partial class ActorAdapter
 
     // S5a: a composed Park set delivers an operator command to a parked root. Until S5b ends the root here, the command is
     // consumed and refused with a journalled reason at the next revision, and the Park and checkpoint stay as they are.
+    // A Park keeps the row's Suspended flag (ActorAdapter.Park), so a root parked while suspended is refused the same way
+    // and stays suspended.
     private Durable.TurnOutcome? RefuseOnParkedRoot(Durable.TurnInput input)
     {
         if (roots is not { RefusesParkedOperators: true } || input.Row is not
-            { Status: Durable.InstanceStatus.Faulted, Suspended: false, Retired: false, Creation: 1, FoundationDispatchHeader.Terminal: null } row ||
+            { Status: Durable.InstanceStatus.Faulted, Retired: false, Creation: 1, FoundationDispatchHeader.Terminal: null } row ||
             input.Taken is not [{ Durable: true, Message: { ReplyTo: null } control } refused] ||
             !IsRootControl(control) || control.Target.Id != row.Id) return null;
         var revision = checked(row.Revision + 1);

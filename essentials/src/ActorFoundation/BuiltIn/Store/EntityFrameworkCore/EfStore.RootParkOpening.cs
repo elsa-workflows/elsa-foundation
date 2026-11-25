@@ -18,7 +18,9 @@ public sealed partial class EfStore
         var split = parkedOperators && opening && turn.Done.Any(PostgresRootAdmission.IsOperatorOccurrence);
         string[] returned = split ? turn.Done.Where(PostgresRootAdmission.IsOperatorOccurrence).Select(key => key.Id).ToArray() : [];
         if (split) turn = WithoutOperators(turn);
-        if (turn.Row is not { Status: InstanceStatus.Faulted, Suspended: false, Fault: { } fault } row ||
+        // A Park keeps the row's Suspended flag, as the in-memory reference does. Only a composed set with operators can
+        // suspend a root, so only there can a Park open or continue on a suspended one.
+        if (turn.Row is not { Status: InstanceStatus.Faulted, Fault: { } fault } row || row.Suspended && !parkedOperators ||
             turn.Expected is not > 0 || opening && reason != ParkKeepReason.Consumed || turn.Done.Count == 0 && !split ||
             turn.FoundationKept is not { } kept || kept.Count != turn.Done.Count ||
             turn.FoundationRootParkInputs is not { } envelopes || !SameInputs(envelopes, turn.Done) ||
@@ -35,7 +37,7 @@ public sealed partial class EfStore
 
         var current = await ReadFirstRootAsync(root.Tenant, root.Reference, cancellationToken);
         var priorStatus = opening ? InstanceStatus.Running : InstanceStatus.Faulted;
-        if (current?.Revision != turn.Expected || current.Status != priorStatus || current.Suspended) return null;
+        if (current?.Revision != turn.Expected || current.Status != priorStatus || current.Suspended != row.Suspended) return null;
         var expected = WorkerRow(root, current) with
         {
             Status = InstanceStatus.Faulted, Revision = checked(current.Revision + 1), Fault = opening ? fault : current.Fault,
@@ -47,7 +49,8 @@ public sealed partial class EfStore
             throw RootShape();
 
         var journal = turn.Journal is null ? null : new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal);
-        return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes, returned));
+        return new(journal, new RootParkOpening(root, current.Revision, opening, reason, DurableKeyJson.Write(fault), envelopes, returned,
+            row.Suspended));
     }
 
     private static TurnCommit WithoutOperators(TurnCommit turn)
@@ -67,7 +70,7 @@ public sealed partial class EfStore
     private sealed record LockedParkCheckpoint(long At, long? ParkAt, long? OpenRevision, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
 
     private sealed record RootParkOpening(WorkerRoot Root, long Expected, bool Opening, ParkKeepReason Reason, string EncodedFault,
-        IReadOnlyList<Message> Inputs, string[] Returned)
+        IReadOnlyList<Message> Inputs, string[] Returned, bool Suspended)
         : QualifiedRootCheckpoint(checked(Expected + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
@@ -82,7 +85,7 @@ public sealed partial class EfStore
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
                 WHERE i."Id" = {Root.Actor} AND i."Partition" = {Root.Partition} AND NOT i."Retired"
-                    AND NOT i."Suspended" AND i."Status" = {(int)priorStatus} AND i."Revision" = {Expected}
+                    AND i."Suspended" = {Suspended} AND i."Status" = {(int)priorStatus} AND i."Revision" = {Expected}
                     AND (i."FoundationParkAt" IS NULL) = {Opening}
                     AND ({Opening} OR i."Fault" = {EncodedFault})
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
@@ -155,7 +158,7 @@ public sealed partial class EfStore
                         AND "FoundationTenant" = {Root.Tenant} AND "FoundationReference" = {Root.Reference}
                         AND "Revision" = {JournalRevision} AND "FoundationWriteRevision" = {JournalRevision}
                         AND "Status" = {(int)InstanceStatus.Faulted} AND "Fault" = {EncodedFault} AND "FoundationParkAt" = {parkAt}
-                        AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
+                        AND "Suspended" = {Suspended} AND "StateVersion" = {prior.StateVersion} AND sha256(convert_to("State", 'UTF8')) = {prior.StateDigest}
                         AND sha256(convert_to("FoundationHeader", 'UTF8')) = {prior.HeaderDigest}
                 ) AND (SELECT count(*) FROM "Messages" WHERE "Id" = ANY({keys}) AND "Target" = {Root.Actor}
                         AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}

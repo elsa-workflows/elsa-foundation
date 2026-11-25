@@ -144,10 +144,14 @@ internal sealed partial class PostgresRootAdmission
             }
             if (!deletion && !recover)
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
+            // A composed Park set admits an unheld Terminate, or Terminate and delete, for a parked root. A held command
+            // there is refused: the owner withholds held rows on a parked root until S5b ends it.
+            var parked = selectedStatus == InstanceStatus.Faulted && db.UsesRootParkedOperators && kind == Kinds.Terminate &&
+                await LocksParkedRootAsync(db, address, tenant, reference, token);
             var eligible = deletion ? exactTerminal : recover ? exactPark
+                : parked ? reply is null
                 : thenDelete ? selectedStatus is InstanceStatus.Running or InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled
-                : selectedStatus == InstanceStatus.Running || selectedStatus == InstanceStatus.Faulted && kind == Kinds.Terminate &&
-                    reply is null && db.UsesRootParkedOperators && await LocksParkedRootAsync(db, address, tenant, reference, token);
+                : selectedStatus == InstanceStatus.Running;
             if (!eligible)
             {
                 await tx.RollbackAsync(token);
@@ -233,13 +237,14 @@ internal sealed partial class PostgresRootAdmission
             """).ToListAsync(token)).Count == 1;
 
     // S5a: a composed Park set admits a Terminate for a parked root with the root's running selection. The owner refuses it
-    // there with a journalled reason; S5b checks it against the Park selection and ends the root.
+    // there with a journalled reason; S5b checks it against the Park selection and ends the root. A Park keeps the row's
+    // Suspended flag, so a root parked while suspended is admitted the same way.
     private static async Task<bool> LocksParkedRootAsync(KernelDb db, CreationAddress address, string tenant, string reference,
         CancellationToken token) =>
         address.Creation == 1 && (await db.Database.SqlQuery<long>($"""
             SELECT "Revision" AS "Value" FROM "Instances"
             WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
-                AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired" AND NOT "Suspended"
+                AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
                 AND "Status" = {(int)InstanceStatus.Faulted} AND "FoundationParkAt" IS NOT NULL AND "FoundationTerminalRevision" IS NULL
             FOR SHARE
             """).ToListAsync(token)).Count == 1;
