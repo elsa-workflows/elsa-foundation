@@ -8,7 +8,7 @@ using CShells.Hosting;
 using Elsa.Locking.Core;
 using Elsa.Tasks;
 using Elsa.Tasks.Core;
-using Elsa.Workbench.Boot;
+using Elsa.Foundation.Hosting;
 using Elsa.Workbench.Readiness;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -561,6 +561,8 @@ public sealed class ShellReadinessTests
         private readonly BackgroundTaskLifetimeControl? _backgroundTaskControl;
         private Exception? _expectedStopFailure;
 
+        private const string EagerActivationEnabledKey = "Elsa:Boot:EagerShellActivation:Enabled";
+
         private WarmupHarness(
             ServiceProvider provider,
             DefaultShellWarmup warmup,
@@ -594,8 +596,21 @@ public sealed class ShellReadinessTests
         public BackgroundTaskLifetimeProbe? BackgroundTaskProbe { get; }
         public ActivationTokenCapture? ActivationTokenCapture { get; }
 
-        public EagerShellActivationHostedService CreateEagerService() =>
-            ActivatorUtilities.CreateInstance<EagerShellActivationHostedService>(_provider);
+        /// <summary>
+        /// The Workbench's eager activation is Elsa.Foundation.Hosting's, whose hosted service is internal. The test takes
+        /// its type from the registration the package's public composition adds, and builds it over this harness's runner.
+        /// </summary>
+        public IHostedService CreateEagerService()
+        {
+            var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
+            builder.Configuration[EagerActivationEnabledKey] = "true";
+            builder.AddFoundationShellHosting();
+            var eagerType = builder.Services
+                .Single(descriptor => descriptor.ServiceType == typeof(IHostedService)
+                                      && descriptor.ImplementationType?.Assembly == typeof(ShellActivationTracker).Assembly)
+                .ImplementationType!;
+            return (IHostedService)ActivatorUtilities.CreateInstance(_provider, eagerType);
+        }
 
         public void ExpectStopFailure(Exception exception) => _expectedStopFailure = exception;
 
@@ -613,7 +628,7 @@ public sealed class ShellReadinessTests
             services.AddLogging();
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [EagerShellActivationOptions.EnabledConfigurationKey] = "true",
+                [EagerActivationEnabledKey] = "true",
                 ["CShells:Shells:default:Name"] = ServerReadinessFixture.DefaultShellName
             }).Build();
             services.AddSingleton<IConfiguration>(configuration);
@@ -649,6 +664,7 @@ public sealed class ShellReadinessTests
             if (registry is not null)
                 services.AddSingleton(registry);
             services.AddShellActivationRunner();
+            services.AddSingleton(new ShellActivationTracker());
 
             var provider = services.BuildServiceProvider();
             var featureCatalogGate = gateFeatureDiscovery
