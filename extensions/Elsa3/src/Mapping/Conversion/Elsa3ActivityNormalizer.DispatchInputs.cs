@@ -22,6 +22,9 @@ internal sealed partial class Elsa3ActivityNormalizer
             return null;
         if (!Elsa3TypedValues.IsBound(fitted))
             return fitted;
+        // A blank script evaluates to null in Elsa 3, which passes no inputs: unbound, as a blank content type is.
+        if (IsBlankExpression(fitted))
+            return null;
 
         var (targetId, declared) = DispatchTarget(context);
         if (!TryGetStaticInputMap(fitted, out var json, out var expressionType))

@@ -89,8 +89,8 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             .GroupBy(x => x.DefinitionId, StringComparer.Ordinal)
             .ToDictionary(
                 x => x.Key,
-                x => (IReadOnlyList<string>)x.OrderByDescending(y => y.Version).ThenByDescending(y => y.Id, StringComparer.Ordinal).First()
-                    .Inputs.Select(input => input.Name).ToArray(),
+                x => (IReadOnlyList<string>)(x.OrderByDescending(y => y.Version).ThenByDescending(y => y.Id, StringComparer.Ordinal).First()
+                    .Inputs ?? []).Select(input => input.Name).ToArray(),
                 StringComparer.Ordinal);
 
         foreach (var item in reusable.Concat(selection.Where(x => !x.IsReusable).OrderBy(x => x.SourceVersionId, StringComparer.Ordinal)))

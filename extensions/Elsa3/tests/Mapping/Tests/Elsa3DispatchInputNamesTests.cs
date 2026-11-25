@@ -137,6 +137,39 @@ public sealed class Elsa3DispatchInputNamesTests
     }
 
     [Fact]
+    public async Task A_captured_map_converts_with_the_warning()
+    {
+        var result = await ConvertAsync(Dispatch("Elsa.DispatchWorkflow", Captured("inputs", "ObjectDictionary")));
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.DispatchInputNames);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.DispatchInputUndeclared);
+    }
+
+    [Fact]
+    public async Task A_blank_script_is_unbound_without_a_warning()
+    {
+        // Elsa 3 evaluates a blank script to null and passes no inputs.
+        var result = await ConvertAsync(Dispatch("Elsa.DispatchWorkflow", Expression("JavaScript", "", "ObjectDictionary")));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(Node(result.Value!.State, "dispatch").Inputs, input => input.ReferenceKey == "Inputs");
+        Assert.DoesNotContain(result.Diagnostics, IsDispatchDiagnostic);
+    }
+
+    [Fact]
+    public async Task A_collection_child_with_null_inputs_declares_none()
+    {
+        var child = ReusableActivityImportFixtures.Workflow("acme-child", "acme-child-v1", 1, false, ReusableActivityImportFixtures.Leaf("c1"));
+        child.Inputs = null!;
+        var caller = ReusableActivityImportFixtures.Workflow("acme-caller", "acme-caller-v1", 1, false,
+            Dispatch("Elsa.DispatchWorkflow", Literal("""{"OrderId":1}""", "ObjectDictionary")));
+
+        var refusal = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(() => ApplyAsync(child, caller));
+
+        Assert.Single(refusal.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.DispatchInputUndeclared);
+    }
+
+    [Fact]
     public async Task An_unbound_or_empty_map_raises_nothing()
     {
         var unbound = await ConvertAsync(Sequence("root", Activity("dispatch", "Elsa.DispatchWorkflow", ("workflowDefinitionId", Literal("acme-child")))));
