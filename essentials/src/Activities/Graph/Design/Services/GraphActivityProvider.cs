@@ -427,7 +427,7 @@ public sealed class GraphActivityProvider(
 
         var projection = activityStructureService.ProjectInputs(node);
         var consumedUnused = projection.ConsumedInputKeys.Except(projection.Inputs.Where(input => input.Definition is null).Select(input => input.ReferenceKey), StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
-        // Exact reads leave a wrongly cased argument list unbound; ValidateAsync refuses it as malformed.
+        // Exact reads leave a wrongly cased argument list unbound; MalformedArguments refuses any such list.
         return (node.Inputs ?? []).Where(input => !consumedUnused.Contains(input.ReferenceKey))
             .Select(x => new ActivityContractMemberUsage("Input", x.ReferenceKey, "Bound"))
             .Concat((node.Outputs ?? []).Select(x => new ActivityContractMemberUsage("Output", x.ReferenceKey, "Bound")))
@@ -1512,12 +1512,18 @@ public sealed class GraphActivityProvider(
     // The relative pointer of each argument the activity node reader cannot read, or that has no reference key.
     private static IEnumerable<string> MalformedArguments(JsonElement node, string propertyName)
     {
-        if (!TryGetPropertyIgnoreCase(node, propertyName, out var property) ||
-            property.Value.ValueKind == JsonValueKind.Null)
+        if (node.ValueKind != JsonValueKind.Object)
             yield break;
 
-        var name = EscapePointer(property.Name);
-        var arguments = property.Value;
+        // The node reader is exact (spec 1207): a list under any other casing would be silently ignored, so it is refused.
+        foreach (var variant in node.EnumerateObject())
+            if (string.Equals(variant.Name, propertyName, StringComparison.OrdinalIgnoreCase) && !string.Equals(variant.Name, propertyName, StringComparison.Ordinal))
+                yield return $"/{EscapePointer(variant.Name)}";
+
+        if (!node.TryGetProperty(propertyName, out var arguments) || arguments.ValueKind == JsonValueKind.Null)
+            yield break;
+
+        var name = EscapePointer(propertyName);
         if (arguments.ValueKind != JsonValueKind.Array)
         {
             yield return $"/{name}";

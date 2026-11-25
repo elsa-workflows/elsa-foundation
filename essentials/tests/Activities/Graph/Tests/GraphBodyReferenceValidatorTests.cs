@@ -160,6 +160,23 @@ public sealed partial class GraphActivityProviderTests
         Assert.Equal($"/rootActivity/{propertyName}", finding.Location?.JsonPointer);
     }
 
+    [Theory]
+    [InlineData("Inputs", "[{\"referenceKey\":\"value\"}]")]
+    [InlineData("OUTPUTS", "[]")]
+    public async Task A_wrongly_cased_argument_list_is_refused_even_when_its_entries_are_valid(string propertyName, string list)
+    {
+        var manifest = WithRootProperty(BodyManifest([], []), propertyName, JsonNode.Parse(list));
+
+        var draft = await _provider.ValidateAsync(manifest, BodyContract());
+        var compilation = await _provider.CompileAsync(CompilationRequest(manifest));
+
+        foreach (var diagnostics in new[] { draft, compilation.Diagnostics })
+        {
+            var finding = Assert.Single(diagnostics, x => x.Code == "activity.graph.argument-malformed");
+            Assert.Equal($"/rootActivity/{propertyName}", finding.Location?.JsonPointer);
+        }
+    }
+
     [Fact]
     public async Task A_body_that_cannot_be_read_is_refused_rather_than_left_unchecked()
     {
