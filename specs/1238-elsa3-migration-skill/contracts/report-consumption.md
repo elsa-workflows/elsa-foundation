@@ -19,8 +19,10 @@ worked around here.
 | Per definition, the exported file relative to the output folder, and for a reusable also its wrapper workflow's file | Point the user at them under the output folder the skill passed; the handoff names `migrated/`. |
 | Findings that belong to no definition: input findings (such as an unreadable export file) and run findings (a refusal of the shared import that names no single definition) | Show them first; the run is not finished while one is neither fixed nor accepted (FR-012). |
 
-JavaScript globals used other than as a direct call reach the report as ordinary converter findings that name the
-global as a JavaScript-function component; the skill needs nothing special for them.
+A JavaScript global used other than as a direct call is listed at inventory as a JavaScript-function component,
+like a called one. Once a host function provides it, `assess` reports the use as a Must fix finding with the remedy
+patch the definition and no component kind, and the function leaves the inventory; the skill sends the user to the
+definition and JSON path, where case 14 says to make it a direct call. The skill needs nothing special for it.
 
 A refusal to run (exit code 2) writes no report: the skill reads the `dotnet run` exit code and the tool's one-line
 reason on standard error (spec 1237's command-line contract) and stops (FR-022).

@@ -5,7 +5,7 @@
 ```powershell
 python tools/skills/check_migration_skill.py --self-test
 python tools/skills/check_migration_skill.py
-dotnet test extensions/Elsa3/tests/Migration/Sample.Tests/Elsa3.Migration.Sample.Tests.csproj
+dotnet test extensions/Elsa3/tests/Migration/Sample/Tests/Elsa3.Migration.Sample.Tests.csproj
 ```
 
 All three pass. Rename a sample method used in a region without updating the catalog: the check fails.

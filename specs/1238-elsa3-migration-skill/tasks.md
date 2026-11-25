@@ -4,7 +4,7 @@
 [contracts/](contracts/), [quickstart.md](quickstart.md).
 
 **Skill folder**: `plugins/elsa3-migration/skills/elsa3-workflows-migration/` (written `skill/` below).
-**Sample root**: `extensions/Elsa3/tests/Migration/` (written `Migration/` below).
+**Sample root**: `extensions/Elsa3/tests/Migration/Sample/` (written `Sample/` below).
 
 **Tests**: The sample's xunit tests (framework §2.23: they prove each *port* example behaves as the catalog says)
 and the check's `--self-test`. The skill text itself is verified by the walkthrough (T029–T031). No test framework
@@ -23,22 +23,23 @@ after the prefix). T018's case 17 follows the storage-driver migration guide in 
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `Migration/Sample/Elsa3.Migration.Sample.csproj` (`IsPackable=false`, references only the Elsa 4
-  authoring projects the plan lists, CShells abstractions) and `Migration/Sample.Tests/Elsa3.Migration.Sample.Tests.csproj`
-  (xunit); add both to `Elsa.Server.slnx` under `/extensions/Elsa3/tests/Migration/`, and restore both to create their
+- [ ] T001 Create `Sample/Elsa3.Migration.Sample/Elsa3.Migration.Sample.csproj` (`IsPackable=false`, references only the Elsa 4
+  authoring projects the plan lists, CShells abstractions) and `Sample/Tests/Elsa3.Migration.Sample.Tests.csproj`
+  (xunit), the paths the architecture guard derives from the names; add both to `Elsa.Server.slnx` under
+  `/extensions/Elsa3/tests/Migration/Sample/`, and restore both to create their
   `packages.lock.json` (CI restores in locked mode).
 - [ ] T002 Add the test project to the PR tier in `tools/ci/test-tiers.json`; run
   `dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check`.
 - [ ] T003 Run `Elsa3MigrationBoundaryTests` and `ArchitectureGuardTests` with the new projects; if the folder or
-  `Elsa3.` prefix trips a guard, rename the projects (not the guard) and update plan P-4.
+  `Elsa3.` prefix trips a guard, move or rename the projects to what the guard derives (not the guard) and update plan P-4.
 
 ---
 
 ## Phase 2: Foundational — sample and check (blocks US3)
 
 Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T008, T013 and T014 also register in
-`AcmeFeature`, so they run one after another after T004, and the case 18 region is final only after T014. All live in `Migration/Sample/` and
-`Migration/Sample.Tests/`; tasks touching different files are [P].
+`AcmeFeature`, so they run one after another after T004, and the case 18 region is final only after T014. All live in `Sample/Elsa3.Migration.Sample/` and
+`Sample/Tests/`; tasks touching different files are [P].
 
 - [ ] T004 Feature registration (case 18): `AcmeFeature` as a `[ShellFeature]` `IShellFeature`; a test that the
   feature registers the services the other cases need.
@@ -62,7 +63,8 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T
   global-matching rule maps the Elsa 3 global `lookupCustomer` to it; test calling the
   implementation with JSON arguments.
 - [ ] T014 Variable type (case 16): a descriptor provider registering `acme.Invoice`; test that the descriptor has
-  the dotted alias.
+  the dotted alias. The catalog's case 16 "before" example uses the bare alias `Invoice` and states the matching rule
+  of research R-2.
 - [ ] T015 Tests (case 19): the region is one of the tests above, chosen as the example of building an activity
   execution context and calling the activity.
 - [ ] T016 `tools/skills/check_migration_skill.py` per [contracts/catalog-entry.md](contracts/catalog-entry.md), with

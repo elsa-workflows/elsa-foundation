@@ -166,8 +166,9 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
 - The .NET SDK is missing, the clone cannot be found, or the clone is not at the commit the plan records: the skill
   stops before running anything and says what to install or which commit to check out, or records the new commit
   when the user moved the clone on purpose (FR-004).
-- A JavaScript global is used other than as a direct call (assigned to a variable, passed as a callback): the
-  converter refuses it at conversion with an ordinary finding; neither the tool nor the skill scans scripts. The
+- A JavaScript global is used other than as a direct call (assigned to a variable, passed as a callback): once a
+  host function provides it, the converter refuses the use at conversion with an ordinary finding that patches the
+  definition; neither the tool nor the skill scans scripts. The
   skill points the user to case 14, which says to make it a direct call in the Elsa 3 definition.
 - A definition's only findings are routine ones the report marks as added to every definition: it goes smoothly,
   and the skill does not ask the user to act on them.
@@ -279,7 +280,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   | 13 | Cancellation and faults | The cancellation token; fault and cancel transitions; no per-activity cancel callback | port |
   | 14 | JavaScript functions | A JavaScript host function declaration `prefix.<Elsa 3 global name>`, effect-free, JSON in and out, registered so the converter maps the Elsa 3 global to it under the converter's matching rule, which the catalog states; the converter rewrites direct calls only and refuses other references, so those become direct calls in the Elsa 3 definition first | port; redesign as an activity when the function has effects |
   | 15 | Liquid filters and other expression additions | Liquid filters: none, filter registration is closed to modules. A new expression syntax: the public expression descriptor and portable expression handler extension points | redesign (Liquid filters: a JavaScript host function or an activity); a new syntax is named with its extension points but carries no example |
-  | 16 | Variable type registration | A variable type descriptor provider registering the type under a dotted alias | port |
+  | 16 | Variable type registration | A variable type descriptor provider registering the type under a dotted alias. The converter matches the Elsa 3 type name only to an Elsa 4 alias or to the full name of a registered type, which the catalog states; Elsa 4 module aliases are dotted, so a bare Elsa 3 alias such as `Invoice` matches nothing: the user changes the variable's type in the Elsa 3 definition to the Elsa 4 alias, or keeps the variable untyped and drops the component | port |
   | 17 | Storage drivers | None per variable: the converter stores every value in the default durable storage, and Elsa 3's default drivers need nothing. A variable, input or output on the memory driver or on a custom driver converts with a Reconsider finding. Each driver type starts one interview, following the repository's Elsa 3 storage-driver migration guide: why was this driver chosen? A secret: Elsa 4 secret references. Bulky data: fetch, use and drop it inside one activity, or keep only a reference. Another store, such as blob storage: not possible per variable today, so the user writes their own plan or spec, and the migration plan links it. No particular reason: the default storage is fine | interview |
   | 18 | Feature registration | An Elsa 4 shell feature in the user's own project, which the migration host references and lists in its local settings; activities are discovered from the feature's assembly | port |
   | 19 | Tests | xunit tests that build an activity execution context and call the activity directly | port |

@@ -67,7 +67,7 @@ publishes or deploys.
 | P-1 | Skill home | `plugins/elsa3-migration/skills/elsa3-workflows-migration/` (R-1). |
 | P-2 | Adapters | Repository-root `.claude-plugin/marketplace.json` with one plugin, `source: ./plugins/elsa3-migration`; `plugins/elsa3-migration/.claude-plugin/plugin.json`. Skills are found by the plugin's default `skills/` folder ([contracts/adapters.md](contracts/adapters.md)). |
 | P-3 | Catalog verdicts | The spec's FR-014 table, decided against the code (R-2). |
-| P-4 | Sample | `extensions/Elsa3/tests/Migration/Sample/Elsa3.Migration.Sample.csproj` and `extensions/Elsa3/tests/Migration/Sample.Tests/Elsa3.Migration.Sample.Tests.csproj`; marked regions `// catalog:case-NN begin` / `// catalog:case-NN end` (R-3, [contracts/catalog-entry.md](contracts/catalog-entry.md)). |
+| P-4 | Sample | `extensions/Elsa3/tests/Migration/Sample/Elsa3.Migration.Sample/Elsa3.Migration.Sample.csproj` and `extensions/Elsa3/tests/Migration/Sample/Tests/Elsa3.Migration.Sample.Tests.csproj` (the paths the architecture guard derives from the project names); marked regions `// catalog:case-NN begin` / `// catalog:case-NN end` (R-3, [contracts/catalog-entry.md](contracts/catalog-entry.md)). |
 | P-5 | Check | `tools/skills/check_migration_skill.py`, run with `--self-test` and then for real next to the catalog link check in `ci.yml`; `plugins/**` is documentation-only in `tools/ci/change_scope.py` (R-5). |
 | P-6 | Versions | `SKILL.md` lists the report schema versions it reads; the plan records the path and commit of the user's clone, from which the tool and the migration host run; no tool version is stamped anywhere (R-4). |
 | P-7 | Report | The skill reads only the fields in [contracts/report-consumption.md](contracts/report-consumption.md); any gap is raised on spec 1237's PR, not solved here. |
@@ -101,9 +101,9 @@ plugins/elsa3-migration/
     ├── SKILL.md
     ├── migration-plan-template.md
     └── porting-catalog.md
-extensions/Elsa3/tests/Migration/
-├── Sample/Elsa3.Migration.Sample.csproj             # synthetic Acme Elsa 4 feature, IsPackable=false
-└── Sample.Tests/Elsa3.Migration.Sample.Tests.csproj # xunit, PR tier
+extensions/Elsa3/tests/Migration/Sample/
+├── Elsa3.Migration.Sample/Elsa3.Migration.Sample.csproj # synthetic Acme Elsa 4 feature, IsPackable=false
+└── Tests/Elsa3.Migration.Sample.Tests.csproj            # xunit, PR tier
 tools/skills/check_migration_skill.py                # catalog ⇔ sample regions; no diagnostic codes
 README.md                                            # "Migrating from Elsa 3" section
 extensions/Elsa3/src/Mapping/README.md               # contributor trigger

@@ -33,7 +33,7 @@ Cases appear in order 01–19. The marker comment `<!-- sample: case-NN -->` app
 
 ## Sample regions
 
-In `extensions/Elsa3/tests/Migration/Sample/**/*.cs` and `extensions/Elsa3/tests/Migration/Sample.Tests/**/*.cs` only
+In `extensions/Elsa3/tests/Migration/Sample/**/*.cs` only (the sample and its tests)
 (other folders under `Migration/` belong to other specs):
 
 ```csharp
