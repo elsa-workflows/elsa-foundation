@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
@@ -72,7 +73,14 @@ public sealed class ExternalAttribute : Attribute;
 
 public enum TransitionKind { Complete, Suspend, Fault, Cancel }
 
-public sealed record ActivityFault(string Code, string Message);
+public sealed record ActivityFault(string Code, string Message)
+{
+    /// <summary>The classification an authored <c>Fault</c> gives the fault, as the old core records it; null otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Category { get; init; }
+
+    /// <summary>The family an authored <c>Fault</c> names for the fault, as the old core records it; null otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? FaultType { get; init; }
+}
 
 /// <summary>What a suspended activity waits for. The model turns each into a kernel registration.</summary>
 public abstract record Trigger;

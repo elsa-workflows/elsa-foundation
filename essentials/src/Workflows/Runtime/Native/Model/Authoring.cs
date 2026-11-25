@@ -40,6 +40,12 @@ public sealed record ExpressionBinding(string Text) : Binding;
 /// </summary>
 public enum Gateway { Decision, ParallelFork, ParallelJoin, InclusiveFork, InclusiveJoin, FirstWins, Merge }
 
+/// <summary>
+/// One case of a Switch: its label, which is also the outcome the Switch completes with, and its condition. A case
+/// without a condition matches when the Switch's <c>Value</c> equals its label (ordinal), as the old core's retained cases do.
+/// </summary>
+public sealed record SwitchCase(string Label, Binding? Condition = null);
+
 /// <summary>A flowchart connection from a source's outcome to a target.</summary>
 public sealed record Connection(string Source, string Target, string Outcome = "Done");
 
@@ -53,6 +59,8 @@ public sealed class Node(string id, Type type)
     public List<Connection> Connections { get; } = [];
     /// <summary>For a flowchart: the gateway kind of a child, by its id.</summary>
     public Dictionary<string, Gateway> Gateways { get; } = new(StringComparer.Ordinal);
+    /// <summary>For a Switch: its cases, in the order they are tried. A case's branch is the child in its slot (<see cref="Native.Switch.CaseSlot"/>).</summary>
+    public List<SwitchCase> Cases { get; } = [];
     /// <summary>Output captures: variable name to a path in the result ("" is the whole result).</summary>
     public Dictionary<string, string> Captures { get; } = new(StringComparer.Ordinal);
     /// <summary>The named child slot this node fills in its parent, where the parent has slots (If: Then, Else).</summary>
@@ -74,6 +82,7 @@ public sealed class Workflow
             node.Background = node.Type.IsDefined(typeof(BackgroundAttribute));
             if (node.JobTimeout is { } timeout && (!node.Background || timeout < TimeSpan.Zero))
                 throw new ArgumentException($"Node '{node.Id}' requires a nonnegative timeout on a background activity.");
+            if (node.Type == typeof(Switch)) Switch.Validate(node, id);
             if (parent is not null) Parents[node.Id] = parent;
             foreach (var child in node.Children) Index(child, node);
         }

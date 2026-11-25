@@ -18,6 +18,54 @@ public sealed class WriteLine : Activity
     }
 }
 
+/// <summary>The old core's WriteLines: each line on its own, in order, where <see cref="WriteLine"/> writes. Null or empty writes nothing.</summary>
+public sealed class WriteLines : Activity
+{
+    [Input] public List<string>? Lines { get; set; }
+
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
+    {
+        foreach (var line in Lines ?? []) WriteLine.Out?.WriteLine(line);
+        return new(Complete());
+    }
+}
+
+/// <summary>
+/// Ends the nearest enclosing loop (For, ForEach, While, Do): it completes with the Break outcome, and Sequence, If,
+/// Switch and Flowchart pass that outcome up to the loop, as on the old core. Outside a loop it ends what passes it up.
+/// </summary>
+public sealed class Break : Activity
+{
+    public const string Outcome = "Break";
+
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) => new(Complete(Outcome));
+}
+
+/// <summary>
+/// The old core's Fault: a deliberate fault with the authored code and message, blank ones taking the defaults, and the
+/// optional category and fault type recorded with it.
+/// </summary>
+public sealed class Fault : Activity
+{
+    public const string DefaultCode = "workflow.fault";
+    public const string DefaultMessage = "The workflow faulted.";
+
+    [Input] public string? Code { get; set; }
+    [Input] public string? Message { get; set; }
+    [Input] public string? Category { get; set; }
+    [Input] public string? FaultType { get; set; }
+
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) =>
+        new(new Transition(TransitionKind.Fault, Fault: new ActivityFault(Coalesce(Code, DefaultCode), Coalesce(Message, DefaultMessage))
+        {
+            Category = Blank(Category),
+            FaultType = Blank(FaultType),
+        }));
+
+    private static string Coalesce(string? value, string fallback) => Blank(value) ?? fallback;
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
 /// <summary>A variable write is an engine intrinsic: the interpreter applies it, as Elsa 4's Set intrinsic.</summary>
 public sealed class SetVariable : ActivityBase, IIntrinsic
 {

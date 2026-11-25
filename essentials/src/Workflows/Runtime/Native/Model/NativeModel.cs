@@ -718,6 +718,8 @@ public sealed partial class CompositeContext
     /// <summary>The node whose start trigger (an HTTP request, an event) is still to be delivered, if any.</summary>
     public string? PendingTrigger => _burst.PendingTrigger;
     public void SetState<T>(T state) => _frame.State = Values.From(state);
+    /// <summary>A binding of this node that is no input, evaluated where the node runs, when the composite needs it (a Switch case's condition).</summary>
+    internal JsonNode? Evaluate(Binding binding) => _burst.Evaluate(binding, new FrameScope(_burst, _frame));
 
     public string Schedule(Node child, string? tag = null, IReadOnlyDictionary<string, JsonNode?>? scope = null) => _burst.Schedule(_frame, child, tag, scope);
     public void Complete(string outcome = "Done", JsonNode? result = null) => _burst.Complete(_frame, outcome, result);

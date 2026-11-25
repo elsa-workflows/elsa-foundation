@@ -63,6 +63,43 @@ public static class Wf
     public static Node Parallel(string id, int? threshold, params Node[] branches) =>
         (threshold is { } t ? Node<Parallel>(id, ("Threshold", t)) : Node<Parallel>(id)).With(branches);
 
+    public static Node Switch(string id, Binding? value, params (SwitchCase Case, Node? Branch)[] cases) => Switch(id, value, null, cases);
+
+    public static Node Switch(string id, Binding? value, Node? @default, params (SwitchCase Case, Node? Branch)[] cases)
+    {
+        var node = value is null ? Node<Switch>(id) : Node<Switch>(id, ("Value", value));
+        foreach (var (@case, branch) in cases)
+        {
+            node.Cases.Add(@case);
+            if (branch is not null) node.Children.Add(branch.In(Native.Switch.CaseSlot(@case.Label)));
+        }
+        if (@default is not null) node.Children.Add(@default.In(Native.Switch.DefaultSlot));
+        return node;
+    }
+
+    public static SwitchCase Case(string label, Binding? condition = null) => new(label, condition);
+
+    public static Node For(string id, Binding start, Binding end, Node body, Binding? step = null, bool endInclusive = false)
+    {
+        var node = Node<For>(id, ("Start", start), ("End", end), ("EndInclusive", endInclusive));
+        if (step is not null) node.Inputs["Step"] = step;
+        return node.With(body);
+    }
+
+    public static Node Do(string id, Binding condition, Node body) => Node<Do>(id, ("Condition", condition)).With(body);
+    public static Node Break(string id) => Node<Break>(id);
+    public static Node WriteLines(string id, Binding lines) => Node<WriteLines>(id, ("Lines", lines));
+
+    public static Node Fault(string id, Binding? code = null, Binding? message = null, Binding? category = null, Binding? faultType = null)
+    {
+        var node = Node<Fault>(id);
+        if (code is not null) node.Inputs["Code"] = code;
+        if (message is not null) node.Inputs["Message"] = message;
+        if (category is not null) node.Inputs["Category"] = category;
+        if (faultType is not null) node.Inputs["FaultType"] = faultType;
+        return node;
+    }
+
     public static Node ForEach(string id, Binding items, Node body) => Node<ForEach>(id, ("Items", items)).With(body);
     public static Node While(string id, Binding condition, Node body) => Node<While>(id, ("Condition", condition)).With(body);
 

@@ -56,7 +56,142 @@ public sealed class If : CompositeActivity
         else context.Complete(outcome);
     }
 
-    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete(child.Tag!);
+    // A branch that ends on Break ends the If on Break, so that the nearest loop hears of it (the old core's #299).
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) =>
+        context.Complete(child.Outcome == Break.Outcome ? Break.Outcome : child.Tag!);
+}
+
+/// <summary>
+/// The old core's Switch: the first case whose condition holds runs, or whose label equals <see cref="Value"/> when it has
+/// no condition; otherwise the default branch. Conditions are evaluated in order, only as far as the first match. The
+/// Switch completes with the case's label or <see cref="DefaultOutcome"/>, also when the selected slot has no branch,
+/// and with Break when its branch does.
+/// </summary>
+public sealed class Switch : CompositeActivity
+{
+    public const string DefaultSlot = "Default";
+    public const string DefaultOutcome = "Default";
+    public static string CaseSlot(string label) => "Case:" + label;
+
+    /// <summary>What a case without a condition is compared with.</summary>
+    [Input] public string? Value { get; set; }
+
+    protected internal override void Execute(CompositeContext context)
+    {
+        foreach (var @case in context.Node.Cases)
+        {
+            bool matches;
+            if (@case.Condition is not { } condition) matches = StringComparer.Ordinal.Equals(@case.Label, Value);
+            else if (context.Evaluate(condition) is not { } value) matches = false;     // an unbound or null condition does not hold
+            else if (value is JsonValue scalar && scalar.GetValueKind() is JsonValueKind.True or JsonValueKind.False) matches = scalar.GetValueKind() == JsonValueKind.True;
+            else
+            {
+                context.Fault(new ActivityFault("switch.condition.invalid", $"The condition of case '{@case.Label}' is {value.ToJsonString()}, not a Boolean."));
+                return;
+            }
+            if (matches)
+            {
+                Run(context, CaseSlot(@case.Label), @case.Label);
+                return;
+            }
+        }
+        Run(context, DefaultSlot, DefaultOutcome);
+    }
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        if (child.Outcome == Break.Outcome) { context.Complete(Break.Outcome); return; }
+        var slot = context.Children.First(c => c.Id == child.Node).Slot!;
+        context.Complete(slot == DefaultSlot ? DefaultOutcome : slot["Case:".Length..]);
+    }
+
+    private static void Run(CompositeContext context, string slot, string outcome)
+    {
+        if (context.Children.FirstOrDefault(c => c.Slot == slot) is { } branch) context.Schedule(branch);
+        else context.Complete(outcome);
+    }
+
+    /// <summary>The definition's own rules, checked when it is registered: unique, non-empty labels, and one branch per case or default.</summary>
+    internal static void Validate(Node node, string workflow)
+    {
+        var labels = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var @case in node.Cases)
+            if (string.IsNullOrEmpty(@case.Label) || !labels.Add(@case.Label))
+                throw new InvalidOperationException($"Switch '{node.Id}' in '{workflow}' needs unique, non-empty case labels ('{@case.Label}').");
+        var slots = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var child in node.Children)
+            if (child.Slot is not { } slot || !(slot == DefaultSlot || slot.StartsWith("Case:", StringComparison.Ordinal) && labels.Contains(slot["Case:".Length..])) || !slots.Add(slot))
+                throw new InvalidOperationException($"Child '{child.Id}' of Switch '{node.Id}' in '{workflow}' must fill one case's slot or the default, once ('{child.Slot}').");
+    }
+}
+
+public sealed record ForState
+{
+    public int Index { get; set; }
+}
+
+/// <summary>
+/// The old core's For: the body runs once per index from <see cref="Start"/>, by <see cref="Step"/>, up to
+/// <see cref="End"/> (exclusive unless <see cref="EndInclusive"/>), each pass in an iteration scope that declares
+/// CurrentIndex, as ForEach's. A step away from the end runs nothing; a zero step faults. Break ends the loop.
+/// </summary>
+public sealed class For : CompositeActivity
+{
+    [Input] public int Start { get; set; }
+    [Input] public int End { get; set; }
+    [Input] public int Step { get; set; } = 1;
+    [Input] public bool EndInclusive { get; set; }
+
+    /// <summary>The body's iteration is its committed scope's CurrentIndex (round 5 C), as ForEach's.</summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
+        childScope is not null && childScope.TryGetValue("CurrentIndex", out var index) && index is JsonValue v && v.TryGetValue<int>(out var i) ? i.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
+
+    protected internal override void Execute(CompositeContext context) => Next(context, Start);
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        if (child.Outcome == Break.Outcome) { context.Complete(); return; }
+        Next(context, (long)context.GetState<ForState>().Index + Step);
+    }
+
+    // The range is read from the inputs at every pass, as the old core resolves it at every completion.
+    private void Next(CompositeContext context, long index)
+    {
+        if (Step == 0) { context.Fault(new ActivityFault("for.step.invalid", "A For loop's step must not be zero.")); return; }
+        var within = Step > 0 ? EndInclusive ? index <= End : index < End : EndInclusive ? index >= End : index > End;
+        if (!within || context.Children.Count == 0) { context.Complete(); return; }
+        context.SetState(new ForState { Index = (int)index });
+        context.Schedule(context.Children[0], scope: new Dictionary<string, JsonNode?> { ["CurrentIndex"] = (int)index });
+    }
+}
+
+/// <summary>
+/// The old core's Do: the body runs once before the condition is read, then again while <see cref="Condition"/> holds
+/// after a pass. Break ends the loop without reading the condition.
+/// </summary>
+public sealed class Do : CompositeActivity
+{
+    [Input] public bool Condition { get; set; }
+
+    /// <summary>The body's iteration is this loop's committed pass count (round 5 C), as While's.</summary>
+    protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
+        (Values.To<WhileState>(state)?.Iteration ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    protected internal override void Execute(CompositeContext context) => Next(context, new WhileState());
+
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    {
+        if (child.Outcome == Break.Outcome || !Condition) { context.Complete(); return; }
+        Next(context, context.GetState<WhileState>());
+    }
+
+    private static void Next(CompositeContext context, WhileState state)
+    {
+        if (context.Children.Count == 0) { context.Complete(); return; }
+        state.Iteration++;
+        context.SetState(state);
+        context.Schedule(context.Children[0]);
+    }
 }
 
 public sealed record ParallelState
