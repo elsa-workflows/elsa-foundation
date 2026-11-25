@@ -30,7 +30,12 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   const untyped = { referenceKey: "plain", name: "plain", type: { alias: "Object", collectionKind: "Single" }, storageDriverType: null };
   const consumer = s.line(); consumer.inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: "" } }];
   const created = await s.seed("typed completion", s.root([consumer]), [], [typed, untyped]);
-  await s.open(created);
+  // Open on the backend this session is signed in to. activityDataSupport.open still links the retired "legacy" profile id.
+  const backend = new URL(page.url()).searchParams.get("backend");
+  await page.goto(`/workflows/definitions?definition=${created.definition.id}${backend ? `&backend=${encodeURIComponent(backend)}` : ""}`);
+  await expect(page.locator('.wf-sequence-step[data-id="consumer"]')).toBeAttached();
+  await s.select();
+  await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
 
   const source = async () => { const stored = (await s.stored(created))?.value; return typeof stored === "string" ? stored : (stored as { source: string }).source; };
   const list = () => page.locator(".cm-tooltip-autocomplete");
