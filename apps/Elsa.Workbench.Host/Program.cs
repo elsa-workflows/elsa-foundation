@@ -88,6 +88,7 @@ using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Tracing;
+using Microsoft.Extensions.Configuration.Memory;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using MinimalEndpoints;
@@ -106,6 +107,13 @@ var bootStopwatch = Stopwatch.StartNew();
 ConsoleLogStreamingSetup.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
+// Eager shell activation is off on this host unless configuration turns it on: the post-listen default-shell warmup under
+// Elsa:Readiness prepares the default shell instead. Elsa.Foundation.Hosting defaults it on, so the default sits here, below
+// every other source, so a deployment that replaces appsettings.json keeps it off.
+builder.Configuration.Sources.Insert(0, new MemoryConfigurationSource
+{
+    InitialData = [new KeyValuePair<string, string?>("Elsa:Boot:EagerShellActivation:Enabled", "false")]
+});
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
 // Environment overlay (e.g. shells.Production.json), layered on top of the dev/demo defaults in shells.json.
 // This keeps `git clone && dotnet run` (Development) working out of the box on ephemeral identity keys, committed
@@ -213,7 +221,7 @@ builder.AddNuplaneHostIntegration(configuration);
 builder.Services.ConfigureOptions<NuplaneIntegrationOptionsSetup>();
 // Nuplane registers its reconcile coordinator and admin operations by type or by factory, so every shell container CShells
 // builds from copies of these registrations would hold second instances of them (#2159). Shells resolve the host's own
-// instead. AddFoundationShellHosting below shares the trigger ingress the same way.
+// instead. AddFoundationShellHosting below shares the trigger ingress with CShells' ShareSingletonWithShells for the same reason.
 builder.Services
     .ShareWithShells<ManualReconcileCoordinator>()
     .ShareWithShells<INuplaneAdminOperations>();
