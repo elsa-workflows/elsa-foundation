@@ -20,7 +20,8 @@ public sealed class WriteLine : Activity
 
 /// <summary>
 /// The old core's WriteLines: each line on its own, in order, where <see cref="WriteLine"/> writes. Null or empty writes
-/// nothing. A line is a string, or a number or Boolean written as its JSON text; anything else faults.
+/// nothing. A line is a string, or a number or Boolean written as its JSON text, and null is an empty line, as the old
+/// core's list writes it; anything else faults.
 /// </summary>
 public sealed class WriteLines : Activity
 {
@@ -29,9 +30,9 @@ public sealed class WriteLines : Activity
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
     {
         if (Lines is null) return new(Complete());
-        if (Lines is not JsonArray lines || lines.Any(line => line is not JsonValue))
+        if (Lines is not JsonArray lines || lines.Any(line => line is not (null or JsonValue)))
             return new(Fault("writelines.lines.invalid", "WriteLines takes a list of strings, numbers or Booleans."));
-        var text = lines.Select(line => line!.GetValueKind() == System.Text.Json.JsonValueKind.String ? line.GetValue<string>() : line.ToJsonString()).ToList();
+        var text = lines.Select(line => line is null ? "" : line.GetValueKind() == System.Text.Json.JsonValueKind.String ? line.GetValue<string>() : line.ToJsonString()).ToList();
         foreach (var line in text) WriteLine.Out?.WriteLine(line);
         return new(Complete());
     }

@@ -40,6 +40,8 @@ internal static class PortChecks
         yield return Workflow("port-switch-invalid", Switch("sw", null, (Case("bad", Expr("'yes'")), Set("s", "a", 1))), ("a", null));
         yield return Workflow("port-switch-null", Switch("sw", null, (Case("missing", Var("nowhere")), Set("s", "a", 1))), ("a", null));
         yield return Workflow("port-switch-number", Switch("sw", Literal(2), (Case("2"), Set("s", "a", 1))), ("a", null));
+        // A Value is read only on reaching a case without a condition: a number beside matching conditions does not fault.
+        yield return Workflow("port-switch-unread", Sequence("root", Switch("sw", Literal(2), (Case("yes", Literal(true)), Set("s", "output", "matched")), (Case("2"), null)), Hold()), ("output", null));
         // An empty label is a label: the old core allows it, and an empty Value matches it.
         yield return Workflow("port-switch-blank", Sequence("root", Switch("sw", Literal(""), (Case(""), Set("s", "output", "blank"))), Hold()), ("output", null));
 
@@ -93,7 +95,7 @@ internal static class PortChecks
         foreach (var child in new[] { "port-switch-invalid", "port-switch-null", "port-switch-number", "port-for-zero", "port-lines-invalid", "port-fault", "port-fault-default" })
             yield return Workflow("port-parent-" + child, Sequence("root", Dispatch("child", child, wait: true).Capture("result"), Hold()), ("result", null));
 
-        yield return Workflow("port-lines", Sequence("root", WriteLines("lines", Expr("['one', 2, true]")), WriteLines("none", Literal(null))));
+        yield return Workflow("port-lines", Sequence("root", WriteLines("lines", Literal(new JsonArray("one", 2, true, null))), WriteLines("none", Literal(null))));
         yield return Workflow("port-lines-invalid", WriteLines("lines", Expr("[['nested']]")));
         yield return Workflow("port-fault", Fault("f", "order.rejected", "The order was rejected.", "business", "Validation"));
         yield return Workflow("port-fault-default", Fault("f", " ", null));
@@ -147,6 +149,8 @@ internal static class PortChecks
                 check(passes == "1 3 2", $"{mode}: Do runs once on a false condition, repeats while it holds, and stops on Break ('{passes}')");
                 var broken = Output(await Run("port-break"));
                 check(broken == "1 3 2", $"{mode}: Break ends ForEach through a Switch, and While through a Flowchart, from a node and from an If's branch ('{broken}')");
+                var unread = Output(await Run("port-switch-unread"));
+                check(unread == "matched", $"{mode}: a Value that is not a string is not read when a condition matches first ('{unread}')");
                 var blankLabel = Output(await Run("port-switch-blank"));
                 check(blankLabel == "blank", $"{mode}: an empty label is a label, and an empty Value matches it ('{blankLabel}')");
 
@@ -167,8 +171,8 @@ internal static class PortChecks
 
                 lines.GetStringBuilder().Clear();
                 await Run("port-lines");
-                check(lines.ToString() == string.Join("", new[] { "one", "2", "true" }.Select(l => l + Environment.NewLine)),
-                    $"{mode}: WriteLines writes each line in order, a number or Boolean as its JSON text, and nothing for none");
+                check(lines.ToString() == string.Join("", new[] { "one", "2", "true", "" }.Select(l => l + Environment.NewLine)),
+                    $"{mode}: WriteLines writes each line in order, a number or Boolean as its JSON text, null as an empty line, and nothing for none");
 
                 // A parent that waits for the child reads its terminal status and the fault it ended with.
                 async Task<DispatchResult?> Child(string workflow)

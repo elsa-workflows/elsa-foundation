@@ -78,18 +78,21 @@ public sealed class Switch : CompositeActivity
 
     protected internal override void Execute(CompositeContext context)
     {
-        // The value is compared as a string, as the old core reads it; a number or anything else faults, where the old
-        // core needs an authored conversion.
-        string? value = null;
-        if (Value is not null && !(Value is JsonValue text && text.GetValueKind() == JsonValueKind.String && text.TryGetValue(out value)))
-        {
-            context.Fault(new ActivityFault("switch.value.invalid", $"The Switch's value is {Value.ToJsonString()}, not a string."));
-            return;
-        }
         foreach (var @case in context.Node.Cases)
         {
             bool matches;
-            if (@case.Condition is not { } condition) matches = value is not null && StringComparer.Ordinal.Equals(@case.Label, value);
+            if (@case.Condition is not { } condition)
+            {
+                // The value is read only when a case without a condition is reached, as on the old core, and compared as a
+                // string; a number or anything else faults, where the old core needs an authored conversion.
+                string? value = null;
+                if (Value is not null && !(Value is JsonValue text && text.GetValueKind() == JsonValueKind.String && text.TryGetValue(out value)))
+                {
+                    context.Fault(new ActivityFault("switch.value.invalid", $"The Switch's value is {Value.ToJsonString()}, not a string."));
+                    return;
+                }
+                matches = value is not null && StringComparer.Ordinal.Equals(@case.Label, value);
+            }
             // A condition is a Boolean; null faults, as on the old core, where only an unbound condition is false.
             else if (context.Evaluate(condition) is JsonValue scalar && scalar.GetValueKind() is JsonValueKind.True or JsonValueKind.False) matches = scalar.GetValueKind() == JsonValueKind.True;
             else
