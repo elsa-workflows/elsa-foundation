@@ -1,0 +1,5 @@
+# Engine and available trigger packages for shells.json.
+@engine
+@http-trigger
+@schedule-trigger
+@sqlite

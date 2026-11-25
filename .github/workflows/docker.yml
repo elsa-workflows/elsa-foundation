@@ -72,6 +72,16 @@ on:
           comment above).
         required: true
         type: string
+      build_profiles:
+        description: Build and verify the three package-based server profiles and export their Docker images.
+        required: false
+        type: boolean
+        default: false
+      publish_profiles:
+        description: Build, verify and publish versioned multi-platform profile tags to the Foundation image repository.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -291,3 +301,94 @@ jobs:
         - registry: docker.io
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+
+  package-profiles:
+    name: Verify and export ${{ matrix.profile }} (${{ matrix.arch }})
+    if: github.event_name == 'workflow_dispatch' && (inputs.build_profiles || inputs.publish_profiles)
+    needs: [versions, build-and-push-foundation-host]
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [essentials, elsa3-import, full]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      PROFILE: ${{ matrix.profile }}
+      FOUNDATION_IMAGE: elsaworkflows/elsa-foundation-host@${{ needs.build-and-push-foundation-host.outputs.digest }}
+      IMAGE: elsa-server-${{ matrix.profile }}:4.0.0-preview.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Prepare the package closure against the verified Foundation image
+        env:
+          PACKAGE_VERSIONS: ${{ needs.versions.outputs.package-versions }}
+        run: |
+          printf '%s' "$PACKAGE_VERSIONS" | base64 -d | gunzip > "$RUNNER_TEMP/package-versions.props"
+          python3 docker/profiles/prepare.py --profile "docker/profiles/$PROFILE" \
+            --versions "$RUNNER_TEMP/package-versions.props" --foundation-image "$FOUNDATION_IMAGE" \
+            --output "$RUNNER_TEMP/context"
+      - name: Build and verify the image without network access at runtime
+        run: |
+          docker build --build-arg FOUNDATION_IMAGE="$FOUNDATION_IMAGE" -f docker/profiles/Dockerfile \
+            -t "$IMAGE" "$RUNNER_TEMP/context"
+          python3 tools/docker-profiles/smoke.py "$IMAGE" --variant "$PROFILE" --timeout 300
+      - name: Export the tested image and its locks
+        run: |
+          mkdir "$RUNNER_TEMP/profile-image"
+          docker save "$IMAGE" | gzip -1 > "$RUNNER_TEMP/profile-image/image.tar.gz"
+          cp "$RUNNER_TEMP/context/"{packages.lock.json,nuplane.lock.json,shells.json} "$RUNNER_TEMP/profile-image/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elsa-server-${{ matrix.profile }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: ${{ runner.temp }}/profile-image/
+          compression-level: 0
+          overwrite: true
+          retention-days: 7
+
+  publish-profiles:
+    name: Publish tested ${{ matrix.profile }} images
+    needs: package-profiles
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_profiles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        profile: [essentials, elsa3-import, full]
+    env:
+      IMAGE: elsa-server-${{ matrix.profile }}:4.0.0-preview.${{ github.run_number }}
+      PROFILE_TAG: elsaworkflows/elsa-foundation-host:${{ matrix.profile }}-4.0.0-preview.${{ github.run_number }}.${{ github.run_attempt }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: elsa-server-${{ matrix.profile }}-*-${{ github.run_number }}
+          path: ${{ runner.temp }}/artifacts
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Publish the tested native images and assemble their manifest
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: |
+          base_digest=''
+          for arch in amd64 arm64; do
+            archive="$RUNNER_TEMP/artifacts/elsa-server-$PROFILE-$arch-$GITHUB_RUN_NUMBER/image.tar.gz"
+            docker load -i "$archive"
+            test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$IMAGE")" = "linux/$arch"
+            base=$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.base.name" }}' "$IMAGE")
+            if [ -n "$base_digest" ]; then test "$base" = "$base_digest"; fi
+            base_digest="$base"
+            docker tag "$IMAGE" "$PROFILE_TAG-$arch"
+            docker push "$PROFILE_TAG-$arch"
+            docker image rm "$IMAGE"
+          done
+          docker buildx imagetools create -t "$PROFILE_TAG" "$PROFILE_TAG-amd64" "$PROFILE_TAG-arm64"
+          docker buildx imagetools inspect "$PROFILE_TAG" >> "$GITHUB_STEP_SUMMARY"
