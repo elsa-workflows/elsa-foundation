@@ -33,7 +33,7 @@ internal static class Elsa3ReusableGuidance
     public static string Intrinsic(string elsa3Type) => ShortName(elsa3Type) switch
     {
         "SetVariable" =>
-            $"Elsa 4 graph activities cannot set variables yet (tracked in {IntrinsicIssue}). A reusable workflow's variables " +
+            $"Elsa 4 graph activities have no Set Variable yet (tracked in {IntrinsicIssue}). A reusable workflow's variables " +
             "are its own, so only its body can read them. If nothing in the body reads this variable, remove the Set Variable: " +
             "nothing else changes. If a value only needs to pass from one activity to the next, capture that activity's output " +
             "into the variable instead, or set it from a Run JavaScript activity's script (setVariable('name', value)), which a " +
