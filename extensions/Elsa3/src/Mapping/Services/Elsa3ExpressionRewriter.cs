@@ -1567,8 +1567,10 @@ public sealed class Elsa3ExpressionRewriter(
                     return;
                 }
 
-                if (TryGetAccessorName(callee.Name, "set", out var setter) &&
-                    resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedSetter, setter)).Succeeded)
+                var setterResolution = TryGetAccessorName(callee.Name, "set", out var setter)
+                    ? resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedSetter, setter))
+                    : null;
+                if (setterResolution is { Succeeded: true })
                 {
                     if (!ConvertsVariableWrites)
                     {
@@ -1592,14 +1594,21 @@ public sealed class Elsa3ExpressionRewriter(
                     return;
                 }
 
+                // Elsa 3 generated the setter but it does not resolve to one variable (two variables of the name, a capture).
+                if (setterResolution is { Succeeded: false, NoSource: false })
+                {
+                    Issues.Add(setterResolution.Issue!);
+                    return;
+                }
+
                 // Workflow inputs are read-only: Elsa 3 generated get{Input} but no set{Input}, so the call ran no setter.
-                if (TryGetAccessorName(callee.Name, "set", out var inputSetter) &&
-                    resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, inputSetter)) is
+                if (setterResolution is { NoSource: true } &&
+                    resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, setter)) is
                         { Succeeded: true, Binding: WorkflowRequestExpressionParameterBinding })
                 {
                     Issues.Add(new Elsa3ExpressionRewriteIssue(
                         Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                        $"JavaScript calls '{callee.Name}', but '{inputSetter}' is a workflow input, which is read-only: Elsa 3 generated no setter for it.",
+                        $"JavaScript calls '{callee.Name}', but '{setter}' is a workflow input, which is read-only: Elsa 3 generated no setter for it.",
                         "Copy the input into a declared variable and set that variable in the Elsa 3 workflow before import."));
                     return;
                 }
@@ -2309,7 +2318,8 @@ public sealed class Elsa3ExpressionRewriter(
 
         /// <summary>
         /// Whether Elsa 3 generated an accessor under <paramref name="name"/>, resolvable or not: a getter for a variable,
-        /// input or activity output, a setter for a variable only (spec 247 R-2).
+        /// input or activity output, a setter for a variable only (and, in a reusable run, an input Elsa 3 declared as a
+        /// variable; spec 247 R-2).
         /// </summary>
         private bool ClashesWithGeneratedAccessor(string name) =>
             HasAccessorShape(name, "get", out var getter)
@@ -3001,7 +3011,8 @@ public enum Elsa3AmbientReferenceKind
 
     /// <summary>
     /// A call <c>set{Name}(value)</c> to a setter Elsa 3 generated per variable; <c>Name</c> is the callee without
-    /// <c>set</c>, as written. Elsa 3 generated no setter for a workflow input or an activity output (spec 247 R-2).
+    /// <c>set</c>, as written. Elsa 3 generated no setter for a standalone workflow's input or for an activity output; in a
+    /// reusable run it declared each input as a variable, with a setter (spec 247 R-2).
     /// </summary>
     GeneratedSetter,
 }

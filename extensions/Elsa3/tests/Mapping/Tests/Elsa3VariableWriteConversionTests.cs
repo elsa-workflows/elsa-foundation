@@ -87,6 +87,19 @@ public sealed class Elsa3VariableWriteConversionTests
         Assert.Equal("variables.Status = 'Paid';\nreturn 1;", Text(Input(Node(result.Value!.State, "node"), "script")));
     }
 
+    /// <summary>Two variables Elsa 3 generated one setter for: the setter is ambiguous, whatever an input of the name does.</summary>
+    [Fact]
+    public async Task An_ambiguous_setter_next_to_an_input_is_refused_as_ambiguous_not_read_only()
+    {
+        var result = await ConvertWithInputAsync("setStatus(1);\nreturn 1;", "Status",
+            new Elsa3Variable { Id = "v1", Name = "status", TypeName = "String" },
+            new Elsa3Variable { Id = "v2", Name = "Status", TypeName = "String" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Message.Contains("read-only", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task A_setter_named_after_a_workflow_input_is_refused_as_read_only()
     {
