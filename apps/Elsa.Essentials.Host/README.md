@@ -34,7 +34,7 @@ It listens on `https://localhost:7262` and `http://localhost:5262`. Development 
 
 ## Running it in Docker
 
-The `Dockerfile` here builds the image from the repository root. CI publishes it from main as `elsaworkflows/elsa-essentials`, beside the Workbench and Foundation host images (`.github/workflows/docker.yml`).
+The `Dockerfile` here builds the image from the repository root. CI publishes it from main as `elsaworkflows/elsa-essentials-host`, beside the Workbench and Foundation host images (`.github/workflows/docker.yml`).
 
 ```bash
 docker build -f apps/Elsa.Essentials.Host/Dockerfile -t elsa-essentials:local .

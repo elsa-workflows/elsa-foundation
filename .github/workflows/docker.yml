@@ -3,7 +3,7 @@ name: Docker Images
 # Builds and pushes three Elsa 4 host images to Docker Hub:
 #   - elsaworkflows/elsa-workbench       — development and demo host
 #   - elsaworkflows/elsa-foundation-host — minimal Nuplane + CShells server host
-#   - elsaworkflows/elsa-essentials      — Nuplane + CShells host with the curated workflow essentials compiled in
+#   - elsaworkflows/elsa-essentials-host — Nuplane + CShells host with the curated workflow essentials compiled in
 # The workbench is a development and demo host, not the shipped product; the
 # elsaworkflows/elsa-server name is reserved for the clean host once it exists.
 # The Elsa major version (4) is encoded in the image tags:
@@ -257,7 +257,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
   build-and-push-essentials-host:
-    name: Build & push elsa-essentials
+    name: Build & push elsa-essentials-host
     needs: versions
     # Same pinned reusable builder as the workbench job above (see the pinning note there):
     # the BuildKit/Buildx versions must match the `# syntax=` pin in
@@ -277,8 +277,8 @@ jobs:
       platforms: linux/amd64,linux/arm64
       cache: true
       cache-mode: max
-      cache-scope: elsa-essentials
-      meta-images: elsaworkflows/elsa-essentials
+      cache-scope: elsa-essentials-host
+      meta-images: elsaworkflows/elsa-essentials-host
       meta-tags: |
         type=sha
         type=raw,value=latest
