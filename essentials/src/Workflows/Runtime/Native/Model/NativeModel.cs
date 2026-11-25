@@ -65,16 +65,23 @@ public class NativeExecutionOptions
     /// <summary>
     /// Whether the host's foundation takes the model's self-sends. With them, a Balanced or Ephemeral burst that reaches
     /// <see cref="MaxActivitiesPerTurn"/> continues in the next turn. Without them a burst runs on to its next wait or end in
-    /// one turn, bounded by the state and history size limits and by <see cref="MaxActivitiesPerBurst"/> and
-    /// <see cref="MaxBurstDuration"/>, past which the workflow faults (<c>native.burst.limit</c>).
+    /// one turn, bounded by the state and history size limits and by <see cref="MaxActivitiesPerBurst"/>, past which the
+    /// workflow faults (<c>native.burst.limit</c>).
     /// </summary>
     public bool SelfSends { get; init; } = true;
 
-    /// <summary>The most activities one turn runs without waiting on a host without self-sends (<see cref="SelfSends"/>).</summary>
+    /// <summary>
+    /// The most activities one turn runs without waiting on a host without self-sends (<see cref="SelfSends"/>): the bound a
+    /// burst is held to, the same however loaded the host is.
+    /// </summary>
     public int MaxActivitiesPerBurst { get; init; } = 10_000;
 
-    /// <summary>The longest one turn runs without waiting on a host without self-sends (<see cref="SelfSends"/>).</summary>
-    public TimeSpan MaxBurstDuration { get; init; } = TimeSpan.FromSeconds(5);
+    /// <summary>
+    /// A backstop on a host without self-sends (<see cref="SelfSends"/>): the longest one turn runs without waiting before
+    /// the workflow faults (<c>native.burst.limit</c>). It keeps a turn from holding its node; it is not a correctness bound,
+    /// and how much work fits in it depends on the host's load.
+    /// </summary>
+    public TimeSpan MaxBurstDuration { get; init; } = TimeSpan.FromSeconds(30);
     public AdmissionFlaw AdmissionFlaws { get; init; }
     public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
     /// <summary>The host's outbound HTTP for SendHttpRequest's job; without it the activity faults.</summary>
@@ -355,17 +362,19 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
 
     internal const string BurstLimitFaultCode = "native.burst.limit";
 
-    // A host without self-sends runs a burst in one turn: past its activity or time bound the workflow faults, so a loop that
-    // never waits ends with a reason instead of holding its node.
+    // A host without self-sends runs a burst in one turn. Its bound is the activity count; the time backstop keeps a turn
+    // from holding its node. Past either the workflow faults with the reason, so the turn ends instead of the node stalling.
     private ActivityFault? BurstLimit()
     {
         _burstStart ??= System.Diagnostics.Stopwatch.GetTimestamp();
-        var ran = _executed >= options.MaxActivitiesPerBurst ? $"{_executed:N0} activities"
-            : System.Diagnostics.Stopwatch.GetElapsedTime(_burstStart.Value) is var elapsed && elapsed >= options.MaxBurstDuration
-                ? $"{elapsed.TotalSeconds:0.#} seconds" : null;
-        return ran is null ? null : new ActivityFault(BurstLimitFaultCode,
-            $"This turn ran {ran} without waiting, more than this host runs in one turn ({options.MaxActivitiesPerBurst:N0} activities or " +
-            $"{options.MaxBurstDuration.TotalSeconds:0.#} seconds). Make the loop wait (for an event or an HTTP request), or give it fewer iterations.");
+        if (_executed >= options.MaxActivitiesPerBurst)
+            return new ActivityFault(BurstLimitFaultCode,
+                $"This turn ran {_executed:N0} activities without waiting, the most this host runs in one turn. " +
+                "Make the workflow wait (for an event or an HTTP request) sooner, or do less work between its waits.");
+        var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(_burstStart.Value);
+        return elapsed < options.MaxBurstDuration ? null : new ActivityFault(BurstLimitFaultCode,
+            $"This turn ran {elapsed.TotalSeconds:0.#} seconds without waiting, the longest this host lets one turn hold its node " +
+            $"({options.MaxBurstDuration.TotalSeconds:0.#} seconds). Make the workflow wait sooner, or do less work between its waits.");
     }
 
     // The frame a work item runs, for a host expression's fault: a resume's waiting frame, or the frame it starts.
