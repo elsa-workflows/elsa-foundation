@@ -301,7 +301,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
         {
             Narrow("WorkflowDefinitionId", "WorkflowDefinitionId", Elsa3ValueContract.LiteralOnly) with { OnNull = NullRequired },
             Carry("CorrelationId", "CorrelationId") with { OnNull = NullAsNull },
-            Narrow("Input", "Inputs", Elsa3ValueContract.JsonOnly) with { OnNull = NullAsNull },
+            Narrow("Input", "Inputs", Elsa3ValueContract.DispatchInputs) with { OnNull = NullAsNull },
             Lost("Result"),
             Synthetic("CancelChildOnParentCancellation", "false")
         };

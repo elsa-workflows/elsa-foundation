@@ -55,6 +55,7 @@ public sealed class Elsa3ConversionDiagnosticsTests
         Elsa3ActivityDiagnosticCodes.ForkWaitAnyCancellation,
         Elsa3ActivityDiagnosticCodes.ExecuteWorkflowDurable,
         Elsa3ActivityDiagnosticCodes.HttpHeaderValueArray,
+        Elsa3ActivityDiagnosticCodes.DispatchInputNames,
     ];
 
     [Theory]
@@ -251,6 +252,9 @@ public sealed class Elsa3ConversionDiagnosticsTests
             case Elsa3ActivityDiagnosticCodes.HttpHeaderValueArray:
                 return Sequence("root", Activity("node", "Elsa.WriteHttpResponse", ("content", Literal("ok")),
                     ("responseHeaders", Expression("JavaScript", "return { 'X-Demo': 'one' };", "HttpHeaders"))));
+            case Elsa3ActivityDiagnosticCodes.DispatchInputNames:
+                return Sequence("root", Activity("node", "Elsa.DispatchWorkflow", ("workflowDefinitionId", Literal("child")),
+                    ("input", Expression("JavaScript", "return { OrderId: 1 };", "ObjectDictionary"))));
             default:
                 throw new ArgumentOutOfRangeException(nameof(code), code, null);
         }

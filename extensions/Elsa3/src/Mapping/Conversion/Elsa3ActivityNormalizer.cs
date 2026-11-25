@@ -818,6 +818,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
     {
         if (rule.Contract == Elsa3ValueContract.HttpResponseHeaders)
             return CheckHttpResponseHeaders(context, propertyName, value);
+        if (rule.Contract == Elsa3ValueContract.DispatchInputs)
+            return CheckDispatchInputs(context, rule, propertyName, value);
         if (CheckFocusedContract(context, rule, propertyName, value, out var focused))
             return focused;
         if (!Elsa3TypedValues.IsBound(value))
