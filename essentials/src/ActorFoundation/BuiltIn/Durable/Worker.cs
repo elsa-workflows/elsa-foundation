@@ -95,6 +95,8 @@ public sealed record WorkerOptions
     internal Action? BeforeDrainRound { get; init; }
     /// <summary>Called where a drain round judges the heartbeat answer, inside its retry; for transient-error witnesses.</summary>
     internal Action? BeforeDrainAnswer { get; init; }
+    /// <summary>Called once a judgement has taken the recorded answer, before it acts on it; for put-back witnesses.</summary>
+    internal Action? AfterAnswerConsumed { get; init; }
 }
 
 /// <summary>
@@ -177,6 +179,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly SortedDictionary<int, long> _pending = [];
     private long _lastPass, _takesStarted, _takeAt, _retakeAt;     // when the take, or the reset's retake, in flight started: for the gate
     private Answered? _answered;     // K1b: the last answer's stand-down side, for the next pass
+    private Answered? _takenAnswer;  // the answer the last judgement took, under _turnSync
+
+    /// <summary>When the recorded answer was sent; for witnesses of which answer a drain round left pending.</summary>
+    internal long? PendingAnswerSentAt { get { lock (_turnSync) return _answered?.Sent.At; } }
     private long _judgedAt = long.MinValue;     // CR-4: the send time of the last answer judged; anything older is refused
     private sealed record Answered(HeartbeatSent Sent, NodeBeat Answer, Func<int, bool>? Sibling);
     private int[] _gaining = [];
@@ -717,6 +723,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (_answered is not { } answered || _releasing || _retaking) return;
             (sent, answer, sibling) = answered;
             _answered = null;
+            _takenAnswer = answered;  // a drain round whose judgement fails puts this one back (KeepDrainLiveAsync)
             _judgedAt = Math.Max(_judgedAt, sent.At);
             if (sent.Generation != _generation && !Has(Flaw.ReleaseDuringTake)) return;     // MUTATION ReleaseDuringTake: also below
             var listed = answer.Owned.ToDictionary(o => o.Partition, o => o.Epoch);
@@ -729,6 +736,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             lost = Has(Flaw.HeartbeatIgnoresAnswer) ? [] : sent.Held.Where(f => (!listed.TryGetValue(f.Partition, out var epoch) || epoch != f.Epoch)
                 && _held.TryGetValue(f.Partition, out var held) && held.Epoch == f.Epoch).Select(f => f.Partition).ToHashSet();
         }
+        _options.AfterAnswerConsumed?.Invoke();
         // As a cooperative hand-over goes: drain, then drop when quiet, or reset and take the rest back. Its release of the
         // lost rows at their old epochs is a no-op, by the store's epoch guard: they moved to another epoch.
         if (lost.Count > 0) await LoseAsync(lost, cancellationToken);
@@ -2431,22 +2439,29 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         cancellationToken.ThrowIfCancellationRequested();
         _options.BeforeDrainRound?.Invoke();
-        var judged = Volatile.Read(ref _answered);
+        lock (_turnSync) _takenAnswer = null;
         try
         {
             _options.BeforeDrainAnswer?.Invoke();
-            if (judged is not null) await AnsweredAsync(cancellationToken);
+            if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
         }
         catch (StoreException error) when (error.Failure is Failure.Transient or Failure.Unknown or Failure.WindowExpired &&
             !cancellationToken.IsCancellationRequested)
         {
             Interlocked.Increment(ref _drainStoreErrors);
             Volatile.Write(ref _lastDrainStoreError, error);
-            if (judged is null) return !(ownedAtStart && _generation != generation);
-            // The failed judgement may have consumed the answer: put it back for the next round, unless a newer one
-            // came, and report a loss it names now, in case every drain ends this round.
-            Interlocked.CompareExchange(ref _answered, judged, null);
-            var namesLoss = judged.Sent.Held.Any(fence => !judged.Answer.Owned.Any(owned => owned.Partition == fence.Partition && owned.Epoch == fence.Epoch));
+            // The failed judgement may have consumed an answer: the one it actually took, which can be newer than any
+            // read before. Put that one back for the next round unless a newer one has come since, and report a loss
+            // it names now, in case every drain ends this round.
+            Answered? consumed;
+            lock (_turnSync)
+            {
+                consumed = _takenAnswer;
+                _takenAnswer = null;
+                if (consumed is not null && _answered is null) _answered = consumed;
+            }
+            var namesLoss = consumed is not null && consumed.Sent.Held.Any(fence =>
+                !consumed.Answer.Owned.Any(owned => owned.Partition == fence.Partition && owned.Epoch == fence.Epoch));
             return !(namesLoss || ownedAtStart && _generation != generation);
         }
         var usable = !Owns || LeaseUsable();
