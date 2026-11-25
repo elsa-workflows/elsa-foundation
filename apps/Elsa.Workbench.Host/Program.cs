@@ -128,7 +128,6 @@ builder.Configuration
     .AddEnvironmentVariables()
     .AddCommandLine(args);
 var configuration = builder.Configuration;
-builder.Services.AddWorkbenchCorePreview(configuration);
 
 // OpenIddict's protocol behavior is composed by the shell feature, but its vendor EF token store is host-owned: one store on the
 // root container, which CShells copies into every shell. It binds the default shell's OpenIddict settings, selects the engine
@@ -468,6 +467,10 @@ builder.Services.AddSingleton<IAttentionContributor>(new ShellActivationAttentio
 // AddAuthentication and AddAuthorization use TryAdd semantics for those services.
 builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
+
+// Registered after the shell hosting on purpose: the host stops hosted services in reverse order, so the Core Preview node
+// stops (and its turns end) before CShells drains the default shell its host expressions are evaluated in.
+builder.Services.AddWorkbenchCorePreview(configuration);
 
 var app = builder.Build();
 

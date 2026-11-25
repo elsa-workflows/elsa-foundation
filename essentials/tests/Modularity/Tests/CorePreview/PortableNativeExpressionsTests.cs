@@ -113,6 +113,17 @@ public sealed class PortableNativeExpressionsTests
     }
 
     [Fact]
+    public async Task A_stop_while_the_service_is_still_starting_stops_it()
+    {
+        var inner = new Recording { BlockStart = true };
+        var gated = new ShellGatedHostedService(inner, _ => Task.CompletedTask, _ => { });
+        await gated.StartAsync(CancellationToken.None);
+        await WaitUntil(() => inner.Started);
+        await gated.StopAsync(CancellationToken.None);
+        Assert.True(inner.Stopped);
+    }
+
+    [Fact]
     public async Task A_gate_that_fails_ends_the_process()
     {
         string? ended = null;
@@ -132,7 +143,14 @@ public sealed class PortableNativeExpressionsTests
     {
         public bool Started { get; private set; }
         public bool Stopped { get; private set; }
-        public Task StartAsync(CancellationToken cancellationToken) { Started = true; return Task.CompletedTask; }
+        public bool BlockStart { get; init; }
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            Started = true;
+            return BlockStart ? Task.Delay(Timeout.Infinite, cancellationToken) : Task.CompletedTask;
+        }
+
         public Task StopAsync(CancellationToken cancellationToken) { Stopped = true; return Task.CompletedTask; }
     }
 

@@ -9,6 +9,7 @@ internal sealed class ShellGatedHostedService(IHostedService inner, Func<Cancell
 {
     private readonly CancellationTokenSource _stopping = new();
     private Task? _started;
+    private int _entered;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -17,6 +18,7 @@ internal sealed class ShellGatedHostedService(IHostedService inner, Func<Cancell
             try
             {
                 await gate(_stopping.Token);
+                Volatile.Write(ref _entered, 1);
                 await inner.StartAsync(_stopping.Token);
             }
             catch (OperationCanceledException) when (_stopping.IsCancellationRequested) { throw; }
@@ -29,9 +31,10 @@ internal sealed class ShellGatedHostedService(IHostedService inner, Func<Cancell
     {
         await _stopping.CancelAsync();
         if (_started is null) return;
+        // The start's own outcome is reported where it happens; here it only decides whether there is a node to stop.
         try { await _started.WaitAsync(cancellationToken); }
-        catch (OperationCanceledException) when (_stopping.IsCancellationRequested && !cancellationToken.IsCancellationRequested) { return; }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested) { return; }
-        await inner.StopAsync(cancellationToken);
+        catch (Exception) { /* cancelled, failed, or the host's stop deadline passed while it was still starting */ }
+        // Once the node's start was entered, stop it, even part-way: its stop cancels a start still running.
+        if (Volatile.Read(ref _entered) == 1) await inner.StopAsync(cancellationToken);
     }
 }
