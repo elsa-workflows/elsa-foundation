@@ -1087,6 +1087,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             }
             case Elsa3AmbientReferenceKind.GeneratedAccessor:
                 return ResolveGeneratedAccessor(definition, consumer, outputs, nodeOrder, accessors, ambient.Name);
+            case Elsa3AmbientReferenceKind.GeneratedSetter:
+                return ResolveGeneratedSetter(definition, consumer, outputs, nodeOrder, accessors, ambient.Name);
             default:
                 throw new ArgumentOutOfRangeException(nameof(ambient), ambient.Kind, "Unknown ambient reference kind.");
         }
@@ -1142,10 +1144,45 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             $"JavaScript calls unknown or unapproved host function 'get{name}'.",
             $"If it reads a variable or workflow input, declare that variable or input before import. {Elsa3ExpressionRewriter.UndeclaredFunctionGuidance($"get{name}")}"));
 
-        static bool HasAccessor(string declared, string accessor) =>
-            Elsa3JavaScriptNames.IsAccessorName(declared) &&
-            Elsa3JavaScriptNames.Pascalize(declared).Equals(accessor, StringComparison.Ordinal);
+        static bool HasAccessor(string declared, string accessor) => HasGeneratedAccessor(declared, accessor);
     }
+
+    /// <summary>
+    /// Resolves <c>set{name}(value)</c> to the variable Elsa 3 generated it for. Elsa 3 generated setters for variables only
+    /// (Pascal-cased name): workflow inputs are read-only and activity outputs have getters only. In a reusable run Elsa 3
+    /// declared each input as a variable of the reusable's own scope, so a setter exists for it there. Spec 247 R-2.
+    /// </summary>
+    private static Elsa3ExpressionParameterResolution ResolveGeneratedSetter(
+        Elsa3WorkflowDefinition definition,
+        ActivityProperty consumer,
+        IReadOnlyList<Elsa3MemoryOccurrence> outputs,
+        IReadOnlyDictionary<string, int> nodeOrder,
+        AccessorScope accessors,
+        string name)
+    {
+        var variables = definition.Variables.Where(value => HasGeneratedAccessor(value.Name, name)).ToArray();
+        var inputVariables = accessors.IsReusable
+            ? definition.Inputs.Where(value => HasGeneratedAccessor(value.Name, name)).ToArray()
+            : [];
+        if (variables.Length + inputVariables.Length > 1)
+            return AmbiguousAmbient(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedSetter, name));
+        if (variables.Length == 1)
+            return ResolveAmbient(definition, consumer, outputs, nodeOrder, accessors,
+                new Elsa3AmbientReference(Elsa3AmbientReferenceKind.Variable, variables[0].Id));
+        if (inputVariables.Length == 1)
+            return ResolveAmbient(definition, consumer, outputs, nodeOrder, accessors,
+                new Elsa3AmbientReference(Elsa3AmbientReferenceKind.WorkflowRequest, inputVariables[0].Name));
+
+        return Elsa3ExpressionParameterResolution.NotFound(new Elsa3ExpressionRewriteIssue(
+            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+            $"JavaScript calls unknown or unapproved host function 'set{name}'.",
+            Elsa3ExpressionRewriter.UndeclaredFunctionGuidance($"set{name}")));
+    }
+
+    /// <summary>Whether Elsa 3 generated <c>get{accessor}</c> / <c>set{accessor}</c> for a variable named <paramref name="declared"/>.</summary>
+    private static bool HasGeneratedAccessor(string declared, string accessor) =>
+        Elsa3JavaScriptNames.IsAccessorName(declared) &&
+        Elsa3JavaScriptNames.Pascalize(declared).Equals(accessor, StringComparison.Ordinal);
 
     /// <summary>The Pascal-cased names of the definition's named activities, as Elsa 3 used them in output accessors.</summary>
     private static IReadOnlyList<string> ActivityAccessorNames(Elsa3Activity? root)

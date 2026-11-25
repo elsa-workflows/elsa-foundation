@@ -1568,7 +1568,7 @@ public sealed class Elsa3ExpressionRewriter(
                 }
 
                 if (TryGetAccessorName(callee.Name, "set", out var setter) &&
-                    resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, setter)).Succeeded)
+                    resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedSetter, setter)).Succeeded)
                 {
                     if (!ConvertsVariableWrites)
                     {
@@ -1588,7 +1588,19 @@ public sealed class Elsa3ExpressionRewriter(
                         return;
                     }
 
-                    ConvertSetter(call, Elsa3AmbientReferenceKind.GeneratedAccessor, setter, callee.Name, call.Arguments[0]);
+                    ConvertSetter(call, Elsa3AmbientReferenceKind.GeneratedSetter, setter, callee.Name, call.Arguments[0]);
+                    return;
+                }
+
+                // Workflow inputs are read-only: Elsa 3 generated get{Input} but no set{Input}, so the call ran no setter.
+                if (TryGetAccessorName(callee.Name, "set", out var inputSetter) &&
+                    resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, inputSetter)) is
+                        { Succeeded: true, Binding: WorkflowRequestExpressionParameterBinding })
+                {
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                        $"JavaScript calls '{callee.Name}', but '{inputSetter}' is a workflow input, which is read-only: Elsa 3 generated no setter for it.",
+                        "Copy the input into a declared variable and set that variable in the Elsa 3 workflow before import."));
                     return;
                 }
 
@@ -2295,10 +2307,15 @@ public sealed class Elsa3ExpressionRewriter(
             return false;
         }
 
-        /// <summary>Whether Elsa 3 generated an accessor under <paramref name="name"/>, resolvable or not.</summary>
+        /// <summary>
+        /// Whether Elsa 3 generated an accessor under <paramref name="name"/>, resolvable or not: a getter for a variable,
+        /// input or activity output, a setter for a variable only (spec 247 R-2).
+        /// </summary>
         private bool ClashesWithGeneratedAccessor(string name) =>
-            (HasAccessorShape(name, "get", out var accessor) || HasAccessorShape(name, "set", out accessor)) &&
-            !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor)).NoSource;
+            HasAccessorShape(name, "get", out var getter)
+                ? !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, getter)).NoSource
+                : HasAccessorShape(name, "set", out var setter) &&
+                  !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedSetter, setter)).NoSource;
 
         /// <summary>
         /// Whether registering a host function with <paramref name="name"/> as its member name would convert a call to it, so
@@ -2981,6 +2998,12 @@ public enum Elsa3AmbientReferenceKind
     /// callee without <c>get</c>, as written. The resolver decides which declaration Elsa 3 bound it to.
     /// </summary>
     GeneratedAccessor,
+
+    /// <summary>
+    /// A call <c>set{Name}(value)</c> to a setter Elsa 3 generated per variable; <c>Name</c> is the callee without
+    /// <c>set</c>, as written. Elsa 3 generated no setter for a workflow input or an activity output (spec 247 R-2).
+    /// </summary>
+    GeneratedSetter,
 }
 
 public sealed record Elsa3AmbientReference(Elsa3AmbientReferenceKind Kind, string Name);

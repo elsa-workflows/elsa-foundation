@@ -578,6 +578,30 @@ public sealed class Elsa3JavaScriptHostFunctionTests
             diagnostic.Message.Contains("'getCustomInput'", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Elsa 3 generated no setter for a workflow input, so a host function named set{Input} takes the call in a standalone
+    /// workflow. In a reusable run Elsa 3 declared the input as a variable with a setter, so the name is ambiguous there.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task A_matched_setter_named_after_an_input_clashes_only_where_elsa3_generated_one(bool isReusable, bool converts)
+    {
+        var setCustomInput = new JavaScriptHostFunctionDeclaration("acme.setCustomInput", _ => default);
+        var definition = ConversionServices.Definition(
+            Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("return setCustomInput(1);")))));
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "CustomInput", Type = "Object" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: isReusable,
+            configure: services => services.AddSingleton(setCustomInput));
+
+        Assert.Equal(converts, result.Succeeded);
+        if (converts)
+            Assert.Contains("acme.setCustomInput(1)", Text(Input(Node(result.Value!.State, "node"), "script")), StringComparison.Ordinal);
+        else
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+    }
+
     /// <summary>Two variables whose generated accessor is the same name: Elsa 3 generated it, so the clash stands.</summary>
     [Fact]
     public async Task A_matched_global_that_is_also_an_ambiguous_generated_accessor_is_ambiguous()

@@ -50,6 +50,10 @@ converter never matches (its own built-ins, the setters and instance-state helpe
 globals), is checked before this lookup and converts to that function; if the accessor lookup would also resolve it,
 the result is `VF-IMP-002`.
 
+A `set{N}(value)` call resolves separately: Elsa 3 generated setters for variables only (in a reusable run, for the inputs
+it declared as variables too). A standalone input `N` has no setter: the call is refused as a read-only input, and a
+variable `N` next to an input `N` is the one `set{N}` writes (#5703).
+
 ### `Elsa3JavaScriptNames` (new, internal static)
 
 - `Pascalize(string)`: Humanizer 2.14.1 semantics, reduced to the names Elsa 3 accepts (all letters and digits): it
