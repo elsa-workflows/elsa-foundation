@@ -59,9 +59,9 @@ public sealed class ParentOutcomeExecutionTests
             write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.IncidentRecorded &&
                      write.Commit.Checkpoint.ActivityExecutionIds.Contains("actexec-child", StringComparer.Ordinal)).Commit;
         var outcomeWorkItem = Assert.Single(childFaultCommit.PostCommitIntents)
-            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, outcomeWorkItem.CommandKind);
-        var outcomePayload = outcomeWorkItem.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+        var outcomePayload = outcomeWorkItem.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(SchedulerCompletionKind.ParentOutcomeEvaluation, outcomePayload.CompletionKind);
         Assert.Equal(["first", "second"], outcomePayload.ParentOutcome!.Notifications.Select(notification => notification.Code));
 
@@ -71,7 +71,7 @@ public sealed class ParentOutcomeExecutionTests
                      write.Commit.Checkpoint.ActivityExecutionIds.Contains("actexec-parent", StringComparer.Ordinal)).Commit;
         Assert.Contains("actexec-child", completedParentCommit.Checkpoint.ActivityExecutionIds);
         var completionWorkItem = Assert.Single(completedParentCommit.PostCommitIntents)
-            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.DoesNotContain(RuntimeMetadataKeys.ChildFaulted, completionWorkItem.CommandMetadata.Keys);
         Assert.DoesNotContain(RuntimeMetadataKeys.IncidentId, completionWorkItem.CommandMetadata.Keys);
         Assert.DoesNotContain(RuntimeMetadataKeys.CompletedChildActivityExecutionId, completionWorkItem.CommandMetadata.Keys);
@@ -294,9 +294,9 @@ public sealed class ParentOutcomeExecutionTests
             write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.IncidentRecorded &&
                      write.Commit.Checkpoint.ActivityExecutionIds.Contains("actexec-child", StringComparer.Ordinal)).Commit;
         var legacyWorkItem = Assert.Single(childFaultCommit.PostCommitIntents)
-            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(SchedulerCompletionKind.ParentCompletionEvaluation,
-            legacyWorkItem.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!.CompletionKind);
+            legacyWorkItem.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.CompletionKind);
     }
 
     private sealed class ParentOutcomeRecorder

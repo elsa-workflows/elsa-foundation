@@ -192,10 +192,10 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
             { Source = new(JsonSerializer.SerializeToElement(new { memberKey = rejected }), "WorkflowRequest") });
         Assert.Contains(invalid.Findings, finding => finding.Type == "ActivityData/UnknownInput");
         var stable = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query with
-            { Source = new(new VariableReference("stable-key"), "Input") });
+            { Source = Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("stable-key"), "Input") });
         Assert.Empty(stable.Findings);
         var wrongStable = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query with
-            { Source = new(new VariableReference("PublicName"), "Input") });
+            { Source = Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("PublicName"), "Input") });
         Assert.Contains(wrongStable.Findings, finding => finding.Type == "ActivityData/UnknownInput");
     }
 
@@ -211,7 +211,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         var closed = await Analyzer(provider).AnalyzeAsync(document with { ResourceKind = "ActivityDefinition" }, new("consumer", "CustomerId"), query);
         Assert.Contains(closed.Findings, finding => finding.Type == "ActivityData/UnknownInput");
         var stable = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query with
-            { Source = new(new VariableReference("legacy"), "Input") });
+            { Source = Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("legacy"), "Input") });
         Assert.Contains(stable.Findings, finding => finding.Type == "ActivityData/UnknownInput");
     }
 
@@ -234,12 +234,33 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData("direct")]
     [InlineData("typed")]
     [InlineData("json")]
-    [InlineData("json-pascal")]
     public async Task Missing_producer_is_invalid_even_when_occurrence_is_optional(string form)
     {
         using var provider = Provider();
         var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer", Read(form, "missing", optional: true)))));
         Assert.Equal("consumer/inputs/CustomerId", Assert.Single(result.Findings, finding => finding.Type == "ValueFlow/UnavailableProducer").Path);
+    }
+
+    [Theory]
+    [InlineData("""{"kind":"Variable","declaringScopeNodeId":"missing","DeclaringScopeNodeId":"workflow","variableKey":"missing","VariableKey":"customer"}""")]
+    [InlineData("""{"kind":"WorkflowRequest","memberKey":"missing","MemberKey":"Customer"}""")]
+    public async Task Differently_cased_members_cannot_repair_an_invalid_canonical_identity(string parameter)
+    {
+        using var provider = Provider();
+        var document = Document(Sequence(Node("consumer", Input(PortableJson("\"parameters\":{\"p\":" + parameter + "}"))))) with
+        {
+            Variables = [Variable("customer", "Customer")],
+            Inputs = [new("customer", "Customer", new("String"), null, "Customer", null, true)]
+        };
+        Assert.NotEmpty((await Analyzer(provider).AnalyzeAsync(document)).Findings);
+    }
+
+    [Fact]
+    public async Task Pascal_case_portable_own_members_are_refused_instead_of_binding_a_different_contract()
+    {
+        using var provider = Provider();
+        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Read("json-pascal", "producer")))));
+        Assert.Contains(result.Findings, finding => finding.Type == "ActivityData/InvalidSource");
     }
 
     [Theory]
@@ -250,18 +271,18 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     public async Task Recognized_portable_json_refuses_malformed_contracts_without_guessing_discriminators(string parameter)
     {
         using var provider = Provider();
-        var value = PortableJson("\"Parameters\":{\"p\":" + parameter + "}");
+        var value = PortableJson("\"parameters\":{\"p\":" + parameter + "}");
         var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(value)))));
         Assert.Equal("consumer/inputs/CustomerId", Assert.Single(result.Findings, finding => finding.Type == "ActivityData/InvalidSource").Path);
     }
 
     [Theory]
-    [InlineData("""{"kind":"Variable","declaringScopeNodeId":"missing","DeclaringScopeNodeId":"workflow","variableKey":"missing","VariableKey":"customer"}""")]
-    [InlineData("""{"kind":"WorkflowRequest","memberKey":"missing","MemberKey":"Customer"}""")]
-    public async Task Portable_json_variable_and_request_aliases_resolve_the_effective_owned_identity(string parameter)
+    [InlineData("""{"kind":"Variable","declaringScopeNodeId":"workflow","DeclaringScopeNodeId":"missing","variableKey":"customer","VariableKey":"missing"}""")]
+    [InlineData("""{"kind":"WorkflowRequest","memberKey":"Customer","MemberKey":"missing"}""")]
+    public async Task Portable_json_resolves_exact_owned_identity_and_ignores_differently_cased_decoys(string parameter)
     {
         using var provider = Provider();
-        var document = Document(Sequence(Node("consumer", Input(PortableJson("\"Parameters\":{\"p\":" + parameter + "}"))))) with
+        var document = Document(Sequence(Node("consumer", Input(PortableJson("\"parameters\":{\"p\":" + parameter + "}"))))) with
         {
             Variables = [Variable("customer", "Customer")],
             Inputs = [new("customer", "Customer", new("String"), null, "Customer", null, true)]
@@ -274,7 +295,8 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     {
         using var provider = Provider();
         var value = PortableJson("""
-            "parameters":{},"Parameters":{"p":{"kind":"ActivityResult","producerNodeId":"producer","projectionKey":"$result","memberPath":["id"]}}
+            "parameters":{"p":{"kind":"ActivityResult","producerNodeId":"producer","projectionKey":"$result","memberPath":["id"]}},
+            "Parameters":{"p":{"kind":"ActivityResult","producerNodeId":"producer","projectionKey":"$result"}}
             """);
         var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("producer"), Node("consumer", Input(value)))));
         Assert.Contains(result.Findings, finding => finding.Type == "ActivityData/UnsupportedMemberSelection");
@@ -284,7 +306,6 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData("direct")]
     [InlineData("typed")]
     [InlineData("json")]
-    [InlineData("json-pascal")]
     public async Task Named_projection_is_resolved_from_the_actual_producer_contract_without_metadata(string form)
     {
         using var provider = Provider();
@@ -296,7 +317,6 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [InlineData("direct")]
     [InlineData("typed")]
     [InlineData("json")]
-    [InlineData("json-pascal")]
     public async Task Direct_and_portable_results_keep_the_same_structured_scope_boundary(string form)
     {
         using var provider = Provider();
@@ -315,7 +335,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         using var provider = Provider(services => services.AddSingleton<IActivityBindingConversionPreviewer>(previewer));
         var value = new ArgumentState("value", ScopeFreeResult("producer", "known"), null, null, null, null)
             { Conversion = new(AuthoredValueConversionMode.None) };
-        var setter = new ActivityNode("setter", "test", [new("name", new ArgumentValue("count", syntax), null, null, null, null), value], [])
+        var setter = new ActivityNode("setter", "test", [new("name", ArgumentValue.FromClr("count", syntax), null, null, null, null), value], [])
             { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new("Int32")) };
         var document = Document(Sequence(Node("producer"), setter)) with
             { Outputs = [new("count-key", "count", new("String"), null, "Count", null, false)] };
@@ -424,7 +444,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     public async Task Focus_returns_only_canonical_identity_fields_and_never_echoes_ignored_business_data()
     {
         using var provider = Provider();
-        var binding = new ArgumentValue(JsonSerializer.SerializeToElement(new {
+        var binding = ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new {
             producerNodeId = "producer", projectionKey = "$result", producerScopeId = "scope:root", isOptional = false,
             privateBusinessData = "must-not-be-returned"
         }), "ActivityResult");
@@ -452,7 +472,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     public async Task Request_local_input_index_preserves_ambiguous_declaration_refusal()
     {
         using var provider = Provider();
-        var document = Document(Sequence(Node("consumer", Input(new(new VariableReference("customer"), "Input")))))
+        var document = Document(Sequence(Node("consumer", Input(Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("customer"), "Input")))))
             with { Inputs = [Definition("customer"), Definition("customer")] };
         var result = await Analyzer(provider).AnalyzeAsync(document);
         Assert.Contains(result.Findings, finding => finding.Type == "ActivityData/UnknownInput");
@@ -473,13 +493,13 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     public async Task Graph_boundary_alias_resolves_the_existing_workflow_variable_without_a_synthetic_draft()
     {
         using var provider = Provider();
-        var document = Document(Sequence(Node("consumer", Input(new(new VariableReference("customer", "activity-graph"), "Variable")))))
+        var document = Document(Sequence(Node("consumer", Input(Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("customer", "activity-graph"), "Variable")))))
             with { ResourceKind = "ActivityDefinition", Variables = [Variable("customer", "Customer")] };
         var result = await Analyzer(provider).AnalyzeAsync(document);
         Assert.Empty(result.Findings);
         var sources = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
         var variable = Assert.Single(sources.Sources, source => source.Id.StartsWith("variable:", StringComparison.Ordinal));
-        Assert.Equal("activity-graph", Assert.IsType<VariableReference>(variable.Binding!.Value).DeclaringScopeId);
+        Assert.Equal("activity-graph", Assert.IsType<JsonElement>(variable.Binding!.Value).GetProperty("declaringScopeId").GetString());
     }
 
     [Fact]
@@ -488,11 +508,11 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         using var provider = Provider();
         var inner = Sequence(Node("inside")) with { NodeId = "inner" };
         inner = inner with { Structure = new("elsa.sequence.structure", "1.0.0", JsonSerializer.SerializeToElement(new {
-            activities = new[] { Node("inside", Input(new(new VariableReference("local", "inner"), "Variable"))) },
+            activities = new[] { Node("inside", Input(Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("local", "inner"), "Variable"))) },
             variables = new[] { Variable("local", "Local") }
         }, Web)) };
         var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(inner,
-            Node("outside", Input(new(new VariableReference("local", "inner"), "Variable"))))));
+            Node("outside", Input(Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("local", "inner"), "Variable"))))));
         Assert.Equal("outside/inputs/CustomerId", Assert.Single(result.Findings).Path);
     }
 
@@ -535,7 +555,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
             services.AddSingleton<IActivityInputSourceConstraintProvider>(new Constraint(["Literal", "Input"]));
             services.AddSingleton<IActivityInputSourceConstraintProvider>(new Constraint(["Literal", "Variable"]));
         });
-        var document = Document(Sequence(Node("consumer", Input(new(new VariableReference("customer"), "Input"))))) with { Inputs = [Definition("customer")] };
+        var document = Document(Sequence(Node("consumer", Input(Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("customer"), "Input"))))) with { Inputs = [Definition("customer")] };
         var browser = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
         Assert.Equal(new[] { "Literal" }, browser.Target!.Constraint!.AllowedExpressionTypes);
         Assert.Empty(browser.Sources);
@@ -572,7 +592,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
             ConnectionType = declaresConnectionType ? "test-connection" : null
         };
         using var provider = ActivityDataSelectionTestSupport.Provider(Catalog(definition));
-        var document = Document(Sequence(Node("producer"), Node("consumer", Input(new("fixed-text", "Literal")))));
+        var document = Document(Sequence(Node("producer"), Node("consumer", Input(Elsa.Expressions.Core.Models.ArgumentValue.FromClr("fixed-text", "Literal")))));
         var browser = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
         Assert.Equal(new[] { "Connection" }, browser.Target!.Constraint!.AllowedExpressionTypes);
         Assert.Empty(browser.Sources);
@@ -582,18 +602,11 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     [Theory]
     [InlineData("Secret")]
     [InlineData("Connection")]
-    public async Task Reference_rules_never_serialize_an_unknown_CLR_business_instance(string syntax)
+    public void A_reference_producer_cannot_admit_a_CLR_value_whose_conversion_fails(string syntax)
     {
         var business = new ReferenceGetterTrap();
-        var definition = Definition("CustomerId") with { IsCredential = syntax == "Secret" ? true : null,
-            ConnectionType = syntax == "Connection" ? "test-connection" : null };
-        using var provider = ActivityDataSelectionTestSupport.Provider(Catalog(definition));
-        // Keep the original CLR instance: the JSON-backed Sequence fixture serializes its children.
-        var document = Document(Node("consumer", Input(new(business, syntax))));
-        var result = await Analyzer(provider).AnalyzeAsync(document);
-        Assert.Contains(result.Findings, finding => finding.Type == (syntax == "Secret" ? CredentialInputBinding.RuleId : ConnectionInputBinding.RuleId));
-        await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
-        Assert.Equal(0, business.Reads);
+        Assert.Throws<InvalidOperationException>(() => ArgumentValue.FromClr(business, syntax));
+        Assert.Equal(1, business.Reads);
     }
 
     [Theory]
@@ -607,39 +620,34 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
             ? SecretReferencePayload.Read(JsonSerializer.SerializeToElement(new { name = "test-secret" })).Reference!
             : ConnectionReferencePayload.Read(JsonSerializer.SerializeToElement(new { connection = "test-connection" })).Reference!;
         using var provider = ActivityDataSelectionTestSupport.Provider(Catalog(definition));
-        // A typed ConnectionReferenceMembers has Name, whereas its canonical JSON payload has connection.
-        // Test the actual admitted record before any structure fixture turns it into a different JSON shape.
-        Assert.Empty((await Analyzer(provider).AnalyzeAsync(Document(Node("consumer", Input(new(reference, syntax)))))).Findings);
+        var argument = ArgumentValue.FromClr(reference, syntax);
+        Assert.True(argument.Value!.Value.TryGetProperty(syntax == "Secret" ? "name" : "connection", out _));
+        Assert.Empty((await Analyzer(provider).AnalyzeAsync(Document(Node("consumer", Input(argument))))).Findings);
     }
 
     [Theory]
     [InlineData("literal")]
     [InlineData("Object")]
     [InlineData("Default")]
-    public async Task Literal_business_objects_are_not_serialized_or_interpreted_as_portable_expressions(string syntax)
+    public async Task Carried_literal_business_data_is_not_interpreted_as_a_portable_expression(string syntax)
     {
         using var provider = Provider();
-        var business = new ThrowingBusinessValue();
-        var document = Document(Node("consumer", Input(new(business, syntax))));
+        var argument = ArgumentValue.FromClr(new { value = "business data" }, syntax);
+        var document = Document(Node("consumer", Input(argument)));
         var result = await Analyzer(provider).AnalyzeAsync(document);
         Assert.Empty(result.Findings);
         await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
-        Assert.Equal(0, business.Reads);
+        Assert.Equal("business data", argument.Value!.Value.GetProperty("value").GetString());
     }
 
     [Theory]
     [InlineData("JavaScript")]
     [InlineData("CustomProvider")]
-    public async Task Uninspectable_CLR_expression_values_are_refused_without_reading_business_getters(string syntax)
+    public void A_failing_CLR_expression_producer_is_refused_before_document_admission(string syntax)
     {
-        using var provider = Provider();
         var business = new ThrowingBusinessValue();
-        var document = Document(Node("consumer", Input(new(business, syntax))));
-        var result = await Analyzer(provider).AnalyzeAsync(document);
-        Assert.Equal("consumer/inputs/CustomerId", Assert.Single(result.Findings,
-            finding => finding.Type == "ActivityData/UnsupportedClrExpressionPayload").Path);
-        await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
-        Assert.Equal(0, business.Reads);
+        Assert.Throws<InvalidOperationException>(() => ArgumentValue.FromClr(business, syntax));
+        Assert.Equal(1, business.Reads);
     }
 
     [Theory]
@@ -666,7 +674,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
             Elsa.Activities.Compensation.Activities.CompensationScope.StructureSchemaVersion,
             JsonSerializer.SerializeToElement(new Elsa.Activities.Compensation.Models.CompensationScopeAuthoredStructure([
                 new("Inventory", Node("reserve"), Node("release")),
-                new("Delivery", Node("deliver"), Node("cancel", Input(new(body, "JavaScript")))),
+                new("Delivery", Node("deliver"), Node("cancel", Input(Elsa.Expressions.Core.Models.ArgumentValue.FromClr(body, "JavaScript")))),
                 new("Confirm", Node("confirm"), null)
             ]), Web)));
         using var provider = Provider(services => new Elsa.Activities.Compensation.ActivitiesCompensationFeature().ConfigureServices(services));
@@ -757,7 +765,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
             JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         return Input(form switch {
             "direct" => Result(producer, projection, optional),
-            "typed" => new(definition, "JavaScript"),
+            "typed" => Elsa.Expressions.Core.Models.ArgumentValue.FromClr(definition, "JavaScript"),
             "json-pascal" => new(JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(definition, Web)
                 .Replace("\"parameters\":", "\"Parameters\":", StringComparison.Ordinal)
                 .Replace("\"producerNodeId\":", "\"ProducerNodeId\":", StringComparison.Ordinal)

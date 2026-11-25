@@ -163,14 +163,14 @@ internal sealed class CombinedOutcomeOutboxProbe
         if (!StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork) || intent.Payload is not { } payload)
             return;
 
-        var workItem = payload.Deserialize<RuntimeSchedulerWorkItem>();
+        var workItem = payload.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options);
         if (workItem is null)
             return;
 
         SchedulerCompletionKind? completionKind = null;
         if (workItem.CommandKind == WorkflowExecutionCommandKind.CompleteActivity &&
             workItem.Payload is { } workPayload &&
-            workPayload.Deserialize<RuntimeCompleteActivityCommandPayload>() is { } completePayload)
+            workPayload.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options) is { } completePayload)
             completionKind = completePayload.CompletionKind;
 
         _attempts.Enqueue(new CombinedOutcomeSchedulerDispatch(workItem.WorkItemId, completionKind, workItem.CommandKind));
@@ -186,10 +186,10 @@ internal sealed class FailFirstCombinedOutcomeDispatcher(
         probe.Record(intent);
         if (intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork &&
             intent.Payload is { } payload &&
-            payload.Deserialize<RuntimeSchedulerWorkItem>() is { } workItem &&
+            payload.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options) is { } workItem &&
             workItem.CommandKind == WorkflowExecutionCommandKind.CompleteActivity &&
             workItem.Payload is { } workPayload &&
-            workPayload.Deserialize<RuntimeCompleteActivityCommandPayload>()?.CompletionKind == SchedulerCompletionKind.ParentOutcomeEvaluation &&
+            workPayload.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)?.CompletionKind == SchedulerCompletionKind.ParentOutcomeEvaluation &&
             probe.TryFailParentOutcome())
         {
             throw new TimeoutException("The test loses the first combined parent-outcome enqueue before queue acceptance.");

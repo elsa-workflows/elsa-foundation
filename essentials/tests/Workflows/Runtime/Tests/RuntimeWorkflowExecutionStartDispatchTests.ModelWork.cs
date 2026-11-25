@@ -18,9 +18,9 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
         var child = NewExecutable(); await _store.SaveAsync(child);
         var parentPin = child.Identity with { ArtifactId = "model", DefinitionId = "model-definition" };
         var protocol = new RuntimeExecutionProtocol("test.model", 1);
-        var model = new RuntimeModelMaterial(1, parentPin, protocol, "test.profile", JsonSerializer.SerializeToElement(new { }),
+        var model = new RuntimeModelMaterial(1, parentPin, protocol, "test.profile", JsonSerializer.SerializeToElement(new { }, options: Elsa.Serialization.Core.JsonBaseline.Options),
             new(1, []), [], [new("work", child.Identity)], []);
-        var bag = new Dictionary<string, JsonElement> { ["value"] = JsonSerializer.SerializeToElement(new { number = 42, text = "input" }) };
+        var bag = new Dictionary<string, JsonElement> { ["value"] = JsonSerializer.SerializeToElement(new { number = 42, text = "input" }, options: Elsa.Serialization.Core.JsonBaseline.Options) };
         var origin = ModelOrigin(version, child.Identity, parentPin, protocol, withInputs ? bag : null);
         var dispatcher = new WorkflowStartDispatcher(new ModelMaterialForStart(_store, new(model, "incarnation")),
             _references, _agentProvider, new IncrementingRuntimeExecutionIdGenerator(), new FakeTimeProvider(_now));
@@ -28,7 +28,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
 
         await dispatcher.DispatchAsync(ModelRequest(origin, requestInputs));
 
-        var payload = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(withInputs ? 1 : 0, payload.Inputs.Count);
         if (withInputs) Assert.True(JsonElement.DeepEquals(bag["value"], payload.Inputs["value"]));
         Assert.True(origin.IsEquivalentTo(payload.StartAuthority!.ModelWork));
@@ -42,7 +42,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
     public async Task Native_model_worker_copied_origin_cannot_override_the_captured_bag(int version, string defect)
     {
         var child = NewExecutable();
-        var captured = version == 1 ? null : new Dictionary<string, JsonElement> { ["value"] = JsonSerializer.SerializeToElement(42) };
+        var captured = version == 1 ? null : new Dictionary<string, JsonElement> { ["value"] = JsonSerializer.SerializeToElement(42, options: Elsa.Serialization.Core.JsonBaseline.Options) };
         var origin = ModelOrigin(version, child.Identity, child.Identity with { ArtifactId = "model" }, new("test.model", 1), captured);
         IReadOnlyDictionary<string, object?> supplied = defect switch
         {
@@ -64,7 +64,7 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
     {
         var child = NewExecutable(); var keyed = KeyedWorkflowStartIdentity.For("model-work", child.Identity.ArtifactId);
         var origin = ModelOrigin(2, child.Identity, child.Identity with { ArtifactId = "model" }, new("test.model", 1),
-            new Dictionary<string, JsonElement> { ["value"] = JsonSerializer.SerializeToElement(42) }, keyed.WorkflowExecutionId);
+            new Dictionary<string, JsonElement> { ["value"] = JsonSerializer.SerializeToElement(42, options: Elsa.Serialization.Core.JsonBaseline.Options) }, keyed.WorkflowExecutionId);
         // No target material/execution is read: input authority is checked before duplicate reconciliation.
         var request = ModelRequest(origin, new Dictionary<string, object?> { ["value"] = 99 }, keyed.StartKey);
         var exception = await Assert.ThrowsAsync<WorkflowExecutableStartRejectedException>(() =>

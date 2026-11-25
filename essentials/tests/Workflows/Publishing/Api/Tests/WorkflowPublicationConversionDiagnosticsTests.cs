@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
 /// Covers issue #906: conversion-resolution failures during workflow publish/preflight are returned as a
-/// structured <c>application/problem+json</c> payload (code VF-COER-001) with the failing node, reference key,
+/// structured <c>application/json</c> payload (code VF-COER-001) with the failing node, reference key,
 /// contracts, representation, mode, and profile, instead of a plain 400 string.
 /// </summary>
 public sealed class WorkflowPublicationConversionDiagnosticsTests
@@ -176,7 +176,8 @@ public sealed class WorkflowPublicationConversionDiagnosticsTests
         using var response = await PublishAsync(host);
 
         Assert.Equal((HttpStatusCode)422, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         var body = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(body);
         var problem = document.RootElement;
@@ -210,7 +211,8 @@ public sealed class WorkflowPublicationConversionDiagnosticsTests
 
         Assert.Equal(HttpStatusCode.BadRequest, publishResponse.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, preflightResponse.StatusCode);
-        Assert.Equal("application/problem+json", preflightResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", preflightResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(preflightResponse.Headers.GetValues("X-Content-Type-Options")));
         Assert.Equal(Normalize(publishBody), Normalize(preflightBody));
     }
 
@@ -292,7 +294,8 @@ public sealed class WorkflowPublicationConversionDiagnosticsTests
     private static async Task<JsonElement> AssertConversionProblemAsync(HttpResponseMessage response)
     {
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var root = document.RootElement.Clone();
         Assert.Equal("VF-COER-001", root.GetProperty("errorCode").GetString());

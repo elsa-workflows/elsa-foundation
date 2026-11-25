@@ -52,9 +52,12 @@ internal sealed class EtlV1CompatibilityFixture
     public string SnapshotRoot => Path.Combine(RuntimeDirectory, "snapshots");
     public string OutputRoot => Path.Combine(RuntimeDirectory, "output");
 
-    public static EtlV1CompatibilityFixture Open()
+    public static EtlV1CompatibilityFixture Open() => OpenAt(Path.Combine(FindRepositoryRoot(), "extensions", "Etl", "tests", "Shared", "Fixtures", "V1", "data"));
+
+    public static EtlV1CompatibilityFixture OpenCurrent() => OpenAt(Path.Combine(FindRepositoryRoot(), "specs", "1207-json-data-integrity-baseline", "evidence", "fixtures", "etl", "current-v1"));
+
+    private static EtlV1CompatibilityFixture OpenAt(string root)
     {
-        var root = Path.Combine(FindRepositoryRoot(), "extensions", "Etl", "tests", "Shared", "Fixtures", "V1", "data");
         var manifestPath = Path.Combine(root, "manifest.json");
         var manifest = JsonSerializer.Deserialize<EtlV1CompatibilityManifest>(File.ReadAllBytes(manifestPath), WebJson)
             ?? throw new InvalidDataException("The retained ETL V1 compatibility manifest is empty.");

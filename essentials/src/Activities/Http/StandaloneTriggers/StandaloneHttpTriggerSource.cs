@@ -61,9 +61,9 @@ internal sealed class HttpTriggerSourceContext(IHttpContextAccessor http, IPersi
         var intent = JsonSerializer.SerializeToElement(new { method = request.Request.Method.ToUpperInvariant(),
             path = request.Request.Path.Value, query = model.Query,
             headers = model.Headers.ToDictionary(pair => pair.Key.ToLowerInvariant(), pair => pair.Value, StringComparer.Ordinal),
-            body = model.Body, contentType = request.Request.ContentType });
+            body = model.Body, contentType = request.Request.ContentType }, options: Elsa.Serialization.Core.JsonBaseline.Options);
         var candidate = new RuntimeIngressWaitCandidate(HttpEndpointStimulus.StimulusType, stimulusHash,
-            JsonSerializer.SerializeToElement(model), new Dictionary<string, string>(),
+            JsonSerializer.SerializeToElement(model, options: Elsa.Serialization.Core.JsonBaseline.Options), new Dictionary<string, string>(),
             new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(HttpRequestModel)), schemaVersion: 1), HttpEndpoint.ActivityType, observedWaits);
         current = current with { SubmittedIntent = intent, WaitCandidate = candidate };
     }

@@ -33,7 +33,7 @@ public static class RuntimeIngressWaitCommand
             candidate.StimulusHash, candidate.Input, RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason, typed)
         { ExpectedBookmarkResume = expected, IngressWaitOrigin = delivery.Origin(recipient) };
         var command = new WorkflowExecutionCommand(id.CommandId, id.WorkflowExecutionId, WorkflowExecutionCommandKind.ResumeBookmark,
-            source.RecordedAt, JsonSerializer.SerializeToElement(payload), metadata);
+            source.RecordedAt, JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options), metadata);
         return new(id.EnvelopeId, id.WorkflowExecutionId, command, id.IdempotencyKey, WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             source.RecordedAt, metadata: metadata, partition: capture.Scope.Partition ?? new(WorkflowExecutionPartition.DefaultValue));
     }
@@ -42,7 +42,7 @@ public static class RuntimeIngressWaitCommand
     {
         var delivery = RequireSelection(source, recipient);
         return new(delivery.Origin(recipient), recipient.Identity, source.RecordedAt, Protocol, ProtocolVersion,
-            JsonSerializer.SerializeToElement(CreateEnvelope(source, recipient)));
+            JsonSerializer.SerializeToElement(CreateEnvelope(source, recipient), options: Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     public static RuntimeIngressWaitDelivery RequireSelection(RuntimePostCommitOutboxItem source, RuntimeIngressWaitRecipient recipient)
@@ -62,7 +62,7 @@ public static class RuntimeIngressWaitCommand
         ArgumentNullException.ThrowIfNull(seal);
         if (seal.CommandProtocol != Protocol || seal.CommandProtocolVersion != ProtocolVersion)
             throw new NotSupportedException("The saved wait command protocol is unsupported.");
-        return seal.Command.Deserialize<WorkflowExecutionCommandEnvelope>() ?? throw Invalid();
+        return seal.Command.Deserialize<WorkflowExecutionCommandEnvelope>(options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw Invalid();
     }
 
     public static void ValidateEnvelope(RuntimeCommittedIngressWait committed, WorkflowExecutionCommandEnvelope envelope)
@@ -73,7 +73,7 @@ public static class RuntimeIngressWaitCommand
             !committed.Seal.Identity.IsEquivalentTo(committed.Recipient.Identity) || committed.Seal.CommittedAt != committed.Item.RecordedAt ||
             committed.Seal.CommandProtocol != Protocol || committed.Seal.CommandProtocolVersion != ProtocolVersion ||
             !Equal(envelope, CreateEnvelope(committed.Item, committed.Recipient)) ||
-            !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(envelope), committed.Seal.Command)) throw Invalid();
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(envelope, options: Elsa.Serialization.Core.JsonBaseline.Options), committed.Seal.Command)) throw Invalid();
     }
 
     public static void ValidateWorkItem(RuntimeCommittedIngressWait committed, RuntimeSchedulerWorkItem item)
@@ -87,6 +87,6 @@ public static class RuntimeIngressWaitCommand
             !Equal(item.Payload, envelope.Command.Payload) || !Equal(item.CommandMetadata, envelope.Command.Metadata) ||
             !Equal(item.EnvelopeMetadata, envelope.Metadata)) throw Invalid();
     }
-    private static bool Equal<T>(T left, T right) => JsonElement.DeepEquals(JsonSerializer.SerializeToElement(left), JsonSerializer.SerializeToElement(right));
+    private static bool Equal<T>(T left, T right) => Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(left, options: Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(right, options: Elsa.Serialization.Core.JsonBaseline.Options));
     private static InvalidDataException Invalid() => new("The saved wait command differs from its exact physical source commitment.");
 }

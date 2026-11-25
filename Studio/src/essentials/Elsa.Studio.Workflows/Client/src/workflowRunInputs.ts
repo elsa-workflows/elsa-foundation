@@ -1,3 +1,4 @@
+import { localDateTimeToIso } from "@elsa-workflows/studio-sdk";
 import { typeAllowsNull } from "./typeNullability";
 import type { StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowExecutionInputs, WorkflowInput } from "./workflowTypes";
@@ -95,7 +96,18 @@ export function parseWorkflowRunInputs(
       errorEntries.push([input.referenceKey, input.isRequired
         ? `${input.displayName || input.name} is required.`
         : `${input.displayName || input.name} cannot be null.`]);
-    } else valueEntries.push([input.name, parsed.value]);
+    } else {
+      const alias = canonicalAlias(input.type.alias);
+      try {
+        const value = alias === "datetime" || alias === "datetimeoffset"
+          ? Array.isArray(parsed.value)
+            ? parsed.value.map(item => typeof item === "string" ? localDateTimeToIso(item) : item)
+            : typeof parsed.value === "string" ? localDateTimeToIso(parsed.value) : parsed.value
+          : parsed.value;
+        valueEntries.push([input.name, value]);
+      } catch (error) { errorEntries.push([input.referenceKey, error instanceof Error ? error.message : "Enter a valid date and time."]); }
+    }
+
   }
 
   return {
@@ -206,7 +218,8 @@ function parseScalarDraft(draft: string, alias: string): { value?: unknown; erro
       return [...draft].length === 1 ? { value: draft } : { error: "Enter one character." };
     case "datetime":
     case "datetimeoffset":
-      return Number.isNaN(Date.parse(draft)) ? { error: "Enter a valid date and time." } : { value: draft };
+      try { return { value: localDateTimeToIso(draft) }; }
+      catch (error) { return { error: error instanceof Error ? error.message : "Enter a valid date and time." }; }
     case "guid":
       return guidPattern.test(draft) ? { value: draft } : { error: "Enter a valid GUID." };
     case "string":

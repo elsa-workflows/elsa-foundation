@@ -182,7 +182,7 @@ public sealed class RoleOwnedInputBindingContractTests
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = new InputDefinition("message", "Text", new TypeReference("String"), null, "Text", null, IsNullable: false);
         using var json = JsonDocument.Parse(payload);
-        var value = new ArgumentValue(json.RootElement.Clone(), "ActivityResult");
+        var value = ArgumentValue.FromClr(json.RootElement.Clone(), "ActivityResult");
 
         if (expectedScope == "refused")
         {
@@ -208,7 +208,7 @@ public sealed class RoleOwnedInputBindingContractTests
             Category: null,
             IsNullable: false);
 
-        var binding = compiler.Compile("node-write", input, new ArgumentValue("hello", "Literal"));
+        var binding = compiler.Compile("node-write", input, ArgumentValue.FromClr("hello", "Literal"));
 
         Assert.Equal("message", binding.InputKey);
         Assert.Equal("String", binding.TargetType.Alias);
@@ -231,7 +231,7 @@ public sealed class RoleOwnedInputBindingContractTests
             IsNullable: false);
         var state = new ArgumentState(
             "message",
-            new ArgumentValue("secret", "Literal"),
+            ArgumentValue.FromClr("secret", "Literal"),
             AutoEvaluate: null,
             EvaluatorType: null,
             StorageDriverType: "encrypted-payloads",
@@ -257,8 +257,8 @@ public sealed class RoleOwnedInputBindingContractTests
         var input = new InputDefinition("message", "Text", type, null, "Text", null, false);
         var portable = new ExpressionDefinition(language, "42", type, new Dictionary<string, ExpressionParameterBinding>(),
             JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
-        var raw = compiler.Compile("node", input, new ArgumentValue("42", language));
-        var promoted = compiler.Compile("node", input, new ArgumentValue(JsonSerializer.SerializeToElement(portable), language));
+        var raw = compiler.Compile("node", input, global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr("42", language));
+        var promoted = compiler.Compile("node", input, new ArgumentValue(JsonSerializer.SerializeToElement(portable, Elsa.Serialization.Core.JsonBaseline.Options), language));
         Assert.Equal(raw.Source, promoted.Source); Assert.Equal(raw.TargetType, promoted.TargetType);
         Assert.Equal(raw.Expression!.Language, promoted.Expression!.Language);
         Assert.Equal(raw.Expression.Expression, promoted.Expression.Expression);
@@ -296,7 +296,7 @@ public sealed class RoleOwnedInputBindingContractTests
         var binding = compiler.Compile(
             "node-write",
             input,
-            new ArgumentValue(JsonSerializer.SerializeToElement(definition), "JavaScript"));
+            ArgumentValue.FromClr(Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(definition), "JavaScript"));
 
         Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
         var expression = Assert.IsType<RuntimeExpressionBinding>(binding.Expression);
@@ -327,20 +327,20 @@ public sealed class RoleOwnedInputBindingContractTests
         var payload = SerializationServices.PayloadSerializer().SerializeToElement(definition);
 
         var binding = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create())
-            .Compile("node-calculate", input, new ArgumentValue(payload, "JavaScript"));
+            .Compile("node-calculate", input, ArgumentValue.FromClr(payload, "JavaScript"));
 
         Assert.Equal("alias", binding.Expression!.ResultType!.Kind);
         Assert.Equal("Int32", binding.Expression.ResultType.Id);
     }
 
     [Fact]
-    public void Compiler_CoercesScalarLiteral_IntoSingleElementStringCollection()
+    public void Compiler_requires_a_json_array_for_a_string_collection()
     {
-        // Issue #924: a bare scalar typed into a collection input compiles to a one-element collection ("GET" → ["GET"]).
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = CollectionInput("SupportedMethods", "String");
 
-        var binding = compiler.Compile("node-endpoint", input, new ArgumentValue("GET", "Literal"));
+        Assert.Throws<ValueConversionPublicationException>(() => compiler.Compile("node-endpoint", input, ArgumentValue.FromClr("GET", "Literal")));
+        var binding = compiler.Compile("node-endpoint", input, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new[] { "GET" }), "Literal"));
 
         var array = binding.Literal!.InlineValue!.Value;
         Assert.Equal(JsonValueKind.Array, array.ValueKind);
@@ -348,13 +348,13 @@ public sealed class RoleOwnedInputBindingContractTests
     }
 
     [Fact]
-    public void Compiler_CoercesCommaSeparatedScalar_IntoPrimitiveCollection()
+    public void Compiler_refuses_comma_separated_text_and_accepts_a_numeric_json_array()
     {
-        // Issue #924: a comma-separated scalar into a primitive collection splits per item ("200, 404" → [200, 404]).
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = CollectionInput("ExpectedStatusCodes", "Int32");
 
-        var binding = compiler.Compile("node-send", input, new ArgumentValue("200, 404", "Literal"));
+        Assert.Throws<ValueConversionPublicationException>(() => compiler.Compile("node-send", input, ArgumentValue.FromClr("200, 404", "Literal")));
+        var binding = compiler.Compile("node-send", input, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new[] { 200, 404 }), "Literal"));
 
         var array = binding.Literal!.InlineValue!.Value;
         Assert.Equal(JsonValueKind.Array, array.ValueKind);
@@ -377,7 +377,7 @@ public sealed class RoleOwnedInputBindingContractTests
             IsNullable: false);
 
         var exception = Assert.Throws<ValueConversionPublicationException>(() =>
-            compiler.Compile("node-send", input, new ArgumentValue("not-a-number", "Literal")));
+            compiler.Compile("node-send", input, ArgumentValue.FromClr("not-a-number", "Literal")));
 
         Assert.Equal(ValueConversionRejectionReason.LiteralCoercionFailed, exception.ReasonCode);
         Assert.StartsWith("VF-COER-001", exception.Message, StringComparison.Ordinal);
@@ -394,8 +394,8 @@ public sealed class RoleOwnedInputBindingContractTests
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = CollectionInput("SupportedMethods", "String");
 
-        var literal = compiler.Compile("node-endpoint", input, new ArgumentValue(JsonSerializer.SerializeToElement(new[] { "GET", "POST" }), "Literal"));
-        var promoted = compiler.Compile("node-endpoint", input, new ArgumentValue("[\"GET\",\"POST\"]", "Object"));
+        var literal = compiler.Compile("node-endpoint", input, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new[] { "GET", "POST" }), "Literal"));
+        var promoted = compiler.Compile("node-endpoint", input, ArgumentValue.FromClr("[\"GET\",\"POST\"]", "Object"));
 
         Assert.Equal(RuntimeInputBindingSource.Literal, literal.Source);
         var array = literal.Literal!.InlineValue!.Value;
@@ -419,7 +419,7 @@ public sealed class RoleOwnedInputBindingContractTests
             Category: null,
             IsNullable: true);
 
-        var binding = compiler.Compile("node-send", input, new ArgumentValue(JsonSerializer.SerializeToElement(new { a = 1 }), "Literal"));
+        var binding = compiler.Compile("node-send", input, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { a = 1 }), "Literal"));
 
         Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
         var value = binding.Literal!.InlineValue!.Value;
@@ -428,19 +428,12 @@ public sealed class RoleOwnedInputBindingContractTests
     }
 
     [Fact]
-    public void Compiler_StringifiedJsonArrayUnderLiteral_FallsIntoScalarCollectionCoercion()
+    public void Compiler_refuses_a_stringified_json_array_under_literal()
     {
-        // Issue #1143: the boundary of the structured branch, pinned so it is explicit rather than a silent trap.
-        // A *stringified* array arrives as a plain string, misses the JsonElement branch, and is split on commas by the
-        // #924 scalar→collection coercion. Clients sending structured values as "Literal" must send the raw value.
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var input = CollectionInput("SupportedMethods", "String");
 
-        var binding = compiler.Compile("node-endpoint", input, new ArgumentValue("[\"GET\",\"POST\"]", "Literal"));
-
-        var array = binding.Literal!.InlineValue!.Value;
-        Assert.Equal(JsonValueKind.Array, array.ValueKind);
-        Assert.Equal(["[\"GET\"", "\"POST\"]"], array.EnumerateArray().Select(item => item.GetString()));
+        Assert.Throws<ValueConversionPublicationException>(() => compiler.Compile("node-endpoint", input, ArgumentValue.FromClr("[\"GET\",\"POST\"]", "Literal")));
     }
 
     [Fact]

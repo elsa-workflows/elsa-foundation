@@ -12,33 +12,34 @@ using Xunit;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// One node binding every whole-value source kind hashes exactly as it did before member reads existed (#4078 slice A),
-/// as a node payload, as a behavioural executable, as a template behaviour and as an input-snapshot binding
-/// fingerprint. The expected values were computed on a9771131c3, the commit before the model change.
+/// Fixed current hashes for a node binding every whole-value source kind. Regenerated once by S-9 before the first stable release.
 /// </summary>
 public sealed class WholeValueBindingHashTests
 {
-    internal const string ExpectedNodePayloadHash = "sha256:dea1bc201ca5c42fd13b2093037d104681f1d98156c05f7a4317c39814ca0648";
-    internal const string ExpectedExecutableHash = "sha256:7c550a97501f76c8473ac6f8090989f0a1e307108d4abe78986f656b311f5f20";
-    internal const string ExpectedTemplateHash = "sha256:904f680fe682e713f776d1835d1c6d3740b8f2638c6e70b704446386c3c3a769";
-    internal const string ExpectedBindingFingerprint = "sha256:8c2712110d10c68bd9b05bcfbcbdc8aec902e01773161dfb7058bceb462ec1b2";
+    internal const string ExpectedNodePayloadHash = "sha256:44e2c240280a2c6ce31c662f54a85311ff7a670d024465994b191c73c9905111";
+    internal const string ExpectedExecutableHash = "sha256:ea1846f2f3564128178dc83cdfe3bb69f0c8641ca35b3dffc0571f37d1a7de35";
+    internal const string ExpectedTemplateHash = "sha256:ca706207f62664f232d2f6c3f4c1d8d38ba119a3807aa09c73793de5eb390a3e";
+    internal const string ExpectedBindingFingerprint = "sha256:ae671a51c5b7fefe07679c2a5258c4002adcf04eafadecf210c419efc3951589";
 
     [Fact]
     public void Every_whole_value_kind_keeps_its_node_payload_hash() =>
-        Assert.Equal(ExpectedNodePayloadHash, new WorkflowExecutableHasher().ComputeHash(Node()));
+        AssertHash(ExpectedNodePayloadHash, new WorkflowExecutableHasher().ComputeHash(Node()));
 
     [Fact]
     public void Every_whole_value_kind_keeps_its_behavioural_executable_hash() =>
-        Assert.Equal(ExpectedExecutableHash, new WorkflowExecutableHasher().ComputeHash(Node(),
+        AssertHash(ExpectedExecutableHash, new WorkflowExecutableHasher().ComputeHash(Node(),
             new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []), []));
 
     [Fact]
     public void Every_whole_value_kind_keeps_its_template_behaviour_hash() =>
-        Assert.Equal(ExpectedTemplateHash, ScopedActivityResultHashTests.TemplateHash(Node()));
+        AssertHash(ExpectedTemplateHash, ScopedActivityResultHashTests.TemplateHash(Node()));
 
     [Fact]
     public void Every_whole_value_kind_keeps_its_input_snapshot_binding_fingerprint() =>
-        Assert.Equal(ExpectedBindingFingerprint, BindingFingerprint(Node()));
+        AssertHash(ExpectedBindingFingerprint, BindingFingerprint(Node()));
+
+    internal static void AssertHash(string expected, string actual) => Assert.True(expected == actual,
+        $"JSON hash golden: Expected={expected}; Actual={actual}. From Elsa 4's first stable release, this hash is frozen and changes require an explicit decision.");
 
     internal static string BindingFingerprint(ExecutableNode node) =>
         (string)typeof(RuntimeActivityInputMaterializer)

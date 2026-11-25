@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, hashJsonTextAsync, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getWorkflowTestRun } from "../api/publishing";
 import type { WorkflowDraft } from "../workflowTypes";
 import { getDraftSignature, isRejectedTestRun } from "./editorHelpers";
@@ -35,8 +35,7 @@ function removeReceipt(key: string) {
 }
 
 async function snapshotDigest(signature: string) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(signature));
-  return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, "0")).join("");
+  return hashJsonTextAsync(signature);
 }
 
 /** Tab-scoped references only. Reattachment requires a fresh authorized read and the exact loaded draft. */

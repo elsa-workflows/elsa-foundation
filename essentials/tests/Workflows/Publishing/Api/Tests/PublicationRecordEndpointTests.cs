@@ -137,7 +137,8 @@ public sealed class PublicationRecordEndpointTests
         // Asserted before parsing, so a regression that answers the miss with an empty or null 200 body
         // reports the status it chose rather than a reader exception.
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         // A silent success would satisfy "the call returned"; neither shape of one is reachable from a miss.
         Assert.NotEqual(string.Empty, raw);
         Assert.NotEqual("null", raw);
@@ -160,7 +161,8 @@ public sealed class PublicationRecordEndpointTests
         using var response = await ReadPublicationAsync(host, " ");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
     }
 
     [Fact]

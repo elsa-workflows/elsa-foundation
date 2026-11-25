@@ -51,17 +51,16 @@ public sealed class EtlArtifactTests
     }
 
     [Fact]
-    public void Typed_pipeline_hash_is_repeatable_and_matches_its_compact_json_bytes()
+    public void Typed_pipeline_hash_pins_its_exact_canonical_value()
     {
         var document = EtlArtifactJson.Write(CreatePipeline());
         var repeatedDocument = EtlArtifactJson.Write(CreatePipeline());
 
         var hash = EtlArtifactJson.Hash(document);
-        var expected = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(document.GetRawText())))
-            .ToLowerInvariant();
+        const string expected = "f51dd507ba3109334c1dd0266191fa2c7ade65dc570c204ce94319bb48a69047";
 
         Assert.Equal(document.GetRawText(), repeatedDocument.GetRawText());
-        Assert.Equal(expected, hash);
+        Assert.True(expected == hash, "First-stable hash freeze: changes require an explicit identity/migration decision.");
         Assert.Equal(64, hash.Length);
         Assert.Equal(hash.ToLowerInvariant(), hash);
     }

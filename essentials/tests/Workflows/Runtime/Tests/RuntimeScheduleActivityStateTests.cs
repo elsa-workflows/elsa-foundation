@@ -56,7 +56,7 @@ public sealed class RuntimeScheduleActivityStateTests
 
         var startWork = Assert.Single(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.StartActivity, startWork.CommandKind);
-        var startPayload = startWork.Payload!.Value.Deserialize<RuntimeStartActivityCommandPayload>()!;
+        var startPayload = startWork.Payload!.Value.Deserialize<RuntimeStartActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("actexec-1", startPayload.ActivityExecutionId);
         Assert.Equal("node-start", startPayload.ExecutableNodeId);
         Assert.Equal(RuntimeStartActivityCommandPayload.ScheduledActivityReason, startPayload.Reason);
@@ -87,7 +87,7 @@ public sealed class RuntimeScheduleActivityStateTests
 
         Assert.Empty(await _schedulerWorkQueue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var pending = Assert.Single(await checkpointWriter.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1")));
-        var startWork = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var startWork = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.StartActivity, startWork.CommandKind);
     }
 
@@ -279,7 +279,7 @@ public sealed class RuntimeScheduleActivityStateTests
             ExecutableNodeId = "node-start",
             ActivityExecutionId = "",
             Reason = RuntimeScheduleActivityCommandPayload.WorkflowStartReason
-        });
+        }, Elsa.Serialization.Core.JsonBaseline.Options);
         var handler = NewHandler();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewScheduleWorkItem(payload: payload)).AsTask());
@@ -383,7 +383,7 @@ public sealed class RuntimeScheduleActivityStateTests
                 "actexec-1",
                 RuntimeScheduleActivityCommandPayload.WorkflowStartReason,
                 "actexec-parent",
-                schedulingProvenance: schedulingProvenance))
+                schedulingProvenance: schedulingProvenance), Elsa.Serialization.Core.JsonBaseline.Options)
             : (JsonElement?)null;
 
         return new RuntimeSchedulerWorkItem(

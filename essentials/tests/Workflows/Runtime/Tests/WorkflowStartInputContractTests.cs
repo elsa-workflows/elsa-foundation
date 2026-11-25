@@ -249,7 +249,7 @@ public sealed class WorkflowStartInputContractTests : IAsyncLifetime
 
         public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
         {
-            startInputs.Add(envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.Inputs);
+            startInputs.Add(envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.Inputs);
             return ValueTask.FromResult(new WorkflowExecutionCommandDispatchResult(
                 envelopeId: envelope.EnvelopeId,
                 workflowExecutionId: envelope.WorkflowExecutionId,

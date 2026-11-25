@@ -325,8 +325,13 @@ public sealed class WorkflowsVersionReconcilerTests
         Assert.Null(saved.DeletedAt);
     }
 
-    [Fact]
-    public async Task Same_id_version_different_content_logs_warning()
+    [Theory]
+    [InlineData("{\"value\":\"A\"}", "{\"value\":\"B\"}", true)]
+    [InlineData("{\"n\":1,\"raw\":\"<雪\"}", " { \"raw\":\"\\u003C雪\", \"n\":1.0 } ", false)]
+    [InlineData("{}", "{\"value\":null}", true)]
+    [InlineData("{\"n\":9007199254740992}", "{\"n\":9007199254740993}", true)]
+    [InlineData("{\"values\":[1,2]}", "{\"values\":[2,1]}", true)]
+    public async Task Same_id_version_compares_canonical_content(string incomingJson, string storedJson, bool warning)
     {
         // Same (id, version) with different canonical state is a broken source — surfaced as
         // a warning now (a throw arrives once the version persists a hash). Under Skip, no throw, no add.
@@ -339,7 +344,7 @@ public sealed class WorkflowsVersionReconcilerTests
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
         var logger = new RecordingLogger<WorkflowsVersionReconciler>();
-        var serializer = new FakePayloadSerializer().With(incomingState, "A").With(storedState, "B");
+        var serializer = new FakePayloadSerializer().With(incomingState, incomingJson).With(storedState, storedJson);
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
@@ -347,7 +352,7 @@ public sealed class WorkflowsVersionReconcilerTests
             DuplicateHandling.Skip, logger: logger, serializer: serializer);
         await reconciler.Reconcile(CancellationToken.None);
 
-        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("different content"));
+        Assert.Equal(warning, logger.Entries.Any(e => e.Level == LogLevel.Warning && e.Message.Contains("different content")));
     }
 
     [Fact]

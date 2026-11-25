@@ -11,7 +11,7 @@ namespace Elsa.Cli;
 /// <summary>Reviews existing local CShells files and writes an accepted portable baseline.</summary>
 internal static class CompositionImportCommand
 {
-    private static readonly JsonSerializerOptions s_json = new()
+    private static readonly JsonSerializerOptions s_json = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,

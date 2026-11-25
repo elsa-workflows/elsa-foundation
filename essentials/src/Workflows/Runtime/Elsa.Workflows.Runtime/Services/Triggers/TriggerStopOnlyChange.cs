@@ -12,7 +12,7 @@ internal static class TriggerStopOnlyChange
         if (old.Id != next.Id || old.TypeKey != next.TypeKey || old.SchemaVersion != next.SchemaVersion || old.Name != next.Name ||
             old.Description != next.Description || old.TenantId != next.TenantId || old.ConfigurationRevision != next.ConfigurationRevision ||
             old.CreatedAt != next.CreatedAt || old.CreatedBy != next.CreatedBy || !Equal(old.Origin, next.Origin) || old.HasActivated && !next.HasActivated ||
-            !JsonElement.DeepEquals(old.Configuration, next.Configuration) ||
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(old.Configuration, next.Configuration) ||
             next.DesiredState != old.DesiredState && next.DesiredState is not (TriggerDesiredState.Paused or TriggerDesiredState.Deleted)) return false;
         foreach (var row in proposed.Subscriptions)
         {
@@ -28,5 +28,5 @@ internal static class TriggerStopOnlyChange
         }
         return true;
     }
-    private static bool Equal<T>(T left, T right) => JsonElement.DeepEquals(JsonSerializer.SerializeToElement(left), JsonSerializer.SerializeToElement(right));
+    private static bool Equal<T>(T left, T right) => Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(left, options: Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(right, options: Elsa.Serialization.Core.JsonBaseline.Options));
 }

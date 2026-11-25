@@ -113,6 +113,7 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
                 .Where(declaration => !suppliedNames.Contains(declaration.Name) && declaration.DefaultValue.HasValue)
                 .Select(declaration => new KeyValuePair<string, JsonElement>(declaration.Name, declaration.DefaultValue!.Value)));
 
+        var warnings = new List<Elsa.Expressions.Core.Models.ExecutionWarning>();
         foreach (var declaration in contract.Inputs)
         {
             if (wellKnownTypeRegistry is null || !wellKnownTypeRegistry.TryGetTypeOrDefault(declaration.Type.Alias, out var elementType))
@@ -130,9 +131,9 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
             if (requireCompleteInputBag && !normalized.Any(input => StringComparer.Ordinal.Equals(input.Key, declaration.Name)))
             {
                 if (declaration.IsNullable)
-                    normalized.Add(new(declaration.Name, JsonSerializer.SerializeToElement<object?>(null)));
+                    normalized.Add(new(declaration.Name, JsonSerializer.SerializeToElement<object?>(null, JsonBaseline.Options)));
                 else if (NullPolicyDefaults.TryGetTypeDefault(targetType, out var defaultValue))
-                    normalized.Add(new(declaration.Name, JsonSerializer.SerializeToElement(defaultValue, targetType)));
+                    normalized.Add(new(declaration.Name, JsonSerializer.SerializeToElement(defaultValue, targetType, JsonBaseline.Options)));
                 else
                     return WorkflowExecutableInputValidation.Failure([
                         new(WorkflowExecutableInputValidationReasonCodes.IncompatibleValue,
@@ -151,7 +152,7 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
 
                     if (policies.DefaultOnNull && NullPolicyDefaults.TryGetTypeDefault(targetType, out var defaultValue))
                     {
-                        normalized[index] = new(input.Key, JsonSerializer.SerializeToElement(defaultValue, targetType));
+                        normalized[index] = new(input.Key, JsonSerializer.SerializeToElement(defaultValue, targetType, JsonBaseline.Options));
                         continue;
                     }
 
@@ -166,21 +167,22 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
 
                 try
                 {
-                    _ = input.Value.Deserialize(targetType);
+                    _ = JsonConversionContract.For(targetType).Read(input.Value, targetType, diagnostic => warnings.Add(
+                        Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"inputs.{declaration.Name}")));
                 }
-                catch (JsonException)
+                catch (JsonException exception)
                 {
                     return WorkflowExecutableInputValidation.Failure(
                     [
                         new WorkflowExecutableInputValidationFinding(
-                            WorkflowExecutableInputValidationReasonCodes.IncompatibleValue,
-                            $"Workflow input '{declaration.Name}' is incompatible with its declared type.",
-                            declaration.Name)
+                            exception is JsonConversionException refusal ? refusal.Code : WorkflowExecutableInputValidationReasonCodes.IncompatibleValue,
+                            $"Workflow input '{declaration.Name}' is incompatible with its declared type. Date-time values require Z or an explicit offset.",
+                            declaration.Name) { JsonPath = "$[" + System.Text.Json.JsonSerializer.Serialize(declaration.Name, JsonBaseline.Options) + "]" + (exception.Path ?? "$").TrimStart('$') }
                     ]);
                 }
             }
         }
 
-        return WorkflowExecutableInputValidation.Success(normalized);
+        return WorkflowExecutableInputValidation.Success(normalized, warnings);
     }
 }

@@ -14,7 +14,7 @@ public sealed class StandaloneTriggerSignal
         if (payload.ValueKind == JsonValueKind.Undefined) throw new ArgumentException("A signal payload must be defined.", nameof(payload));
         if (metadata is { ValueKind: not JsonValueKind.Object }) throw new ArgumentException("Source metadata must be an object.", nameof(metadata));
         TriggerId = triggerId; SourceKey = sourceKey; PayloadSchema = payloadSchema; Payload = payload.Clone();
-        Metadata = metadata?.Clone() ?? JsonSerializer.SerializeToElement(new { });
+        Metadata = metadata?.Clone() ?? JsonSerializer.SerializeToElement(new { }, options: Elsa.Serialization.Core.JsonBaseline.Options);
     }
     public string TriggerId { get; }
     public string SourceKey { get; }

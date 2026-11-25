@@ -167,7 +167,8 @@ public sealed class PublishingHttpContractTests
             "{\"expectedDraftRevision\":7,\"version\":\"1.0.0\",\"reviewToken\":\"review-sha256\",\"idempotencyKey\":\"publish-operation-2\"}");
 
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
-        Assert.Equal("application/problem+json", conflict.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", conflict.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(conflict.Headers.GetValues("X-Content-Type-Options")));
         Assert.Contains("\"errorCode\":\"activity.draft.stale-revision\"", await conflict.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
@@ -415,7 +416,8 @@ public sealed class PublishingHttpContractTests
             "{\"scope\":\"Everything\",\"artifactIds\":null}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         Assert.Contains("\"errorCode\":\"activity.request.invalid\"", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 

@@ -19,7 +19,7 @@ public sealed class NullableJsonElementConverter : JsonConverter<JsonElement?>
     public override void Write(Utf8JsonWriter writer, JsonElement? value, JsonSerializerOptions options)
     {
         if (value is { } element)
-            element.WriteTo(writer);
+            RawJsonElementConverter.WriteRaw(writer, element, options);
         else
             writer.WriteNullValue();
     }

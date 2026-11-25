@@ -12,10 +12,6 @@ public static class ActivityValueJsonProfile
 {
     public const string Revision = "elsa.activity-value-json/1";
 
-    /// <summary>Creates independent options with the unchanged activity-value defaults.</summary>
-    public static JsonSerializerOptions CreateOptions() => new(JsonSerializerDefaults.Web)
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        NumberHandling = JsonNumberHandling.Strict
-    };
+    /// <summary>Creates independent options with S-9's default typed-conversion contract.</summary>
+    public static JsonSerializerOptions CreateOptions() => new(Elsa.Serialization.Core.JsonConversionContract.Default.Options);
 }

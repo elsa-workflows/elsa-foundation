@@ -149,7 +149,10 @@ internal sealed class ProcessingRecords(IProcessingRecordReader reader, IProcess
         return new(record.Id, category ? record.CustomerCategory : null, category, record.StartedAt, record.CompletedAt, record.Status);
     }
 
-    private static string Sign(ProcessingActor actor, string after) => Convert.ToBase64String(HMACSHA256.HashData(CursorKey, JsonSerializer.SerializeToUtf8Bytes(new[] { actor.TenantId, actor.SubjectId, after })));
+    private static string Sign(ProcessingActor actor, string after) => SignWithKey(actor, after, CursorKey);
+    internal static string SignWithKey(ProcessingActor actor, string after, byte[] key) =>
+        Convert.ToBase64String(Elsa.Serialization.Core.JsonHashInput.HashKeyed(
+            Elsa.Serialization.Core.JsonHashInput.SerializeToElement(new[] { actor.TenantId, actor.SubjectId, after }), key));
     private static string WriteCursor(ProcessingActor actor, string after) => Convert.ToBase64String(Encoding.UTF8.GetBytes(after + "|" + Sign(actor, after)));
     private static ProcessingException Denied() => new("denied", "This processing action is unavailable.");
 }

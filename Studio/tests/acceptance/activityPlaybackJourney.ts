@@ -2,6 +2,7 @@ import { expectQualifiedTimelineCoverage } from "./expectQualifiedTimelineCovera
 import { rangePositionX } from "./rangePosition";
 import { expect, request, type APIRequestContext, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { writeFileSync } from "node:fs";
+import { expectedStudioDate, selectStudioTimeZone } from "./studioDateAssertions";
 import type { PlaybackPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/activityPlayback";
 import type { RuntimeHistoryBookmarkPage, RuntimeHistoryPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/runtimeHistoryTypes";
 import type { ActivityExecutionInspection, WorkflowInstanceDetails } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
@@ -396,6 +397,8 @@ export async function playbackCoverageJourney(page: Page, info: TestInfo, captur
 
 export async function playbackTransportJourney(page: Page, info: TestInfo, capture: Capture, register: Cleanup) {
   const h = await harness(page, info, capture, register);
+  await page.goto("/settings/appearance");
+  await page.getByLabel("Time zone", { exact: true }).selectOption("Europe/Amsterdam");
   await page.emulateMedia({ reducedMotion: "reduce" });
   const choice = await h.node("choice", "if", { Condition: true }, {
     then: await h.node("taken", "write", { text: "Taken branch" }), else: await h.node("not-visited", "write", { text: "No recorded visit expected" }) });
@@ -416,8 +419,32 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
   const branches = observed.activities.filter(item => ["left", "right"].includes(item.authoredActivityId)); expect(branches).toHaveLength(2);
   expect(sequence.items.filter(item => branches.some(row => row.activityExecutionId === item.activityExecutionId)).every(item => item.parentActivityExecutionId)).toBe(true);
   const clockStart = new Date(Date.parse(sequence.readAt) + 60_000);
+  // Clock installation affects future pages too. Mount Settings before pausing the shared browser clock.
+  const mountedSettings = await page.context().newPage();
+  register(async () => { await mountedSettings.close(); });
+  await mountedSettings.goto(new URL("/settings/appearance", page.url()).toString());
+  await expect(mountedSettings.getByLabel("Time zone", { exact: true })).toHaveValue("Europe/Amsterdam");
   await page.clock.install({ time: new Date(clockStart.getTime() - 60_000) }); await h.open(run.id, 9); await page.clock.pauseAt(clockStart);
   await h.position(0, 9, sequence.items[0].activityExecutionId);
+  const first = sequence.items[0];
+  const instant = first.occurredAtKnown === false ? first.recordedAt : first.occurredAt ?? first.recordedAt;
+  expect(instant, "Actual playback observation instant").toBeTruthy();
+  const moment = h.controls.locator(".wf-playback-note").filter({ hasText: /First observed|Occurrence time unknown/ });
+  await h.controls.getByText("Playback options", { exact: true }).click();
+  await expect(moment).toContainText((await expectedStudioDate(page, instant!, "Europe/Amsterdam")).full);
+  await moment.scrollIntoViewIfNeeded();
+  await expect(moment).toBeInViewport();
+  await h.snap("playback-time-zone-amsterdam");
+  const readsBeforeZoneChange = h.observedRequests.length;
+  await selectStudioTimeZone(page, "UTC", mountedSettings);
+  await expect(moment).toContainText((await expectedStudioDate(page, instant!, "UTC")).full);
+  await h.position(0, 9, first.activityExecutionId);
+  expect(h.observedRequests).toHaveLength(readsBeforeZoneChange);
+  await moment.scrollIntoViewIfNeeded();
+  await expect(moment).toBeInViewport();
+  await h.snap("playback-time-zone-utc");
+  await h.controls.getByText("Playback options", { exact: true }).click();
+  await selectStudioTimeZone(page, "Europe/Amsterdam", mountedSettings);
   const next = h.controls.getByRole("button", { name: "Next", exact: true });
   await next.focus(); await next.press("Enter"); await h.position(1, 9, sequence.items[1].activityExecutionId); await expect(next).toBeFocused();
   await h.controls.getByText("Playback options", { exact: true }).click();

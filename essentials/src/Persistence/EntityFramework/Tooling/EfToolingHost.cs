@@ -127,7 +127,7 @@ public static class EfToolingHost
             result = Failed(command, EfToolingRefusal.Resolution("internal-error", $"{failure.GetType().Name}: {failure.Message}"));
         }
 
-        await JsonSerializer.SerializeAsync(response, result, EfToolingContract.Json, cancellationToken);
+        await JsonSerializer.SerializeAsync(response, result, options: EfToolingContract.Json, cancellationToken);
         await response.WriteAsync(Newline, cancellationToken);
         await response.FlushAsync(cancellationToken);
         return result.ExitCode;
@@ -153,7 +153,7 @@ public static class EfToolingHost
     {
         try
         {
-            return await JsonSerializer.DeserializeAsync<EfToolingRequest>(request, EfToolingContract.Json, cancellationToken)
+            return await JsonSerializer.DeserializeAsync<EfToolingRequest>(request, options: EfToolingContract.Json, cancellationToken)
                    ?? throw EfToolingRefusal.Usage("invalid-request", "The request is empty.");
         }
         catch (JsonException failure)

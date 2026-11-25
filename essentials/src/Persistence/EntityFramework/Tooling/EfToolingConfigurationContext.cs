@@ -21,7 +21,7 @@ public sealed class EfToolingConfigurationContext : IDisposable
 
     private readonly IConfigurationRoot configuration;
     private bool disposed;
-    private static readonly JsonSerializerOptions RequestJson = new()
+    private static readonly JsonSerializerOptions RequestJson = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = false,

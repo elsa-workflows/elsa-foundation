@@ -136,7 +136,7 @@ public sealed class For : StructuralActivity, IRuntimeStructuralActivity, IRunti
         var iterationId = FormatIterationId(index);
         var indexEnvelope = ValueEnvelope.Inline(
             new ValueTypeDescriptor("Int32"),
-            JsonSerializer.SerializeToElement(index),
+            JsonSerializer.SerializeToElement(index, Elsa.Serialization.Core.JsonBaseline.Options),
             ValueProtectionPolicy.InstanceInline);
 
         // #259: publish this pass's iteration variable in the body child's scheduling

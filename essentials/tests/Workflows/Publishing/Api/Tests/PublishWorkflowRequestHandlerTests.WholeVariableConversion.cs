@@ -31,14 +31,14 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [MemberData(nameof(WholeVariablePublicationCases))]
     public async Task A_whole_variable_conversion_refuses_publication_before_any_write(bool scoped, string intent)
     {
-        var read = new ArgumentState("Text", new ArgumentValue(new VariableReference("customer", scoped ? "sequence" : "workflow"), "Variable"),
+        var read = new ArgumentState("Text", global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("customer", scoped ? "sequence" : "workflow"), "Variable"),
             null, null, null, null, WholeVariableConversionTests.Request(intent));
         var variable = new VariableDefinition("customer", "Customer", new TypeReference("String"), null, null);
         var root = scoped
             ? SequenceNode("sequence", [Node("consumer", read)]) with
             {
                 Structure = new(SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion,
-                    JsonSerializer.SerializeToElement(new SequenceAuthoredStructure([Node("consumer", read)], [variable])))
+                    JsonSerializer.SerializeToElement(new SequenceAuthoredStructure([Node("consumer", read)], [variable]), Elsa.Serialization.Core.JsonBaseline.Options))
             }
             : Node("consumer", read);
         var version = WorkflowVersion(root);
@@ -101,7 +101,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
 
     private static ActivityNode WholeVariableSet(AuthoredValueConversionRequest? conversion) =>
         new("set-counter", "elsa.intrinsic.set@1",
-            [new ArgumentState(WorkflowIntrinsicInputKeys.Value, new ArgumentValue(new VariableReference("counter", "workflow"), "Variable"),
+            [new ArgumentState(WorkflowIntrinsicInputKeys.Value, ArgumentValue.FromClr(new VariableReference("counter", "workflow"), "Variable"),
                 null, null, null, null, conversion)], [])
         {
             Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Set, new TypeReference("Int32"), new VariableReference("counter", "workflow"))

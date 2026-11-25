@@ -13,6 +13,27 @@ public sealed class StimulusDeliverySnapshotTests
     private static readonly WorkflowExecutableIdentity Pin = new("artifact", "definition", "version", "1.0.0", "hash");
 
     [Fact]
+    public void Captured_bookmark_payload_identity_is_canonical_and_keeps_absence_distinct()
+    {
+        static string Capture(string? json)
+        {
+            using var document = json is null ? null : JsonDocument.Parse(json);
+            var bookmark = Bookmark() with { Payload = document?.RootElement.Clone() };
+            return StimulusResumeRecipient.From(new BookmarkStateObservation(bookmark, 7),
+                Workflow() with { WorkflowExecutionId = "waiter" }, new("tenant")).RegistrationCapture!.PayloadFingerprint;
+        }
+        // Independently hashed frame: ASCII "json:" followed by canonical JSON bytes.
+        var actual = Capture("""{"items":[1,2],"n":1,"text":"a"}""");
+        Assert.True(actual == "12bf78477b021d3fc19b617d117b23b42d3dd4f6fa9bec01727b6cd33e7b97bc",
+            $"Bookmark JSON hash golden: Actual={actual}. From Elsa 4's first stable release, this hash is frozen and changes require an explicit decision.");
+        Assert.Equal(actual, Capture("""{ "text":"\u0061", "n":1e0, "items":[1.0,2e0] }"""));
+        Assert.NotEqual(actual, Capture("""{"items":[2,1],"n":1,"text":"a"}"""));
+        Assert.NotEqual(actual, Capture("""{"items":[1,2],"n":2,"text":"a"}"""));
+        Assert.NotEqual(Capture("{}"), Capture("{\"n\":null}"));
+        Assert.NotEqual(Capture(null), Capture("null"));
+    }
+
+    [Fact]
     public void Whole_cohort_round_trips_every_binding_even_with_shared_artifact_and_every_exact_wait()
     {
         var metadata = new Dictionary<string, string> { ["start"] = "one" };
@@ -410,8 +431,9 @@ public sealed class StimulusDeliverySnapshotTests
         var legacy = new RuntimeCheckpointCommit("commit", new("checkpoint", "name", "waiter", Now, [], new Dictionary<string, string>()),
             new(null, null, [], [], [], [], []), [], new Dictionary<string, string>());
         Assert.False(JsonSerializer.SerializeToNode(legacy, Web)!.AsObject().ContainsKey("expectedBookmarkResume"));
-        // Compiled parent 678a519 writer over this exact historical envelope.
-        Assert.Equal("af976cb76bbef3f226bc15cbbdae5d8b330ec98ae9f287ff18e15aadc2df1f1a", RuntimeCheckpointCommitFingerprint.Compute(legacy));
+        var actual = RuntimeCheckpointCommitFingerprint.Compute(legacy);
+        Assert.True(actual == "12400ef7670071f85be78ccfded150ba04c7b05c54d4d8f2683ec4058b4d8d8a",
+            $"Checkpoint JSON hash golden: Actual={actual}. From Elsa 4's first stable release, this hash is frozen and changes require an explicit decision.");
         var captured = legacy with { ExpectedBookmarkResume = CapturedWait() };
         Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(legacy), RuntimeCheckpointCommitFingerprint.Compute(captured));
         var left = captured with { ExpectedBookmarkResume = CapturedWait(new Dictionary<string, string> { ["opaque"] = "\ud800" }) };

@@ -585,6 +585,8 @@ static Elsa.Rules.Persistence.Core.RuleRecordCodec.FactsBytes(System.Collections
 static Elsa.Rules.Persistence.Core.RuleRecordCodec.FactsHash(System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>! facts) -> string!
 static Elsa.Rules.Persistence.Core.RuleRecordCodec.Fingerprint(Elsa.Rules.Core.RuleInvocationEnvelope! invocation) -> Elsa.Rules.Core.RuleInvocationFingerprint!
 static Elsa.Rules.Persistence.Core.RuleRecordCodec.Hash(System.ReadOnlySpan<byte> bytes) -> string!
+static Elsa.Rules.Persistence.Core.RuleRecordCodec.JsonHash(System.ReadOnlySpan<byte> bytes) -> string!
+static Elsa.Rules.Persistence.Core.RuleRecordCodec.ArtifactHash(int formatVersion, System.ReadOnlySpan<byte> bytes) -> string!
 static Elsa.Rules.Persistence.Core.RuleRecordCodec.InvocationBytes(Elsa.Rules.Core.RuleInvocationEnvelope! invocation) -> byte[]!
 static Elsa.Rules.Persistence.Core.RuleRecordCodec.PinHash(Elsa.Rules.Core.RuleSemanticPin! pin) -> string!
 static Elsa.Rules.Persistence.Core.RuleRecordCodec.ReadDeliveryRecord(System.ReadOnlyMemory<byte> bytes) -> Elsa.Rules.Core.RuleTerminalEnvelope!

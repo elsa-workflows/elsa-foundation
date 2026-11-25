@@ -13,7 +13,7 @@ const responsiveCss = (width: number) =>
 const responsiveRuleBody = (css: string, selector: string) => ruleBody(css, `\n  ${selector}`);
 const mobileShellCss = responsiveCss(1024);
 const phoneShellCss = responsiveCss(640);
-const layoutsCss = read("../app/themes/layouts.css").replace(/\/\*[\s\S]*?\*\//g, "");
+const layoutsCss = read("../app/themes/layouts.css").replace(/\r\n/g, "\n").replace(/\/\*[\s\S]*?\*\//g, "");
 // The desktop media block closes at the first column-zero brace; the status bar rules follow it.
 const desktopEnd = layoutsCss.indexOf("\n}\n");
 const desktopCss = layoutsCss.slice(0, desktopEnd);

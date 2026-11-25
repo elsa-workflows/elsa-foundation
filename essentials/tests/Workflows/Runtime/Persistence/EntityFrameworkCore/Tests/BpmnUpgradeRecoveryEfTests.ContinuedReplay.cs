@@ -67,7 +67,7 @@ public sealed partial class BpmnUpgradeRecoveryEfTests
                 capture.ParentId = parentId; capture.ChildId = childId;
                 await first.ResumeAsync(selected, JsonSerializer.SerializeToElement(new { eventName = "continue" }));
                 callback = Assert.Single(capture.WorkItems);
-                var payload = Assert.IsType<RuntimeCompleteActivityCommandPayload>(callback.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>());
+                var payload = Assert.IsType<RuntimeCompleteActivityCommandPayload>(callback.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options));
                 Assert.Equal(childId, payload.CompletedChildActivityExecutionId);
                 Assert.Equal(parentId, payload.ActivityExecutionId);
                 var after = await store.ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);
@@ -150,7 +150,7 @@ public sealed partial class BpmnUpgradeRecoveryEfTests
         public void Observe(RuntimeSchedulerWorkItem work)
         {
             if (work.CommandKind == WorkflowExecutionCommandKind.CompleteActivity &&
-                work.Payload is { } payload && payload.Deserialize<RuntimeCompleteActivityCommandPayload>() is { } completion &&
+                work.Payload is { } payload && payload.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options) is { } completion &&
                 completion.ActivityExecutionId == ParentId && completion.CompletedChildActivityExecutionId == ChildId)
                 WorkItems.Enqueue(work);
         }

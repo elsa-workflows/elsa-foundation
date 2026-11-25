@@ -388,7 +388,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // as a blocking incident faults the activity and surfaces a queryable cause, distinct from
             // InputMaterializationFailed and the ActivityResumeFaulted resume-method failure below.
             activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: resumePayload.ActivityExecutionId, contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery, executableNode.Descriptor),
+                new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: resumePayload.ActivityExecutionId, contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery, executableNode.Descriptor) { Warnings = stepWarnings },
                 cancellationToken);
             activity = activationLease.Activity;
 
@@ -414,7 +414,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 scopedVariableEnvelopes: scopedVariableEnvelopes).WithValuePolicies(executable.ValuePolicies).WithWarnings(stepWarnings);
             stepSession = await StepVariableSessions.CreateAsync(
                 serviceProvider, scopeService, activity, executable, executableNode, executionState, durableValues: null, cancellationToken,
-                attemptId: resumeAttempt.AttemptId);
+                attemptId: resumeAttempt.AttemptId, warnings: stepWarnings);
             stepSession?.SetWarnings(stepWarnings);
             stateSession = await StepWorkflowState.CreateAsync(serviceProvider, scopeService, activity, executableNode,
                 executionState, await durableValueStateStore.ListAllDurableValueStatesAsync(workItem.WorkflowExecutionId, cancellationToken),
@@ -998,7 +998,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 enqueuedAt: now,
                 recordedAt: now,
                 sequence: resumeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
-                payload: JsonSerializer.SerializeToElement(payload),
+                payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
                 commandMetadata: resumeWorkItem.CommandMetadata,
                 envelopeMetadata: resumeWorkItem.EnvelopeMetadata);
         }
@@ -1042,7 +1042,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
     private static JsonElement RequireInlinePayload(ValueEnvelope envelope, string role) => envelope.Presence switch
     {
         ValuePresence.Present when envelope.InlineValue is { } inline => inline,
-        ValuePresence.ExplicitNull => JsonSerializer.SerializeToElement<object?>(null),
+        ValuePresence.ExplicitNull => JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options),
         _ => throw new InvalidOperationException($"Typed activity {role} must carry an inline persistable payload.")
     };
 
@@ -1050,7 +1050,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         StringComparer.Ordinal.Equals(left.Alias, right.Alias) &&
         left.CollectionKind == right.CollectionKind &&
         left.SchemaVersion == right.SchemaVersion &&
-        StringComparer.Ordinal.Equals(left.Schema?.GetRawText(), right.Schema?.GetRawText());
+        Elsa.Serialization.Core.JsonCanonicalForm.Equals(left.Schema, right.Schema);
 
     private static void ValidateBookmarkMatchesPayload(
         RuntimeSchedulerWorkItem workItem,
@@ -1085,7 +1085,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         metadata[RuntimeMetadataKeys.ResumeSchedulerWorkItemId] = workItem.WorkItemId;
         metadata[RuntimeMetadataKeys.BookmarkId] = resumePayload.BookmarkId;
         metadata[RuntimeMetadataKeys.ResumeTargetId] = resumePayload.ResumeTargetId;
-        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(outcomeNames);
+        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(outcomeNames, Elsa.Serialization.Core.JsonBaseline.Options);
 
         return RuntimeContainerScopeService.CloseOwnedFrames(state with
         {

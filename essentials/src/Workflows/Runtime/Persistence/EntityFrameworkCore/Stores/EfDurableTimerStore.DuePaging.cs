@@ -29,7 +29,7 @@ public sealed partial class EfDurableTimerStore
             DuePageCursor cursor;
             try
             {
-                cursor = JsonSerializer.Deserialize<DuePageCursor>(continuationCodec.Decode(DuePagePurpose, token)) ?? throw new FormatException();
+                cursor = JsonSerializer.Deserialize<DuePageCursor>(continuationCodec.DecodeJson(DuePagePurpose, token), options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new FormatException();
                 if (cursor.Binding != binding || cursor.Due < 0 || cursor.Due > asOf.UtcTicks ||
                     string.IsNullOrWhiteSpace(cursor.TimerOrder) || string.IsNullOrWhiteSpace(cursor.RunOrder)) throw new FormatException();
             }
@@ -45,8 +45,8 @@ public sealed partial class EfDurableTimerStore
         var more = rows.Length > page.Limit;
         if (more) rows = rows[..page.Limit];
         var items = rows.Select(row => ReadChecked(row, scope)).ToArray();
-        var next = more ? continuationCodec.Encode(DuePagePurpose, JsonSerializer.SerializeToUtf8Bytes(new DuePageCursor(binding,
-            rows[^1].DueTimeUtcTicks, rows[^1].TimerIdOrderKey, rows[^1].WorkflowExecutionIdOrderKey))) : null;
+        var next = more ? continuationCodec.EncodeJson(DuePagePurpose, JsonSerializer.SerializeToUtf8Bytes(new DuePageCursor(binding,
+            rows[^1].DueTimeUtcTicks, rows[^1].TimerIdOrderKey, rows[^1].WorkflowExecutionIdOrderKey), options: Elsa.Serialization.Core.JsonBaseline.Options)) : null;
         CheckHistoryAccess(captured, cancellationToken); return new(page, items, next);
     }
 

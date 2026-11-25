@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { studioThemeLayoutAttribute, type StudioEndpointContext } from "../../sdk";
+import { useStudioTimeZone } from "../../sdk/timeZone";
 import type { StudioThemeDefinition, Theme, ThemeMaterialMode, ThemeMode } from "../themes/presets";
 import {
   builtInThemeDefinitions,
@@ -66,6 +67,8 @@ interface ThemeContextType {
   /** The navigation surface's tone: `theme` follows the workspace, `light`/`dark` pin it. */
   sidebarColorPreference: SidebarColorPreference;
   setSidebarColorPreference: (preference: SidebarColorPreference) => void;
+  timeZone: string;
+  setTimeZone: (preference: string) => void;
   previewTheme: (theme: StudioThemeDefinition) => void;
   availableThemes: Theme[];
   store: ThemeStoreResponse;
@@ -266,6 +269,8 @@ export function ThemeProvider({
     writeAppearancePreferences({ navigation: preference });
   };
 
+  const timeZone = useStudioTimeZone();
+  const handleSetTimeZone = (preference: string) => writeAppearancePreferences({ timeZone: preference });
   const handleSetSidebarColorPreference = (preference: SidebarColorPreference) => {
     setSidebarColorPreferenceState(preference);
     writeAppearancePreferences({ sidebarColor: preference });
@@ -315,6 +320,8 @@ export function ThemeProvider({
         setNavModePreference: handleSetNavModePreference,
         sidebarColorPreference,
         setSidebarColorPreference: handleSetSidebarColorPreference,
+        timeZone,
+        setTimeZone: handleSetTimeZone,
         previewTheme: handlePreviewTheme,
         availableThemes: getSelectableThemes(store),
         store,

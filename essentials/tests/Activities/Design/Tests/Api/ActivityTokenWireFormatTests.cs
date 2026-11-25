@@ -5,9 +5,9 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Api;
 
 /// <summary>
-/// Clients hold these tokens across requests, so a token issued before a deploy must decode after it. The
-/// fixtures were produced by the codecs before they moved onto the shared signed-token format; encoding the same
-/// state must reproduce them byte for byte, and a token signed with any other key must be refused.
+/// The approved one-time pre-stable JSON hash migration replaces the former raw-byte signatures. These
+/// independently computed canonical fixtures freeze at Elsa 4's first stable release; state and signing-key
+/// changes remain observable, while retained payload bytes preserve their typed wire representation.
 /// </summary>
 public sealed class ActivityTokenWireFormatTests
 {
@@ -16,13 +16,13 @@ public sealed class ActivityTokenWireFormatTests
     private static readonly string OtherKey = new('o', 32);
 
     private const string DependencyCursorFixture =
-        "eyJ0ZW5hbnRTY29wZSI6InRlbmFudDp0ZW5hbnQtYSIsImF1dGhvcml6YXRpb25Qcm9maWxlRmluZ2VycHJpbnQiOiJwcm9maWxlLWZpbmdlcnByaW50Iiwicm9vdFZlcnNpb25JZCI6InZlcnNpb24tMSIsImRpcmVjdGlvbiI6Ik91dGJvdW5kIiwidHJhbnNpdGl2ZSI6dHJ1ZSwiaW5jbHVkZSI6WyJEcmFmdHMiLCJWZXJzaW9ucyJdLCJ3YXRlcm1hcmsiOiJzaGEyNTYtd2F0ZXJtYXJrIiwicG9zaXRpb24iOjd9.PhMVv_QvNi15ldoaBNq8KmYGtiOossm51c2doD4t5ys";
+        "eyJ0ZW5hbnRTY29wZSI6InRlbmFudDp0ZW5hbnQtYSIsImF1dGhvcml6YXRpb25Qcm9maWxlRmluZ2VycHJpbnQiOiJwcm9maWxlLWZpbmdlcnByaW50Iiwicm9vdFZlcnNpb25JZCI6InZlcnNpb24tMSIsImRpcmVjdGlvbiI6Ik91dGJvdW5kIiwidHJhbnNpdGl2ZSI6dHJ1ZSwiaW5jbHVkZSI6WyJEcmFmdHMiLCJWZXJzaW9ucyJdLCJ3YXRlcm1hcmsiOiJzaGEyNTYtd2F0ZXJtYXJrIiwicG9zaXRpb24iOjd9.xl5sWfefK9oSXli-PQBwID9MYev3L1G6VZtmyNRGvnc";
 
     private const string ManagementCursorFixture =
-        "eyJzY29wZSI6InRlbmFudDp0ZW5hbnQtYSIsIm9mZnNldCI6MjUsInNuYXBzaG90U2VxdWVuY2UiOjQyfQ.IhbNt4LfKFt2oFgaY4IV3uu6NfwFOzZpC6ik0WMscFU";
+        "eyJzY29wZSI6InRlbmFudDp0ZW5hbnQtYSIsIm9mZnNldCI6MjUsInNuYXBzaG90U2VxdWVuY2UiOjQyfQ.LGh4rsAEf8UrOmXXKpid3uYyT-DUetH7kIgqhczyTJo";
 
     private const string ForkCandidateIdFixture =
-        "eyJyZXNlcnZhdGlvbklkIjoicmVzZXJ2YXRpb24tMSIsInJlcXVlc3RGaW5nZXJwcmludCI6InNoYTI1NjphYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwiZXhwaXJlc0F0IjoiMjAyNi0wNy0xOFQxMjoxNTowMCswMDowMCJ9._UIcc8UvAhFryvHjhzUaJiJa6To86Jvu-V0o2Qm4ymE";
+        "eyJyZXNlcnZhdGlvbklkIjoicmVzZXJ2YXRpb24tMSIsInJlcXVlc3RGaW5nZXJwcmludCI6InNoYTI1NjphYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwiZXhwaXJlc0F0IjoiMjAyNi0wNy0xOFQxMjoxNTowMCswMDowMCJ9.8athtPrnbX539iuINP-eRVywyVuCp4_VnmHtsbEOUkU";
 
     private static readonly ActivityDependencyCursorState DependencyCursor =
         new("tenant:tenant-a", "profile-fingerprint", "version-1", "Outbound", true, ["Drafts", "Versions"], "sha256-watermark", 7);
@@ -33,7 +33,7 @@ public sealed class ActivityTokenWireFormatTests
         new("reservation-1", "sha256:" + new string('a', 64), new DateTimeOffset(2026, 7, 18, 12, 15, 0, TimeSpan.Zero));
 
     [Fact]
-    public void Dependency_cursor_issued_before_the_shared_format_still_decodes_and_encodes_identically()
+    public void Dependency_cursor_pins_the_canonical_hash_and_retained_wire_format()
     {
         var codec = new HmacActivityDependencyCursorCodec(Signing(SigningKey));
 
@@ -41,31 +41,44 @@ public sealed class ActivityTokenWireFormatTests
 
         Assert.Equal(DependencyCursor with { Include = decoded.Include }, decoded);
         Assert.Equal(DependencyCursor.Include, decoded.Include);
-        Assert.Equal(DependencyCursorFixture, codec.Encode(DependencyCursor));
+        Assert.True(DependencyCursorFixture == codec.Encode(DependencyCursor), "First-stable hash freeze: changes require an explicit identity/migration decision.");
         Assert.Throws<ActivityDependencyCursorInvalidException>(() =>
             codec.Decode(new HmacActivityDependencyCursorCodec(Signing(OtherKey)).Encode(DependencyCursor)));
     }
 
     [Fact]
-    public void Management_cursor_issued_before_the_shared_format_still_decodes_and_encodes_identically()
+    public void Management_cursor_pins_the_canonical_hash_and_retained_wire_format()
     {
         var codec = new HmacActivityManagementCursorCodec(Signing(SigningKey));
 
         Assert.Equal(ManagementCursor, codec.Decode(ManagementCursorFixture));
-        Assert.Equal(ManagementCursorFixture, codec.Encode(ManagementCursor));
+        Assert.True(ManagementCursorFixture == codec.Encode(ManagementCursor), "First-stable hash freeze: changes require an explicit identity/migration decision.");
         Assert.Throws<ActivityManagementCursorInvalidException>(() =>
             codec.Decode(new HmacActivityManagementCursorCodec(Signing(OtherKey)).Encode(ManagementCursor)));
     }
 
     [Fact]
-    public void Fork_candidate_id_issued_before_the_shared_format_still_decodes_and_encodes_identically()
+    public void Fork_candidate_id_pins_the_canonical_hash_and_retained_wire_format()
     {
         var codec = new HmacActivityForkCandidateIdCodec(Signing(SigningKey));
 
         Assert.Equal(ForkCandidateId, codec.Decode(ForkCandidateIdFixture));
-        Assert.Equal(ForkCandidateIdFixture, codec.Encode(ForkCandidateId));
+        Assert.True(ForkCandidateIdFixture == codec.Encode(ForkCandidateId), "First-stable hash freeze: changes require an explicit identity/migration decision.");
         Assert.Throws<ActivityForkCandidateIdInvalidException>(() =>
             codec.Decode(new HmacActivityForkCandidateIdCodec(Signing(OtherKey)).Encode(ForkCandidateId)));
+    }
+
+    [Fact]
+    public void Management_cursor_refuses_the_former_raw_json_signature()
+    {
+        var codec = new HmacActivityManagementCursorCodec(Signing(SigningKey));
+        var token = codec.Encode(ManagementCursor).Split('.');
+        var encodedPayload = token[0].Replace('-', '+').Replace('_', '/');
+        encodedPayload += new string('=', (4 - encodedPayload.Length % 4) % 4);
+        var payload = Convert.FromBase64String(encodedPayload);
+        var rawSignature = System.Security.Cryptography.HMACSHA256.HashData(System.Text.Encoding.UTF8.GetBytes(SigningKey), payload);
+        token[1] = Convert.ToBase64String(rawSignature).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        Assert.Throws<ActivityManagementCursorInvalidException>(() => codec.Decode(string.Join('.', token)));
     }
 
     [Fact]

@@ -1681,16 +1681,16 @@ public sealed partial class EfRuntimeArtifactScopeTests
         var legacyId = EfRelationalIdentity.Encode("legacy");
         var content = new JsonObject
         {
-            ["Leases"] = new JsonObject
+            ["leases"] = new JsonObject
             {
-                [legacyId] = new JsonObject { ["Id"] = legacyId, ["Token"] = EfRelationalIdentity.Encode("legacy-token"), ["ExpiresAt"] = expiresAt }
+                [legacyId] = new JsonObject { ["id"] = legacyId, ["token"] = EfRelationalIdentity.Encode("legacy-token"), ["expiresAt"] = expiresAt }
             },
-            ["Guard"] = guard is { } value
+            ["guard"] = guard is { } value
                 ? new JsonObject
                 {
-                    ["OperationId"] = EfRelationalIdentity.Encode(value.OperationId),
-                    ["Token"] = EfRelationalIdentity.Encode(value.Token),
-                    ["ExpiresAt"] = value.ExpiresAt
+                    ["operationId"] = EfRelationalIdentity.Encode(value.OperationId),
+                    ["token"] = EfRelationalIdentity.Encode(value.Token),
+                    ["expiresAt"] = value.ExpiresAt
                 }
                 : null
         };
@@ -1804,7 +1804,7 @@ public sealed partial class EfRuntimeArtifactScopeTests
         Assert.NotNull(guard);
 
         var row = await other.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("guarded"));
-        row.ContentJson = "{\"Leases\":{},\"Guard\":null}";
+        row.ContentJson = "{\"leases\":{},\"guard\":null}";
         row.Revision++;
         await other.Context.SaveChangesAsync();
         Assert.False(await fixture.Executable.DeleteAsync(guard!, now));
@@ -1845,7 +1845,7 @@ public sealed partial class EfRuntimeArtifactScopeTests
         Assert.NotNull(first);
 
         var row = await other.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("conflict"));
-        row.ContentJson = "{\"Leases\":{},\"Guard\":null}";
+        row.ContentJson = "{\"leases\":{},\"guard\":null}";
         row.Revision++;
         await other.Context.SaveChangesAsync();
 
@@ -1889,19 +1889,31 @@ public sealed partial class EfRuntimeArtifactScopeTests
     [Fact]
     public async Task Corrupt_coordination_payloads_fail_closed_as_invalid_data()
     {
+        static string E(string value) => Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(value);
+        var keyMismatch = $$$"""{"leases":{"{{{E("key")}}}":{"id":"{{{E("other")}}}","token":"{{{E("token")}}}","expiresAt":"2030-01-01T00:00:00+00:00"}},"guard":null}""";
+        var emptyTokens = $$$"""{"leases":{"{{{E("one")}}}":{"id":"{{{E("one")}}}","token":"","expiresAt":"2030-01-01T00:00:00+00:00"},"{{{E("two")}}}":{"id":"{{{E("two")}}}","token":"","expiresAt":"2030-01-01T00:00:00+00:00"}},"guard":null}""";
+        var defaultExpiry = $$$"""{"leases":{"{{{E("one")}}}":{"id":"{{{E("one")}}}","token":"{{{E("token")}}}","expiresAt":"0001-01-01T00:00:00+00:00"}},"guard":null}""";
+        var emptyGuard = $$$"""{"leases":{},"guard":{"operationId":"","token":"{{{E("token")}}}","expiresAt":"2030-01-01T00:00:00+00:00"}}""";
+        var semanticReasons = new Dictionary<string, string>
+        {
+            [keyMismatch] = "The persisted workflow executable coordination contains an invalid lease.",
+            [emptyTokens] = "The persisted workflow executable coordination contains an invalid lease.",
+            [defaultExpiry] = "The persisted workflow executable coordination contains an invalid lease.",
+            [emptyGuard] = "The persisted workflow executable coordination contains an invalid deletion guard."
+        };
         var payloads = new[]
         {
             "null",
             "{",
-            "{\"Leases\":null,\"Guard\":null}",
-            "{\"Leases\":{\"key\":{\"Id\":\"other\",\"Token\":\"token\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
-            "{\"Leases\":{\"one\":{\"Id\":\"one\",\"Token\":\"\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"},\"two\":{\"Id\":\"two\",\"Token\":\"\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
-            "{\"Leases\":{\"one\":{\"Id\":\"one\",\"id\":\"one\",\"Token\":\"token\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
-            "{\"Leases\":{\"one\":{\"Token\":\"token\",\"token\":\"token-duplicate\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
-            "{\"Leases\":{\"one\":{\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\",\"expiresAt\":\"2030-01-02T00:00:00+00:00\",\"Id\":\"one\",\"Token\":\"token\"}},\"Guard\":null}",
-            "{\"Leases\":{\"one\":{\"Id\":\"one\",\"Token\":\"token\",\"ExpiresAt\":\"0001-01-01T00:00:00+00:00\"}},\"Guard\":null}",
-            "{\"Leases\":{},\"Guard\":{\"OperationId\":\"\",\"Token\":\"token\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}}",
-            "{\"Leases\":{},\"leases\":{},\"Guard\":null}"
+            "{\"leases\":null,\"guard\":null}",
+            keyMismatch,
+            emptyTokens,
+            "{\"leases\":{\"one\":{\"Id\":\"one\",\"id\":\"one\",\"token\":\"token\",\"expiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"guard\":null}",
+            "{\"leases\":{\"one\":{\"Token\":\"token\",\"token\":\"token-duplicate\",\"expiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"guard\":null}",
+            "{\"leases\":{\"one\":{\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\",\"expiresAt\":\"2030-01-02T00:00:00+00:00\",\"id\":\"one\",\"token\":\"token\"}},\"guard\":null}",
+            defaultExpiry,
+            emptyGuard,
+            "{\"Leases\":{},\"leases\":{},\"guard\":null}"
         };
 
         foreach (var payload in payloads)
@@ -1919,6 +1931,7 @@ public sealed partial class EfRuntimeArtifactScopeTests
                 .AsTask());
             Assert.IsNotType<JsonException>(exception);
             Assert.IsNotType<NullReferenceException>(exception);
+            if (semanticReasons.TryGetValue(payload, out var reason)) Assert.Equal(reason, exception.Message);
         }
     }
 
@@ -1932,7 +1945,7 @@ public sealed partial class EfRuntimeArtifactScopeTests
             .SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("case-sensitive-leases"));
         var encodedA = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("A");
         var encodedAInsensitive = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("a");
-        row.ContentJson = $"{{\"Leases\":{{\"{encodedA}\":{{\"Id\":\"{encodedA}\",\"Token\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("token-a")}\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"{encodedAInsensitive}\":{{\"Id\":\"{encodedAInsensitive}\",\"Token\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("token-b")}\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}}}},\"Guard\":null}}";
+        row.ContentJson = $"{{\"leases\":{{\"{encodedA}\":{{\"id\":\"{encodedA}\",\"token\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("token-a")}\",\"expiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"{encodedAInsensitive}\":{{\"id\":\"{encodedAInsensitive}\",\"token\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("token-b")}\",\"expiresAt\":\"2030-01-01T00:00:00+00:00\"}}}},\"guard\":null}}";
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
 

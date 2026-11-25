@@ -42,7 +42,7 @@ internal sealed class WorkbenchStartupArtifactContext
                 return false;
 
             var manifest = JsonSerializer.Deserialize<Manifest>(File.ReadAllBytes(manifestPath),
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options));
             if (manifest is not { SchemaVersion: 1, Files: { Length: > 0 } } ||
                 !string.Equals(manifest.Environment, environment, StringComparison.Ordinal))
                 return false;

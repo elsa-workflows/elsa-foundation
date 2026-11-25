@@ -240,12 +240,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             }
         }
 
-        var inputs = ApplyInputContract(executable, request.Inputs);
+        var validatedInputs = ApplyInputContract(executable, request.Inputs);
         await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
         if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
         return await DispatchCoreAsync(
             request,
-            inputs,
+            validatedInputs.NormalizedInputs,
             resolved.Identity,
             resolved.Source,
             resolved.Dispatch,
@@ -256,6 +256,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             saved?.Origin,
             dispatchOptions,
             cancellationToken,
+            validatedInputs.Warnings,
             saved?.HistoryCausation ?? request.ChildHistorySource?.Intent.HistoryCausation);
     }
 
@@ -352,7 +353,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private static bool SameStimulusInput(JsonElement? supplied, JsonElement? canonical) =>
         supplied.HasValue == canonical.HasValue && (!supplied.HasValue ||
             supplied.Value.ValueKind != JsonValueKind.Undefined && canonical!.Value.ValueKind != JsonValueKind.Undefined &&
-            JsonElement.DeepEquals(supplied.Value, canonical.Value));
+            Elsa.Serialization.Core.JsonCanonicalForm.Equals(supplied.Value, canonical.Value));
 
     private static ResolvedPinnedExecutable ResolveStimulusExecutable(StimulusStartRecipient saved, WorkflowExecutable executable)
     {
@@ -386,7 +387,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var supplied = WorkflowExecutionStartCommandPayload.ToJsonValues(request.Inputs);
         var matches = origin.FormatVersion == 1 ? supplied.Count == 0 :
             origin.Inputs is { } captured && supplied.Count == captured.Count &&
-            captured.All(item => supplied.TryGetValue(item.Key, out var value) && JsonElement.DeepEquals(item.Value, value));
+            captured.All(item => supplied.TryGetValue(item.Key, out var value) && Elsa.Serialization.Core.JsonCanonicalForm.Equals(item.Value, value));
         if (!matches)
             throw AuthorityRejected("model-work-input-mismatch", "Native model work must preserve its exact committed declared inputs.");
     }
@@ -514,11 +515,11 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     // Every start applies its executable's input contract before the command is enqueued (#3728): declared defaults fill
     // omitted inputs, and a blank, unknown, duplicate or mistyped input or a missing required one refuses the start. A
     // legacy artifact without a contract, or a dispatcher composed without a validator, keeps the supplied inputs.
-    private IReadOnlyDictionary<string, JsonElement> ApplyInputContract(WorkflowExecutable executable, IReadOnlyDictionary<string, object?> inputs)
+    private WorkflowExecutableInputValidation ApplyInputContract(WorkflowExecutable executable, IReadOnlyDictionary<string, object?> inputs)
     {
         var supplied = WorkflowExecutionStartCommandPayload.ToJsonValues(inputs);
         if (executable.InputContract is not { } contract || _inputValidator is null)
-            return supplied;
+            return WorkflowExecutableInputValidation.Success(supplied);
 
         var validation = _inputValidator.Validate(contract, supplied, executable.ValuePolicies);
         if (!validation.IsValid)
@@ -526,10 +527,10 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             throw new WorkflowExecutableStartRejectedException(
                 WorkflowExecutableStartRejectionCategory.Input,
                 validation.Findings.First().ReasonCode,
-                string.Join(" ", validation.Findings.Select(finding => finding.Message)));
+                string.Join(" ", validation.Findings.Select(finding => finding.Message))) { InputPath = validation.Findings.First().JsonPath };
         }
 
-        return validation.NormalizedInputs;
+        return validation;
     }
 
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
@@ -545,6 +546,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         RuntimeStimulusDeliveryOrigin? savedOrigin,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken,
+        IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning> inputWarnings,
         RuntimeHistoryCausation? historyCausation = null)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
@@ -555,7 +557,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         if (savedOrigin is not null)
         {
             var protectedMetadata = metadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-            protectedMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin);
+            protectedMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin, options: Elsa.Serialization.Core.JsonBaseline.Options);
             metadata = protectedMetadata;
         }
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
@@ -577,11 +579,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             testScope: request.TestScope,
             triggerMetadata: request.TriggerMetadata)
         {
+            InputWarnings = inputWarnings.Count == 0 ? null : inputWarnings,
             HistoryCausation = historyCausation,
             HistoryCapturePolicy = history.Item1,
             HistoryCaptureEnabledAtAdmission = history.Item2,
             StimulusDeliveryOrigin = savedOrigin
-        });
+        }, Elsa.Serialization.Core.JsonBaseline.Options);
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
             ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload, savedOrigin, historyCausation);
 
@@ -638,9 +641,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private static void ValidateSavedCommandRoundTrip(WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableIdentity identity, WorkflowExecutableSourceProvenance? source, WorkflowExecutionPartition partition, JsonElement payload, RuntimeStimulusDeliveryOrigin? savedOrigin, RuntimeHistoryCausation? historyCausation)
     {
-        // Ordinary command wire is unchanged. Invalid UTF-16 in an internal capture must not silently
+        // Commands use the shared baseline. Invalid UTF-16 in an internal capture must not silently
         // become a different binding/provenance when System.Text.Json replaces an unpaired surrogate.
-        var restored = payload.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var restored = payload.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         var expected = request.StartAuthority!.StimulusDelivery!;
         var actual = restored.StartAuthority?.StimulusDelivery;
         if (restored.HistoryCausation != historyCausation || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(restored.PinnedExecutable, identity) ||

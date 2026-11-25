@@ -39,7 +39,7 @@ public sealed record SecretDocument(
     }
 
     public static SecretDocument Parse(string payload) =>
-        JsonSerializer.Deserialize<SecretDocument>(payload, SecretsEfJson.Options)
+        JsonSerializer.Deserialize<SecretDocument>(payload, options: SecretsEfJson.Options)
         ?? throw new InvalidOperationException("Secret document content is invalid.");
 
     internal static SecretDocument Parse(JsonElement payload) =>
@@ -54,7 +54,7 @@ public sealed record SecretDocument(
     [JsonIgnore]
     public string Tombstone => Secret.Status == SecretStatus.Deleted ? Secret.Id : "";
 
-    public string ToPayload() => JsonSerializer.Serialize(this, SecretsEfJson.Options);
+    public string ToPayload() => JsonSerializer.Serialize(this, options: SecretsEfJson.Options);
 
     public SecretRecord ToRecord(byte[]? concurrencyToken = null) => new()
     {

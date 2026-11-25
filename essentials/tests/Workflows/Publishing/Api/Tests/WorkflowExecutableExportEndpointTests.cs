@@ -422,7 +422,7 @@ public sealed class WorkflowExecutableExportEndpointTests
                 activityType: "Elsa.Testing.Probe",
                 activityTypeVersion: "1.0.0",
                 descriptorType: WellKnownRuntimeActivityConsumers.ClrActivity,
-                descriptorPayload: JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Elsa.Testing.Probe")),
+                descriptorPayload: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor("Elsa.Testing.Probe")),
                 inputBindings: new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal),
                 metadata: new Dictionary<string, string>(StringComparer.Ordinal));
             var inputContract = new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []);

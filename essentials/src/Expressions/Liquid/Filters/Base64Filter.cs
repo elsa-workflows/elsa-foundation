@@ -32,11 +32,11 @@ internal sealed class Base64Filter : ILiquidFilter
     {
         return input.Type switch
         {
-            FluidValues.Array => JsonSerializer.Serialize(input.Enumerate(context).Select(o => o.ToObjectValue())),
+            FluidValues.Array => Elsa.Serialization.Core.JsonConversionContract.Serialize(input.Enumerate(context).Select(o => o.ToObjectValue())),
             FluidValues.Boolean => input.ToBooleanValue().ToString(),
             FluidValues.Nil => null,
             FluidValues.Number => input.ToNumberValue().ToString(CultureInfo.InvariantCulture),
-            FluidValues.DateTime or FluidValues.Dictionary or FluidValues.Object => JsonSerializer.Serialize(input.ToObjectValue()),
+            FluidValues.DateTime or FluidValues.Dictionary or FluidValues.Object => Elsa.Serialization.Core.JsonConversionContract.Serialize(input.ToObjectValue()),
             FluidValues.String => input.ToStringValue(),
             _ => throw new ArgumentOutOfRangeException(nameof(input), "Unrecognized FluidValue")
         };

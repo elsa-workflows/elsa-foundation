@@ -86,7 +86,7 @@ public sealed class Elsa3UndefinedResultTests
 
     private static ExpressionDefinition ReadExpression(ArgumentState argument) =>
         (argument.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(argument.Value.Value))
-        .Deserialize<ExpressionDefinition>()!;
+        .Deserialize<ExpressionDefinition>(Elsa.Serialization.Core.JsonBaseline.Options)!;
 
     private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertTextAsync(string expression) =>
         ConvertAsync(Sequence("root", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", expression)))),

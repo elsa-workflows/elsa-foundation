@@ -20,6 +20,17 @@ internal sealed class ExternalAuthenticationFlowService(IServiceScopeFactory sco
     IOptions<ExternalAuthenticationOptions> options, IDataProtectionProvider protection, ITokenSubjectResolver subjects,
     IConnectionWriteAuthorizer authorizer, TimeProvider clock, IHostEnvironment? environment = null) : IExternalAuthenticationFlowService
 {
+    // This protected owner metadata retains its established CLR member names. Carried JSON
+    // still uses the shared baseline; no tolerant reader or workflow conversion policy is added.
+    private static readonly JsonSerializerOptions RetainedJson = CreateRetainedJson();
+    private static JsonSerializerOptions CreateRetainedJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.PropertyNamingPolicy = null;
+        options.MakeReadOnly();
+        return options;
+    }
+
     public string? GetCallbackUri(string connectionKey, AuthenticationArtifactPurpose purpose)
     {
         if (!Key(connectionKey) || purpose is not (AuthenticationArtifactPurpose.SignIn or AuthenticationArtifactPurpose.Preview) ||
@@ -119,7 +130,7 @@ internal sealed class ExternalAuthenticationFlowService(IServiceScopeFactory sco
             prospective.RoleIds.Order(StringComparer.Ordinal).ToArray(), prospective.Permissions.Order(StringComparer.Ordinal).ToArray(), prospective.Failure, observed);
         var resultHandle = Random();
         var payload = new PreviewState(1, preview, observed, Milliseconds(observed + options.Value.PreviewResultLifetime));
-        if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(payload)) > 131072) return Refuse(ExternalFlowFailure.InvalidResult);
+        if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(payload, options: RetainedJson)) > 131072) return Refuse(ExternalFlowFailure.InvalidResult);
         var saved = await store!.TryCreateAsync(Protect(resultHandle, AuthenticationArtifactPurpose.PreviewResult, state.ConnectionKey,
             request.BrowserBinding, admin, observed, payload.ExpiresAt, payload), cancellationToken);
         return saved ? new(ReturnUrl: state.ReturnUrl, PreviewResultHandle: resultHandle) : Refuse(ExternalFlowFailure.Conflict);
@@ -176,7 +187,7 @@ internal sealed class ExternalAuthenticationFlowService(IServiceScopeFactory sco
         var browserHash = Hash("browser/v1", key, browser);
         var adminHash = administrator is null ? null : Hash("administrator/v1", options.Value.TenantId, administrator);
         var envelope = new AuthenticationArtifact(id, options.Value.TenantId, purpose, browserHash, adminHash, created, expires, "");
-        return envelope with { ProtectedPayload = Protector(envelope).Protect(JsonSerializer.Serialize(value)) };
+        return envelope with { ProtectedPayload = Protector(envelope).Protect(JsonSerializer.Serialize(value, options: RetainedJson)) };
     }
 
     private async ValueTask<AuthenticationArtifact?> Consume(IAuthenticationArtifactStore store, string handle, AuthenticationArtifactPurpose purpose,
@@ -186,7 +197,7 @@ internal sealed class ExternalAuthenticationFlowService(IServiceScopeFactory sco
 
     private T? Unprotect<T>(AuthenticationArtifact artifact) where T : class
     {
-        try { return JsonSerializer.Deserialize<T>(Protector(artifact).Unprotect(artifact.ProtectedPayload)); }
+        try { return JsonSerializer.Deserialize<T>(Protector(artifact).Unprotect(artifact.ProtectedPayload), options: RetainedJson); }
         catch (Exception exception) when (exception is CryptographicException or JsonException) { return null; }
     }
     private IDataProtector Protector(AuthenticationArtifact artifact) => protection.CreateProtector("Elsa.ExternalAuthentication.Artifact.v1",

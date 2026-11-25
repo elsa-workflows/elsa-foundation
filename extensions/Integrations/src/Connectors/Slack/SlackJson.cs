@@ -4,7 +4,7 @@ namespace Elsa.Integrations.Connectors.Slack;
 
 internal static class SlackJson
 {
-    public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
+    public static readonly JsonSerializerOptions Options = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNameCaseInsensitive = true
     };

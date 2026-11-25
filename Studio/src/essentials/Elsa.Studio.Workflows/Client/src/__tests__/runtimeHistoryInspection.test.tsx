@@ -2,7 +2,7 @@ import { flushSync } from "react-dom";
 import { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { authSessionEndedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, setStudioTimeZonePreference, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityBookmarkHistory, HistoryInspection } from "../workflow-editor/run-history/HistoryInspection";
 import { HistoryCoverage, HistoryEventList, historyDate, historyAuthorityLabel, historyEventLabel, isKnownHistoryEvent } from "../workflow-editor/run-history/historyPresentation";
 import { RunHistoryTimeline } from "../workflow-editor/run-history/RunHistoryTimeline";
@@ -317,6 +317,27 @@ it("discloses long open handles as waits for a stimulus and separates elapsed fr
   render(<RunHistorySummary context={context} instance={{ workflowExecutionId: "run", status: "Suspended", startedAt: "2026-11-03T09:00:00Z" } as WorkflowInstanceSummary} name="Approval" activities={[{ activityExecutionId: "activity-1", status: "Suspended", activityType: "Elsa.CreateUserTask" } as ActivityExecutionStateSummary]} activitiesLimited={false} onBookmark={vi.fn()} enabled />);
   await vi.waitFor(() => expect(container.textContent).toContain("Waiting at last observation"));
   expect(container.textContent).toContain("User Task Completed"); expect(container.textContent).toContain("Handle open for"); expect(container.textContent).toContain("Elapsed includes waiting");
+});
+
+it("updates mounted waiting-summary and bookmark dates without refetching or changing retained instants", async () => {
+  const instant = "2026-07-15T23:30:00Z";
+  const item = historyBookmark({ eligibility: "eligible", bookmark: { ...historyBookmark().bookmark, createdAt: instant } });
+  const retained = bookmarkPage({ items: [item], readAt: instant });
+  api.listWorkflowHistoryBookmarks.mockResolvedValue(retained);
+  const expected = (zone: string, offset: string) => `${new Intl.DateTimeFormat(undefined, { timeZone: zone, dateStyle: "medium", timeStyle: "medium" }).format(new Date(instant))} UTC${offset}`;
+  setStudioTimeZonePreference("Europe/Amsterdam");
+  try {
+    render(<><RunHistorySummary context={context} instance={{ workflowExecutionId: "run", status: "Suspended", startedAt: instant } as WorkflowInstanceSummary} name="Approval" activities={[{ activityExecutionId: "activity-1", status: "Suspended" } as ActivityExecutionStateSummary]} activitiesLimited={false} onBookmark={vi.fn()} enabled />
+      <ActivityBookmarkHistory context={context} workflowExecutionId="run" activityExecutionId="activity-1" onSelect={vi.fn()} /></>);
+    await vi.waitFor(() => expect(container.querySelector(".wf-history-run-summary")?.textContent).toContain(expected("Europe/Amsterdam", "+02:00")));
+    expect(container.querySelector(".wf-history-bookmark-record")?.textContent).toContain(expected("Europe/Amsterdam", "+02:00"));
+    const reads = api.listWorkflowHistoryBookmarks.mock.calls.length;
+    flushSync(() => setStudioTimeZonePreference("UTC"));
+    expect(container.querySelector(".wf-history-run-summary")?.textContent).toContain(expected("UTC", "+00:00"));
+    expect(container.querySelector(".wf-history-bookmark-record")?.textContent).toContain(expected("UTC", "+00:00"));
+    expect(api.listWorkflowHistoryBookmarks).toHaveBeenCalledTimes(reads);
+    expect(retained.readAt).toBe(instant); expect(item.bookmark.createdAt).toBe(instant);
+  } finally { flushSync(() => setStudioTimeZonePreference("browser")); }
 });
 
 

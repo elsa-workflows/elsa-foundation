@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Database } from "lucide-react";
@@ -95,6 +97,7 @@ export function ActivityDefinitionsPage({
   runtime?: StudioRuntimeSettings;
   navigateToStudioPath?(path: string): void;
 }) {
+
   const [route, setRoute] = useState(readRouteState);
   // A create or upgrade can complete while this screen's workspace tab is in the background; its
   // navigation then waits for the tab to return instead of taking over the active tab's address.
@@ -250,6 +253,7 @@ function writeRouteState(route: RouteState, mode: "push" | "replace", collection
 }
 
 function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, authorizationInvalidating, activityEditors, onHistoryContextChange, onImport, onPlanUpgrade, onOpen, onCreated }: { context: StudioEndpointContext; baseUrl: string; authorityRevision: number; authorizationInvalidating: boolean; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onHistoryContextChange(context: ActivityCollectionHistoryContext): void; onImport(): void; onPlanUpgrade(): void; onOpen(definitionId: string, section?: string | null, publicationReview?: boolean): void; onCreated(definitionId: string, draftId: string): void }) {
+  useStudioTimeZone();
   const queryClient = useQueryClient();
   const capabilitiesQuery = useActivityAuthoringCapabilities(context);
   const providers = capabilitiesQuery.data?.providers ?? [];
@@ -585,10 +589,12 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
 }
 
 function ActivityDefinitionSkeleton() {
+
   return <><span>Loading Activity Definitions…</span><SkeletonRows label="Loading Activity Definitions" /></>;
 }
 
 function ActivityDefinitionFailure({ kind, cursorInvalid, onRetry }: { kind: ReturnType<typeof classifyActivityDefinitionReadFailure>; cursorInvalid: boolean; onRetry(): void }) {
+
   if (cursorInvalid) return <StudioResultState tone="danger" icon={<AlertTriangle size={22} aria-hidden />} title="Collection continuation is no longer valid" description="Restart paging to request a fresh authorized snapshot while keeping your filters and page size." actions={<StudioButton onClick={onRetry}>Restart paging</StudioButton>} />;
   const copy = {
     unavailable: ["Activity definitions unavailable", "This backend does not support activity definition management."],
@@ -675,5 +681,5 @@ function readRouteState(): RouteState {
 }
 
 function formatTimestamp(value: number | null) {
-  return value ? new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "at an earlier time";
+  return value ? formatStudioDate(value) : "at an earlier time";
 }

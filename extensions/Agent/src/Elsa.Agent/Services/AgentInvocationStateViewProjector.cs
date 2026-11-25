@@ -28,5 +28,5 @@ internal sealed class AgentInvocationStateViewProjector : IActivityStateViewProj
         ValueTask.FromResult<JsonElement?>(Project(context));
 
     private static JsonElement Project(ActivityStateViewContext context) =>
-        JsonSerializer.SerializeToElement(new { invocation = context.ExecutableNode.ActivityContract?.Activation.Capability == AgentRuntimeIds.FacadeCapability });
+        JsonSerializer.SerializeToElement(new { invocation = context.ExecutableNode.ActivityContract?.Activation.Capability == AgentRuntimeIds.FacadeCapability }, Elsa.Serialization.Core.JsonBaseline.Options);
 }

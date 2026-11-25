@@ -459,7 +459,7 @@ public sealed class WorkflowAlterationOrchestrationTests
         Assert.Equal(first.EnvelopeId, second.EnvelopeId);
         Assert.Equal(first.Command.CommandId, second.Command.CommandId);
         Assert.Equal(WorkflowExecutionCommandDeliveryMode.AtLeastOnce, first.DeliveryMode);
-        var payload = first.Command.Payload!.Value.Deserialize<WorkflowAlterationActorCommand>();
+        var payload = first.Command.Payload!.Value.Deserialize<WorkflowAlterationActorCommand>(Elsa.Serialization.Core.JsonBaseline.Options);
         Assert.Equal(job.JobId, payload!.JobId);
         Assert.Equal(job.Claim!.Token, payload.ClaimToken);
         Assert.DoesNotContain("payload", first.Command.Payload!.Value.GetRawText(), StringComparison.OrdinalIgnoreCase);

@@ -43,13 +43,13 @@ public sealed class WorkflowArtifactClosureSerializer(IPayloadSerializer payload
     public string Serialize(WorkflowArtifactClosure closure)
     {
         ArgumentNullException.ThrowIfNull(closure);
-        return JsonSerializer.Serialize(closure, GetOptions());
+        return JsonSerializer.Serialize(closure, options: GetOptions());
     }
 
     public WorkflowArtifactClosure? Deserialize(string json)
     {
         ArgumentNullException.ThrowIfNull(json);
-        return JsonSerializer.Deserialize<WorkflowArtifactClosure>(json, GetOptions());
+        return JsonSerializer.Deserialize<WorkflowArtifactClosure>(json, options: GetOptions());
     }
 
     private JsonSerializerOptions GetOptions()

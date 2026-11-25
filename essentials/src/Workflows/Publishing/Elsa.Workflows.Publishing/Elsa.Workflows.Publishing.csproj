@@ -40,4 +40,7 @@
     <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Releases.NativeCapture.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

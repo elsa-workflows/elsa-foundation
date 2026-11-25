@@ -1,10 +1,11 @@
+import { formatStudioDate, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import React, { useId } from "react";
 import { AdvancedSection, StudioButton, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import type { QueryCell, QueryColumn, QueryResult, QueryRow, Visualization } from "./types";
 
 function cellText(cell?: QueryCell) {
   if (!cell) return "Unavailable";
-  if (cell.value !== null) return cell.value;
+  if (cell.value !== null) return cell.type === "instant" ? formatStudioDate(cell.value) : cell.value;
   if (cell.nullReason === "noEligibleDenominator") return "No eligible denominator";
   if (cell.nullReason === "noEligibleValues") return "No eligible values";
   return cell.nullReason ?? "Missing";
@@ -57,6 +58,7 @@ function NumericSeries({ rows, column, categories, kind }: { rows: QueryRow[]; c
 }
 
 export function ResultView({ result, visualization, stale = false, outdated = false, compactProvenance = false, onDrill }: { result: QueryResult; visualization: Visualization; stale?: boolean; outdated?: boolean; compactProvenance?: boolean; onDrill?(row: QueryRow): void }) {
+  useStudioTimeZone();
   if (result.outcome !== "succeeded") return <section className="named-result-state" role="status"><h3>{result.outcome === "cancelled" ? "Query cancelled" : result.outcome === "denied" ? "Access unavailable" : result.outcome === "limitExceeded" ? "Query limit reached" : result.outcome === "incompatible" ? "Question needs repair" : "Results unavailable"}</h3><p>{result.message ?? "Review the definition, source availability and your current access before retrying."}</p></section>;
   const columns = result.columns ?? [];
   const rows = result.rows ?? [];
@@ -73,8 +75,8 @@ export function ResultView({ result, visualization, stale = false, outdated = fa
     {outdated ? <p role="status"><strong>Stale result. Definition changed.</strong> These values answer the previous definition. Preview or refresh to answer the current definition.</p> : null}
   </>;
   const refreshDetails = <>
-    {result.generatedAt ? <p>Last successful refresh: <time dateTime={result.generatedAt}>{new Date(result.generatedAt).toLocaleString()}</time></p> : null}
-    {result.periods?.map(period => <p key={period.role}>{period.role}: <time dateTime={period.from}>{period.from}</time> to <time dateTime={period.to}>{period.to}</time> ({period.timeZone}; end exclusive)</p>)}
+    {result.generatedAt ? <p>Last successful refresh: <time dateTime={result.generatedAt}>{formatStudioDate(result.generatedAt)}</time></p> : null}
+    {result.periods?.map(period => <p key={period.role}>{period.role}: <time dateTime={period.from}>{formatStudioDate(period.from)}</time> to <time dateTime={period.to}>{formatStudioDate(period.to)}</time> (query zone: {period.timeZone}; end exclusive)</p>)}
   </>;
   return <section className="named-result" aria-label={visualization.label || "Question results"}>
     <div className="named-result-provenance">

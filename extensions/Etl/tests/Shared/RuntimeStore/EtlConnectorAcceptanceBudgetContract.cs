@@ -288,7 +288,7 @@ public abstract partial class EtlRuntimeStoreContract
             HasContinuation = page.NextContinuation is not null,
             PageJson = pageJson,
             ByteLength = page.Body.ByteLength,
-            PageDigest = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(pageJson))),
+            PageDigest = Elsa.Serialization.Core.JsonHashInput.HashJson(pageJson),
             MetadataBytes = pageMetadataBytes,
             AcceptedItemCount = 0,
             SchemaVersion = EtlRuntimeEfModule.SchemaVersion

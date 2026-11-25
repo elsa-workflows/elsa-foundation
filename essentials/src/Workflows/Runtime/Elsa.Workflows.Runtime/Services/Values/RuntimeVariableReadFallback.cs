@@ -59,9 +59,9 @@ internal sealed class RuntimeVariableReadFallback : IExpressionVariableReader
             if (envelope.Presence == ValuePresence.Absent &&
                 !NullPolicyDefaults.AcceptsNull(envelope.Type.ToTypeReference(), registry, typeDescriptors) &&
                 NullPolicyDefaults.TryGetTypeDefault(envelope.Type.Alias, registry, out var typeDefault))
-                values[variable.Name] = JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType());
+                values[variable.Name] = JsonSerializer.SerializeToElement(typeDefault, typeDefault!.GetType(), Elsa.Serialization.Core.JsonBaseline.Options);
             else if (envelope.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull)
-                values[variable.Name] = JsonSerializer.SerializeToElement<object?>(null);
+                values[variable.Name] = JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options);
             else if (envelope.InlineValue.HasValue)
                 values[variable.Name] = envelope.InlineValue.Value.Clone();
             else if (envelope.ExternalReference is not null && externalPayloadStore is not null)

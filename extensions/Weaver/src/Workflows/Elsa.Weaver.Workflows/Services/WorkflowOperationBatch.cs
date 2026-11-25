@@ -40,7 +40,7 @@ internal static partial class WorkflowOperationBatch
 
     private const string RootSlot = "root";
     private const string NothingChanged = " The whole batch was refused and nothing changed.";
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     internal sealed record Failure(string Code, string Message, int Status);
 

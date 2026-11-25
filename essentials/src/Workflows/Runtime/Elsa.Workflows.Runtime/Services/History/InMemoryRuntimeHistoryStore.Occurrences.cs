@@ -88,8 +88,8 @@ internal sealed partial class InMemoryRuntimeHistoryStore
                     index > first ? source[index - 1].ActivityId : null,
                     index + 1 < end ? source[index + 1].ActivityId : null));
             }
-            var token = query.SequenceToken ?? codec.Encode(OccurrencePurpose, JsonSerializer.SerializeToUtf8Bytes(
-                new OccurrenceCursor(binding, upper, lower, PolicyBinding(head.Policy))));
+            var token = query.SequenceToken ?? codec.EncodeJson(OccurrencePurpose, JsonSerializer.SerializeToUtf8Bytes(
+                new OccurrenceCursor(binding, upper, lower, PolicyBinding(head.Policy)), options: Elsa.Serialization.Core.JsonBaseline.Options));
             return ValueTask.FromResult(new RuntimeHistoryOccurrencePage(head,
                 head.CapturedFromStart && lower == 0 ? RuntimeHistoryOccurrenceAvailability.Available : RuntimeHistoryOccurrenceAvailability.Partial,
                 lower > 0 ? "retained-prefix-purged" : head.CapturedFromStart ? null : "capture-not-from-start",
@@ -122,7 +122,7 @@ internal sealed partial class InMemoryRuntimeHistoryStore
         if (token is null) return null;
         try
         {
-            var cursor = JsonSerializer.Deserialize<OccurrenceCursor>(codec.Decode(OccurrencePurpose, token));
+            var cursor = JsonSerializer.Deserialize<OccurrenceCursor>(codec.DecodeJson(OccurrencePurpose, token), options: Elsa.Serialization.Core.JsonBaseline.Options);
             if (cursor is null || cursor.Binding != binding || cursor.Upper < 0 || cursor.Purged < 0 ||
                 cursor.Purged > cursor.Upper || string.IsNullOrEmpty(cursor.Policy)) throw new FormatException();
             return cursor;

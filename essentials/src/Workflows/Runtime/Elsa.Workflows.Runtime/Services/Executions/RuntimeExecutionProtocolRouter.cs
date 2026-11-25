@@ -33,7 +33,7 @@ internal sealed partial class RuntimeExecutionProtocolRouter(RuntimeExecutionPro
             RuntimeModelExecutionCommand input;
             try
             {
-                input = envelope.Command.Payload?.Deserialize<RuntimeModelExecutionCommand>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                input = envelope.Command.Payload?.Deserialize<RuntimeModelExecutionCommand>(new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options))
                     ?? throw new RuntimeSchedulerWorkUnavailableException("runtime.model.input-unreadable",
                         $"Model input '{envelope.Command.CommandId}' for execution '{envelope.WorkflowExecutionId}' in envelope '{envelope.EnvelopeId}' is missing.");
             }

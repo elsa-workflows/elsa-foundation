@@ -166,6 +166,6 @@ public sealed class WeaverPolicyTests
             sensitivity,
             "selection",
             "Context summary.",
-            content,
+            WeaverJsonData.From(content),
             new Dictionary<string, string> { ["ref"] = "value" });
 }

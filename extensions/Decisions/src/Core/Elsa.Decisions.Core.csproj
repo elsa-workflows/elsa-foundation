@@ -1,3 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

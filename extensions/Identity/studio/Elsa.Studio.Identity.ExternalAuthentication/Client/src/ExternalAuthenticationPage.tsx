@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceWhenActive,
   type StudioDialogApi, type StudioEndpointContext, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
-import { StudioAlert, CopyableIdentifier, StatusChip, StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
+import { StudioAlert, CopyableIdentifier, StatusChip, StudioButton, StudioPage, StudioPageHeader, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { ConnectionEditor, emptyDocument } from "./ConnectionEditor";
 import { connectionChanges, ExternalAuthenticationClient, ExternalAuthenticationClientError, externalAuthenticationError,
   type ConnectionCatalog, type ConnectionCommand, type ConnectionDocument, type ConnectionPreview, type ConnectionTest, type ConnectionView, type Readiness } from "./sdk";
@@ -293,7 +293,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
           {selected && !selected.document.archivedAt && visible.canManageConnections ? <section className="external-auth-observations" aria-label="Test and preview">
             <h3>Test, preview, then enable</h3><p>Save configuration changes first. Tests verify provider metadata; preview verifies a real sign-in and shows its prospective Elsa access.</p>
             <div className="external-auth-actions"><StudioButton disabled={locked || dirty} onClick={() => { void testConnection(); }}>Test configuration</StudioButton><StudioButton disabled={locked || dirty || !liveTest || !configurationReady} onClick={() => { void previewConnection(); }}>Preview sign-in</StudioButton></div>
-            {test?.connectionRecordId === selected.document.id ? <div role="status" className="external-auth-callout"><strong>{testSucceeded(test, selected) ? "Configuration test passed" : "Configuration test needs attention"}</strong><p>{testDescription(test)}</p><small>Observed {new Date(test.observedAt).toLocaleString()}. Results describe that observation, not future availability.</small></div> : null}
+            {test?.connectionRecordId === selected.document.id ? <div role="status" className="external-auth-callout"><strong>{testSucceeded(test, selected) ? "Configuration test passed" : "Configuration test needs attention"}</strong><p>{testDescription(test)}</p><small>Observed <StudioTimestamp value={test.observedAt} format="date-time" />. Results describe that observation, not future availability.</small></div> : null}
             {preview?.connectionRecordId === selected.document.id ? <div className="external-auth-preview"><h4>Preview result</h4><p>{previewDescription(preview)}</p>
               <CopyableIdentifier label="Validated issuer" value={preview.issuer} /><CopyableIdentifier label="External subject" value={preview.subject} />
               <dl><dt>Elsa user</dt><dd>{preview.existingUserId || (preview.admission === 2 ? "Would be created" : "No user admitted")}</dd><dt>Roles</dt><dd>{preview.roleIds.join(", ") || "None"}</dd><dt>Permissions</dt><dd>{preview.permissions.map(value => value === "*" ? "All permissions" : value).join(", ") || "None"}</dd></dl>

@@ -30,6 +30,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
     IEnumerable<IElsa3NodeRewrite> rewrites,
     IWellKnownTypeRegistry wellKnownTypeRegistry,
     IObjectConverter objectConverter,
+    IOptions<Elsa3ConversionOptions> conversionOptions,
     IOptions<Elsa3MappingOptions>? options = null,
     IVariableTypeDescriptorCatalog? typeDescriptors = null)
 {
@@ -46,8 +47,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
     internal const int MaxSequenceNestingDepth = (MaxNodeJsonLevel - RootJsonLevel) / 4;
     private const string ParallelTypeKey = "Elsa.Activities.Parallel.Activities.Parallel";
 
-    private static readonly JsonSerializerOptions Elsa3JsonOptions = new(JsonSerializerDefaults.Web);
-    private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null);
+    private static readonly JsonSerializerOptions Elsa3JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
+    private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null, options: Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly IReadOnlyDictionary<Elsa3NodeRewriteKind, IElsa3NodeRewrite> _rewrites =
         rewrites.ToDictionary(rewrite => rewrite.Kind);
 
@@ -133,6 +134,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
         var variables = plan.Definition.Variables;
         for (var index = 0; index < variables.Count; index++)
         {
+            var path = $"$.variables[{index}].value";
             var variableMetadata = new Dictionary<string, string> { ["VariableName"] = variables[index].Name };
             if (Elsa3VariableMapper.DescribeUnregisteredType(wellKnownTypeRegistry, variables[index]) is { } notice)
                 plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
@@ -146,8 +148,9 @@ internal sealed partial class Elsa3ActivityNormalizer(
             if (Elsa3StorageDriverCorrections.Describe("Variable", variables[index].Name, variables[index].StorageDriverTypeName) is { } correction)
                 plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Warning,
                     correction.Code, correction.Message, correction.Guidance, $"$.variables[{index}]", correction.Metadata));
-            if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variables[index], out var mapped, out var refusal, typeDescriptors))
+            if (TryMapVariable(plan, variables[index], path, out var mapped, out var refusal))
             {
+                plan.WorkflowVariables.Add(variables[index], mapped);
                 plan.WorkflowVariableTypes[variables[index]] = mapped.Type;
                 continue;
             }
@@ -160,6 +163,24 @@ internal sealed partial class Elsa3ActivityNormalizer(
                 $"$.variables[{index}]",
                 variableMetadata));
         }
+    }
+
+    private bool TryMapVariable(Elsa3ConversionPlan plan, Elsa3Variable source, string path,
+        out Elsa.Expressions.Core.Models.VariableDefinition mapped, out Elsa3VariableRefusal? refusal)
+    {
+        var notes = new List<Elsa3LiteralConversion.Note>();
+        var success = Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, source, out mapped, out refusal,
+            typeDescriptors: typeDescriptors, options: conversionOptions.Value, report: notes.Add);
+        foreach (var note in notes)
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, note.Severity, note.Code, note.Message, note.Guidance,
+                path + note.Path[1..], new Dictionary<string, string> { ["VariableName"] = source.Name }));
+        if (notes.Any(note => note.Code == LiteralDateInterpreted) && plan.Diagnostics.All(note => note.Code != Elsa3ImportDiagnosticCodes.DateInterpretationApplied))
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Info,
+                Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
+                $"The workflow's starting values were converted with {conversionOptions.Value.DateInterpretation}" +
+                (conversionOptions.Value.SourceTimeZone is null ? "." : $" '{conversionOptions.Value.SourceTimeZone}'."),
+                "Keep the same date interpretation when converting this workflow again.", path));
+        return success;
     }
 
     /// <summary>
@@ -1058,7 +1079,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
                     context.Info(Elsa3ImportDiagnosticCodes.VariableTypeUnregistered, notice.Message, notice.Guidance, property);
                 if (Elsa3StorageDriverCorrections.Describe("Variable", variable.Name, variable.StorageDriverTypeName) is { } correction)
                     context.Warning(correction.Code, correction.Message, correction.Guidance, property, metadata: correction.Metadata);
-                if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variable, out var mapped, out var refusal, typeDescriptors))
+                if (TryMapVariable(context.Plan, variable, $"{context.Node.JsonPath}{Elsa3ConversionDiagnostics.FormatProperty(property)}.value", out var mapped, out var refusal))
                     context.Node.Variables.Add(mapped);
                 else
                     context.Error(refusal!.Code, refusal.Message, refusal.Guidance, property);

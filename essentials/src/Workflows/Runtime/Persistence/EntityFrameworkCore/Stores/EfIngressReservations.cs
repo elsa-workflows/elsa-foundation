@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access) : IRuntimeIngressReservationReader
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     public bool SupportsReservations => context.Database.IsRelational();
 
     public ValueTask<RuntimeIngressReservation?> FindAsync(TriggerScope scope, string stimulusType, string stimulusHash, CancellationToken cancellationToken = default) =>
@@ -76,7 +76,7 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
                     RuntimeIngressReservationRules.CheckSemanticOwner(Read(row, scope.Persistence), claim, policies);
         }
         var scopeHash = Hash(scope.Persistence.Value); var ownerHash = Hash(ownerId);
-        var tenantKey = Encode(JsonSerializer.Serialize(scope.TenantId));
+        var tenantKey = Encode(JsonSerializer.Serialize(scope.TenantId, options: Elsa.Serialization.Core.JsonBaseline.Options));
         // A logical publication slot is owned by its physical scope, even when a replacement captures a new tenant.
         // Standalone resource identities remain tenant-scoped and cannot reconcile another tenant's claims.
         var publicationOwner = ownerKind == RuntimeIngressReservation.PublicationSlotOwner;
@@ -143,7 +143,7 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
     private static RuntimeIngressReservationEntity ToEntity(RuntimeIngressReservation value, long revision) => new()
     {
         Id = value.ReservationId, ScopeKey = Encode(value.Scope.Persistence.Value), ScopeHash = Hash(value.Scope.Persistence.Value),
-        TenantKey = Encode(JsonSerializer.Serialize(value.Scope.TenantId)), StimulusType = Encode(value.StimulusType), StimulusTypeHash = Hash(value.StimulusType),
+        TenantKey = Encode(JsonSerializer.Serialize(value.Scope.TenantId, options: Elsa.Serialization.Core.JsonBaseline.Options)), StimulusType = Encode(value.StimulusType), StimulusTypeHash = Hash(value.StimulusType),
         StimulusHash = Encode(value.StimulusHash), StimulusHashHash = Hash(value.StimulusHash), OwnerKind = value.OwnerKind,
         OwnerId = Encode(value.OwnerId), OwnerHash = Hash(value.OwnerId), Revision = revision, ContentJson = JsonSerializer.Serialize(value, Json)
     };

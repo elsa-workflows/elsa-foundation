@@ -11,7 +11,7 @@ namespace Elsa.Activities.Primitives.Services;
 /// <summary>The owning payload decoder for canonical persisted named-event sends; performs no delivery effects.</summary>
 internal sealed class PublishStimulusIntentAdapter : IStimulusDeliveryIntentAdapter
 {
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Options = new(Elsa.Serialization.Core.JsonBaseline.Options);
     internal static readonly StandaloneTriggerSourceDescriptor SourceDescriptor = new("event", 1, "Elsa.Event.Broadcast",
         new ValueTypeDescriptor("Elsa.EventPayload", schemaVersion: 1));
     public PublishStimulusIntentAdapter() { }
@@ -31,7 +31,7 @@ internal sealed class PublishStimulusIntentAdapter : IStimulusDeliveryIntentAdap
         var payload = intent.Payload!.Value.Deserialize<PublishStimulusIntentPayload>(Options)!;
         if (payload.IsLocalEvent) return null;
         return new(SourceDescriptor.TypeKey, SourceDescriptor.SchemaVersion, "eventName", payload.EventName, SourceDescriptor.SourceFamily, SourceDescriptor.PayloadSchema,
-            payload.Payload ?? JsonSerializer.SerializeToElement<object?>(null),
+            payload.Payload ?? JsonSerializer.SerializeToElement<object?>(null, options: Elsa.Serialization.Core.JsonBaseline.Options),
             JsonSerializer.SerializeToElement(new { eventName = payload.EventName, correlationId = payload.CorrelationId }, Options));
     }
 

@@ -1,0 +1,92 @@
+[
+  {
+    "name": "spelling-a",
+    "json": "{ \"text\":\"\\u0061\", \"n\":1.0 }",
+    "canonical": "{\"n\":1e0,\"text\":\"a\"}",
+    "sha256": "f14a446e28dada50496083f909c072c9c6042b62bfcd7bb550f2c78d26ff1970"
+  },
+  {
+    "name": "spelling-b",
+    "json": "{\"n\":1e0,\"text\":\"a\"}",
+    "canonical": "{\"n\":1e0,\"text\":\"a\"}",
+    "sha256": "f14a446e28dada50496083f909c072c9c6042b62bfcd7bb550f2c78d26ff1970"
+  },
+  {
+    "name": "empty",
+    "json": "{}",
+    "canonical": "{}",
+    "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  {
+    "name": "present-null",
+    "json": "{\"x\":null}",
+    "canonical": "{\"x\":null}",
+    "sha256": "c6b8df5aba33a39cbdee46ffaf77fae93ea2aa7d99d66408162b05a42105bd71"
+  },
+  {
+    "name": "array-forward",
+    "json": "[1,2]",
+    "canonical": "[1e0,2e0]",
+    "sha256": "7b4067038893c7dd08536157205d73dd8b8166c8a2a9803e623782009c76b50e"
+  },
+  {
+    "name": "array-reverse",
+    "json": "[2,1]",
+    "canonical": "[2e0,1e0]",
+    "sha256": "8cffb77f9654994621be8379284a67254baecf758b475643a988a602b814a800"
+  },
+  {
+    "name": "large-a",
+    "json": "9007199254740993",
+    "canonical": "9007199254740993e0",
+    "sha256": "4279acb5fac2ed79dc46bc43fbd0bd24f432224a19aff570313e1abaff2a5b13"
+  },
+  {
+    "name": "large-b",
+    "json": "9007199254740992",
+    "canonical": "9007199254740992e0",
+    "sha256": "6b658c6597411cedf1cb11958fbbfde732202f0d7aa88c8cb408046eb2bf7d79"
+  },
+  {
+    "name": "unbounded-exponent",
+    "json": "1.2300e999999999999999999999",
+    "canonical": "123e999999999999999999997",
+    "sha256": "de7e9db6767e8d50ff5d844d7ff8930c6b0f89251ba6a081626c97a6bb2ed715"
+  },
+  {
+    "name": "negative-zero",
+    "json": "-0.000e999999999999999999999",
+    "canonical": "0",
+    "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+  },
+  {
+    "name": "exact-fraction",
+    "json": "0.10000000000000000000000000001",
+    "canonical": "10000000000000000000000000001e-29",
+    "sha256": "44c0378c311c12343f3facfeb018bd40c91c356a1ca79f252014de8f4ace50ba"
+  },
+  {
+    "name": "unicode-string",
+    "json": "\"René \\\"<>&'+`\\\\\\b\\t\\n\\f\\r雪𐀀\"",
+    "canonical": "\"Ren\\u00E9 \\u0022\\u003C\\u003E\\u0026\\u0027\\u002B\\u0060\\\\\\b\\t\\n\\f\\r\\u96EA\\uD800\\uDC00\"",
+    "sha256": "732b9cc5b3d99aa490467676dfeeb47723575380ea65a3a90f77f55ef3304ee1"
+  },
+  {
+    "name": "utf8-name-order",
+    "json": "{\"𐀀\":1,\"\":2,\"a\":3}",
+    "canonical": "{\"a\":3e0,\"\\uE000\":2e0,\"\\uD800\\uDC00\":1e0}",
+    "sha256": "087ae075b26e6988d2ea388382ad4fe5185f34c408ec65f58f09410444f7ba7c"
+  },
+  {
+    "name": "escaped-names",
+    "json": "{\"\\u0061\":true,\"b\":false}",
+    "canonical": "{\"a\":true,\"b\":false}",
+    "sha256": "cf5ce5d22cc0da3c5aa620a9652583597ad367d1e69a668b4ddceecaf010d5a8"
+  },
+  {
+    "name": "nested",
+    "json": "{\"z\":[{\"x\":1.00,\"nil\":null}],\"a\":{\"empty\":{},\"items\":[]}}",
+    "canonical": "{\"a\":{\"empty\":{},\"items\":[]},\"z\":[{\"nil\":null,\"x\":1e0}]}",
+    "sha256": "1eb67071d9efd87b63a1d33e0d65f44626a547c39c8630cbadad8a7f102fc254"
+  }
+]

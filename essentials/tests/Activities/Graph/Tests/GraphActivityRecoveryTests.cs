@@ -92,7 +92,7 @@ public sealed class GraphActivityRecoveryTests
         var lateWork = WorkItem(
             WorkflowExecutionCommandKind.ScheduleActivity,
             "late-schedule",
-            JsonSerializer.SerializeToElement(latePayload),
+            JsonSerializer.SerializeToElement(latePayload, Elsa.Serialization.Core.JsonBaseline.Options),
             "outer");
         var scheduleHandler = provider.GetServices<IWorkflowSchedulerWorkHandler>()
             .Single(item => item is WorkflowScheduleActivitySchedulerWorkHandler);
@@ -220,12 +220,12 @@ public sealed class GraphActivityRecoveryTests
         var retryCommit = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
         Assert.Equal(Now, retryCommit.Commit.Checkpoint.OccurredAt);
         var intent = Assert.Single(retryCommit.Commit.PostCommitIntents);
-        var scheduled = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var scheduled = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("outer-retry", scheduled.ExecutionScopeId);
         Assert.Equal(3, scheduled.Attempt!.AttemptNumber);
         Assert.Equal("outer-first", scheduled.Attempt.FirstAttemptActivityExecutionId);
         Assert.Equal("outer", scheduled.Attempt.PreviousAttemptActivityExecutionId);
-        var payload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        var payload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(identity.ArtifactHash, payload.PinnedExecutable.ArtifactHash);
         Assert.Equal("outer-retry", payload.ActivityExecutionId);
 
@@ -252,9 +252,9 @@ public sealed class GraphActivityRecoveryTests
 
         var retryCommit = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
         var scheduled = Assert.Single(retryCommit.Commit.PostCommitIntents)
-            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("outer", scheduled.ExecutionScopeId);
-        var retryPayload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        var retryPayload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("outer", retryPayload.SchedulingProvenance.ExecutionScopeId);
 
         var scheduleHandler = provider.GetServices<IWorkflowSchedulerWorkHandler>()
@@ -304,7 +304,7 @@ public sealed class GraphActivityRecoveryTests
     private static RuntimeSchedulerWorkItem CancelWorkItem() => WorkItem(
         WorkflowExecutionCommandKind.CancelActivityScope,
         "cancel",
-        JsonSerializer.SerializeToElement(new CancelActivityScopeCommand("outer", "outer", "operator-request")),
+        JsonSerializer.SerializeToElement(new CancelActivityScopeCommand("outer", "outer", "operator-request"), Elsa.Serialization.Core.JsonBaseline.Options),
         "outer");
 
     private static RuntimeSchedulerWorkItem RetryWorkItem(
@@ -313,7 +313,7 @@ public sealed class GraphActivityRecoveryTests
         string retryActivityExecutionId = "outer-retry") => WorkItem(
         WorkflowExecutionCommandKind.RetryActivityBoundary,
         "retry",
-        JsonSerializer.SerializeToElement(new RetryActivityBoundaryCommand(activityExecutionId, retryActivityExecutionId, identity, "policy-retry")),
+        JsonSerializer.SerializeToElement(new RetryActivityBoundaryCommand(activityExecutionId, retryActivityExecutionId, identity, "policy-retry"), Elsa.Serialization.Core.JsonBaseline.Options),
         "outer");
 
     private static RuntimeSchedulerWorkItem WorkItem(

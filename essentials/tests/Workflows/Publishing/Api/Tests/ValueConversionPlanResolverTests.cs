@@ -327,7 +327,7 @@ public sealed class ValueConversionPlanResolverTests
                 StorageDriverKey: "elsa.json")],
             [new ArgumentState(
                 "result",
-                new ArgumentValue("total", "Variable"),
+                ArgumentValue.FromClr("total", "Variable"),
                 null,
                 null,
                 null,
@@ -343,7 +343,7 @@ public sealed class ValueConversionPlanResolverTests
         var input = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create(), resolver).Compile(
             "reader",
             Input("String"),
-            new ArgumentValue("total", "Variable"));
+            ArgumentValue.FromClr("total", "Variable"));
 
         Assert.Null(input.ConversionPlan);
     }
@@ -356,7 +356,7 @@ public sealed class ValueConversionPlanResolverTests
             Input("Any"),
             new ArgumentState(
                 "value",
-                new ArgumentValue("""{"name":"Grace"}""", "Literal"),
+                ArgumentValue.FromClr("""{"name":"Grace"}""", "Literal"),
                 null,
                 null,
                 null,
@@ -392,7 +392,7 @@ public sealed class ValueConversionPlanResolverTests
                 SourceRepresentation: ValueRepresentation.FormattedContent)],
             [new ArgumentState(
                 "result",
-                new ArgumentValue("customer", "Variable"),
+                ArgumentValue.FromClr("customer", "Variable"),
                 null,
                 null,
                 null,
@@ -420,7 +420,7 @@ public sealed class ValueConversionPlanResolverTests
                 IsRequired: true,
                 IsNullable: false,
                 StorageDriverKey: "elsa.json")],
-            [new ArgumentState("stream", new ArgumentValue("payload", "Variable"), null, null, null, null)],
+            [new ArgumentState("stream", ArgumentValue.FromClr("payload", "Variable"), null, null, null, null)],
             [new VariableDefinition("payload", "Payload", new TypeReference("Stream"), null, null)]));
 
         Assert.Contains("VF-ACT-005", exception.Message, StringComparison.Ordinal);

@@ -208,7 +208,7 @@ export function WorkflowLibraryResult({ proposal, preparedInvocation, toolResult
   const status = typeof data.status === "string" ? data.status : "proposed";
   const changes = Array.isArray(data.changes) ? data.changes.filter(isRecord) : [];
   const overall = toolResult ? status === "applied" ? "Changed in the workflow library." : status === "partial" ? "Partly changed: some workflows were not changed." : "Nothing was changed."
-    : proposal?.status === "denied" ? "Declined: nothing was changed." : "Review this library change.";
+    : isRecord(proposal) && proposal.status === "denied" ? "Declined: nothing was changed." : "Review this library change.";
   return (
     <section aria-label="Workflow library change" className="weaver-workflow-library" data-outcome={toolResult ? status : "proposed"}>
       <p><strong>{overall}</strong></p>

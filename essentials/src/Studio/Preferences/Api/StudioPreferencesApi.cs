@@ -34,7 +34,7 @@ public static class StudioPreferencesApi
         // Both operations keep their own reads, writes, precondition handling, ETag headers, and
         // problem shapes — and the published contract lets unexpected failures reach the host's
         // exception pipeline — so the surface stays on the group's raw seam.
-        var api = endpoints.MapEndpointGroup(owner, StudioPreferencesJsonContext.Default, jsonContentType: "application/json");
+        var api = endpoints.MapEndpointGroup(owner, StudioPreferencesJsonContext.WireContext, jsonContentType: "application/json");
 
         api.MapUnboundOperation("GET", PreferencesRoute, "Get",
                 typeof(StudioPreferenceDocument), StatusCodes.Status200OK, null, HandleGetRequestAsync,
@@ -65,7 +65,7 @@ public static class StudioPreferencesApi
         PutStudioPreferenceRequest? request;
         try
         {
-            request = await httpContext.Request.ReadFromJsonAsync<PutStudioPreferenceRequest>(httpContext.RequestAborted);
+            request = await httpContext.Request.ReadFromJsonAsync(StudioPreferencesJsonContext.WireContext.PutStudioPreferenceRequest, httpContext.RequestAborted);
         }
         catch (System.Text.Json.JsonException)
         {
@@ -113,7 +113,7 @@ public static class StudioPreferencesApi
                 return Results.NotFound();
 
             httpContext.Response.Headers.ETag = $"\"{document.Revision}\"";
-            return Results.Json(document, contentType: "application/json");
+            return Results.Json(document, StudioPreferencesJsonContext.WireContext.StudioPreferenceDocument, contentType: "application/json");
         }
         catch (StudioPreferenceScopeException)
         {
@@ -158,7 +158,7 @@ public static class StudioPreferencesApi
                 cancellationToken);
 
             httpContext.Response.Headers.ETag = $"\"{document.Revision}\"";
-            return Results.Json(document, contentType: "application/json");
+            return Results.Json(document, StudioPreferencesJsonContext.WireContext.StudioPreferenceDocument, contentType: "application/json");
         }
         catch (StudioPreferenceScopeException)
         {

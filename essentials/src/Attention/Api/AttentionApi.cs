@@ -24,7 +24,7 @@ public static class AttentionApi
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
         var api = endpoints.MapEndpointGroup(
             OwnerId,
-            AttentionJsonContext.Default,
+            AttentionJsonContext.WireContext,
             jsonContentType: "application/json",
             tag: string.IsNullOrWhiteSpace(applicationName) ? null : applicationName);
 
@@ -53,7 +53,7 @@ public static class AttentionApi
                     new AttentionQueryContext(principal, tenantId),
                     query.Length == 0 ? null : query),
                 context.RequestAborted);
-            await Results.Json(result, AttentionJsonContext.Default.AttentionAggregationResult, contentType: "application/json").ExecuteAsync(context);
+            await Results.Json(result, AttentionJsonContext.WireContext.AttentionAggregationResult, contentType: "application/json").ExecuteAsync(context);
         }
         catch (AttentionQueryException exception)
         {

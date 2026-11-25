@@ -8,5 +8,5 @@ public static class ActivityNodePresentationHasher
 {
     public static string Compute(IEnumerable<ActivityNodePresentationRecord>? records) =>
         ActivityLayoutHasher.Compute(ActivityNodePresentationRecord.NormalizeCollection(records).Select(record =>
-            new ActivityLayoutRecord(record.NodeId, JsonSerializer.SerializeToElement(new { record.DisplayName, record.Description }))));
+            new ActivityLayoutRecord(record.NodeId, Elsa.Serialization.Core.JsonHashInput.SerializeToElement(new { record.DisplayName, record.Description }))));
 }

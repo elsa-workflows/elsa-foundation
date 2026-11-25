@@ -1096,8 +1096,10 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         }
     }
 
-    [Fact]
-    public async Task Legacy_bool_discard_marker_replays_without_duplicate_event()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_bool_discard_marker_replays_only_with_the_current_fingerprint(bool archivedHash)
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -1109,15 +1111,23 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         await writer.ExecuteAsync(key, "workflow.draft.discard.v1", new { DraftId = "draft" }, [DesignPersistenceUnitNames.Drafts],
             (_, _) => Task.FromResult(DesignAtomicWriteStage<bool>.Accepted(true)));
         var marker = await db.Operations.SingleAsync();
-        marker.RequestFingerprint = LegacyFingerprint("workflow.draft.discard.v1", "{\"draftId\":\"draft\"}");
+        marker.RequestFingerprint = archivedHash
+            ? LegacyFingerprint("workflow.draft.discard.v1", "{\"draftId\":\"draft\"}")
+            : PortableFingerprint("workflow.draft.discard.v1", "{\"draftId\":\"draft\"}");
         marker.ResultJson = "true";
-        marker.ResultFingerprint = LegacyFingerprint("workflow.draft.discard.v1.result", "true");
+        marker.ResultFingerprint = PortableFingerprint("workflow.draft.discard.v1.result", "true");
         await db.SaveChangesAsync();
 
         var events = new CapturingDeferredEventPublisher();
-        await new EfDiscardDraftCommand(db, access, writer, new TestLockProvider(), events).Execute(key, "draft");
+        var command = new EfDiscardDraftCommand(db, access, writer, new TestLockProvider(), events);
+        if (archivedHash)
+            Assert.Contains("conflicts with an earlier request", (await Assert.ThrowsAsync<InvalidOperationException>(() => command.Execute(key, "draft"))).Message, StringComparison.Ordinal);
+        else
+            await command.Execute(key, "draft");
 
         Assert.Empty(events.Events);
+        Assert.Equal(1, await db.Operations.CountAsync());
+        Assert.Equal("true", (await db.Operations.SingleAsync()).ResultJson);
     }
 
     [Fact]
@@ -1379,7 +1389,8 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         db.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" }); await db.SaveChangesAsync();
         await new EfAddWorkflowDefinitionVersionCommand(db, access, writer, serializer, identity, new TestLockProvider()).Execute(new DesignOperationKey("serializer-request"), "definition", state);
         var marker = await db.Operations.SingleAsync(x => x.OperationKey == "serializer-request");
-        var stateJson = serializer.Serialize(state);
+        using var stateDocument = JsonDocument.Parse(serializer.Serialize(state));
+        var stateJson = stateDocument.RootElement;
         var materialJson = JsonSerializer.Serialize(new { definitionId = "definition", stateJson });
         Assert.Equal(PortableFingerprint("workflow.version.add.v1", materialJson), marker.RequestFingerprint);
     }
@@ -2151,6 +2162,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
             .Execute(new DesignOperationKey("parity-create"), definition, draft, [layout], [presentation]);
 
         var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        using var expectedState = JsonDocument.Parse(serializer.Serialize(state));
         var expectedCreateJson = JsonSerializer.Serialize(new
         {
             name = definition.Name,
@@ -2159,7 +2171,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
             deletedReason = definition.DeletedReason,
             isSourceOwned = definition.IsSourceOwned,
             sourceVersionId = draft.SourceVersionId,
-            stateJson = serializer.Serialize(state),
+            stateJson = expectedState.RootElement,
             layout = new[] { new { nodeId = "root", x = 1d, y = 2d, width = 3d, height = 4d, additionalPropertiesJson = (string?)null } },
             activityPresentation = new[] { new { nodeId = "root", displayName = "Root", description = "Description" } }
         }, json);
@@ -3062,7 +3074,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     private static WorkflowDefinitionState State() => new([], null, [], [], null);
 
     /// <summary>The hash a promotion is given where the atomic writer never reaches the draft, so no comparison runs.</summary>
-    private static readonly string UnreadStateHash = WorkflowDraftStateHash.Compute("draft content the writer never reads");
+    private static readonly string UnreadStateHash = WorkflowDraftStateHash.Compute("{}");
 
     /// <summary>The content hash of the draft as stored, which a caller that read it passes to promotion.</summary>
     private static async Task<string> StoredDraftHashAsync(WorkflowsDesignDbContext db, string draftId) =>
@@ -3225,10 +3237,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     private static string PortableFingerprint(string operationKind, string json)
     {
         using var document = JsonDocument.Parse(json);
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            WriteCanonical(writer, document.RootElement);
-        var canonical = Encoding.UTF8.GetString(stream.ToArray());
+        var canonical = Encoding.UTF8.GetString(JsonHashInput.CanonicalBytes(document.RootElement));
         var identity = "elsa-design-material:v1";
         var material = $"{Encoding.UTF8.GetByteCount(identity)}:{identity}{Encoding.UTF8.GetByteCount(operationKind)}:{operationKind}1:1{Encoding.UTF8.GetByteCount(canonical)}:{canonical}";
         return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)))}";
@@ -3237,28 +3246,6 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     private static string LegacyFingerprint(string operationKind, string json) =>
         $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"elsa-design-material:v1\n{operationKind}\n{json}")))}";
 
-    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
-    {
-        if (element.ValueKind == JsonValueKind.Object)
-        {
-            writer.WriteStartObject();
-            foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
-            {
-                writer.WritePropertyName(property.Name);
-                WriteCanonical(writer, property.Value);
-            }
-            writer.WriteEndObject();
-        }
-        else if (element.ValueKind == JsonValueKind.Array)
-        {
-            writer.WriteStartArray();
-            foreach (var item in element.EnumerateArray())
-                WriteCanonical(writer, item);
-            writer.WriteEndArray();
-        }
-        else
-            element.WriteTo(writer);
-    }
     private sealed class ProtocolScope(Exception? disposeFailure = null) : IDisposable
     {
         public bool Disposed { get; private set; }
@@ -3435,10 +3422,10 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     {
         public Task ExecuteAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
-    private sealed class TestSerializer(JsonSerializerOptions? serializerOptions = null) : IPayloadSerializer
+    private sealed class TestSerializer(JsonSerializerOptions? serializerOptions = null, Exception? writeFailure = null) : IPayloadSerializer
     {
         private readonly JsonSerializerOptions options = serializerOptions ?? new();
-        public string Serialize(object payload) => JsonSerializer.Serialize(payload, options);
+        public string Serialize(object payload) => writeFailure is null ? JsonSerializer.Serialize(payload, options) : throw writeFailure;
         public JsonElement SerializeToElement(object payload) => JsonSerializer.SerializeToElement(payload, options);
         public object Deserialize(string serializedData) => JsonSerializer.Deserialize<JsonElement>(serializedData);
         public object Deserialize(string serializedData, Type type) => JsonSerializer.Deserialize(serializedData, type)!;

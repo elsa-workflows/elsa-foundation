@@ -118,7 +118,7 @@ public sealed class DynamicKindBindingTests
 
         var executable = await publication.Compile(new ActivityNode("write", ResponseVersion,
         [
-            new(nameof(WriteHttpResponse.Headers), new ArgumentValue("""{"X-Test": ["1"]}""", "Object"), null, null, null, null)
+            new(nameof(WriteHttpResponse.Headers), ArgumentValue.FromClr("""{"X-Test": ["1"]}""", "Object"), null, null, null, null)
         ], []));
 
         var binding = executable.RootActivity.InputBindings[nameof(WriteHttpResponse.Headers)];
@@ -145,11 +145,11 @@ public sealed class DynamicKindBindingTests
         var stored = JsonSerializer.Deserialize<VariableDefinition>(
             $$$"""{"referenceKey":"customer","name":"Customer","type":{"alias":"{{{storedAlias}}}","collectionKind":"Single"}}""",
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
-        var customer = stored with { Default = new ArgumentValue(JsonSerializer.SerializeToElement(new { address = new { street = "Main" } }), "Object") };
+        var customer = stored with { Default = ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { address = new { street = "Main" } }), "Object") };
         Assert.Equal("Any", customer.Type.Alias);
         using var publication = new MemberReadPublicationRunTests.Publication(memberReads: true, typed: true);
         var reader = new ActivityNode("reader", "reader-version", [new(nameof(MemberReadPublicationRunTests.MemberReader.Value),
-            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "customer", declaringScopeId = "workflow", memberPath = new[] { "address", "street" } }),
+            ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "customer", declaringScopeId = "workflow", memberPath = new[] { "address", "street" } }),
                 "VariableMember"), null, null, null, null)], []);
 
         var executable = await publication.Compile(reader, [customer]);
@@ -183,7 +183,7 @@ public sealed class DynamicKindBindingTests
     private static ActivityNode Reader(string inputKey, string json, TypeReference? resultType = null) =>
         new("reader", ReaderVersion + "-" + inputKey,
         [
-            new(inputKey, new ArgumentValue(new ExpressionDefinition(
+            new(inputKey, ArgumentValue.FromClr(new ExpressionDefinition(
                 "JavaScript",
                 json,
                 resultType ?? new TypeReference("Any"),

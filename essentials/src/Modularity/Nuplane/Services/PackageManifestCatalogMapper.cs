@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Modularity.Core.Models;
 using Elsa.Specifications.PackageManifests;
@@ -18,12 +17,22 @@ public static class PackageManifestCatalogMapper
     {
         // System.Text.Json's byte/span overloads reject a leading UTF-8 BOM ("'0xEF' is an invalid start of a value"),
         // so strip it before deserializing — manifests re-saved by BOM-emitting editors/tooling must still parse.
-        var manifest = JsonSerializer.Deserialize<ElsaPackageManifest>(StripByteOrderMark(bytes), ManifestJsonSerializerOptions.Default);
+        var manifest = JsonSerializer.Deserialize<ElsaPackageManifest>(StripByteOrderMark(bytes), options: ManifestJsonSerializerOptions.Default);
         if (manifest is null)
             return PackageManifestReadResult.Missing("Package manifest was empty.");
 
-        // Hash the original file bytes (BOM included) so the content identity matches the file on disk.
-        var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        // Catalog content identity includes unknown members, but not BOM, whitespace or JSON spelling.
+        string hash;
+        try
+        {
+            hash = Elsa.Serialization.Core.JsonHashInput.HashUtf8(StripByteOrderMark(bytes).ToArray());
+        }
+        catch (InvalidOperationException exception)
+        {
+            // Extension values may remain JsonElement during typed parsing. Refuse invalid Unicode in
+            // those values through the same per-package manifest error path as malformed JSON syntax.
+            throw new JsonException("Package manifest contains an invalid JSON value.", exception);
+        }
         return PackageManifestReadResult.Found(path, hash, manifest);
     }
 

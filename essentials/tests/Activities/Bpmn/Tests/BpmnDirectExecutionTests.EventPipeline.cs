@@ -195,8 +195,8 @@ public sealed partial class BpmnDirectExecutionTests
         var execution = (await peerScope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId))!;
         Assert.Equal(captured, execution.PinnedExecutable);
         Assert.NotNull(execution.IngressOrigin);
-        Assert.True(execution.IngressOrigin!.IsEquivalentTo(recoveredProgress.Seal.Command.Deserialize<WorkflowExecutionCommandEnvelope>()!
-            .Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.StartAuthority!.StandaloneTrigger));
+        Assert.True(execution.IngressOrigin!.IsEquivalentTo(recoveredProgress.Seal.Command.Deserialize<WorkflowExecutionCommandEnvelope>(Elsa.Serialization.Core.JsonBaseline.Options)!
+            .Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.StartAuthority!.StandaloneTrigger));
         Assert.Single(await peerScope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executionId));
         Assert.Single(await peerScope.ServiceProvider.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(executionId));
         Assert.Empty((await peerScope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new(executionId))).Items);

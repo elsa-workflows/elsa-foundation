@@ -65,7 +65,7 @@ internal sealed class HostSqlBindings(IEnumerable<EtlHostSqlBindingOptions> opti
         {
             throw new EtlBindingException("etl.binding-unavailable", "The SQL binding's connection string is invalid.");
         }
-        var handle = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+        var handle = Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             FormatVersion = 1,
             ScopeIdentity = EtlRuntimeIdentity.ScopeKey(Scope(binding)),
@@ -80,7 +80,7 @@ internal sealed class HostSqlBindings(IEnumerable<EtlHostSqlBindingOptions> opti
             AllowedTables = binding.AllowedTables.Order(StringComparer.Ordinal).ToArray(),
             binding.LedgerTable,
             binding.CreateLedger
-        })));
+        });
         return new(binding.Alias, binding.Revision, handle, engine, binding.ConnectionString, binding.LedgerTable, binding.CreateLedger);
     }
 

@@ -130,7 +130,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         // Ordinary JSON serialization substitutes malformed UTF-16. Refuse before emitting a false link.
         if (!IsWellFormedUtf16(evidenceId))
             throw new InvalidOperationException("The evidence identifier cannot be represented as an exact JSON reference.");
-        return JsonSerializer.Serialize(new[] { evidenceId });
+        return JsonSerializer.Serialize(new[] { evidenceId }, options: Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     private static bool IsWellFormedUtf16(string value)
@@ -397,7 +397,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                 if (fact.OutcomeNames.Count > 0)
                 {
                     var representable = fact.OutcomeNames.All(IsWellFormedUtf16);
-                    var outcomes = representable ? JsonSerializer.Serialize(fact.OutcomeNames) : null;
+                    var outcomes = representable ? JsonSerializer.Serialize(fact.OutcomeNames, options: Elsa.Serialization.Core.JsonBaseline.Options) : null;
                     if (outcomes is { Length: <= 2048 }) metadata["history.outcomeNames"] = outcomes;
                     else
                     {

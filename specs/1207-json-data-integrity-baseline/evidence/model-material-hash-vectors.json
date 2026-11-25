@@ -1,0 +1,74 @@
+[
+  {
+    "name": "spelling-a",
+    "definition": "{ \"total\":1.0, \"name\":\"Ren\\u00e9\" }",
+    "canonical": "{\"definition\":{\"name\":\"Ren\\u00E9\",\"total\":1e0},\"dependencies\":[],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[],\"version\":1e0},\"outputs\":[],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[]}",
+    "sha256": "c3cb6316d581618fb09521bcb50fa2308c283885aede0677e79ef1b757869caa"
+  },
+  {
+    "name": "spelling-b",
+    "definition": "{\"name\":\"René\",\"total\":1e0}",
+    "canonical": "{\"definition\":{\"name\":\"Ren\\u00E9\",\"total\":1e0},\"dependencies\":[],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[],\"version\":1e0},\"outputs\":[],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[]}",
+    "sha256": "c3cb6316d581618fb09521bcb50fa2308c283885aede0677e79ef1b757869caa"
+  },
+  {
+    "name": "empty",
+    "definition": "{}",
+    "canonical": "{\"definition\":{},\"dependencies\":[],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[],\"version\":1e0},\"outputs\":[],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[]}",
+    "sha256": "c654085a293f97f877a2d722fb3ad6f13185d687b501e239cf3607c516f0607d"
+  },
+  {
+    "name": "present-null",
+    "definition": "{\"x\":null}",
+    "canonical": "{\"definition\":{\"x\":null},\"dependencies\":[],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[],\"version\":1e0},\"outputs\":[],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[]}",
+    "sha256": "f7502fac5ed634448e74812c852b53bcb28b545137e70824761216c42ba7e96d"
+  },
+  {
+    "name": "array-forward",
+    "definition": "{\"x\":[1,2]}",
+    "canonical": "{\"definition\":{\"x\":[1e0,2e0]},\"dependencies\":[],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[],\"version\":1e0},\"outputs\":[],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[]}",
+    "sha256": "a5f60f567ed3df2e5a465f497251858f3036d9321bb7154e984fc83372cf354e"
+  },
+  {
+    "name": "array-reverse",
+    "definition": "{\"x\":[2,1]}",
+    "canonical": "{\"definition\":{\"x\":[2e0,1e0]},\"dependencies\":[],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[],\"version\":1e0},\"outputs\":[],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[]}",
+    "sha256": "cf0d100d32636de9b12afba18bba09933b7fe5efe056b0a1c00b8a3006e9a107"
+  },
+  {
+    "name": "large-a",
+    "definition": "{\"x\":9007199254740993}",
+    "canonical": "{\"definition\":{\"x\":9007199254740993e0},\"dependencies\":[],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[],\"version\":1e0},\"outputs\":[],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[]}",
+    "sha256": "de32a4d455f7d4eb917e067653c164158fec68d491cc4a1a9f6a317cf9351242"
+  },
+  {
+    "name": "large-b",
+    "definition": "{\"x\":9007199254740992}",
+    "canonical": "{\"definition\":{\"x\":9007199254740992e0},\"dependencies\":[],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[],\"version\":1e0},\"outputs\":[],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[]}",
+    "sha256": "d2366ab0886e6c58c860fa45782f654d40212b60cafd97872cc5464becd655aa"
+  },
+  {
+    "name": "rich-value",
+    "rich": true,
+    "defaultKind": "value",
+    "definition": "{\"kind\":\"rich\",\"values\":[1,null]}",
+    "canonical": "{\"definition\":{\"kind\":\"rich\",\"values\":[1e0,null]},\"dependencies\":[{\"bindingId\":\"dwBvAHIAawBlAHIA\",\"executable\":{\"artifactHash\":\"cwBoAGEAMgA1ADYAOgBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAA==\",\"artifactId\":\"YQByAHQAaQBmAGEAYwB0AC0AbQBvAGQAZQBsAA==\",\"artifactVersion\":\"MQAuADAALgAwAA==\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgA=\",\"definitionVersionId\":\"dgBlAHIAcwBpAG8AbgA=\"}}],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[{\"defaultValue\":\"Ren\\u00E9\",\"hasDefault\":true,\"isRequired\":false,\"name\":\"dgBhAGwAdQBlAA==\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"Single\"}}],\"version\":1e0},\"outputs\":[{\"name\":\"cgBlAHMAdQBsAHQA\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"List\"}}],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[{\"consumerKey\":\"dABlAHMAdAAuAGMAbwBuAHMAdQBtAGUAcgA=\",\"schemaVersion\":\"MQAuADAA\"}]}",
+    "sha256": "44d5929b5aff3ddc4c3f08b7ad1658a106b187012a3881f371f34f5f0e756b97"
+  },
+  {
+    "name": "rich-missing",
+    "rich": true,
+    "defaultKind": "missing",
+    "definition": "{\"kind\":\"rich\",\"values\":[1,null]}",
+    "canonical": "{\"definition\":{\"kind\":\"rich\",\"values\":[1e0,null]},\"dependencies\":[{\"bindingId\":\"dwBvAHIAawBlAHIA\",\"executable\":{\"artifactHash\":\"cwBoAGEAMgA1ADYAOgBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAA==\",\"artifactId\":\"YQByAHQAaQBmAGEAYwB0AC0AbQBvAGQAZQBsAA==\",\"artifactVersion\":\"MQAuADAALgAwAA==\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgA=\",\"definitionVersionId\":\"dgBlAHIAcwBpAG8AbgA=\"}}],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[{\"defaultValue\":null,\"hasDefault\":false,\"isRequired\":false,\"name\":\"dgBhAGwAdQBlAA==\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"Single\"}}],\"version\":1e0},\"outputs\":[{\"name\":\"cgBlAHMAdQBsAHQA\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"List\"}}],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[{\"consumerKey\":\"dABlAHMAdAAuAGMAbwBuAHMAdQBtAGUAcgA=\",\"schemaVersion\":\"MQAuADAA\"}]}",
+    "sha256": "3dc2b9ed674519a2d32a2e63a40d591a77eff6416775639b32d2943858b94a24"
+  },
+  {
+    "name": "rich-null",
+    "rich": true,
+    "defaultKind": "null",
+    "definition": "{\"kind\":\"rich\",\"values\":[1,null]}",
+    "canonical": "{\"definition\":{\"kind\":\"rich\",\"values\":[1e0,null]},\"dependencies\":[{\"bindingId\":\"dwBvAHIAawBlAHIA\",\"executable\":{\"artifactHash\":\"cwBoAGEAMgA1ADYAOgBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAGEAYQBhAA==\",\"artifactId\":\"YQByAHQAaQBmAGEAYwB0AC0AbQBvAGQAZQBsAA==\",\"artifactVersion\":\"MQAuADAALgAwAA==\",\"definitionId\":\"ZABlAGYAaQBuAGkAdABpAG8AbgA=\",\"definitionVersionId\":\"dgBlAHIAcwBpAG8AbgA=\"}}],\"domain\":\"ZQBsAHMAYQAuAHIAdQBuAHQAaQBtAGUALgBtAG8AZABlAGwALQBtAGEAdABlAHIAaQBhAGwALwB2ADEA\",\"formatVersion\":1e0,\"inputContract\":{\"inputs\":[{\"defaultValue\":null,\"hasDefault\":true,\"isRequired\":false,\"name\":\"dgBhAGwAdQBlAA==\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"Single\"}}],\"version\":1e0},\"outputs\":[{\"name\":\"cgBlAHMAdQBsAHQA\",\"type\":{\"alias\":\"UwB0AHIAaQBuAGcA\",\"collectionKind\":\"List\"}}],\"profile\":\"dABlAHMAdAAvADEA\",\"protocol\":{\"key\":\"dABlAHMAdAAuAHMAZQBtAGEAbgB0AGkAYwAtAG0AbwBkAGUAbAA=\",\"version\":1e0},\"runtimeRequirements\":[{\"consumerKey\":\"dABlAHMAdAAuAGMAbwBuAHMAdQBtAGUAcgA=\",\"schemaVersion\":\"MQAuADAA\"}]}",
+    "sha256": "73490efe76cce4de7054f0a4e993732b157602a6d9efe48da84a4236dfe48769"
+  }
+]

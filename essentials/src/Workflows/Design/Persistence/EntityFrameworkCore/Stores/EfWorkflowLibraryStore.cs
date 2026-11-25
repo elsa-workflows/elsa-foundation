@@ -21,7 +21,7 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
     private const int MaximumFolders = 10000;
     private const int MaximumTags = 10000;
     private const int MaximumAssignments = 64;
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private string Tenant => access.Current.RequireScope().Value;
     private static string NewId(string prefix) => prefix + Guid.NewGuid().ToString("N");
     private static string Revision() => Guid.NewGuid().ToString("N");
@@ -80,7 +80,7 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
         if (key.Length > 256 || key.Any(char.IsControl)) throw new ArgumentException("Operation keys must have 1–256 characters without control characters.");
     }
     private static string ClientKeyHash(string key) => EfDesignSupport.LookupHash("workflow-library-client-key\0" + key);
-    private static string Fingerprint(object material) => EfDesignSupport.LookupHash(JsonSerializer.Serialize(material, Json));
+    private static string Fingerprint(object material) => Elsa.Serialization.Core.JsonHashInput.Hash(material);
     private static void ValidateStoredId(string id, string prefix)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
@@ -223,8 +223,8 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
 
     private sealed record Cursor(string Binding, string Key, string Id, long Ticks = 0);
     private string Binding(string kind, object material, string? subject = null) =>
-        EfDesignSupport.LookupHash(JsonSerializer.Serialize(new { kind, tenant = access.Current.Scope?.Value,
-            global = access.Current.IsGlobal, subject, material }, Json));
+        Elsa.Serialization.Core.JsonHashInput.Hash(new { kind, tenant = access.Current.Scope?.Value,
+            global = access.Current.IsGlobal, subject, material });
     private static string Encode(Cursor cursor) => Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(cursor, Json)))
         .TrimEnd('=').Replace('+', '-').Replace('/', '_');
     private static Cursor? Decode(string? token, string binding)

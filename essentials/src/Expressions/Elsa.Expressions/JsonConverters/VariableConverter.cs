@@ -7,22 +7,18 @@ using System.Text.Json.Serialization;
 namespace Elsa.Expressions.JsonConverters;
 
 /// <summary>
-/// Serializes <see cref="Type"/> objects to a simple alias representing said type.
+/// Serializes variable declarations with their aliases and typed default values.
 /// </summary>
 /// <inheritdoc />
 internal sealed class VariableConverter(IVariableMapper variableMapper) : JsonConverter<IVariable>
 {
-    private JsonSerializerOptions? _options;
-
     /// <inheritdoc />
     public override IVariable Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        var newOptions = GetClonedOptions(options);
-
         VariableDefinition model;
         try
         {
-            model = JsonSerializer.Deserialize<VariableDefinition>(ref reader, newOptions)!;
+            model = JsonSerializer.Deserialize<VariableDefinition>(ref reader, options)!;
         }
         catch (JsonException e)
         {
@@ -41,15 +37,4 @@ internal sealed class VariableConverter(IVariableMapper variableMapper) : JsonCo
         JsonSerializer.Serialize(writer, model, options);
     }
 
-    private JsonSerializerOptions GetClonedOptions(JsonSerializerOptions options)
-    {
-        if (_options != null)
-            return _options;
-
-        var newOptions = new JsonSerializerOptions(options);
-        var jsonPrimitiveToStringConverter = new JsonPrimitiveToStringConverter();
-        newOptions.Converters.Add(jsonPrimitiveToStringConverter);
-        _options = newOptions;
-        return newOptions;
-    }
 }

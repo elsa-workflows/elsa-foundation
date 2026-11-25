@@ -61,6 +61,12 @@ public sealed class ExecutableNodeCompiler(
     /// recursive node compilation reads it without threading it through every call (spec 1222 FR-001, FR-004a).
     /// </summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ActivityTreeProjection, ScopedVariableVisibility> ReadVisibility = new();
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<ActivityTreeProjection, Elsa.Expressions.Core.Contracts.IExecutionWarningSink> _conversionWarnings = new();
+
+    internal void SetConversionWarningSink(ActivityTreeProjection projection, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings)
+    {
+        if (warnings is not null) _conversionWarnings.AddOrUpdate(projection, warnings);
+    }
 
     private IReadOnlyDictionary<string, TypeReference> _workflowOutputTypes = new Dictionary<string, TypeReference>();
 
@@ -74,6 +80,9 @@ public sealed class ExecutableNodeCompiler(
         (operatorSchedulingCapabilityProviders ?? []).ToArray();
 
     private readonly ValueConversionPlanResolver _conversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
+
+    internal RuntimeInputBindingCompiler ConversionCompilerFor(RuntimeActivityDescriptor descriptor, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings, string nodeId) =>
+        inputBindingCompiler.WithConversionBoundary(ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, descriptor), warnings, nodeId);
 
     public ExecutableNode CompileRoot(
         ActivityNode rootActivity,
@@ -185,7 +194,8 @@ public sealed class ExecutableNodeCompiler(
         inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, projectedInputs.States);
         var inputBindings = PinScriptReads(
             activity.NodeId,
-            inputBindingCompiler.CompileAll(activity.NodeId, projectedInputs.Definitions, projectedInputs.States),
+            inputBindingCompiler.WithConversionBoundary(clrActivityType, _conversionWarnings.TryGetValue(projection, out var conversionWarnings) ? conversionWarnings : null, activity.NodeId)
+                .CompileAll(activity.NodeId, projectedInputs.Definitions, projectedInputs.States),
             projection,
             clrActivityType?.GetCustomAttribute<ActivityScriptOutcomesAttribute>(inherit: true)?.ScriptInputKey,
             out var bodyReadPlan,
@@ -572,7 +582,6 @@ public sealed class ExecutableNodeCompiler(
         {
             var outputName = nameArgument.Value switch
             {
-                string text => text,
                 JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
                 _ => null
             };
@@ -1072,20 +1081,20 @@ public sealed class ExecutableNodeCompiler(
         if (structure is null)
             return null;
 
-        var payload = JsonNode.Parse(structure.Payload.GetRawText()) as JsonObject
-            ?? throw new ArgumentException($"Activity node '{nodeId}' has a non-object executable structure payload.");
-        if (payload["variables"] is { } variablesNode)
-        {
-            var authored = variablesNode.Deserialize<IReadOnlyCollection<VariableDefinition>>(DescriptorPayloadSerializer.Options)
-                ?? throw new ArgumentException($"Activity node '{nodeId}' has malformed variable declarations.");
-            var compiled = authored.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
-            payload["variables"] = JsonSerializer.SerializeToNode(compiled, DescriptorPayloadSerializer.Options);
-        }
+        if (structure.Payload.ValueKind != JsonValueKind.Object)
+            throw new ArgumentException($"Activity node '{nodeId}' has a non-object executable structure payload.");
+        if (!structure.Payload.TryGetProperty("variables", out var variables) || variables.ValueKind == JsonValueKind.Null)
+            return new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
+        var authored = variables.Deserialize<IReadOnlyCollection<VariableDefinition>>(DescriptorPayloadSerializer.Options)
+            ?? throw new ArgumentException($"Activity node '{nodeId}' has malformed variable declarations.");
+        var compiled = authored.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
+        var payload = structure.Payload.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+        payload["variables"] = JsonSerializer.SerializeToElement(compiled, options: DescriptorPayloadSerializer.Options);
 
         return new ExecutableActivityStructure(
             structure.Kind,
             structure.SchemaVersion,
-            JsonSerializer.SerializeToElement(payload, DescriptorPayloadSerializer.Options));
+            JsonSerializer.SerializeToElement(payload, options: DescriptorPayloadSerializer.Options));
     }
 
     /// <summary>

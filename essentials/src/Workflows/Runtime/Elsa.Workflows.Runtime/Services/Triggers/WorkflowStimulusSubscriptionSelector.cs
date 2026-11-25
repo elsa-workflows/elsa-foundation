@@ -13,7 +13,7 @@ internal sealed class WorkflowStimulusSubscriptionSelector(IStandaloneTriggerSto
 {
     private readonly StimulusDeliveryRequestProjector projector = new(adapters);
     private readonly IReadOnlyDictionary<string, IStandaloneTriggerRuntimeTarget> runtimeTargets = runtimeTargets.ToDictionary(target => target.ModelKey, StringComparer.Ordinal);
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     internal async ValueTask<RuntimeWorkflowSubscriptionCandidate> SelectAsync(PostCommitDeliveryContext source, CancellationToken token)
     {

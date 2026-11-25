@@ -141,7 +141,7 @@ public sealed class EtlWorkflowPublicationTests
     }
 
     [Fact]
-    public void Native_pin_reader_rejects_wrong_version_hash_and_noncanonical_v2_documents()
+    public void Native_pin_reader_rejects_wrong_version_and_hash_but_accepts_equivalent_v2_property_order()
     {
         var artifact = Assert.IsType<EtlArtifact>(new EtlArtifactCompiler().Compile("orders", 7, EtlV2TestPipelines.Create()).Artifact);
         var selection = new EtlPublishedSelection(artifact.DefinitionId, artifact.DefinitionVersion, artifact.ContentHash).ToToken();
@@ -163,11 +163,14 @@ public sealed class EtlWorkflowPublicationTests
         var noncanonicalPin = SerializeArtifact(noncanonical);
         using var serializedPin = JsonDocument.Parse(noncanonicalPin);
         Assert.NotEqual(artifact.Pipeline.GetRawText(), serializedPin.RootElement.GetProperty("pipeline").GetRawText());
-        Assert.Throws<InvalidDataException>(() => EtlNativeBoundary.ReadPin(noncanonicalPin, selection));
+        var restored = EtlNativeBoundary.ReadPin(noncanonicalPin, selection);
+        Assert.Equal(artifact.ContentHash, restored.ContentHash);
+        Assert.Equal(artifact.ArtifactId, restored.ArtifactId);
+        Assert.Equal(noncanonicalDocument.RootElement.GetRawText(), restored.Pipeline.GetRawText());
     }
 
     [Fact]
-    public void Native_pin_reader_rejects_default_shape_with_missing_required_property_or_other_noncanonical_bytes()
+    public void Native_pin_reader_rejects_missing_required_property_and_preserves_equivalent_reordered_bytes()
     {
         var artifact = Assert.IsType<EtlArtifact>(new EtlArtifactCompiler().Compile("orders", 7, EtlV2TestPipelines.Create()).Artifact);
 
@@ -187,7 +190,10 @@ public sealed class EtlWorkflowPublicationTests
             EtlArtifactJson.CreateArtifactId(artifact.FormatVersion, artifact.DefinitionId, artifact.DefinitionVersion, reorderedHash),
             reorderedHash, artifact.DefinitionId, artifact.DefinitionVersion, reorderedDocument.RootElement);
         var reorderedSelection = new EtlPublishedSelection(reordered.DefinitionId, reordered.DefinitionVersion, reordered.ContentHash).ToToken();
-        Assert.Throws<InvalidDataException>(() => EtlNativeBoundary.ReadPin(SerializeArtifact(reordered), reorderedSelection));
+        Assert.Equal(artifact.ContentHash, reorderedHash);
+        Assert.Equal(artifact.ArtifactId, reordered.ArtifactId);
+        var restored = EtlNativeBoundary.ReadPin(SerializeArtifact(reordered), reorderedSelection);
+        Assert.Equal(reorderedDocument.RootElement.GetRawText(), restored.Pipeline.GetRawText());
     }
 
     [Fact]

@@ -3,6 +3,7 @@ export * from "./backends";
 export * from "./backendConnection";
 export * from "./moduleHost";
 export * from "./notifications";
+export * from "./timeZone";
 import type {StudioConnectionController, StudioModuleHostContext, StudioModuleInstance, StudioShellContribution} from "./moduleHost";
 import type { StudioBackendAwareContribution, StudioBackendSession } from "./backends";
 import type { ComponentType, ReactNode } from "react";
@@ -3016,3 +3017,5 @@ export class StudioHttpError extends Error {
     this.name = "StudioHttpError";
   }
 }
+export { canonicalJsonText, canonicalJsonValue, hashJson, hashJsonText, hashJsonTextAsync } from "./jsonHashInput";
+export { sha256, sha256Hex } from "./sha256";

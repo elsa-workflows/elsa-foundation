@@ -12,7 +12,7 @@ namespace Elsa.Studio.Dashboard.Management.Query;
 internal sealed class DashboardQueryService(
     IInlineEventPublisher events, DashboardReadGate gate, DashboardQueryLimits limits, TimeProvider clock) : IDashboardQueryService
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         MaxDepth = 32
@@ -120,7 +120,7 @@ internal sealed class DashboardQueryService(
         catch (DashboardQueryException exception)
         { return (null, new(false, [new(exception.Code, "query.time", exception.Message)])); }
         var parameters = DashboardQueryValidator.Parameters(snapshot);
-        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { scope, request = snapshot, parameters, evaluatedAt, periods }, Json))).ToLowerInvariant();
+        var fingerprint = Elsa.Serialization.Core.JsonHashInput.Hash(new { scope, request = snapshot, parameters, evaluatedAt, periods });
         var context = new DashboardQueryContext(scope, snapshot, dataset, parameters, fingerprint, evaluatedAt, periods);
         var validating = new DashboardQueryValidating(context);
         await PublishAsync(validating, cancellationToken);

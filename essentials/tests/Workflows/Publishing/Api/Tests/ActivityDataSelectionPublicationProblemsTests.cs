@@ -25,7 +25,8 @@ public sealed class ActivityDataSelectionPublicationProblemsTests
         request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.IdentityHeader, "trusted-success");
         using var response = await host.Client.SendAsync(request);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var diagnostic = Assert.Single(json.RootElement.GetProperty("diagnostics").EnumerateArray());
         Assert.Equal("actual-draft", diagnostic.GetProperty("subject").GetProperty("id").GetString());

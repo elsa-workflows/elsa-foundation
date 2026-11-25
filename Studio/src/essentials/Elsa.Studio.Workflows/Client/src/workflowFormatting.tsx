@@ -1,3 +1,4 @@
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 /** Shared presentational formatters used across the workflow editor and instance views. */
 
 import type { IncidentResolutionOutcomeSummary } from "./workflowTypes";
@@ -5,7 +6,7 @@ import type { IncidentResolutionOutcomeSummary } from "./workflowTypes";
 export function formatDate(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : formatStudioDate(date);
 }
 
 export function formatDuration(start?: string | null, end?: string | null) {
@@ -99,7 +100,7 @@ export function resolveActivityDefinitionTitle(displayName: string | null | unde
 export function formatActivityDefinitionDate(value?: string | null) {
   if (!isActivityDefinitionTimestamp(value)) return "—";
   const date = new Date(value);
-  return date.toLocaleDateString();
+  return formatStudioDate(date);
 }
 
 export function isActivityDefinitionTimestamp(value?: string | null): value is string {

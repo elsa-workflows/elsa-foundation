@@ -75,7 +75,7 @@ public sealed partial class GraphActivityProviderTests
     {
         var projection = new ActivityStructureInputProjection([
             new("Case:a:Condition", new InputDefinition("Case:a:Condition", "Condition", new("Boolean"), null, "Condition", null, false),
-                new("foreign-key", unknownVariable ? new ArgumentValue(ParseJson("""{"referenceKey":"missing","declaringScopeId":"workflow"}"""), "Variable") : new ArgumentValue(true, "Literal"), null, null, null, null))], ["Value"]);
+                new("foreign-key", unknownVariable ? ArgumentValue.FromClr(ParseJson("""{"referenceKey":"missing","declaringScopeId":"workflow"}"""), "Variable") : ArgumentValue.FromClr(true, "Literal"), null, null, null, null))], ["Value"]);
         var provider = new GraphActivityProvider(new TestActivityStructureService { InputProjection = projection },
             new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
         var manifest = CreateManifest("""

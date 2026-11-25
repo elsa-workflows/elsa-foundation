@@ -63,11 +63,10 @@ internal sealed class ActivityDataSelectionAnalyzer(
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var facts = await Target(context, new(node.Node.NodeId, input.ReferenceKey), cancellationToken);
-                if (facts?.IsCredential == true && (CanonicalReferenceState(input, CredentialInputBinding.SecretExpressionType) is not { } secretState ||
-                    !CredentialInputBinding.IsAccepted(true, secretState)))
+                if (facts?.IsCredential == true && !CredentialInputBinding.IsAccepted(true, input))
                     findings.Add(new(Path(node, input.ReferenceKey), CredentialInputBinding.RuleId, "A credential input accepts only a secret reference."));
                 if (context.ConnectionTargets.Contains(new(node.Node.NodeId, input.ReferenceKey)) &&
-                    (CanonicalReferenceState(input, ConnectionInputBinding.ConnectionExpressionType) is not { } connectionState || !ConnectionInputBinding.IsAccepted(connectionState)))
+                    !ConnectionInputBinding.IsAccepted(input))
                     findings.Add(new(Path(node, input.ReferenceKey), ConnectionInputBinding.RuleId, "A connection input accepts only a connection reference."));
                 if (facts?.Constraint is { } constraint && input.IsBound() &&
                     !constraint.AllowedExpressionTypes.Contains(ConstraintRole(input.Value.ExpressionType), StringComparer.OrdinalIgnoreCase))
@@ -265,7 +264,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 location.Node.Inputs.FirstOrDefault(input => input.ReferenceKey == "name")?.Value is { } nameArgument &&
                 StringComparer.OrdinalIgnoreCase.Equals(nameArgument.ExpressionType, "Literal"))
             {
-                var name = nameArgument.Value switch { string text => text, JsonElement { ValueKind: JsonValueKind.String } json => json.GetString(), _ => null };
+                var name = nameArgument.Value is JsonElement { ValueKind: JsonValueKind.String } json ? json.GetString() : null;
                 type = context.Document.Outputs.FirstOrDefault(output => StringComparer.Ordinal.Equals(output.Name, name))?.Type ?? type;
             }
             definition = new("value", "Value", type, StorageDriverType: null, DisplayName: "Value", Category: null,
@@ -331,8 +330,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
             // whose inputs are its boundary's, keeps offering the Input or InputMember read.
             var value = binding.Role is "Input" or ActivityDataReadRoles.InputMember && !context.WorkflowBoundary
                 ? memberOfInput
-                    ? new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = input.ReferenceKey, memberPath = binding.MemberPath }), ActivityDataReadRoles.InputMember)
-                    : new ArgumentValue(new VariableReference(input.ReferenceKey), "Input")
+                    ? new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = input.ReferenceKey, memberPath = binding.MemberPath }, options: Elsa.Serialization.Core.JsonBaseline.Options), ActivityDataReadRoles.InputMember)
+                    : ArgumentValue.FromClr(new VariableReference(input.ReferenceKey), "Input")
                 : RequestRead(context.WorkflowBoundary ? input.Name : input.ReferenceKey, binding, memberOfInput);
             return new($"input:{input.ReferenceKey}", input.DisplayName, null, value,
                 ActivityChildResultAvailability.Definite, input.Type, null, null, context.WorkflowBoundary ? AuthoredAllowsNull(input.Type) : input.IsNullable, input.IsSensitive, input.IsCredential,
@@ -354,7 +353,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
             var authoredScope = AuthoredScope(context.Document, scope);
             ArgumentValue read = binding.Role == ActivityDataReadRoles.VariableMember
                 ? new(JsonSerializer.SerializeToElement(new { referenceKey = variable.ReferenceKey, declaringScopeId = authoredScope, memberPath = binding.MemberPath }), ActivityDataReadRoles.VariableMember)
-                : new(new VariableReference(variable.ReferenceKey, authoredScope), "Variable");
+                : ArgumentValue.FromClr(new VariableReference(variable.ReferenceKey, authoredScope), "Variable");
             return new($"variable:{authoredScope}:{variable.ReferenceKey}", variable.Name, scope,
                 read, ActivityChildResultAvailability.Definite, variable.Type, null, null, null, null, null)
             { ParameterSource = new VariableExpressionParameterBinding(authoredScope, variable.ReferenceKey) };
@@ -502,8 +501,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
 
     // The request read of one member, or of the whole member when the read selects none.
     private static ArgumentValue RequestRead(string memberKey, ActivityDataReadBinding binding, bool member) => member
-        ? new(JsonSerializer.SerializeToElement(new { memberKey, memberPath = binding.MemberPath }), ActivityDataReadRoles.WorkflowRequestMember)
-        : new(JsonSerializer.SerializeToElement(new { memberKey, path = binding.Path }), "WorkflowRequest");
+        ? new(JsonSerializer.SerializeToElement(new { memberKey, memberPath = binding.MemberPath }, options: Elsa.Serialization.Core.JsonBaseline.Options), ActivityDataReadRoles.WorkflowRequestMember)
+        : new(JsonSerializer.SerializeToElement(new { memberKey, path = binding.Path }, options: Elsa.Serialization.Core.JsonBaseline.Options), "WorkflowRequest");
 
     // A member read is admitted wherever the whole read of its source is.
     private async ValueTask<ActivityBindingConversionPreview?> PreviewConversion(Request context, ArgumentState input,
@@ -601,20 +600,6 @@ internal sealed class ActivityDataSelectionAnalyzer(
     private static bool RequiresReturn(ActivityDataSelectionGraph.Location producer) => producer.Node.Structure?.Kind is
         "elsa.sequence.structure" or "elsa.parallel.structure" or "elsa.flowchart.structure";
     private static string Path(ActivityDataSelectionGraph.Location location, string key) => $"{location.Node.NodeId}/inputs/{key}";
-    private static ArgumentState? CanonicalReferenceState(ArgumentState state, string role)
-    {
-        if (!StringComparer.OrdinalIgnoreCase.Equals(state.Value?.ExpressionType, role) || !state.IsBound()) return state;
-        // Existing acceptance predicates serialize non-JSON objects. Never hand them an arbitrary CLR instance.
-        object? payload = state.Value.Value switch {
-            JsonElement json => json,
-            SecretReferenceMembers secret when role == CredentialInputBinding.SecretExpressionType =>
-                JsonSerializer.SerializeToElement(new { name = secret.Name, typeName = secret.TypeName, scope = secret.Scope }),
-            ConnectionReferenceMembers connection when role == ConnectionInputBinding.ConnectionExpressionType =>
-                JsonSerializer.SerializeToElement(new { connection = connection.Name, type = connection.Type }),
-            _ => null
-        };
-        return payload is null ? null : state with { Value = state.Value with { Value = payload } };
-    }
     private static bool Valid(ActivityDataSelectionQuery query) =>
         (query.ExpressionType is null || !string.IsNullOrWhiteSpace(query.ExpressionType) && query.ExpressionType.Length <= 128) && query.Skip is >= 0 and <= 10000 && query.Take is >= 1 and <= 100
         && (query.Search?.Length ?? 0) <= 256 && !query.MemberPath.IsDefault && (query.MemberPath.IsEmpty || ActivityDataMemberPath.IsWithinBounds(query.MemberPath))

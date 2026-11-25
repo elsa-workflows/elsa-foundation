@@ -13,7 +13,7 @@ public sealed class ChildCancelExecutor(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IWorkflowDispatchStore workflowDispatchStore) : IRuntimePostCommitIntentHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public async ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
     {

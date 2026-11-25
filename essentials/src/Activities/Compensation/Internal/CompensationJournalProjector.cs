@@ -20,7 +20,7 @@ internal sealed class CompensationJournalProjector : IActivityStateViewProjector
     public const string Kind = "compensation.journal";
     public const int Version = 1;
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public string StateTypeAlias => CompensationScopeStatePersister.StateTypeAlias;
     public string ViewKind => Kind;

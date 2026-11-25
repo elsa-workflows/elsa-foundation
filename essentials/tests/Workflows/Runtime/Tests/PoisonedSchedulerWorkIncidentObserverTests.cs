@@ -802,7 +802,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 WorkflowExecutionId: workflowExecutionId,
                 Kind: kind,
                 EnqueuedAt: DateTimeOffset.UnixEpoch,
-                Payload: JsonSerializer.SerializeToElement(payload),
+                Payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
                 Metadata: new Dictionary<string, string>());
             return new WorkflowExecutionCommandEnvelope(
                 envelopeId: "envelope-start",

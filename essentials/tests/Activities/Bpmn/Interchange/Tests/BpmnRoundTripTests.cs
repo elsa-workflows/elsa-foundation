@@ -235,8 +235,8 @@ public sealed class BpmnRoundTripTests
             "type" => variable with { Type = new TypeReference("Acme.Account") },
             "collection" => variable with { Type = new TypeReference("Int32", CollectionKind.Array) },
             "storage" => variable with { StorageDriverType = "external-store" },
-            "literal-default" => variable with { Default = new ArgumentValue(42, "Literal") },
-            _ => variable with { Default = new ArgumentValue("variables.outer", "JavaScript") }
+            "literal-default" => variable with { Default = ArgumentValue.FromClr(42, "Literal") },
+            _ => variable with { Default = ArgumentValue.FromClr("variables.outer", "JavaScript") }
         };
         var source = ProcessNode(new BpmnAuthoredStructure(variables: [variable]));
         var before = source.Structure!.Payload.GetRawText();
@@ -325,7 +325,7 @@ public sealed class BpmnRoundTripTests
         var authored = CatchStructure(
             new BpmnEventDefinition(BpmnEventDefinitionTypes.Timer, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Interval] = "PT5M" }),
             new ActivityNode("node-catch", "Elsa.Delay",
-                [new ArgumentState("Duration", new ArgumentValue("PT5M", "Literal"), null, null, null, null)], []));
+                [new ArgumentState("Duration", ArgumentValue.FromClr("PT5M", "Literal"), null, null, null, null)], []));
 
         var reimported = ExportImport(authored);
 
@@ -346,7 +346,7 @@ public sealed class BpmnRoundTripTests
         var authored = CatchStructure(
             new BpmnEventDefinition(type, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = "order-shipped" }),
             new ActivityNode("node-catch", "Elsa.Event",
-                [new ArgumentState("EventName", new ArgumentValue("order-shipped", "Literal"), null, null, null, null)], []));
+                [new ArgumentState("EventName", ArgumentValue.FromClr("order-shipped", "Literal"), null, null, null, null)], []));
 
         var reimported = ExportImport(authored);
 

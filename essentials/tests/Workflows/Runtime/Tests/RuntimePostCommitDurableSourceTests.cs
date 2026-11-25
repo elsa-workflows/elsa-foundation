@@ -296,7 +296,7 @@ public sealed partial class RuntimePostCommitDurableSourceTests
         var work = new RuntimeSchedulerWorkItem("work", "publisher", "command", WorkflowExecutionCommandKind.InvokeActivity,
             "envelope", "work-key", Now, Now);
         var intent = new RuntimePostCommitIntent("continue", "publisher", RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
-            Now, null, "continue-key", System.Text.Json.JsonSerializer.SerializeToElement(work));
+            Now, null, "continue-key", System.Text.Json.JsonSerializer.SerializeToElement(work, Elsa.Serialization.Core.JsonBaseline.Options));
         var continuation = new RuntimePostCommitOutboxItem("continuation:continue", intent, RuntimePostCommitOutboxStatus.Pending, Now, Now);
         var envelope = Envelope("both", 1, required);
         envelope = envelope with { StateChanges = envelope.StateChanges.WithPostCommitOutbox([

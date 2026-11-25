@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { History as HistoryIcon } from "lucide-react";
@@ -11,6 +13,7 @@ import { readTaskBrowseLocation, taskCollectionPath } from "./taskNavigation";
 const responsePendingNotice = "Your response is recorded. The workflow will continue when delivery completes. You can leave this page.";
 
 export function TaskDetailPage({ api, id, navigate }: { api: ElsaStudioModuleApi; id: string; navigate(path: string): void }) {
+
   const location = useStudioRouteLocation();
   const backPath = taskCollectionPath(readTaskBrowseLocation(location.search), id);
   const scope = api.backendSession ?? api.backend;
@@ -37,6 +40,7 @@ export function TaskDetailPage({ api, id, navigate }: { api: ElsaStudioModuleApi
 }
 
 export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: ElsaStudioModuleApi; id: string; identity: TaskActor; onClose?(): void; accessNotice?: React.ReactNode }) {
+  useStudioTimeZone();
   const [task, setTask] = useState<TaskItem>(); const [data, setData] = useState<Record<string, unknown>>({});
   const [validationNotice, setValidationNotice] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({}); const [notice, setNotice] = useState("");

@@ -38,7 +38,7 @@ internal sealed record TriggerGrantView(string State, long? Revision = null, Dat
 internal sealed record TriggerSubscriptionView(string Id, string TriggerId, long Revision, bool Enabled,
     TriggerManagementOrigin Origin, TriggerTargetSelector Target, IReadOnlyList<JsonElement> Mappings,
     TriggerGrantView InvocationGrant, string Compatibility, IReadOnlyList<TriggerFinding> Findings,
-    TriggerServing? Serving, IReadOnlyList<TriggerAction> Actions, object? TriggerSummary = null);
+    TriggerServing? Serving, IReadOnlyList<TriggerAction> Actions, JsonElement? TriggerSummary = null);
 internal sealed record TriggerPage<T>(IReadOnlyList<T> Items, string? Next);
 internal sealed record TriggerConfigurationFieldView(string Key, string Label, string Type, bool Required,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? DefaultValue,
@@ -57,7 +57,7 @@ internal sealed record TriggerImpact(string Label, string? Before = null, string
 internal sealed record TriggerPreview(string PreviewId, DateTimeOffset ExpiresAt, long ObservedRevision,
     string CommandFingerprint, bool CanApply, IReadOnlyList<TriggerImpact> Impact, IReadOnlyList<TriggerFinding> Findings);
 internal sealed record TriggerChangeResult(string RequestId, string Disposition, long Revision, TriggerView? Trigger,
-    TriggerSubscriptionView? Subscription = null, IReadOnlyList<object>? Effects = null);
+    TriggerSubscriptionView? Subscription = null, JsonElement? Effects = null);
 internal sealed record TriggerProblem(string Code, string Message, IReadOnlyDictionary<string, string>? Errors = null);
 internal sealed record TriggerPreviewProof(string Actor, TriggerScope Scope, string TriggerId, long Revision,
     string CommandFingerprint, string ObservationFingerprint, DateTimeOffset ExpiresAt);

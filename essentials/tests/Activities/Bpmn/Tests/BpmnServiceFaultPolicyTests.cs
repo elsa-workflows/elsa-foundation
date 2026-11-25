@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -9,20 +11,41 @@ public sealed class BpmnServiceFaultPolicyTests
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
-    [Fact]
-    public void The_actual_pre_policy_definition_keeps_its_original_material_hash_and_absent_policy_wire()
+    [Theory]
+    [InlineData("ActualNativeModelV2.json", false)]
+    [InlineData("CurrentNativeModelV2.json", true)]
+    public void Format2_keeps_its_absent_policy_and_accepts_only_the_current_canonical_hash(string file, bool current)
     {
-        using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ActualNativeModelV2.json")));
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", file);
+        using var fixture = JsonDocument.Parse(File.ReadAllText(path));
         var root = fixture.RootElement;
+        var material = ReadMaterial(root);
+        if (!current)
+        {
+            Assert.NotEqual(root.GetProperty("expectedContentHash").GetString(), material.ComputeContentHash());
+            return;
+        }
+        using var golden = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "CurrentNativeModelV2.golden.json")));
+        var preimage = golden.RootElement.GetProperty("canonical").GetString()!;
+        const string freeze = "FR-021: this recipe freezes from Elsa 4 first stable; later changes require the agreed compatibility process. Do not update pins to hide a regression.";
+        Assert.True(golden.RootElement.GetProperty("captureSha256").GetString() == Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))), "The retained capture changed. " + freeze);
+        var expected = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(preimage)));
+        Assert.True(expected == golden.RootElement.GetProperty("expectedContentHash").GetString(), "The independent golden preimage and hash differ. " + freeze);
+        Assert.True(expected == root.GetProperty("expectedContentHash").GetString(), "The actual publication and golden differ. " + freeze);
+        var actual = material.ComputeContentHash();
+        Assert.True(expected == actual, $"Expected {expected}, actual {actual}. " + freeze);
+    }
+
+    internal static RuntimeModelMaterial ReadMaterial(JsonElement root)
+    {
         var definition = root.GetProperty("definition").Deserialize<BpmnModelDefinition>(Web)!;
         Assert.Equal(2, definition.FormatVersion);
         Assert.Null(Assert.Single(definition.ServiceBindings!).FaultPolicy);
         var pin = root.GetProperty("identity").Deserialize<WorkflowExecutableIdentity>(Web)!;
         var serialized = JsonSerializer.SerializeToElement(definition, Web);
         Assert.DoesNotContain("faultPolicy", serialized.GetRawText());
-        var material = new RuntimeModelMaterial(1, pin, new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), BpmnModelProtocol.NativeWorkProfile,
+        return new RuntimeModelMaterial(1, pin, new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), BpmnModelProtocol.NativeWorkProfile,
             serialized, new(1, []), [], definition.ServiceBindings!.Select(binding => new RuntimeModelDependency(binding.BindingId, binding.Executable)).ToArray(), []);
-        Assert.Equal(root.GetProperty("expectedContentHash").GetString(), material.ComputeContentHash());
     }
 
     [Theory]

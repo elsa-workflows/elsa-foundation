@@ -263,7 +263,7 @@ public sealed class RuntimePersistenceModeResolverTests : IAsyncDisposable
         return Envelope(
             WorkflowExecutionCommandKind.Start,
             "start",
-            JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(Identity, ArtifactId)),
+            JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(Identity, ArtifactId), Elsa.Serialization.Core.JsonBaseline.Options),
             metadata);
     }
 

@@ -225,7 +225,7 @@ public sealed class ExpressionDraftSemanticValidatorTests
         Validator(provider).ValidateAsync(state, "draft", CancellationToken.None);
 
     private static ArgumentState Argument(string referenceKey, object? value, string expressionType) =>
-        new(referenceKey, new(value, expressionType), null, null, null, null);
+        new(referenceKey, Elsa.Expressions.Core.Models.ArgumentValue.FromClr(value, expressionType), null, null, null, null);
 
     private static WorkflowDefinitionState StateWith(object? value, string expressionType = "JavaScript") =>
         StateOf(Argument("text", value, expressionType));

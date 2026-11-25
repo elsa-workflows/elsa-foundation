@@ -152,6 +152,6 @@ public sealed class RuntimeActivityExecutionInspectionAccumulator : IRuntimeActi
         left.Failure == right.Failure && left.EvidenceId == right.EvidenceId;
 
     private static bool JsonEqual(JsonElement? left, JsonElement? right) =>
-        left.HasValue == right.HasValue && (!left.HasValue || JsonElement.DeepEquals(left.Value, right!.Value));
+        left.HasValue == right.HasValue && (!left.HasValue || Elsa.Serialization.Core.JsonCanonicalForm.Equals(left.Value, right!.Value));
 
 }

@@ -615,11 +615,11 @@ public sealed class ValueFlowValidatorTests
 
     private static ArgumentState VariableOutput(string outputKey, string variableKey) =>
         new(outputKey,
-            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = variableKey, declaringScopeId = "workflow" }), "Variable"),
+            ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = variableKey, declaringScopeId = "workflow" }), "Variable"),
             null, null, null, null);
 
     private static ActivityNode Intrinsic(AuthoredWorkflowIntrinsicKind kind, string nodeId, string variableKey, string declaringScopeId) =>
-        new ActivityNode(nodeId, "$intrinsic", [new ArgumentState("value", new ArgumentValue(1, "Literal"), null, null, null, null)], [])
+        new ActivityNode(nodeId, "$intrinsic", [new ArgumentState("value", ArgumentValue.FromClr(1, "Literal"), null, null, null, null)], [])
         {
             Intrinsic = new AuthoredWorkflowIntrinsic(kind, new TypeReference("Int32"), new VariableReference(variableKey, declaringScopeId))
         };
@@ -683,7 +683,7 @@ public sealed class ValueFlowValidatorTests
             nodeId,
             "$intrinsic",
             [
-                new ArgumentState("value", new ArgumentValue(1, "Literal"), null, null, null, null)
+                new ArgumentState("value", ArgumentValue.FromClr(1, "Literal"), null, null, null, null)
             ],
             [])
         {
@@ -697,7 +697,7 @@ public sealed class ValueFlowValidatorTests
         new ActivityNode(
             nodeId,
             "$intrinsic",
-            [new ArgumentState("value", new ArgumentValue(1, "Literal"), null, null, null, null)],
+            [new ArgumentState("value", ArgumentValue.FromClr(1, "Literal"), null, null, null, null)],
             [])
         {
             Intrinsic = new AuthoredWorkflowIntrinsic(
@@ -715,7 +715,7 @@ public sealed class ValueFlowValidatorTests
     private static ArgumentState ResultInput(string inputKey, string producerNodeId, string producerScopeId, bool isOptional = false) =>
         new(
             inputKey,
-            new ArgumentValue(
+            ArgumentValue.FromClr(
                 JsonSerializer.SerializeToElement(new { producerNodeId, projectionKey = "$result", producerScopeId, isOptional }),
                 "ActivityResult"),
             null,

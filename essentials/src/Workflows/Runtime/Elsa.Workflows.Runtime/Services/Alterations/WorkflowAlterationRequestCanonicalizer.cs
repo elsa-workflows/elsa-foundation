@@ -1,7 +1,8 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 
 namespace Elsa.Workflows.Runtime.Services.Alterations;
@@ -9,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Alterations;
 /// <summary>Produces stable, payload-preserving request representations for tenant-scoped idempotency.</summary>
 public static class WorkflowAlterationRequestCanonicalizer
 {
-    /// <summary>Returns the canonical UTF-8 request string.</summary>
+    /// <summary>Returns the request representation retained by payload protection, preserving each raw JSON payload.</summary>
     public static string Canonicalize(WorkflowAlterationSubmission submission)
     {
         ArgumentNullException.ThrowIfNull(submission);
@@ -41,9 +42,36 @@ public static class WorkflowAlterationRequestCanonicalizer
         return builder.ToString();
     }
 
-    /// <summary>Returns a lowercase SHA-256 hash of the canonical request.</summary>
-    public static string Hash(WorkflowAlterationSubmission submission) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Canonicalize(submission))));
+    /// <summary>Returns the canonical JSON hash of the logical request, independently of its retained payload spelling.</summary>
+    public static string Hash(WorkflowAlterationSubmission submission)
+    {
+        ArgumentNullException.ThrowIfNull(submission);
+        return submission.Target.Query is { } query
+            ? HashRequest(submission, new
+            {
+                query = new
+                {
+                    query.ArtifactId,
+                    query.CorrelationId,
+                    query.DefinitionId,
+                    From = query.From?.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
+                    query.MatchAllAuthorized,
+                    RunKind = query.RunKind?.ToString(),
+                    Status = query.Status?.ToString(),
+                    To = query.To?.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
+                    query.WorkflowExecutionId
+                }
+            })
+            : HashRequest(submission, new { executionIds = submission.Target.ExecutionIds });
+    }
+
+    private static string HashRequest<TTarget>(WorkflowAlterationSubmission submission, TTarget target) =>
+        JsonHashInput.Hash(RuntimeJsonHashProjection.Project(new
+        {
+            authority = submission.AuthorityScope,
+            target,
+            alterations = submission.Alterations
+        }));
 
     private static void WriteAuthority(StringBuilder builder, WorkflowAlterationAuthorityScope authority)
     {
@@ -119,58 +147,9 @@ public static class WorkflowAlterationRequestCanonicalizer
 
     private static void WriteJson(StringBuilder builder, JsonElement value)
     {
-        switch (value.ValueKind)
-        {
-            case JsonValueKind.Object:
-                builder.Append('{');
-                var properties = value.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal).ToArray();
-                for (var index = 0; index < properties.Length; index++)
-                {
-                    if (index > 0)
-                        builder.Append(',');
-                    WriteProperty(builder, properties[index].Name, () => WriteJson(builder, properties[index].Value));
-                }
-                builder.Append('}');
-                return;
-            case JsonValueKind.Array:
-                builder.Append('[');
-                var items = value.EnumerateArray().ToArray();
-                for (var index = 0; index < items.Length; index++)
-                {
-                    if (index > 0)
-                        builder.Append(',');
-                    WriteJson(builder, items[index]);
-                }
-                builder.Append(']');
-                return;
-            case JsonValueKind.String:
-                WriteString(builder, value.GetString()!);
-                return;
-            case JsonValueKind.Number:
-                WriteNumber(builder, value.GetRawText());
-                return;
-            case JsonValueKind.True:
-                builder.Append("true");
-                return;
-            case JsonValueKind.False:
-                builder.Append("false");
-                return;
-            case JsonValueKind.Null:
-                builder.Append("null");
-                return;
-            default:
-                throw new ArgumentException("Alteration payload contains an undefined JSON value.", nameof(value));
-        }
-    }
-
-    private static void WriteNumber(StringBuilder builder, string raw)
-    {
-        if (decimal.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue))
-            builder.Append(decimalValue.ToString("G29", CultureInfo.InvariantCulture));
-        else if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue) && double.IsFinite(doubleValue))
-            builder.Append(doubleValue.ToString("R", CultureInfo.InvariantCulture));
-        else
-            throw new ArgumentException("Alteration payload contains a non-canonical JSON number.");
+        if (value.ValueKind is JsonValueKind.Undefined)
+            throw new ArgumentException("Alteration payload contains an undefined JSON value.", nameof(value));
+        builder.Append(value.GetRawText());
     }
 
     private static void WriteProperty(StringBuilder builder, string name, Action value)
@@ -180,7 +159,7 @@ public static class WorkflowAlterationRequestCanonicalizer
         value();
     }
 
-    private static void WriteString(StringBuilder builder, string value) => builder.Append(JsonSerializer.Serialize(value));
+    private static void WriteString(StringBuilder builder, string value) => builder.Append(JsonSerializer.Serialize(value, JsonBaseline.Options));
     private static void WriteNullableString(StringBuilder builder, string? value) { if (value is null) builder.Append("null"); else WriteString(builder, value); }
 
 }

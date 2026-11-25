@@ -75,7 +75,7 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
                 if (activity.Scope != context.Scope) throw Refuse("graph_source_scope_mismatch");
                 Fields(context.Node.Descriptor.Payload, [.. PlanFields, .. PlacedFields]);
                 foreach (var field in captured.Root.Descriptor.Payload.EnumerateObject())
-                    if (!context.Node.Descriptor.Payload.TryGetProperty(field.Name, out var actual) || !JsonElement.DeepEquals(field.Value, actual)) throw Refuse("graph_placed_plan_mismatch");
+                    if (!context.Node.Descriptor.Payload.TryGetProperty(field.Name, out var actual) || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(field.Value, actual)) throw Refuse("graph_placed_plan_mismatch");
                 foreach (var field in new[] { "definitionId", "definitionVersionId", "version", "templateHash", "sourceReferenceId" })
                     if (Text(context.Node.Descriptor.Payload, field) != context.Node.Metadata["activity." + field]) throw Refuse("graph_placed_identity_mismatch");
                 var dependency = captured.DirectDependencies.Single();
@@ -94,7 +94,7 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
             }
             ValidatePlan(captured, content);
             if (site.Site.SiteKind != ReleaseRuntimeSiteKinds.Descriptor) return ValueTask.FromResult(new ReleaseOccurrenceFacts(ReleaseSemanticStatus.Verified));
-            var key = JsonSerializer.Serialize(new object?[] { site.Member.Kind, site.Member.Identity, site.Origin, site.Node, "activity-module", "ActivitiesGraphRuntime" });
+            var key = JsonSerializer.Serialize(new object?[] { site.Member.Kind, site.Member.Identity, site.Origin, site.Node, "activity-module", "ActivitiesGraphRuntime" }, options: Elsa.Serialization.Core.JsonBaseline.Options);
             return ValueTask.FromResult(new ReleaseOccurrenceFacts(ReleaseSemanticStatus.Verified, prerequisites: [new(key, site.Member, "activity-module", "ActivitiesGraphRuntime", "opaque", "required")]));
         }
         catch (OperationCanceledException) { throw; }
@@ -128,7 +128,7 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
         Empty(node, "outputs");
         var child = reader.ReadTemplate(new(ReleaseRuntimeCodecs.TemplateKind, dependency.TemplateId), content);
         Inputs(node.GetProperty("inputs"), template.Root.Descriptor.Payload.GetProperty("inputs"), child.Template.Root.ActivityContract);
-        if (dependency.OccurrenceOverlay is null || !JsonElement.DeepEquals(node.GetProperty("inputs"), dependency.OccurrenceOverlay.InputBindings)) throw Refuse("graph_provider_overlay_mismatch");
+        if (dependency.OccurrenceOverlay is null || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(node.GetProperty("inputs"), dependency.OccurrenceOverlay.InputBindings)) throw Refuse("graph_provider_overlay_mismatch");
         if (activity.ProviderSchemaVersion == "1")
         {
             var emitted = activity.Contract.GetProperty("outcomes").EnumerateArray().Where(value => value.GetProperty("isEmitted").GetBoolean()).ToArray();
@@ -148,7 +148,7 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
         // The public-contract owner checks that separate catalog identity; placement stamps its own full contract below.
         if (template.Root.ActivityType != WellKnownRuntimeActivityConsumers.GraphActivity || template.Root.ActivityTypeVersion != "1" ||
             runtime.ContractVersion != "1" || runtime.DescriptorKind != WellKnownRuntimeActivityConsumers.GraphActivity || runtime.Activation.DescriptorKind != runtime.DescriptorKind ||
-            runtime.Activation.Capability != runtime.DescriptorKind || !JsonElement.DeepEquals(runtime.DescriptorPayload, plan) || runtime.SideEffectProfile != SideEffectProfile.External || runtime.SupportsBackgroundExecution)
+            runtime.Activation.Capability != runtime.DescriptorKind || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(runtime.DescriptorPayload, plan) || runtime.SideEffectProfile != SideEffectProfile.External || runtime.SupportsBackgroundExecution)
             throw Refuse("graph_runtime_contract_mismatch");
         if (runtime.Result.Type != new ValueTypeDescriptor("Object") || !runtime.Result.IsRequired || runtime.Result.EffectiveSourceRepresentation != ValueRepresentation.StructuredValue ||
             runtime.Result.Projections.Count != 0 || template.Root.ChildSlots.Count != 0 || template.Root.ExecutionPlacement != ActivityExecutionPlacement.Inline ||
@@ -169,7 +169,7 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
             {
                 Fields(value, "syntax", "value");
                 if (!string.Equals(Text(value, "syntax"), "Literal", StringComparison.OrdinalIgnoreCase)) throw Refuse("graph_default_syntax_unsupported");
-                if (!declared.HasDefault || !declared.DefaultValue.HasValue || !JsonElement.DeepEquals(declared.DefaultValue.Value, value.GetProperty("value"))) throw Refuse("graph_default_inventory_mismatch");
+                if (!declared.HasDefault || !declared.DefaultValue.HasValue || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(declared.DefaultValue.Value, value.GetProperty("value"))) throw Refuse("graph_default_inventory_mismatch");
             }
             else if (declared.HasDefault) throw Refuse("graph_default_inventory_mismatch");
         }
@@ -199,7 +199,7 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
         var overlay = dependency.OccurrenceOverlay ?? throw Refuse("graph_overlay_missing");
         if (overlay.SchemaVersion != "1") throw Refuse("graph_overlay_schema_unsupported");
         if (overlay.Structure is not null || overlay.InputContracts is not null || overlay.OutputBindings is { } output && output.GetArrayLength() != 0) throw Refuse("graph_overlay_surface_unsupported");
-        if (!JsonElement.DeepEquals(occurrence.GetProperty("inputBindings"), overlay.InputBindings)) throw Refuse("graph_overlay_inventory_mismatch");
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(occurrence.GetProperty("inputBindings"), overlay.InputBindings)) throw Refuse("graph_overlay_inventory_mismatch");
         if (occurrence.TryGetProperty("outputBindings", out var bindings) && bindings.ValueKind != JsonValueKind.Null && bindings.GetArrayLength() != 0) throw Refuse("graph_output_binding_unsupported");
         var child = reader.ReadTemplate(new(ReleaseRuntimeCodecs.TemplateKind, dependency.TemplateId), content);
         Inputs(overlay.InputBindings, plan.GetProperty("inputs"), child.Template.Root.ActivityContract);
@@ -283,7 +283,7 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
             if (!contract.Inputs.TryGetValue(key, out var input) || !node.InputBindings.TryGetValue(key, out var binding) || binding.InputKey != key || binding.TargetType != input.Type)
                 throw Refuse("graph_placed_input_inventory_mismatch");
             var expectedPolicy = ValuePolicyCombiner.ToProtectionPolicy(input.Policy);
-            if (!JsonElement.DeepEquals(JsonSerializer.SerializeToElement(expectedPolicy), JsonSerializer.SerializeToElement(binding.EffectivePolicy)) ||
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(expectedPolicy, options: Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(binding.EffectivePolicy, options: Elsa.Serialization.Core.JsonBaseline.Options)) ||
                 binding.ConversionRequest is not null || binding.Metadata.Count != 1 || binding.Metadata.GetValueOrDefault("referenceKey") != key)
                 throw Refuse("graph_placed_input_policy_mismatch");
             var value = source.GetProperty("value"); var syntax = value.TryGetProperty("expressionType", out var expression) && expression.ValueKind != JsonValueKind.Null ? expression.GetString() : "Literal";
@@ -296,8 +296,8 @@ internal sealed class GraphReleaseOccurrenceInspector(IReleaseRuntimeSiteReader 
             {
                 var literal = binding.Literal; var expected = value.GetProperty("value");
                 if (!string.Equals(syntax, "Literal", StringComparison.OrdinalIgnoreCase) || binding.Source != RuntimeInputBindingSource.Literal || literal is null ||
-                    literal.Type != input.Type || !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(expectedPolicy), JsonSerializer.SerializeToElement(literal.Policy)) ||
-                    (expected.ValueKind == JsonValueKind.Null ? literal.Presence != ValuePresence.ExplicitNull : literal.Presence != ValuePresence.Present || !literal.InlineValue.HasValue || !JsonElement.DeepEquals(expected, literal.InlineValue.Value)) ||
+                    literal.Type != input.Type || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(expectedPolicy, options: Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(literal.Policy, options: Elsa.Serialization.Core.JsonBaseline.Options)) ||
+                    (expected.ValueKind == JsonValueKind.Null ? literal.Presence != ValuePresence.ExplicitNull : literal.Presence != ValuePresence.Present || !literal.InlineValue.HasValue || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(expected, literal.InlineValue.Value)) ||
                     binding.ConversionPlan?.Fingerprint != ValueConversionPlan.Identity(input.Type, ValueRepresentationDefaults.Infer(input.Type)).Fingerprint)
                     throw Refuse("graph_placed_input_value_mismatch");
             }

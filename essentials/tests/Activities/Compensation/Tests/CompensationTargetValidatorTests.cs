@@ -98,7 +98,7 @@ public sealed class CompensationTargetValidatorTests
     {
         var node = Compensate("compensate") with
         {
-            Inputs = [new ArgumentState("scope", new ArgumentValue("return 'elsewhere';", "JavaScript"), null, null, null, null)]
+            Inputs = [new ArgumentState("scope", ArgumentValue.FromClr("return 'elsewhere';", "JavaScript"), null, null, null, null)]
         };
 
         Assert.Empty(await ValidateAsync(Scope("scope", ("Check", node, null))));
@@ -125,7 +125,7 @@ public sealed class CompensationTargetValidatorTests
     private static ActivityNode Compensate(string nodeId, string? scope = null) => new(nodeId, CompensateVersion, Target(scope), []);
 
     private static ArgumentState[] Target(string? scope) =>
-        scope is null ? [] : [new ArgumentState("scope", new ArgumentValue(scope, "Literal"), null, null, null, null)];
+        scope is null ? [] : [new ArgumentState("scope", ArgumentValue.FromClr(scope, "Literal"), null, null, null, null)];
 
     private static ActivityNode Scope(string nodeId, params (string Name, ActivityNode? Activity, ActivityNode? Compensation)[] steps)
     {

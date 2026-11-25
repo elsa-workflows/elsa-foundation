@@ -1,2 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../../Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

@@ -21,6 +21,85 @@ namespace Elsa.Studio.Tests.Administration;
 public sealed class FeatureAdministrationTests
 {
     [Fact]
+    public async Task Actual_revision_callers_bind_retained_features_with_the_existing_process_key()
+    {
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true);
+        var store = host.App.Services.GetRequiredService<IShellFeatureConfigurationStore>();
+        var key = ((byte[])typeof(ShellFeatureStore).GetField("RevisionKey", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!).ToArray();
+        var hash = typeof(ShellFeatureStore).GetMethod("HashRevision", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        async Task<string> RetainedRevision()
+        {
+            using var retained = JsonDocument.Parse(await File.ReadAllTextAsync(host.ShellsFile));
+            var features = retained.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("Authoring").GetProperty("Features");
+            return (string)hash.Invoke(null, [features, key])!;
+        }
+        var before = await store.LoadAsync();
+        Assert.True(before.Revision == await RetainedRevision(), "Shell snapshot caller: First-stable hash freeze requires an explicit identity/migration decision.");
+        using var raw = JsonDocument.Parse("""{ "Credential":"fixture-private", "Size":10, "OwnerData":{"n":9007199254740993,"nil":null} }""");
+        var changes = before.Features.Select(pair => new FeatureConfigurationChange(pair.Key, true, pair.Key == "Configured" ? raw.RootElement.Clone() : pair.Value)).ToArray();
+        var saved = await store.SaveAsync(before.Revision, changes);
+        Assert.True(saved.Revision == await RetainedRevision(), "Shell save/snapshot callers: First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True(saved.Revision == (await store.LoadAsync()).Revision, "Shell revision key retains its existing process lifetime. First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True(key.SequenceEqual((byte[])typeof(ShellFeatureStore).GetField("RevisionKey", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!),
+            "Shell revision key lifetime: First-stable hash freeze requires an explicit identity/migration decision.");
+    }
+
+    [Fact]
+    public async Task Declared_configuration_data_survives_catalog_apply_and_reload_with_conflicting_host_options()
+    {
+        const string raw = """{ "OrderTotal":1.00, "text":"Ren\u00e9 <>&", "explicit":null, "large":9007199254740993 }""";
+        const string changed = """{ "OrderTotal":2.00, "text":"Ren\u00e9 <>&", "explicit":null, "large":9007199254740993 }""";
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true,
+            beforeStudio: builder =>
+            {
+                var path = Path.Combine(builder.Environment.ContentRootPath, "config", "studio-shells.json");
+                var document = JsonNode.Parse(File.ReadAllText(path))!;
+                document["CShells"]!["Shells"]!["Authoring"]!["Features"]!["Configured"]!["Raw"] = "__S9_RAW_CHILD__";
+                File.WriteAllText(path, document.ToJsonString(Elsa.Serialization.Core.JsonBaseline.Options).Replace("\"__S9_RAW_CHILD__\"", raw, StringComparison.Ordinal));
+            },
+            afterStudio: builder =>
+            {
+                builder.Services.AddSingleton<IFeatureCatalogContributor, RawSettingContributor>();
+                builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+                {
+                    options.SerializerOptions.WriteIndented = true;
+                    options.SerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default;
+                    options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+                });
+            });
+        using var catalogResponse = await host.Client.GetAsync("/modularity/features");
+        catalogResponse.EnsureSuccessStatusCode();
+        var catalogText = await catalogResponse.Content.ReadAsStringAsync();
+        using (var catalog = JsonDocument.Parse(catalogText)) Assert.Equal(raw, Raw(catalog.RootElement).GetRawText());
+        var request = Request(JsonNode.Parse(catalogText)!.AsObject());
+        Configuration(request)["Raw"] = "__S9_RAW_CHILD__";
+        var requestText = request.ToJsonString(Elsa.Serialization.Core.JsonBaseline.Options).Replace("\"__S9_RAW_CHILD__\"", changed, StringComparison.Ordinal);
+        using var applied = await host.Client.PostAsync("/modularity/features/apply", new StringContent(requestText, System.Text.Encoding.UTF8, "application/json"));
+        applied.EnsureSuccessStatusCode();
+        using var result = JsonDocument.Parse(await applied.Content.ReadAsStringAsync());
+        Assert.Equal(changed, Raw(result.RootElement.GetProperty("catalog")).GetRawText());
+        using var stored = JsonDocument.Parse(await File.ReadAllTextAsync(host.ShellsFile));
+        Assert.Equal(changed, stored.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("Authoring").GetProperty("Features").GetProperty("Configured").GetProperty("Raw").GetRawText());
+        using var reopened = await host.Client.GetAsync("/modularity/features");
+        reopened.EnsureSuccessStatusCode();
+        using var returned = JsonDocument.Parse(await reopened.Content.ReadAsStringAsync());
+        Assert.Equal(changed, Raw(returned.RootElement).GetRawText());
+
+        static JsonElement Raw(JsonElement catalog) => catalog.GetProperty("features").EnumerateArray()
+            .Single(feature => feature.GetProperty("id").GetString() == "Configured").GetProperty("configuration").GetProperty("Raw");
+    }
+
+    private sealed class RawSettingContributor : IFeatureCatalogContributor
+    {
+        public Task ContributeAsync(FeatureCatalogContributionContext context, CancellationToken cancellationToken = default)
+        {
+            var feature = context.GetOrAdd("Configured");
+            feature.Settings = [.. feature.Settings, new FeatureSettingDescriptor("Raw", "Raw", null, null, null, null, "object", false, null, false, false, false, false, false, null, null, [])];
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
     public async Task Masked_round_trip_preserves_secret_and_unrelated_shell_and_reloads_only_selected_shell()
     {
         await using var host = await AdministrationHost.StartAsync(managedFeatures: true);
@@ -81,6 +160,65 @@ public sealed class FeatureAdministrationTests
         Assert.Contains("On", snapshot.Features.Keys);
         Assert.DoesNotContain("Off", snapshot.Features.Keys);
         Assert.Equal(10, snapshot.Features["Configured"].GetProperty("Size").GetInt32());
+    }
+
+    [Fact]
+    public async Task Public_store_preserves_accepted_configuration_bytes_through_save_and_reload()
+    {
+        const string raw = """{ "Credential":"raw-private", "Size":10, "OrderID":9007199254740993, "nil":null, "text":"Ren\u00e9", "amount":1.00 }""";
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true);
+        var store = host.App.Services.GetRequiredService<IShellFeatureConfigurationStore>();
+        var before = await store.LoadAsync();
+        using var data = JsonDocument.Parse(raw);
+        var changes = before.Features.Select(pair => new FeatureConfigurationChange(pair.Key, true,
+            pair.Key == "Configured" ? data.RootElement : pair.Value)).ToArray();
+        var saved = await store.SaveAsync(before.Revision, changes);
+        Assert.Equal(raw, saved.Features["Configured"].GetRawText());
+        Assert.Equal(raw, (await store.LoadAsync()).Features["Configured"].GetRawText());
+        using var retained = JsonDocument.Parse(await File.ReadAllTextAsync(host.ShellsFile));
+        Assert.Equal(raw, retained.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("Authoring")
+            .GetProperty("Features").GetProperty("Configured").GetRawText());
+    }
+
+    [Fact]
+    public async Task Managed_jsonc_projects_only_jsonc_values_and_retains_strict_siblings()
+    {
+        const string strict = """{ "Credential":"private-feature-credential-sentinel", "raw":"\u0041", "n":1.00, "large":9007199254740993, "nil":null }""";
+        const string jsonc = """{ "n":1, /* owner configuration comment */ "text":"ok", }""";
+        const string unrelated = """{ "keep":true, /* unrelated owner comment */ }""";
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true, beforeStudio: builder =>
+        {
+            var path = Path.Combine(builder.Environment.ContentRootPath, "config", "studio-shells.json");
+            var text = File.ReadAllText(path)
+                .Replace("\"Configured\":{\"Credential\":\"private-feature-credential-sentinel\"}", "\"On\":" + jsonc + ",\"Configured\":" + strict, StringComparison.Ordinal)
+                .Replace("\"preserve\":\"unrelated\"", "\"preserve\":" + unrelated, StringComparison.Ordinal);
+            File.WriteAllText(path, text);
+        });
+        var store = host.App.Services.GetRequiredService<IShellFeatureConfigurationStore>();
+        var snapshot = await store.LoadAsync();
+        using var projected = JsonDocument.Parse(snapshot.Features["On"].GetRawText());
+        Assert.Equal("ok", projected.RootElement.GetProperty("text").GetString());
+        Assert.Equal(strict, snapshot.Features["Configured"].GetRawText());
+        await store.SaveAsync(snapshot.Revision, snapshot.Features.Select(pair => new FeatureConfigurationChange(pair.Key, true, pair.Value)).ToArray());
+        using var saved = JsonDocument.Parse(await File.ReadAllTextAsync(host.ShellsFile), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        Assert.Equal(unrelated, saved.RootElement.GetProperty("preserve").GetRawText());
+        var reopened = await store.LoadAsync();
+        Assert.Equal(strict, reopened.Features["Configured"].GetRawText());
+        Assert.Equal(1, reopened.Features["On"].GetProperty("n").GetInt32());
+        Assert.Equal("ok", reopened.Features["On"].GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public async Task Public_store_refuses_an_unreadable_complete_file_depth_before_writing()
+    {
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true);
+        var store = host.App.Services.GetRequiredService<IShellFeatureConfigurationStore>();
+        var current = await store.LoadAsync();
+        var before = await File.ReadAllBytesAsync(host.ShellsFile);
+        var raw = string.Concat(Enumerable.Repeat("{\"next\":", 60)) + "0" + new string('}', 60);
+        using var data = JsonDocument.Parse(raw);
+        await Assert.ThrowsAnyAsync<JsonException>(() => store.SaveAsync(current.Revision, [new("Deep", true, data.RootElement)]));
+        Assert.Equal(before, await File.ReadAllBytesAsync(host.ShellsFile));
     }
 
     [Fact]

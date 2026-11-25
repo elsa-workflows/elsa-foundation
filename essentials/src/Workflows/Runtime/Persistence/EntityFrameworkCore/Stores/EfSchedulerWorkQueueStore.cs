@@ -831,13 +831,13 @@ public sealed partial class EfSchedulerWorkQueueStore(
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
     private string EncodeCursor(string scopeHash, string workflowHash, string orderKey) =>
-        continuationCodec.Encode(CursorPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new QueueCursor(1, scopeHash, workflowHash, orderKey))));
+        continuationCodec.EncodeJson(CursorPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new QueueCursor(1, scopeHash, workflowHash, orderKey))));
 
     private QueueCursor DecodeCursor(string token)
     {
         try
         {
-            return RuntimeArtifactJson.Deserialize<QueueCursor>(Encoding.UTF8.GetString(continuationCodec.Decode(CursorPurpose, token)));
+            return RuntimeArtifactJson.Deserialize<QueueCursor>(Encoding.UTF8.GetString(continuationCodec.DecodeJson(CursorPurpose, token)));
         }
         catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException or System.Text.Json.JsonException)
         {

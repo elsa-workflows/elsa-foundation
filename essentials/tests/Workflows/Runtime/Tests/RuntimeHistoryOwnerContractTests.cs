@@ -14,11 +14,11 @@ public sealed class RuntimeHistoryOwnerContractTests
     public void Optional_checkpoint_causation_is_omitted_for_legacy_wire_and_survives_an_owned_roundtrip()
     {
         var commit = Legacy();
-        Assert.False(JsonSerializer.SerializeToElement(commit.Checkpoint).TryGetProperty("HistoryCausation", out _));
+        Assert.False(JsonSerializer.SerializeToElement(commit.Checkpoint, options: Elsa.Serialization.Core.JsonBaseline.Options).TryGetProperty("historyCausation", out _));
         var cause = new RuntimeHistoryCausation("event", "source-run", "delivery", "command", "work");
         var captured = commit with { Checkpoint = commit.Checkpoint with { HistoryCausation = cause } };
         Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(commit), RuntimeCheckpointCommitFingerprint.Compute(captured));
-        var restored = JsonSerializer.Deserialize<RuntimeCheckpoint>(JsonSerializer.Serialize(captured.Checkpoint))!;
+        var restored = JsonSerializer.Deserialize<RuntimeCheckpoint>(JsonSerializer.Serialize(captured.Checkpoint, options: Elsa.Serialization.Core.JsonBaseline.Options), options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(cause, restored.HistoryCausation);
     }
 
@@ -79,7 +79,7 @@ public sealed class RuntimeHistoryOwnerContractTests
         var ids = new List<string> { "evidence-1", "evidence-2" };
         var delta = new RuntimeCheckpointValueCapture("checkpoint", "work", ids);
         ids.Clear();
-        var copy = JsonSerializer.Deserialize<RuntimeCheckpointValueCapture>(JsonSerializer.Serialize(delta))!;
+        var copy = JsonSerializer.Deserialize<RuntimeCheckpointValueCapture>(JsonSerializer.Serialize(delta, options: Elsa.Serialization.Core.JsonBaseline.Options), options: Elsa.Serialization.Core.JsonBaseline.Options)!;
 
         Assert.Equal("checkpoint", copy.CheckpointId);
         Assert.Equal("work", copy.SchedulerWorkItemId);
@@ -124,9 +124,9 @@ public sealed class RuntimeHistoryOwnerContractTests
     public void Absent_and_empty_sources_retain_the_existing_golden_fingerprint(bool explicitEmpty)
     {
         var legacy = Legacy() with { HistorySourceFacts = explicitEmpty ? [] : null };
-        Assert.Equal("af976cb76bbef3f226bc15cbbdae5d8b330ec98ae9f287ff18e15aadc2df1f1a", RuntimeCheckpointCommitFingerprint.Compute(legacy));
+        RuntimeCheckpointHashGoldenTests.AssertEmptyCommitPin(legacy);
         if (!explicitEmpty)
-            Assert.False(JsonSerializer.SerializeToElement(legacy).TryGetProperty(nameof(RuntimeCheckpointCommit.HistorySourceFacts), out _));
+            Assert.False(JsonSerializer.SerializeToElement(legacy, options: Elsa.Serialization.Core.JsonBaseline.Options).TryGetProperty("historySourceFacts", out _));
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public sealed class RuntimeHistoryOwnerContractTests
         supplied.Clear();
         Assert.Single(source.HistorySourceFacts!);
         Assert.Same(source.HistorySourceFacts, (source with { StateChanges = source.StateChanges.WithPostCommitOutbox([]) }).HistorySourceFacts);
-        var copy = JsonSerializer.Deserialize<RuntimeHistorySourceFact>(JsonSerializer.Serialize(source.HistorySourceFacts[0]))!;
+        var copy = JsonSerializer.Deserialize<RuntimeHistorySourceFact>(JsonSerializer.Serialize(source.HistorySourceFacts[0], options: Elsa.Serialization.Core.JsonBaseline.Options), options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(source), RuntimeCheckpointCommitFingerprint.Compute(source with { HistorySourceFacts = [copy] }));
         Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(source), RuntimeCheckpointCommitFingerprint.Compute(Legacy()));
         Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(Legacy() with { HistorySourceFacts = [SourceFact("\ud800")] }),
@@ -157,7 +157,7 @@ public sealed class RuntimeHistoryOwnerContractTests
         Assert.Equal(0, calls);
         Assert.Equal("activity", projection.ActivityExecutionId);
         Assert.Null(projection.CheckpointValueCapture);
-        Assert.False(JsonSerializer.SerializeToElement(projection).TryGetProperty(nameof(ActivityExecutionInspectionProjection.CheckpointValueCapture), out _));
+        Assert.False(JsonSerializer.SerializeToElement(projection, options: Elsa.Serialization.Core.JsonBaseline.Options).TryGetProperty("checkpointValueCapture", out _));
     }
 
     [Theory]

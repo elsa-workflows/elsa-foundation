@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../../essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\..\Studio\src\essentials\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
     <ProjectReference Include="..\..\..\..\Studio\src\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
   </ItemGroup>

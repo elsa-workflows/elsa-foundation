@@ -136,7 +136,9 @@ public sealed class Elsa3JavaScriptConversionTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var arguments = Assert.IsType<JsonElement>(Input(Node(result.Value!.State, "node"), "arguments").Value.Value);
-        Assert.Equal("System.Text.Json.JsonElement", arguments.GetProperty("resultType").GetProperty("Alias").GetString());
+        var resultType = arguments.GetProperty("resultType");
+        Assert.False(resultType.TryGetProperty("Alias", out _));
+        Assert.Equal("System.Text.Json.JsonElement", resultType.GetProperty("alias").GetString());
     }
 
     [Fact]

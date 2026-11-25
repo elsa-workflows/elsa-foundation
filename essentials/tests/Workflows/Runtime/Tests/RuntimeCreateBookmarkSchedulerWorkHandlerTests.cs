@@ -493,7 +493,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             expiresAt: _now.AddMinutes(30),
             reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
             metadata: new Dictionary<string, string> { ["customer"] = "northwind" },
-            valueSnapshots: [NewInputSnapshot()]));
+            valueSnapshots: [NewInputSnapshot()]), Elsa.Serialization.Core.JsonBaseline.Options);
 
         return new RuntimeSchedulerWorkItem(
             workItemId: "create-bookmark-work",

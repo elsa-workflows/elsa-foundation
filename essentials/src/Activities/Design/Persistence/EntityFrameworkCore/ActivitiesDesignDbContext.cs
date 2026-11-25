@@ -22,7 +22,7 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 /// </summary>
 public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbContext(options), IEfSchemaVersionedContext
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     /// <summary>
     /// Domain-separated key for the global definition scope. The prefix keeps a global row
     /// distinct from every opaque tenant identifier without reserving a user-visible tenant ID.
@@ -509,7 +509,7 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
     private static void ConfigureConversions<TEntity>(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<TEntity> entity)
         where TEntity : class
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         foreach (var property in typeof(TEntity).GetProperties().Where(p =>
                      p.CanWrite && p.PropertyType != typeof(string) &&
                      (p.PropertyType.IsClass || p.PropertyType.IsInterface) &&
@@ -547,10 +547,10 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
     private static bool JsonEquals<TValue>(TValue? left, TValue? right, JsonSerializerOptions options) =>
         left is null || right is null
             ? left is null && right is null
-            : string.Equals(JsonSerializer.Serialize(left, options), JsonSerializer.Serialize(right, options), StringComparison.Ordinal);
+            : Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(left, options), JsonSerializer.SerializeToElement(right, options));
 
     private static int JsonHashCode<TValue>(TValue value, JsonSerializerOptions options) =>
-        value is null ? 0 : StringComparer.Ordinal.GetHashCode(JsonSerializer.Serialize(value, options));
+        value is null ? 0 : StringComparer.Ordinal.GetHashCode(Elsa.Serialization.Core.JsonHashInput.Hash(JsonSerializer.SerializeToElement(value, options)));
 
     private static TValue JsonSnapshot<TValue>(TValue value, JsonSerializerOptions options) =>
         value is null ? value : JsonSerializer.Deserialize<TValue>(JsonSerializer.Serialize(value, options), options)!;
@@ -605,6 +605,9 @@ internal static class ActivityAuthorityIntegrity
         string? sourceId,
         ActivityContentAuthorityKind kind)
     {
+        // Physical row witness, paired with ActivityAuthorityValiditySql.SqlServer. This binds
+        // stored spellings, token columns and decoded scalars; it is not JSON value identity.
+        // In particular, canonical JSON equality cannot detect corruption of a same-write witness.
         var material = string.Join("|", new[]
         {
             raw, canonical, authorityKeyToken, sourceIdToken, authorityKey, sourceId,

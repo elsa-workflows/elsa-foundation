@@ -11,7 +11,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// <summary>Reintroduces the ordinary cancellation input for physical work left by the old final-fault writer.</summary>
 internal sealed class BpmnLegacyFaultWorkRecovery(IPersistenceScopeRunner scopes, TimeProvider clock) : IStartupTask
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public async Task ExecuteAsync(CancellationToken cancellationToken) =>
         await scopes.RunAsync(RecoverAsync, cancellationToken);

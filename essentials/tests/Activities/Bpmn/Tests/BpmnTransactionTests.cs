@@ -88,12 +88,12 @@ public sealed class BpmnTransactionTests
         // handlerB (most-recently-completed host) replays first, alone.
         var firstBookmark = Assert.Single(await fixture.BookmarksAsync());
         Assert.Equal("node-hB", firstBookmark.ExecutableNodeId);
-        run = await fixture.ResumeAsync(firstBookmark, JsonSerializer.SerializeToElement(new DurableTimerElapsed(firstBookmark.StimulusHash)));
+        run = await fixture.ResumeAsync(firstBookmark, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(firstBookmark.StimulusHash)));
 
         // then handlerA, alone.
         var secondBookmark = Assert.Single(await fixture.BookmarksAsync());
         Assert.Equal("node-hA", secondBookmark.ExecutableNodeId);
-        run = await fixture.ResumeAsync(secondBookmark, JsonSerializer.SerializeToElement(new DurableTimerElapsed(secondBookmark.StimulusHash)));
+        run = await fixture.ResumeAsync(secondBookmark, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(secondBookmark.StimulusHash)));
 
         run.AssertOutcomes(BpmnRuntimeFixture.ProcessNodeId, "Cancelled");
         run.AssertWorkflowCompleted();

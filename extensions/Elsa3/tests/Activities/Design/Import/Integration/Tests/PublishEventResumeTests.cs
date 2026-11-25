@@ -36,7 +36,7 @@ public sealed class PublishEventResumeTests(ITestOutputHelper output)
     /// An Elsa 3 <c>Object</c> literal is the text the author typed. The import keeps it as text, so the imported
     /// Publish Event sends, and the Event receives, that JSON string unchanged.
     /// </summary>
-    internal const string Elsa3ObjectLiteralPayload = "\"{\\u0022orderId\\u0022:\\u00221\\u0022}\"";
+    internal const string Elsa3ObjectLiteralPayload = "\"{\\\"orderId\\\":\\\"1\\\"}\"";
 
     [Theory]
     [InlineData("publish-event-publisher", null)]

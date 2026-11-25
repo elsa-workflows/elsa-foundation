@@ -259,7 +259,7 @@ public sealed partial class EfActivityExecutionInspectionStore(
             return null;
         try
         {
-            var cursor = RuntimeArtifactJson.Deserialize<InspectionCursor>(Encoding.UTF8.GetString(continuationCodec.Decode(ContinuationPurpose, token)));
+            var cursor = RuntimeArtifactJson.Deserialize<InspectionCursor>(Encoding.UTF8.GetString(continuationCodec.DecodeJson(ContinuationPurpose, token)));
             if (cursor.Version != 1 || cursor.ScopeHash != ActivityExecutionEfSupport.Hash(scope) ||
                 !StringComparer.Ordinal.Equals(cursor.WorkflowExecutionId, workflow) || string.IsNullOrWhiteSpace(cursor.ActivityExecutionId) ||
                 string.IsNullOrWhiteSpace(cursor.OrderKey) || string.IsNullOrWhiteSpace(cursor.Id) ||
@@ -273,7 +273,7 @@ public sealed partial class EfActivityExecutionInspectionStore(
         }
     }
 
-    private string EncodeCursor(InspectionCursor cursor) => continuationCodec.Encode(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(cursor)));
+    private string EncodeCursor(InspectionCursor cursor) => continuationCodec.EncodeJson(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(cursor)));
 
     private static void ValidateIdentity(string workflowExecutionId, string activityExecutionId)
     {

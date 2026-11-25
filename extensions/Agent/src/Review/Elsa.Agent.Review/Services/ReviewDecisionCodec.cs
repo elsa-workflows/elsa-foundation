@@ -55,7 +55,7 @@ internal sealed class ReviewDecisionCodec(ISecretValueProtector protector)
     internal string Protect(ReviewDecisionClaims claims)
     {
         if (claims.Purpose != Purpose || claims.Codec != Codec) throw HumanReviewException.Invalid("The decision envelope purpose is not a human review decision.");
-        return protector.Protect(JsonSerializer.Serialize(claims, HumanReviewJson.Web));
+        return protector.Protect(JsonSerializer.Serialize(claims, options: HumanReviewJson.Web));
     }
 
     internal ReviewDecisionClaims Read(string? envelope)
@@ -69,7 +69,7 @@ internal sealed class ReviewDecisionCodec(ISecretValueProtector protector)
             throw HumanReviewException.Invalid("The decision envelope is not authentic.");
         }
         ReviewDecisionClaims? claims;
-        try { claims = JsonSerializer.Deserialize<ReviewDecisionClaims>(plaintext, HumanReviewJson.Web); }
+        try { claims = JsonSerializer.Deserialize<ReviewDecisionClaims>(plaintext, options: HumanReviewJson.Web); }
         catch (JsonException) { throw HumanReviewException.Invalid("The protected value is not a human review decision."); }
         if (claims is null || claims.Purpose != Purpose || claims.Codec != Codec ||
             new[] { claims.TenantId, claims.Partition, claims.WorkflowExecutionId, claims.ActivityExecutionId, claims.ExecutableNodeId,
@@ -80,12 +80,10 @@ internal sealed class ReviewDecisionCodec(ISecretValueProtector protector)
         return claims;
     }
 
-    // One canonical encoding (compact, default encoder) bounds, hashes and identifies content, so neither whitespace nor
-    // the escaping of any upstream writer or persistence round trip changes its size or identity.
-    // It does not normalize key order or number spelling, so stores must keep private state and results as written.
-    internal static byte[] CanonicalBytes(JsonElement content) => JsonSerializer.SerializeToUtf8Bytes(content);
+    // Bounds and identity use the same exact canonical JSON form. Storage retains the original data.
+    internal static byte[] CanonicalBytes(JsonElement content) => Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(content);
 
-    internal static string HashContent(JsonElement content) => Convert.ToHexStringLower(SHA256.HashData(CanonicalBytes(content)));
+    internal static string HashContent(JsonElement content) => Elsa.Serialization.Core.JsonHashInput.Hash(content);
 
     internal static string WaitId(string workflowExecutionId, string activityExecutionId, string contentHash) =>
         "agent-review:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(

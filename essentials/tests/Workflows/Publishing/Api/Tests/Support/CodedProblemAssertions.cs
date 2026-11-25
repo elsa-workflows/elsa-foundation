@@ -15,7 +15,8 @@ internal static class CodedProblemAssertions
     public static void AssertCodedProblem(HttpResponseMessage response, string raw, HttpStatusCode expectedStatus, string expectedErrorCode)
     {
         Assert.True(response.StatusCode == expectedStatus, $"{(int)response.StatusCode}: {raw}");
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         using var problem = JsonDocument.Parse(raw);
         var root = problem.RootElement;
         Assert.Equal(expectedErrorCode, root.GetProperty("errorCode").GetString());

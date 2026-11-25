@@ -370,12 +370,12 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
     [Fact]
     public async Task Resolves_projected_boolean_condition_and_declines_consumed_unused_value()
     {
-        var node = new ActivityNode("target", "activity", [new("Value", new("old", "JavaScript"), null, null, null, null)], []);
+        var node = new ActivityNode("target", "activity", [new("Value", Elsa.Expressions.Core.Models.ArgumentValue.FromClr("old", "JavaScript"), null, null, null, null)], []);
         var structure = new RankedStructureService(node, [], new Dictionary<string, string[]>())
         {
             InputProjection = new([
                 new("Case:a:Condition", new InputDefinition("Case:a:Condition", "Condition", new("Boolean"), null, "Condition", null, false),
-                    new("foreign-key", new("true", "JavaScript"), null, null, null, null))], ["Value"])
+                    new("foreign-key", Elsa.Expressions.Core.Models.ArgumentValue.FromClr("true", "JavaScript"), null, null, null, null))], ["Value"])
         };
         var source = SourceFor(node, structure);
         var request = new ResolveExpressionAuthoringContextRequest(ExpressionToolingContractVersion.V1, "draft", "target", "Case:a:Condition", "JavaScript", "revision");

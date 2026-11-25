@@ -9,7 +9,7 @@ public static class SecretsEfJson
 
     private static JsonSerializerOptions Create()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
     }

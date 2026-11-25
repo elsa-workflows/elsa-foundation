@@ -70,7 +70,7 @@ public sealed class ReleaseTransportTests
         Assert.Equal("duplicate_transport_path", Assert.Throws<ReleaseBundleFormatException>(() => _codec.ValidateParts(fixture.Bytes, fixture.Blobs, attachments, null)).Code);
         attachments.Clear();
         var key = fixture.Blobs.Keys.First(); var tampered = fixture.Blobs[key].ToArray(); tampered[0] = (byte)'['; fixture.Blobs[key] = tampered;
-        Assert.Equal("blob_digest_mismatch", Assert.Throws<ReleaseBundleFormatException>(() => _codec.ValidateParts(fixture.Bytes, fixture.Blobs, attachments, null)).Code);
+        Assert.Equal("invalid_json", Assert.Throws<ReleaseBundleFormatException>(() => _codec.ValidateParts(fixture.Bytes, fixture.Blobs, attachments, null)).Code);
     }
 
     [Theory]

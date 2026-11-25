@@ -135,7 +135,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
     {
         var validWorkItem = NewCompleteActivityWorkItem(SchedulerCompletionKind.ParentOutcomeEvaluation);
         var malformed = JsonNode.Parse(validWorkItem.Payload!.Value.GetRawText())!.AsObject();
-        malformed[nameof(RuntimeCompleteActivityCommandPayload.ParentOutcome)]![nameof(RuntimeParentOutcome.Version)] = RuntimeParentOutcome.CurrentVersion + 1;
+        malformed["parentOutcome"]!["version"] = RuntimeParentOutcome.CurrentVersion + 1;
 
         using var payloadDocument = JsonDocument.Parse(malformed.ToJsonString());
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -244,7 +244,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
             completedChildActivityExecutionId: isParentEvaluation ? "actexec-child" : null,
             parentOutcome: parentOutcome);
 
-        return NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, payload: JsonSerializer.SerializeToElement(payload));
+        return NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     private sealed class ShortCircuitActivityMiddleware : ActivityRuntimeMiddlewareBase

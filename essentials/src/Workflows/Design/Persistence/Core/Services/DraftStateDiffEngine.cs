@@ -177,15 +177,14 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
         stored.Y == desired.Y &&
         stored.Width == desired.Width &&
         stored.Height == desired.Height &&
-        StringComparer.Ordinal.Equals(CanonicalJson(stored.AdditionalProperties), CanonicalJson(desired.AdditionalProperties));
+        JsonValuesEqual(stored.AdditionalProperties, desired.AdditionalProperties);
 
     /// <summary>
     /// Structural equality for a matched (same <c>ReferenceKey</c>) activity argument across a
     /// persistence round-trip. The stored side is rehydrated from JSON, so its
-    /// <see cref="ArgumentValue.Value"/> (typed <c>object?</c>) comes back as a
-    /// <see cref="JsonElement"/> while the desired side carries the raw CLR value — record equality
-    /// would report those as different even when semantically identical and emit a phantom "updated"
-    /// event. Comparing the canonical JSON projection of each argument normalises both sides.
+    /// <see cref="ArgumentValue.Value"/> is a detached <see cref="JsonElement"/> on both sides. Record equality
+    /// does not compare the carried JSON value, so equivalent spellings could emit a phantom "updated"
+    /// event. Canonical JSON equality keeps the existing no-op behavior across persistence.
     /// </summary>
     private static bool ArgumentStatesEqual(ArgumentState stored, ArgumentState desired) =>
         stored.AutoEvaluate == desired.AutoEvaluate &&
@@ -193,11 +192,13 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
         Equals(stored.StorageDriverType, desired.StorageDriverType) &&
         stored.IsSensitive == desired.IsSensitive &&
         StringComparer.Ordinal.Equals(stored.Value.ExpressionType, desired.Value.ExpressionType) &&
-        StringComparer.Ordinal.Equals(CanonicalJson(stored.Value.Value), CanonicalJson(desired.Value.Value)) &&
-        StringComparer.Ordinal.Equals(CanonicalJson(stored.Conversion), CanonicalJson(desired.Conversion));
+        JsonValuesEqual(stored.Value.Value, desired.Value.Value) &&
+        JsonValuesEqual(stored.Conversion, desired.Conversion);
 
-    private static string CanonicalJson(object? value) =>
-        JsonSerializer.Serialize(value);
+    private static bool JsonValuesEqual(object? left, object? right) =>
+        Elsa.Serialization.Core.JsonCanonicalForm.Equals(
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(left),
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(right));
 
     private static Dictionary<string, T> ByKey<T>(IEnumerable<T> items, Func<T, string> keySelector)
     {

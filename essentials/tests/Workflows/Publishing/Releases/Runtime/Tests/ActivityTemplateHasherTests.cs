@@ -10,17 +10,25 @@ namespace Elsa.Workflows.Publishing.Releases.Runtime.Tests;
 
 public sealed class ActivityTemplateHasherTests
 {
-    // Minimal/value vectors retain the original Publishing helper's contract. The expression-bearing vector
-    // follows the accepted capability profile, which is itself part of the captured behavioral identity.
-    private const string MinimalHash = "sha256:82189d4ffd4a775a87743a10a428873bdcc6a27735d9b9d38b5c48457f20b4d0";
-    private const string RichHash = "sha256:976939661c2c4c2f5851714c88557cccab947435eedcc3bf0fb53daf375b4be5";
-    private const string ValueHash = "sha256:913d823b7d53f28a0f2954f196284e8c3526e53ea31dafc74f4378c5b4459895";
+    // Approved pre-stable migration: literal producer preimages are independently hashed by Python.
+    private static string MinimalHash => Pin("minimal");
+    private static string RichHash => Pin("rich");
+    private static string ValueHash => Pin("value");
+    private const string Freeze = "First-stable hash freeze: changes require an explicit identity/migration decision.";
+    private static string Pin(string name)
+    {
+        using var source = typeof(ActivityTemplateHasherTests).Assembly.GetManifestResourceStream("template-hash-vectors.json")!;
+        using var vectors = JsonDocument.Parse(source);
+        return "sha256:" + vectors.RootElement.EnumerateArray().Single(v => v.GetProperty("name").GetString() == name)
+            .GetProperty("sha256").GetString();
+    }
+    public static TheoryData<string, string> MigrationVectors => new()
+    { { "minimal", MinimalHash }, { "rich", RichHash }, { "value", ValueHash } };
+    private static void AssertHash(string expected, string actual) => Assert.True(expected == actual, Freeze + " Expected " + expected + "; actual " + actual);
     private const string CanonicalValue = "{\"z\":[3,1,2],\"é\":\"λ\",\"a\":{\"b\":null,\"a\":true}}";
 
     [Theory]
-    [InlineData("minimal", MinimalHash)]
-    [InlineData("rich", RichHash)]
-    [InlineData("value", ValueHash)]
+    [MemberData(nameof(MigrationVectors))]
     public void Runtime_hash_matches_captured_publication_vectors(string vector, string expected)
     {
         var actual = vector switch
@@ -29,15 +37,15 @@ public sealed class ActivityTemplateHasherTests
             "rich" => Hash(Rich()),
             _ => ActivityTemplateHasher.ComputeCanonicalValueHash(Json(CanonicalValue))
         };
-        Assert.True(StringComparer.Ordinal.Equals(expected, actual), $"Captured {vector} hash: expected {expected}; observed {actual}.");
+        AssertHash(expected, actual);
     }
 
     [Fact]
     public void Existing_publication_facade_keeps_the_observed_contract()
     {
-        Assert.Equal(MinimalHash, Legacy(Minimal()));
-        Assert.Equal(RichHash, Legacy(Rich()));
-        Assert.Equal(ValueHash, ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(Json(CanonicalValue)));
+        AssertHash(MinimalHash, Legacy(Minimal()));
+        AssertHash(RichHash, Legacy(Rich()));
+        AssertHash(ValueHash, ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(Json(CanonicalValue)));
     }
 
     [Theory]
@@ -85,13 +93,13 @@ public sealed class ActivityTemplateHasherTests
             Storage = original.Storage.Reverse().ToArray(),
             Compatibility = original.Compatibility.Reverse().ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal)
         };
-        Assert.Equal(RichHash, Hash(reordered));
+        AssertHash(RichHash, Hash(reordered));
     }
 
     [Fact]
     public void Canonical_values_sort_object_members_and_preserve_array_order()
     {
-        Assert.Equal(ValueHash, ActivityTemplateHasher.ComputeCanonicalValueHash(Json(
+        AssertHash(ValueHash, ActivityTemplateHasher.ComputeCanonicalValueHash(Json(
             "{\"a\":{\"a\":true,\"b\":null},\"é\":\"λ\",\"z\":[3,1,2]}")));
         Assert.NotEqual(ValueHash, ActivityTemplateHasher.ComputeCanonicalValueHash(Json(
             "{\"a\":{\"a\":true,\"b\":null},\"é\":\"λ\",\"z\":[1,2,3]}")));

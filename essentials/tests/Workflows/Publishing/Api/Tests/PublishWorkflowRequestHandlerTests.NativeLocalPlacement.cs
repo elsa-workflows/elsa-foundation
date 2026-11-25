@@ -26,9 +26,9 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [InlineData("flowchart", true)]
     public async Task A_placed_native_container_local_keeps_its_canonical_declaration(string owner, bool nested)
     {
-        var local = new VariableDefinition("local", "Local", new TypeReference("String"), null, new ArgumentValue("start", "Literal"));
+        var local = new VariableDefinition("local", "Local", new TypeReference("String"), null, global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr("start", "Literal"));
         var assignment = new ActivityNode("assign-local", "elsa.intrinsic.set@1",
-            [new ArgumentState("value", new ArgumentValue("one", "Literal"), null, null, null, null)], [])
+            [new ArgumentState("value", global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr("one", "Literal"), null, null, null, null)], [])
         {
             Intrinsic = new(AuthoredWorkflowIntrinsicKind.Set, new TypeReference("Elsa.Any"), new("local", "body"))
         };

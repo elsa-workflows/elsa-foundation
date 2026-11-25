@@ -237,7 +237,7 @@ internal sealed class JavaScriptHostFunctions
     private static JsonElement Argument(Engine engine, FeatureOptions options, string function, int index, JsValue value)
     {
         if (value.IsUndefined())
-            return JsonSerializer.SerializeToElement<object?>(null);
+            return JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options);
         try
         {
             // Plain data is serialized in .NET, running no script code: host work. Anything else goes through the engine's

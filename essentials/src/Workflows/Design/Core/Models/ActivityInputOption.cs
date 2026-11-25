@@ -13,10 +13,9 @@ public sealed record ActivityInputOption
             throw new ArgumentException("An activity input option label is required.", nameof(label));
         ArgumentNullException.ThrowIfNull(value);
 
-        var normalizedValue = value.GetType().IsEnum ? value.ToString()! : value;
-        var element = normalizedValue is JsonElement jsonElement
+        var element = value is JsonElement jsonElement
             ? jsonElement.Clone()
-            : JsonSerializer.SerializeToElement(normalizedValue, normalizedValue.GetType());
+            : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value, value.GetType());
 
         if (element.ValueKind is not (JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False))
             throw new ArgumentException("An activity input option value must be a JSON string, number, or boolean.", nameof(value));

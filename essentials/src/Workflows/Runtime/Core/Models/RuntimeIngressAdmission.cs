@@ -37,7 +37,7 @@ public static class RuntimeIngressAdmission
     {
         if (payload.ValueKind == JsonValueKind.Undefined || metadata.ValueKind != JsonValueKind.Object)
             throw new ArgumentException("Submitted intent requires a defined payload and an object of detached producer metadata.");
-        return JsonSerializer.SerializeToElement(new { payload, metadata }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        return JsonSerializer.SerializeToElement(new { payload, metadata }, new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     public static string ComputeInputContractFingerprint(WorkflowExecutableInputContract contract)

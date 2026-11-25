@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -17,6 +18,15 @@ internal static partial class StudioBackendProfiles
     internal const string Namespace = "backend-profiles";
     internal const string TenantClaim = StudioBridgeAuthorization.TenantClaimType;
     private const string Path = "/_elsa/studio/backends/profiles";
+    private static readonly JsonSerializerOptions ResponseJson = CreateResponseJson();
+
+    private static JsonSerializerOptions CreateResponseJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.MakeReadOnly();
+        return options;
+    }
 
     internal static void Add(IServiceCollection services)
     {
@@ -70,9 +80,9 @@ internal static partial class StudioBackendProfiles
 
     internal static void Map(IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet(Path, ReadAsync)
+        endpoints.MapGet(Path, ReadAsync).WithElsaJsonResponseHeaders()
             .RequireAuthorization(StudioBridgeAuthorization.BuildPermissionPolicy("studio/preferences:read"));
-        endpoints.MapPut(Path, WriteAsync)
+        endpoints.MapPut(Path, WriteAsync).WithElsaJsonResponseHeaders()
             .RequireAuthorization(StudioBridgeAuthorization.BuildPermissionPolicy("studio/preferences:write"));
     }
 
@@ -94,7 +104,7 @@ internal static partial class StudioBackendProfiles
         if (document is null) return Results.NotFound();
         context.Response.Headers.ETag = $"\"{document.Revision}\"";
         context.Response.Headers.CacheControl = "no-store";
-        return Results.Json(document);
+        return Results.Json(document, ResponseJson);
     }
 
     private static async Task<IResult> WriteAsync(HttpContext context, IStudioPreferenceService preferences, IConfiguration configuration)
@@ -113,7 +123,7 @@ internal static partial class StudioBackendProfiles
                 if (body.Length + count > 34 * 1024) return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
                 body.Write(buffer, 0, count);
             }
-            var request = JsonSerializer.Deserialize<ProfileWrite>(body.ToArray(), new JsonSerializerOptions(JsonSerializerDefaults.Web) { MaxDepth = 16, UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow });
+            var request = JsonSerializer.Deserialize<ProfileWrite>(body.ToArray(), new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) { MaxDepth = 16, UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow });
             if (request is null || !new BackendProfilesPreferenceNamespace().Validate(request.Value)) return Results.BadRequest();
             var configured = configuration.GetSection("Studio:Backends:Profiles").GetChildren().Select(section => section["Id"]).ToHashSet(StringComparer.Ordinal);
             if (request.Value.GetProperty("profiles").EnumerateArray().Any(profile => configured.Contains(profile.GetProperty("id").GetString())))
@@ -127,7 +137,7 @@ internal static partial class StudioBackendProfiles
             var document = await preferences.WriteAsync(scope, new(request.SchemaVersion, request.Value), condition, context.RequestAborted);
             context.Response.Headers.ETag = $"\"{document.Revision}\"";
             context.Response.Headers.CacheControl = "no-store";
-            return Results.Json(document);
+            return Results.Json(document, ResponseJson);
         }
         catch (JsonException) { return Results.BadRequest(); }
         catch (StudioPreferenceConflictException error) { return Results.Conflict(new { error = error.Message }); }

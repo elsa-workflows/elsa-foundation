@@ -25,6 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../Serialization/Core/Elsa.Serialization.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Modularity.Tests" />
   </ItemGroup>
 

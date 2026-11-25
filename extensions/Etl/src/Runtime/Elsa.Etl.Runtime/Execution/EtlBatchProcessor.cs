@@ -184,7 +184,7 @@ internal sealed class EtlBatchProcessor
             if (invocation.Artifact.FormatVersion != EtlArtifact.CurrentFormatVersion ||
                 artifactHash != invocation.Artifact.ContentHash || artifactHash != suppliedHash ||
                 prepared.PipelineHash != artifactHash ||
-                suppliedDocument.GetRawText() != artifactDocument.GetRawText())
+                !Elsa.Serialization.Core.JsonCanonicalForm.Equals(suppliedDocument, artifactDocument))
                 return new EtlPreparationDiagnostic("etl.pipeline-artifact-mismatch");
 
             if (prepared.Inputs.Scope != scope || prepared.Inputs.RunId != invocation.RunId ||
@@ -275,7 +275,7 @@ internal sealed class EtlBatchProcessor
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var bounded = new BoundedWriteStream(destination, remaining);
-        using var writer = new Utf8JsonWriter(bounded, new JsonWriterOptions { Indented = false });
+        using var writer = new Utf8JsonWriter(bounded, new JsonWriterOptions { Indented = false, Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder });
         writer.WriteStartObject();
         writer.WriteNumber("recordOrdinal", error.RecordOrdinal);
         writer.WriteString("code", error.Code);

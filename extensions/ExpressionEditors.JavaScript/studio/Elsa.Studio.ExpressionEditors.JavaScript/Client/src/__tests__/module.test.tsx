@@ -4,6 +4,7 @@ import { createStudioCodeToolingProjection, StudioCodeEditor } from "@elsa-workf
 import { JavaScriptExpandedEditor, JavaScriptInlineEditor, JavaScriptSourceRenderer, register } from "../module";
 import { javaScriptToolingProjection } from "../javaScriptToolingProjection";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
+import { createContributionRegistry } from "@elsa-workflows/studio-sdk";
 
 describe("JavaScript expression editor module", () => {
   it("registers inline and expanded JavaScript expression editor surfaces", () => {
@@ -225,9 +226,10 @@ function findStudioCodeEditor(node: React.ReactNode): React.ReactElement<StudioC
   if (typeof node.type === "function") {
     return findStudioCodeEditor((node.type as (props: unknown) => React.ReactNode)(node.props));
   }
-  const memo = node.type as unknown as { type?: unknown };
-  if (typeof memo === "object" && memo && typeof memo.type === "function") {
-    return findStudioCodeEditor((memo.type as (props: unknown) => React.ReactNode)(node.props));
+  const component: unknown = node.type;
+  if (typeof component === "object" && component && "type" in component &&
+      typeof component.type === "function") {
+    return findStudioCodeEditor((component.type as (props: unknown) => React.ReactNode)(node.props));
   }
   for (const child of React.Children.toArray((node.props as { children?: React.ReactNode }).children)) {
     try {
@@ -245,12 +247,8 @@ function testApi(): ElsaStudioModuleApi {
   } as ElsaStudioModuleApi;
 }
 
-function registry<T>(): Pick<StudioContributionRegistry<T>, "add" | "list"> {
-  const contributions: T[] = [];
-  return {
-    add: contribution => contributions.push(contribution),
-    list: () => [...contributions]
-  };
+function registry<T>(): StudioContributionRegistry<T> {
+  return createContributionRegistry<T>();
 }
 
 function context(syntax: string) {

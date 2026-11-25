@@ -41,7 +41,7 @@ internal sealed class NativeIngressWaitTargetEvidence(IWorkflowSchedulerWorkQueu
         var activity = await PhysicalActivities.FindAsync(expected.WorkflowExecutionId, expected.ActivityExecutionId, cancellationToken);
         if (activity is null || activity.Execution.WorkflowExecutionId != expected.WorkflowExecutionId ||
             activity.Execution.ActivityExecutionId != expected.ActivityExecutionId || activity.Execution.ExecutableNodeId != expected.ExecutableNodeId) return null;
-        var payload = envelope.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         var typed = payload.TriggerDelivery;
         if (activity.Metadata.GetValueOrDefault(RuntimeIngressWaitCommand.AcceptanceSealMetadataKey) == seal.Fingerprint &&
             activity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId) == envelope.EnvelopeId &&
@@ -78,10 +78,10 @@ internal sealed class NativeIngressWaitTargetEvidence(IWorkflowSchedulerWorkQueu
         // must not impose this newer typed payload's required fields on a legacy command.
         if (envelope.Command.Kind != WorkflowExecutionCommandKind.ResumeBookmark || envelope.Command.Payload is not { } payload ||
             payload.ValueKind != JsonValueKind.Object ||
-            !payload.TryGetProperty(nameof(RuntimeResumeBookmarkCommandPayload.IngressWaitOrigin), out var marker) ||
+            !payload.TryGetProperty("ingressWaitOrigin", out var marker) ||
             marker.ValueKind == JsonValueKind.Null)
             return null;
-        return payload.Deserialize<RuntimeResumeBookmarkCommandPayload>()?.IngressWaitOrigin;
+        return payload.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)?.IngressWaitOrigin;
     }
     private static NotSupportedException Unsupported() => new("The selected physical ordinary wait evidence boundary is unsupported.");
 }

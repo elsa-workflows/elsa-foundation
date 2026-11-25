@@ -1,0 +1,219 @@
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+namespace Elsa.Architecture.Tests;
+
+/// <summary>Inspects actual wire metadata. A shape pin requests review; it never classifies a member as metadata.</summary>
+internal static class JsonBoundaryContractGraph
+{
+    private static readonly Type DefaultNullableConverter = new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() }
+        .GetConverter(typeof(int?)).GetType().GetGenericTypeDefinition();
+    internal sealed record Snapshot(SortedDictionary<string, string> Pins, SortedDictionary<string, string> Shapes,
+        SortedSet<string> LooseMembers, SortedSet<string> OpaqueConverters, IReadOnlyList<string> Errors);
+    internal sealed record Contracts(string Owner, IEnumerable<Type> Roots, JsonSerializerOptions Options);
+
+    internal static IReadOnlyList<JsonSerializerContext> Contexts(IEnumerable<Assembly> assemblies) => assemblies
+        .SelectMany(assembly => assembly.GetTypes()).Where(type => !type.IsAbstract && typeof(JsonSerializerContext).IsAssignableFrom(type))
+        .Select(type => (JsonSerializerContext?)(type.GetProperty("WireContext", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(null)
+            ?? type.GetProperty("Default", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(null))
+            ?? throw new InvalidDataException("No constructed serializer context: " + type.FullName))
+        .OrderBy(context => context.GetType().FullName, StringComparer.Ordinal).ToArray();
+
+    internal static Snapshot Inspect(IEnumerable<JsonSerializerContext> contexts) => Inspect(contexts.Select(context => new Contracts(
+        context.GetType().FullName!, CustomAttributeData.GetCustomAttributes(context.GetType())
+            .Where(attribute => attribute.AttributeType == typeof(JsonSerializableAttribute))
+            .Select(attribute => (Type)attribute.ConstructorArguments[0].Value!), context.Options)));
+
+    internal static Snapshot Inspect(IEnumerable<Contracts> contexts)
+    {
+        var pins = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        var shapes = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        var loose = new SortedSet<string>(StringComparer.Ordinal);
+        var opaque = new SortedSet<string>(StringComparer.Ordinal);
+        var errors = new List<string>();
+        foreach (var context in contexts)
+        {
+            var owner = context.Owner;
+            foreach (var root in context.Roots)
+            {
+                pins.Add("root|" + owner + "|" + Name(root), "declared");
+                Visit(root, context.Options, owner);
+            }
+        }
+        return new(pins, shapes, loose, opaque, errors);
+
+        void Visit(Type type, JsonSerializerOptions options, string owner)
+        {
+            var identity = "shape|" + owner + "|" + Name(type);
+            if (shapes.ContainsKey(identity)) return;
+            shapes.Add(identity, "pending");
+            JsonTypeInfo info;
+            try { info = options.GetTypeInfo(type); }
+            catch (Exception error) when (error is InvalidOperationException or NotSupportedException or ArgumentException)
+            { errors.Add(identity + ": " + error.Message); return; }
+
+            var properties = info.Properties.OrderBy(property => property.Name, StringComparer.Ordinal).Select(property => new
+            {
+                property.Name, Type = Name(property.PropertyType), property.Order, property.IsRequired, property.IsGetNullable, property.IsSetNullable,
+                property.IsExtensionData, property.NumberHandling, property.ObjectCreationHandling,
+                Converter = property.CustomConverter is { } converter ? Name(converter.GetType()) : null,
+                EnumWire = property.Get is null && property.Set is null ? null : EnumTokens(property.PropertyType, options, property.CustomConverter),
+                HasGet = property.Get is not null, HasSet = property.Set is not null, HasPredicate = property.ShouldSerialize is not null
+            }).ToArray();
+            var shape = JsonSerializer.Serialize(new
+            {
+                Kind = info.Kind.ToString(), Converter = Name(info.Converter.GetType()), Properties = properties,
+                Discriminator = info.PolymorphismOptions?.TypeDiscriminatorPropertyName,
+                UnknownDerived = info.PolymorphismOptions?.UnknownDerivedTypeHandling,
+                IgnoreUnknownDiscriminator = info.PolymorphismOptions?.IgnoreUnrecognizedTypeDiscriminators,
+                Derived = info.PolymorphismOptions?.DerivedTypes.Select(derived => new { Type = Name(derived.DerivedType), Discriminator = derived.TypeDiscriminator })
+                    .OrderBy(derived => derived.Type, StringComparer.Ordinal).ToArray(),
+                Enum = type.IsEnum ? Enum.GetNames(type).Select(name => name + "=" + Enum.Format(type, Enum.Parse(type, name), "D")).ToArray() : null,
+                EnumWire = EnumTokens(type, options)
+            });
+            shapes[identity] = shape;
+            pins.Add(identity, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(shape))));
+            var underlying = Nullable.GetUnderlyingType(type);
+            var defaultNullable = underlying is not null && info.Converter.GetType().IsConstructedGenericType &&
+                info.Converter.GetType().GetGenericTypeDefinition() == DefaultNullableConverter;
+            if (info.Kind == JsonTypeInfoKind.None && !IsLeaf(type) && type != typeof(object) && !defaultNullable)
+                opaque.Add(owner + "|" + Name(type) + "|" + Name(info.Converter.GetType()));
+            foreach (var property in info.Properties.Where(property => property.Get is not null || property.Set is not null))
+            {
+                if (property.CustomConverter is { } memberConverter && !IsLeaf(property.PropertyType))
+                {
+                    opaque.Add(owner + "|" + Name(type) + "." + property.Name + "|" + Name(property.PropertyType) + "|" + Name(memberConverter.GetType()));
+                    continue;
+                }
+                if (property.CustomConverter is null && (property.PropertyType == typeof(object) ||
+                    options.GetTypeInfo(property.PropertyType).Kind != JsonTypeInfoKind.None && ContainsObject(property.PropertyType)))
+                    loose.Add(owner + "|" + Name(type) + "." + property.Name);
+                Visit(property.PropertyType, options, owner);
+            }
+            foreach (var element in CollectionContracts(type, info.Kind)) Visit(element, options, owner);
+            if (defaultNullable) Visit(underlying!, options, owner);
+            if (info.PolymorphismOptions is { } polymorphism)
+                foreach (var derived in polymorphism.DerivedTypes) Visit(derived.DerivedType, options, owner);
+        }
+    }
+
+    internal static bool IsJsonData(Type type) =>
+        (Nullable.GetUnderlyingType(type) ?? type) == typeof(JsonElement) || typeof(JsonNode).IsAssignableFrom(type);
+
+    internal static bool ContainsObject(Type type) => ContainsObject(type, []);
+
+    private static bool ContainsObject(Type type, HashSet<Type> seen) => seen.Add(type) && (type == typeof(object) ||
+        (type.IsArray && ContainsObject(type.GetElementType()!, seen)) ||
+        CollectionContracts(type, JsonTypeInfoKind.Dictionary).Concat(CollectionContracts(type, JsonTypeInfoKind.Enumerable))
+            .Any(element => ContainsObject(element, seen)));
+
+    private static IEnumerable<Type> CollectionContracts(Type type, JsonTypeInfoKind kind)
+    {
+        var contracts = type.GetInterfaces().Prepend(type).Where(candidate => candidate.IsGenericType).ToArray();
+        if (kind == JsonTypeInfoKind.Dictionary)
+        {
+            var arguments = contracts.Where(candidate => candidate.GetGenericTypeDefinition() == typeof(IDictionary<,>) ||
+                candidate.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)).SelectMany(candidate => candidate.GetGenericArguments()).Distinct().ToArray();
+            return arguments.Length != 0 ? arguments : typeof(System.Collections.IDictionary).IsAssignableFrom(type) ? [typeof(object)] : [];
+        }
+        if (kind == JsonTypeInfoKind.Enumerable)
+        {
+            var elements = contracts.Where(candidate => candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                .Select(candidate => candidate.GetGenericArguments()[0]).Distinct().ToArray();
+            return elements.Length != 0 ? elements : typeof(System.Collections.IEnumerable).IsAssignableFrom(type) && type != typeof(string) ? [typeof(object)] : [];
+        }
+        return [];
+    }
+
+    private static string[]? EnumTokens(Type declared, JsonSerializerOptions options, JsonConverter? converter = null)
+    {
+        var type = Nullable.GetUnderlyingType(declared) ?? declared;
+        if (!type.IsEnum) return null;
+        if (converter is null)
+            return Enum.GetNames(type).Select(name => JsonSerializer.Serialize(Enum.Parse(type, name), declared, options)).ToArray();
+
+        var target = converter.CanConvert(declared) ? declared : type;
+        if (converter is JsonConverterFactory factory)
+            converter = factory.CreateConverter(target, options) ?? throw new InvalidDataException("An enum member converter factory returned no converter.");
+        var write = converter.GetType().GetMethod("Write", BindingFlags.Public | BindingFlags.Instance, null,
+            [typeof(Utf8JsonWriter), target, typeof(JsonSerializerOptions)], null)
+            ?? throw new InvalidDataException("The enum member converter has no matching writer: " + Name(converter.GetType()));
+        return Enum.GetNames(type).Select(name =>
+        {
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream, EffectiveWriterOptions(options)))
+                write.Invoke(converter, [writer, Enum.Parse(type, name), options]);
+            return Encoding.UTF8.GetString(stream.ToArray());
+        }).ToArray();
+    }
+
+    private static JsonWriterOptions EffectiveWriterOptions(JsonSerializerOptions owner)
+    {
+        // Ask the serializer itself so framework defaults such as validation/depth/indentation stay exact.
+        // The synthetic probe owns only its temporary resolver and never changes the owner context.
+        var options = new JsonSerializerOptions(owner) { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
+        options.Converters.Insert(0, new WriterOptionsConverter());
+        var probe = new WriterOptionsProbe();
+        _ = JsonSerializer.Serialize(probe, options);
+        return probe.Options;
+    }
+
+    private sealed class WriterOptionsProbe { public JsonWriterOptions Options { get; set; } }
+    private sealed class WriterOptionsConverter : JsonConverter<WriterOptionsProbe>
+    {
+        public override WriterOptionsProbe Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => throw new NotSupportedException();
+        public override void Write(Utf8JsonWriter writer, WriterOptionsProbe value, JsonSerializerOptions options)
+        { value.Options = writer.Options; writer.WriteNullValue(); }
+    }
+
+    private static bool IsLeaf(Type declared)
+    {
+        var type = Nullable.GetUnderlyingType(declared) ?? declared;
+        return IsJsonData(type) || type == typeof(string) || type.IsPrimitive || type.IsEnum ||
+            type == typeof(decimal) || type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(DateOnly) || type == typeof(TimeOnly) ||
+            type == typeof(TimeSpan) || type == typeof(Guid) || type == typeof(Uri) || type == typeof(byte[]);
+    }
+
+    internal static string Name(Type type) => type.IsArray ? Name(type.GetElementType()!) + "[" + new string(',', type.GetArrayRank() - 1) + "]" :
+        type.IsGenericType ? type.GetGenericTypeDefinition().FullName! + "[" + string.Join(',', type.GetGenericArguments().Select(Name)) + "]" : type.FullName ?? type.Name;
+
+    internal static IReadOnlySet<string> DeclaredContexts(IEnumerable<string> sources)
+    {
+        var trees = sources.Select(source => CSharpSyntaxTree.ParseText(source).GetCompilationUnitRoot()).ToArray();
+        var globalAliases = trees.SelectMany(tree => tree.Usings.Where(usingDirective => usingDirective.GlobalKeyword.RawKind != 0 && usingDirective.Alias is not null))
+            .ToDictionary(usingDirective => usingDirective.Alias!.Name.Identifier.ValueText, usingDirective => usingDirective.Name!.ToString(), StringComparer.Ordinal);
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var tree in trees)
+        {
+            var aliases = new Dictionary<string, string>(globalAliases, StringComparer.Ordinal);
+            foreach (var directive in tree.DescendantNodes().OfType<UsingDirectiveSyntax>().Where(directive => directive.Alias is not null))
+                aliases[directive.Alias!.Name.Identifier.ValueText] = directive.Name!.ToString();
+            foreach (var declaration in tree.DescendantNodes().OfType<TypeDeclarationSyntax>())
+            {
+                if (!declaration.AttributeLists.SelectMany(list => list.Attributes).Any(attribute => IsSerializable(attribute.Name.ToString(), aliases))) continue;
+                var spaces = declaration.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().Reverse().Select(space => space.Name.ToString());
+                var owners = declaration.Ancestors().OfType<TypeDeclarationSyntax>().Reverse().Append(declaration)
+                    .Select(owner => owner.Identifier.ValueText + (owner.TypeParameterList is { Parameters.Count: > 0 } parameters ? "`" + parameters.Parameters.Count : ""));
+                var prefix = string.Join('.', spaces);
+                result.Add((prefix.Length == 0 ? "" : prefix + ".") + string.Join('+', owners));
+            }
+        }
+        return result;
+    }
+
+    private static bool IsSerializable(string name, IReadOnlyDictionary<string, string> aliases)
+    {
+        name = name.Replace("global::", "", StringComparison.Ordinal);
+        if (aliases.TryGetValue(name, out var alias)) name = alias.Replace("global::", "", StringComparison.Ordinal);
+        var first = name.Split('.')[0];
+        if (aliases.TryGetValue(first, out var space)) name = space + name[first.Length..];
+        return name is "JsonSerializable" or "JsonSerializableAttribute" or "System.Text.Json.Serialization.JsonSerializable" or "System.Text.Json.Serialization.JsonSerializableAttribute";
+    }
+}

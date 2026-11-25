@@ -13,6 +13,39 @@ namespace Elsa.Studio.Preferences.Tests;
 
 public sealed class StudioHomeLayoutApiTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Owned_home_layout_preserves_submitted_widget_options_through_normalization_store_and_responses(bool normalizeMetadata)
+    {
+        await using var host = await StudioPreferencesCanaryHost.StartMigratedAsync(services =>
+            services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+            {
+                options.SerializerOptions.WriteIndented = true;
+                options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+            }));
+        const string options = """{ "OrderTotal":1.00, "text":"Ren\u00e9 <>&", "explicit":null, "large":9007199254740993 }""";
+        var value = "{ \"widgets\" : [{\"id\":\"home.\\u0072ecent-runs\",\"size\":\"" +
+            (normalizeMetadata ? "L\"" : "full\",\"visible\":true") + ",\"options\":" + options + "}] }";
+        using var saved = await host.Client.SendAsync(Put(StudioHomeLayoutApi.UserRoute, "write", ifNoneMatch: "*",
+            body: "{\"schemaVersion\":1,\"value\":" + value + "}"));
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        using var scope = host.Services.CreateScope();
+        var key = new StudioPreferenceKey(StudioPreferencesCanaryHost.SubjectId, StudioPreferencesCanaryHost.TenantId, StudioPreferencesCanaryHost.HostId, "home-layout");
+        var stored = (await scope.ServiceProvider.GetRequiredService<IStudioPreferenceStore>().FindAsync(key))!;
+        Assert.Equal(options, stored.Value.GetProperty("widgets")[0].GetProperty("options").GetRawText());
+        if (!normalizeMetadata) Assert.Equal(value, stored.Value.GetRawText());
+        using var created = JsonDocument.Parse(await saved.Content.ReadAsStringAsync());
+        Assert.Equal(stored.Value.GetRawText(), created.RootElement.GetProperty("value").GetRawText());
+        Assert.Equal(options, created.RootElement.GetProperty("value").GetProperty("widgets")[0].GetProperty("options").GetRawText());
+        using var read = await host.Client.SendAsync(Request(HttpMethod.Get, StudioHomeLayoutApi.UserRoute, "read"));
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        using var returned = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+        Assert.Equal(stored.Value.GetRawText(), returned.RootElement.GetProperty("value").GetRawText());
+        Assert.Equal(options, returned.RootElement.GetProperty("value").GetProperty("widgets")[0].GetProperty("options").GetRawText());
+        Assert.Equal("home.recent-runs", returned.RootElement.GetProperty("value").GetProperty("widgets")[0].GetProperty("id").GetString());
+    }
+
     [Fact]
     public async Task Get_user_returns_builtin_when_nothing_is_stored()
     {

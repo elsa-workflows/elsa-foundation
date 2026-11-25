@@ -1,3 +1,4 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text.Json;
 using Elsa.Activities.Graph.Runtime.Models;
 using Elsa.Activities.Graph.Runtime.Services;
@@ -64,7 +65,6 @@ public sealed class GraphActivity(
     private OutcomeSelection? _mappedSelection;
     private readonly IPortableExpressionEvaluator? _portableExpressionEvaluator = portableExpressionEvaluator;
     private readonly IWellKnownTypeRegistry? _wellKnownTypeRegistry = wellKnownTypeRegistry;
-    private static readonly JsonSerializerOptions ExpressionJsonOptions = new(JsonSerializerDefaults.Web);
 
     public GraphActivityDescriptor Descriptor { get; } = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
 
@@ -341,7 +341,7 @@ public sealed class GraphActivity(
             if (StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "Literal") ||
                 StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "Object"))
             {
-                return CoerceExpressionResult(expression.Value, expectedType, context, target);
+                return CoerceExpressionResult(expression.Value, expectedType, context, target, warnings);
             }
 
             if (StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "Input"))
@@ -351,7 +351,7 @@ public sealed class GraphActivity(
                     ?? throw new InvalidOperationException($"Graph Input expression references undeclared input '{referenceKey}'.");
                 scope.RecordExpressionPolicy(target, scope.Inputs.Values.Where(row => row.Metadata.GetValueOrDefault(RuntimeMetadataKeys.BoundaryReferenceKey) == referenceKey));
                 var value = await ReadDeclaredInputAsync(scope, input, cancellationToken);
-                return CoerceExpressionResult(value, expectedType, context, target);
+                return CoerceExpressionResult(value, expectedType, context, target, warnings);
             }
 
             if (evaluatingOutputs && StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "Variable"))
@@ -367,7 +367,7 @@ public sealed class GraphActivity(
                 var captured = await scope.ReadVariableAsync(reference.ReferenceKey, cancellationToken);
                 if (!captured.Exists)
                     throw new InvalidOperationException($"Graph variable '{reference.ReferenceKey}' has no captured value for this invocation.");
-                return CoerceExpressionResult(captured.Value, expectedType, context, target);
+                return CoerceExpressionResult(captured.Value, expectedType, context, target, warnings);
             }
 
             var portableEvaluator = _portableExpressionEvaluator
@@ -405,7 +405,7 @@ public sealed class GraphActivity(
                 if (!NullPolicyDefaults.AcceptsNull(variableType.ToTypeReference(), _wellKnownTypeRegistry, _typeDescriptors) &&
                     _wellKnownTypeRegistry?.TryGetTypeOrDefault(variableType.Alias, out var clrType) == true)
                     NullPolicyDefaults.TryGetTypeDefault(clrType, out initial);
-                ambientVariables.Add(variable.Name, captured.Exists ? ToJsonElement(captured.Value) : JsonSerializer.SerializeToElement(initial));
+                ambientVariables.Add(variable.Name, captured.Exists ? ToJsonElement(captured.Value) : JsonValueConversion.SerializeToElement(initial));
             }
 
             scope.RecordExpressionPolicy(target, scope.Inputs.Values.Concat(scope.Variables.Values));
@@ -414,7 +414,7 @@ public sealed class GraphActivity(
                 source.Text,
                 expected.ToTypeReference(),
                 parameterBindings,
-                JsonSerializer.SerializeToElement(new Dictionary<string, object?>()),
+                JsonValueConversion.SerializeToElement(new Dictionary<string, object?>()),
                 ExpressionCapabilityProfiles.BindingReadonlyV1);
             // The graph's own variables are read by name through the variables root (spec 1222): a graph expression is
             // evaluated in-process from the graph scope, so the values are already here and every name is looked up.
@@ -424,7 +424,7 @@ public sealed class GraphActivity(
                 ambientVariables.Count == 0 ? null : new GraphVariableReader(ambientVariables),
                 cancellationToken) { UndefinedAsNull = context.UndefinedAsNull, Warnings = warnings };
             var result = await portableEvaluator.EvaluateAsync(request);
-            return CoerceExpressionResult(result, expectedType, context, target);
+            return CoerceExpressionResult(result, expectedType, context, target, warnings);
         };
 
     private sealed class GraphEvaluationWarnings(IExecutionWarningSink sink, GraphActivityScope scope) : IExecutionWarningSink
@@ -453,7 +453,7 @@ public sealed class GraphActivity(
         throw new InvalidOperationException($"VF-ACT-003: Graph input '{input.ReferenceKey}' requires a declared default.");
     }
 
-    private object? CoerceExpressionResult(object? value, JsonElement expectedType, IActivityExecutionContext context, string target)
+    private object? CoerceExpressionResult(object? value, JsonElement expectedType, IActivityExecutionContext context, string target, IExecutionWarningSink? warnings)
     {
         var descriptor = ReadType(expectedType);
         var alias = descriptor.Alias;
@@ -481,7 +481,9 @@ public sealed class GraphActivity(
 
         try
         {
-            return JsonSerializer.Deserialize(json.GetRawText(), targetType, ExpressionJsonOptions);
+            var typed = Elsa.Serialization.Core.JsonConversionContract.For(targetType).Read(json, targetType, diagnostic => warnings?.Report(
+                Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, "graph")));
+            return value is JsonElement ? json.Clone() : typed;
         }
         catch (JsonException exception)
         {
@@ -495,15 +497,15 @@ public sealed class GraphActivity(
     {
         if (type.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("A graph expression target type must be a JSON object.");
-        return JsonSerializer.Deserialize<ValueTypeDescriptor>(type.GetRawText(), ExpressionJsonOptions)
+        return JsonValueConversion.Deserialize<ValueTypeDescriptor>(type.GetRawText())
                ?? throw new InvalidOperationException("A graph expression target type resolved to null.");
     }
 
     private static JsonElement ToJsonElement(object? value) => value switch
     {
         JsonElement element => element.Clone(),
-        null => JsonSerializer.SerializeToElement<object?>(null),
-        _ => JsonSerializer.SerializeToElement(value, value.GetType(), ExpressionJsonOptions)
+        null => JsonValueConversion.SerializeToElement<object?>(null),
+        _ => JsonValueConversion.SerializeToElement(value, value.GetType())
     };
 
     private static string ReadInputReferenceKey(GraphActivityExpression expression)

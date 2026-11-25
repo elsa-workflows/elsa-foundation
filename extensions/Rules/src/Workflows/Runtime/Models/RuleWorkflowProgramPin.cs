@@ -11,7 +11,7 @@ namespace Elsa.Rules.Workflows.Runtime.Models;
 public sealed record RuleWorkflowProgramPin
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions Options = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         MaxDepth = 24
@@ -30,7 +30,7 @@ public sealed record RuleWorkflowProgramPin
             throw new ArgumentOutOfRangeException(nameof(vocabularyCount));
         _ = new RuleInvocationFingerprint(sourceSha256);
         if (artifact.ArtifactId != "rules:" + artifact.Sha256 ||
-            RuleRecordCodec.Hash(artifact.CanonicalBytes.Span) != artifact.Sha256)
+            RuleRecordCodec.JsonHash(artifact.CanonicalBytes.Span) != artifact.Sha256)
             throw new InvalidDataException("The published Rules artifact does not match its identity.");
         _ = RuleRecordCodec.PinHash(implementation);
         FormatVersion = formatVersion;

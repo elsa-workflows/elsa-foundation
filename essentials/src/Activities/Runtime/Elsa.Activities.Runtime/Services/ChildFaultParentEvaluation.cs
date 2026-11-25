@@ -121,7 +121,7 @@ internal static class ChildFaultParentEvaluation
             enqueuedAt: now,
             recordedAt: now,
             sequence: sourceWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            payload: JsonSerializer.SerializeToElement(payload),
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: commandMetadata,
             envelopeMetadata: sourceWorkItem.EnvelopeMetadata,
             executionScopeId: parentState.ExecutionScopeId ?? parentState.Provenance.ExecutionScopeId,

@@ -40,7 +40,7 @@ internal static class JavaScriptBuiltIns
         return builder.ToString();
     }
 
-    private static JsonElement Text(string value) => JsonSerializer.SerializeToElement(value);
+    private static JsonElement Text(string value) => JsonSerializer.SerializeToElement(value, Elsa.Serialization.Core.JsonBaseline.Options);
 
     private static string StringArgument(string function, JavaScriptHostFunctionCall call)
     {

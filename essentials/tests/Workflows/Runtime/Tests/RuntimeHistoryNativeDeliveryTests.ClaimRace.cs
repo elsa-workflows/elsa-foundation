@@ -25,7 +25,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
             expiresAt: change == "expired" ? At.AddSeconds(2) : null);
         await f.SeedPublisherAsync(); await f.PublishAsync(); await f.ProcessPublicationsAsync();
         var work = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
-        var origin = work.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.HistoryCausation!;
+        var origin = work.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!.HistoryCausation!;
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single((await f.DrainAsync()).Items).Status);
         Assert.Equal(1, race.Claims); Assert.Equal(0, f.Activator.Calls);
         Assert.Empty(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Empty(await f.Poison.ListAsync(Run));

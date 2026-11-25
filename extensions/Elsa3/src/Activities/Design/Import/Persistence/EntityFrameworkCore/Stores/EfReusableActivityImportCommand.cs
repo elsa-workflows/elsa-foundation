@@ -51,7 +51,7 @@ public sealed class EfReusableActivityImportCommand(
     private static readonly EfWriteRetry WriteConflicts = new(EfWriteRetry.DefaultMaxAttempts, IsWriteConflict);
     private const int ReconciliationReads = 3;
     private const string DefinitionBindingKind = "elsa3ReusableImportDefinitionBinding";
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
 
     public async ValueTask<ReusableActivityImportCommitResult> CommitAsync(
@@ -522,7 +522,7 @@ public sealed class EfReusableActivityImportCommand(
         foreach (var group in candidates.GroupBy(candidate => candidate.Id, StringComparer.Ordinal))
         {
             var first = group.First();
-            if (group.Skip(1).Any(candidate => !JsonNode.DeepEquals(ActivityVersionMaterial(first), ActivityVersionMaterial(candidate))))
+            if (group.Skip(1).Any(candidate => !Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(ActivityVersionMaterial(first), ActivityVersionMaterial(candidate))))
                 throw Collision($"Elsa 3 import mutation binds '{ActivityVersionKind}/{first.Id}' to multiple contents.", scoped);
             result.Add(first);
         }
@@ -539,7 +539,7 @@ public sealed class EfReusableActivityImportCommand(
         foreach (var group in candidates.GroupBy(candidate => candidate.Entity.Id, StringComparer.Ordinal))
         {
             var first = group.First();
-            if (group.Skip(1).Any(candidate => !JsonNode.DeepEquals(first.Material, candidate.Material)))
+            if (group.Skip(1).Any(candidate => !Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(first.Material, candidate.Material)))
                 throw Collision($"Elsa 3 import mutation binds '{kind}/{first.Entity.Id}' to multiple contents.", scoped);
             result.Add(first.Entity);
         }
@@ -674,7 +674,7 @@ public sealed class EfReusableActivityImportCommand(
             return left is null && right is null;
         try
         {
-            return JsonNode.DeepEquals(JsonNode.Parse(left), JsonNode.Parse(right));
+            return Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(JsonNode.Parse(left), JsonNode.Parse(right));
         }
         catch (JsonException exception)
         {

@@ -352,7 +352,7 @@ public sealed class BookmarkConsumptionCheckpointRequest
         if (workItem.Payload is not { } payload)
             throw new ArgumentException("Bookmark consumption completion work requires a complete activity payload.", parameterName);
 
-        var completePayload = payload.Deserialize<RuntimeCompleteActivityCommandPayload>()
+        var completePayload = payload.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)
                               ?? throw new ArgumentException("Bookmark consumption completion work payload resolved to null.", parameterName);
         if (!StringComparer.Ordinal.Equals(completePayload.ActivityExecutionId, activityExecutionId))
             throw new ArgumentException("Bookmark consumption completion work activity execution ID must match completed state.", parameterName);

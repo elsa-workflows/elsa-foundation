@@ -146,16 +146,19 @@ public sealed class ExecutionEvidenceCheckpointEnricher(
         // been a comparand that failed to distinguish two genuinely different values, so this is the one invariant:
         // different content, different comparand.
         var content = DescribeContent(envelope);
+        var identity = envelope.InlineValue is { } json
+            ? Elsa.Serialization.Core.JsonHashInput.Hash(json)
+            : Digest(content);
 
         if (_options.RedactSensitiveValues && envelope.Policy.IsSensitive)
-            return Withheld(ExecutionEvidenceValueDisposition.Sensitive, content);
+            return Withheld(ExecutionEvidenceValueDisposition.Sensitive, identity);
 
         switch (envelope.Presence)
         {
             case ValuePresence.Absent:
-                return Withheld(ExecutionEvidenceValueDisposition.Absent, content);
+                return Withheld(ExecutionEvidenceValueDisposition.Absent, identity);
             case ValuePresence.ExplicitNull:
-                return Withheld(ExecutionEvidenceValueDisposition.Null, content);
+                return Withheld(ExecutionEvidenceValueDisposition.Null, identity);
         }
 
         if (envelope.ExternalReference is not null)
@@ -168,15 +171,15 @@ public sealed class ExecutionEvidenceCheckpointEnricher(
         }
 
         if (envelope.InlineValue is not { } inline)
-            return Withheld(ExecutionEvidenceValueDisposition.Absent, content);
+            return Withheld(ExecutionEvidenceValueDisposition.Absent, identity);
 
         return content.Length > _options.MaxInlineValueLength
-            ? Withheld(ExecutionEvidenceValueDisposition.Truncated, content)
+            ? Withheld(ExecutionEvidenceValueDisposition.Truncated, identity)
             : new ExecutionEvidenceVariableCapture
             {
                 Disposition = ExecutionEvidenceValueDisposition.Captured,
                 Value = inline.Clone(),
-                Comparand = $"Captured:{content}"
+                Comparand = $"Captured:{identity}"
             };
     }
 
@@ -210,11 +213,11 @@ public sealed class ExecutionEvidenceCheckpointEnricher(
     /// </summary>
     private static ExecutionEvidenceVariableCapture Withheld(
         ExecutionEvidenceValueDisposition disposition,
-        string content) =>
+        string identity) =>
         new()
         {
             Disposition = disposition,
-            Comparand = $"{disposition}:{Digest(content)}"
+            Comparand = $"{disposition}:{identity}"
         };
 
     private static string Digest(string content) =>

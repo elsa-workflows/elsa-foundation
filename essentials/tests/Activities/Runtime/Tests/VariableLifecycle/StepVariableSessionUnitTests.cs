@@ -10,6 +10,7 @@ using Elsa.Activities.Runtime.Services.StepVariables;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
@@ -20,7 +21,7 @@ namespace Elsa.Activities.Runtime.Tests.VariableLifecycle;
 /// Spec 1231 session branches that a whole workflow cannot easily reach, driven on hand-built frames: a withheld value,
 /// a loop item, the <c>Fault</c>-mode digest on a session read, transient variables, and the engine surface.
 /// </summary>
-public sealed class StepVariableSessionUnitTests
+public sealed partial class StepVariableSessionUnitTests
 {
     private const string CountKey = VariableLifecycleTestGraph.CountKey;
     private static readonly ValueTypeDescriptor Int32Type = VariableLifecycleTestGraph.Int32Type;
@@ -301,8 +302,9 @@ public sealed class StepVariableSessionUnitTests
         Dictionary<(string, string), bool>? bound = null,
         bool suspends = false,
         bool engineConsumer = false,
-        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null, IRuntimeTypeNullability? descriptors = null) =>
-        Session([root], mode, bound, suspends, engineConsumer, policies, registry, countType, descriptors);
+        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null, IRuntimeTypeNullability? descriptors = null,
+        IWorkflowExecutableInputValidator? validator = null) =>
+        Session([root], mode, bound, suspends, engineConsumer, policies, registry, countType, descriptors, validator);
 
     private static StepVariableSession Session(
         VariableFrameState[] frames,
@@ -310,7 +312,8 @@ public sealed class StepVariableSessionUnitTests
         Dictionary<(string, string), bool>? bound = null,
         bool suspends = false,
         bool engineConsumer = false,
-        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null, IRuntimeTypeNullability? descriptors = null)
+        WorkflowValuePolicies? policies = null, IWellKnownTypeRegistry? registry = null, ValueTypeDescriptor? countType = null, IRuntimeTypeNullability? descriptors = null,
+        IWorkflowExecutableInputValidator? validator = null)
     {
         var node = StepVariableTestGraph.CountLeaf("node-root", typeof(SessionIncrementActivity), mode: mode);
         var executable = WorkflowExecutionHarness.NewExecutable(node,
@@ -325,7 +328,7 @@ public sealed class StepVariableSessionUnitTests
             new ActivityExecution("actexec-root", "workflow-run", "node-root", "authored-node-root", node.ActivityType, "1.0.0"),
             ActivityExecutionStatus.Running, null, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, null, null, null, null, null, null,
             [], [], 0, 0, new Dictionary<string, string>());
-        return new StepVariableSession(new RuntimeVisibleVariableFrames(frames), executable, invocation, node, validator: null,
+        return new StepVariableSession(new RuntimeVisibleVariableFrames(frames), executable, invocation, node, validator,
             attemptId: "attempt-1", suspends: suspends,
             boundReferences: bound ?? new Dictionary<(string, string), bool> { [("workflow", CountKey)] = true },
             engineConsumer: engineConsumer, registry: registry, typeDescriptors: descriptors);

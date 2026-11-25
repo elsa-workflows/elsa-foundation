@@ -1128,6 +1128,57 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it.each(["Cancel", "Escape"])("restores the editor Run control after contract loading and %s", async dismiss => {
+    stubWorkflowEditorFetch();
+    const originalFetch = globalThis.fetch;
+    let releaseContract!: (value: Response) => void;
+    const contract = new Promise<Response>(resolve => { releaseContract = resolve; });
+    let requestedContract = false;
+    const requests: { url: string; method: string }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      requests.push({ url, method: init?.method ?? (input instanceof Request ? input.method : "GET") });
+      if (url.includes("/runtime/workflows/executables")) return response([
+        executable({ references: [executableReference({ definitionVersionId: "version-1" })] })
+      ]);
+      if (url.includes("/design/workflows/versions/version-1")) { requestedContract = true; return contract; }
+      return originalFetch(input, init);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+    try {
+      const run = await vi.waitFor(() => {
+        const candidate = container.querySelector<HTMLButtonElement>(".wf-run-published-button");
+        expect(candidate?.disabled).toBe(false);
+        return candidate!;
+      }, { timeout: 5_000 });
+      run.focus();
+      await click(run);
+      await vi.waitFor(() => { expect(requestedContract).toBe(true); expect(run.disabled).toBe(true); });
+      // Native browsers blur a control when it is disabled; reproduce that observable state in jsdom.
+      const previousTabIndex = document.body.getAttribute("tabindex");
+      document.body.tabIndex = -1;
+      document.body.focus();
+      if (previousTabIndex === null) document.body.removeAttribute("tabindex");
+      else document.body.setAttribute("tabindex", previousTabIndex);
+      expect(document.activeElement).toBe(document.body);
+      const version = workflowDefinitionVersionDetails();
+      releaseContract(response({ ...version, state: { ...version.state, inputs: [workflowInput()] } }));
+      const dialog = await vi.waitFor(() => {
+        const candidate = document.body.querySelector<HTMLElement>('[role="dialog"]');
+        expect(candidate?.textContent).toContain("Provide the workflow inputs");
+        return candidate!;
+      });
+      await vi.waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+      if (dismiss === "Cancel") await click(buttonByText(dialog, "Cancel"));
+      else (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await vi.waitFor(() => expect(document.body.contains(dialog)).toBe(false));
+      await vi.waitFor(() => expect(document.activeElement).toBe(run));
+      expect(run.isConnected).toBe(true);
+      expect(run.disabled).toBe(false);
+      expect(requests.filter(request => request.method === "POST" && request.url.includes("/runtime/"))).toEqual([]);
+    } finally { releaseContract(response(null, 499)); await unmount(); }
+  }, 15_000);
+
   it("enables workflow editor autosave by default when not configured", async () => {
     stubWorkflowEditorFetch();
 
@@ -3508,7 +3559,7 @@ describe("workflows module", () => {
     expect(testRunCall).toBeTruthy();
     const requestBody = JSON.parse(testRunCall?.body ?? "{}");
     expect(requestBody.definitionId).toBe("definition-1");
-    expect(requestBody.snapshotId).toMatch(/^draft-1-[0-9a-f]{8}$/);
+    expect(requestBody.snapshotId).toMatch(/^draft-1-[0-9a-f]{64}$/);
     expect(requestBody.inputs).toEqual({ Greeting: "Hello from test run" });
     expect(requestBody.state.rootActivity).toMatchObject({
       nodeId: "root",

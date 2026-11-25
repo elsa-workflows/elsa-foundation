@@ -143,6 +143,7 @@ internal static class RuntimeBookmarksProviderSmoke
         var reopened = await Store(reopenedContext, scope).FindAsync(concurrencyWorkflowId, "concurrency");
         Assert.NotNull(reopened);
         Assert.Contains(reopened!.StimulusHash, new[] { "left", "right" });
+        Assert.Equal(RawPayload("concurrency").GetRawText(), reopened.Payload!.Value.GetRawText());
     }
 
     private static EfBookmarkStateStore Store(RuntimeDbContext context, string scope) =>
@@ -169,10 +170,17 @@ internal static class RuntimeBookmarksProviderSmoke
         "resume-1",
         stimulusType,
         stimulusHash,
-        JsonSerializer.SerializeToElement(new { provider = true, id = bookmarkId }),
+        RawPayload(bookmarkId),
         new Dictionary<string, string> { ["provider"] = "smoke" },
         CreatedAt,
         null);
+
+    private static JsonElement RawPayload(string id)
+    {
+        using var document = JsonDocument.Parse("""{ "OrderID":9007199254740993, "amount":1.00, "nil":null, "text":"\u0061 <+>", "id":""" +
+            JsonSerializer.Serialize(id, Elsa.Serialization.Core.JsonBaseline.Options) + " }");
+        return document.RootElement.Clone();
+    }
 
     private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor
     {

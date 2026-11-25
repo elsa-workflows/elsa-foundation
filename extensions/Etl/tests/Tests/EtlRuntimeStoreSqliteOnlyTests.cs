@@ -193,11 +193,11 @@ public sealed partial class EtlRuntimeStoreTests
         await migrator.MigrateAsync("20261021160000_ConnectorSourceFetch");
 
         var main = new EtlConnectorRouteOutput(EtlConnectorKind.Http,
-            new EtlObjectReference("retained-main", EtlRuntimeRecordCodec.HashText("main"), 17), 1,
-            EtlRuntimeRecordCodec.HashText("main-effect"));
+            new EtlObjectReference("retained-main", Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes("main")), 17), 1,
+            Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes("main-effect")));
         var errors = new EtlConnectorRouteOutput(EtlConnectorKind.Jsonl,
-            new EtlObjectReference("retained-errors", EtlRuntimeRecordCodec.HashText("errors"), 19), 1,
-            EtlRuntimeRecordCodec.HashText("error-effect"));
+            new EtlObjectReference("retained-errors", Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes("errors")), 19), 1,
+            Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes("error-effect")));
         var outputJson = EtlConnectorRecordCodec.Write(new EtlConnectorBatchOutput(1, 1, 0, main, errors));
         var outputDigest = EtlRuntimeRecordCodec.HashText(outputJson);
         await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_etl_connector_batches SET OutputJson = {outputJson}, OutputDigest = {outputDigest}, OutputBytes = 36, RecordCount = 2 WHERE BatchId = {batchId}");

@@ -66,7 +66,7 @@ public sealed class BpmnMultiInstanceTests
             var bookmark = Assert.Single(await fixture.BookmarksAsync());
             Assert.Equal(BodyNodeId, bookmark.ExecutableNodeId);
             Assert.Equal(completed + 1, run.States(BodyNodeId).Count(state => state.Status == ActivityExecutionStatus.Waiting || state.Status == ActivityExecutionStatus.Suspended || state.Status == ActivityExecutionStatus.Completed));
-            run = await fixture.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new DurableTimerElapsed(bookmark.StimulusHash)));
+            run = await fixture.ResumeAsync(bookmark, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(bookmark.StimulusHash)));
         }
 
         run.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
@@ -98,7 +98,7 @@ public sealed class BpmnMultiInstanceTests
         // Resume each independently; the last completion routes the host's outbound flow.
         WorkflowExecutionRun run = initial;
         foreach (var bookmark in bookmarks)
-            run = await fixture.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new DurableTimerElapsed(bookmark.StimulusHash)));
+            run = await fixture.ResumeAsync(bookmark, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(bookmark.StimulusHash)));
 
         run.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         run.AssertWorkflowCompleted();
@@ -137,7 +137,7 @@ public sealed class BpmnMultiInstanceTests
         Assert.Equal(3, (await fixture.BookmarksAsync()).Count);
         var timerBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.ExecutableNodeId == "node-timer");
 
-        var resumed = await fixture.ResumeAsync(timerBookmark, JsonSerializer.SerializeToElement(new DurableTimerElapsed(timerBookmark.StimulusHash)));
+        var resumed = await fixture.ResumeAsync(timerBookmark, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(timerBookmark.StimulusHash)));
 
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         resumed.AssertWorkflowCompleted();
@@ -360,7 +360,7 @@ public sealed class BpmnMultiInstanceTests
         for (var completed = 0; completed < 3; completed++)
         {
             var bookmark = Assert.Single(await fixture.BookmarksAsync());
-            current = await fixture.ResumeAsync(bookmark, JsonSerializer.SerializeToElement(new DurableTimerElapsed(bookmark.StimulusHash)));
+            current = await fixture.ResumeAsync(bookmark, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(bookmark.StimulusHash)));
         }
 
         current.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
@@ -415,7 +415,7 @@ public sealed class BpmnMultiInstanceTests
         Assert.Equal(3, (await fixture.BookmarksAsync()).Count);
         var timerBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.ExecutableNodeId == "node-timer");
 
-        var resumed = await fixture.ResumeAsync(timerBookmark, JsonSerializer.SerializeToElement(new DurableTimerElapsed(timerBookmark.StimulusHash)));
+        var resumed = await fixture.ResumeAsync(timerBookmark, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(timerBookmark.StimulusHash)));
 
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         resumed.AssertWorkflowCompleted();

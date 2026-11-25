@@ -193,7 +193,7 @@ public sealed class ActivityContract
             activation = Activation
         };
 
-        var node = JsonNode.Parse(JsonSerializer.Serialize(payload))!.AsObject();
+        var node = JsonNode.Parse(Elsa.Serialization.Core.JsonHashInput.SerializeToElement(payload).GetRawText())!.AsObject();
 
         // The side-effect profile participates in the fingerprint only when it departs from the default:
         // a change to ReplaySafe is a contract change and must move the
@@ -213,9 +213,7 @@ public sealed class ActivityContract
         if (AccessesWorkflowState)
             node[nameof(AccessesWorkflowState)] = true;
 
-        var canonical = SortNode(node).ToJsonString();
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
-        return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
+        return "sha256:" + Elsa.Serialization.Core.JsonHashInput.Hash(Elsa.Serialization.Core.JsonHashInput.SerializeToElement(node));
     }
 
     private static IReadOnlyDictionary<string, object?> BuildInputFingerprintProjection(ActivityInputContract input)
@@ -296,16 +294,7 @@ public sealed class ActivityContract
         }
     }
 
-    private static JsonNode SortNode(JsonNode node) => node switch
-    {
-        JsonObject obj => new JsonObject(obj
-            .OrderBy(x => x.Key, StringComparer.Ordinal)
-            .Select(x => KeyValuePair.Create(x.Key, x.Value is null ? null : SortNode(x.Value)))),
-        JsonArray array => new JsonArray(array
-            .Select(x => x is null ? null : SortNode(x))
-            .ToArray()),
-        _ => node.DeepClone()
-    };
+
 }
 
 public sealed class ActivityInputContract
