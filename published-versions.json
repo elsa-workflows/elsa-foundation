@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "bbe3068e922a0d2b42a293bd005204713a1a8a88",
+  "last_publish_commit": "840e731625cb88b2c125ebee7deb4c862f5bb45b",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -476,6 +476,11 @@
       "package_id": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore",
       "version": "4.0.31-preview",
       "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+    },
+    {
+      "package_id": "Elsa.Diagnostics.OpenTelemetry.Workflows",
+      "version": "4.0.0-preview",
+      "commit": "840e731625cb88b2c125ebee7deb4c862f5bb45b"
     },
     {
       "package_id": "Elsa.Diagnostics.Persistence",
@@ -1194,13 +1199,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Activities",
-      "version": "4.0.1-preview",
-      "commit": "e601bb4bec80037025c6770e1373f6c697b4d52f"
+      "version": "4.0.2-preview",
+      "commit": "840e731625cb88b2c125ebee7deb4c862f5bb45b"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Model",
-      "version": "4.0.2-preview",
-      "commit": "e601bb4bec80037025c6770e1373f6c697b4d52f"
+      "version": "4.0.3-preview",
+      "commit": "840e731625cb88b2c125ebee7deb4c862f5bb45b"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
