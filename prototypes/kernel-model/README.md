@@ -346,6 +346,22 @@ timed qualification keeps its own protocol 9. Provision a dedicated database for
 checks the installed format before registering an owner. Run one Workbench process at a time against
 the preview database. Existing workflow and Studio endpoints still use their current runtime.
 
+Set `Elsa__CorePreview__Publications=true`, beside `Elsa__CorePreview__Enabled=true`, to run the default shell's
+publications on the kernel (K10). The one switch composes both sides. The host shares one `KernelServing` between the
+preview node, which runs the registry it serves into, and the default shell. The default shell enables the
+`WorkflowsRuntimeKernel` feature, which replaces its activation coordinator and trigger extractor with the kernel's and
+leaves out the old core's HTTP route table. Once the node runs, the default shell serves every slot its publications left
+active. Studio's toolbox hides the activities the kernel does not run (`kernel-unsupported`). Two limits stand until the
+owner decides them:
+
+- **No HTTP edge yet.** A served start route is in `KernelServing.Routes`, and nothing in the Workbench routes requests to
+  it.
+- **No schedule actor.** The PostgreSQL foundation hosts no schedule actor, so a Timer or Cron publish fails at serving,
+  and the refusal names the limit.
+
+Run `PG_PREVIEW_PROFILE=publications bash tools/ci/actor-foundation/check-workbench-core-preview.sh Release` to check
+that a Workbench with publications on serves its default shell on the kernel.
+
 Set `Elsa__CorePreview__ReadsTenant` to the preview's Embedded tenant id to expose
 `GET /runtime/core-preview/workflows/instances`. Workbench requires both workflow runtime read
 and activity structure inspection permissions. The authenticated tenant and ordinary persistence

@@ -139,10 +139,10 @@ public sealed class KernelCoordinatorTests
         }
 
         /// <summary>Another coordinator over these stores and this host's serving state, as a second shell composes one.</summary>
-        public KernelActivationCoordinator NewCoordinator(IWorkflowActivationSwitch activationSwitch) =>
+        public KernelActivationCoordinator NewCoordinator(IWorkflowActivationSwitch activationSwitch, IScheduleActors? schedules = null) =>
             new(Authority, activationSwitch, References,
                 new WorkflowExecutableRootWriteLeaseManager(Executables, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock),
-                Executables, Bindings, Serving, Schedules, Clock, RecurringSchedules, _channels, [Observer]);
+                Executables, Bindings, Serving, schedules ?? Schedules, Clock, RecurringSchedules, _channels, [Observer]);
 
         public async Task<WorkflowActivationResult> ActivateAsync(WorkflowExecutable executable, string activationId, string slot = KernelServing.DefaultSlotName,
             KernelActivationCoordinator? coordinator = null)
@@ -520,6 +520,22 @@ public sealed class KernelCoordinatorTests
         Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.ServingCheck), (second.Outcome, second.FailedStep));
         Assert.Contains("Definition 'ticks'", second.Diagnostic, StringComparison.Ordinal);
         Assert.Contains("publish the scheduled definition to one channel", second.Diagnostic, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_host_without_schedule_actors_refuses_a_timer_at_serving_with_its_reason()
+    {
+        var host = new Host();
+        host.Coordinator = host.NewCoordinator(host.Switch, new UnavailableScheduleActors("Timer and Cron do not run on this preview. Remove the Timer."));
+
+        var timer = await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
+        var http = await host.ActivateAsync(Orders("orders@1"), "orders-1");
+
+        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.ProjectionActivation), (timer.Outcome, timer.FailedStep));
+        Assert.StartsWith("Timer and Cron do not run on this preview. Remove the Timer.", timer.Diagnostic, StringComparison.Ordinal);
+        Assert.Null(timer.Slot.ActiveActivationId);
+        Assert.Null(host.Serving.ServedWorkflow("ticks"));
+        Assert.Equal(WorkflowActivationOutcome.Activated, http.Outcome);
     }
 
     [Fact]

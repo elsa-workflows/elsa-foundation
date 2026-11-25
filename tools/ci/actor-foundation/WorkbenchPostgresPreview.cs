@@ -37,14 +37,16 @@ internal static class WorkbenchPostgresPreview
     internal static async Task RunAsync(string[] arguments, string? executable = null)
     {
         if (arguments is not [var phase and ("birth" or "restart" or "disabled"), var receiptPath, .. var profileArguments] ||
-            profileArguments is not ([] or ["jobs" or "timed" or "timeout" or "takeover" or "takeover-complete"]))
-            throw new ArgumentException("Expected birth, restart or disabled, a receipt file and optional jobs, timed, timeout, takeover or takeover-complete profile.");
+            profileArguments is not ([] or ["jobs" or "timed" or "timeout" or "takeover" or "takeover-complete" or "publications"]))
+            throw new ArgumentException("Expected birth, restart or disabled, a receipt file and optional jobs, timed, timeout, takeover, takeover-complete or publications profile.");
         var profile = profileArguments.SingleOrDefault();
         var completesTakeover = profile == "takeover-complete";
         var takeover = profile == "takeover" || completesTakeover;
         var timed = takeover || profile is "timed" or "timeout";
         var timesOut = profile is "timeout" or "takeover";
-        var nativeJobs = profile is not null;
+        // The publications profile is the ordinary format with the kernel serving the default shell's publications.
+        var publications = profile == "publications";
+        var nativeJobs = profile is not (null or "publications");
         var ticketScope = timed ? TimedJobScope : JobTicketScope;
 
         if ((phase == "disabled" || takeover) && executable is null)
@@ -133,7 +135,7 @@ internal static class WorkbenchPostgresPreview
         {
             try
             {
-                var wrong = await PostgresPreviewHosting.StartAsync(() => OpenProfile(observationOptions, profile is null ? "jobs" : timed ? "jobs" : null),
+                var wrong = await PostgresPreviewHosting.StartAsync(() => OpenProfile(observationOptions, !nativeJobs ? "jobs" : timed ? "jobs" : null),
                     "wrong-preview-format", workflowActor, Environment.FailFast, cancellationToken: token);
                 await wrong.StopAsync();
                 throw new InvalidOperationException("The wrong preview profile started on this database.");
@@ -158,7 +160,10 @@ internal static class WorkbenchPostgresPreview
             if (host is not null)
                 await host.StartAsync(token);
             if (workbench is not null)
+            {
                 await workbench.WaitReadyAsync(token);
+                if (publications) await RequireKernelServingAsync(workbench, token);
+            }
 
             if (previous is null)
             {
@@ -237,6 +242,7 @@ internal static class WorkbenchPostgresPreview
                     ownerPid = workbench.Id;
                     nodePrefix = $"workbench-core-preview-{ownerPid}-";
                     await workbench.WaitReadyAsync(token);
+                    if (publications) await RequireKernelServingAsync(workbench, token);
                     if (releaseFile is not null)
                     {
                         Require(await workbench.WaitForJobEntryAsync(token) == originalEntry,
@@ -473,6 +479,11 @@ internal static class WorkbenchPostgresPreview
         }
     }
 
+    // With publications on, the default shell composes the kernel's coordinator, which serves its active slots once the node runs.
+    private static async Task RequireKernelServingAsync(WorkbenchProcess workbench, CancellationToken token) =>
+        Require((await workbench.WaitForKernelServingAsync(token)).Contains("shell default on the kernel", StringComparison.Ordinal),
+            "the default shell serves its publications on the kernel");
+
     private static async Task CheckEntryBeforeListeningAsync()
     {
         var output = new WorkbenchOutput();
@@ -487,6 +498,7 @@ internal static class WorkbenchPostgresPreview
     {
         internal readonly TaskCompletionSource<JobEntry> Entry = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource<string> Listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource<string> KernelServing = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         internal async Task ReadAsync(TextReader reader)
         {
@@ -495,6 +507,9 @@ internal static class WorkbenchPostgresPreview
                 if (line.StartsWith(DirectApprovalWorkflow.ActiveJobEntry, StringComparison.Ordinal) &&
                     line[DirectApprovalWorkflow.ActiveJobEntry.Length..].Split(' ', 2) is [var actor, var key])
                     Entry.TrySetResult(new(actor, key));
+                if (line.Contains("serves the publications of shell", StringComparison.Ordinal) ||
+                    line.Contains("does not compose the WorkflowsRuntimeKernel feature", StringComparison.Ordinal))
+                    KernelServing.TrySetResult(line);
                 const string listening = "Now listening on: ";
                 var offset = line.IndexOf(listening, StringComparison.Ordinal);
                 if (offset >= 0)
@@ -511,6 +526,8 @@ internal static class WorkbenchPostgresPreview
         internal int Id => process.Id;
         internal Task<JobEntry> WaitForJobEntryAsync(CancellationToken token) =>
             WaitForOutputAsync(output.Entry.Task, "entering the timed job", token);
+        internal Task<string> WaitForKernelServingAsync(CancellationToken token) =>
+            WaitForOutputAsync(output.KernelServing.Task, "serving its publications on the kernel", token);
 
         internal static WorkbenchProcess Start(string executable, string connection, bool enabled, string? profile, string? releaseFile)
         {
@@ -544,6 +561,8 @@ internal static class WorkbenchPostgresPreview
                 start.Environment["Elsa__CorePreview__Enabled"] = "true";
             if (profile == "jobs")
                 start.Environment["Elsa__CorePreview__NativeJobs"] = "true";
+            if (profile == "publications")
+                start.Environment["Elsa__CorePreview__Publications"] = "true";
             if (profile is "timed" or "timeout" or "takeover" or "takeover-complete")
                 start.Environment["Elsa__CorePreview__TimedNativeJobs"] = "true";
             if (releaseFile is not null)

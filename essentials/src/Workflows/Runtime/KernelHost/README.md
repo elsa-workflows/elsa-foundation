@@ -19,6 +19,11 @@ the Native model's definitions.
 - `IScheduleActors` is how the coordinator reaches the schedule actors. `IngressScheduleActors` implements it on the
   host's ingress.
 - `KernelTriggerBindingExtractor` reports no old-core triggers, so the publication preflight checks only the slot.
+- `WorkflowsRuntimeKernelFeature` (`WorkflowsRuntimeKernel`) composes the kernel into a shell. After every other feature
+  has registered, it replaces the activation coordinator and the trigger extractor with the kernel's, and drops the old
+  core's HTTP route-table observer. It requires the host to share its `KernelServing` and `IScheduleActors` by instance.
+- `UnavailableScheduleActors` is for a host that runs no schedule actor. Each call throws its reason, so a Timer or Cron
+  publish fails at serving with that reason.
 
 The mapping rules are in [definitions on the kernel](../../../../../docs/architecture/definitions-on-the-kernel.md#mapping-rules).
 
