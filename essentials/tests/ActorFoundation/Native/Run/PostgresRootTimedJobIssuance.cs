@@ -95,7 +95,7 @@ internal static class PostgresRootTimedJobIssuance
             image.Id == root.Actor && binding.Reference == actorId,
             "The cold checkpoint must load the exact bound workflow actor and public reference.");
         using var dispatch = JsonDocument.Parse(image.FoundationDispatchHeader!.Header.TypeData);
-        var workflow = dispatch.RootElement.GetProperty("Definition").GetString();
+        var workflow = dispatch.RootElement.GetProperty("Workflow").GetString();
         var nativeModel = dispatch.RootElement.GetProperty("Model").GetString();
         Check(workflow == Definition && nativeModel == NativeExecutionModel.ModelKey,
             "The persisted dispatch header must name the exact Native model and definition.");

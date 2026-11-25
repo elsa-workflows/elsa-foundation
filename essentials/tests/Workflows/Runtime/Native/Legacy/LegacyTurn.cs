@@ -28,7 +28,7 @@ internal sealed class LegacyTurn : INativeTurn
     }
 
     public Contract.ActorRef Actor => new(_turn.Instance.Ref.Id);
-    public string Definition => _turn.Instance.Definition;
+    public string Workflow => _turn.Instance.Definition;
     public bool HasExactIdentity => _turn.Instance.Creation > 0;
     public bool SavesWaitRecipes => false;
     public string OperationOrigin => CreationProtocol.Origin(Actor.Id, _turn.Instance.Creation);

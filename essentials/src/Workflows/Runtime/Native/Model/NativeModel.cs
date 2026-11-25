@@ -138,7 +138,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
 {
     internal bool HasExactIdentity => turn.HasExactIdentity;
     private readonly NativeState _s = turn.State;
-    private Workflow _wf => registry.Get(turn.Definition); // metadata-only turns never resolve authored definitions
+    private Workflow _wf => registry.Get(turn.Workflow); // metadata-only turns never resolve authored definitions
     private Contract.ActorStatus _status = Contract.ActorStatus.Running;
     private int _executed;
 
