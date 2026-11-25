@@ -53,6 +53,8 @@ short worktree path (MSB3030).
   - `AddEfPersistenceResources`, with `MigrationHostEfToolingShellDefaults` and its
     `[assembly: EfToolingShellDefaults(...)]` attribute;
   - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` and `AddShellStartupValidation`;
+  - the JSON baseline: `AddElsaJsonResponseHeaders()` and `ConfigureHttpJsonOptions` with `JsonBaseline.Configure`
+    and `StrictDateTimeConverters.Configure(..., apiMode: true)`, as the Workbench registers them (R-2);
   - authentication, authorization and `AddOpenIddictEntityFrameworkCoreStore`;
   - the Studio CORS policy;
   - `AddEfSchemaReadability`, `AddConfiguredClusterMembership`, `AddWorkflowRuntimeRunnabilityReport` and the
@@ -67,6 +69,8 @@ short worktree path (MSB3030).
 - [ ] T006 Write `appsettings.json` and the settings in `shells.json` (R-6):
   - the `Elsa` resource at `data/elsa.db`, with `Migrate:Policy` `AutoMigrate`;
   - development identity with the seeded administrator (the OpenIddict store is in memory in development mode);
+  - the development-only demo keys R-6 lists (runtime recovery continuation and hierarchy cursor signing keys, the
+    workflow alteration payload protection keys);
   - `AllowedReturnUrlOrigins` and CORS for the Studio host's local address (the Studio host's own fixed URL);
   - `WorkflowsRuntimeCheckpointPersistence` with `Mode` `Durable`, as the S-15 run sets it (R-10);
   - the two reconciliation features with `SourceId` `elsa3-migration`, `PublishOnReconcile` `true`, and the sample
@@ -124,7 +128,7 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
 - [ ] T012 [US2] Start the host from that head with an empty `data/` folder and the `inventory` output as its migrated
   folder. Set capture through `PUT runtime/workflows/diagnostics/settings` as the S-15 README does. Run `jtest run` with
   the S-15 Elsa 4 templates and `environments/elsa4.json`, with its variables set as R-10 lists
-  (`ELSA_API_BASE_URL`, `ELSA_EXECUTOR_BASE_URL` to `<host URL>/workflows`, the admin variables, `CORRELATION_ID`,
+  (`ELSA_API_BASE_URL`, `ELSA_EXECUTOR_BASE_URL` to `<host URL>/workflows/http`, `JTEST_CONFIG_FILE`, the admin variables, `CORRELATION_ID`,
   `DATE_NOW_ISO_STRING`). Record the run in `extensions/Elsa3/tests/JTest/ledger/runs.md` in the ledger's existing columns
   (data-model.md, FR-015).
 - [ ] T013 [US2] For each suite that passes on the Workbench and fails on the host, find the cause and route it as

@@ -49,6 +49,10 @@ acceptance set and templates from the merged S-15, or from the head current at t
     `[assembly: EfToolingShellDefaults(...)]` attribute, as `WorkbenchEfToolingShellDefaults` is for the Workbench;
   - `AddEfPendingMigrationActivationGuard`, `AddConfiguredDataProtection` (EF key store) and
     `AddShellStartupValidation`;
+  - the initiative's JSON baseline (S-9, ADR 0091) at host level, as the Workbench and `Elsa.Foundation.Host`
+    register it: `AddElsaJsonResponseHeaders()` and `ConfigureHttpJsonOptions` with `JsonBaseline.Configure` and
+    `StrictDateTimeConverters.Configure(..., apiMode: true)`. Main's essentials host predates the initiative and lacks
+    it; without it the API serializes differently from the Workbench run;
   - `AddAuthentication`/`AddAuthorization`, and the OpenIddict token store from main's
     `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore` (`AddOpenIddictEntityFrameworkCoreStore`, R-7);
   - a CORS policy for the repository's Studio host (R-8);
@@ -192,8 +196,11 @@ and the folder settings. `FeatureCompositionTests` already proves each feature c
 - **Identity.**
   - The identity features run in development mode with the Workbench's seeded development administrator (FR-006).
   - `AllowedReturnUrlOrigins` and the CORS policy list the local address of the repository's Studio host (R-8).
-  - The workflow alteration payload key falls back to an ephemeral development key. That is acceptable for a local
-    tool, and it is the Workbench's Development behaviour.
+  - Development-only demo keys are committed, as the Workbench's and main's essentials host's `shells.json` do:
+    `WorkflowsRuntimeEntityFrameworkCore` `RecoveryContinuationSigningKey` and `HierarchyCursorSigningKey` (the
+    runtime EF registrations set `AllowEphemeralDevelopmentKey = false`, so a missing key fails shell activation), and
+    the `WorkflowAlterationPayloadProtection*` key settings. They are demo values for a local tool, not production
+    secrets (FR-006).
 - **Migrated folder.**
   - `JsonWorkflowReconciliation` has `Options.FolderPath` `migrated/workflows`, `SourceId` `elsa3-migration`, and
     `PublishOnReconcile` `true` (spec Q4). `PublishOnReconcile` needs `WorkflowsPublishing` in the same shell.
@@ -243,7 +250,9 @@ The host references no EF vendor package directly, so `OpenIddictPersistenceArch
 - **Decision.** Use the S-15 Elsa 4 templates and environment unchanged, except base URL and credentials (the
   development administrator from R-6). The S-15 environment file `environments/elsa4.json` reads its values from
   variables, so the run reuses it and sets them as the S-15 README does: `ELSA_API_BASE_URL` to the host's fixed URL
-  (R-2), `ELSA_EXECUTOR_BASE_URL` to `<host URL>/workflows` (most suites call their HTTP trigger through it),
+  (R-2), `ELSA_EXECUTOR_BASE_URL` to `<host URL>/workflows/http` (Elsa 4's default `HttpRoutePublicationOptions.BasePath`, as spec 1235's run-hosts
+  contract uses; most suites call their HTTP trigger through it), `JTEST_CONFIG_FILE` to
+  `global-configuration.elsa4.json` (which selects the `templates-elsa4/*` search path),
   `ADMIN_USERNAME` and `ADMIN_PASSWORD` to the development administrator, and `CORRELATION_ID` and
   `DATE_NOW_ISO_STRING` as the README sets them. The Notes column records both URLs and the user name (no secret). The run record is a row in the S-15 ledger,
   `extensions/Elsa3/tests/JTest/ledger/runs.md`, in its existing columns: Engine `Elsa 4`; Source names the migration
