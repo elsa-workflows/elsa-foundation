@@ -91,11 +91,11 @@ public sealed partial class EfStore
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
                 """;
-            var openRevisionColumn = db.UsesRootParkArrivals ? """i."FoundationParkRevision" """ : "NULL::bigint";
+            var openRevisionColumn = db.RecordsRootParkRevision ? """i."FoundationParkRevision" """ : "NULL::bigint";
             var locked = await db.Database.SqlQuery<LockedParkCheckpoint>(FormattableStringFactory.Create(
                 read.Format.Replace("/*open-revision*/", openRevisionColumn, StringComparison.Ordinal), read.GetArguments()))
                 .ToListAsync(cancellationToken);
-            if (locked is not [var prior] || db.UsesRootParkArrivals &&
+            if (locked is not [var prior] || db.RecordsRootParkRevision &&
                 (Opening ? prior.OpenRevision is not null : prior.OpenRevision is not > 0 || prior.OpenRevision > Expected)) return false;
 
             var parkAt = prior.ParkAt ?? prior.At;
@@ -106,7 +106,7 @@ public sealed partial class EfStore
                     /*open-revision*/
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """;
-            if (db.UsesRootParkArrivals)
+            if (db.RecordsRootParkRevision)
                 write = FormattableStringFactory.Create(
                     write.Format.Replace("/*open-revision*/", $$""", "FoundationParkRevision" = {{{write.ArgumentCount}}}""", StringComparison.Ordinal),
                     [.. write.GetArguments(), openRevision]);
@@ -167,7 +167,7 @@ public sealed partial class EfStore
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                 AS "Value"
                 """).SingleAsync(cancellationToken);
-            if (db.UsesRootParkArrivals && !await db.Database.SqlQuery<bool>($"""
+            if (db.RecordsRootParkRevision && !await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "Revision" = {JournalRevision} AND "FoundationParkRevision" = {openRevision}) AS "Value"
                 """).SingleAsync(cancellationToken)) return false;

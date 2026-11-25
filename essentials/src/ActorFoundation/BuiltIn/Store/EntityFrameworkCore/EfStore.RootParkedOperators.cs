@@ -41,7 +41,7 @@ public sealed partial class EfStore
                 _."FoundationTerminalAt", _."Model", _."Definition", _."NextJobGeneration", _."CustomHandles" /*wire*/)
             """;
         string Row(string side) => columns.Replace("_.", side + ".", StringComparison.Ordinal)
-            .Replace("/*park-revision*/", db.UsesRootParkArrivals ? $""", {side}."FoundationParkRevision" """ : "", StringComparison.Ordinal)
+            .Replace("/*park-revision*/", db.RecordsRootParkRevision ? $""", {side}."FoundationParkRevision" """ : "", StringComparison.Ordinal)
             .Replace("/*wire*/", db.UsesRootStableBody ? $""", {side}."FoundationStateWire" """ : "", StringComparison.Ordinal);
         // The raw command is formatted, so the literal brace is doubled.
         return $$$"""
