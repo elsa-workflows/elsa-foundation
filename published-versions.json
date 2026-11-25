@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "c3d571e6ab273ea63df256c3fa0c97befe8e3abf",
+  "last_publish_commit": "f6c9b830b9b02ebf5ad7a8c9823d907efdc18343",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -594,8 +594,8 @@
     },
     {
       "package_id": "Elsa.Expressions.JavaScript",
-      "version": "4.0.21-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.22-preview",
+      "commit": "f6c9b830b9b02ebf5ad7a8c9823d907efdc18343"
     },
     {
       "package_id": "Elsa.Expressions.JavaScript.Core",
@@ -619,8 +619,8 @@
     },
     {
       "package_id": "Elsa.Expressions.Liquid",
-      "version": "4.0.18-preview",
-      "commit": "d6dd2ec04df28426b118cd80e5b8ddb3f3f344ec"
+      "version": "4.0.19-preview",
+      "commit": "f6c9b830b9b02ebf5ad7a8c9823d907efdc18343"
     },
     {
       "package_id": "Elsa.ExtensionBuilder.Api",
