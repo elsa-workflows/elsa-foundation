@@ -50,7 +50,7 @@ public static class NativeWorkflows
                     Sequence("b1", Event("e1", Expr("input.key + '-1'")),
                         While("loop", Expr("i < 2"), Sequence("body", Set("inc", "i", Expr("i + 1")), Post("h1", "https://partner.example/orders", Expr("'i=' + i"))))),
                     Sequence("b2", Delay("d", 200), Set("t1", "tag", 1), Set("t2", "tag", 2), Set("t3", "tag", 3), Email("m1", "ops@example.com", "b2", "sent"))),
-                ForEach("each", Expr("[1, 2]"), Post("h2", "https://partner.example/items", Expr("'n=' + CurrentIndex"))),
+                ForEach("each", Expr("[1, 2]"), Post("h2", "https://partner.example/items", Expr("'n=' + currentIndex"))),
                 // Two event branches meet at a Merge and fork again to a join: the join fires once per token, in one turn or
                 // in two, and the Http behind it twice, so the join's committed firing ordinal is what keeps the two keys apart.
                 Flowchart("mj",
@@ -105,7 +105,7 @@ public static class NativeWorkflows
             ("first", null), ("second", null), ("output", null)));
         registry.Add(Workflow("n-child", Sequence("root", Delay("d", 400), Set("o", "output", "child")), ("output", null)));
         registry.Add(Workflow("n-loop", Sequence("root",
-                ForEach("each", Expr("[1, 2, 3]"), Sequence("body", Delay("d", 300), Set("add", "sum", Expr("sum + CurrentItem * 10 + CurrentIndex")))),
+                ForEach("each", Expr("[1, 2, 3]"), Sequence("body", Delay("d", 300), Set("add", "sum", Expr("sum + currentItem * 10 + currentIndex")))),
                 While("loop", Expr("i < 2"), Set("inc", "i", Expr("i + 1"))),
                 Call("svc", "pricing").Capture("quote"),
                 Set("out", "output", Expr("sum + ' ' + i + ' ' + quote"))),

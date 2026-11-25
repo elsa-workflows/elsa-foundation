@@ -255,10 +255,57 @@ public sealed class MappingStructureTests
         var workflow = NativeExecutableMapper.Map(Executable(root));
 
         Assert.Equal("POST", ((Native.LiteralBinding)workflow.Nodes["http"].Inputs["Method"]).Value!.GetValue<string>());
-        Assert.False(workflow.Nodes["http"].Inputs.ContainsKey("CanStartWorkflow"));
+        Assert.True(((Native.LiteralBinding)workflow.Nodes["http"].Inputs[Native.NativeStartTriggers.Input]).Value!.GetValue<bool>());
         Assert.Equal("GET", ((Native.LiteralBinding)workflow.Nodes["get"].Inputs["Method"]).Value!.GetValue<string>());
         Assert.Equal(5000L, ((Native.LiteralBinding)workflow.Nodes["delay"].Inputs["Milliseconds"]).Value!.GetValue<long>());
         Assert.Equal(new Native.ResultBinding("http", "Body"), workflow.Nodes["respond"].Inputs["Body"]);
+    }
+
+    [Fact]
+    public void Can_start_workflow_passes_through_on_http_endpoints_and_events()
+    {
+        var root = Sequence("root",
+            Node("http", Types.HttpEndpoint, [Literal("Path", "orders", "String"), Literal("CanStartWorkflow", false, "Boolean")]),
+            Node("wait", Types.Event, [Literal("EventName", "paid", "String"), Literal("CanStartWorkflow", false, "Boolean")]));
+
+        var workflow = NativeExecutableMapper.Map(Executable(root));
+
+        Assert.False(Native.NativeStartTriggers.CanStart(workflow.Nodes["http"]));
+        Assert.False(Native.NativeStartTriggers.CanStart(workflow.Nodes["wait"]));
+        // At the root Sequence's start, the endpoint is a wait route, not a start route.
+        var route = Assert.Single(new Native.HttpRoutes(new Native.WorkflowRegistry().Add(workflow)).Routes);
+        Assert.False(route.Start);
+    }
+
+    [Fact]
+    public void Send_http_request_content_goes_as_text_by_default()
+    {
+        var root = Sequence("root",
+            Node("send", Types.SendHttpRequest, [Literal("Url", "https://partner.example/a", "Uri"), Literal("Content", "{\"raw\": 1}", "String")]),
+            Node("typed", Types.SendHttpRequest, [Literal("Url", "https://partner.example/b", "Uri"), Literal("Content", "x", "String"), Literal("ContentType", "application/json", "String")]),
+            Node("empty", Types.SendHttpRequest, [Literal("Url", "https://partner.example/c", "Uri")]));
+
+        var workflow = NativeExecutableMapper.Map(Executable(root));
+
+        Assert.Equal("text/plain", LiteralOf(workflow.Nodes["send"], "ContentType")!.GetValue<string>());
+        Assert.Equal("GET", LiteralOf(workflow.Nodes["send"], "Method")!.GetValue<string>());
+        Assert.Equal("application/json", LiteralOf(workflow.Nodes["typed"], "ContentType")!.GetValue<string>());
+        Assert.False(workflow.Nodes["empty"].Inputs.ContainsKey("ContentType"));
+    }
+
+    [Fact]
+    public void A_loop_body_reads_its_loops_item_and_index()
+    {
+        var root = Sequence("root",
+            Node("each", Types.ForEach, [Literal("Collection", new[] { 1, 2 })], Structure("elsa.foreach.structure", new { body = "item" }),
+                [Slot("ForEach.Body", Set("item", "v-last", VariableRead("value", "currentItem", scope: "each")))]),
+            Node("count", Types.For, [Literal("Start", 0, "Int32"), Literal("End", 2, "Int32")], Structure("elsa.for.structure", new { body = "pass" }),
+                [Slot("For.Body", WriteLine("pass", VariableRead("text", "index", scope: "count")))]));
+
+        var workflow = NativeExecutableMapper.Map(Executable(root, Variable("v-last", "last")));
+
+        Assert.Equal(new Native.VariableBinding("currentItem"), workflow.Nodes["item"].Inputs["Value"]);
+        Assert.Equal(new Native.VariableBinding("index"), workflow.Nodes["pass"].Inputs["Text"]);
     }
 
     internal static JsonNode? LiteralOf(Native.Node node, string input) => ((Native.LiteralBinding)node.Inputs[input]).Value;

@@ -74,7 +74,8 @@ public class NativeExecutionOptions
     /// The workflow a Dispatch Workflow starts, by the id it names. A designer's Dispatch names a definition, and a publishing
     /// host serves each definition as one artifact at a time, so the host resolves the definition to the workflow id it serves
     /// now; null when the id names no served definition. Consulted when the child starts; without it, or when it returns
-    /// null, the child starts the workflow the id names.
+    /// null, the child starts the workflow the id names. It is read inside the turn, so a turn that runs again after a lost
+    /// commit may start a version published in between.
     /// </summary>
     public Func<string, string?>? ServedWorkflow { get; init; }
 }

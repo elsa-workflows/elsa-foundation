@@ -134,7 +134,15 @@ public sealed class Workflow
         (Id, Root, Variables, Definition) = (id, root, variables ?? new Dictionary<string, JsonNode?>(), definition ?? id);
         void Index(Node node, Node? parent)
         {
-            if (!Nodes.TryAdd(node.Id, node)) throw new InvalidOperationException($"Node id '{node.Id}' is used twice in '{id}'.");
+            if (!Nodes.TryAdd(node.Id, node)) throw new NativeDefinitionException(node.Id, $"Node id '{node.Id}' is used twice in '{id}'.");
+            try { Validate(node, parent); }
+            catch (InvalidOperationException invalid) when (invalid is not NativeDefinitionException) { throw new NativeDefinitionException(node.Id, invalid.Message); }
+            if (parent is not null) Parents[node.Id] = parent;
+            foreach (var child in node.Children) Index(child, node);
+        }
+
+        void Validate(Node node, Node? parent)
+        {
             node.External = node.Type.IsDefined(typeof(ExternalAttribute));
             node.Background = node.Type.IsDefined(typeof(BackgroundAttribute));
             if (node.JobTimeout is { } timeout && (!node.Background || timeout < TimeSpan.Zero))
@@ -147,8 +155,6 @@ public sealed class Workflow
             if (node.Type == typeof(SetOutput)) GraphActivity.ValidateOutput(node, Boundary(parent), id);
             if (node.Type == typeof(Finish) && !(node.Inputs.GetValueOrDefault("Outcome") is LiteralBinding { Value: JsonValue outcome } && outcome.TryGetValue<string>(out var named) && !string.IsNullOrWhiteSpace(named)))
                 throw new InvalidOperationException($"Finish '{node.Id}' in '{id}' needs a literal outcome.");
-            if (parent is not null) Parents[node.Id] = parent;
-            foreach (var child in node.Children) Index(child, node);
         }
         Index(root, null);
 
@@ -176,6 +182,12 @@ public sealed class Workflow
     public IReadOnlyDictionary<string, JsonNode?> Variables { get; }
     public Dictionary<string, Node> Nodes { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, Node> Parents { get; } = new(StringComparer.Ordinal);
+}
+
+/// <summary>A definition the Native model's own rules refuse when it is built, naming the node that breaks one.</summary>
+public sealed class NativeDefinitionException(string node, string message) : InvalidOperationException(message)
+{
+    public string Node { get; } = node;
 }
 
 public sealed class WorkflowRegistry

@@ -54,7 +54,7 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
 
     [Input] public string Url { get; set; } = "";
     [Input] public string Method { get; set; } = "POST";
-    /// <summary>The body: a JSON value sent as application/json, or a string sent as <see cref="ContentType"/> text.</summary>
+    /// <summary>The body: a string is sent as its text (text/plain unless <see cref="ContentType"/> says otherwise), any other JSON value as JSON (application/json unless it says otherwise).</summary>
     [Input] public JsonNode? Body { get; set; }
     /// <summary>The body's media type, parameters allowed (<c>text/plain; charset=utf-8</c>).</summary>
     [Input] public string? ContentType { get; set; }
@@ -164,14 +164,16 @@ public sealed class SendHttpRequest : Activity<HttpResponseResult?>
         }
         if (Body is not null)
         {
-            var json = mediaType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) != false;
-            mediaType ??= new MediaTypeHeaderValue("application/json");
+            // A string is sent as its text, whatever the media type says; any other value as JSON. Without a content type a
+            // string goes as text/plain and anything else as application/json.
+            var text = Body is JsonValue value && value.TryGetValue<string>(out var plain) ? plain : null;
+            mediaType ??= new MediaTypeHeaderValue(text is null ? "application/json" : "text/plain");
             var encoding = Encoding.UTF8;
             if (mediaType.CharSet is { Length: > 0 } charset)
                 try { encoding = Encoding.GetEncoding(charset.Trim('"')); }
                 catch (Exception unknown) when (unknown is ArgumentException or NotSupportedException) { refused = $"'{charset}' is not a charset this host encodes."; request.Dispose(); return null; }
             else mediaType.CharSet = "utf-8";
-            request.Content = new StringContent(!json && Body is JsonValue text && text.TryGetValue<string>(out var plain) ? plain : Body.ToJsonString(), encoding);
+            request.Content = new StringContent(text ?? Body.ToJsonString(), encoding);
             request.Content.Headers.ContentType = mediaType;
         }
         var keyed = false;

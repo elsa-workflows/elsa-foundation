@@ -50,15 +50,15 @@ public sealed class MappingBindingTests
             Result("text", "wait", "Payload"),
             ResultMember("text", "wait", "Payload", "amount"),
             Result("text", "wait", "Result"),
-            ResultMember("text", "http", "Request", "query", "name"),
-            Result("text", "http", "RouteData"),
+            ResultMember("text", "http", "Request", "method"),
+            Result("text", "http", "ParsedContent"),
             Result("text", "script", "result"));
 
         Assert.Equal(new Native.ResultBinding("wait", "Payload"), Read(workflow, 0));
         Assert.Equal(new Native.ResultBinding("wait", "Payload.amount"), Read(workflow, 1));
         Assert.Equal(new Native.ResultBinding("wait", "EventName"), Read(workflow, 2));
-        Assert.Equal(new Native.ResultBinding("http", "Query.name"), Read(workflow, 3));
-        Assert.Equal(new Native.ResultBinding("http", "RouteValues"), Read(workflow, 4));
+        Assert.Equal(new Native.ResultBinding("http", "Method"), Read(workflow, 3));
+        Assert.Equal(new Native.ResultBinding("http", "Body"), Read(workflow, 4));
         Assert.Equal(new Native.ResultBinding("script", "Value"), Read(workflow, 5));
     }
 

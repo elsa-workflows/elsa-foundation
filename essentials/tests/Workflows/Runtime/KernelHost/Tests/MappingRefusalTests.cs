@@ -30,7 +30,8 @@ public sealed class MappingRefusalTests
 
         AssertActivity(refused, "compensate");
         Assert.Contains("CompensationScope", refused.Message, StringComparison.Ordinal);
-        Assert.Contains("kernel-unsupported", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("release 1", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("Remove the node", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -152,6 +153,117 @@ public sealed class MappingRefusalTests
     public void A_capture_into_a_variable_the_node_cannot_see_is_refused() =>
         AssertBinding(Refused(Sequence("root",
             Node("script", Types.RunJavaScript, [Literal("script", "1", "String")], captures: [Capture("result", "nowhere")]))), "script", "result");
+
+    [Theory]
+    [InlineData("input")]
+    [InlineData("output")]
+    [InlineData("currentItem")]
+    [InlineData("currentIndex")]
+    [InlineData("index")]
+    public void A_workflow_variable_with_a_name_this_host_uses_is_refused(string name)
+    {
+        var refused = Refused(Sequence("root", WriteLine("w", Literal("text", "hi"))), Variable("v-1", name));
+
+        AssertBinding(refused, "root", name);
+        Assert.EndsWith("Rename the variable.", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Request", "headers")]
+    [InlineData("Request", "query")]
+    [InlineData("Request", "body")]
+    [InlineData("Request", "path")]
+    [InlineData("Request", null)]
+    [InlineData("RouteData", null)]
+    [InlineData("RouteData", "id")]
+    public void An_http_endpoint_result_whose_shape_differs_is_refused(string projection, string? member)
+    {
+        var read = member is null ? Result("text", "http", projection) : ResultMember("text", "http", projection, member);
+        var refused = Refused(Sequence("root", Node("http", Types.HttpEndpoint, [Literal("Path", "orders", "String")]), WriteLine("reader", read)));
+
+        AssertBinding(refused, "reader", "text");
+    }
+
+    [Theory]
+    [InlineData("ResponseBody", null)]
+    [InlineData("ResponseHeaders", null)]
+    [InlineData("ResponseHeaders", "content-type")]
+    public void A_send_http_request_result_whose_shape_differs_is_refused(string projection, string? member)
+    {
+        var read = member is null ? Result("text", "send", projection) : ResultMember("text", "send", projection, member);
+        AssertBinding(Refused(Sequence("root", Node("send", Types.SendHttpRequest, [Literal("Url", "https://partner.example", "Uri")]), WriteLine("reader", read))),
+            "reader", "text");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("status")]
+    [InlineData("outputs")]
+    public void A_dispatch_result_read_is_refused(string? member)
+    {
+        var read = member is null ? Result("text", "dispatch", "Result") : ResultMember("text", "dispatch", "Result", member);
+        AssertBinding(Refused(Sequence("root", Node("dispatch", Types.Dispatch, [Literal("WorkflowDefinitionId", "child", "String")]), WriteLine("reader", read))),
+            "reader", "text");
+    }
+
+    [Theory]
+    [InlineData("5")]
+    [InlineData("PT5S")]
+    [InlineData("soon")]
+    public void A_delay_takes_a_literal_time_span_as_publishing_writes_it(string duration) =>
+        AssertBinding(Refused(Sequence("root", Node("delay", Types.Delay, [Literal("Duration", duration, "TimeSpan")]))), "delay", "Duration");
+
+    [Fact]
+    public void A_bare_number_is_days_on_both_cores()
+    {
+        // Publishing converts a TimeSpan literal through System.Text.Json, which reads "5" as five days and writes it back in
+        // its own form; the old core's Delay then waits five days, and so does this host's.
+        var published = System.Text.Json.JsonSerializer.Serialize(System.Text.Json.JsonSerializer.Deserialize<TimeSpan>("\"5\""));
+        Assert.Equal("\"5.00:00:00\"", published);
+
+        var workflow = NativeExecutableMapper.Map(Executable(Sequence("root",
+            Node("delay", Types.Delay, [Literal("Duration", System.Text.Json.JsonSerializer.Deserialize<string>(published), "TimeSpan")]))));
+        Assert.Equal((long)TimeSpan.FromDays(5).TotalMilliseconds,
+            ((Kernel.Native.LiteralBinding)workflow.Nodes["delay"].Inputs["Milliseconds"]).Value!.GetValue<long>());
+    }
+
+    [Fact]
+    public void A_refusal_names_the_node_by_its_display_name_and_the_variable_by_its_name()
+    {
+        var root = Sequence("root", Node("w", Types.WriteLine, [VariableRead("text", "v-order", policy: ValueProtectionPolicy.Transient)], displayName: "Log the order"));
+
+        var refused = Refused(root, Variable("v-order", "order"));
+
+        Assert.Equal("Log the order", refused.DisplayName);
+        Assert.StartsWith("Node 'Log the order' (w), input 'text': Variable 'order' is transient", refused.Message, StringComparison.Ordinal);
+        Assert.EndsWith("Make the variable persistent.", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("kernel", refused.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void A_parallel_with_a_threshold_and_an_empty_branch_is_refused()
+    {
+        var root = Node("par", Types.Parallel, structure: Structure("elsa.parallel.structure", new
+            {
+                branches = new object[] { new { name = "left", activity = "l" }, new { name = "right", activity = (string?)null } },
+                threshold = 1,
+            }),
+            slots: [Slot("Parallel.Branch[left]", WriteLine("l", Literal("text", "l")))]);
+
+        var refused = Refused(root);
+
+        AssertActivity(refused, "par");
+        Assert.EndsWith("Remove the empty branch or the threshold.", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_native_definition_rule_is_refused_naming_the_node_that_breaks_it()
+    {
+        // A Complete belongs inside a reusable activity's body; outside one the Native definition refuses it.
+        var refused = Refused(Sequence("root", WriteLine("w", Literal("text", "hi")), Node("done", Types.Complete, [Literal("outcome", "Done", "String")])));
+
+        AssertActivity(refused, "done");
+    }
 }
 
 internal static class ExecutableNodeExtensions

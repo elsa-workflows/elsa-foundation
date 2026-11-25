@@ -35,6 +35,7 @@ internal static class Compiled
         public const string Delay = "Elsa.Activities.Scheduling.Activities.Delay";
         public const string Dispatch = "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow";
         public const string HttpEndpoint = "Elsa.HttpEndpoint";
+        public const string SendHttpRequest = "Elsa.Activities.Http.Activities.SendHttpRequest";
         public const string WriteHttpResponse = "Elsa.Activities.Http.Activities.WriteHttpResponse";
         public const string RunJavaScript = "Elsa.RunJavaScript";
         public const string CompensationScope = "Elsa.Activities.Compensation.Activities.CompensationScope";
@@ -53,9 +54,10 @@ internal static class Compiled
 
     public static ExecutableNode Node(string id, string type, RuntimeInputBinding[]? inputs = null, ExecutableActivityStructure? structure = null,
         ExecutableChildSlot[]? slots = null, RuntimeOutputCapture[]? captures = null, string descriptorType = WellKnownRuntimeActivityConsumers.ClrActivity,
-        object? descriptor = null) =>
+        object? descriptor = null, string? displayName = null) =>
         new(id, id, type, "1.0.0", descriptorType, JsonSerializer.SerializeToElement(descriptor ?? new { }),
-            (inputs ?? []).ToDictionary(input => input.InputKey, StringComparer.Ordinal), new Dictionary<string, string>(), slots, structure,
+            (inputs ?? []).ToDictionary(input => input.InputKey, StringComparer.Ordinal),
+            displayName is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["displayName"] = displayName }, slots, structure,
             outputCaptures: (captures ?? []).ToDictionary(capture => capture.OutputName, StringComparer.Ordinal));
 
     public static ExecutableNode Intrinsic(string id, WorkflowIntrinsicKind kind, RuntimeVariableReference? variable, params RuntimeInputBinding[] inputs) =>

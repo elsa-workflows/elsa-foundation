@@ -32,6 +32,29 @@ public sealed class MappedRunTests
         Assert.Equal("order-42", turn.Labels[Native.NativeLabels.CorrelationId]);
     }
 
+    [Fact]
+    public async Task A_loop_body_reads_its_item_and_index_on_the_native_model()
+    {
+        var root = Sequence("root",
+            Node("each", Types.ForEach, [Literal("Collection", new[] { "a", "b", "c" })], Structure("elsa.foreach.structure", new { body = "item-body" }),
+                [Slot("ForEach.Body", Sequence("item-body",
+                    Set("item", "v-item", VariableRead("value", "currentItem", scope: "each")),
+                    Set("position", "v-position", VariableRead("value", "currentIndex", scope: "each"))))]),
+            Node("count", Types.For, [Literal("Start", 0, "Int32"), Literal("End", 4, "Int32")], Structure("elsa.for.structure", new { body = "pass" }),
+                [Slot("For.Body", Set("pass", "v-index", VariableRead("value", "index", scope: "count")))]),
+            SetOutput("item-out", "item", VariableRead("value", "v-item")),
+            SetOutput("position-out", "position", VariableRead("value", "v-position")),
+            SetOutput("index-out", "index", VariableRead("value", "v-index")));
+        var workflow = NativeExecutableMapper.Map(Executable(root, Variable("v-item", "item"), Variable("v-position", "position"), Variable("v-index", "lastIndex")));
+
+        var turn = await NativeTurn.StartAsync(workflow);
+
+        Assert.Equal(Contract.ActorStatus.Finished, turn.Status);
+        Assert.Equal("c", turn.Output!["item"]!.GetValue<string>());
+        Assert.Equal(2, turn.Output["position"]!.GetValue<int>());
+        Assert.Equal(3, turn.Output["index"]!.GetValue<int>());
+    }
+
     private static ExecutableNode StructureTestsGraph() => MappingStructureTests.Graph("approve", out _);
 
     [Theory]

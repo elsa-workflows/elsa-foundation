@@ -67,7 +67,7 @@ Kept from Elsa 4 (see `docs/reports/elsa-4-activity-contract-parity-2026-07.md`)
 
 Ported activities (run: `smoke` exercises each in Ephemeral, Balanced and Durable): WriteLine, SetVariable, Sequence,
 If, Flowchart (on the graph engine of [the Graph engine](../../essentials/src/Workflows/Runtime/Graph): gateways, implicit dead-path joins), Parallel (threshold join), ForEach (iteration scope with
-`CurrentItem`, `CurrentIndex`), While, Delay, Event, PublishEvent, DispatchWorkflow (with and without waiting),
+`currentItem`, `currentIndex`), While, Delay, Event, PublishEvent, DispatchWorkflow (with and without waiting),
 HttpEndpoint, WriteHttpResponse, CallService (slow external work, `[Background]`), SendNotification (`[External]`),
 and since round 5 C the two outbound activities that carry an effect key: SendHttpRequest (`[External]`; the key is the
 `Idempotency-Key` header) and SendEmail (`[External]`; the key is the local part of the `Message-ID`).
@@ -80,7 +80,7 @@ uses. The **iteration path** (`ActivityContext.IterationPath`, `Burst.IterationP
 node this is: for every frame between the root and the activation, what its parent composite says the child's
 iteration is (`CompositeActivity.IterationOf`, from the parent's committed state), root first, as `parent=iteration`
 segments joined by dots, plus `node=retryN` for a retried activity's successor (its generation, from the committed
-retry lineage); `-` when nothing repeats the node. ForEach gives the body's `CurrentIndex`; While counts its passes in
+retry lineage); `-` when nothing repeats the node. ForEach gives the body's `currentIndex`; While counts its passes in
 its own state (`WhileState.Iteration`, new in round 5 C); a Flowchart gives the engine's round (`head-2`) and the token
 (`^m-ea`: the merge and the source node of the arrival, chained through every merge passed in the round; `^j#2`: a
 join's firing ordinal in the round, from the Flowchart's committed `firings`), both carried on the child's tag; a

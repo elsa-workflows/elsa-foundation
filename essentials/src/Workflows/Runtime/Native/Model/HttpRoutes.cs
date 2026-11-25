@@ -7,7 +7,8 @@ namespace Kernel.Native;
 /// upper case and its path as a <see cref="HttpRouteTemplate"/>: trimmed of white space and slashes, literals and
 /// parameter names in lower case, as the old core canonicalizes a template.
 /// <list type="bullet">
-/// <item>A start route is an HttpEndpoint with a literal path where a run begins (<see cref="StartsOf"/>). A wait route is
+/// <item>A start route is an HttpEndpoint with a literal path where a run begins (<see cref="StartsOf"/>) that may start one
+/// (<see cref="NativeStartTriggers"/>). A wait route is
 /// any other HttpEndpoint with a literal path; it subscribes on its template resolved with its route values, so a
 /// request on <c>orders/42/cancel</c> resumes only the instance that waits for order 42.</item>
 /// <item>One route shape starts one workflow at one endpoint: a second start with the same method and shape
@@ -75,7 +76,8 @@ public sealed class HttpRoutes
         var shapes = new Dictionary<string, HttpRoute>(StringComparer.Ordinal);
         foreach (var workflow in registry.All)
         {
-            var starts = StartsOf(workflow.Root).ToHashSet();
+            // An endpoint that may not start a run is a wait wherever it is (NativeStartTriggers).
+            var starts = StartsOf(workflow.Root).Where(NativeStartTriggers.CanStart).ToHashSet();
             foreach (var node in workflow.Nodes.Values.Where(n => n.Type == typeof(HttpEndpoint)))
             {
                 if (node.Inputs.GetValueOrDefault("Path") is not LiteralBinding { Value: { } literal })

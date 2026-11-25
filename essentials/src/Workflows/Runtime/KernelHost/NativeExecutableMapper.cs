@@ -8,32 +8,44 @@ using Native = Kernel.Native;
 namespace Elsa.Workflows.Runtime.KernelHost;
 
 /// <summary>
-/// Maps a compiled <see cref="WorkflowExecutable"/>, as publishing stores it, to the Native workflow the kernel runs. The
+/// Maps a compiled <see cref="WorkflowExecutable"/>, as publishing stores it, to the Native workflow a kernel host runs. The
 /// workflow's id is the executable's artifact id and its definition is the executable's definition id, so instance reads
-/// and schedules key on the definition and an instance runs the artifact it started on. Anything the kernel does not run
+/// and schedules key on the definition and an instance runs the artifact it started on. Anything this host does not run
 /// is refused with a <see cref="NativeMappingRefusedException"/> that names the node, before anything is minted or served.
 /// The rules are those of <c>docs/architecture/definitions-on-the-kernel.md</c>, "Mapping rules".
 /// </summary>
 public static class NativeExecutableMapper
 {
     /// <summary>The Native workflow for <paramref name="executable"/>, or a refusal naming the node (and input) it cannot map.</summary>
-    /// <exception cref="NativeMappingRefusedException">The executable holds an activity or a binding the kernel does not run.</exception>
+    /// <exception cref="NativeMappingRefusedException">The executable holds an activity or a binding this host does not run.</exception>
     public static Native.Workflow Map(WorkflowExecutable executable)
     {
         ArgumentNullException.ThrowIfNull(executable);
-        var mapping = new Mapping(executable);
-        var root = mapping.MapNode(executable.RootActivity, Scope.Workflow);
-        var variables = mapping.WorkflowVariables();
         try
         {
-            return new Native.Workflow(executable.Identity.ArtifactId, root, variables, executable.Identity.DefinitionId);
+            var mapping = new Mapping(executable);
+            var root = mapping.MapNode(executable.RootActivity, Scope.Workflow);
+            var variables = mapping.WorkflowVariables();
+            try
+            {
+                return new Native.Workflow(executable.Identity.ArtifactId, root, variables, executable.Identity.DefinitionId);
+            }
+            catch (Native.NativeDefinitionException invalid)
+            {
+                // The Native definition's own rules (unique Switch labels, a GraphActivity's single body and declarations, a
+                // Complete inside a boundary, a Set Output it declares), which name the node that breaks one.
+                throw NativeMappingRefusedException.Activity(invalid.Node, $"{invalid.Message} Change the node so that it follows this rule.");
+            }
         }
-        catch (InvalidOperationException invalid)
+        catch (NativeMappingRefusedException refused) when (refused.DisplayName is null &&
+            executable.NodesById.GetValueOrDefault(refused.Node)?.Metadata.GetValueOrDefault(DisplayNameMetadataKey) is { Length: > 0 } name)
         {
-            // The Native definition's own rules (unique Switch labels, a GraphActivity's single body and its declarations).
-            throw NativeMappingRefusedException.Activity(root.Id, invalid.Message);
+            throw refused.Named(name);
         }
     }
+
+    /// <summary>The node metadata a display name is carried under, where the compiled node has one.</summary>
+    private const string DisplayNameMetadataKey = "displayName";
 
     /// <summary>Where a node is mapped: in the workflow, or inside a GraphActivity's body, which sees only its boundary.</summary>
     private sealed record Scope(GraphScope? Graph)
@@ -55,6 +67,18 @@ public static class NativeExecutableMapper
         private const string GraphVariableValueIdPrefix = "graph-variable:";
         private const string WholeResult = "$result";
         private const string InputVariable = "input";
+        private const string OutputVariable = "output";
+
+        // The loops' iteration variables, as both cores name them: a body reads them as variables its loop declares.
+        private static readonly Dictionary<Type, string[]> IterationVariables = new()
+        {
+            [typeof(Native.ForEach)] = ["currentItem", "currentIndex"],
+            [typeof(Native.For)] = [Native.For.IndexVariable],
+        };
+
+        // Names a workflow variable cannot have on this host: the run's input, the workflow's outputs (Set Output), and the
+        // loops' iteration variables, which a loop body's scope would shadow.
+        private static readonly string[] ReservedNames = [InputVariable, OutputVariable, "currentItem", "currentIndex", Native.For.IndexVariable];
 
         private static readonly JsonSerializerOptions PayloadOptions = new(JsonSerializerDefaults.Web);
 
@@ -65,22 +89,26 @@ public static class NativeExecutableMapper
         // so the first node in document order that the kernel does not run is the one refused.
         private readonly Dictionary<string, Type> _types = executable.Nodes.ToDictionary(node => node.ExecutableNodeId, TypeOf, StringComparer.Ordinal);
 
+        // The names of container-declared variables, by their container and key, for refusals that name them.
+        private readonly Dictionary<(string Scope, string Key), string> _containerVariables = ContainerVariables(executable);
+
         public IReadOnlyDictionary<string, JsonNode?> WorkflowVariables()
         {
             var root = executable.RootActivity.ExecutableNodeId;
             var variables = new Dictionary<string, JsonNode?>(StringComparer.Ordinal);
             foreach (var declaration in executable.WorkflowVariables)
             {
-                if (declaration.Name == InputVariable)
-                    throw NativeMappingRefusedException.Binding(root, declaration.Name, $"A workflow variable cannot be named '{InputVariable}': on the kernel it is the run's input.");
+                if (ReservedNames.Contains(declaration.Name, StringComparer.Ordinal))
+                    throw NativeMappingRefusedException.Binding(root, declaration.Name,
+                        $"On this host '{declaration.Name}' is a name the workflow's input, outputs or loops use. Rename the variable.");
                 if (!variables.TryAdd(declaration.Name, null))
-                    throw NativeMappingRefusedException.Binding(root, declaration.Name, $"Two workflow variables are named '{declaration.Name}'; the kernel names variables.");
+                    throw NativeMappingRefusedException.Binding(root, declaration.Name, $"Two workflow variables are named '{declaration.Name}', and this host names variables. Rename one of them.");
                 if (declaration.InitialBinding is not { } initial) continue;
                 variables[declaration.Name] = MapBinding(initial, root, declaration.Name, Scope.Workflow) switch
                 {
                     null => null,
                     Native.LiteralBinding literal => literal.Value,
-                    _ => throw NativeMappingRefusedException.Binding(root, declaration.Name, "A workflow variable's initial value must be a literal."),
+                    _ => throw NativeMappingRefusedException.Binding(root, declaration.Name, $"The initial value of variable '{declaration.Name}' is not a literal. Give it a literal default value."),
                 };
             }
             return variables;
@@ -99,7 +127,7 @@ public static class NativeExecutableMapper
                     WorkflowIntrinsicKind.SetCorrelationId => typeof(Native.SetCorrelationId),
                     WorkflowIntrinsicKind.SetInstanceName => typeof(Native.SetInstanceName),
                     WorkflowIntrinsicKind.Finish => typeof(Native.Finish),
-                    _ => throw NativeMappingRefusedException.Activity(id, $"The {kind} intrinsic does not run on the kernel in release 1."),
+                    _ => throw NativeMappingRefusedException.Activity(id, $"The {kind} intrinsic does not run on this host in release 1. Remove the node."),
                 };
             if (StringComparer.Ordinal.Equals(node.DescriptorType, WellKnownRuntimeActivityConsumers.GraphActivity))
                 return typeof(Native.GraphActivity);
@@ -109,7 +137,10 @@ public static class NativeExecutableMapper
             }
             catch (Native.NativeActivityUnsupportedException unsupported)
             {
-                throw NativeMappingRefusedException.Activity(id, unsupported.Message);
+                var type = node.ActivityType[(node.ActivityType.LastIndexOf('.') + 1)..];
+                throw NativeMappingRefusedException.Activity(id, unsupported.Hidden
+                    ? $"{type} does not run on this host in release 1. Remove the node, or replace it with an activity this host runs."
+                    : $"{node.ActivityType} is an activity this host does not know. Remove the node, or replace it with an activity this host runs.");
             }
         }
 
@@ -123,7 +154,7 @@ public static class NativeExecutableMapper
             if (source.IntrinsicKind is not null)
             {
                 if (source.ChildSlots.Any(slot => slot.Activities.Count != 0))
-                    throw NativeMappingRefusedException.Activity(id, "An intrinsic node with children does not run on the kernel.");
+                    throw NativeMappingRefusedException.Activity(id, "An intrinsic node with children does not run on this host. Remove its children.");
                 MapIntrinsic(source, node, scope);
             }
             else
@@ -166,7 +197,7 @@ public static class NativeExecutableMapper
                     if (@case.ConditionInputKey is { } key)
                     {
                         if (!source.InputBindings.TryGetValue(key, out var binding))
-                            throw NativeMappingRefusedException.Activity(id, $"Case '{@case.Match}' names condition input '{key}', which the node does not bind.");
+                            throw NativeMappingRefusedException.Activity(id, $"Case '{@case.Match}' names condition input '{key}', which the node does not bind. Give the case a condition, or publish again.");
                         // An unbound condition is false, as on the old core.
                         condition = MapBinding(binding, id, key, scope) ?? Native.Binding.Literal(false);
                         consumed.Add(key);
@@ -190,7 +221,7 @@ public static class NativeExecutableMapper
                 if (structure.Threshold is { } threshold && threshold >= 1 && threshold <= branches.Count)
                 {
                     if (branches.Any(branch => branch.Activity is null))
-                        throw NativeMappingRefusedException.Activity(id, "A Parallel with a threshold and an empty branch does not run on the kernel.");
+                        throw NativeMappingRefusedException.Activity(id, "A Parallel with a threshold and an empty branch does not run on this host in release 1. Remove the empty branch or the threshold.");
                     node.Inputs["Threshold"] = Native.Binding.Literal(threshold);
                 }
                 foreach (var branch in branches)
@@ -218,10 +249,10 @@ public static class NativeExecutableMapper
             if (structure.StartNodeId is { Length: > 0 } start)
             {
                 if (!order.Remove(start))
-                    throw NativeMappingRefusedException.Activity(id, $"The start node '{start}' is not a child of the Flowchart.");
+                    throw NativeMappingRefusedException.Activity(id, $"The start node '{start}' is not a child of the Flowchart. Choose one of its activities as the start.");
                 var targets = connections.Select(c => c.Target).ToHashSet(StringComparer.Ordinal);
                 if (targets.Contains(start) && order.Any(child => !targets.Contains(child)))
-                    throw NativeMappingRefusedException.Activity(id, $"The start node '{start}' has an inbound connection while another child has none; the kernel would start there.");
+                    throw NativeMappingRefusedException.Activity(id, $"The start node '{start}' has an inbound connection while another activity has none, and this host would start at that one. Start at an activity no connection leads to.");
                 order.Insert(0, start);
             }
             foreach (var child in order) node.Children.Add(MapNode(children.Take(child), scope));
@@ -238,7 +269,7 @@ public static class NativeExecutableMapper
                     "inclusiveJoin" => Native.Gateway.InclusiveJoin,
                     "firstWins" => Native.Gateway.FirstWins,
                     "merge" => Native.Gateway.Merge,
-                    var other => throw NativeMappingRefusedException.Activity(child, $"The Flowchart policy '{other}' does not run on the kernel."),
+                    var other => throw NativeMappingRefusedException.Activity(child, $"The Flowchart policy '{other}' does not run on this host. Choose a gateway this host runs, or none."),
                 };
             }
         }
@@ -255,15 +286,15 @@ public static class NativeExecutableMapper
             try
             {
                 descriptor = source.DescriptorPayload.Deserialize<GraphDescriptor>(PayloadOptions)
-                             ?? throw NativeMappingRefusedException.Activity(id, "The GraphActivity descriptor is empty.");
+                             ?? throw NativeMappingRefusedException.Activity(id, "The GraphActivity descriptor is empty. Publish the workflow again.");
             }
             catch (JsonException invalid)
             {
-                throw NativeMappingRefusedException.Activity(id, $"The GraphActivity descriptor does not read: {invalid.Message}");
+                throw NativeMappingRefusedException.Activity(id, $"The GraphActivity descriptor does not read ({invalid.Message}). Publish the workflow again.");
             }
             var entry = !string.IsNullOrWhiteSpace(descriptor.EntryNodeId) ? descriptor.EntryNodeId : descriptor.EntryOccurrenceId;
             if (string.IsNullOrWhiteSpace(entry))
-                throw NativeMappingRefusedException.Activity(id, "The GraphActivity descriptor names no entry node.");
+                throw NativeMappingRefusedException.Activity(id, "The GraphActivity descriptor names no entry node. Publish the activity and the workflow again.");
 
             var inputs = descriptor.Inputs ?? [];
             var variables = descriptor.Variables ?? [];
@@ -290,7 +321,7 @@ public static class NativeExecutableMapper
             foreach (var (key, binding) in source.InputBindings.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             {
                 if (!inputKeys.Contains(key))
-                    throw NativeMappingRefusedException.Binding(id, key, "The GraphActivity does not declare this input.");
+                    throw NativeMappingRefusedException.Binding(id, key, "The GraphActivity does not declare this input. Clear the input.");
                 if (MapBinding(binding, id, key, scope) is { } mapped) node.Inputs[key] = mapped;
             }
 
@@ -312,7 +343,7 @@ public static class NativeExecutableMapper
                 VariableReference.TryParse(expression.Value, out var reference) && reference is not null &&
                 (reference.IsWorkflowScope || reference.DeclaringScopeId == LegacyGraphScopeId) && variables.TryGetValue(reference.ReferenceKey, out var name))
                 return new Native.VariableBinding(name);
-            throw NativeMappingRefusedException.Binding(node, member, $"A GraphActivity expression of syntax '{syntax}' does not run on the kernel in this slice.");
+            throw NativeMappingRefusedException.Binding(node, member, $"A {syntax} expression in a reusable activity's defaults or output mappings does not run on this host yet. Use a literal, an input or a variable.");
         }
 
         // ---- intrinsics ------------------------------------------------------------------------------------------
@@ -328,7 +359,7 @@ public static class NativeExecutableMapper
                 _ => [WorkflowIntrinsicInputKeys.Outcome],
             };
             if (source.InputBindings.Keys.FirstOrDefault(key => !expected.Contains(key, StringComparer.Ordinal)) is { } unknown)
-                throw NativeMappingRefusedException.Binding(id, unknown, $"The {kind} intrinsic has no such input.");
+                throw NativeMappingRefusedException.Binding(id, unknown, $"The {kind} intrinsic has no such input. Clear the input.");
 
             Native.Binding Input(string key) =>
                 source.InputBindings.TryGetValue(key, out var binding) ? MapBinding(binding, id, key, scope) ?? Native.Binding.Literal(null) : Native.Binding.Literal(null);
@@ -336,7 +367,7 @@ public static class NativeExecutableMapper
             Native.Binding LiteralText(string key) =>
                 Input(key) is Native.LiteralBinding { Value: JsonValue value } literal && value.TryGetValue<string>(out var text) && !string.IsNullOrWhiteSpace(text)
                     ? literal
-                    : throw NativeMappingRefusedException.Binding(id, key, $"The {kind} intrinsic needs a literal, non-blank '{key}'.");
+                    : throw NativeMappingRefusedException.Binding(id, key, $"The {kind} intrinsic needs a literal, non-blank '{key}'. Type the value in.");
 
             switch (kind)
             {
@@ -376,21 +407,21 @@ public static class NativeExecutableMapper
                     case InputRule.Literal literal:
                         if (mapped is null) break;
                         if (mapped is not Native.LiteralBinding value || literal.Convert(value.Value) is not { } converted)
-                            throw NativeMappingRefusedException.Binding(id, key, $"On the kernel this input takes {literal.Expected}.");
+                            throw NativeMappingRefusedException.Binding(id, key, $"On this host this input takes {literal.Expected}. {literal.Action}");
                         node.Inputs[literal.Native] = new Native.LiteralBinding(converted);
                         break;
                     case InputRule.Unmodelled unmodelled:
                         if (mapped is null) break;
                         if (mapped is not Native.LiteralBinding fixedValue || !unmodelled.Accepts(fixedValue.Value))
-                            throw NativeMappingRefusedException.Binding(id, key, $"This value does not run on the kernel: {unmodelled.Reason}.");
+                            throw NativeMappingRefusedException.Binding(id, key, $"This value does not run on this host: {unmodelled.Reason}. {unmodelled.Action}");
                         break;
                     default:
-                        throw NativeMappingRefusedException.Binding(id, key, $"The kernel's {node.Type.Name} has no such input.");
+                        throw NativeMappingRefusedException.Binding(id, key, $"{node.Type.Name} has no such input on this host. Clear the input.");
                 }
             }
-            foreach (var (native, (old, value)) in shape.AbsentDefaults)
-                if (!source.InputBindings.ContainsKey(old) && !node.Inputs.ContainsKey(native))
-                    node.Inputs[native] = new Native.LiteralBinding(value?.DeepClone());
+            foreach (var fallback in shape.AbsentDefaults)
+                if (fallback.Applies(key => source.InputBindings.ContainsKey(key)) && !node.Inputs.ContainsKey(fallback.Native))
+                    node.Inputs[fallback.Native] = new Native.LiteralBinding(fallback.Value.DeepClone());
         }
 
         private void MapCaptures(ExecutableNode source, Native.Node node, Scope scope)
@@ -407,7 +438,7 @@ public static class NativeExecutableMapper
                          executable.WorkflowVariables.Any(declaration => declaration.Name == capture.ValueId[WorkflowVariableValueIdPrefix.Length..]))
                     variable = capture.ValueId[WorkflowVariableValueIdPrefix.Length..];
                 else
-                    throw NativeMappingRefusedException.Binding(id, capture.OutputName, $"The output is captured into '{capture.ValueId}', which is not a variable this node can see.");
+                    throw NativeMappingRefusedException.Binding(id, capture.OutputName, $"The output is captured into '{capture.ValueId}', which is not a workflow variable, or a variable of the reusable activity this node is in. Capture it into a workflow variable.");
                 node.Captures[variable] = ResultPath(id, capture.OutputName, null, id, capture.OutputName);
             }
         }
@@ -419,7 +450,7 @@ public static class NativeExecutableMapper
         {
             RequireConversion(binding.ConversionPlan, node, input);
             if (binding.ConversionPlan is null && binding.ConversionRequest is { Mode: not (ValueConversionMode.Auto or ValueConversionMode.None) } request)
-                throw NativeMappingRefusedException.Binding(node, input, $"The kernel applies no {request.Mode} conversion.");
+                throw NativeMappingRefusedException.Binding(node, input, $"This host applies no {request.Mode} conversion. Remove the conversion.");
             var segments = Segments(binding.Selection, node, input);
             switch (binding.Source)
             {
@@ -429,13 +460,14 @@ public static class NativeExecutableMapper
                         null or { Presence: ValuePresence.Absent } => null,
                         { Presence: ValuePresence.ExplicitNull } => Native.Binding.Literal(null),
                         { Presence: ValuePresence.Present, InlineValue: { } value } => new Native.LiteralBinding(ToNode(value)),
-                        _ => throw NativeMappingRefusedException.Binding(node, input, "The kernel reads literals stored inline only."),
+                        _ => throw NativeMappingRefusedException.Binding(node, input, "This host reads literals stored inline only. Type the value in."),
                     };
                 case RuntimeInputBindingSource.VariableRead or RuntimeInputBindingSource.VariableMember:
-                    // A transient value lives in one activation only, and the kernel keeps every variable in the instance's state.
-                    if (binding.EffectivePolicy.Lifecycle == DurableValueLifecycle.None)
-                        throw NativeMappingRefusedException.Binding(node, input, "The binding reads a transient variable, which the kernel does not keep.");
                     var variable = binding.Variable!;
+                    // A transient value lives in one activation only, and this host keeps every variable in the instance's state.
+                    if (binding.EffectivePolicy.Lifecycle == DurableValueLifecycle.None)
+                        throw NativeMappingRefusedException.Binding(node, input,
+                            $"Variable '{VariableLabel(variable.VariableKey, variable.DeclaringScopeId)}' is transient, which this host does not keep. Make the variable persistent.");
                     return new Native.VariableBinding(VariableName(variable.VariableKey, variable.DeclaringScopeId, node, input, scope), Join(null, segments));
                 case RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.WorkflowRequestMember:
                     return RequestRead(binding.WorkflowRequest!.MemberKey, binding.WorkflowRequest.Path, segments, node, input, scope);
@@ -446,9 +478,9 @@ public static class NativeExecutableMapper
                 case RuntimeInputBindingSource.Expression:
                     return HostExpression(binding, node, input, scope);
                 case RuntimeInputBindingSource.SecretRead:
-                    throw NativeMappingRefusedException.Binding(node, input, "Secrets are outside release 1 on the kernel.");
+                    throw NativeMappingRefusedException.Binding(node, input, "Secrets are outside release 1 on this host. Type the value in, or use a variable.");
                 default:
-                    throw NativeMappingRefusedException.Binding(node, input, $"The binding source {binding.Source} does not run on the kernel.");
+                    throw NativeMappingRefusedException.Binding(node, input, $"A {binding.Source} binding does not run on this host. Bind the input another way.");
             }
         }
 
@@ -456,14 +488,14 @@ public static class NativeExecutableMapper
         {
             var expression = binding.Expression!;
             if (!string.Equals(expression.Language, "JavaScript", StringComparison.OrdinalIgnoreCase) && !string.Equals(expression.Language, "Liquid", StringComparison.OrdinalIgnoreCase))
-                throw NativeMappingRefusedException.Binding(node, input, $"{expression.Language} expressions do not run on the kernel; JavaScript and Liquid do.");
+                throw NativeMappingRefusedException.Binding(node, input, $"{expression.Language} expressions do not run on this host. Use JavaScript or Liquid.");
             if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.BindingPureV1))
-                throw NativeMappingRefusedException.Binding(node, input, $"The kernel evaluates expressions under {ExpressionCapabilityProfiles.BindingPureV1} only, not {expression.CapabilityProfile}.");
+                throw NativeMappingRefusedException.Binding(node, input, $"This host evaluates expressions under {ExpressionCapabilityProfiles.BindingPureV1} only, not {expression.CapabilityProfile}. Use a binding expression.");
             var parameters = new List<Native.HostParameter>();
             foreach (var (name, parameter) in expression.Parameters)
             {
                 if (expression.ParameterConversionPlans.TryGetValue(name, out var plan) && plan.Operation != ValueConversionOperation.Identity)
-                    throw NativeMappingRefusedException.Binding(node, input, $"Parameter '{name}' converts its value ({plan.Operation}), which the kernel does not.");
+                    throw NativeMappingRefusedException.Binding(node, input, $"Parameter '{name}' converts its value ({plan.Operation}), which this host does not. Remove the conversion.");
                 Native.Binding value = parameter switch
                 {
                     LiteralExpressionParameterBinding literal => new Native.LiteralBinding(ToNode(literal.Value)),
@@ -472,7 +504,7 @@ public static class NativeExecutableMapper
                     ActivityResultExpressionParameterBinding result => new Native.ResultBinding(result.ProducerNodeId, ResultPath(result.ProducerNodeId, result.ProjectionKey, null, node, input)),
                     WorkflowInstanceExpressionParameterBinding { Member: WorkflowInstanceExpressionParameterBinding.Members.InstanceId } => new Native.InstanceBinding(Native.InstanceField.Id),
                     WorkflowInstanceExpressionParameterBinding => new Native.InstanceBinding(Native.InstanceField.CorrelationId),
-                    _ => throw NativeMappingRefusedException.Binding(node, input, $"Parameter '{name}' reads its value in a way the kernel does not support."),
+                    _ => throw NativeMappingRefusedException.Binding(node, input, $"Parameter '{name}' reads its value in a way this host does not support. Remove the parameter."),
                 };
                 parameters.Add(new Native.HostParameter(name, value));
             }
@@ -488,11 +520,11 @@ public static class NativeExecutableMapper
         private static Native.VariableBinding RequestRead(string member, string? legacyPath, IReadOnlyList<string>? segments, string node, string input, Scope scope)
         {
             if (legacyPath is not null)
-                throw NativeMappingRefusedException.Binding(node, input, "A request read by a legacy path does not run on the kernel; select the member instead.");
+                throw NativeMappingRefusedException.Binding(node, input, "A request read by a legacy path does not run on this host. Select the member instead.");
             if (scope.Graph is { } graph)
             {
                 if (!graph.Inputs.Contains(member))
-                    throw NativeMappingRefusedException.Binding(node, input, $"GraphActivity '{graph.Node}' declares no input '{member}'.");
+                    throw NativeMappingRefusedException.Binding(node, input, $"The reusable activity '{graph.Node}' declares no input '{member}'. Read one of its inputs.");
                 return new Native.VariableBinding(member, Join(null, segments));
             }
             RequireSegment(member, node, input);
@@ -502,34 +534,74 @@ public static class NativeExecutableMapper
         /// <summary>A variable's Native name. Only workflow variables, and inside a GraphActivity's body its own, are mapped.</summary>
         private string VariableName(string key, string declaringScope, string node, string input, Scope scope)
         {
+            // A loop body reads its loop's item or index as a variable the loop declares; Native's loops declare them under
+            // the same names.
+            if (_types.TryGetValue(declaringScope, out var loop) && IterationVariables.TryGetValue(loop, out var iteration) &&
+                iteration.Contains(key, StringComparer.Ordinal))
+                return key;
             if (scope.Graph is { } graph)
             {
                 if ((declaringScope == WorkflowScopeId || declaringScope == LegacyGraphScopeId) && graph.Variables.TryGetValue(key, out var local)) return local;
-                throw NativeMappingRefusedException.Binding(node, input, $"Variable '{key}' in scope '{declaringScope}' is not a variable of GraphActivity '{graph.Node}'.");
+                throw NativeMappingRefusedException.Binding(node, input,
+                    $"Variable '{VariableLabel(key, declaringScope)}' is not a variable of the reusable activity '{graph.Node}', whose body sees only its own. Read one of its inputs or variables.");
             }
             // Container-scoped variables (a Sequence's or a Flowchart's own) are refused until their Native form is settled
             // (definitions-on-the-kernel.md, "Outside this path").
             if (declaringScope != WorkflowScopeId)
-                throw NativeMappingRefusedException.Binding(node, input, $"Variable '{key}' is declared on container '{declaringScope}'; the kernel maps workflow variables only.");
+                throw NativeMappingRefusedException.Binding(node, input,
+                    $"Variable '{VariableLabel(key, declaringScope)}' is declared on container '{declaringScope}', and this host maps workflow variables only. Declare the variable on the workflow.");
             if (!_variables.TryGetValue(key, out var declaration))
-                throw NativeMappingRefusedException.Binding(node, input, $"Variable '{key}' is not a workflow variable.");
+                throw NativeMappingRefusedException.Binding(node, input, $"Variable '{key}' is not a workflow variable. Declare it on the workflow, or read another variable.");
             if (declaration.Policy.Lifecycle == DurableValueLifecycle.None)
-                throw NativeMappingRefusedException.Binding(node, input, $"Variable '{declaration.Name}' is transient, which the kernel does not keep.");
+                throw NativeMappingRefusedException.Binding(node, input, $"Variable '{declaration.Name}' is transient, which this host does not keep. Make the variable persistent.");
             return declaration.Name;
+        }
+
+        /// <summary>A variable's name from its declaration, where the mapper knows it, else its reference key.</summary>
+        private string VariableLabel(string key, string declaringScope) =>
+            declaringScope == WorkflowScopeId && _variables.TryGetValue(key, out var declaration) ? declaration.Name
+            : _containerVariables.TryGetValue((declaringScope, key), out var name) ? name
+            : key;
+
+        private static Dictionary<(string Scope, string Key), string> ContainerVariables(WorkflowExecutable executable)
+        {
+            var names = new Dictionary<(string, string), string>();
+            foreach (var node in executable.Nodes)
+            {
+                if (node.Structure?.Payload is not { ValueKind: JsonValueKind.Object } payload ||
+                    !payload.TryGetProperty("variables", out var declared) || declared.ValueKind != JsonValueKind.Array) continue;
+                foreach (var variable in declared.EnumerateArray())
+                    if (variable.ValueKind == JsonValueKind.Object && Text(variable, "variableKey") is { } key && Text(variable, "name") is { } name)
+                        names[(node.ExecutableNodeId, key)] = name;
+            }
+            return names;
+
+            static string? Text(JsonElement element, string property) =>
+                element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
         }
 
         /// <summary>The Native path of a producer's result projection, with the member segments a member read selects.</summary>
         private string ResultPath(string producer, string projection, IReadOnlyList<string>? segments, string node, string input)
         {
             if (!_types.TryGetValue(producer, out var type))
-                throw NativeMappingRefusedException.Binding(node, input, $"The result of '{producer}', which is not a node of this workflow, is read.");
+                throw NativeMappingRefusedException.Binding(node, input, $"The result of '{producer}', which is not a node of this workflow, is read. Read the result of one of its activities.");
             var shape = NativeActivityShape.For(type);
             if (shape.Results.TryGetValue(projection, out var mapped))
             {
-                if (mapped.Members is { } members && segments is { Count: > 0 })
+                if (mapped.Refused is { } refused)
+                    throw NativeMappingRefusedException.Binding(node, input, $"This reads {projection} of '{producer}'. {refused}");
+                if (segments is not { Count: > 0 })
+                {
+                    if (mapped.Path is null)
+                        throw NativeMappingRefusedException.Binding(node, input,
+                            $"On this host the whole {projection} of {type.Name} '{producer}' reads differently. {(mapped.Members is { Count: > 0 } allowed ? $"Read a member of it: {string.Join(", ", allowed.Keys)}." : "Remove this read until the shapes match.")}");
+                    return mapped.Path;
+                }
+                if (mapped.Members is { } members)
                 {
                     if (!members.TryGetValue(segments[0], out var first))
-                        throw NativeMappingRefusedException.Binding(node, input, $"The {type.Name} result of '{producer}' has no member '{segments[0]}' on the kernel.");
+                        throw NativeMappingRefusedException.Binding(node, input,
+                            $"On this host the member '{segments[0]}' of {type.Name} '{producer}''s {projection} reads differently. {(members.Count > 0 ? $"Read one of: {string.Join(", ", members.Keys)}." : "Remove this read until the shapes match.")}");
                     segments = [first, .. segments.Skip(1)];
                 }
                 return Join(mapped.Path, segments) ?? "";
@@ -540,13 +612,13 @@ public static class NativeExecutableMapper
                 RequireSegment(projection, node, input);
                 return Join(projection, segments)!;
             }
-            throw NativeMappingRefusedException.Binding(node, input, $"The kernel's {type.Name} has no result '{projection}' (read from '{producer}').");
+            throw NativeMappingRefusedException.Binding(node, input, $"{type.Name} '{producer}' has no result '{projection}' on this host. Read another of its results, or remove this read.");
         }
 
         private static void RequireConversion(ValueConversionPlan? plan, string node, string input)
         {
             if (plan is not null && plan.Operation is not (ValueConversionOperation.Identity or ValueConversionOperation.NumericWidening))
-                throw NativeMappingRefusedException.Binding(node, input, $"The kernel applies no {plan.Operation} conversion; only identity and numeric widening.");
+                throw NativeMappingRefusedException.Binding(node, input, $"This host applies no {plan.Operation} conversion; only identity and numeric widening. Remove the conversion, or read a value of the input's type.");
         }
 
         private static IReadOnlyList<string>? Segments(RuntimeReadSelection? selection, string node, string input)
@@ -560,7 +632,7 @@ public static class NativeExecutableMapper
         private static void RequireSegment(string segment, string node, string input)
         {
             if (segment.Length == 0 || segment.Contains('.', StringComparison.Ordinal))
-                throw NativeMappingRefusedException.Binding(node, input, $"The member '{segment}' cannot be named in a kernel path, which splits on '.'.");
+                throw NativeMappingRefusedException.Binding(node, input, $"The member '{segment}' cannot be named on this host, whose paths split on '.'. Read the whole value and select the member in an expression.");
         }
 
         private static string? Join(string? head, IReadOnlyList<string>? segments)
@@ -572,7 +644,7 @@ public static class NativeExecutableMapper
         private static void RefuseContainerVariables(string node, IReadOnlyList<JsonElement>? variables)
         {
             if (variables is { Count: > 0 })
-                throw NativeMappingRefusedException.Activity(node, "The container declares its own variables, which the kernel does not map yet.");
+                throw NativeMappingRefusedException.Activity(node, "The container declares its own variables, which this host does not map yet. Declare them on the workflow.");
         }
 
         private static Native.Node Slotted(Native.Node node, string slot)
@@ -599,7 +671,7 @@ public static class NativeExecutableMapper
             _parent = parent;
             foreach (var child in parent.ChildSlots.SelectMany(slot => slot.Activities))
                 if (!_byId.TryAdd(child.ExecutableNodeId, child))
-                    throw NativeMappingRefusedException.Activity(parent.ExecutableNodeId, $"Child '{child.ExecutableNodeId}' is in two slots.");
+                    throw NativeMappingRefusedException.Activity(parent.ExecutableNodeId, $"Child '{child.ExecutableNodeId}' is in two slots. Publish the workflow again.");
         }
 
         public IEnumerable<string> InSlot(string slot) =>
@@ -608,16 +680,16 @@ public static class NativeExecutableMapper
         public ExecutableNode Take(string id)
         {
             if (!_byId.TryGetValue(id, out var child))
-                throw NativeMappingRefusedException.Activity(_parent.ExecutableNodeId, $"The structure names child '{id}', which no slot carries.");
+                throw NativeMappingRefusedException.Activity(_parent.ExecutableNodeId, $"The structure names child '{id}', which no slot carries. Publish the workflow again.");
             if (!_placed.Add(id))
-                throw NativeMappingRefusedException.Activity(_parent.ExecutableNodeId, $"The structure places child '{id}' twice.");
+                throw NativeMappingRefusedException.Activity(_parent.ExecutableNodeId, $"The structure places child '{id}' twice. Publish the workflow again.");
             return child;
         }
 
         public void RequireAllPlaced()
         {
             if (_byId.Keys.FirstOrDefault(id => !_placed.Contains(id)) is { } stray)
-                throw NativeMappingRefusedException.Activity(_parent.ExecutableNodeId, $"Child '{stray}' has no place in the kernel's {_parent.ActivityType} structure.");
+                throw NativeMappingRefusedException.Activity(_parent.ExecutableNodeId, $"Child '{stray}' has no place in a {_parent.ActivityType} on this host. Remove the child.");
         }
     }
 
