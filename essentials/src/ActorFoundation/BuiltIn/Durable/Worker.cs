@@ -2431,17 +2431,23 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         cancellationToken.ThrowIfCancellationRequested();
         _options.BeforeDrainRound?.Invoke();
+        var judged = Volatile.Read(ref _answered);
         try
         {
             _options.BeforeDrainAnswer?.Invoke();
-            if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
+            if (judged is not null) await AnsweredAsync(cancellationToken);
         }
         catch (StoreException error) when (error.Failure is Failure.Transient or Failure.Unknown or Failure.WindowExpired &&
             !cancellationToken.IsCancellationRequested)
         {
             Interlocked.Increment(ref _drainStoreErrors);
             Volatile.Write(ref _lastDrainStoreError, error);
-            return !(ownedAtStart && _generation != generation);
+            if (judged is null) return !(ownedAtStart && _generation != generation);
+            // The failed judgement may have consumed the answer: put it back for the next round, unless a newer one
+            // came, and report a loss it names now, in case every drain ends this round.
+            Interlocked.CompareExchange(ref _answered, judged, null);
+            var namesLoss = judged.Sent.Held.Any(fence => !judged.Answer.Owned.Any(owned => owned.Partition == fence.Partition && owned.Epoch == fence.Epoch));
+            return !(namesLoss || ownedAtStart && _generation != generation);
         }
         var usable = !Owns || LeaseUsable();
         if (usable) Volatile.Write(ref _lastPass, _options.Monotonic());

@@ -306,7 +306,9 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
         catch (Exception error) when (!cancellationToken.IsCancellationRequested)
         {
             // The run will be abandoned: let every other Worker's drain end first, so what follows (the job drain judges
-            // answers) never runs beside a drain's flush. The deadline still bounds the wait.
+            // answers) never runs beside a drain's flush. The deadline still bounds the wait. No rounds run meanwhile, so
+            // on a host of several Workers the gate may close after a lease and the node lease lapse: that is the abandoned
+            // run's intended end (its ownership runs out by lease), and a drain still waiting then fails its own fence check.
             try { await all.WaitAsync(cancellationToken); }
             catch (Exception) { }
             _ = all.ContinueWith(static drained => _ = drained.Exception, CancellationToken.None,
