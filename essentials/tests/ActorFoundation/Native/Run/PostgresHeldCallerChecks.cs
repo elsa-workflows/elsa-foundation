@@ -10,7 +10,7 @@ using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Native.Run;
 
-// K10 (#4229): on the shipped format 24, a root's output reaches the callers its owner holds for it, whichever turn
+// K10 (#4229): on the shipped format 25, a root's output reaches the callers its owner holds for it, whichever turn
 // consumed their delivery, and a Native workflow that ends Faulted commits, its held callers answered with that end, as
 // the in-memory reference's Worker.Release does. One node runs through PostgresPreviewHostedService with held requests.
 internal static class PostgresHeldCallerChecks
@@ -82,7 +82,7 @@ internal static class PostgresHeldCallerChecks
             .Add(Wf.Workflow("spins", Wf.Sequence("main", Wf.While("forever", Binding.Literal(true), Wf.Set("step", "x", Binding.Literal(1)))), ("x", 0)));
         var routes = new HttpRoutes(registry);
         var partner = new Partner();
-        // The store format says whether the node takes self-sends; format 24 takes none.
+        // The store format says whether the node takes self-sends; format 25 takes none.
         var selfSends = PostgresPreviewHosting.TakesSelfSends(Open);
         Require(!selfSends, "the shipped format takes no self-sends, so the model runs a burst in one turn");
         var actor = new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry,

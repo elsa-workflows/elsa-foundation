@@ -17,22 +17,29 @@ Opt-in PostgreSQL node composition and Generic Host lifetime for the Built-in Ac
   with a timeout and the root's status. The node answers through `PostgresPreviewFoundation.Requests`, in the order it
   sends, so a turn's response reaches its caller before the turn's end.
 
-- `PostgresPreviewHosting.CreateShippedContext` selects the shipped format 24: the format 17 operator chain, Native jobs
+- `PostgresPreviewHosting.CreateShippedContext` selects the shipped format 25: the format 17 operator chain, Native jobs
   with timed settlement, direct held replies, Park opening and inspection, and workflow history (which
   `InstallPreviewRootSchemaAsync` installs with it). It holds replies, so a node on it takes `requests`:
   `PostgresPreviewHosting.CreateRequests` makes them before the store is opened, and the host hands the same requests to
   `OpenFoundationAsync` for its edge. The earlier preview formats (2, 6, 18) stay for their qualification checks, and a
-  database on one of them is recreated for format 24, not migrated.
-- `PostgresPreviewHosting.InstallShippedAsync` readies a dedicated database for format 24 in a single-process host (the
-  Workbench calls it before its node starts): an empty database is installed, and one whose store marker is format 24 is
-  installed again, which completes a first install that was cut short and changes nothing in a whole one. Any other is
-  refused, naming what it holds, with the advice to recreate it empty. Objects of PostgreSQL extensions do not count, and
-  hosts starting at once install one after the other (an advisory lock). A multi-node host keeps installation an explicit setup
-  step (`EfStore.CreateAsync` and `InstallPreviewRootSchemaAsync`), run while no node is.
-- Format 24 runs no self-sends, timers or child starts yet. Self-sends wait on S6's input-scope union with timed jobs,
+  database on one of them is recreated for format 25, not migrated.
+- `PostgresPreviewHosting.InstallShippedAsync` readies a dedicated database for the shipped format in a single-process
+  host (the Workbench calls it before its node starts): an empty database is installed, and one whose store marker is the
+  shipped format is installed again, which completes a first install that was cut short and changes nothing in a whole
+  one. Any other is refused, naming what it holds, with the advice to recreate it empty. Objects of PostgreSQL extensions
+  do not count, and hosts starting at once install one after the other (an advisory lock). A multi-node host keeps
+  installation an explicit setup step (`EfStore.CreateAsync` and `InstallPreviewRootSchemaAsync`), run while no node is.
+- Format 25 runs no self-sends, timers or child starts yet. Self-sends wait on S6's input-scope union with timed jobs,
   and child workflows on PostgreSQL roots are their own slice. So a kernel host refuses Delay and Dispatch Workflow at
   publish.
 
 The shipped format grows by composition. Each widening of its capability set takes a new protocol number, and a database
 installed with an older set is refused. Before GA a preview database is recreated; after GA a widening migrates, with a
 rollback floor (K12).
+
+A change to the shipped format's functions, triggers or stored operator framing takes a new number too, since a host
+reinstalls them only when it creates the database. Format 25 is format 24 with a plain Delete of a parked root (S5b-3b):
+admission accepts a Delete that names the root's Park, a clearing control may carry the Delete kind, and the checkpoint,
+journal and outcome triggers accept a parked retirement that keeps the Faulted status and a protected Delete's discard.
+A database installed as format 24 is refused and recreated. Code refers to the shipped format as
+`StoreFormat.RootShipped`, not by its number.

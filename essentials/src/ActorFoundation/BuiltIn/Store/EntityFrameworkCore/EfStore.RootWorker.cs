@@ -240,10 +240,12 @@ public sealed partial class EfStore
     }
 
     // The terminal revision of the exact unretired root, share-locked until the transaction ends: Finished, or a status
-    // that its state family ends under the family's prefix.
+    // that its state family ends under the family's prefix. S5b-3b: in a parked-operator set a protected Delete ends a
+    // parked root Faulted under a terminal mark, so a Faulted root with its terminal mark has ended there too.
     internal static Task<List<long>> LockQualifiedTerminalAsync(KernelDb db, WorkerRoot root, CancellationToken cancellationToken)
     {
         var family = db.RootStateFamily;
+        var endsFaulted = family.EndsFaulted || db.UsesRootParkedOperators && db.UsesRootRetirement;
         return db.Database.SqlQuery<long>($"""
             SELECT i."FoundationTerminalRevision" AS "Value" FROM "Instances" i
             JOIN "FoundationRootBirths" b ON b."Actor" = i."Id" AND b."Partition" = i."Partition"
@@ -253,7 +255,7 @@ public sealed partial class EfStore
                 AND (i."Status" = {(int)InstanceStatus.Finished} OR
                     ({family.EndsCancelled} AND i."Status" = {(int)InstanceStatus.Cancelled}
                         AND starts_with(i."State", {family.Prefix})) OR
-                    ({family.EndsFaulted} AND i."Status" = {(int)InstanceStatus.Faulted}
+                    ({endsFaulted} AND i."Status" = {(int)InstanceStatus.Faulted}
                         AND starts_with(i."State", {family.Prefix})))
                 AND i."FoundationTerminalAt" IS NOT NULL AND i."FoundationTerminalRevision" = i."Revision" FOR SHARE OF i
             """).ToListAsync(cancellationToken);
@@ -388,9 +390,11 @@ public sealed partial class EfStore
         {
             await using var profile = create();
             // S5b-2: an Open ("clearing" entry) or a page (no entry) of a clearing, or the end of the Park, clears kept rows.
+            // S5b-3b: so does the protected end of a Delete, which discards the Park and keeps the row Faulted.
             if (profile.UsesRootParkedOperators)
                 return turn.Row.Status == InstanceStatus.Cancelled || turn.FoundationRootOperator.Operator?.RootParkFacts is not null &&
-                    (turn.Journal is null || turn.Journal.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal))
+                    (turn.Journal is null || turn.Journal.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) ||
+                        turn.Journal.StartsWith("""{"Outcome":"protected","Disposition":"discarded",""", StringComparison.Ordinal))
                     ? await PrepareRootParkedTerminateAsync(root, turn, cancellationToken)
                     : await PrepareRootParkedRefusalAsync(root, turn, cancellationToken);
         }

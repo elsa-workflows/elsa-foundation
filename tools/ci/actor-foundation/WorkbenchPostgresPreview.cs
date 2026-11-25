@@ -29,7 +29,7 @@ internal static class WorkbenchPostgresPreview
     private sealed record Receipt(string Actor, string Bookmark, string Frame, string StateHash, string JournalHash, long Epoch, int Process);
     private sealed record Checkpoint(long Revision, string State, long Epoch, string? Owner)
     {
-        // The stable body of a profile that keeps it apart (the shipped format 24): the state itself, in its own column.
+        // The stable body of a profile that keeps it apart (the shipped format 25): the state itself, in its own column.
         public byte[]? Wire { get; init; }
     }
     private sealed record ActiveJob(long Epoch, string Owner, string State, string Registry,
@@ -826,7 +826,7 @@ internal static class WorkbenchPostgresPreview
     {
         "timed" or "timeout" or "takeover" or "takeover-complete" => PostgresPreviewHosting.CreateTimedNativeJobContext(options),
         "jobs" => PostgresPreviewHosting.CreateNativeJobContext(options),
-        // The release profile: publications run on the shipped format 24.
+        // The release profile: publications run on the shipped format 25.
         "publications" => PostgresPreviewHosting.CreateShippedContext(options),
         _ => new(options)
     };
@@ -842,7 +842,7 @@ internal static class WorkbenchPostgresPreview
 
     private static NativeState Native(Checkpoint checkpoint, string? profile)
     {
-        // The profile's root state family: the timed-job family on 18, the composed one on the shipped format 24.
+        // The profile's root state family: the timed-job family on 18, the composed one on the shipped format 25.
         var prefix = OpenProfile(new DbContextOptionsBuilder<KernelDb>().UseNpgsql("Host=state-family.invalid").Options, profile).RootStateFamily.Prefix;
         Require(checkpoint.State.StartsWith(prefix, StringComparison.Ordinal), "the state uses the expected preview framing");
         return JsonSerializer.Deserialize<NativeState>(checkpoint.State[prefix.Length..])!;

@@ -91,6 +91,9 @@ public sealed record WorkerOptions
     /// <summary>Called inside the scheduler just before the job's generation/deadline check; for deterministic witnesses.</summary>
     public Action? BeforeScheduledJobCheck { get; init; }
     internal Action? AfterJobPublication { get; init; }
+    /// <summary>A store error a drain round retried (transient, unknown or an expired commit window), for the host to
+    /// report: a drain that keeps failing so and then runs into its deadline shows its cause. It runs inline and must not block.</summary>
+    internal Action<StoreException>? OnDrainStoreError { get; init; }
     /// <summary>Called at the start of each drain round, outside its retry; for fault witnesses.</summary>
     internal Action? BeforeDrainRound { get; init; }
     /// <summary>Called where a drain round judges the heartbeat answer, inside its retry; for transient-error witnesses.</summary>
@@ -280,6 +283,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool Owns => _held.Count != 0;
     public long Evicted { get; private set; }
     public int Idle => _slots.Values.Count(s => s.Loaded && !s.Busy && s.Inbox.Count == 0 && s.Replies.Count == 0);    // for tests
+    internal int InboxCountOf(string instance) => _slots.TryGetValue(Canonical(instance), out var slot) ? slot.Inbox.Count : 0;    // for tests
 
     /// <summary>The instances held in memory only, never written (decision 4). For tests.</summary>
     public IEnumerable<string> Unwritten => _slots.Where(s => s.Value.Unwritten).Select(s => s.Key);
@@ -1118,7 +1122,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 // K1b: a guard expiry during the drain made them pending: they move only through their counting retake.
                 lock (_turnSync) held = [.. held.Where(f => !_pending.ContainsKey(f.Partition))];
                 if (held.Count > 1 && !cancellationToken.IsCancellationRequested)
-                    try { await _store.ReleaseAsync(held, cancellationToken); }
+                    try { await _store.ReleaseAsync(held, cancellationToken); }     // the epoch guard may make it a no-op: not counted as freed
                     catch (Exception) { /* then the leases run out instead */ }
                 return;
             }
@@ -1133,6 +1137,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             if (held.Count == 1) await _store.ReleaseAsync(held[0].Partition, held[0].Epoch, cancellationToken);
             else await _store.ReleaseAsync(held, cancellationToken);
+            _freed?.AddRange(held.Select(f => f.Partition));
         }
         catch (Exception) { /* then the lease runs out instead */ }
     }
@@ -1252,20 +1257,31 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// fence. Handing over every partition is a stand-down. During a retake after a reset the Worker holds nothing: the
     /// retake leaves these partitions out and releases them, at the epoch it held them or the one it got back.
     /// </summary>
-    internal async Task LoseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
+    /// <returns>The partitions whose fence the store released in this hand-over: a store release that failed, or never ran
+    /// (a cancellation, a retake in flight that gives them up later), leaves its partitions out.</returns>
+    internal async Task<IReadOnlyList<int>> LoseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
     {
         // K1b: a guard expiry during the hand-over keeps nothing of these partitions pending: the host gave them up.
         lock (_turnSync) _handingOver.UnionWith(partitions);
+        var (outer, freed) = (_freed, new List<int>());
+        _freed = freed;
         try
         {
             LeaseUsable();      // an idle worker may have expired since the host planned its hand-over
             await HandOverAsync(partitions, cancellationToken);
+            return [.. freed.Where(partitions.Contains).Distinct().Order()];
         }
         finally
         {
+            _freed = outer;
             lock (_turnSync) _handingOver.ExceptWith(partitions);
         }
     }
+
+    // During LoseAsync: the partitions its store releases freed. Hand-overs do not overlap: the host's release and a pass
+    // (an answer's stand-down) take the host's turn (DurableHost), and the stop's drain rounds start only once the node
+    // has joined its releases and passes. A nested LoseAsync keeps its own list and restores the outer one.
+    private List<int>? _freed;
 
     private async Task HandOverAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken)
     {
@@ -1330,12 +1346,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         // A drain refused down to a reset with no retake holds nothing: give up what was captured, as ReleaseAsync does.
         // The store's epoch guard makes it a no-op for a row that moved or was taken again since.
-        if (leaving.Count == 0) leaving = captured;
+        var guarded = leaving.Count == 0;     // then the release may be a no-op by the epoch guard: not counted as freed
+        if (guarded) leaving = captured;
         lock (_turnSync) leaving = [.. leaving.Where(f => !_pending.ContainsKey(f.Partition))];      // K1b: a guard expiry made them pending
         try
         {
             if (leaving.Count == 1) await _store.ReleaseAsync(leaving[0].Partition, leaving[0].Epoch, cancellationToken);
             else if (leaving.Count > 1) await _store.ReleaseAsync(leaving, cancellationToken);
+            if (!guarded) _freed?.AddRange(leaving.Select(f => f.Partition));
         }
         catch (Exception) { /* then the leases run out instead */ }
         if (kept.Count > 0) await RetakeAsync(kept, cancellationToken);
@@ -2450,18 +2468,23 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             Interlocked.Increment(ref _drainStoreErrors);
             Volatile.Write(ref _lastDrainStoreError, error);
+            try { _options.OnDrainStoreError?.Invoke(error); }
+            catch (Exception) { }     // a failing report must not end the drain
             // The failed judgement may have consumed an answer: the one it actually took, which can be newer than any
             // read before. Put that one back for the next round unless a newer one has come since, and report a loss
             // it names now, in case every drain ends this round.
             Answered? consumed;
+            bool namesLoss;
             lock (_turnSync)
             {
                 consumed = _takenAnswer;
                 _takenAnswer = null;
                 if (consumed is not null && _answered is null) _answered = consumed;
+                // As AnsweredAsync judges a loss: a fence the answer omits that this Worker still holds at that epoch.
+                namesLoss = consumed is not null && consumed.Sent.Held.Any(fence =>
+                    !consumed.Answer.Owned.Any(owned => owned.Partition == fence.Partition && owned.Epoch == fence.Epoch) &&
+                    _held.TryGetValue(fence.Partition, out var held) && held.Epoch == fence.Epoch);
             }
-            var namesLoss = consumed is not null && consumed.Sent.Held.Any(fence =>
-                !consumed.Answer.Owned.Any(owned => owned.Partition == fence.Partition && owned.Epoch == fence.Epoch));
             return !(namesLoss || ownedAtStart && _generation != generation);
         }
         var usable = !Owns || LeaseUsable();
@@ -3391,7 +3414,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationHeader = unit.FoundationHeader,
             FoundationRootOperator = unit.Consumed is [var qualified] && qualified.Message.Operator is { } command &&
                 (command.RootHeldReply || unit.Row?.FoundationDispatchHeader is not null ||
-                    unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true })
+                    unit.Delete && command is { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null })
                     ? qualified.Message : null,
             FoundationRootJobCompletion = unit.Row?.FoundationDispatchHeader is not null &&
                 unit.Consumed is [{ IsWorkerJobCompletion: true, Original: { } original } completed] &&
@@ -3600,7 +3623,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 RemoveSlot(Canonical(item.Message.Target.Id));
         }
         if (unit.Delete && unit.Slot is { } retired && unit.Consumed is
-            [{ Message.Operator: { QualifiedTerminal: not null } or { RootThenDelete: true } }])
+            [{ Message.Operator: { QualifiedTerminal: not null } or { RootThenDelete: true } or { RootParkMark: not null } }])
         {
             // The root retirement write settles every occurrence, including ones read ahead of this command.
             foreach (var item in retired.Inbox.ToArray()) Forget(item);

@@ -105,12 +105,12 @@ internal static class WorkbenchCorePreview
         // With publications on, the kernel's serving state is shared by this host's node and the default shell, which publishes:
         // the node runs the registry it serves into. Registered by instance, so each shell resolves this one.
         var publications = configuration.GetValue<bool>(PublicationsKey);
-        // The release profile: publications run on the shipped format 24, which carries Native jobs with timed settlement,
+        // The release profile: publications run on the shipped format 25, which carries Native jobs with timed settlement,
         // held replies, selected operators and workflow history. A database on an earlier preview format is recreated.
         if (publications && (nativeJobs || timedJobs))
             throw new InvalidOperationException(
                 "With Elsa:CorePreview:Publications on, the Core Preview runs on the shipped format, which carries Native jobs: leave NativeJobs and TimedNativeJobs off.");
-        // Format 24 runs no schedule actor, timers or child workflows yet, and the edge serves no wait routes: serving refuses
+        // Format 25 runs no schedule actor, timers or child workflows yet, and the edge serves no wait routes: serving refuses
         // a Timer, Cron, Delay, Dispatch Workflow and an HTTP Endpoint that waits where it maps them. Whether the node takes
         // self-sends is the store format's to say; without them a burst runs on to its next wait.
         var capabilities = new KernelHostCapabilities(Schedules: false, Timers: false, Children: false,

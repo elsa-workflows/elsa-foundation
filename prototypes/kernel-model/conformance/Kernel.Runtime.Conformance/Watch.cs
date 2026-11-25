@@ -131,13 +131,13 @@ public sealed class Watcher
     {
         public bool SupportsSetRelease => inner is IScopeSetRelease { SupportsSetRelease: true };
 
-        public async ValueTask ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default)
+        public async ValueTask<IReadOnlyList<int>> ReleaseAsync(IReadOnlyList<IScopeActivation> activations, CancellationToken cancellationToken = default)
         {
             var releasing = activations.Cast<Watched>().Where(activation => activation.BeginRelease()).ToArray();
             var cancelled = false;
             try
             {
-                await ((IScopeSetRelease)inner).ReleaseAsync(releasing.Select(activation => activation.Inner).ToArray(), cancellationToken);
+                return await ((IScopeSetRelease)inner).ReleaseAsync(releasing.Select(activation => activation.Inner).ToArray(), cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
