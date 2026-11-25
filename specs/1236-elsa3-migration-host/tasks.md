@@ -64,7 +64,8 @@ short worktree path (MSB3030).
   - creating `data/` when missing, and logging the absolute workflows folder, activities file and data paths.
 
   `AddFoundationNuplane` with no feed and no shared assemblies, so no package loads (R-6). Every host on main has at
-  least one feed, so confirm on the first run that Nuplane starts without one; if it doesn't, configure one empty
+  least one feed, so confirm on the first run that Nuplane starts without one and that the Nuplane observer-order
+  theory of `HostOwnedServicesAreSharedWithShellsTests` passes; if it doesn't, configure one empty
   directory feed under the git-ignored `data/` folder, still with no shared assemblies, and say so in the PR.
 - [ ] T006 Write `appsettings.json` and the settings in `shells.json` (R-6):
   - `ConnectionStrings:Elsa` set to `Data Source=data/elsa.db`, with `Migrate:Policy` `AutoMigrate`;
@@ -73,8 +74,8 @@ short worktree path (MSB3030).
     workflow alteration payload protection keys);
   - `AllowedReturnUrlOrigins` and CORS for the Studio host's local address (the Studio host's own fixed URL);
   - `WorkflowsRuntimeCheckpointPersistence` with `Mode` `Durable`, as the S-15 run sets it (R-10);
-  - the two reconciliation features with `SourceId` `elsa3-migration`, `PublishOnReconcile` `true`, and the sample
-    folder paths.
+  - `SourceId` `elsa3-migration` and the sample folder paths on both reconciliation features, and `PublishOnReconcile`
+    `true` on `JsonWorkflowReconciliation` (the activity options have no such setting).
 
   Add `.gitignore` entries for `data/`, `shells.Local.json` and `nuplane.lock.json`. Add the sample
   `migrated/workflows/hello.json` (an HTTP trigger and `WriteHttpResponse`, with a fixed `definitionId`) and `migrated/activities/activities.json`

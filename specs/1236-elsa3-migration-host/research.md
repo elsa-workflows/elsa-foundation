@@ -119,7 +119,7 @@ Workbench's catalog but not enabled there.
 
 | Group | Candidates | Reason |
 |---|---|---|
-| Host infrastructure | Primitives, Serialization, Mediator, Events, MemoryCache, Tasks, FileSystemDistributedLocking, ApiCapabilities | Required by the features below. `Tasks` resolves `IDistributedLockProvider` in `TaskExecutor`, so a lock provider must be composed. |
+| Host infrastructure | Primitives, Serialization, Mediator, Events, MemoryCache, Tasks, FileSystemDistributedLocking | Required by the features below. `Tasks` resolves `IDistributedLockProvider` in `TaskExecutor`, so a lock provider must be composed. |
 | Identity | FoundationIdentityAbstractions, FoundationIdentityApi, FoundationIdentityAspNetCoreIdentity, FoundationIdentityAspNetCoreIdentityEntityFrameworkCore, FoundationIdentityOpenIddict, IdentityIamEntityFrameworkCore | The `elsa-authenticate` template (login, token); Studio sign-in. |
 | Expressions | Expressions, ExpressionsApi, JavaScriptExpressions, JavaScriptJintEngine, JavaScriptActivities, JavaScriptWorkflowsDesign, JavaScriptEndpoints | JavaScript expressions and `RunJavaScript`; the designer's expression editor. |
 | HTTP | Http, HttpJavaScript, ActivitiesHttp, WorkflowsRuntimeHttp | Six HTTP suites; `HttpEndpoint`, `WriteHttpResponse`. |
@@ -218,7 +218,7 @@ and the folder settings. `FeatureCompositionTests` already proves each feature c
 ## R-7 OpenIddict token store (spec Q10)
 
 - **Fact (main).** Commit `e2e9550461` (2026-11-24) moved the Workbench's OpenIddict token store into
-  `essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore`.
+  `essentials/src/Foundation/Identity/OpenIddict/EntityFrameworkCore/Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.csproj`.
   It is registered with `AddOpenIddictEntityFrameworkCoreStore(configuration)`, and main's `apps/Elsa.Essentials.Host`
   calls it. `561a5099a9` kept its implementations internal.
 - **On the initiative branch** the store is still Workbench host code. The branch is 1,084 commits behind main
