@@ -2419,12 +2419,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
     internal void DisarmDrainBeat() => Volatile.Write(ref _drainBeat, null);
 
     /// <summary>
-    /// One round of a drain's wait, which counts as this Worker's pass: the last heartbeat answer is judged, the fence must
-    /// still be usable at <paramref name="generation"/>, and the pass gate stays open so the node lease keeps renewing.
-    /// False when the fence was lost. A store error while judging the answer is retried at the next round, as a pass's is,
-    /// and counts no pass.
+    /// One round of a drain's wait, which counts as this Worker's pass: the last heartbeat answer is judged, and while the
+    /// fence it holds (if any) is usable the pass gate stays open, so the node lease keeps renewing. A pending-only Worker
+    /// gets the pass too, and one that took partitions back after a reset keeps getting it. False when this Worker lost a
+    /// fence it held at the start (<paramref name="ownedAtStart"/>, <paramref name="generation"/>) or holds one that is no
+    /// longer usable. A store error while judging the answer is recorded and retried at the next round, as a pass retries
+    /// it, and counts no pass; any other error faults the drain.
     /// </summary>
-    internal async Task<bool> KeepDrainLiveAsync(long generation, CancellationToken cancellationToken)
+    internal async Task<bool> KeepDrainLiveAsync(long generation, bool ownedAtStart, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         _options.BeforeDrainRound?.Invoke();
@@ -2433,11 +2435,23 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _options.BeforeDrainAnswer?.Invoke();
             if (Volatile.Read(ref _answered) is not null) await AnsweredAsync(cancellationToken);
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested) { return _generation == generation && Owns; }
-        if (_generation != generation || !LeaseUsable()) return false;
-        Volatile.Write(ref _lastPass, _options.Monotonic());
-        return true;
+        catch (StoreException error) when (!cancellationToken.IsCancellationRequested)
+        {
+            Interlocked.Increment(ref _drainStoreErrors);
+            Volatile.Write(ref _lastDrainStoreError, error);
+            return !(ownedAtStart && _generation != generation);
+        }
+        var usable = !Owns || LeaseUsable();
+        if (usable) Volatile.Write(ref _lastPass, _options.Monotonic());
+        return usable && !(ownedAtStart && _generation != generation);
     }
+
+    private long _drainStoreErrors;
+    private StoreException? _lastDrainStoreError;
+
+    /// <summary>Store errors a drain round retried, and the last of them.</summary>
+    internal (long Count, StoreException? Last) DrainStoreErrors =>
+        (Interlocked.Read(ref _drainStoreErrors), Volatile.Read(ref _lastDrainStoreError));
 
     internal void ReopenJobEntry()
     {

@@ -266,20 +266,22 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
     }
 
     /// <summary>
-    /// Wait for every Worker's drain and keep each Worker that owned a partition at the start live meanwhile, so the gate
-    /// (every holding Worker passed within a lease) keeps the node lease renewing until the whole node has drained or the
-    /// deadline cancels. With <paramref name="drainsKeepThemselves"/> a Worker's own drain keeps it live until it ends.
-    /// Then every outcome counts: any fault other than a lost fence is thrown as it is, so the runtime abandons the run;
-    /// otherwise a lost fence is thrown as <see cref="ScopeOwnershipLostException"/>.
+    /// Wait for every Worker's drain and give every Worker of the host the drain's pass meanwhile (a pending-only one too),
+    /// so the gate (every holding Worker passed within a lease) keeps the node lease renewing until the whole node has
+    /// drained or the deadline cancels. A Worker whose fence is no longer usable gets no pass; a loss is kept and reported.
+    /// With <paramref name="drainsKeepThemselves"/> a Worker's own drain keeps it live until it ends. Then every outcome
+    /// counts: any fault other than a lost fence, and a drain cancelled without the deadline, is thrown as a fault, so the
+    /// runtime abandons the run; otherwise a lost fence is thrown as <see cref="ScopeOwnershipLostException"/>.
     /// </summary>
-    private async Task KeepLiveWhileAsync(IReadOnlyList<Worker> workers, Task[] drains, bool drainsKeepThemselves,
+    internal async Task KeepLiveWhileAsync(IReadOnlyList<Worker> workers, Task[] drains, bool drainsKeepThemselves,
         CancellationToken cancellationToken)
     {
         var generations = workers.Select(worker => worker.DrainGeneration).ToArray();
-        var live = workers.Select(worker => worker.Owns).ToArray();
+        var ownedAtStart = workers.Select(worker => worker.Owns).ToArray();
         var lost = new bool[workers.Count];
         var all = Task.WhenAll(drains);
-        var lease = _lease ?? workers.FirstOrDefault()?.Lease ?? TimeSpan.FromSeconds(10);
+        // A round at least three times per lease of the shortest-lived Worker, so none of them goes stale between rounds.
+        var lease = workers.Count > 0 ? workers.Min(worker => worker.Lease) : _lease ?? TimeSpan.FromSeconds(10);
         try
         {
             while (!all.IsCompleted)
@@ -287,10 +289,9 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
                 List<Task> wakes = [all];
                 for (var i = 0; i < workers.Count; i++)
                 {
-                    if (!live[i] || drainsKeepThemselves && !drains[i].IsCompleted || drains[i].IsFaulted) continue;
+                    if (drainsKeepThemselves && !drains[i].IsCompleted || drains[i].IsFaulted) continue;
                     wakes.Add(workers[i].ArmDrainBeat());
-                    if (await workers[i].KeepDrainLiveAsync(generations[i], cancellationToken)) continue;
-                    (live[i], lost[i]) = (false, true);
+                    if (!await workers[i].KeepDrainLiveAsync(generations[i], ownedAtStart[i], cancellationToken)) lost[i] = true;
                 }
                 using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 wakes.Add(Task.Delay(lease / 3, wait.Token));
@@ -299,14 +300,25 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost, IScop
                 cancellationToken.ThrowIfCancellationRequested();
             }
         }
+        catch
+        {
+            // The drains run on: observe their outcome, so a later fault is not left unobserved.
+            _ = all.ContinueWith(static drained => _ = drained.Exception, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            throw;
+        }
         finally
         {
             foreach (var worker in workers) worker.DisarmDrainBeat();
         }
         var faults = drains.Where(drain => drain.IsFaulted).SelectMany(drain => drain.Exception!.InnerExceptions).ToList();
-        if (drains.Any(drain => drain.IsCanceled)) cancellationToken.ThrowIfCancellationRequested();
         if (faults.FirstOrDefault(fault => fault is not ScopeOwnershipLostException) is { } fault)
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(fault);
+        if (drains.Any(drain => drain.IsCanceled))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException("A Worker's drain was cancelled without the stop deadline.");
+        }
         if (faults.Count > 0 || lost.Any(value => value))
             throw faults.FirstOrDefault() ?? new ScopeOwnershipLostException("Ownership was lost while draining during shutdown.");
     }
