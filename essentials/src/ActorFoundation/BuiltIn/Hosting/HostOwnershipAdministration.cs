@@ -1,6 +1,6 @@
 namespace Kernel.Runtime.Hosting;
 
-/// <summary>Host-wide ownership commands for the built-in node in this process.</summary>
+/// <summary>Host-wide ownership commands for the built-in node in this process: release some partitions, or drain the node.</summary>
 /// <param name="node">The local node that owns the work.</param>
 /// <param name="authorize">The trusted host's authorization check for the current caller's ownership administration permission.</param>
 /// <param name="drainDeadline">How long the graceful stop may drain before it becomes a kill and what is still owned runs
@@ -15,6 +15,28 @@ public sealed class HostOwnershipAdministration(RuntimeNode node, Func<bool> aut
     private readonly TimeSpan _drainDeadline = drainDeadline is { } given && given > TimeSpan.Zero ? given
         : drainDeadline is null ? DefaultDrainDeadline
         : throw new ArgumentOutOfRangeException(nameof(drainDeadline), "The drain deadline must be positive.");
+
+    /// <summary>
+    /// Releases the listed partitions that the local node holds, through the runtime's own release, so the next take of
+    /// each, by this node or another, counts no death. A listed partition the node does not hold is skipped. It reads no
+    /// tenant row.
+    /// </summary>
+    /// <param name="partitions">The virtual partitions to release, each in range for the node.</param>
+    /// <param name="cancellationToken">Cancels the release; a partition already given up stays released.</param>
+    /// <returns>False on refusal. True once the authorized release has run. It skips a listed partition that the node does
+    /// not hold or is already taking or giving up, and gives up nothing once a stop or kill has begun.</returns>
+    public async ValueTask<bool> ReleaseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(partitions);
+        foreach (var partition in partitions)
+            if ((uint)partition >= (uint)_node.Runtime.Partitions)
+                throw new ArgumentOutOfRangeException(nameof(partitions), partition, "A partition is outside the node's range.");
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!_authorize()) return false;
+        cancellationToken.ThrowIfCancellationRequested();
+        await _node.ReleaseAsync(partitions, cancellationToken);
+        return true;
+    }
 
     /// <summary>Requests a graceful stop of the local node.</summary>
     /// <param name="cancellationToken">Cancels this call's wait. A stop already requested keeps running.</param>

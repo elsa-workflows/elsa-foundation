@@ -1930,9 +1930,20 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
       # Output folders of the prototype projects, relative to prototypes/kernel-model.
       BIN: bin/Release/net10.0
+      # Throwaway value for the job-scoped database service (the K5 PostgreSQL step).
+      PG_PASSWORD: kernel
     defaults:
       run:
         working-directory: prototypes/kernel-model
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ${{ env.PG_PASSWORD }}
+        ports: ['5432']
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -2017,6 +2028,37 @@ jobs:
           RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/$BIN/Kernel.Runtime.Conformance.Run.dll"
           $RTC semantic-broken
           $RTC stress-broken 10 1000
+
+      # K5 (#4229): graceful stop and host administration of ownership, tenancy case T12 among them.
+      - name: K5, graceful stop and host administration
+        run: |
+          SIM="dotnet ../../essentials/tests/ActorFoundation/Simulation/$BIN/Kernel.Sim.dll"
+          $SIM --host-job-drain-check
+          $SIM --host-drain-check
+          $SIM --host-t12-check
+
+      # K5 on PostgreSQL: the hosted preview's lifetime, and two runtime processes with the wake signal at 4 and 1,024
+      # partitions. Each run gets its own new database; a failed run fails the step at the end.
+      - name: K5, PostgreSQL host lifetime and runtime cluster
+        env:
+          PG_PORT: ${{ job.services.postgres.ports[5432] }}
+          PG_ID: ${{ job.services.postgres.id }}
+        run: |
+          NAT=(dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll")
+          failed=()
+          for run in "pg-preview-host-lifetime" "pg-runtime-cluster 4 wake" "pg-runtime-cluster 1024 wake"; do
+            db="k5_${run//[- ]/_}"
+            echo "::group::$run"
+            docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
+            export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
+            read -ra arguments <<<"$run"
+            if ! "${NAT[@]}" "${arguments[@]}"; then
+              echo "::error::K5 PostgreSQL run failed: $run"
+              failed+=("$run")
+            fi
+            echo "::endgroup::"
+          done
+          if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
 
       - name: Native model, smoke and cost
         run: |

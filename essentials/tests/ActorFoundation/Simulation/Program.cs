@@ -350,6 +350,8 @@ if (args.Contains("--host-job-drain-check"))
     return await HostJobDrainChecks.RunAsync();
 if (args.Contains("--host-drain-check"))
     return await HostDrainChecks.RunAsync();
+if (args.Contains("--host-t12-check"))
+    return await HostT12Checks.RunAsync(flaws);
 if (args.Contains("--foundation-migration-dispatch-check"))
 {
     var failed = false;

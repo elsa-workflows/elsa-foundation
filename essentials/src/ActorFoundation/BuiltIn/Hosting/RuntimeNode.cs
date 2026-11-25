@@ -203,6 +203,25 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     }
 
     /// <summary>
+    /// Host administration's release of some partitions: on the node's scheduler, through
+    /// <see cref="PartitionRuntime.ReleaseAsync"/>. Each one given up is free at its epoch; the next balancing round places
+    /// it by the fair share, on this node or another. Nothing is given up once a stop or kill has begun. A kill during the
+    /// release ends it; what is still owned then runs out by its lease.
+    /// </summary>
+    /// <returns>The listed partitions this node held and gave up.</returns>
+    public async ValueTask<IReadOnlyList<int>> ReleaseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(partitions);
+        using var release = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _kill.Token);
+        IReadOnlyList<int> released = [];
+        await OnNode(async () =>
+        {
+            if (!_gone) released = await _runtime.ReleaseAsync(partitions, release.Token);
+        });
+        return released;
+    }
+
+    /// <summary>
     /// Finish the pass under way, end admitted off-turn work, then give every scope up: whoever takes them next finds no death.
     /// The call that starts the stop sets its deadline: when <paramref name="cancellationToken"/> cancels, the stop becomes
     /// a kill, also during the release, and what is still owned runs out by its lease. A stop that joins a stop under way

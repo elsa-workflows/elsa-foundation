@@ -317,6 +317,33 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         finally { EndWork(); }
     }
 
+    /// <summary>
+    /// Host administration's release (tenancy.md, "release a partition"): give up the listed scopes this node holds, as a
+    /// balancing round gives up its surplus, through a set host in one release and through any other host one at a time.
+    /// A scope not held, or one being activated or released, is skipped. Whoever takes a released scope next, this node
+    /// included, finds no death. Returns the scopes given up; none once a stop has begun, since the stop gives up every scope.
+    /// </summary>
+    public async Task<IReadOnlyList<int>> ReleaseAsync(IReadOnlyCollection<int> scopes, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scopes);
+        if (!BeginWork()) return [];
+        try
+        {
+            var held = scopes.Where(scope => (uint)scope < (uint)partitions).Distinct().Order()
+                .Where(scope => Owns(scope) && !_activating[scope] && !_releasing[scope]).ToArray();
+            if (held.Length > 1 && _host is IScopeSetRelease { SupportsSetRelease: true } setHost)
+                await ReleaseSetAsync(setHost, [.. held.Select(Activation).OfType<IScopeActivation>()], cancellationToken);
+            else
+                foreach (var scope in held)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await GiveUpAsync(scope);
+                }
+            return held;
+        }
+        finally { EndWork(); }
+    }
+
     private async Task GiveUpAsync(int scope)
     {
         if (_releasing[scope] || Activation(scope) is not { } activation) return;
