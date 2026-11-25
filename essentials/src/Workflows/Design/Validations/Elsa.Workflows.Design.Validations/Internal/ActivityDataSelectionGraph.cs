@@ -40,6 +40,9 @@ internal sealed class ActivityDataSelectionGraph(IActivityStructureService struc
         while (pending.TryPop(out var item))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // A provider body may omit a node's argument lists; validation and compilation read that as empty.
+            if (item.Node.Inputs is null || item.Node.Outputs is null)
+                item.Node = item.Node with { Inputs = item.Node.Inputs ?? [], Outputs = item.Node.Outputs ?? [] };
             if (_nodes.Count >= 10000 || item.Depth > maxDepth)
             {
                 findings.Add(new("$workflow", "ActivityData/AnalysisLimit", "The canonical graph exceeds the source-analysis limit."));
