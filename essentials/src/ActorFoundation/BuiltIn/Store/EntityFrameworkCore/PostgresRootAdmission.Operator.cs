@@ -145,7 +145,7 @@ internal sealed partial class PostgresRootAdmission
             if (!deletion && !recover)
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
             // A composed Park set admits an unheld Terminate, or Terminate and delete, for a parked root. A held command
-            // there is refused: the owner withholds held rows on a parked root until S5b ends it.
+            // there is refused at admission; one admitted before the Park opened is refused by the owner, which answers it.
             var parked = selectedStatus == InstanceStatus.Faulted && db.UsesRootParkedOperators && kind == Kinds.Terminate &&
                 await LocksParkedRootAsync(db, address, tenant, reference, token);
             var eligible = deletion ? exactTerminal : recover ? exactPark

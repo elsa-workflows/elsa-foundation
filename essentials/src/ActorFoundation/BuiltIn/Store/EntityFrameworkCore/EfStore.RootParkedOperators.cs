@@ -13,7 +13,8 @@ public sealed partial class EfStore
         if (turn.Row is not { Status: InstanceStatus.Faulted, Retired: false, FoundationDispatchHeader: { Terminal: null } header } row ||
             turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
             !PostgresRootAdmission.IsOperatorOccurrence(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
-            command.ReplyTo is not null || command.Kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete) ||
+            (command.ReplyTo is not null) != (command.Operator?.RootHeldReply == true) ||
+            command.Kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete) ||
             turn.Journal != Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = "parked" }) ||
             turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
                 turn.Journal, Held: turn.Held)
@@ -92,6 +93,7 @@ public sealed partial class EfStore
                 """).ToListAsync(token);
             if (locked is not [var prior]) return false;
             // Without Park arrivals the parked root withholds its ordinary inputs, so the settled prefix is its operator rows.
+            // The envelope comparison binds a held command's exact reply address.
             if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
                     suspended: !db.UsesRootParkArrivals, token)) return false;
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""

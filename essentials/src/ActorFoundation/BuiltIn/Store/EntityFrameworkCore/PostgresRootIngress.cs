@@ -227,6 +227,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
                     "ProtectionUnavailable" => "protection unavailable",
                     "StaleSelection" => "stale selection",
                     "TargetMismatch" => "target",
+                    "Parked" => "parked",
                     _ => "missing"
                 });
             return new(answer.Channel, answer.Item, (Contract.ActorStatus?)answer.Status, answer.Error);
