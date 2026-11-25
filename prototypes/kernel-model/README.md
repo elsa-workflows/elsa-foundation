@@ -362,6 +362,10 @@ version no slot serves any more loads that version from the default shell's exec
 toolbox in the default shell hides the activities the kernel does not run (`kernel-unsupported`). The HTTP edge, and
 the limits that stand, each with its own slice coming:
 
+- **Runs list.** Studio's Runs page lists the kernel's runs (`WorkflowsRuntimeKernelApi`, composed into the kernel
+  shell): those of the bound tenant (`Elsa:CorePreview:Tenant`, `default` when unset, the seeded administrator's), with
+  their status, workflow, start and end. Old-core runs, Studio's test runs among them, are not listed there. Preview
+  limit: each request reads all of the tenant's runs. Run details and the activity timeline still read the old core.
 - **HTTP edge.** A published workflow's HTTP endpoint is served on the kernel at `Elsa:CorePreview:HttpBasePath`
   (default `/workflows/http`, the address Studio shows; the Workbench does not start when it differs from the default
   shell's HTTP base path), within `Elsa:CorePreview:HttpTimeout` (default 30 s; past it the caller gets 504 and the

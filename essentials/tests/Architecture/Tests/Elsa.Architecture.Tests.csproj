@@ -112,6 +112,7 @@
     <ProjectReference Include="../../../src/ActorFoundation/Model/Contracts/Elsa.ActorFoundation.Model.Contracts.csproj" />
     <ProjectReference Include="../../../src/Workflows/Runtime/WorkflowActor/Elsa.Workflows.Runtime.WorkflowActor.csproj" />
     <ProjectReference Include="../../../src/Workflows/Runtime/KernelHost/Elsa.Workflows.Runtime.KernelHost.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/KernelApi/Elsa.Workflows.Runtime.KernelApi.csproj" />
     <ProjectReference Include="../../../src/Workflows/Runtime/Graph/Elsa.Workflows.Runtime.Graph.csproj" />
     <ProjectReference Include="../../../src/Workflows/Runtime/Native/Model/Elsa.Workflows.Runtime.Native.Model.csproj" />
     <ProjectReference Include="../../../src/Workflows/Runtime/Native/Activities/Elsa.Workflows.Runtime.Native.Activities.csproj" />
