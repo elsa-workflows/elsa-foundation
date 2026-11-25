@@ -14,6 +14,7 @@ namespace Elsa.Workflows.Design.Validations.Core.Models;
 /// <item><c>{NodeId}</c> — workflow-level concern bound to a node.</item>
 /// <item><c>{NodeId}/inputs/{InputReferenceKey}</c> — activity input.</item>
 /// <item><c>{NodeId}/outputs/{OutputReferenceKey}</c> — activity output.</item>
+/// <item><c>{NodeId}/inputs</c> / <c>{NodeId}/outputs</c> — the node's argument list itself (e.g. missing).</item>
 /// <item><c>$workflow/inputs/{InputReferenceKey}</c> — workflow-level input declaration.</item>
 /// <item><c>$workflow/outputs/{OutputReferenceKey}</c> — workflow-level output declaration.</item>
 /// <item><c>$workflow/variables/{VariableName}</c> — workflow variable.</item>

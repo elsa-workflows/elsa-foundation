@@ -72,6 +72,13 @@ public sealed class DraftValidationFindingOwnershipTests
         var refused = await Assert.ThrowsAsync<ArgumentException>(() => scope.ServiceProvider.GetRequiredService<IScriptVariableRenamePlanner>()
             .PlanAsync(state, "root", "variable", "renamed").AsTask());
         Assert.StartsWith("root/inputs", refused.Message, StringComparison.Ordinal);
+        // Scope resolution reads a ForEach's inputs, so the planner refuses before it resolves scopes.
+        var forEach = new ActivityNode("each", "test", null!, [], new(Elsa.Activities.ForEach.Activities.ForEach.StructureKind, "1.0.0",
+            System.Text.Json.JsonSerializer.SerializeToElement(new Elsa.Activities.ControlFlow.Loops.LoopAuthoredStructure(new ActivityNode("body", "test", [], [])),
+                new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))));
+        var loopRefused = await Assert.ThrowsAsync<ArgumentException>(() => scope.ServiceProvider.GetRequiredService<IScriptVariableRenamePlanner>()
+            .PlanAsync(new([], forEach, [], [], null), "each", "variable", "renamed").AsTask());
+        Assert.StartsWith("each/inputs", loopRefused.Message, StringComparison.Ordinal);
 
         // Data selection reads the same draft state directly and refuses it the same way.
         var analysis = await scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>()
