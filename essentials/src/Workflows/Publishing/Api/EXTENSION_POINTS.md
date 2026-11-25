@@ -24,6 +24,7 @@ compiler validates and pins the selected alias/version into each executable.
 | Contract | Built-in default | Replace when |
 |---|---|---|
 | `IActivityPublishingAuthorizationContext` | `HttpContextActivityPublishingAuthorizationContext` (scoped) | A host authenticates activity publish/test-run requests through another transport. Authorization is a transport concern; the engine neither registers nor depends on this contract. |
+| `IWorkflowTestRunStarter` *(this project, `Elsa.Workflows.Publishing.Api.Handlers`)* | `StartWorkflowTestRunRequestHandler` (scoped) | A host starts versioned and workflow draft test runs another way: `StartAsync`, `StartDraftAsync` and `GetDraftOptionsAsync` serve the test-run endpoints. A replacement keeps the draft-snapshot refusal in [Workflow draft Test Runs](#workflow-draft-test-runs). |
 | `IWorkflowTestRunStore` | `InMemoryWorkflowTestRunStore` (singleton) | Test-run projections need shared/durable retention. Runtime owns the matching scope lifecycle; expiry opens an operation scope and closes Runtime before removing the projection. |
 | `IActivityDraftTestRunStore` | `InMemoryActivityDraftTestRunStore` (singleton) | Activity draft Test Run receipts, idempotency, and status lookup must survive restart. The Publishing EF Core package replaces this default. |
 | `IActivityDraftTestRunCancellationPolicy` | `DefaultActivityDraftTestRunCancellationPolicy` (singleton) | A host needs to suppress or further constrain cancellation while advertising the effective capability truthfully. |
@@ -79,6 +80,24 @@ reaches the decorated context unchanged.
 - Status projection may expose safe codes and diagnostics, immutable artifact/source identities, and the eventual
   outer activity execution identity. It must not expose synthetic wrapper/provider payloads or raw Runtime
   exception messages.
+
+### Workflow draft Test Runs
+
+`IWorkflowTestRunStarter` (default `StartWorkflowTestRunRequestHandler`, scoped) serves
+`POST publishing/workflows/drafts/test-run-options` and `POST publishing/workflows/drafts/test-runs`. Both compile the
+posted draft snapshot, which never passed the draft validation gate. Before anything reads it (expression validation or
+the compiler), a node whose `inputs` or `outputs` list is missing or null, at any depth, is refused with the
+`Graph/MalformedArgumentList` refusal of `ActivityArgumentLists` (Design Validations Core), one per list at
+`{NodeId}/inputs` or `{NodeId}/outputs`; `[]` is the only way to say "no arguments":
+
+- the options request returns no option and one diagnostic per refusal, with code `Graph/MalformedArgumentList`, the
+  message `{NodeId}/{list}: Graph/MalformedArgumentList: ...` and `nodeId` set to the authored node id;
+- the start request returns a `Rejected` test run whose reason joins those messages; only that rejected test-run record
+  is saved: nothing is compiled, no executable or source reference is stored, and nothing is dispatched.
+
+The whole tree is checked through `IActivityStructureService`, which the composed host always provides; a handler
+constructed directly without it checks the root node only. A replacement starter must refuse such a snapshot the same
+way.
 
 ## HTTP endpoint surface
 

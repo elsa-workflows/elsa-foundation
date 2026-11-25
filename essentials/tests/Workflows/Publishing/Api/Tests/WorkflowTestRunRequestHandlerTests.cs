@@ -346,6 +346,71 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public async Task DraftTestRunOptionsRefuseANodeWithoutArgumentListsBeforeCompiling()
+    {
+        var compiled = 0;
+        var handler = DraftSnapshotHandler(onCompile: _ => compiled++);
+
+        var options = await handler.GetDraftOptionsAsync(
+            new DraftTestRunOptionsRequest("definition-1", "snapshot-missing-lists", StateWithoutArgumentLists()),
+            CancellationToken.None);
+
+        Assert.Equal(0, compiled);
+        Assert.Empty(options.Options);
+        Assert.Equal(
+            [("Graph/MalformedArgumentList", "write-one"), ("Graph/MalformedArgumentList", "write-one")],
+            options.Diagnostics.Select(diagnostic => (diagnostic.Code, diagnostic.NodeId)));
+        Assert.Contains(options.Diagnostics, diagnostic => diagnostic.Message.StartsWith("write-one/inputs", StringComparison.Ordinal));
+        Assert.Contains(options.Diagnostics, diagnostic => diagnostic.Message.StartsWith("write-one/outputs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DraftTestRunRejectsANodeWithoutArgumentListsBeforeCompiling()
+    {
+        var compiled = 0;
+        var handler = DraftSnapshotHandler(onCompile: _ => compiled++);
+
+        var rejected = await handler.Handle(
+            new StartWorkflowDraftTestRun("definition-1", "snapshot-missing-lists", StateWithoutArgumentLists()),
+            CancellationToken.None);
+
+        Assert.Equal("Rejected", rejected.Status);
+        Assert.StartsWith("write-one/inputs", rejected.Reason, StringComparison.Ordinal);
+        Assert.Contains("Graph/MalformedArgumentList", rejected.Reason, StringComparison.Ordinal);
+        Assert.Contains("write-one/outputs", rejected.Reason, StringComparison.Ordinal);
+        Assert.Equal(0, compiled);
+        Assert.Empty(await _executableStore.ListAllAsync());
+        Assert.Empty(await _sourceReferenceStore.ListAllAsync());
+        Assert.Null(await _testScopeStore.FindAsync(rejected.TestRunId));
+    }
+
+    [Fact]
+    public async Task DraftTestRunOptionsRefuseANestedNodeWithoutAnArgumentList()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
+        new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        var compiled = 0;
+        var handler = DraftSnapshotHandler(onCompile: _ => compiled++, activityStructures: provider.GetRequiredService<IActivityStructureService>());
+        var state = JsonSerializer.Deserialize<WorkflowDefinitionState>("""
+            {"variables":[],"inputs":[],"outputs":[],"rootActivity":{"nodeId":"root","activityVersionId":"sequence","inputs":[],"outputs":[],
+             "structure":{"kind":"elsa.sequence.structure","schemaVersion":"1.0.0","payload":{"variables":[],"activities":[
+               {"nodeId":"child","activityVersionId":"activity-write-line","inputs":[],"outputs":null}]}}}}
+            """, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+
+        var options = await handler.GetDraftOptionsAsync(new DraftTestRunOptionsRequest("definition-1", "snapshot-nested", state), CancellationToken.None);
+
+        Assert.Equal(0, compiled);
+        var diagnostic = Assert.Single(options.Diagnostics);
+        Assert.Equal(("Graph/MalformedArgumentList", "child"), (diagnostic.Code, diagnostic.NodeId));
+        Assert.StartsWith("child/outputs", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    private static WorkflowDefinitionState StateWithoutArgumentLists() =>
+        new([], new ActivityNode("write-one", "activity-write-line", null!, null!), [], [], null);
+
+    [Fact]
     public async Task DraftTestRunWithInputContractFailsClosedWhenInputValidatorIsUnavailable()
     {
         var state = new WorkflowDefinitionState(
@@ -1024,7 +1089,8 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
         IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
         bool inputValidatorUnavailable = false,
         Action<WorkflowExecutableCompileRequest>? onCompile = null,
-        IServiceProvider? ambientServices = null)
+        IServiceProvider? ambientServices = null,
+        IActivityStructureService? activityStructures = null)
     {
         return new(
             ObserveCompiler(TestCompiler.Create(
@@ -1052,7 +1118,8 @@ public sealed partial class WorkflowTestRunRequestHandlerTests
                 : inputValidator ?? new WorkflowExecutableInputValidator(TestWellKnownTypeRegistry.Create()),
             accessContextAccessor: accessContextAccessor,
             partitionAccessor: partitionAccessor,
-            ambientServices: ambientServices);
+            ambientServices: ambientServices,
+            activityStructures: activityStructures ?? _activityStructureService);
     }
 
     private static IWorkflowExecutableCompiler ObserveCompiler(IWorkflowExecutableCompiler compiler, Action<WorkflowExecutableCompileRequest>? observer) =>

@@ -4,7 +4,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 using Elsa.Workflows.Design.Core.Services;
-using Elsa.Workflows.Design.Validations.Internal;
+using Elsa.Workflows.Design.Validations.Core;
 
 namespace Elsa.Workflows.Design.Validations.Services;
 
@@ -42,7 +42,7 @@ public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resol
 
         // Before anything reads the tree: scope resolution reads loop inputs, so a missing list would throw unnamed.
         if (ActivityArgumentLists.Refusals(state.RootActivity, structures) is [var malformed, ..])
-            throw new ArgumentException($"{malformed.Path}: {malformed.Message}");
+            throw new ArgumentException(ActivityArgumentLists.Describe(malformed));
         var visibility = new ScopedVariableResolver(structures).Resolve(state.Variables, state.RootActivity, MaxDepth, includeIterationScopes: true);
         var nodes = Walk(state.RootActivity).ToArray();
         var renamed = FindDeclaration(state, nodes, scopeId, referenceKey)
