@@ -279,7 +279,14 @@ public sealed record SourceActivityPublicationCommit<TExecutableTemplate, TSourc
     TExecutableTemplate ExecutableTemplate,
     TSourceReference SourceReference)
     where TExecutableTemplate : class
-    where TSourceReference : class;
+    where TSourceReference : class
+{
+    /// <summary>
+    /// One edge per occurrence of another activity version in the published content, committed with the publication as a
+    /// draft publication's edges are. Content without dependencies, such as a CLR activity's single node, has none.
+    /// </summary>
+    public IReadOnlyList<ActivityDependencyEdge> DirectDependencies { get; init; } = [];
+}
 
 /// <summary>
 /// Atomic source-authority counterpart of draft publication. There is no mutable draft or head CAS:

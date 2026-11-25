@@ -77,17 +77,57 @@ public sealed class ActivityVersionReconciler(
 
         var (definitionIndex, versionIndex) = await Prefetch(@event.Versions, cancellationToken);
 
-        var refused = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var version in @event.Versions)
+        var pass = new SourcePublicationPass();
+        try
         {
-            await ReconcileVersion(version, definitionIndex, versionIndex, refused, cancellationToken);
+            foreach (var version in @event.Versions)
+            {
+                await ReconcileVersion(version, definitionIndex, versionIndex, pass, cancellationToken);
+            }
+
+            if (SingleSourceVersionPublisher() is { } sourceVersionPublisher)
+                await RetryRefusedPublicationsAsync(sourceVersionPublisher, pass, cancellationToken);
         }
+        finally
+        {
+            // A pass that ends early, on a hash mismatch for example, still reports what it refused up to that point.
+            foreach (var refusal in pass.Refusals.Values)
+                RecordRefusal(refusal);
+        }
+
+        if (SingleSourceVersionPublisher() is null)
+            return;
 
         // A complete pass is the whole truth about refusals: an entry for a version this pass did not refuse (published,
         // or no longer contributed, such as one a source replaced by a fixed next version) is no longer current.
-        if (diagnosticStore is not null && SingleSourceVersionPublisher() is not null)
-            foreach (var versionId in diagnosticStore.List().Keys.Where(id => !refused.Contains(id)))
+        if (diagnosticStore is not null)
+            foreach (var versionId in diagnosticStore.List().Keys.Where(id => !pass.Refusals.ContainsKey(id)))
                 diagnosticStore.Clear(versionId);
+    }
+
+    /// <summary>
+    /// Publishes again, in rounds, the source-owned versions this pass refused, in the order they were first tried, for as
+    /// long as a round publishes at least one of them. A version that uses another version contributed later in the pass,
+    /// or by a source that contributes after its own, is refused until that dependency is published; the next round then
+    /// publishes it. Only the publication is retried: the candidate's other reconciliation steps ran once, in the first
+    /// round. Versions that use each other never publish, so a round that publishes none of them ends the pass.
+    /// </summary>
+    private async Task RetryRefusedPublicationsAsync(
+        IActivitySourceVersionPublisher publisher,
+        SourcePublicationPass pass,
+        CancellationToken cancellationToken)
+    {
+        var pending = pass.Retries.ToList();
+        while (pending.Count > 0)
+        {
+            var stillRefused = new List<PendingSourcePublication>();
+            foreach (var publication in pending)
+                if (!await TryPublishSourceVersionAsync(publisher, pass, publication, cancellationToken))
+                    stillRefused.Add(publication);
+            if (stillRefused.Count == pending.Count)
+                return;
+            pending = stillRefused;
+        }
     }
 
     /// <summary>
@@ -124,7 +164,7 @@ public sealed class ActivityVersionReconciler(
         IActivityDefinitionVersion incomingVersion,
         DefinitionIndex definitionIndex,
         VersionIndex versionIndex,
-        ISet<string> refused,
+        SourcePublicationPass pass,
         CancellationToken cancellationToken)
     {
         var sourceVersionPublisher = SingleSourceVersionPublisher();
@@ -148,7 +188,7 @@ public sealed class ActivityVersionReconciler(
                     newDefinition,
                     newVersion,
                     cancellationToken);
-            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, refused, newDefinition, newVersion, cancellationToken))
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, pass, newDefinition, newVersion, cancellationToken))
                 return;
 
             // Mirror the write into the indexes so a later candidate targeting the same definition
@@ -175,7 +215,7 @@ public sealed class ActivityVersionReconciler(
                     CreateOperationKey("append", incomingVersion),
                     appended,
                     cancellationToken);
-            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, appended, cancellationToken))
+            else if (!await PublishSourceVersionAsync(sourceVersionPublisher, pass, definition, appended, cancellationToken))
                 return;
             versionIndex.Add(appended);
             return;
@@ -209,7 +249,7 @@ public sealed class ActivityVersionReconciler(
                 if (sourceVersionPublisher is not null)
                 {
                     existingVersion.Definition ??= definition;
-                    await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, existingVersion, cancellationToken);
+                    await PublishSourceVersionAsync(sourceVersionPublisher, pass, definition, existingVersion, cancellationToken);
                 }
                 return;
             }
@@ -231,7 +271,7 @@ public sealed class ActivityVersionReconciler(
         if (sourceVersionPublisher is not null)
         {
             existingVersion.Definition ??= definition;
-            await PublishSourceVersionAsync(sourceVersionPublisher, refused, definition, existingVersion, cancellationToken);
+            await PublishSourceVersionAsync(sourceVersionPublisher, pass, definition, existingVersion, cancellationToken);
         }
     }
 
@@ -260,20 +300,40 @@ public sealed class ActivityVersionReconciler(
     }
 
     /// <summary>
-    /// Publishes one source-owned version and says whether it was published. A refused version is logged with each of its
-    /// diagnostics and recorded in the reconciliation diagnostic store; nothing of it was written, so the caller skips it
-    /// and the pass goes on. A version that publishes clears what an earlier pass recorded for it.
+    /// Publishes one source-owned version and says whether it was published. A refused version is held for the pass's
+    /// retry rounds, once per version; nothing of it was written, so the caller skips it and the pass goes on.
     /// </summary>
     private async Task<bool> PublishSourceVersionAsync(
         IActivitySourceVersionPublisher publisher,
-        ISet<string> refused,
+        SourcePublicationPass pass,
         ActivityDefinition definition,
         ActivityDefinitionVersion version,
         CancellationToken cancellationToken)
     {
+        var publication = new PendingSourcePublication(definition, version);
+        if (await TryPublishSourceVersionAsync(publisher, pass, publication, cancellationToken))
+            return true;
+        // A version a source contributes twice is retried once.
+        if (!pass.Retries.Any(x => StringComparer.Ordinal.Equals(x.Version.Id, version.Id)))
+            pass.Retries.Add(publication);
+        return false;
+    }
+
+    /// <summary>
+    /// Publishes a source-owned version once. A version that publishes clears what this or an earlier pass recorded for it;
+    /// a refused one keeps its latest diagnostics, recorded when the pass ends.
+    /// </summary>
+    private async Task<bool> TryPublishSourceVersionAsync(
+        IActivitySourceVersionPublisher publisher,
+        SourcePublicationPass pass,
+        PendingSourcePublication publication,
+        CancellationToken cancellationToken)
+    {
+        var (definition, version) = publication;
         var result = await publisher.PublishAsync(definition, version, cancellationToken);
         if (result.IsPublished)
         {
+            pass.Refusals.Remove(version.Id);
             diagnosticStore?.Clear(version.Id);
             return true;
         }
@@ -287,7 +347,14 @@ public sealed class ActivityVersionReconciler(
                 "The publishing bridge refused the source-owned version without a stated reason.",
                 new("ActivitySourceVersion", version.Id, definition.Id, Revision: 0),
                 Remediation: "Check the node log for the publishing bridge, correct the source content and reconcile again.")]);
-        refused.Add(version.Id);
+        pass.Refusals[version.Id] = new(definition, version, diagnostics);
+        return false;
+    }
+
+    /// <summary>Logs a version the pass ended without publishing, with each of its diagnostics, and records it.</summary>
+    private void RecordRefusal(SourceRefusal refusal)
+    {
+        var (definition, version, diagnostics) = refusal;
         diagnosticStore?.Record(version.Id, diagnostics);
         if (logger.IsEnabled(LogLevel.Warning))
             foreach (var diagnostic in diagnostics)
@@ -298,8 +365,18 @@ public sealed class ActivityVersionReconciler(
                     version.Version,
                     diagnostic.Code,
                     diagnostic.Message);
-        return false;
     }
+
+    /// <summary>The source-owned publications of one pass: those refused so far, to retry, and each refused version's latest refusal.</summary>
+    private sealed class SourcePublicationPass
+    {
+        public List<PendingSourcePublication> Retries { get; } = [];
+        public Dictionary<string, SourceRefusal> Refusals { get; } = new(StringComparer.Ordinal);
+    }
+
+    private sealed record PendingSourcePublication(ActivityDefinition Definition, ActivityDefinitionVersion Version);
+
+    private sealed record SourceRefusal(ActivityDefinition Definition, ActivityDefinitionVersion Version, IReadOnlyList<ActivityDiagnostic> Diagnostics);
 
     private IActivitySourceVersionPublisher? SingleSourceVersionPublisher()
     {

@@ -146,6 +146,58 @@ internal sealed partial class PublishedNativeFixture
             .ExecuteAsync(new(null, new(draftId, 1, definitionId, null, catalog, publication, layout, edges), template, source, receipt));
         return versionId;
     }
+    /// <summary>
+    /// Publishes Graph content a reconciliation source owns through the actual source-owned publication bridge: the actual
+    /// Graph provider and template compiler resolve its one child, and the EF source commit stores it. The child is the
+    /// CLR WriteLine (which gets its text) or another composite version.
+    /// </summary>
+    public async Task<Elsa.Activities.Design.Core.Reconciliation.ActivitySourceVersionPublicationResult> PublishSourceOwnedGraph(
+        string versionId, string activityTypeKey, string childVersion, bool childIsWriteLine)
+    {
+        var access = new Accessor(); var db = Service<ActivitiesDesignDbContext>();
+        var stores = new EfActivityDesignStores(db, access, null, new EfActivityManagementProjectionWriter(db, access));
+        var serializer = Service<IPayloadSerializer>(); var structures = Service<IActivityStructureService>(); var types = Service<IWellKnownTypeRegistry>();
+        IReadOnlyList<ArgumentState> childInputs = childIsWriteLine
+            ? [new("text", new ArgumentValue(serializer.SerializeToElement("source-owned child"), "Literal"), null, null, null, null)]
+            : [];
+        var payload = serializer.SerializeToElement(new
+        {
+            rootActivity = new ActivityNode("body", childVersion, childInputs, []), variables = Array.Empty<object>(), outputMappings = Array.Empty<object>(), outcomeMappings = Array.Empty<object>()
+        });
+        var definition = new ActivityDefinition { Id = activityTypeKey + "-definition", ActivityTypeKey = activityTypeKey, Category = "Tests" };
+        var version = new ActivityDefinitionVersion("1.0.0", definition.Id)
+        {
+            Id = versionId, Definition = definition, ProviderKey = GraphActivityProvider.Key, ProviderSchemaVersion = "1",
+            ConsumerKey = GraphActivityProvider.RuntimeConsumerKey, ConsumerSchemaVersion = "1", DescriptorPayload = payload,
+            SourceKind = "Configuration", SourceId = "migrated-activities", Hash = "source-content-" + versionId,
+            // Schema 1 Graph content has exactly the one public outcome "done".
+            DesignFacets = [new("elsa.outcomes", "1", JsonSerializer.SerializeToElement(new { ports = new[] { new { referenceKey = "done", name = "Done", type = "outcome" } } }))]
+        };
+        var provider = new GraphActivityProvider(structures, new ActivityContractAuthoringValidator(new EmptyPublicContractTypes()));
+        var templates = new EfExecutableActivityTemplateStore(Runtime, access, new Cursor());
+        var compiler = new ActivityTemplateCompiler(new ActivityTemplateProviderCompilerRegistry([provider]), new ActivityTemplateDependencyDiscovererRegistry([provider]),
+            stores, stores, templates, new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System, [provider], Service<IActivityDataSelectionAnalyzer>(), structures);
+        var inputs = new RuntimeInputBindingCompiler(types);
+        var outputs = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
+        var command = new EfSourceActivityPublicationCommand(templates, References, stores, access);
+        return await new SourceOwnedActivityVersionPublisher(command, stores, new ExecutableNodeCompiler(structures, types, inputs, outputs), TimeProvider.System,
+                NullLogger<SourceOwnedActivityVersionPublisher>.Instance, [provider], compiler, new AcceptingValidator(), readiness: new AlwaysReady())
+            .PublishAsync(definition, version);
+    }
+    /// <summary>Accepts the draft shape; the actual Graph provider and template compiler are the gates under test.</summary>
+    private sealed class AcceptingValidator : IActivityDraftValidator
+    {
+        public ValueTask<ActivityDraftValidation> ValidateAsync(ActivityDraftValidationRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityDraftValidation(request.DraftId, request.Revision, true, DateTimeOffset.UnixEpoch, []));
+    }
+    /// <summary>This fixture composes no runtime consumers; readiness is not what the source-owned dependency tests exercise.</summary>
+    private sealed class AlwaysReady : IActivityPublicationReadiness
+    {
+        public IReadOnlyList<PublicationCapabilityReadiness> StorageReadiness(IEnumerable<RuntimeStorageDriverRequirement> requirements) => [];
+        public IReadOnlyList<PublicationCapabilityReadiness> RuntimeReadiness(IEnumerable<RuntimeRequirement> requirements) => [];
+        public IEnumerable<ActivityDiagnostic> ReadinessDiagnostics(ActivityDiagnosticSubject subject, IEnumerable<RuntimeRequirement> runtime, IEnumerable<RuntimeStorageDriverRequirement> storage) => [];
+        public string Fingerprint(string artifactHash, IEnumerable<RuntimeRequirement> runtime, IEnumerable<RuntimeStorageDriverRequirement> storage) => artifactHash;
+    }
     private sealed class EmptyPublicContractTypes : IActivityContractCapabilityCatalog
     {
         // The reusable public contract has no inputs or outputs; its actual Graph child is independently resolved.
