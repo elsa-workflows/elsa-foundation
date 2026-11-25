@@ -61,6 +61,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private readonly Action<Exception>? _onFault;
     private readonly TimeSpan _disposeDeadline;
     private readonly HashSet<Exception> _faults = new(ReferenceEqualityComparer.Instance);     // each fault is recorded once
+    private readonly HashSet<(Type, string)> _loopErrors = [];     // each distinct loop error is reported once
+    private TimeoutException? _boundExpired;
+    private Exception? _ownCancellation;     // a drain's own cancellation, kept as thrown
     private readonly CancellationTokenSource _besideEnd = new();     // A1: cancelled at the end of the stop, or on a kill
     private Task? _besideRun;
     private readonly object _halting = new();
@@ -72,8 +75,10 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// <param name="beforeRelease">Optional graceful drain after the last scheduler pass and before returning
     /// ownership. It may await work entered by a pass that has already returned.</param>
     /// <param name="onFault">Called once for each fault the node records about its stop: the stop's own fault (also one
-    /// that ends cancelled without a kill), a dispose that returned at its bound, and a fault that lands after a kill.
-    /// The host logs it; the fault is also on <see cref="LastError"/>.</param>
+    /// that ends cancelled without a kill), a dispose that returned at its bound, and a fault that lands after a kill; and
+    /// once for each distinct error its loops survive (the heartbeat, the beside loop, balancing, passes), whose repeats
+    /// are only counted (<see cref="Errors"/>). The host logs it; the fault is also on <see cref="LastError"/>. It runs
+    /// inline on the stop's path and must not block: hand slow work off.</param>
     public RuntimeNode(string node, IMembership membership, int partitions, LoopOptions? options = null, IWakeSignal? wake = null,
         Func<CancellationToken, Task>? beside = null, Func<CancellationToken, Task>? beforeRelease = null, Action<Exception>? onFault = null)
     {
@@ -149,7 +154,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             catch (OperationCanceledException) when (exit.IsCancellationRequested) { break; }
             catch (Exception e)
             {
-                RecordError(e);    // the host counts a failed heartbeat as missed; anything else is a bug
+                RecordLoopError(e);    // the host counts a failed heartbeat as missed; anything else is a bug
             }
             try { await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, (long)every.TotalMilliseconds - (Now - started))), exit); }
             catch (OperationCanceledException) { break; }
@@ -162,7 +167,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         catch (OperationCanceledException) when (_besideEnd.IsCancellationRequested) { }
         catch (Exception e)
         {
-            RecordError(e);
+            RecordLoopError(e);
         }
     }
 
@@ -176,7 +181,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             catch (OperationCanceledException) when (kill.IsCancellationRequested) { break; }
             catch (Exception e)
             {
-                RecordError(e);
+                RecordLoopError(e);
             }
             Signal();       // a scope taken gets its first pass at once
             var ms = Math.Max(0, (long)_options.BalanceEvery.TotalMilliseconds - (Now - started));
@@ -240,8 +245,8 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         using (deadline.Token.Register(_kill.Cancel))
             try { await halted.WaitAsync(bound.Token); }
             catch (Exception) { }     // a fault is recorded by the halt itself; the bound's cancellation is noted below
-        if (!halted.IsCompleted)
-            RecordFault(new TimeoutException($"The dispose returned {DisposeGrace.TotalSeconds:0.#} s after its deadline while the killed stop had not ended."));
+        if (!halted.IsCompleted)     // one instance, so a second dispose of the same stuck node records and logs nothing new
+            RecordFault(_boundExpired ??= new TimeoutException($"The dispose returned {DisposeGrace.TotalSeconds:0.#} s after its deadline while the killed stop had not ended."));
     }
 
     // The longest delay a CancellationTokenSource accepts; a deadline beyond it is treated as infinite.
@@ -252,11 +257,12 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         deadline == Timeout.InfiniteTimeSpan || deadline > LongestDelay - grace ? Timeout.InfiniteTimeSpan : deadline + grace;
 
     /// <summary>
-    /// A dispose deadline is positive or infinite; anything else is refused when the node or its host is made. One past the
-    /// longest delay a timer accepts (about 49.7 days) is treated as infinite.
+    /// A dispose deadline is positive or infinite; anything else is refused when the node or its host is made. One whose
+    /// bound (the deadline plus <see cref="DisposeGrace"/>) passes the longest delay a timer accepts (about 49.7 days) is
+    /// treated as infinite, so the kill and the bound agree.
     /// </summary>
     public static TimeSpan ValidDisposeDeadline(TimeSpan deadline) =>
-        deadline == Timeout.InfiniteTimeSpan || deadline > LongestDelay ? Timeout.InfiniteTimeSpan
+        deadline == Timeout.InfiniteTimeSpan || deadline > LongestDelay - DisposeGrace ? Timeout.InfiniteTimeSpan
         : deadline > TimeSpan.Zero ? deadline
         : throw new ArgumentOutOfRangeException(nameof(deadline), deadline, "LoopOptions.DisposeDeadline must be positive or infinite.");
 
@@ -279,7 +285,8 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             var node = (RuntimeNode)state!;
             if (stopped.IsFaulted) node.RecordFault(stopped.Exception!.InnerException ?? stopped.Exception);
             else if (!node._kill.IsCancellationRequested)
-                node.RecordFault(new OperationCanceledException("The node's stop ended cancelled although no kill or deadline asked for it."));
+                node.RecordFault(Volatile.Read(ref node._ownCancellation) ??
+                    new OperationCanceledException("The node's stop ended cancelled although no kill or deadline asked for it."));
         }, this, CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         return halted;
     }
@@ -322,6 +329,12 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 try { await draining.WaitAsync(_kill.Token); }
                 catch (OperationCanceledException) when (_kill.IsCancellationRequested) { RecordLater(draining); }
                 catch (Exception error) { drainError = error; }
+                if (drainError is OperationCanceledException own)
+                {
+                    // The drain's own cancellation, no kill: record it as thrown, now, whatever a later kill does to the stop.
+                    Volatile.Write(ref _ownCancellation, own);
+                    RecordFault(own);
+                }
             }
 
             // A kill during shutdown leaves remaining ownership to expire instead of returning it as clean. So does a
@@ -366,6 +379,16 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// <summary>What the loop caught that was not a cancellation: zero unless something is broken.</summary>
     public long Errors => Interlocked.Read(ref _errors);
     public Exception? LastError => Volatile.Read(ref _lastError);
+
+    // A loop survived an error: counted always, reported once per distinct error so a repeating one does not flood.
+    private void RecordLoopError(Exception error)
+    {
+        RecordError(error);
+        lock (_loopErrors)
+            if (!_loopErrors.Add((error.GetType(), error.Message))) return;
+        try { _onFault?.Invoke(error); }
+        catch (Exception) { }
+    }
 
     private void RecordError(Exception error)
     {
@@ -448,7 +471,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             catch (Exception e)
             {
                 // The kernel catches what its store throws; anything else is a bug the loop must survive and count.
-                RecordError(e);
+                RecordLoopError(e);
                 try { await Task.Delay(TimeSpan.FromMilliseconds(100), exit); }      // no spin on a bug that throws every time
                 catch (OperationCanceledException) { break; }
             }
