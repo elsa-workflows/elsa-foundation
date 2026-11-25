@@ -70,7 +70,7 @@ publishes or deploys.
 | P-4 | Sample | `extensions/Elsa3/tests/Migration/Sample/Elsa3.Migration.Sample/Elsa3.Migration.Sample.csproj` and `extensions/Elsa3/tests/Migration/Sample/Tests/Elsa3.Migration.Sample.Tests.csproj` (the paths the architecture guard derives from the project names); marked regions `// catalog:case-NN begin` / `// catalog:case-NN end` (R-3, [contracts/catalog-entry.md](contracts/catalog-entry.md)). |
 | P-5 | Check | `tools/skills/check_migration_skill.py`, run with `--self-test` and then for real next to the catalog link check in `ci.yml`; `plugins/**` is documentation-only in `tools/ci/change_scope.py` (R-5). |
 | P-6 | Versions | `SKILL.md` lists the report schema versions it reads; the plan records the path and commit of the user's clone, from which the tool and the migration host run; no tool version is stamped anywhere (R-4). |
-| P-7 | Report | The skill reads only the fields in [contracts/report-consumption.md](contracts/report-consumption.md); any gap is raised on spec 1237's PR, not solved here. |
+| P-7 | Report | The skill reads only the fields in [contracts/report-consumption.md](contracts/report-consumption.md); any gap is raised as an amendment to spec 1237's contracts (`specs/1237-elsa3-migration-cli/contracts/`), not solved here. |
 
 ## Project Structure
 

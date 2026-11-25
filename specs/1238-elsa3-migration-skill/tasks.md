@@ -83,7 +83,7 @@ is final only after T014. All live in `Sample/Elsa3.Migration.Sample/` and
 
 - [ ] T018 [US3] Write `skill/porting-catalog.md`: an introduction (how to use a case, the verdicts, apply cases in
   order), then cases 01–19 in the [entry shape](contracts/catalog-entry.md) with the FR-014 verdicts and the R-2
-  evidence turned into plain guidance. Case 14 states the replaced-global rules of research R-2. *Port* "after" blocks are copied from the sample regions; *redesign* parts name
+  evidence turned into plain guidance. Case 14 states the replaced-global rules of research R-2 and lists the functions Elsa 3 defined itself that a host function may take over (R-6). *Port* "after" blocks are copied from the sample regions; *redesign* parts name
   the alternatives and offer no workaround code. Case 17 is an *interview*, once per driver type: restate the
   questions and goals of the Elsa 3 storage-driver migration guide in `docs/migration/` (secret, bulky data, another
   store, no reason), verify the Elsa 4 features it names in the code, and link the guide for further reading. Elsa 3 "before" examples are written for the catalog, synthetic.
@@ -102,7 +102,7 @@ is final only after T014. All live in `Sample/Elsa3.Migration.Sample/` and
 - [ ] T021 [US1] Write `skill/SKILL.md`: front matter per [contracts/adapters.md](contracts/adapters.md); then, in
   order, the privacy statement (FR-005, FR-006: what reaches the AI provider; ask before each new raw definition or
   source file, naming the file and the JSON path), what the skill does and does not do (FR-021), "read the plan first" (FR-007), asking for and recording the clone's path and commit when the plan has none (FR-004), the `.agents/skills/` copy instruction ([contracts/adapters.md](contracts/adapters.md)),
-  the prerequisite check, the `dotnet run` invocation from spec 1237's command-line contract with the project path under the clone and absolute export and output paths, the build-failure rule (FR-022), the handoff's two host settings with absolute paths under the output folder of the last report (FR-020), the four stages (FR-008–FR-012, R-6 searches, the report fields of
+  the prerequisite check, the `dotnet run` invocation from spec 1237's command-line contract with the project path under the clone and absolute export and output paths, the build-failure rule (FR-022), the handoff's two host settings with absolute paths under the output folder of the last report (FR-020), the four stages (FR-008–FR-012, R-6 searches and the Elsa 3 built-in rule, the report fields of
   [contracts/report-consumption.md](contracts/report-consumption.md)), the version check (R-4), the handoff
   (FR-020), and the edge cases of the spec as plain rules. No diagnostic code literal; read code, message and
   guidance from the report.

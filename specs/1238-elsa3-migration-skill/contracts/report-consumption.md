@@ -2,8 +2,8 @@
 
 Spec 1237 owns the schema (`specs/1237-elsa3-migration-cli/contracts/report.schema.json`) and the command line
 (`contracts/cli.md` there). This list is what the skill depends on; field names are 1237's. The skill refuses an
-unknown schema version and ignores unknown properties. A missing item is raised on spec 1237's pull request, not
-worked around here.
+unknown schema version and ignores unknown properties. A missing item is raised as an amendment to spec 1237's
+contracts, not worked around here.
 
 | Need | Used for |
 |---|---|
