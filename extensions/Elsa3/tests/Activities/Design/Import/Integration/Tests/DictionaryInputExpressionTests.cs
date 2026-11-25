@@ -12,14 +12,17 @@ namespace Elsa3.Activities.Design.Import.Integration.Tests;
 /// </summary>
 public sealed class DictionaryInputExpressionTests
 {
-    [Fact]
-    public async Task A_script_on_Elsa3_response_headers_publishes_and_sets_the_headers()
+    [Theory]
+    [InlineData("return { 'X-Demo': ['one', 'two'] };", new[] { "one", "two" })]
+    public async Task A_script_on_Elsa3_response_headers_publishes_and_sets_the_headers(string script, string[] expected)
     {
         await using var host = await Elsa3ImportHost.StartAsync(withHttp: true);
         var collection = JsonNode.Parse(Elsa3ImportHost.Collection("http-response-content-type"))!.AsArray();
-        collection[0]!["root"]!["activities"]![1]!["responseHeaders"] = JsonNode.Parse("""
-            { "typeName": "HttpHeaders", "expression": { "type": "JavaScript", "value": "return { 'X-Demo': ['one', 'two'] };" } }
-            """);
+        collection[0]!["root"]!["activities"]![1]!["responseHeaders"] = new JsonObject
+        {
+            ["typeName"] = "HttpHeaders",
+            ["expression"] = new JsonObject { ["type"] = "JavaScript", ["value"] = script }
+        };
         var import = await ImportAsync(host, collection, "http-response-content-type-v1");
         await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import, "workflowVersionId"));
 
@@ -27,7 +30,7 @@ public sealed class DictionaryInputExpressionTests
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"{(int)response.StatusCode}: {body}");
-        Assert.Equal(["one", "two"], response.Headers.GetValues("X-Demo"));
+        Assert.Equal(expected, response.Headers.GetValues("X-Demo"));
     }
 
     [Theory]
@@ -37,6 +40,9 @@ public sealed class DictionaryInputExpressionTests
     {
         await using var host = await Elsa3ImportHost.StartAsync();
         var collection = JsonNode.Parse(Elsa3ImportHost.Collection("dispatch-target", "dispatch-caller"))!.AsArray();
+        // Elsa 4 dispatches only inputs the target declares.
+        var target = collection.Single(source => (string?)source!["id"] == "dispatch-target-v1")!;
+        target["inputs"] = new JsonArray(new JsonObject { ["name"] = "Name", ["type"] = "String" });
         var caller = collection.Single(source => (string?)source!["id"] == "dispatch-caller-v1")!;
         caller["root"]!["activities"]![0]!["input"] = new JsonObject
         {
