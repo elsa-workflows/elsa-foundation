@@ -66,6 +66,13 @@ export async function typedCollectionCompletionJourney(page: Page, info: TestInf
   await expect(editor).toBeFocused();
   await page.keyboard.insertText("variables.orders[0].");
   await settled("variables.orders[0].");
+  // After autosave the compact editor still shows the caret, so a suggestion list can open beside it.
+  await expect.poll(() => editor.evaluate(content => {
+    const scroller = content.closest(".cm-scroller")!, line = content.querySelector(".cm-line")!;
+    const range = document.createRange(); range.selectNodeContents(line);
+    const end = range.getBoundingClientRect().right, visible = scroller.getBoundingClientRect();
+    return end > visible.left && end <= visible.right + 1;
+  }), { message: "The end of the typed path is inside the compact editor's visible area" }).toBe(true);
   await complete("variables.orders[0].");
   await expect(list()).toBeVisible();
   layout.push(await editor.evaluate(content => {

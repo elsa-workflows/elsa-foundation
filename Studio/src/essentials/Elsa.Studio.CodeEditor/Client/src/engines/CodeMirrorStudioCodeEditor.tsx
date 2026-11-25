@@ -154,6 +154,8 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       current.revision++;
       current.state = createEntryState(latest, current);
       view.setState(current.state);
+      // A new state resets the scroll position; keep the caret of a field being edited in view.
+      if (view.hasFocus) view.dispatch({ scrollIntoView: true });
       void loadLanguageSupport(view, latest.document.language, current);
     } else if (latest.document.value !== view.state.doc.toString() && latest.document.value !== current.runtime.lastEmittedValue) {
       view.dispatch({
@@ -180,7 +182,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     // Signature help is selection-driven. Re-dispatch the current selection when a delayed
     // authoring context replaces the initial local-only providers so the visible document can
     // immediately acquire the newly available signature.
-    view.dispatch({ selection: view.state.selection });
+    view.dispatch({ selection: view.state.selection, scrollIntoView: view.hasFocus });
   }, [props.completionProvider, props.completions, props.hoverProvider, props.signatureProvider]);
 
   return (
