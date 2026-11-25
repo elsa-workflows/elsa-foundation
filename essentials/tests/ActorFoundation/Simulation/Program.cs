@@ -47,6 +47,12 @@ if (args.Contains("--contract-actors"))
 if (args.Contains("--contract-native"))
     return await ContractNativeWorkload.Run(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
         Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws, NativeSwitch.Flaws);
+if (args.Contains("--schedule-check"))
+{
+    var failed = false;
+    await ScheduleChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--native-tenant-effects-check"))
 {
     var failed = false;

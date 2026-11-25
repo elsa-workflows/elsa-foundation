@@ -662,7 +662,7 @@ public sealed class Flowchart : CompositeActivity
     /// the run enters it, whatever the node ids.
     /// </summary>
     internal static bool IsEntry(Node flowchart, Node child) =>
-        child.Type == typeof(HttpEndpoint) && !flowchart.Connections.Any(connection => connection.Target == child.Id);
+        (child.Type == typeof(HttpEndpoint) || child.Type == typeof(Timer) || child.Type == typeof(Cron)) && !flowchart.Connections.Any(connection => connection.Target == child.Id);
 
     private static string KindOf(Gateway gateway) => gateway switch
     {
