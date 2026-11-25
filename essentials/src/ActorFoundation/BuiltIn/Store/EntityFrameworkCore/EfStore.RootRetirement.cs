@@ -104,6 +104,24 @@ public sealed partial class EfStore
                         (db.RetiredOperatorReplies ??= []).Add(new(row.Id, new(route, Root.Tenant)));
                 }
             }
+            if (db.UsesRootReplyProtocol)
+            {
+                // #5756: a held direct input still pending here is answered once, as an operator command is: the in-memory
+                // reference refuses an input that reaches a retired row (RetiredCreation), which its caller reads as "missing".
+                // Direct admission also share-locks the root, so this lock fixes these callers too.
+                var held = await db.Messages.FromSqlInterpolated($"""
+                    SELECT * FROM "Messages" WHERE "InboxScope" = {occurrence} AND "Target" = {Root.Actor}
+                        AND "Partition" = {Root.Partition} AND NOT "Done" AND "ReplyTo" IS NOT NULL
+                        AND "Id" NOT LIKE 'operator/%'
+                    ORDER BY "Seq" FOR UPDATE
+                    """).AsNoTracking().ToListAsync(token);
+                foreach (var row in held)
+                {
+                    var message = PostgresRootAdmission.DecodeDirect(row, Root.Reference, replies: true);
+                    if (message.ReplyTo is { } route)
+                        (db.RetiredOperatorReplies ??= []).Add(new(row.Id, new(route, Root.Tenant)));
+                }
+            }
 
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL
