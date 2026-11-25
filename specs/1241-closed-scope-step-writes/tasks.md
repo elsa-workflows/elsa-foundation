@@ -17,7 +17,7 @@ Tests are xunit only. `[P]` = can run in parallel (different files).
 - [x] T005 `StepVariableCommit`: on suspension apply row intents; on completion skip row intents already applied; row
   records advance invocation bases and join its variable writes.
 - [x] T006 Invoke and resume handlers: apply session row intents before the capture projection, pass the overlay, route
-  a `Fault` session row lost update through `rowLostUpdateFault`.
+  a `Fault` session row lost update through `rowLostUpdateFault`. *Done. On the invoke path the session's row writes apply ahead of the capture projection; a `Fault` lost update skips the projection and reaches the step through `StepVariableCommit.TryApplyAsync` (the `stepLostUpdate` branch), not `rowLostUpdateFault`, with the same result. Only the resume path is tested: an inline step's base cannot go stale before it commits (spec 1221 FR-021).*
 - [x] T007 Run tests (end to end through a published graph activity): US1 scenarios 1–5, US2 scenarios 1–6, nested
   body, loop inside body, caller variable of the same name unchanged (SC-005). *Done in `GraphBodyStepWriteTests` (Activities.Behavioral), over hand-built placed boundaries, not through publication. US2 AS2 is covered on the resume path (warning and `Fault`); the digest exception under `Fault` is the shared commit rule and is not repeated. Not covered: a loop inside a body (a loop item stays read-only through the existing iteration-frame refusal); a sensitive body variable (a graph variable declares no protection of its own; the row write combines policies and hides the digest in `ClosedScopeRowCommit`, as a row capture does); an operator retry or re-execute of a faulted body step (it runs the step again through the same handlers).*
 
