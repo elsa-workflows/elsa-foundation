@@ -427,9 +427,10 @@ public sealed class GraphActivityProvider(
 
         var projection = activityStructureService.ProjectInputs(node);
         var consumedUnused = projection.ConsumedInputKeys.Except(projection.Inputs.Where(input => input.Definition is null).Select(input => input.ReferenceKey), StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
-        return node.Inputs.Where(input => !consumedUnused.Contains(input.ReferenceKey))
+        // Exact reads leave a wrongly cased argument list unbound; ValidateAsync refuses it as malformed.
+        return (node.Inputs ?? []).Where(input => !consumedUnused.Contains(input.ReferenceKey))
             .Select(x => new ActivityContractMemberUsage("Input", x.ReferenceKey, "Bound"))
-            .Concat(node.Outputs.Select(x => new ActivityContractMemberUsage("Output", x.ReferenceKey, "Bound")))
+            .Concat((node.Outputs ?? []).Select(x => new ActivityContractMemberUsage("Output", x.ReferenceKey, "Bound")))
             .Where(x => !string.IsNullOrWhiteSpace(x.ReferenceKey))
             .Distinct()
             .OrderBy(x => x.MemberKind, StringComparer.Ordinal)
