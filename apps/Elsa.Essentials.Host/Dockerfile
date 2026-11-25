@@ -101,7 +101,9 @@ COPY --from=build /app/publish ./
 #   /app/.nuplane   Nuplane reconciliation state
 #   /app/data       SQLite files meant to outlive the container (mount a named volume here and point
 #                   ConnectionStrings__Elsa at it, e.g. "Data Source=/app/data/elsa-essentials.db")
-#   *.db            the default SQLite store, elsa-essentials.db in the content root
+#                   In Production also point the OpenIddict token store there:
+#                   CShells__Shells__default__Features__FoundationIdentityOpenIddict__ConnectionString
+#   *.db            the default SQLite stores in the content root: elsa-essentials.db and, in Production, elsa-identity.db
 # The non-root runtime user needs write access to them. The Data Protection key ring is not among them: unless
 # Elsa:DataProtection:EntityFrameworkCore:Enabled keeps it in the platform database, ASP.NET Core keeps it in the
 # runtime user's home directory, which no volume covers, so a recreated container signs everyone out
