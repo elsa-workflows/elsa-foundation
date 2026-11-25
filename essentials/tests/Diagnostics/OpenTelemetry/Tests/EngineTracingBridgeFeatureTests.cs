@@ -41,13 +41,18 @@ public sealed class EngineTracingBridgeFeatureTests
         var startupTask = Assert.IsType<BridgeStartupTask>(scope.ServiceProvider.GetRequiredService<IStartupTask>());
         var terminator = Assert.Single(scope.ServiceProvider.GetServices<IShellTerminator>().OfType<BridgeTerminator>());
 
+        var bridge = provider.GetRequiredService<EngineTracingBridge>();
+        Assert.Same(bridge, scope.ServiceProvider.GetRequiredService<EngineTracingBridge>());
+
         await startupTask.ExecuteAsync(CancellationToken.None);
+        Assert.True(bridge.IsAttached);
         await terminator.TerminateAsync(CancellationToken.None);
+        Assert.False(bridge.IsAttached);
         // Stop re-arms Start, so the same singleton attaches again on the next activation.
         await startupTask.ExecuteAsync(CancellationToken.None);
+        Assert.True(bridge.IsAttached);
         await terminator.TerminateAsync(CancellationToken.None);
-
-        Assert.Same(provider.GetRequiredService<EngineTracingBridge>(), scope.ServiceProvider.GetRequiredService<EngineTracingBridge>());
+        Assert.False(bridge.IsAttached);
     }
 
     private sealed class NullIngestor : IOpenTelemetryIngestor

@@ -3,6 +3,7 @@ using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +30,9 @@ namespace Elsa.Diagnostics.OpenTelemetry.Workflows;
 /// contract the OTLP/HTTP receiver uses — so the batch flows through redaction, the store, and the live feed unchanged.
 /// </para>
 /// </remarks>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Diagnostics")]
+[ManifestFeatureCategory("Observability")]
 [ShellFeature(
     name: "DiagnosticsOpenTelemetryEngineBridge",
     DisplayName = "Diagnostics: OpenTelemetry Engine Bridge",
@@ -36,9 +40,9 @@ namespace Elsa.Diagnostics.OpenTelemetry.Workflows;
     DependsOn = new object[] { "DiagnosticsOpenTelemetry", "WorkflowsRuntimeTracing" })]
 // Must be public: CShells feature discovery scans exported types only, so an internal feature class never
 // enters the runtime feature catalog and is silently dropped from every shell that requests it.
-public sealed class EngineTracingBridgeFeature : IShellFeature
+public class EngineTracingBridgeFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<EngineTracingBridge>();
         services.AddScoped<IStartupTask, BridgeStartupTask>();

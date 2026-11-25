@@ -23,7 +23,7 @@ package. The Workbench enables it in `shells.json`.
 
 ## What it registers
 
-- `EngineTracingBridge`, one per shell. It attaches an in-process `ActivityListener` to the engine source. When the
+- `EngineTracingBridge`, one per shell that enables the feature. It attaches an in-process `ActivityListener` to the engine source. The listener is process-wide and filters by source name only, so two shells that both enable the feature each ingest the other's engine spans. When the
   outermost drain span of a trace stops and no other engine span of that trace is open, it folds the trace's spans into
   one `OpenTelemetryBatch` and hands it to `IOpenTelemetryIngestor`, the contract the OTLP receiver uses, so the batch
   goes through redaction, the store and the live feed unchanged. Spans that never sit under a drain, such as the

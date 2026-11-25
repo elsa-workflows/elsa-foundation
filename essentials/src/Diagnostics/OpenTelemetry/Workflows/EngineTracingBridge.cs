@@ -83,6 +83,9 @@ internal sealed class EngineTracingBridge
         public bool Closed;
     }
 
+    /// <summary>Whether the listener is attached to the engine source.</summary>
+    internal bool IsAttached => Volatile.Read(ref _listener) is not null;
+
     public void Start()
     {
         if (Interlocked.Exchange(ref _started, 1) == 1)
