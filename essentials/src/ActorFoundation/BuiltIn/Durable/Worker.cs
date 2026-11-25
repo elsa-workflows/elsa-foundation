@@ -280,6 +280,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool Owns => _held.Count != 0;
     public long Evicted { get; private set; }
     public int Idle => _slots.Values.Count(s => s.Loaded && !s.Busy && s.Inbox.Count == 0 && s.Replies.Count == 0);    // for tests
+    internal int InboxCountOf(string instance) => _slots.TryGetValue(Canonical(instance), out var slot) ? slot.Inbox.Count : 0;    // for tests
 
     /// <summary>The instances held in memory only, never written (decision 4). For tests.</summary>
     public IEnumerable<string> Unwritten => _slots.Where(s => s.Value.Unwritten).Select(s => s.Key);

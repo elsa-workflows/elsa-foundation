@@ -104,6 +104,13 @@ internal sealed partial class ActorAdapter
             : clear ? facts.Clearing != control.Id || facts.Mark != mark ? "selection" : null
             : facts.Clearing is not null ? "clearing" : facts.Mark != mark ? "selection"
             : facts.Outstanding || deletes && facts.Residue ? "outstanding" : null;
+        // S5b-3b: a Delete runs ProtectsDeletion at its Open, as the in-memory OpenParkDelete does. A protected root, or one
+        // whose protection cannot be read, is refused with its Park and kept rows as they are. A single page is its own Open.
+        if (reason is null && !clear && control.Kind == Durable.Kinds.Delete)
+            reason = DeletionRefusal(RootHeader(row), row.State, input.Services.Now) switch
+            {
+                null => null, "Protected" => "protected", _ => "unavailable"
+            };
         if (reason is null && !facts!.FitsPage)
         {
             var page = new Durable.TurnOutcome(input.Actor)
@@ -116,13 +123,13 @@ internal sealed partial class ActorAdapter
         }
         if (reason is null)
         {
+            var cleared = facts!.Cleared + facts.Arrived + facts.Consumed;
+            if (control.Kind == Durable.Kinds.Delete) return DeleteParkedRoot(input, row, refused, cleared, clear);
             var ended = row with
             {
                 Status = Durable.InstanceStatus.Cancelled, Suspended = false, Revision = revision,
                 FoundationDispatchHeader = header with { RefreshTerminal = roots.RequiresCommittedTerminal }
             };
-            var cleared = facts!.Cleared + facts.Arrived + facts.Consumed;
-            if (control.Kind == Durable.Kinds.Delete) return DeleteParkedRoot(input, row, refused, cleared);
             // S5b-3a: a Terminate-then-delete retires the ended root in the same commit, unless the row is protected then;
             // a protected row is terminated and kept, as the in-memory drain's Complete does.
             var kept = control.Operator.RootThenDelete && DeletionRefusal(RootHeader(ended), row.State, input.Services.Now) is not null;
@@ -154,19 +161,24 @@ internal sealed partial class ActorAdapter
         if (control.ReplyTo is not null)
             outcome.ReplyTo(refused, new Durable.CreationResult(input.Actor, reason switch
             {
-                "selection" => "StaleSelection", "outstanding" => "ParkOutstanding", "clearing" => "ResolutionOpen", _ => "Parked"
+                "selection" => "StaleSelection", "outstanding" => "ParkOutstanding", "clearing" => "ResolutionOpen",
+                "protected" => "Protected", "unavailable" => "ProtectionUnavailable", _ => "Parked"
             }, control.TargetCreation, row.Creation), creationRefusal: true);
         return outcome;
     }
 
     // S5b-3b: a Delete of a parked root has no end of its own (observability, "Delete during a drain"). The commit that
-    // leaves nothing kept retires the root still Faulted, unless the row is protected then: the Park then resolves as a
-    // discard would (DT-4), Faulted under a new terminal mark and journalled as protected. That is the end state only.
-    private Durable.TurnOutcome DeleteParkedRoot(Durable.TurnInput input, Durable.InstanceRow row, Durable.Delivery command, long cleared)
+    // leaves nothing kept retires the root still Faulted. A single page checked protection at its Open; the last page of a
+    // clearing runs ProtectsDeletion once more, as the in-memory Complete does. Protection that appeared during the clearing
+    // resolves the Park as a discard would (DT-4, the end state only): Faulted under a new terminal mark, journalled as
+    // protected. An answer that cannot be read neither deletes nor discards: the control's refusal fails closed in the store,
+    // so the owner stands down, the clearing stays open and the next owner runs the control again.
+    private Durable.TurnOutcome DeleteParkedRoot(Durable.TurnInput input, Durable.InstanceRow row, Durable.Delivery command, long cleared,
+        bool completes)
     {
         var revision = checked(row.Revision + 1);
-        var header = row.FoundationDispatchHeader!;
-        if (DeletionRefusal(RootHeader(row), row.State, input.Services.Now) is null)
+        var protection = completes ? DeletionRefusal(RootHeader(row), row.State, input.Services.Now) : null;
+        if (protection is null)
         {
             var marker = Durable.CreationProtocol.Retire(row);
             var deleted = new Durable.TurnOutcome(input.Actor)
@@ -177,19 +189,19 @@ internal sealed partial class ActorAdapter
             deleted.ReplyTo(command, "deleted");
             return deleted;
         }
-        var discarded = new Durable.TurnOutcome(input.Actor)
+        var unavailable = protection != "Protected";
+        return new Durable.TurnOutcome(input.Actor)
         {
             Expected = row.Revision, Row = row with
             {
-                Revision = revision, FoundationDispatchHeader = header with { RefreshTerminal = roots!.RequiresCommittedTerminal }
+                Revision = revision,
+                FoundationDispatchHeader = unavailable ? row.FoundationDispatchHeader
+                    : row.FoundationDispatchHeader! with { RefreshTerminal = roots!.RequiresCommittedTerminal }
             },
-            Revision = revision, Status = row.Status, Consumed = [command], Unsubscribe = true,
-            Journal = Durable.Json.Write(new { Outcome = "protected", Disposition = "discarded", Operation = command.Message.Id, Cleared = cleared })
+            Revision = revision, Status = row.Status, Consumed = [command], Unsubscribe = !unavailable,
+            Journal = unavailable ? Durable.Json.Write(new { Outcome = "refused", Operation = command.Message.Id, Reason = "unavailable" })
+                : Durable.Json.Write(new { Outcome = "protected", Disposition = "discarded", Operation = command.Message.Id, Cleared = cleared })
         };
-        if (command.Message.ReplyTo is not null)
-            discarded.ReplyTo(command, new Durable.CreationResult(input.Actor, "Protected", command.Message.TargetCreation, row.Creation),
-                creationRefusal: true);
-        return discarded;
     }
 
     // S5b-3a: a command that names a Park the root no longer has, because the root ended before it ran, is refused as a

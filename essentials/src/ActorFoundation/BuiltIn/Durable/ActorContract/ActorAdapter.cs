@@ -81,7 +81,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     // A qualified root's Park holds while it is Faulted without a terminal mark. S5b-3b: a protected Delete ends a parked root
     // Faulted under its terminal mark; that root has ended, so it neither withholds nor keeps an input.
     private static bool IsRootParked(Durable.InstanceRow row) =>
-        row.Status == Durable.InstanceStatus.Faulted && row.FoundationDispatchHeader?.Terminal is null;
+        row is { Status: Durable.InstanceStatus.Faulted, Retired: false } && row.FoundationDispatchHeader?.Terminal is null;
 
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {

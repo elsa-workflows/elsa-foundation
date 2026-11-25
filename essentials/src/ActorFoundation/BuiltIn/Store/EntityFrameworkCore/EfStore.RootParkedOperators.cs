@@ -12,9 +12,15 @@ public sealed partial class EfStore
     {
         var command = turn.FoundationRootOperator!;
         // A clearing's own control is never refused: consuming it would strand the clearing, so its refusal fails closed.
+        // S5b-3b: so does the last page of a Delete whose protection cannot be read; the next owner runs the control again.
+        if (command.Operator is { RootParkClear: true } &&
+            turn.Journal == Json.Write(new { Outcome = "refused", Operation = command.Id, Reason = "unavailable" }))
+            throw new NotSupportedException("A Delete's clearing cannot end while the root's deletion protection is unavailable.");
+        // A Delete is also refused at its Open for a protected root or one whose protection cannot be read.
         string[] reasons = command.Operator?.RootParkMark is null ? ["parked"]
-            : command is { Kind: Kinds.Terminate or Kinds.Delete, Operator: { RootParkFacts: not null, RootParkClear: false } }
-                ? ["selection", "outstanding", "clearing"] : [];
+            : command is { Kind: Kinds.Terminate, Operator: { RootParkFacts: not null, RootParkClear: false } } ? ["selection", "outstanding", "clearing"]
+            : command is { Kind: Kinds.Delete, Operator: { RootParkFacts: not null, RootParkClear: false } }
+                ? ["selection", "outstanding", "clearing", "protected", "unavailable"] : [];
         // The refusal keeps the Suspended flag: a Park on a suspended root keeps it, as the in-memory reference does.
         if (turn.Row is not { Status: InstanceStatus.Faulted, Retired: false, FoundationDispatchHeader: { Terminal: null } header } row ||
             turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
@@ -68,7 +74,9 @@ public sealed partial class EfStore
                 ? Json.Write(new { Outcome = "protected", Disposition = "terminated", Operation = command.Id, Cleared = total })
                 : Json.Write(new { Outcome = "terminated", Operation = command.Id, Cleared = total })
             : command.Operator.RootParkClear ? null : Json.Write(new { Outcome = "clearing", Operation = command.Id, Cleared = facts.Page });
+        // A one-page Delete checked protection at its Open, so only a clearing's last page discards.
         if (row is not { Status: InstanceStatus.Cancelled or InstanceStatus.Faulted } || (row.Status == InstanceStatus.Cancelled) != (ends && !discards) ||
+            discards && !command.Operator.RootParkClear ||
             ends && !discards && row.Suspended || turn.Journal != journal ||
             turn != new TurnCommit(root.Actor, row, expected, turn.Consumed, turn.Done, turn.Sent, turn.Subscribed, turn.Unsubscribed,
                 turn.Journal, Unsubscribe: ends, Held: turn.Held) { FoundationRootOperator = command } ||
