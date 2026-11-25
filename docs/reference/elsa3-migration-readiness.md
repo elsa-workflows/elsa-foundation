@@ -82,7 +82,7 @@ Its variables are its own, but Correlate, Set Name and Finish act on that callin
 
    | In the reusable body | Fix in Elsa 3 |
    |---|---|
-   | Set Variable | Nothing outside the body sees its variables. If nothing in the body reads the variable, delete the Set Variable. If a value only passes from one activity to the next, capture that activity's output into the variable instead. Otherwise wait for #3023, or make the workflow regular (below). |
+   | Set Variable | Nothing outside the body sees its variables. If nothing in the body reads the variable, delete the Set Variable. If a value only passes from one activity to the next, capture that activity's output into the variable instead, or set it from a Run JavaScript activity's script (`setVariable('name', value)`), which a reusable body supports (spec 1241). Otherwise wait for #3023, or make the workflow regular (below). |
    | Set Output | If no caller reads the output, delete it. If one does, wait for #3023, or make the workflow regular (below). |
    | Correlate | It sets the **caller's** correlation id. Delete it, and add a Correlate with the same value to each caller, directly before the activity. |
    | Set Name | It names the **caller's** instance. Delete it, and add a Set Name with the same value to each caller, directly before or after the activity. |

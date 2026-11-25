@@ -23,11 +23,3 @@ internal static class ClosedScopeCaptureBoundary
             .FindClosedScopeBoundaryAsync(workflowExecutionId, activityExecutionId, node, cancellationToken);
 }
 
-/// <summary>Creates a step's <see cref="ClosedScopeRowCommit"/>; null when the host stores no durable values.</summary>
-internal static class ClosedScopeRowCommits
-{
-    public static ClosedScopeRowCommit? Create(IServiceProvider serviceProvider) =>
-        serviceProvider.GetService<IDurableValueStateStore>() is { } store
-            ? new ClosedScopeRowCommit(store, serviceProvider.GetRequiredService<IRuntimeDurableValueStorageDriverRegistry>())
-            : null;
-}

@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services.Values;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Runtime.Services;
 
@@ -95,4 +96,13 @@ internal sealed class ClosedScopeRowCommit
         _overlay[versioned.DurableValueId] = versioned;
         return (change with { State = versioned, Metadata = versioned.Metadata }, VariableWriteRecord.IsRecorded(write.Decision) ? record : null);
     }
+}
+
+/// <summary>Creates a step's <see cref="ClosedScopeRowCommit"/>; null when the host stores no durable values.</summary>
+internal static class ClosedScopeRowCommits
+{
+    public static ClosedScopeRowCommit? Create(IServiceProvider serviceProvider) =>
+        serviceProvider.GetService<IDurableValueStateStore>() is { } store
+            ? new ClosedScopeRowCommit(store, serviceProvider.GetRequiredService<IRuntimeDurableValueStorageDriverRegistry>())
+            : null;
 }
