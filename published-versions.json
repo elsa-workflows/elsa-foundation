@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "38f8f076bdec60bb4b2f7b490edb58c459a85f40",
+  "last_publish_commit": "99e6f01b32e885b227eaa5c3b58bb07126ce2d3c",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -149,13 +149,13 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Hosting",
-      "version": "4.0.4-preview",
-      "commit": "d8365955a8f337200aa3b984784847c74fe0365c"
+      "version": "4.0.5-preview",
+      "commit": "99e6f01b32e885b227eaa5c3b58bb07126ce2d3c"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
-      "version": "4.0.8-preview",
-      "commit": "38f8f076bdec60bb4b2f7b490edb58c459a85f40"
+      "version": "4.0.9-preview",
+      "commit": "99e6f01b32e885b227eaa5c3b58bb07126ce2d3c"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Runtime",
