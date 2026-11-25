@@ -39,16 +39,19 @@ ADR 0092 D-9 no new commit rule
    digest and writer; puts the result in the overlay; returns the row change and record.
 3. Session row writes: re-encode the envelope with the row's storage driver and keep its metadata and protection
    minimum. Source `SessionChange`.
-4. Order: on completion, the invoke and resume handlers apply the session's row intents into a fresh overlay just
-   before the capture projection and pass the overlay into `ProjectAsync`; `StepVariableCommit` then applies frame
-   intents only. On suspension, `StepVariableCommit` applies row intents itself. A `Fault` lost update on a session row
-   write goes through the existing `rowLostUpdateFault` path.
+4. Order: each handler creates one `ClosedScopeRowCommit` per step and passes it to `StepVariableCommit.TryApplyAsync`
+   and to `ProjectAsync`. The session's row intents apply once into its overlay, before the capture projection: the
+   invoke handler applies them itself just before the projection (`StepVariableCommit.ApplyRowIntentsAsync`, cached), the
+   resume handler through `TryApplyAsync`, which runs before its projection; on suspension `TryApplyAsync` applies them.
+   A `Fault` lost update or a failure on a session row write skips the capture projection and faults the step through
+   `TryApplyAsync` (the step lost-update and failure branches), not `rowLostUpdateFault`.
 5. Records: session row records join the invocation's variable writes and advance its bases
    (`InvocationVariableBases.Advance`), so its own capture does not conflict.
 
 ### Publish (US3)
 
-1. `IStepVariableWriteAnalyzer` (new, `Validations.Core`): `AnalyzeAsync(root, rootVariables, catalog, ct)` returning
+1. `IStepVariableWriteAnalyzer` (new, `Validations.Core`): `AnalyzeAsync(root, rootVariables, ct)` (the catalog is
+   injected into the implementation) returning
    `StepVariableWriteFacts`, reference errors, overlap warnings and refused literal script writes. The workflow
    `ValueFlowValidator` keeps calling the internal `StepVariableWriteValidation` (the implementation delegates to it).
 2. `StepVariableWriteValidation` also reports refused literal script writes (`ScriptVariableReadPlan.RefusedLiteralWrites`)
@@ -61,11 +64,11 @@ ADR 0092 D-9 no new commit rule
 
 ### Converter (US4)
 
-1. `Elsa3ValueFlowLowerer`: `scriptWritesVariables: true` for reusable workflows.
-2. `Elsa3ExpressionRewriter`: delete `ReusableVariableWriteGuidance` and its branches. A generated setter of a reusable
-   input already refuses ("a workflow input or an activity result"). `setVariable('<input>', v)` in a reusable workflow
-   gets a dedicated refusal (`VF-IMP-005`): it writes the reusable workflow's input `<input>`; guidance: declare a
-   variable, initialize it from the input, write that variable.
+1. `Elsa3ValueFlowLowerer`: reusable scripts write variables; the rewriter's `scriptWritesVariables` parameter became
+   `reusableWorkflow: accessors.IsReusable`, which now only keeps running-workflow state refused.
+2. `Elsa3ExpressionRewriter`: delete `ReusableVariableWriteGuidance` and its branches. A write to a reusable workflow's
+   input, `setVariable('<input>', v)` or its generated setter, gets a dedicated refusal (`VF-IMP-005`): it writes the
+   reusable workflow's input `<input>`; guidance: declare a variable, initialize it from the input, write that variable.
 3. Tests: the reusable refusal theory turns into conversion assertions; the input-write cases pin the refusal.
 4. FR-010a (added in review): a reusable workflow with a variable and an input of one name refuses a script whose source
    mentions the name, or that `ScriptMayWriteVariables` finds may write variables (anything but a generated setter)

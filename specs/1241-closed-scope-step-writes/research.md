@@ -40,9 +40,10 @@ in two large handlers for no gain.
 
 ## R-4 Write history, protection, snapshots
 
-Row records already carry source, writer, base/current/new version and digest; a refused (`Fault`) row write refuses
+Row records already carry source, writer, base/current/new version and digest; a refused (`Fault`) row capture refuses
 the completion through the handler's `rowLostUpdateFault` path and is not recorded for acceptance. Session row writes
-use source `SessionChange` and the same path. As for row captures, no value snapshot is kept and the record takes the
+use source `SessionChange`; a refused one refuses the step through the step's own lost-update path, before any capture
+is projected. As for row captures, no value snapshot is kept and the record takes the
 written value's protection (combined with the stored row's), the documented row limitations.
 
 ## R-5 Isolation

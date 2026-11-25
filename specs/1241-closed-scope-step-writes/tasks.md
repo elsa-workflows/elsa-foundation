@@ -34,7 +34,7 @@ Tests are xunit only. `[P]` = can run in parallel (different files).
 
 - [x] T011 `Elsa3ValueFlowLowerer`: reusable scripts write variables; remove `ReusableVariableWriteGuidance` paths.
 - [x] T012 Reusable input writes: dedicated refusal for `setVariable('<input>', v)`; generated input setter keeps its
-  refusal. Tests. *Also FR-010a (added in review): in a workflow where a variable and an input share a name, a script whose
+  refusal. Tests. *Done: both forms get the dedicated input-write refusal (`VF-IMP-005`).* *Also FR-010a (added in review): in a workflow where a variable and an input share a name, a script whose
   source mentions the name, or that may write variables other than through a generated setter, is ambiguous
   (`VF-IMP-002`); tested in `Elsa3VariableWriteConversionTests`.*
 - [x] T013 Convert the reusable refusal tests into conversion assertions; `ApplyDiscount` conversion + import run test
