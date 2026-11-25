@@ -587,12 +587,16 @@ class VerdictTests(unittest.TestCase):
             request.assert_not_called()
 
     def test_inherited_credentials_and_store_overrides_are_not_forwarded(self):
+        # The Core Preview's switches and store reach a host only through core_preview.py's own composition.
         with patch.dict(os.environ, {'ConnectionStrings__Elsa': 'private', 'OPENAI_API_KEY': 'private', 'PATH': '/bin',
+                                     'ConnectionStrings__KernelCorePreview': 'private', 'Elsa__CorePreview__Enabled': 'true',
+                                     'Elsa__CorePreview__Publications': 'true',
                                      'DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE': 'false',
                                      'DOTNET_USE_POLLING_FILE_WATCHER': '1'}, clear=True):
             env = acceptance.clean_environment()
         self.assertNotIn('OPENAI_API_KEY', env)
         self.assertNotIn('ConnectionStrings__Elsa', env)
+        self.assertFalse([key for key in env if 'CorePreview' in key], 'The ordinary composition must not inherit the Core Preview')
         self.assertEqual('/bin', env['PATH'])
         self.assertEqual('false', env['DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE'])
         self.assertEqual('1', env['DOTNET_USE_POLLING_FILE_WATCHER'])
