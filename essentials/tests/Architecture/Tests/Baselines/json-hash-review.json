@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "consumerSignature": "20c84be5ef7ac35ec8b284c4103221246c9f7ab07777669d09881d44767e11bc",
-  "authoritySignature": "15eb1c75a5e6ec9b3181b5b7faa1c046312c01a62fc77fafed44a95c6df1a705",
+  "consumerSignature": "a654edd4c0667fd3d4710e06b97b858feae60846a47a925bd9d81989e3e7414c",
+  "authoritySignature": "fc3886c27da4089c03a62fa19816a42e3f722e3f1b19fa2fdf0d63d38a285e80",
   "owners": [
     {
       "identity": "Acme.Processing|Acme.Processing.ProcessingDashboardSource::GroupKey(System.Collections.Generic.IReadOnlyList`1[System.String],System.Collections.Generic.IReadOnlyDictionary`2[System.String,Elsa.Studio.Dashboard.Core.Models.DashboardValue])->System.String",
@@ -8706,5 +8706,5 @@
       ]
     }
   ],
-  "goldenSignature": ""
+  "goldenSignature": "6cf882d4264b4494e26ae315920a6c5243bb9515365b4009145c57366031157a"
 }
