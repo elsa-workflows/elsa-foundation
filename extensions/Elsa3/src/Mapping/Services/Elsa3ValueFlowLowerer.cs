@@ -895,6 +895,20 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             return;
         }
 
+        // Spec 1241: Elsa 3 declared a reusable workflow's inputs as variables too, so a name a variable and an input share
+        // named two variables there. A script that may write variables and mentions such a name, directly or through an
+        // alias or helper, could write either: refuse it rather than guess (VF-IMP-002).
+        if (accessors.IsReusable &&
+            SharedVariableInputNames(definition).FirstOrDefault(name => expression.Value.Contains(name, StringComparison.OrdinalIgnoreCase)) is { } shared &&
+            expressionRewriter.ScriptMayWriteVariables(expression.Value, ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient)))
+        {
+            diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                $"The script writes variables and uses '{shared}', which names both a variable and an input of this reusable workflow; Elsa 3 declared the input as a variable too.",
+                $"Rename the variable or the input '{shared}' in the Elsa 3 workflow before import.",
+                $"{property.JsonPath}.expression.value"));
+            return;
+        }
+
         var possibleOutcomes = PossibleOutcomesKey(property.Activity);
         var rewrite = expressionRewriter.Rewrite(
             "JavaScript",
@@ -1729,6 +1743,15 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
     private static JsonElement CreateArgument(JsonElement original, string expressionType, JsonElement expressionValue)
         => Elsa3TypedValues.WithExpression(original, expressionType, expressionValue, removeMemoryReference: true);
+
+    /// <summary>The names a variable and an input of the workflow share, compared as the converter resolves both.</summary>
+    private static IReadOnlyList<string> SharedVariableInputNames(Elsa3WorkflowDefinition definition) =>
+        definition.Variables
+            .Select(variable => variable.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name) &&
+                           definition.Inputs.Any(input => string.Equals(input.Name, name, StringComparison.OrdinalIgnoreCase)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
     private static Elsa3MigrationDiagnostic CreateDiagnostic(
         DiagnosticScope input,

@@ -2146,6 +2146,14 @@ public sealed class Elsa3ExpressionRewriter(
                 return true;
             if (_ambiguousMemberTarget is not null)
                 return false;
+            // A getter that resolved to an input whose name a variable shares (spec 1241).
+            if (resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor)) is
+                    { Succeeded: true, Binding: WorkflowRequestExpressionParameterBinding getterInput } &&
+                NamesVariableAndInput(getterInput.MemberKey))
+            {
+                _ambiguousMemberTarget = AmbiguousWithInput("a member change", getterInput.MemberKey);
+                return false;
+            }
             // In a reusable workflow, where Elsa 3 declared inputs as variables too, report a getter whose name is ambiguous as
             // that (VF-IMP-002) rather than as a change of an ambient value.
             if (IsReusable && resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor)).Issue is
