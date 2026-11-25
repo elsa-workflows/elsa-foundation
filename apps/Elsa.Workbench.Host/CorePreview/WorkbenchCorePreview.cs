@@ -1,9 +1,12 @@
+using CShells.Lifecycle;
 using Elsa.ActorFoundation.Hosting;
+using Elsa.Workbench.Readiness;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Native;
 using Kernel.Native.Preview;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using WorkflowActor = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Elsa.Workbench.CorePreview;
@@ -44,15 +47,32 @@ internal static class WorkbenchCorePreview
         var javaScript = new Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions();
         configuration.GetSection("Elsa:CorePreview:JavaScript").Bind(javaScript);
         var scripts = new JintNativeScripts(Elsa.Expressions.JavaScript.Jint.Services.JintScriptEvaluators.Create(javaScript));
-        var model = new NativeExecutionModel(workflows, new NativeExecutionOptions
-        {
-            Scripts = scripts,
-            Http = new NativeHttpOptions { Client = NativeHttpOptions.CreateClient() },
-        });
-        var actor = new WorkflowActor([model]);
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
-        services.AddHostedService(provider => new PostgresPreviewHostedService(Open, node, actor, Environment.FailFast,
-            logger: provider.GetRequiredService<ILogger<PostgresPreviewHostedService>>()));
+        services.AddHostedService(provider =>
+        {
+            // Host expressions (JavaScript, Liquid) run on the default shell's portable evaluator, in a scope of that shell.
+            var shells = provider.GetRequiredService<IShellRegistry>();
+            var shellName = provider.GetRequiredService<IOptions<ShellReadinessOptions>>().Value.DefaultShellName;
+            var expressions = new PortableNativeExpressions(() =>
+            {
+                var shell = shells.GetActive(shellName) ?? throw new NativeExpressionsUnavailableException($"The shell '{shellName}' is not active.");
+                IShellScope scope;
+                try { scope = shell.BeginScope(); }
+                catch (Exception closing) when (closing is ObjectDisposedException or InvalidOperationException)
+                { throw new NativeExpressionsUnavailableException($"The shell '{shellName}' is going away.", closing); }
+                return (scope.ServiceProvider, scope);
+            });
+            var model = new NativeExecutionModel(workflows, new NativeExecutionOptions
+            {
+                Scripts = scripts,
+                Http = new NativeHttpOptions { Client = NativeHttpOptions.CreateClient() },
+                Expressions = expressions,
+            });
+            // The node starts once the default shell is active, so its first turns find the evaluator.
+            return new ShellGatedHostedService(new PostgresPreviewHostedService(Open, node, new WorkflowActor([model]), Environment.FailFast,
+                    logger: provider.GetRequiredService<ILogger<PostgresPreviewHostedService>>()),
+                token => shells.GetOrActivateAsync(shellName, token), Environment.FailFast);
+        });
         if (configuration["Elsa:CorePreview:ReadsTenant"] is { } readsTenant)
             services.AddSingleton(new WorkbenchCorePreviewReads(Open, EmbeddedTenant.Bind(readsTenant)));
 
