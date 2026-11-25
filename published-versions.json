@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "5d2a8fd7eefdd675081363a3c47bd904b4d86b9d",
+  "last_publish_commit": "eb37af2ed978da36ce976ee0b9e6529656addcd2",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -154,8 +154,8 @@
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.PostgreSql",
-      "version": "4.0.5-preview",
-      "commit": "5d2a8fd7eefdd675081363a3c47bd904b4d86b9d"
+      "version": "4.0.6-preview",
+      "commit": "eb37af2ed978da36ce976ee0b9e6529656addcd2"
     },
     {
       "package_id": "Elsa.ActorFoundation.BuiltIn.Runtime",
@@ -1199,8 +1199,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.KernelHost",
-      "version": "4.0.3-preview",
-      "commit": "5d2a8fd7eefdd675081363a3c47bd904b4d86b9d"
+      "version": "4.0.4-preview",
+      "commit": "eb37af2ed978da36ce976ee0b9e6529656addcd2"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Activities",
@@ -1209,8 +1209,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Native.Model",
-      "version": "4.0.13-preview",
-      "commit": "5d2a8fd7eefdd675081363a3c47bd904b4d86b9d"
+      "version": "4.0.14-preview",
+      "commit": "eb37af2ed978da36ce976ee0b9e6529656addcd2"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
