@@ -237,8 +237,9 @@ activities file).
   Workbench and Studio images get.
 - **FR-016**: A compose file MUST start both images with mounts for `appsettings.json`, the packages folder, the
   `migrated/` folder and the data volume, and MUST need no other configuration than the example `appsettings.json`.
-- **FR-017**: The Workbench's behaviour, its image and the S-15 acceptance on the Workbench MUST NOT change. The
-  OpenIddict token store moves from the Workbench into a shared library without changing what it does (Q10).
+- **FR-017**: The Workbench's behaviour, configuration, image mounts and compose files and the S-15 acceptance on the
+  Workbench MUST NOT change. The OpenIddict token store moves from the Workbench into a shared library without changing
+  what it does (Q10); the only difference in the Workbench image is that its assemblies include that library.
 
 **One list**
 

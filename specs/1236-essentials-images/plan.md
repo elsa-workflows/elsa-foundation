@@ -9,8 +9,8 @@
 Add one small library that holds the essentials feature list, the assemblies behind it and the settings merge; a new
 engine host that composes exactly that list and reads one user `appsettings.json`; a new Studio app with only the
 workflow designer; two Dockerfiles, their CI image jobs and a compose file. Then prove the engine with the S-15 JTest
-acceptance set, using the migration CLI's `migrated/` folder as the mounted folder. The Workbench does not
-change.
+acceptance set, using the migration CLI's `migrated/` folder as the mounted folder. The Workbench keeps its
+behaviour; its OpenIddict token store moves into a host-side library both hosts call (Q10).
 
 ## Technical Context
 
@@ -32,7 +32,7 @@ JTest acceptance run by hand (FR-019–FR-023).
 **Performance Goals**: none beyond the Workbench image's; the engine composes fewer features.
 
 **Constraints**: no Elsa 3 code in the engine image (§E2.7); composition baked and not user-visible (FR-004); the
-Workbench unchanged (FR-017); no JTest CI tier (FR-023).
+Workbench's behaviour unchanged (FR-017); no JTest CI tier (FR-023).
 
 **Scale/Scope**: about 70 engine features (R-7) and 8 Studio features (R-8); the S-15 acceptance set.
 
@@ -137,8 +137,11 @@ extensions/Elsa3/tests/JTest/ledger/runs.md   # essentials run rows (after S-15 
 ```
 
 **Structure Decision**: The list and the merge live in a library both the engine host and the migration CLI can
-reference; each host is a thin composition over existing features. Nothing in `essentials/src` other than the new
-library changes.
+reference; each host is a thin composition over existing features. The OpenIddict token store moves from `apps/Elsa.Workbench`
+(Program.cs and its OpenIddict files) into `apps/Elsa.Essentials.OpenIddict`. Besides the new projects, only tests
+change: the architecture guards (`OpenIddictPersistenceArchitectureTests`, `EfCoreDependencyGuardTests`,
+`HostProvidedPackagesGuardTests`, `ArchitectureGuardTests`) and `essentials/tests/Modularity/ProviderTests`. Nothing in
+`essentials/src` changes.
 
 ## Complexity Tracking
 

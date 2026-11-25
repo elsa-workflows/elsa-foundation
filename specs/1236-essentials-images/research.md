@@ -151,9 +151,10 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
 
 - **Decision**: the persistence resource `Elsa` points at `Data Source=/app/data/elsa.db`; every EF feature in the
   list uses that one connection (S-15 found that the Elsa 3 import must share the Activities Design store's database;
-  sharing one database avoids the same class of mismatch here). OpenIddict's token store is a separate, SQLite-only connection
-  (`FoundationIdentityOpenIddict:ConnectionString`); it moves to `/app/data/elsa-identity.db` and stays SQLite whatever
-  provider a user selects for the `Elsa` resource. `docs/docker.md` says so.
+  sharing one database avoids the same class of mismatch here). OpenIddict's token store is a separate connection
+  (`FoundationIdentityOpenIddict:ConnectionString`): SQLite by default at `/app/data/elsa-identity.db`; its own
+  `FoundationIdentityOpenIddict:Provider` setting selects SQL Server or PostgreSQL, independent of the `Elsa`
+  resource, and MySQL is refused. `docs/docker.md` says so.
   `Migrate:Policy` is `AutoMigrate` in the image, because the essentials image has no separate migration step; a user
   can set `Validate` and run migrations from CI/CD.
 - **Rationale**: the user's go-live path is one container; the data folder is the one volume they mount.
@@ -216,7 +217,8 @@ its package in the packages folder, as any other feature (FR-005, FR-007).
   `OpenIddictPersistenceArchitectureTests` forbids an `EntityFrameworkCore` folder inside or beside
   `essentials/src/Foundation/Identity/OpenIddict/` ("No EF wrapper"). A library among the hosts keeps the store
   host-owned: it is no Elsa domain package and no Elsa contract. `Workbench_owns_the_vendor_package` changes from "the
-  Workbench references `OpenIddict.EntityFrameworkCore`" to "only host projects in `apps/` reference it"; the Workbench
+  Workbench references `OpenIddict.EntityFrameworkCore`" to "only projects under `apps/` (the hosts and this host-side library) reference it, plus
+  the Identity test project pinned today"; the Workbench
   keeps its direct reference. No ADR text changes; if the coordinator reads ADR 0073 as host-*project*-owned rather than
   host-side, this needs an ADR 0073 note instead.
 - **Behaviour preserved**: the OpenIddict files depend only on `Elsa.Foundation.Identity.OpenIddict`,

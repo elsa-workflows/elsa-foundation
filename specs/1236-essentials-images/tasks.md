@@ -19,13 +19,14 @@ worktree path on Windows (MSB3030).
   both to `Elsa.Server.slnx`, register the test project as PR tier in `tools/ci/test-tiers.json`, add
   `Elsa.Essentials.Composition` and the test project to `ArchitectureGuardTests.ExpectedProjectPath` and
   `ExpectedSolutionFolder` the way `Elsa.Foundation.Host` is listed, add `Elsa.Essentials` to the host and test groupings
-  in constitution §E2.1, add the library's reviewed EF closure (it resolves EF through the listed features) to
-  `EfCoreDependencyGuardTests.AllowedEfConsumers`, and run `ArchitectureGuardTests.Project_paths_match_domain_tree_convention` (R-2).
+  in constitution §E2.1, admit the library in `EfCoreDependencyGuardTests` (it resolves EF through the listed
+  features: its name in `AllowedEfConsumers`, its reviewed package array and an arm in `ReviewedEfPackages`), and run `ArchitectureGuardTests.Project_paths_match_domain_tree_convention` (R-2).
 - [ ] T002 [P] Create `apps/Elsa.Essentials.Server/Elsa.Essentials.Server.csproj` referencing
   `Elsa.Essentials.Composition`, `Elsa.Foundation.Hosting` and the Nuplane/CShells hosting packages the Workbench uses,
   importing `apps/ComputedProductionSettings.targets` as the Workbench does; add it to
   `HostProvidedPackagesGuardTests.SharingHosts`, to `Elsa.Server.slnx`, to the guard's `ExpectedProjectPath` and
-  `ExpectedSolutionFolder`, and its reviewed EF closure to `EfCoreDependencyGuardTests.AllowedEfConsumers`.
+  `ExpectedSolutionFolder`, and admit it in `EfCoreDependencyGuardTests` (name in `AllowedEfConsumers`, reviewed
+  package array, an arm in `ReviewedEfPackages`).
 - [ ] T003 [P] Create `Studio/src/apps/Elsa.Studio.Essentials/Elsa.Studio.Essentials.csproj` modelled on
   `Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj`, referencing only the Studio modules R-8 lists; add it to
   the Studio solution.
@@ -58,9 +59,9 @@ worktree path on Windows (MSB3030).
   and platform providers, the migration policy and pruning, with neutral registration names. Make
   `apps/Elsa.Workbench/Program.cs` call the library and keep its direct `OpenIddict.EntityFrameworkCore` reference;
   repoint `essentials/tests/Modularity/ProviderTests/WorkbenchOpenIddictEngineTests.cs` and `OpenIddictEngineDatabases.cs`;
-  change `OpenIddictPersistenceArchitectureTests.Workbench_owns_the_vendor_package` to "only host projects in `apps/`
-  reference the vendor package"; add the library's reviewed EF closure to `EfCoreDependencyGuardTests` and leave the
-  Workbench's unchanged; add it to the guard's `ExpectedProjectPath`/`ExpectedSolutionFolder`. Confirm the Workbench's
+  change `OpenIddictPersistenceArchitectureTests.Workbench_owns_the_vendor_package` to "only projects under `apps/` (the hosts and the
+  host-side store library) reference the vendor package, plus the Identity test project pinned today"; admit the library in `EfCoreDependencyGuardTests` (its name in `AllowedEfConsumers`, its reviewed
+  package array and an arm in `ReviewedEfPackages`) and leave the Workbench's unchanged; add it to the guard's `ExpectedProjectPath`/`ExpectedSolutionFolder`. Confirm the Workbench's
   tests and an existing Workbench SQLite token store still migrate and issue tokens unchanged (FR-017).
 
 **Checkpoint**: the list, its assemblies and the merge exist and are guarded; the CLI spec can reference the library.
@@ -195,8 +196,8 @@ publishes `/app/migrated/workflows`.
   settings, how to add a feature, and that the composition cannot be edited.
 - [ ] T034 Regenerate the solution filters and check maps (`dotnet run --project tools/maps/Elsa.Maps.Generator -- check`;
   on Windows compare with `git diff --stat`).
-- [ ] T035 Confirm the Workbench's behaviour, its image contents, its compose files and S-15's Workbench run are
-  unchanged after the token-store move (FR-017).
+- [ ] T035 Confirm the Workbench's behaviour, configuration, image mounts, compose files and S-15's Workbench run are
+  unchanged after the token-store move, and that the image's assemblies differ only by the moved library (FR-017).
 - [ ] T036 Set the spec status to Implemented in the PR that finishes the work.
 
 ## Dependencies
