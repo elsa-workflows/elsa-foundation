@@ -3627,12 +3627,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
             _woken = true;
         }
         if (unit.Consumed is [{ Message.Operator.RootParkFacts.ClearsInPages: true }] &&
-            unit.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true && unit.Slot is { } opened &&
-            opened.Inbox.Where(item => item.Durable && !item.Taken && item.Message.Operator is null).ToArray() is { Length: > 0 } ahead)
+            unit.Journal?.StartsWith("""{"Outcome":"clearing",""", StringComparison.Ordinal) == true && unit.Slot is { } opened)
         {
-            // S5b-2: a clearing's Open withholds the root's inputs until its end; one read ahead of the Open must not be kept
-            // mid-clearing. The Open's commit marked them unseen, so the next poll reads them again under the clearing's filter.
-            foreach (var item in ahead) Forget(item);
+            // S5b-2: a clearing's Open withholds the root's direct inputs until its end; one read ahead of the Open must not be
+            // kept mid-clearing. The Open's commit marked them unseen, so the next poll reads them again under the clearing's
+            // filter, and a poll in flight brings none of the root's rows in.
+            foreach (var item in opened.Inbox.Where(item => item.Durable && !item.Taken && item.Message.Operator is null &&
+                         item.Message.InboxScope == InboxKey.FoundationOccurrenceScope).ToArray()) Forget(item);
             if (_polling && !Has(Flaw.PollRace)) _retiredRootsDuringPoll.Add(unit.Instance);
             _caughtUp = false;
             _woken = true;
