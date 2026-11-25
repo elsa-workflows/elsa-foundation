@@ -128,7 +128,7 @@ in, open a converted definition in the designer, change it and publish it.
   tasks do today. The CLI writes only definitions that converted and always writes the activities file, so this means a
   hand-edited or foreign file. This specification builds no per-file isolation.
 - **A converted workflow uses a reusable with activity dependencies.** The activities file holds it as a composite. It
-  loads only once the engine fix for source-owned composites with dependencies has landed (FR-010).
+  loads through the engine fix for source-owned composites with dependencies (FR-010).
 - **The workflows folder holds subfolders.** Only the top level is read, as JSON workflow reconciliation does today.
   The CLI writes a flat folder.
 - **The engineer's package needs a newer Elsa share than the host carries.** Nuplane refuses it, as it does for the
@@ -180,8 +180,9 @@ folder) and converted reusables in `activities/activities.json` (the activities 
   files in that feature's format. It MUST publish what it imports by default; an engineer MAY turn publishing off.
 - **FR-009**: The host MUST compose JSON activity reconciliation, reading the activities file, so the reusables the CLI
   converts to composite activities load at startup.
-- **FR-010**: Loading a source-owned composite that depends on other activities needs the engine fix for source-owned
-  composites with dependencies. This specification depends on that fix and does not deliver it.
+- **FR-010**: Loading a source-owned composite that depends on other activities relies on the engine fix for
+  source-owned composites with dependencies (PR #5685, merged into the initiative branch on 2026-11-25). This
+  specification does not change it.
 - **FR-011**: The host project MUST ship a sample `migrated/` folder with one hand-written Elsa 4 workflow (an HTTP
   trigger that writes a response) and an empty activities file. The default settings MUST point at it, so the host
   starts and US1's independent test runs without the CLI. The two settings that name the workflows folder and the
@@ -213,7 +214,8 @@ folder) and converted reusables in `activities/activities.json` (the activities 
 
 **Boundaries**
 
-- **FR-017**: The Workbench, its image, its settings and the S-15 acceptance on the Workbench MUST NOT change.
+- **FR-017**: The Workbench (`apps/Elsa.Workbench` on the initiative branch, `apps/Elsa.Workbench.Host` after the
+  main sync), its image, its settings and the S-15 acceptance on the Workbench MUST NOT change.
 
 ### Key Entities
 
@@ -226,7 +228,7 @@ folder) and converted reusables in `activities/activities.json` (the activities 
 | ID | Question | Decision |
 |---|---|---|
 | Q1 | New host or Workbench profile? | A new host (Joey, 2026-11-24). A profile would still carry every Workbench feature in the binary. |
-| Q11 | Published images, a base image and a designer-only Studio, or a host built from source? | A migration-specific ASP.NET Core project built from source with project references, with no images and no new Studio app (Joey, 2026-11-25). The audience clones the repository. The GA composition story (base, essentials profiles, images) moved to #5800. This replaces the earlier image decisions (old Q3, Q5, Q7). |
+| Q11 | Published images, a base image and a designer-only Studio, or a host built from source? | A migration-specific ASP.NET Core project built from source with project references, with no images and no new Studio app (Joey, 2026-11-25). The audience clones the repository. The GA composition story (base, essentials profiles, images) moved to #5800. This replaces the earlier image decisions: the image names (old Q3, whose number now holds the host's location), Q5 and Q7. |
 | Q2 | How do the Elsa 3 definitions reach a host that carries no Elsa 3 code? | Through the migration CLI's `migrated/` folder. Joey gave no preference; this was the recommendation. The final acceptance run therefore waits for the CLI's `inventory` command (FR-013). FR-011's sample checks the host before then. |
 | Q3 | Where does the host live, and what is it called? | `Elsa3.Migration.Host` in `extensions/Elsa3/src/Migration/Host/`, next to the rest of the Elsa 3 migration. The name says what it is for. It also keeps the host out of `apps/`, where the product and demo hosts live (`Elsa.Essentials.Host`, the Workbench). It references no Elsa 3 project (FR-003). |
 | Q4 | Does the host publish what it imports? | Yes by default, because the migrated workflows must run. Engineers can turn it off. |
@@ -254,10 +256,10 @@ folder) and converted reusables in `activities/activities.json` (the activities 
   4 templates, its exemptions and the Workbench run this specification compares with. It stays on the Workbench.
 - **The migration CLI (spec 1237, PR #5678)** writes the `migrated/` folder that FR-008 and FR-009 read, always
   including the activities file. The final acceptance run (FR-013) needs its `inventory` command. Spec 1237 was designed
-  around an image built `FROM` the essentials engine image. That image no longer exists, so how the CLI composes its
+  around an image built `FROM` the essentials engine image. That image is no longer planned, so how the CLI composes its
   assessment is now spec 1237's decision. FR-004 lets it read this host's composition by path.
-- **The engine fix for source-owned composites with activity dependencies** (PR #5685, spec 1239) is needed by US1
-  scenario 2 and by every acceptance suite whose definitions use a reusable workflow.
+- **The engine fix for source-owned composites with activity dependencies** (PR #5685, spec 1239) is merged into the
+  initiative branch. US1 scenario 2 and every acceptance suite whose definitions use a reusable workflow rely on it.
 - **Main's OpenIddict store library** (Q10) must reach the initiative branch through a main sync before implementation.
 - **[Elsa constitution](../../.specify/memory/constitution.md) §E2.7** keeps Elsa 3 behind the import boundary. The
   host references no Elsa 3 project.

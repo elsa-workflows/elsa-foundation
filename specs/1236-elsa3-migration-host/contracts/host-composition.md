@@ -25,7 +25,8 @@ migrated/
     └── activities.json        # JSON activity reconciliation format; [] when empty; always present
 ```
 
-The engineer points the host at their folder with two settings, from any standard configuration source:
+The engineer points the host at their folder with two settings, from user secrets, a git-ignored `shells.Local.json`,
+environment variables or the command line (settings in `appsettings*.json` sit below `shells.json` and can't):
 
 ```text
 CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__FolderPath=<abs path>/migrated/workflows

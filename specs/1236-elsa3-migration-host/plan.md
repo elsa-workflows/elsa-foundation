@@ -35,7 +35,7 @@ activity reconciliation, main's OpenIddict store library (R-7), and `jtest` for 
 - not published (FR-001);
 - the Workbench unchanged (FR-017);
 - no JTest CI tier (FR-016);
-- implementation waits for a main sync (R-7).
+- implementation starts after a main sync, which also renames the Workbench host and changes the guard lists (R-7).
 
 **Scale/Scope**: about 70 features (R-4); the S-15 acceptance set.
 
@@ -45,7 +45,7 @@ activity reconciliation, main's OpenIddict store library (R-7), and `jtest` for 
 
 | Gate | Status | Notes |
 |---|---|---|
-| §E2.7 Elsa 3 behind the import boundary | PASS | The host references no `Elsa3.*` project or package; a closure test checks it (R-5). |
+| §E2.7 Elsa 3 behind the import boundary | PASS with an in-unit amendment | The host references no `Elsa3.*` project or package; a closure test checks it (R-5). §E2.7 lists only import adapters and shared support, so the implementing PR names the migration host there and in the domain-tree purpose (R-11, T017). |
 | §E2.2 Runtime takes no Design reference | PASS | No runtime project changes; the host composes existing features. |
 | §E5 packaging, reserved `Elsa.Server` name | PASS | The host isn't packed or published, and doesn't take the reserved name. |
 | §E7 CI test tiers | PASS | The new test project goes into `tools/ci/test-tiers.json` as PR tier, with no child host of 2 minutes or more. |
@@ -100,27 +100,30 @@ extensions/Elsa3/src/Migration/Host/
 ├── MigrationHostEfToolingShellDefaults.cs
 ├── appsettings.json                # persistence, Nuplane feed, logging
 ├── shells.json                     # the composition (R-3, R-6)
+├── MigrationHost.cs                # Build(args), used by Program.cs and the tests (R-2)
 ├── README.md                       # local tool only; folder settings; reasons table
 ├── packages/.gitkeep               # Nuplane directory feed for the engineer's packages
 ├── migrated/
 │   ├── workflows/hello.json
 │   └── activities/activities.json  # []
-├── .gitignore                      # data/, packages/* except .gitkeep
+├── .gitignore                      # data/, packages/* except .gitkeep, shells.Local.json
 └── packages.lock.json
 
 extensions/Elsa3/tests/Migration/Host/Tests/
 └── Elsa3.Migration.Host.Tests.csproj   # R-5
 
 essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs   # host admission (R-9)
-essentials/tests/Modularity/Tests/HostProvidedPackagesGuardTests.cs # SharingHosts, if needed (R-6)
+essentials/tests/Architecture/Tests/HostProvidedPackagesGuardTests.cs   # SharingHosts (R-6)
+essentials/tests/Architecture/Tests/Support/NuplaneHostSettings.cs     # host path outside apps/ (R-6)
+.specify/memory/constitution.md, docs/reference/elsa-domain-tree.md # §E2.7 and Elsa3 purpose (R-11)
 tools/ci/test-tiers.json                                            # + the test project
 Elsa.Server.slnx, solution filters, dependency map                  # + the two projects (regenerated)
 extensions/Elsa3/tests/JTest/ledger/runs.md                         # migration-host run rows (after S-15 merges)
 ```
 
 **Structure Decision**: one thin host over existing features, in the Elsa 3 bucket because it exists for the
-migration. Nothing in `essentials/src` changes. Outside the two new projects, only the guard tests named above and
-the generated solution and map files change.
+migration. Nothing in `essentials/src` changes. Outside the two new projects, only the guard tests and their helper named above, the two
+constitution and domain-tree lines (R-11), and the generated solution and map files change.
 
 ## Complexity Tracking
 

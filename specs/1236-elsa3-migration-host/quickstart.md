@@ -24,9 +24,9 @@ dotnet run --project extensions/Elsa3/src/Migration/Host
    ```
 
 3. **Your own activities.** Add a project reference to your feature project in your clone, or put its package in the
-   host's `packages/` folder. Then add the feature to the composition in a local settings source, for example
-   `dotnet user-secrets` or an environment variable.
-4. Delete `data/` to start from an empty store.
+   host's `packages/` folder. Then add the feature to the composition in a local settings source: a git-ignored
+   `shells.Local.json` next to `shells.json`, `dotnet user-secrets`, or an environment variable.
+4. Delete `data/` to start from an empty store; the host creates it again at startup.
 
 ## See what your host needs
 
@@ -44,5 +44,5 @@ definitions list shows what the host imported.
    acceptance definitions as its migrated folder.
 2. Run `jtest run` with the S-15 Elsa 4 templates. The environment differs from the Workbench one only in base URL and
    credentials.
-3. Record the run in `extensions/Elsa3/tests/JTest/ledger/runs.md` with engine `migration-host`, and compare it with the
+3. Record the run in `extensions/Elsa3/tests/JTest/ledger/runs.md` in the ledger's existing columns (data-model.md), and compare it with the
    Workbench row for the same commit.

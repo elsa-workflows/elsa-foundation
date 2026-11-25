@@ -24,16 +24,15 @@ files and records this feature defines.
 
 ## Acceptance run record
 
-A row in `extensions/Elsa3/tests/JTest/ledger/runs.md`, next to the S-15 rows:
+A row in `extensions/Elsa3/tests/JTest/ledger/runs.md`, in the S-15 ledger's existing columns (spec 1235
+data-model.md):
 
-| Field | Meaning |
+| Column | Value for a migration-host run |
 |---|---|
-| Date | When the run happened |
-| Engine | `migration-host` |
+| Engine | `Elsa 4` |
 | Commit | The initiative head the host was built from |
-| CLI version | The migration CLI version that wrote `migrated/` |
-| jtest version | The `jtest` tool version |
-| Result per suite | Pass, fail, or exempt with its S-15 reason |
-| Compared with | The S-15 Workbench run on the same commit |
+| Source | `Elsa3.Migration.Host`, the migration CLI version that wrote `migrated/`, and whether spec 1207 is implemented on the commit |
+| Environment file, jtest, Scope, Result, Receipt | As spec 1235 defines them |
+| Notes | The Workbench run on the same commit it is compared with |
 
 No secret values. A failed run stays recorded.
