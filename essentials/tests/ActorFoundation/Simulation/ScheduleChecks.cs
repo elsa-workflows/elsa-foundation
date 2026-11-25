@@ -33,30 +33,47 @@ internal static class ScheduleChecks
         .Add(Workflow("flow-tick", Flowchart("flow",
             [Event("first", "never"), Timer("t", "00:01:00"), Set("after", "output", "timer")],
             [new("t", "after")])))
-        // A Timer that is not where a run begins is no schedule.
-        .Add(Workflow("mid", Sequence("root", Set("a", "x", 1), Timer("t", "PT1M"))));
+        // The start path is followed through containers.
+        .Add(Workflow("nested", Sequence("root", Sequence("inner", Timer("t", "PT1H"), Set("o", "output", "nested")))));
 
     public static async Task Run(Action<bool, string> check)
     {
         var registry = Registry();
         var table = new NativeSchedules(registry, CronError);
-        check(table.All.Select(s => $"{s.Workflow}/{s.Node}/{s.Kind}").SequenceEqual(["cron-tick/c/cron", "flow-tick/t/interval", "tick/t/interval"]),
-            $"a Timer or Cron where a run begins is a schedule, and one in the middle of a workflow is none ({string.Join(", ", table.All.Select(s => s.Key))})");
+        check(table.All.Select(s => $"{s.Workflow}/{s.Node}/{s.Kind}").SequenceEqual(["cron-tick/c/cron", "flow-tick/t/interval", "nested/t/interval", "tick/t/interval"]),
+            $"a Timer or Cron where a run begins is a schedule, also down the start path through containers ({string.Join(", ", table.All.Select(s => s.Key))})");
+        check(Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("mid", Sequence("root", Set("a", "x", 1), Timer("t", "PT1M")))))) &&
+              Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("joined", Flowchart("flow", [Set("a", "x", 1), Timer("t", "PT1M")], [new("a", "t")]))))),
+            "a Timer away from where a run begins is refused, as the old core refuses to publish it");
         check(Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("zero", Timer("t", "PT0S"))))) &&
+              Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("tiny", Timer("t", "PT0.0001S"))))) &&
+              Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("huge", Timer("t", "P99999999Y"))))) &&
               Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("bad", Timer("t", "soon"))))) &&
               Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("computed", Node<Kernel.Native.Timer>("t", ("Interval", Binding.Expr("'PT1M'")))))) ) &&
               Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("cron", Cron("c", "* * *"))), CronError)) &&
               Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("no-calendar", Cron("c", EveryHalfMinute))))),
-            "an interval that is not positive or does not read, a computed one, and a cron expression the host does not read are refused");
+            "an interval under a second, one that does not read or overflows, a computed one, and a cron expression the host does not read are refused");
+        check(Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule(RecurringSchedule.Interval, "soon"), "s")) &&
+              Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule(RecurringSchedule.Interval, "PT0.0001S"), "s")) &&
+              Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule("weekly", "x"), "s")),
+            "setting a schedule that does not read is refused before anything is sent");
 
         var model = new NativeExecutionModel(registry);
-        await using var driver = new ContractWorkload.InMemoryDriver(4, Flaw.None, new PublicWorkflow([model]), alsoTypes: [new ScheduleActor(new Calendar())]);
+        await using var driver = new ContractWorkload.InMemoryDriver(4, Flaw.None, new PublicWorkflow([model]),
+            authorizeOperator: (_, _) => true, alsoTypes: [new ScheduleActor(new Calendar())]);
         var scope = ContractScopes.Bind("schedules");
         await driver.TakeAll();
 
-        async Task<Contract.AdmissionOutcome[]> SetAll() =>
-            [.. await Task.WhenAll(table.All.Select(s =>
-                ScheduleActor.SetAsync(driver.Ingress, scope, s.Key, "v1", new RecurringSchedule(s.Kind, s.Value), s.Start()).AsTask())).ContinueWith(t => t.Result.Select(a => a.Outcome))];
+        async Task<Contract.AdmissionOutcome[]> SetAll()
+        {
+            var outcomes = new List<Contract.AdmissionOutcome>();
+            foreach (var s in table.All)
+            {
+                await ScheduleActor.RegisterRunAsync(driver.Ingress, scope, s.StartKey, s.Start());
+                outcomes.Add((await ScheduleActor.SetAsync(driver.Ingress, scope, s.Key, 1, new RecurringSchedule(s.Kind, s.Value), s.StartKey)).Outcome);
+            }
+            return [.. outcomes];
+        }
         async Task<List<Contract.ActorView>> List(string? type)
         {
             var all = new List<Contract.ActorView>();
@@ -87,7 +104,7 @@ internal static class ScheduleChecks
 
         var created = await SetAll();
         await driver.PassAll(4);
-        check(created.All(o => o == Contract.AdmissionOutcome.Accepted) && (await List(ScheduleActor.ActorType)).Count == 3 && (await Runs("tick")).Finished == 0,
+        check(created.All(o => o == Contract.AdmissionOutcome.Accepted) && (await List(ScheduleActor.ActorType)).Count == 4 && (await Runs("tick")).Finished == 0,
             "setting the schedules creates one schedule actor each, and nothing runs before its first occurrence");
 
         // The clock moves in jumps, each an owner change, so every occurrence below fires after its timer was restored.
@@ -136,30 +153,67 @@ internal static class ScheduleChecks
         check(late == 5 && quiet == 5 && (await Runs("tick")).Finished == 6,
             $"after five missed intervals the due occurrence fires once, and the next comes an interval later ({late}, {quiet}, {(await Runs("tick")).Finished})");
 
-        // A changed schedule replaces the timer; a stopped one fires no more.
+        // A newer revision replaces the schedule, an older one changes nothing, and an unchanged one keeps its timer.
         var tick = table.All.Single(s => s.Workflow == "tick");
-        var changed = await ScheduleActor.SetAsync(driver.Ingress, scope, tick.Key, "v2", new RecurringSchedule(RecurringSchedule.Interval, "PT2M"), tick.Start());
+        ValueTask<Contract.Admission> SetTick(long revision, string interval) =>
+            ScheduleActor.SetAsync(driver.Ingress, scope, tick.Key, revision, new RecurringSchedule(RecurringSchedule.Interval, interval), tick.StartKey);
+        var changed = await SetTick(10, "PT2M");
         await driver.PassAll(4);
         await Step(61_000);
         var halfway = (await Runs("tick")).Finished;
         await Step(61_000);
         check(changed.Outcome == Contract.AdmissionOutcome.Accepted && halfway == 6 && (await Runs("tick")).Finished == 7,
             $"a changed interval replaces the timer: nothing at the old interval, one run at the new ({halfway}, {(await Runs("tick")).Finished})");
-        var back = await ScheduleActor.SetAsync(driver.Ingress, scope, tick.Key, "v3", new RecurringSchedule(RecurringSchedule.Interval, "PT1M"), tick.Start());
+        var back = await SetTick(20, "PT1M");
+        var older = await SetTick(15, "PT5M");
         await driver.PassAll(4);
         await Step(61_000);
         var restored = (await Runs("tick")).Finished;
-        var changedAgain = await ScheduleActor.SetAsync(driver.Ingress, scope, tick.Key, "v2", new RecurringSchedule(RecurringSchedule.Interval, "PT2M"), tick.Start());
-        check(back.Outcome == Contract.AdmissionOutcome.Accepted && restored == 8 && changedAgain.Outcome == Contract.AdmissionOutcome.Duplicate,
-            $"a change back to an earlier schedule applies, and a repeat of an earlier operation is a duplicate ({back.Outcome}, {restored}, {changedAgain.Outcome})");
-        await Step(61_000);
-        var stopped = await ScheduleActor.StopAsync(driver.Ingress, scope, tick.Key, "stop-tick");
+        var repeat = await SetTick(10, "PT2M");
+        check(back.Outcome == Contract.AdmissionOutcome.Accepted && older.Outcome == Contract.AdmissionOutcome.Accepted && restored == 8 &&
+              repeat.Outcome == Contract.AdmissionOutcome.Duplicate,
+            $"a change back applies, an older revision sent late changes nothing, and a repeat is a duplicate ({restored}, {repeat.Outcome})");
+        await Step(30_000);
+        await SetTick(30, "PT1M");     // republished with the schedule unchanged, halfway to the next occurrence
+        await driver.PassAll(4);
+        await Step(31_000);
+        check((await Runs("tick")).Finished == 9, $"an unchanged schedule set again keeps its pending occurrence ({(await Runs("tick")).Finished})");
+
+        // Stop disarms the schedule and leaves it to be set again; Terminate ends it for good.
+        var stopped = await ScheduleActor.StopAsync(driver.Ingress, scope, tick.Key, 40);
         await driver.PassAll(4);
         await Step(10 * 60_000);
-        var schedule = (await List(ScheduleActor.ActorType)).Single(v => v.Header.TypeData.Contains("\"PT1M\"", StringComparison.Ordinal));
-        check(stopped.Outcome == Contract.AdmissionOutcome.Accepted && (await Runs("tick")).Finished == 9 && schedule.Header.Status == Contract.ActorStatus.Finished,
-            $"a stopped schedule ends and starts no more runs ({(await Runs("tick")).Finished}, {schedule.Header.Status})");
+        var schedule = (await List(ScheduleActor.ActorType)).Single(v => v.Header.TypeData.Contains("\"Revision\":30", StringComparison.Ordinal));
+        check(stopped.Outcome == Contract.AdmissionOutcome.Accepted && (await Runs("tick")).Finished == 9 && schedule.Header.Status == Contract.ActorStatus.Running,
+            $"a stopped schedule starts no more runs and stays, idle ({(await Runs("tick")).Finished}, {schedule.Header.Status})");
+        var rearmed = await SetTick(50, "PT1M");
+        await driver.PassAll(4);
+        await Step(61_000);
+        check(rearmed.Outcome == Contract.AdmissionOutcome.Accepted && (await Runs("tick")).Finished == 10,
+            $"a stopped schedule set again fires again ({(await Runs("tick")).Finished})");
+        var tickActor = (await List(ScheduleActor.ActorType)).Single(v => v.Header.TypeData.Contains("\"Revision\":50", StringComparison.Ordinal)).Header.Ref;
+        var terminated = await driver.Ingress.SendAsync(scope, new Contract.Target.Ref(tickActor), "terminate-tick", Contract.Kinds.Terminate);
+        await driver.PassAll(4);
+        await SetTick(60, "PT1M");
+        await driver.PassAll(4);
+        await Step(5 * 60_000);
+        var ended = (await List(ScheduleActor.ActorType)).FirstOrDefault(v => v.Header.Status != Contract.ActorStatus.Running);
+        check(terminated.Outcome == Contract.AdmissionOutcome.Accepted && ended?.Header.Status == Contract.ActorStatus.Cancelled && (await Runs("tick")).Finished == 10,
+            $"Terminate ends the schedule, and a Set after it starts nothing ({terminated.Outcome} {terminated.Reason}, {ended?.Header.Status}, {(await Runs("tick")).Finished})");
+
+        // A run registration removed (an unpublished definition) leaves the occurrence nothing to start.
+        var flowSchedule = table.All.Single(s => s.Workflow == "flow-tick");
+        var flowBefore = (await Runs("flow-tick")).Finished;
+        await ScheduleActor.RegisterRunAsync(driver.Ingress, scope, flowSchedule.StartKey, null);
+        await Step(2 * 61_000);
+        check((await Runs("flow-tick")).Finished == flowBefore, $"without its run registered, an occurrence starts nothing ({flowBefore}, {(await Runs("flow-tick")).Finished})");
         check((await Runs("tick")).Running == 0 && (await Runs("flow-tick")).Running == 0 && (await Runs("cron-tick")).Running == 0, "every scheduled run finished");
+    }
+
+    private static bool Argument(Func<ValueTask<Contract.Admission>> set)
+    {
+        try { set().AsTask().GetAwaiter().GetResult(); return false; }
+        catch (ArgumentException) { return true; }
     }
 
     private static bool Refused(Action build)
