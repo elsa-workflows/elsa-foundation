@@ -1766,7 +1766,7 @@ internal static class HostJobDrainChecks
     }
 
     // The dispose bound expires while a beside loop holds the stop. The stop's drain fault is recorded when the drain
-    // throws it, before the bound; the bound's expiry is recorded too. Each is logged once.
+    // throws it, before the bound; the bound's expiry is recorded after it. Each is logged once, in that order.
     private static async Task BoundExpiryFaultAsync()
     {
         var fixture = new Fixture();
@@ -1785,9 +1785,10 @@ internal static class HostJobDrainChecks
         beside.TrySetResult();
         var clock = Stopwatch.StartNew();
         while (!logged.Any(entry => ReferenceEquals(entry, fault)) && clock.Elapsed < Timeout) await Task.Delay(20);
-        await Task.Delay(100);
+        try { await node.StopAsync().AsTask().WaitAsync(Timeout); }     // joins the halt: it has ended, so a late duplicate would show
+        catch (Exception) { }
         Check(disposed is null && atBound is TimeoutException && logged.Count == 2 &&
-            logged.Count(entry => entry is TimeoutException) == 1 && logged.Count(entry => ReferenceEquals(entry, fault)) == 1,
+            ReferenceEquals(logged.First(), fault) && logged.Last() is TimeoutException,
             $"a dispose returns at its bound, and the stop's drain fault and the bound's expiry are each recorded and logged once ({atBound?.GetType().Name ?? "nothing"} at the bound, logged [{string.Join(", ", logged.Select(entry => entry.GetType().Name))}])");
     }
 

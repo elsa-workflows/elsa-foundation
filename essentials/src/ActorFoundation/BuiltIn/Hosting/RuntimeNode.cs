@@ -474,6 +474,10 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// <summary>Run on the node's scheduler, one task at a time with the loop and what it started.</summary>
     private Task OnNode(Func<Task> work) => Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.DenyChildAttach, _scheduler).Unwrap();
 
+    /// <summary>The node was killed: by a stop's deadline, a dispose deadline or <see cref="KillAsync"/>. True from the moment
+    /// the kill is requested, before anything the kill cancels has run.</summary>
+    internal bool Killed => _kill.IsCancellationRequested;
+
     private long Now => _clock.ElapsedMilliseconds;
     private long _errors;
     private Exception? _lastError;
