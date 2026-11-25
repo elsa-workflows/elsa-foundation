@@ -5419,6 +5419,8 @@ button.wf-reference-select {
   max-height: min(760px, calc(100vh - 56px));
   min-height: 440px;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  /* A long editor line scrolls inside the editor. An auto column would widen the dialog past its clip instead. */
+  grid-template-columns: minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius-md);
@@ -5485,6 +5487,7 @@ button.wf-reference-select {
 
 .wf-property-editor-body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   gap: 10px;
   padding: 14px;

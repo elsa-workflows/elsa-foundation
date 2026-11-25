@@ -35,6 +35,7 @@ import { activityDataMembersJourney } from "./activityDataMembersJourney";
 import { activityDataSourcesJourney } from "./activityDataSourcesJourney";
 import { activityExpressionInsertionJourney, expressionModulePreservationJourney } from "./activityExpressionInsertionJourney";
 import { numericBindingJourney } from "./numericBindingJourney";
+import { typedVariableCompletionJourney } from "./typedVariableCompletionJourney";
 import { typedCollectionCompletionJourney } from "./typedCollectionCompletionJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
 import { structuredLogsReadabilityJourney } from "./structuredLogsReadabilityJourney";
@@ -1085,6 +1086,9 @@ test("insert JavaScript activity data", async ({ page }, info) => {
 });
 test("insert Liquid activity data", async ({ page }, info) => {
   await activityExpressionInsertionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); }, "Liquid");
+});
+test("complete typed variable members in JavaScript", async ({ page }, info) => {
+  await typedVariableCompletionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 test("complete typed collection items in JavaScript", async ({ page }, info) => {
   await typedCollectionCompletionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });

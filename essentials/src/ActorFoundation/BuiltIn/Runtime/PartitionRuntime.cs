@@ -317,6 +317,46 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         finally { EndWork(); }
     }
 
+    /// <summary>
+    /// Host administration's release (tenancy.md, "release a partition"): give up the listed scopes this node holds, as a
+    /// balancing round gives up its surplus, through a set host in one release and through any other host one at a time.
+    /// A scope not held, or one being activated, released or passed, is skipped, as the balancing round skips it. Each
+    /// scope given up is free at its epoch, and placement decides who takes it next, this node included; that take finds
+    /// no death. Returns the scopes actually given up; none once a stop has begun, since the stop gives up every scope.
+    /// One at a time, each scope is checked again just before its give-up, since a pass may start while an earlier one
+    /// awaits the store. A cancellation stops before the next scope and returns those already given up; a set release
+    /// that the cancellation interrupts returns those its one store call freed.
+    /// </summary>
+    internal async Task<IReadOnlyList<int>> ReleaseAsync(IReadOnlyCollection<int> scopes, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scopes);
+        if (!BeginWork()) return [];
+        try
+        {
+            var held = scopes.Where(scope => (uint)scope < (uint)partitions).Distinct().Order()
+                .Where(scope => Owns(scope) && !_activating[scope] && !_releasing[scope] && !_passing[scope]).ToArray();
+            if (held.Length > 1 && _host is IScopeSetRelease { SupportsSetRelease: true } setHost)
+            {
+                // The set is marked releasing before its one store call, so no pass starts on it meanwhile.
+                IScopeActivation[] activations = [.. held.Select(Activation).OfType<IScopeActivation>()];
+                try { await ReleaseSetAsync(setHost, activations, cancellationToken); }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+                return [.. activations.Where(activation => !activation.Active).Select(activation => activation.Scope)];
+            }
+            var released = new List<int>();
+            foreach (var scope in held)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                // An earlier give-up awaited the store, and a pass or activation may have started on this scope meanwhile.
+                if (_passing[scope] || _activating[scope] || _releasing[scope] || !Owns(scope)) continue;
+                await GiveUpAsync(scope);
+                released.Add(scope);
+            }
+            return released;
+        }
+        finally { EndWork(); }
+    }
+
     private async Task GiveUpAsync(int scope)
     {
         if (_releasing[scope] || Activation(scope) is not { } activation) return;

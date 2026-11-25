@@ -75,6 +75,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private Task? _besideRun;
     private readonly object _halting = new();
     private volatile bool _gone;
+    private Task _releases = Task.CompletedTask;     // host-admin releases under way, joined by the halt (under _halting)
 
     /// <param name="beside">K1b slice 5b: a loop of the host's own that runs beside the node's loops, off the node's
     /// scheduler, and ends when a stop has ended or on a kill: layer 2's watchdog (<c>Watchdog.RunAsync</c>), which closes a stuck
@@ -200,6 +201,30 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             try { await Task.Delay(TimeSpan.FromMilliseconds(ms), exit); }
             catch (OperationCanceledException) { break; }
         }
+    }
+
+    /// <summary>
+    /// Host administration's release of some partitions: on the node's scheduler, through
+    /// <see cref="PartitionRuntime.ReleaseAsync"/>. Each one given up is free at its epoch, and placement decides who takes
+    /// it next: the next balancing round may give it back to this node when it is below its share. Nothing is given up once
+    /// a stop or kill has begun, and a stop joins a release under way before its own drain. A kill ends the release; what
+    /// is still owned then runs out by its lease.
+    /// </summary>
+    /// <returns>The listed partitions this node held and gave up.</returns>
+    internal async ValueTask<IReadOnlyList<int>> ReleaseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(partitions);
+        using var release = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _kill.Token);
+        Task<IReadOnlyList<int>> run;
+        lock (_halting)
+        {
+            if (_halted is not null) return [];
+            run = Task.Factory.StartNew(() => _runtime.ReleaseAsync(partitions, release.Token), CancellationToken.None,
+                TaskCreationOptions.DenyChildAttach, _scheduler).Unwrap();
+            // The halt joins it before the turn drain; its outcome is the caller's.
+            _releases = Task.WhenAll(_releases, run).ContinueWith(static _ => { }, TaskScheduler.Default);
+        }
+        return await run;
     }
 
     /// <summary>
@@ -364,6 +389,10 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         try
         {
             if (_loop is not null) await _loop;
+            Task releases;
+            lock (_halting) releases = _releases;
+            try { await releases.WaitAsync(_kill.Token); }
+            catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }     // a kill does not wait for it
             if (_beforeRelease is { } drain && !_kill.IsCancellationRequested)
             {
                 var draining = OnNode(() => drain(_kill.Token));

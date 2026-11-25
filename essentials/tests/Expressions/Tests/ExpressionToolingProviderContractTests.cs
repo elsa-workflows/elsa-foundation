@@ -97,6 +97,9 @@ public sealed class ExpressionToolingProviderContractTests
         var getterHover = await provider.GetHoverAsync(
             new(scope, "getCustomer().name", new(0, "getCustomer().name".Length)),
             CancellationToken.None);
+        var functionHover = await provider.GetHoverAsync(
+            new(scope, "getCurrentValue", new(0, "getCurrentValue".Length)),
+            CancellationToken.None);
 
         var rootGetter = Assert.Single(root.Payload!.Items);
         Assert.Equal("getCurrentValue", rootGetter.Label);
@@ -104,6 +107,24 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.Equal("currentValue", Assert.Single(member.Payload!.Items).Label);
         Assert.Equal("name", Assert.Single(getterMember.Payload!.Items).Label);
         Assert.Contains("Customer name.", getterHover.Payload!.Contents, StringComparison.Ordinal);
+        // A signature already names the function, so it is the whole first line.
+        Assert.Equal("getCurrentValue()", functionHover.Payload!.Contents.Split(Environment.NewLine)[0]);
+    }
+
+    [Fact]
+    public async Task Member_hover_keeps_its_name_when_the_type_name_starts_with_it()
+    {
+        var shape = new ExpressionValueShape("Order", ExpressionValueKind.Object,
+            Members: [new("Date", new("DateTime", ExpressionValueKind.Scalar, false), "Placed on.")]);
+        var symbol = new ExpressionSymbol("order", "order", ExpressionSymbolKind.Variable, shape);
+
+        var javascript = await new JavaScriptExpressionToolingProvider().GetHoverAsync(
+            new(CreateScope("JavaScript", [symbol]), "variables.order.Date", new(0, "variables.order.Date".Length)), CancellationToken.None);
+        var liquid = await new LiquidExpressionToolingProvider().GetHoverAsync(
+            new(CreateScope("Liquid", [symbol]), "{{ order.Date }}", new(0, "{{ order.Date".Length)), CancellationToken.None);
+
+        Assert.StartsWith("Date: DateTime" + Environment.NewLine, javascript.Payload!.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("Date: DateTime" + Environment.NewLine, liquid.Payload!.Contents, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -128,6 +149,7 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.Equal(note, item.Documentation);
         Assert.Empty(validation.Payload!.Diagnostics);
         Assert.Contains("the stored value may differ", hover.Payload!.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("city: String" + Environment.NewLine, hover.Payload.Contents, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -193,9 +215,14 @@ public sealed class ExpressionToolingProviderContractTests
         var liquidCompletion = await liquid.GetCompletionsAsync(
             new(liquidScope, "producer.", new(0, "producer.".Length)),
             CancellationToken.None);
+        var liquidHover = await liquid.GetHoverAsync(
+            new(liquidScope, "{{ producer.output }}", new(0, "{{ producer.output".Length)),
+            CancellationToken.None);
 
         Assert.Equal("output", Assert.Single(javascriptCompletion.Payload!.Items).Label);
         Assert.Contains("Producer output.", javascriptHover.Payload!.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("output: String" + Environment.NewLine, javascriptHover.Payload.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("output: String" + Environment.NewLine, liquidHover.Payload!.Contents, StringComparison.Ordinal);
         Assert.Contains(liquidCompletion.Payload!.Items, item => item.Label == "output");
     }
 
