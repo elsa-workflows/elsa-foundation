@@ -2,8 +2,11 @@
 
 25 November 2026. This covers every open issue in `elsa-workflows/elsa-foundation` authored by `j03y-nxxbz`: 58 issues
 across the three pages of the list. Each body was read, and comments were read where they changed the picture. Linked
-PRs were checked for their state. The source was read at `main` `1c930f7e4d`. Nothing on GitHub was changed. No label,
-comment, assignment or state was touched. This report is for Sipke to act on.
+PRs were checked for their state. The source was read at `main` `1c930f7e4d`. No label, assignment or state was
+touched. After Sipke's answers, at his request, the in-scope issues went onto the
+[4.0 milestone](https://github.com/elsa-workflows/elsa-foundation/milestone/1), together with the three fixes merged on
+the initiative branch (#3809, #5666, #5683). #4919 was already there. #3052 stays off it, because the milestone
+leaves umbrella issues out.
 
 ## What the verdicts rest on
 
