@@ -31,7 +31,9 @@ the unpinned `:latest` commands here are not that recorded run.
 > shell as `elsaworkflows/elsa-studio-foundation`; see [Studio Docker](../Studio/docs/docker.md).
 > The three Studio images take their preview numbers from one shared counter, so one commit often carries the same
 > preview number in all three. During rapid merges each image's queue can run at a different pace, and the same preview
-> number can then name different commits in different repositories. Pair images by their `sha-<commit>` tag.
+> number can then name different commits in different repositories. A manual publish whose number sits between the
+> images' highest numbers has the same effect: the images already at or above it refuse it, the others publish it. Pair
+> images by their `sha-<commit>` tag.
 
 > **Development posture.** The `docker run` examples below set `ASPNETCORE_ENVIRONMENT=Development`
 > so they can rely on the image's baked-in `shells.json` demo defaults. The canonical published-image

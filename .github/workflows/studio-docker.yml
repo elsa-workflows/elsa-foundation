@@ -28,7 +28,7 @@ on:
         type: boolean
         default: false
       preview_image_tag:
-        description: 'Required for a main image push. Check Docker Hub first and enter a strictly higher 4.0.0-preview.N tag.'
+        description: 'Required for a main image push. Check all three Studio images on Docker Hub (elsa-studio, elsa-studio-workbench, elsa-studio-foundation) and enter a 4.0.0-preview.N tag above the highest of them.'
         required: false
         type: string
         default: ''

@@ -320,7 +320,7 @@ class StudioDockerPublishTests(unittest.TestCase):
             publish.require_preview_above_floor("4.0.0-preview.708", publish.read_preview_floor(WORKBENCH_IMAGE, open_page))
         workflow = (REPO_ROOT / ".github/workflows/studio-docker.yml").read_text()
         self.assertIn('require_preview_above_floor(os.environ["PREVIEW_IMAGE_TAG"], read_repository_preview_floor(image))', workflow)
-        self.assertNotIn("read_preview_floor(image)", workflow)
+        self.assertNotIn("read_preview_floor", workflow)
 
     def test_repository_check_distinguishes_present_missing_and_unavailable(self) -> None:
         requests: list[str] = []
