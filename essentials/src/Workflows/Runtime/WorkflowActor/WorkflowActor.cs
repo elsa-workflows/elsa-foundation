@@ -7,7 +7,7 @@ using Kernel.Model.Contracts;
 namespace Kernel.WorkflowActor;
 
 /// <summary>What a workflow actor's header says about its run (<see cref="WorkflowActor.DescribeRun"/>).</summary>
-public sealed record WorkflowRunHeader(string Model, string Workflow, string Definition, bool Suspended, string? SubStatus, DateTimeOffset? StartedAt);
+public sealed record WorkflowRunHeader(string Workflow, string Definition, bool Suspended, string? SubStatus, DateTimeOffset? StartedAt);
 
 /// <summary>Runs workflow models through the public actor contract.</summary>
 public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) : IActorType
@@ -224,7 +224,7 @@ public sealed partial class WorkflowActor(IEnumerable<IExecutionModel> models) :
         WorkflowHeader? workflow;
         try { workflow = JsonSerializer.Deserialize<WorkflowHeader>(header.TypeData); }
         catch (JsonException) { return null; }
-        return workflow is null ? null : new(workflow.Model, workflow.Workflow, workflow.Definition ?? workflow.Workflow,
+        return workflow is null ? null : new(workflow.Workflow, workflow.Definition ?? workflow.Workflow,
             workflow.Suspended, workflow.SubStatus, workflow.StartedAt is { } started ? DateTimeOffset.FromUnixTimeMilliseconds(started) : null);
     }
 
