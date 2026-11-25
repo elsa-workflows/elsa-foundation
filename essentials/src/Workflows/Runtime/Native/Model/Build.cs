@@ -158,6 +158,10 @@ public static class Wf
             ? Node<WriteHttpResponse>(id, ("StatusCode", status), ("ContentType", contentType), ("Body", body))
             : Node<WriteHttpResponse>(id, ("StatusCode", status), ("ContentType", contentType), ("Body", body), ("Headers", headers));
 
+    /// <summary>The same workflow as a version of <paramref name="definition"/> (<see cref="Native.Workflow.Definition"/>).</summary>
+    public static Workflow VersionOf(string definition, Workflow workflow) =>
+        new(workflow.Id, workflow.Root, workflow.Variables, definition) { InterventionRequested = workflow.InterventionRequested };
+
     public static Workflow Workflow(string id, Node root, params (string Name, object? Value)[] variables) =>
         new(id, root, variables.ToDictionary(v => v.Name, v => Values.From(v.Value)));
 

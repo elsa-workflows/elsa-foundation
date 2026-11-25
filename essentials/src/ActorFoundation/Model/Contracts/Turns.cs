@@ -25,7 +25,8 @@ public interface ITurn
     void Unsubscribe(string key, string wait);
     string Publish(string key, string? payload, TimeSpan keepFor);
     void Record(object entry);
-    void Rebind(string definition);
+    /// <summary>Moves the instance to another workflow (a migration); its definition stays.</summary>
+    void Rebind(string workflow);
 
     /// <summary>
     /// Sets one of the instance's own labels, or removes it with null: metadata reads filter on labels (ActorQuery.Labels),

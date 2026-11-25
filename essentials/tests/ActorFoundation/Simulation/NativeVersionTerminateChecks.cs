@@ -220,7 +220,7 @@ internal static class NativeVersionTerminateChecks
     {
         using var document = JsonDocument.Parse(header.TypeData);
         var value = document.RootElement;
-        return value.GetProperty("Model").GetString() == "native" && value.GetProperty("Definition").GetString() == "root" &&
+        return value.GetProperty("Model").GetString() == "native" && value.GetProperty("Workflow").GetString() == "root" &&
             value.GetProperty("Version").GetInt32() == version && value.GetProperty("Suspended").GetBoolean() == suspended &&
             !header.Labels.ContainsKey("version");
     }
@@ -273,7 +273,7 @@ internal static class NativeVersionTerminateChecks
         }
         public ValueTask TurnAsync(PublicModel.ITurn turn, CancellationToken cancellationToken)
         {
-            if (turn.Instance.Definition == "root") OrdinaryRootTurns++;
+            if (turn.Instance.Workflow == "root") OrdinaryRootTurns++;
             return model.TurnAsync(turn, cancellationToken);
         }
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken token) => model.ExecuteJobAsync(job, token);

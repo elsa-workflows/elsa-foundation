@@ -18,10 +18,20 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     public Type StateType => typeof(NativeState);
     public int StateVersion => 14;
 
-    public static Models.WorkflowStart Start(string definition, string mode = Modes.Balanced, JsonObject? input = null,
-        string? triggerNode = null, JsonNode? trigger = null) =>
-        new(ModelKey, definition, JsonSerializer.Serialize(new NativeStart(mode, input, triggerNode, trigger)),
-            Ephemeral: mode == Modes.Ephemeral);
+    /// <param name="workflow">The workflow to run (<see cref="Workflow.Id"/>).</param>
+    /// <param name="definition">
+    /// Its <see cref="Workflow.Definition"/>, when it is not the workflow itself. A publishing host starts a published version
+    /// with <see cref="Start(Workflow, string, JsonObject?)"/>, which passes it; without it, the instance's definition is the
+    /// workflow.
+    /// </param>
+    public static Models.WorkflowStart Start(string workflow, string mode = Modes.Balanced, JsonObject? input = null,
+        string? triggerNode = null, JsonNode? trigger = null, string? definition = null) =>
+        new(ModelKey, workflow, JsonSerializer.Serialize(new NativeStart(mode, input, triggerNode, trigger)),
+            Ephemeral: mode == Modes.Ephemeral, Definition: definition == workflow ? null : definition);
+
+    /// <summary>A start of a registered workflow, under its definition.</summary>
+    public static Models.WorkflowStart Start(Workflow workflow, string mode = Modes.Balanced, JsonObject? input = null) =>
+        Start(workflow.Id, mode, input, definition: workflow.Definition);
 
     public object CreateState(Models.WorkflowStart start) => NewState(start.Input);
 
@@ -32,8 +42,12 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
 
     public string? ValidateMigration(Models.InstanceInfo source, object state, string target)
     {
-        if (!registry.TryGet(source.Definition, out var before) || !registry.TryGet(target, out var after))
+        if (!registry.TryGet(source.Workflow, out var before) || !registry.TryGet(target, out var after))
             return "DefinitionUnavailable";
+        // A migration moves an instance between versions of its definition, and its definition label stays: a published
+        // version does not move to another definition's.
+        if (before.Definition != after.Definition && (before.Definition != before.Id || after.Definition != after.Id))
+            return "DefinitionChanged";
         return StructuredMigration.Validate(before, after, (NativeState)state)?.ToString();
     }
 
@@ -55,7 +69,9 @@ public sealed class NativeExecutionModel(WorkflowRegistry registry, NativeExecut
     }
 
     public ValueTask TurnAsync(Models.ITurn turn, CancellationToken cancellationToken) =>
-        new Burst(registry, _options, new ContractTurn(turn, outbound), cancellationToken).RunAsync();
+        new Burst(registry, _options, new ContractTurn(turn, outbound, definitionOf: DefinitionOf), cancellationToken).RunAsync();
+
+    private string? DefinitionOf(string workflow) => registry.TryGet(workflow, out var found) ? found.Definition : null;
 
     public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) =>
         ExecuteBackground(registry, job.Actor, job.Arguments, cancellationToken, _options.Http);

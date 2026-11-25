@@ -2,8 +2,9 @@ using Kernel.Foundation.Contracts;
 
 namespace Kernel.WorkflowActor;
 
+/// <param name="Definition">The definition label the source's instances carry: <paramref name="From"/> unless the plan names another.</param>
 internal sealed record MigrationPlanProgress(string From, string? Model, long Number, PageToken? Cursor, bool AllSelected,
-    MigrationDispatchBatch? Pending);
+    MigrationDispatchBatch? Pending, string Definition);
 
 /// <summary>Replays committed plan transitions and retains the bookmark and at most one pending batch.</summary>
 internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorReads reads, MigrationPlanAuthority authority,
@@ -43,7 +44,7 @@ internal sealed class JournalMigrationDispatchState(IIngress ingress, IActorRead
             }
             if (_closed || _created is null || !await IsDispatchable(_created.Deadline, cancellationToken)) return null;
             var pending = _pending is { } batch ? batch with { Actors = batch.Actors.ToArray() } : null;
-            return new(_created.From, _created.Model, _number, _cursor, _allSelected, pending);
+            return new(_created.From, _created.Model, _number, _cursor, _allSelected, pending, _created.Definition ?? _created.From);
         }
         finally { _gate.Release(); }
     }

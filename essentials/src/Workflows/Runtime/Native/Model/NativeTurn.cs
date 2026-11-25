@@ -6,7 +6,7 @@ namespace Kernel.Native;
 internal interface INativeTurn
 {
     Contract.ActorRef Actor { get; }
-    string Definition { get; }
+    string Workflow { get; }
     bool HasExactIdentity { get; }
     bool SavesWaitRecipes { get; }
     string OperationOrigin { get; }
