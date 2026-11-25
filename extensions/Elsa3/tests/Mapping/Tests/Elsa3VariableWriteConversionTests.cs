@@ -490,6 +490,7 @@ public sealed class Elsa3VariableWriteConversionTests
 
     [Theory]
     [InlineData("setVariable('Amount', 5); return 1;", "setVariable")]
+    [InlineData("setVariable('amount', 5); return 1;", "setVariable")]
     [InlineData("setAmount(5); return 1;", "setAmount")]
     public async Task A_write_to_a_reusable_workflows_input_is_refused_with_guidance(string source, string callee)
     {
@@ -529,32 +530,40 @@ public sealed class Elsa3VariableWriteConversionTests
     }
 
     [Fact]
-    public async Task A_reusable_setVariable_matching_an_input_only_in_letter_case_is_an_undeclared_variable()
+    public async Task A_reusable_setVariable_of_two_inputs_named_alike_is_refused_as_an_input_write()
     {
-        // Only the input's exact name is the input Elsa 3 held as a variable; another spelling created a new variable there.
-        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("setVariable('amount', 5); return 1;"))));
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("setVariable('Amount', 5); return 1;"))));
         var definition = ConversionServices.Definition(root, variables: [Total]);
-        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" }];
+        definition.Inputs =
+        [
+            new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" },
+            new Elsa3WorkflowArgumentDefinition { Name = "amount", Type = "Int32" }
+        ];
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
 
         Assert.False(result.Succeeded);
-        Assert.Equal(Elsa3ImportDiagnosticCodes.SetterOfUndeclaredVariable, Assert.Single(result.Diagnostics, item => item.IsError).Code);
+        var diagnostic = Assert.Single(result.Diagnostics, item => item.IsError);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, diagnostic.Code);
+        Assert.Contains("an input of this reusable workflow", diagnostic.Message, StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData("setVariable('amount', 5); return 1;")]
-    [InlineData("getVariable('amount').x = 1; return 1;")]
-    public async Task A_reusable_variable_named_like_an_input_in_another_letter_case_converts(string source)
+    [InlineData("setVariable('Amount', 5); return 1;")]
+    [InlineData("getVariable('Amount').x = 1; return 1;")]
+    [InlineData("variables.amount.x = 1; return 1;")]
+    public async Task A_reusable_variable_named_like_an_input_in_another_letter_case_is_ambiguous(string source)
     {
-        // Elsa 3 held the input as a variable of its exact name; 'amount' and 'Amount' were two variables there.
+        // Names compare as the converter resolves variables and inputs, without regard to letter case.
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
         var definition = ConversionServices.Definition(root, variables: [new Elsa3Variable { Id = "amount-id", Name = "amount", TypeName = "Object" }]);
         definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" }];
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
 
-        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.False(result.Succeeded);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.AmbiguousReference, Assert.Single(result.Diagnostics, item => item.IsError).Code);
     }
 
     [Theory]
