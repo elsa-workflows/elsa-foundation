@@ -29,7 +29,7 @@ public sealed partial class EfStore
             $fn$;
             CREATE OR REPLACE TRIGGER kernel_project_root_park_metadata AFTER UPDATE OF "FoundationParkAt"
                 ON "Instances" FOR EACH ROW WHEN (NEW."FoundationReference" IS NOT NULL AND
-                    OLD."FoundationParkAt" IS DISTINCT FROM NEW."FoundationParkAt")
+                    OLD."FoundationParkAt" IS DISTINCT FROM NEW."FoundationParkAt" /*park-retired*/)
                 EXECUTE FUNCTION kernel_project_root_park_metadata();
 
             UPDATE "FoundationActorList" p SET "ParkAt" = i."FoundationParkAt",
@@ -39,6 +39,8 @@ public sealed partial class EfStore
                 AND (p."ParkAt", p."ParkFault" /*park-revision-old*/) IS DISTINCT FROM
                     (i."FoundationParkAt", CASE WHEN i."FoundationParkAt" IS NULL THEN NULL ELSE i."Fault" END /*park-revision-new*/);
             """.Replace("/*inspectable*/", InspectableIndex, StringComparison.Ordinal)
+            // S5b-3a: a parked root retired by its Terminate-then-delete has no list row left to project its Park onto.
+            .Replace("/*park-retired*/", db.UsesRootParkedOperators ? """AND NOT NEW."Retired" """ : "", StringComparison.Ordinal)
             .Replace("/*kept-reasons*/", KeptReasons(db), StringComparison.Ordinal)
             // Park selections name the opening revision, so a set that seals them projects that revision with the Park time.
             .Replace("/*park-revision-column*/", db.ProjectsRootParkRevision ? """, ADD COLUMN IF NOT EXISTS "ParkRevision" bigint""" : "", StringComparison.Ordinal)

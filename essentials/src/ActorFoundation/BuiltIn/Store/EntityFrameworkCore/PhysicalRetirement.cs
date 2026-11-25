@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Kernel.EntityFramework;
 
 // Disposable prototype schemas only. Guards execute inside the existing DML transaction, without a header read.
+// S5b-3a: in a composed parked-operator set a Terminate-then-delete retires a parked root as it ends it Cancelled.
 internal static class PhysicalRetirement
 {
     internal static Task InstallAsync(KernelDb db, Engine? engine, bool postgres)
@@ -49,7 +50,13 @@ internal static class PhysicalRetirement
                     AND OLD."FoundationReference" IS NOT NULL AND NEW."FoundationReference" = OLD."FoundationReference"
                     AND NEW."FoundationWriteRevision" = OLD."Revision" + 1 AND NEW."Revision" = NEW."FoundationWriteRevision"
                     AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL) IS TRUE)
-                """) : "", StringComparison.Ordinal);
+                """) + (db.UsesRootParkedOperators ? FormattableString.Invariant($"""
+                AND NOT ((OLD."Status" = {(int)InstanceStatus.Faulted} AND OLD."FoundationParkAt" IS NOT NULL
+                    AND NEW."Status" = {(int)InstanceStatus.Cancelled}
+                    AND OLD."FoundationReference" IS NOT NULL AND NEW."FoundationReference" = OLD."FoundationReference"
+                    AND NEW."FoundationWriteRevision" = OLD."Revision" + 1 AND NEW."Revision" = NEW."FoundationWriteRevision"
+                    AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL) IS TRUE)
+                """) : "") : "", StringComparison.Ordinal);
         return db.Database.ExecuteSqlRawAsync(sql);
     }
 }
