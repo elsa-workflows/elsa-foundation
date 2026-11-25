@@ -24,6 +24,56 @@ public static class PostgresPreviewHosting
     public static KernelDb CreateShippedContext(DbContextOptions<KernelDb> options) => KernelDb.ForPostgresRootShipped(options);
 
     /// <summary>
+    /// Readies a dedicated database for the shipped format (<see cref="CreateShippedContext"/>), for a single-process host
+    /// such as the Workbench to call before its node starts: an empty database is installed, one already on the shipped
+    /// format is left as it is, and any other (an earlier preview format, or tables of something else) is refused with
+    /// what to do. A multi-node production host keeps installation an explicit setup step, run while no node is.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The database holds something other than the shipped format.</exception>
+    public static async Task InstallShippedAsync(DbContextOptions<KernelDb> options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        KernelDb Open() => CreateShippedContext(options);
+        await using (var db = Open())
+        {
+            if (!db.Database.IsNpgsql())
+                throw new NotSupportedException("The shipped Core Preview format installs on PostgreSQL.");
+            if (!await IsEmptyAsync(db, cancellationToken))
+            {
+                try
+                {
+                    await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
+                    return;
+                }
+                catch (StoreFormatException refused)
+                {
+                    throw new InvalidOperationException(
+                        $"The Core Preview database holds something other than the shipped format ({refused.Message}). " +
+                        "Recreate this database empty, or point ConnectionStrings:KernelCorePreview at an empty one: the Workbench installs the format there.",
+                        refused);
+                }
+            }
+        }
+        var store = new EfStore(Open, postgres: true);
+        await store.CreateAsync();
+        await store.InstallPreviewRootSchemaAsync(cancellationToken);
+    }
+
+    // Whether the database's current schema holds no object at all: nothing to keep, so nothing to refuse.
+    private static Task<bool> IsEmptyAsync(KernelDb database, CancellationToken cancellationToken) =>
+        database.Database.SqlQueryRaw<bool>("""
+            WITH user_schema AS (
+                SELECT oid, nspname FROM pg_catalog.pg_namespace
+                WHERE nspname <> 'information_schema' AND nspname !~ '^pg_'
+            )
+            SELECT EXISTS (SELECT 1 FROM user_schema WHERE nspname = pg_catalog.current_schema()) AND NOT EXISTS (
+                SELECT 1 FROM pg_catalog.pg_depend dependency
+                JOIN user_schema ns ON ns.oid = dependency.refobjid
+                WHERE dependency.refclassid = 'pg_catalog.pg_namespace'::pg_catalog.regclass
+            ) AS "Value"
+            """).SingleAsync(cancellationToken);
+
+    /// <summary>
     /// Whether a node on the format <paramref name="create"/> selects takes an actor's self-sends. A host gives the answer to
     /// its model (for the Native model, <c>NativeExecutionOptions.SelfSends</c>), so that a model which continues a long
     /// burst in a self-send on a format with them runs it in one turn on a format without them, the shipped format among them.

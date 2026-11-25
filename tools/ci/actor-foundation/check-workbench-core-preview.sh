@@ -45,6 +45,14 @@ sentinel="$scratch/caller-identity.sqlite"
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__IsDevelopmentOrDemo=false
 export CShells__Shells__default__Features__FoundationIdentityOpenIddict__ConnectionString="Data Source=$sentinel"
 for profile in "${profiles[@]}"; do
+  if [[ "$profile" == publications ]]; then
+    # The release profile installs its own format in an empty database, and refuses one that holds something else.
+    for install in empty foreign; do
+      docker exec "$container" createdb -U postgres "workbench_core_preview_install_$install"
+      KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=$port;Username=postgres;Password=$POSTGRES_PASSWORD;Database=workbench_core_preview_install_$install;SSL Mode=Disable;GSS Encryption Mode=Disable" \
+        "$client" pg-workbench-core-preview "install-$install" "$scratch/install-$install.json" publications
+    done
+  fi
   database="workbench_core_preview_${profile//-/_}"
   docker exec "$container" createdb -U postgres "$database"
   export KERNEL_PREVIEW_POSTGRES="Host=127.0.0.1;Port=$port;Username=postgres;Password=$POSTGRES_PASSWORD;Database=$database;SSL Mode=Disable;GSS Encryption Mode=Disable"

@@ -28,7 +28,7 @@ export default defineConfig({
   reporter: [["line"], ["json", { outputFile: `${output}/playwright.json` }], ["html", { outputFolder: `${output}/html`, open: "never" }]],
   use: { baseURL: process.env.ELSA_STUDIO_URL, trace: "on", screenshot: "only-on-failure" },
   projects: corePreview ? [
-    { name: "core-preview-desktop-light", use: { viewport: { width: 1440, height: 1000 }, colorScheme: "light" as const } }
+    { name: "desktop-light", use: { viewport: { width: 1440, height: 1000 }, colorScheme: "light" as const } }
   ] : [
     { name: "desktop-light", use: { viewport: { width: 1440, height: 1000 }, colorScheme: "light" } },
     { name: "desktop-dark", use: { viewport: { width: 1440, height: 1000 }, colorScheme: "dark" } },

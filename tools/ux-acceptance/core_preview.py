@@ -31,12 +31,12 @@ command, host, clean_environment, free_port, prepare_host, source_state = (
 
 SUITE = 'core-preview'
 # The kernel journeys run once, on the desktop: they qualify the kernel path, not the appearance matrix.
-PROJECT = 'core-preview-desktop-light'
+PROJECT = 'desktop-light'
 CAPTURES = {
-    'core preview serves kernel publications': ['reference'],
+    'core preview stack is ready': ['reference'],
 }
 EVIDENCE = {
-    'core preview serves kernel publications': ['core-preview-smoke.json'],
+    'core preview stack is ready': ['core-preview-smoke.json'],
 }
 JOURNEYS = set(CAPTURES)
 # The tenant the Workbench's kernel edge starts workflows in, and its reads list from.
@@ -45,7 +45,6 @@ POSTGRES_IMAGE = os.environ.get('UX_CORE_PREVIEW_POSTGRES_IMAGE', 'postgres:17')
 DATABASE = 'ux_core_preview'
 # The Workbench logs one of these once the default shell's publications are served on the kernel, before its node runs.
 SERVING_LINE = 'serves the publications of shell default on the kernel'
-INSTALLER = ROOT / 'essentials/tests/ActorFoundation/Native/Run/Elsa.ActorFoundation.Native.Run.csproj'
 SERVING_FAILURES = ('could not serve the publications of shell', 'does not compose the WorkflowsRuntimeKernel feature')
 
 
@@ -62,14 +61,28 @@ def kernel_environment(connection):
             'Elsa__CorePreview__Tenant': TENANT, 'ConnectionStrings__KernelCorePreview': connection}
 
 
+LABEL = 'elsa.ux-acceptance=core-preview'
+
+
+def sweep_stale_containers():
+    """Remove containers an interrupted earlier run left behind, by this runner's label; returns their ids."""
+    stale = subprocess.check_output(['docker', 'ps', '-aq', '--filter', f'label={LABEL}'], text=True).split()
+    if stale:
+        subprocess.run(['docker', 'rm', '-f', *stale], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return stale
+
+
 @contextmanager
 def postgres(log, *, attempts=240):
     """A throwaway PostgreSQL container on a loopback port, with one database for the kernel store; stopped on exit."""
     password = secrets.token_hex(24)
-    container = subprocess.check_output(['docker', 'run', '-d', '--rm', '--label', 'elsa.ux-acceptance=core-preview',
-                                         '-e', f'POSTGRES_PASSWORD={password}', '-p', '127.0.0.1::5432', POSTGRES_IMAGE],
-                                        text=True, stderr=subprocess.STDOUT).strip()
+    # A run-unique name stops the container even when docker run itself was interrupted before it printed an id.
+    name = f'elsa-ux-core-preview-{secrets.token_hex(8)}'
     try:
+        # The password reaches the container through the environment only: never in argv, a failure's text or the report.
+        container = subprocess.check_output(['docker', 'run', '-d', '--rm', '--name', name, '--label', LABEL,
+                                             '-e', 'POSTGRES_PASSWORD', '-p', '127.0.0.1::5432', POSTGRES_IMAGE],
+                                            text=True, stderr=subprocess.STDOUT, env=dict(os.environ, POSTGRES_PASSWORD=password)).strip()
         with log.open('w') as output:
             for _ in range(attempts):
                 # Ready on TCP: the image's init restarts the server once, and its socket answers before that.
@@ -77,7 +90,7 @@ def postgres(log, *, attempts=240):
                                        stdout=output, stderr=subprocess.STDOUT)
                 if ready.returncode == 0:
                     created = subprocess.run(['docker', 'exec', container, 'createdb', '-h', '127.0.0.1', '-U', 'postgres', DATABASE],
-                                             stdout=output, stderr=subprocess.STDOUT, env=dict(os.environ, PGPASSWORD=password))
+                                             stdout=output, stderr=subprocess.STDOUT)
                     if created.returncode == 0:
                         break
                 time.sleep(.25)
@@ -85,11 +98,11 @@ def postgres(log, *, attempts=240):
                 raise TimeoutError(f'The owned PostgreSQL container did not accept a database; see {log}')
         mapped = subprocess.check_output(['docker', 'port', container, '5432/tcp'], text=True).strip().splitlines()[0]
         port = int(mapped.rsplit(':', 1)[1])
-        yield {'container': container, 'image': POSTGRES_IMAGE, 'port': port, 'database': DATABASE,
+        yield {'container': container, 'name': name, 'image': POSTGRES_IMAGE, 'port': port, 'database': DATABASE,
                'connection': f'Host=127.0.0.1;Port={port};Username=postgres;Password={password};Database={DATABASE};'
                              'SSL Mode=Disable;GSS Encryption Mode=Disable'}
     finally:
-        subprocess.run(['docker', 'stop', '--time', '3', container], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(['docker', 'stop', '--time', '3', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def container_gone(container, *, attempts=60):
@@ -231,8 +244,6 @@ def run(output, journey=None):
         command(['dotnet', 'build', str(backend_project), *build], output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=ROOT / 'Studio')
         command(['dotnet', 'build', str(studio_project), *build], output / 'studio-build.log')
-        # The kernel harness installs the shipped format in the owned empty database; the Workbench only checks it.
-        command(['dotnet', 'build', str(INSTALLER), *build], output / 'installer-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-core-preview-') as temporary:
             data = Path(temporary)
             report['ownedRoot'] = str(data)
@@ -245,11 +256,10 @@ def run(output, journey=None):
             env = dict(clean_environment(), DOTNET_PROCESSOR_COUNT='2', HOME=str(data / 'home'), DOTNET_CLI_HOME=str(data / 'home'),
                        **{'Logging__LogLevel__Microsoft.Hosting.Lifetime': 'Information'})
             report['stage'] = 'postgres'
+            report['staleContainersRemoved'] = sweep_stale_containers()
             with postgres(output / 'postgres.log') as database, Stub() as stub:
+                # The database is empty: the Workbench installs the shipped format itself before its node starts.
                 report['postgres'] = {key: database[key] for key in ('container', 'image', 'database')}
-                command(['dotnet', str(INSTALLER.parent / 'bin/Debug/net10.0/Kernel.Native.Run.dll'), 'pg-install-shipped'], output / 'install.log',
-                        env=dict(clean_environment(), KERNEL_PREVIEW_POSTGRES=database['connection']))
-                report['postgres']['installed'] = 'shipped format 24'
                 report.update(stage='host-start', backendUrl=backend_url, studioUrl=studio_url, stubUrl=stub.url)
                 backend_log = output / 'backend.log'
                 with host(backend, 'Elsa.Workbench.Host.dll', backend_url, '/health/ready', backend_log,

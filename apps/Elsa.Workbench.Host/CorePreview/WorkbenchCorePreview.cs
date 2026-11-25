@@ -206,6 +206,9 @@ internal static class WorkbenchCorePreview
                 // edge does not serve: the node does not start, and the process ends.
                 async token =>
                 {
+                    // The release profile installs its format in an empty database and starts on one already installed; any
+                    // other database is refused with what to do, and the process ends before its node starts.
+                    if (publications) await PostgresPreviewHosting.InstallShippedAsync(options, token);
                     await shells.GetOrActivateAsync(shellName, token);
                     if (edge is not null) await RequireEdgeBasePathAsync(shells, shellName, edge);
                 }, Environment.FailFast,

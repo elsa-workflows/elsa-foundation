@@ -40,7 +40,7 @@ internal static class WorkbenchPostgresPreview
 
     internal static async Task RunAsync(string[] arguments, string? executable = null)
     {
-        if (arguments is not [var phase and ("birth" or "restart" or "disabled"), var receiptPath, .. var profileArguments] ||
+        if (arguments is not [var phase and ("birth" or "restart" or "disabled" or "install-empty" or "install-foreign"), var receiptPath, .. var profileArguments] ||
             profileArguments is not ([] or ["jobs" or "timed" or "timeout" or "takeover" or "takeover-complete" or "publications"]))
             throw new ArgumentException("Expected birth, restart or disabled, a receipt file and optional jobs, timed, timeout, takeover, takeover-complete or publications profile.");
         var profile = profileArguments.SingleOrDefault();
@@ -53,8 +53,10 @@ internal static class WorkbenchPostgresPreview
         var nativeJobs = profile is not (null or "publications");
         var ticketScope = timed ? TimedJobScope : JobTicketScope;
 
-        if ((phase == "disabled" || takeover) && executable is null)
-            throw new ArgumentException("The disabled and takeover checks require a Workbench executable.");
+        if ((phase is "disabled" or "install-empty" or "install-foreign" || takeover) && executable is null)
+            throw new ArgumentException("The disabled, install and takeover checks require a Workbench executable.");
+        if (phase is "install-empty" or "install-foreign" && !publications)
+            throw new ArgumentException("The install checks run the publications profile, which installs its own format.");
 
         var releaseFile = completesTakeover ? Path.GetFullPath(receiptPath + ".release") : null;
         if (releaseFile is not null && File.Exists(releaseFile))
@@ -78,6 +80,11 @@ internal static class WorkbenchPostgresPreview
         KernelDb OpenObservation() => OpenProfile(observationOptions, profile);
         var wire = Wire.Start("postgres", $"Host={settings.Host};Port={settings.Port}");
         settings.Port = wire.LocalPort;
+        if (phase is "install-empty" or "install-foreign")
+        {
+            await CheckWorkbenchInstallAsync(executable!, settings.ConnectionString, OpenObservation, foreign: phase == "install-foreign", scope, token);
+            return;
+        }
         if (phase == "disabled")
         {
             if (completesTakeover) await CheckEntryBeforeListeningAsync();
@@ -494,6 +501,49 @@ internal static class WorkbenchPostgresPreview
         }
     }
 
+    // With publications on, the Workbench installs the shipped format in an empty database before its node starts, and refuses
+    // a database that holds something else, ending before its node starts.
+    private static async Task CheckWorkbenchInstallAsync(string executable, string connection, Func<KernelDb> openObservation, bool foreign,
+        Contract.BoundScope scope, CancellationToken token)
+    {
+        await using (var db = openObservation())
+        {
+            Require(await PostgresFixtureDatabase.IsEmptyAsync(db, token), "the install check starts from an empty database");
+            if (foreign) await db.Database.ExecuteSqlRawAsync("CREATE TABLE someone_elses_orders (id integer PRIMARY KEY)", token);
+        }
+        using var workbench = WorkbenchProcess.Start(executable, connection, enabled: true, "publications", null);
+        if (foreign)
+        {
+            var (exitCode, error) = await workbench.WaitForExitAsync(token);
+            await using var db = openObservation();
+            var tables = await db.Database.SqlQueryRaw<string>(
+                "SELECT tablename AS \"Value\" FROM pg_catalog.pg_tables WHERE schemaname = pg_catalog.current_schema()").ToListAsync(token);
+            Require(exitCode != 0 && error.Contains("Recreate this database empty", StringComparison.Ordinal) &&
+                    tables.SequenceEqual(["someone_elses_orders"]),
+                $"a Workbench with publications on refuses a database that holds something else, installs nothing, and says to recreate it (exit {exitCode})");
+            return;
+        }
+        try
+        {
+            await workbench.WaitReadyAsync(token);
+            Contract.IActorReads? reads = null;
+            async Task<int> ProbeRunsAsync()
+            {
+                reads ??= await new EfStore(openObservation, postgres: true).OpenPreviewRootReadsAsync(64, token);
+                return (await reads.ListAsync(scope, new Contract.ActorQuery(Kernel.WorkflowActor.WorkflowActor.ActorType, Contract.ActorStatus.Finished,
+                    new Dictionary<string, string> { ["definition"] = "core-preview-http-probe" }), cancellationToken: token)).Items.Count;
+            }
+            await RequireKernelServingAsync(workbench, ProbeRunsAsync, token);
+            await using var db = openObservation();
+            await EfStore.RequireStoreVersionsAsync(db, token);
+            Require(true, "a Workbench with publications on installs the shipped format in an empty database, starts and serves");
+        }
+        finally
+        {
+            await workbench.StopAsync();
+        }
+    }
+
     // With publications on, the default shell composes the kernel's coordinator, which serves its active slots before the node runs.
     private static async Task RequireKernelServingAsync(WorkbenchProcess workbench, Func<Task<int>> probeRuns, CancellationToken token)
     {
@@ -687,6 +737,15 @@ internal static class WorkbenchPostgresPreview
             await process.WaitForExitAsync(token);
             if (stdout is not null) await stdout.WaitAsync(token);
             Require(process.ExitCode != 0, "the entered owner exited abruptly");
+        }
+
+        /// <summary>The exit code and standard error of a Workbench that ends on its own.</summary>
+        internal async Task<(int ExitCode, string Error)> WaitForExitAsync(CancellationToken token)
+        {
+            var read = stdout ??= output.ReadAsync(process.StandardOutput);
+            await process.WaitForExitAsync(token);
+            await read.WaitAsync(token);
+            return (process.ExitCode, await log.WaitAsync(token));
         }
 
         internal async Task StopAsync()

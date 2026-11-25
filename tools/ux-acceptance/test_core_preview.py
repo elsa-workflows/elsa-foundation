@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import urllib.request
 
 spec = importlib.util.spec_from_file_location("core_preview_acceptance", Path(__file__).with_name("core_preview.py"))
@@ -17,7 +17,7 @@ class CorePreviewVerdictTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(prefix="synthetic-core-preview-gate-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.journey = "core preview serves kernel publications"
+        self.journey = "core preview stack is ready"
         attachments = []
         for name in ["trace", "reference.png", "reference.aria.yml", "core-preview-smoke.json"]:
             path = self.root / name
@@ -33,7 +33,7 @@ class CorePreviewVerdictTests(unittest.TestCase):
         self.assertEqual(1, acceptance.verdict(self.report(self.test), self.root))
 
     def test_another_project_or_a_second_execution_is_refused(self):
-        other = dict(self.test, projectName="desktop-light")
+        other = dict(self.test, projectName="desktop-dark")
         with self.assertRaises(ValueError):
             acceptance.verdict(self.report(other), self.root)
         with self.assertRaises(ValueError):
@@ -79,6 +79,35 @@ class CorePreviewCompositionTests(unittest.TestCase):
             process.poll.return_value = 1
             with self.assertRaises(RuntimeError):
                 acceptance.wait_for_kernel_serving(log, process, timeout=1)
+
+    def test_the_password_stays_out_of_argv_and_an_interrupted_run_still_stops_its_container(self):
+        calls = []
+        def check_output(args, **kwargs):
+            calls.append((args, kwargs))
+            raise KeyboardInterrupt  # interrupted before docker run printed an id
+        def run(args, **kwargs):
+            calls.append((args, kwargs))
+            return MagicMock(returncode=0)
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(acceptance.subprocess, "check_output", side_effect=check_output), \
+                patch.object(acceptance.subprocess, "run", side_effect=run):
+            with self.assertRaises(KeyboardInterrupt):
+                with acceptance.postgres(Path(directory) / "postgres.log"):
+                    self.fail("No container was started")
+        (started, options), (stopped, _) = calls
+        name = started[started.index("--name") + 1]
+        self.assertIn("POSTGRES_PASSWORD", started)
+        self.assertFalse([argument for argument in started if argument.startswith("POSTGRES_PASSWORD=")], "The password is in argv")
+        self.assertEqual(48, len(options["env"]["POSTGRES_PASSWORD"]))
+        self.assertIn(acceptance.LABEL, started)
+        self.assertEqual(["docker", "stop", "--time", "3", name], stopped)
+
+    def test_stale_containers_of_this_runner_are_swept_by_label(self):
+        with patch.object(acceptance.subprocess, "check_output", return_value="abc\ndef\n") as listed, \
+                patch.object(acceptance.subprocess, "run") as removed:
+            self.assertEqual(["abc", "def"], acceptance.sweep_stale_containers())
+        self.assertIn(f"label={acceptance.LABEL}", listed.call_args.args[0])
+        self.assertEqual(["docker", "rm", "-f", "abc", "def"], removed.call_args.args[0])
 
     def test_the_stub_answers_with_what_it_got_and_records_it(self):
         with acceptance.Stub() as stub:
