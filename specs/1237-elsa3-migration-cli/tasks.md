@@ -9,7 +9,7 @@
 - the essentials engine image and feature list of specification 1236 exist on the initiative branch;
 - the converter's member-name matching of Elsa 3 globals to prefixed host functions, and its storage-driver change
   (the two `ELS3-BEHAVIOUR-*-STORAGE-*` codes with `StorageDriverType` and `ComponentName`), are on the initiative
-  branch;
+  branch (done: PRs #5703 and #5709);
 
 
 **Tests**: Risk-based (framework §2.23). Each test is written with the code it covers:
@@ -88,7 +88,11 @@
   lists both the custom driver and the memory driver as storage-driver components. Give every call, and every read of an undeclared global used as a value, that the
   converter reports as matchable (`CanBeMatched`: an undeclared custom global or a refused built-in a host function may
   take over) a `javascript-function` component code of its own, separate from the forbidden-capability code, which
-  unmatchable calls and forbidden capabilities keep. Update the mapping README and the affected converter tests, and
+  unmatchable calls and forbidden capabilities keep. Cover every emission site, not only the `CanBeMatched` one in
+  `Elsa3ExpressionRewriter`: the `get{Name}()` and `set{Name}()` calls with no matching variable or input in
+  `Elsa3ValueFlowLowerer` (the `UndeclaredFunctionGuidance` sites) get the component code too, while a `set{Name}()`
+  write to a read-only input stays a `patch-definition` finding and is not a component. Add a `get`-prefixed custom
+  global (`getCustomerData()`) to the T002 fixture. Update the mapping README and the affected converter tests, and
   test the fixture calls and the value-only reference. The report builder reads `componentName` only from that metadata.
 - [ ] T005 Extract `Elsa3ImportRun` from `Elsa3FolderImportTask` in
   `extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Services/`. It returns the plan items, the skips with
@@ -220,8 +224,11 @@
   per workflow definition, the wrapper workflow of each reusable among them, and one activities file in dependency
   order. A reusable's `exportedTo` is the activities file, and its `wrapperExportedTo` is the wrapper's file. Every
   published reusable version goes into `activities.json`, older pinned ones included. Add a fixture case of a workflow
-  that pins an older reusable version, and assert that the older version is in `activities.json`. Each exported reusable keeps its
-  dependency version ids as stored and its `elsa.outcomes` design facet (the single `done` outcome). It sets
+  that pins an older reusable version, and assert that the older version is in `activities.json`. The engine gives each loaded activity version
+  `ActivityCatalogStableIds.VersionId(typeKey, version)`, not the stored import id, so the exporter rewrites every
+  reusable version id, and every reference to one (graph dependencies and workflow `activityVersionId` values), to that
+  id. Each exported reusable keeps its `elsa.outcomes` facet and contract as stored; add a fixture reusable with a
+  custom Elsa 3 outcome next to `done`. It sets
   `exportedTo`. It leaves out refused and blocked
   definitions. It always creates `migrated/workflows/` and always writes `migrated/activities/activities.json`, as
   `[]` when no reusable is exported. Test the layout, the absence, and a run that exports no workflow and no reusable.
@@ -243,8 +250,9 @@
   no partial run. Name the feature, package or setting key, never a value. Test with a fixture package whose feature
   throws during configuration.
 - [ ] T027 [US2] Add the assess integration test (SC-007). Run the fixture export with the T003 package and its
-  settings. Every finding that names the custom activity, the function or the variable type disappears, and no finding
-  unrelated to them is added. The definitions it unblocks publish clean.
+  settings. Every finding that names the custom activity, the function or the variable type disappears, except that the
+  value-only read `items.map(lookupCustomer)` becomes `ELS3-REPLACED-FUNCTION-REFERENCE` (`patch-definition`). No other
+  finding is added. The other definitions it unblocks publish clean.
 
 ## Phase 7: User Story 5 - Redacted, versioned report (P2)
 

@@ -187,9 +187,10 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   inventory lists it. The CLI scans no scripts itself.
 - A converted reusable activity always depends on other activity versions, because its body is made of catalog
   activities. The engine's JSON activity reconciliation publishes such source-owned composites with their dependencies
-  (specification 1239), so `migrated/activities/activities.json` loads in any order. Each exported reusable references
-  its dependencies by the exact activity version ids the engine produces, and carries its outcomes facet with the
-  single `done` outcome its graph needs.
+  (specification 1239), so `migrated/activities/activities.json` loads in any order. The engine gives each loaded
+  activity version the catalog id of its type key and version, not the id the import stored, so the export rewrites
+  every reusable version id, and every reference to one in a reusable or a workflow, to that catalog id. Each exported
+  reusable keeps its outcomes facet and contract as stored, including any outcome it declared in Elsa 3.
 
 ## Requirements *(mandatory)*
 
@@ -299,6 +300,9 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   no structured metadata is never used to name a component. A JavaScript call, or a read of an undeclared global used as a
   value, that the converter reports as matchable (a registered prefixed host function may take the name over: an undeclared custom global, or a refused
   Elsa 3 built-in such as `getConfig`) gets a `javascript-function` component code of its own, with `ComponentName`.
+  That includes a `get{Name}()` or `set{Name}()` call that matches no variable or input, which can be an Elsa 3 custom
+  global such as `getCustomerData()`. A `set{Name}()` write to a read-only input is not a component: it is fixed in the
+  definition (`patch-definition`).
   Calls the converter reports as unmatchable, and forbidden capabilities, keep the forbidden-capability code and are not
   components.
 - **FR-016**: Every Must fix finding MUST carry one of three remedies:
@@ -380,7 +384,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 | ID | Question | Decision |
 |---|---|---|
 | Q1 | Where does the migrated content come from? | It is exported from the run's own Elsa 4 store after publish, not written from the converter's output. The folder is `migrated/`. Workflows use the workflow format, and reusables use the activity format. |
-| Q2 | Converted reusables depend on other activity versions. Can the engine load them from `migrated/`? | Yes: specification 1239 lets the engine's JSON activity reconciliation publish source-owned composites with their dependencies. The export keeps the exact dependency version ids and each reusable's outcomes facet, so nothing in the report needs to flag reusables. |
+| Q2 | Converted reusables depend on other activity versions. Can the engine load them from `migrated/`? | Yes: specification 1239 lets the engine's JSON activity reconciliation publish source-owned composites with their dependencies. The engine assigns each loaded version its catalog id (type key and version), so the export rewrites reusable version ids and every reference to them to that id, and keeps each reusable's outcomes as stored. Nothing in the report needs to flag reusables. |
 | Q3 | Where does the CLI's Elsa 4 closure come from? | The Elsa 3 migration image, built `FROM` the essentials engine at the same version, with the Elsa 3 additions baked in. The CLI ships no closure, and Docker is a prerequisite. |
 | Q4 | Does using the ADR 0076 worker for this group need an ADR change? | Yes. A small ADR 0076 amendment does two things. It lets the worker reach further named frozen entry points, one per command group (D14). It also lets such a group, by default, reconcile local directory feeds into a private, run-scoped install root that it deletes at the end, never a host's shared store and never the network (D1, D10). This specification is provisional on it. |
 | Q5 | How is the run kept to one database when the shared transaction refuses a supplied connection? | Every module gets the same connection string, for a uniquely named in-memory shared-cache database that is kept alive for the run. |
@@ -412,8 +416,9 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **SC-005 - Redaction**: The sentinel test finds no sentinel in `report.json` or `report.html`.
 - **SC-006 - Determinism**: Two runs over the same input produce byte-identical `report.json` and `migrated/`.
 - **SC-007 - Assess resolves**: With the fixture feature package, `assess` clears every finding that names one of the
-  package's components, and adds no finding unrelated to them. The fixture is built so that the definitions it unblocks
-  publish clean.
+  package's components, except that a value-only read of a function the package now provides becomes
+  `ELS3-REPLACED-FUNCTION-REFERENCE` (Must fix, `patch-definition`), because only direct calls are rewritten. It adds no
+  other finding. The fixture is built so that the other definitions it unblocks publish clean.
 - **SC-008 - Offline**: A run with container networking disabled produces the same output as one with networking
   enabled.
 
@@ -428,7 +433,7 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   variable types. Its storage-driver change converts Elsa 3 storage drivers to the default storage with a Reconsider
   warning: `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` and `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED`, each carrying
   the driver type as `StorageDriverType` and `ComponentName`. The member-name matching and the storage-driver change
-  are converter changes outside this specification, and implementation waits for both.
+  are converter changes outside this specification, delivered by PRs #5703 and #5709.
   These supply
   the codes from which the custom-component inventory is built, and this specification adds their entries to the code
   table.

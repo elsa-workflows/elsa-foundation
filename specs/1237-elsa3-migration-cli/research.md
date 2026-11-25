@@ -236,21 +236,26 @@ Elsa 4 closure that can drift from the engine the user goes live on.
 
 - JSON workflow reconciliation (`essentials/src/Workflows/Design/Reconciliation/Json/`) reads a top-level array of
   `WorkflowVersionReconciliationModel` through `IPayloadSerializer`. `FolderPath` reads top-level files in ordinal
-  order. `activityVersionId` values are deterministic catalog ids.
+  order. `activityVersionId` values of CLR catalog activities are deterministic catalog ids; imported reusables are stored
+  under import ids (`ReusableActivityImportIdentity.ActivityVersion`) instead.
 - JSON activity reconciliation (`essentials/src/Activities/Design/Reconciliation/Json/`) reads
   `ActivityVersionReconciliationModel` arrays, and `Files` are read in ascending `Order`. Specification 1239
   lets it publish source-owned composites with their dependencies, retrying refused versions in rounds, so order does
-  not matter. A dependency must be named by its exact activity version id (otherwise
-  `activity.dependency.version-not-found`), and a schema-1 graph needs exactly one outcome with reference key `done`,
-  read from the version's `elsa.outcomes` design facet (otherwise `activity.graph.outcome-done-required`).
+  not matter. The model has no version-id field: the engine assigns
+  `ActivityCatalogStableIds.VersionId(ActivityTypeKey, Version)` (`CollectActivityVersions.cs`). A dependency must be
+  named by that id (otherwise `activity.dependency.version-not-found`). Only a schema-1 graph needs exactly one
+  `done` outcome (`activity.graph.outcome-done-required`); the import writes schema-2 graphs, which keep declared
+  Elsa 3 outcomes.
 - Only readers exist. No writer produces either format.
 
 **Decision**: add a writer next to each reader, in the same project, so the format has one owner:
 `JsonWorkflowCatalogWriter` and `JsonActivityCatalogWriter`. Each serializes models through `IPayloadSerializer`, and a
 round-trip test checks read(write(x)) = x. The tooling entry point reads the published versions back from the
 design stores and writes them. Workflows go one file per definition, named by definition id. Activities go in one file,
-in dependency order. The export copies each reusable's stored dependency version ids and its `elsa.outcomes` facet
-unchanged, and T024 proves that the engine loads the result.
+in dependency order. The export rewrites each reusable version id, and every reference to one, to the engine's catalog id
+(`ActivityCatalogStableIds.VersionId`), and keeps each reusable's outcomes facet unchanged. T024 proves that the engine
+loads the result. **Rejected**: changing the import's id formula or adding a version id to the JSON activity model;
+both change other owners for a problem the exporter can solve alone.
 
 ## R-9 Report rendering
 
