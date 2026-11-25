@@ -69,7 +69,8 @@ internal static class WorkbenchCorePreview
                 Expressions = expressions,
             });
             // The node starts once the default shell is active, so its first turns find the evaluator.
-            return new ShellGatedHostedService(new PostgresPreviewHostedService(Open, node, new WorkflowActor([model]), Environment.FailFast),
+            return new ShellGatedHostedService(new PostgresPreviewHostedService(Open, node, new WorkflowActor([model]), Environment.FailFast,
+                    logger: provider.GetRequiredService<ILogger<PostgresPreviewHostedService>>()),
                 token => shells.GetOrActivateAsync(shellName, token), Environment.FailFast);
         });
         if (configuration["Elsa:CorePreview:ReadsTenant"] is { } readsTenant)

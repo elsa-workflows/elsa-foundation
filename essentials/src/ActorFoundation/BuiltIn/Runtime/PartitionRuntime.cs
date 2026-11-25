@@ -32,9 +32,16 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     private readonly IScopeActivation?[] _active = new IScopeActivation?[partitions];
     private readonly bool[] _activating = new bool[partitions], _passing = new bool[partitions];
     private readonly bool[] _releasing = new bool[partitions];
+    private readonly object _lifecycle = new();
     private IScopeHost? _host;
-    private bool _balancing;
-    private Task? _stopSet;
+    private IScopeHostRun? _hostRun;
+    private Task? _stopping;      // starts wait for this: it ends when the run is released or abandoned
+    private Task? _stopJoined;    // joined stops wait for this: an abandoned run's in-flight operation has also returned
+    private bool _abandoned;
+    private volatile bool _closing;    // a stop has begun: no new pass or activation starts, and the stop joins those under way
+    private int _working;              // passes and activations under way
+    private TaskCompletionSource? _idle;
+    private bool _balancing, _listening;
     private Cluster? _cluster;      // K1b: what the node's last renewing heartbeat saw, for the balancing round
 
     public string Node => node;
@@ -43,11 +50,50 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     public int ScopeOf(InstanceRef actor) => actor.Partition;
 
+    /// <summary>Attach one host to an idle runtime. A start waits for an ongoing shutdown.</summary>
     public async ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
     {
-        if (host is IScopeCount counted) await counted.CheckScopesAsync(partitions, cancellationToken);     // refuses a mismatch
-        _host = host;
-        Wake.Listen(actor => _ = Woken(actor));
+        ArgumentNullException.ThrowIfNull(host);
+        var counted = host as IScopeCount;
+        bool listen;
+        while (true)
+        {
+            Task? stopping;
+            lock (_lifecycle)
+            {
+                if (_abandoned)
+                    throw new InvalidOperationException("This runtime cannot restart because its previous shutdown did not complete.");
+                stopping = _stopping;
+                if (stopping is null)
+                {
+                    if (_host is not null)
+                        throw new InvalidOperationException("This runtime is already running.");
+                    if (counted is null)
+                    {
+                        _hostRun = host.AttachRuntime();
+                        _host = host;
+                        listen = !_listening;
+                        _listening = true;
+                        break;
+                    }
+                }
+            }
+            if (stopping is not null)
+            {
+                // A stop abandoned at its deadline completes as cancelled; the next round refuses the restart. A stop that
+                // released and then reported a lost fence ended its run: the queued start goes on, without that loss.
+                try { await stopping.WaitAsync(cancellationToken); }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && stopping.IsCanceled) { }
+                catch (ScopeOwnershipLostException) when (!cancellationToken.IsCancellationRequested) { }
+            }
+            else if (counted is not null)
+            {
+                await counted.CheckScopesAsync(partitions, cancellationToken);
+                counted = null;
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        if (listen) Wake.Listen(actor => _ = Woken(actor));
     }
 
     private async Task Woken(InstanceRef actor)
@@ -61,44 +107,177 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask StopAsync(CancellationToken cancellationToken = default)
+    /// <summary>End this run once. Concurrent callers share the shutdown and a new start waits for it to finish.</summary>
+    public ValueTask StopAsync(CancellationToken cancellationToken = default) => StopAsync(cancellationToken, beforeRelease: null);
+
+    /// <summary>
+    /// As <see cref="StopAsync(CancellationToken)"/>; the run that starts the shutdown calls <paramref name="beforeRelease"/>
+    /// after the host's off-turn work has ended and before the first scope is given up. Its host stops renewing there.
+    /// A call that joins a shutdown already under way waits for it and does not call its own <paramref name="beforeRelease"/>.
+    /// </summary>
+    public ValueTask StopAsync(CancellationToken cancellationToken, Func<Task>? beforeRelease)
     {
-        if (cancellationToken.IsCancellationRequested) return;
-        if (_stopSet is { } stopping)
+        if (cancellationToken.IsCancellationRequested) return default;
+        IScopeHostRun? hostRun;
+        TaskCompletionSource stopped, joined;
+        lock (_lifecycle)
         {
-            await stopping.WaitAsync(cancellationToken);
-            return;
+            // A later stop, also one after an abandoned stop, waits for the interrupted operation and then reports the
+            // abandonment as a cancellation, the way a stop that joined it does.
+            if (_stopJoined is { } pending) return WaitForStopAsync(pending, cancellationToken);
+            if (_host is null) return default;
+            hostRun = _hostRun;
+            stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            joined = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _stopping = stopped.Task;
+            _stopJoined = joined.Task;
         }
-        // The clocked host joins its loops before stopping. Retain the scalar path when a caller stops with work in flight.
-        if (_host is IScopeSetRelease { SupportsSetRelease: true } setHost &&
-            !_passing.Contains(true) && !_activating.Contains(true) && !_releasing.Contains(true))
+        _ = StopRunAsync(hostRun, beforeRelease, stopped, joined, cancellationToken);
+        return AwaitOwnStopAsync(stopped.Task, cancellationToken);
+    }
+
+    private static async ValueTask AwaitOwnStopAsync(Task stopped, CancellationToken cancellationToken)
+    {
+        // The first caller's deadline ends the run; it returns as a crash would. Joined callers observe the cancellation.
+        try { await stopped.ConfigureAwait(false); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+    }
+
+    private static async ValueTask WaitForStopAsync(Task stopped, CancellationToken cancellationToken)
+    {
+        try { await stopped.WaitAsync(cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+    }
+
+    private async Task StopRunAsync(IScopeHostRun? hostRun, Func<Task>? beforeRelease, TaskCompletionSource stopped,
+        TaskCompletionSource joined, CancellationToken cancellationToken)
+    {
+        // The first caller sets the stop deadline. Other callers can give up their own wait.
+        // What is not given up yet runs out by its lease, as after a crash.
+        var released = false;
+        Exception? failure = null, drainFailure = null;
+        Task? operation = null, abandoned = null;
+        try
         {
-            var held = Enumerable.Range(0, partitions).Select(Activation).OfType<IScopeActivation>().ToArray();
+            // A direct caller may stop with a pass, an activation, a balance round (with its set gain or release), a give-up
+            // or a node pass under way: the drain must not judge answers or the fence beside it, and nothing may be gained
+            // after the release. RuntimeNode has joined its loops already, so this finds nothing in flight there.
+            _closing = true;
+            operation = IdleAsync();
+            await operation.WaitAsync(cancellationToken);
+            if (hostRun is not null)
+            {
+                operation = hostRun.PrepareToStopAsync(cancellationToken).AsTask();
+                // A drain that lost a fence still ends its jobs first. Release what is still held, then report the loss.
+                // A loss that arrives with the deadline is the deadline's: the run is abandoned, as on any cancellation.
+                try { await operation.WaitAsync(cancellationToken); }
+                catch (ScopeOwnershipLostException error) when (!cancellationToken.IsCancellationRequested) { drainFailure = error; }
+                catch (ScopeOwnershipLostException) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
+            }
+            if (beforeRelease is not null)
+            {
+                operation = beforeRelease();
+                await operation.WaitAsync(cancellationToken);
+            }
+            // The clocked host joins its loops before stopping. Retain the scalar path when a caller stops with work in flight.
+            var held = _host is IScopeSetRelease { SupportsSetRelease: true } &&
+                !_passing.Contains(true) && !_activating.Contains(true) && !_releasing.Contains(true)
+                ? Enumerable.Range(0, partitions).Select(Activation).OfType<IScopeActivation>().ToArray()
+                : [];
             if (held.Length > 1)
             {
-                var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                _stopSet = completion.Task;
-                try
+                operation = ReleaseSetAsync((IScopeSetRelease)_host!, held, cancellationToken).AsTask();
+                await operation.WaitAsync(cancellationToken);
+            }
+            else
+                for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++)
                 {
-                    await ReleaseSetAsync(setHost, held, cancellationToken);
-                    completion.SetResult();
+                    operation = GiveUpAsync(scope);
+                    await operation.WaitAsync(cancellationToken);
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            if (cancellationToken.IsCancellationRequested) return;
+            hostRun?.Stopped();
+            released = true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            abandoned = operation;
+        }
+        catch (Exception error) { failure = error; }
+        finally
+        {
+            Array.Clear(_active);
+            Volatile.Write(ref _cluster, null);
+            lock (_lifecycle)
+            {
+                _host = null;
+                _hostRun = null;
+                _abandoned = !released;
+                if (released)
                 {
-                    completion.SetCanceled(cancellationToken);
+                    _stopping = _stopJoined = null;
+                    _closing = false;
                 }
-                catch (Exception error)
+                if (failure is null && released && drainFailure is null)
                 {
-                    completion.SetException(error);
-                    _ = completion.Task.Exception;
-                    throw;
+                    stopped.SetResult();
+                    joined.SetResult();
                 }
-                finally { _stopSet = null; }
-                return;
+                else if (failure is null && released)
+                {
+                    // Released and detached: the run is over, so a restart is allowed, and every caller sees the loss.
+                    stopped.SetException(drainFailure!);
+                    joined.SetException(drainFailure!);
+                    _ = stopped.Task.Exception;
+                    _ = joined.Task.Exception;
+                }
+                else if (failure is null)
+                {
+                    // The first caller and queued starts see the abandonment at once. A joined stop also waits for the
+                    // operation the deadline interrupted, so it never returns while that commit or release is in flight.
+                    stopped.SetCanceled(cancellationToken);
+                    _ = CancelJoinedAsync(abandoned, joined, cancellationToken);
+                }
+                else
+                {
+                    stopped.SetException(failure);
+                    joined.SetException(failure);
+                    // A kill or cancellation can leave no waiter. Later observers still receive the same error.
+                    _ = stopped.Task.Exception;
+                    _ = joined.Task.Exception;
+                }
             }
         }
-        // A cancelled token ends it: what is not given up yet runs out by its lease, as after a crash.
-        for (var scope = 0; scope < partitions && !cancellationToken.IsCancellationRequested; scope++) await DeactivateAsync(scope, cancellationToken);
+    }
+
+    private Task IdleAsync()
+    {
+        var idle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Volatile.Write(ref _idle, idle);
+        if (Volatile.Read(ref _working) == 0) idle.TrySetResult();
+        return idle.Task;
+    }
+
+    private bool BeginWork()
+    {
+        if (_closing) return false;
+        Interlocked.Increment(ref _working);
+        if (!_closing) return true;
+        EndWork();
+        return false;
+    }
+
+    private void EndWork()
+    {
+        if (Interlocked.Decrement(ref _working) == 0 && _closing) Volatile.Read(ref _idle)?.TrySetResult();
+    }
+
+    private static async Task CancelJoinedAsync(Task? operation, TaskCompletionSource joined, CancellationToken cancellationToken)
+    {
+        if (operation is not null)
+            try { await operation.ConfigureAwait(false); }
+            catch (Exception) { } // The stop deadline has passed. Observe the late outcome without changing the run.
+        joined.SetCanceled(cancellationToken);
     }
 
     /// <summary>This node holds the scope's fence, as far as layer 2 knows.</summary>
@@ -115,19 +294,30 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// </summary>
     public async Task<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
     {
-        if (_activating[scope] || _releasing[scope]) return null;
-        _activating[scope] = true;
-        IScopeActivation? activation;
-        try { activation = await (_host ?? throw new InvalidOperationException("The runtime has not started.")).ActivateAsync(scope, cancellationToken); }
-        finally { _activating[scope] = false; }
-        if (activation is null) return null;
-        _active[scope] = activation;
-        await activation.WokenAsync(null, cancellationToken);     // a take starts from empty memory: the first pass reads the inbox
-        return activation;
+        if (_activating[scope] || _releasing[scope] || !BeginWork()) return null;
+        try
+        {
+            _activating[scope] = true;
+            IScopeActivation? activation;
+            try { activation = await (_host ?? throw new InvalidOperationException("The runtime has not started.")).ActivateAsync(scope, cancellationToken); }
+            finally { _activating[scope] = false; }
+            if (activation is null) return null;
+            _active[scope] = activation;
+            await activation.WokenAsync(null, cancellationToken);     // a take starts from empty memory: the first pass reads the inbox
+            return activation;
+        }
+        finally { EndWork(); }
     }
 
     /// <summary>Give the scope up. Whoever takes it next finds no death.</summary>
     public async Task DeactivateAsync(int scope, CancellationToken cancellationToken = default)
+    {
+        if (!BeginWork()) return;     // a stop under way gives every scope up itself
+        try { await GiveUpAsync(scope); }
+        finally { EndWork(); }
+    }
+
+    private async Task GiveUpAsync(int scope)
     {
         if (_releasing[scope] || Activation(scope) is not { } activation) return;
         _releasing[scope] = true;
@@ -144,10 +334,14 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// </summary>
     public async Task BalanceAsync(CancellationToken cancellationToken = default)
     {
-        if (_balancing) return;
+        if (_balancing || !BeginWork()) return;     // a stop joins a round under way, set gains and releases included
         _balancing = true;
         try { await BalanceRoundAsync(cancellationToken); }
-        finally { _balancing = false; }
+        finally
+        {
+            _balancing = false;
+            EndWork();
+        }
     }
 
     private async Task BalanceRoundAsync(CancellationToken cancellationToken)
@@ -180,7 +374,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
                 cancellationToken.ThrowIfCancellationRequested();
                 // Earlier give-ups may have awaited the store while a pass started on this worker.
                 if (_passing[surplus] || _activating[surplus] || !Owns(surplus)) continue;
-                await DeactivateAsync(surplus, cancellationToken);
+                await GiveUpAsync(surplus);
             }
         }
         if (take.Count > 1 && _host is IScopeSetGain { SupportsSetGain: true } gains)
@@ -249,9 +443,13 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// </summary>
     public async Task NodePassAsync(CancellationToken cancellationToken = default)
     {
-        if (_host is not INodeLeaseHost { NodeLease: not null } host) return;
-        foreach (var scope in await host.PassAsync(cancellationToken))
-            if ((uint)scope < (uint)partitions && !Owns(scope) && !_activating[scope]) await ActivateAsync(scope, cancellationToken);
+        if (_host is not INodeLeaseHost { NodeLease: not null } host || !BeginWork()) return;
+        try
+        {
+            foreach (var scope in await host.PassAsync(cancellationToken))
+                if ((uint)scope < (uint)partitions && !Owns(scope) && !_activating[scope]) await ActivateAsync(scope, cancellationToken);
+        }
+        finally { EndWork(); }
     }
 
     /// <summary>One pass of a scope this node holds, never two at once. Null when it holds none, or a pass is under way.</summary>
@@ -261,10 +459,14 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// <summary>The serialized pass with the optional fairness hint used by a clocked host.</summary>
     public async ValueTask<ScopePass> PassWithAgeAsync(int scope, CancellationToken cancellationToken = default)
     {
-        if (_passing[scope] || _releasing[scope] || Activation(scope) is not { } activation) return default;
+        if (_passing[scope] || _releasing[scope] || Activation(scope) is not { } activation || !BeginWork()) return default;
         _passing[scope] = true;
         try { return await activation.RunWithAgeAsync(cancellationToken); }
-        finally { _passing[scope] = false; }
+        finally
+        {
+            _passing[scope] = false;
+            EndWork();
+        }
     }
 }
 
