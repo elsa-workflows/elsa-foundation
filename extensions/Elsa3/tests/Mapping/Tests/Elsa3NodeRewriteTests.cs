@@ -242,12 +242,40 @@ public sealed class Elsa3NodeRewriteTests
         Assert.Equal(("Literal", "false"), (conditions[2].Value.ExpressionType, Text(conditions[2])));
     }
 
+    /// <summary>#5789: a condition that carries no source is false, as Elsa 3 evaluated it; a bare true literal is true.</summary>
+    [Fact]
+    public async Task Case_conditions_without_source_are_false_and_a_bare_true_literal_is_true()
+    {
+        var @switch = Activity("switch", "Elsa.Switch");
+        @switch.AdditionalProperties["cases"] = JsonDocument.Parse("""
+            [
+              { "label": "absent" },
+              { "label": "null", "condition": null },
+              { "label": "no-value", "condition": { "type": "JavaScript" } },
+              { "label": "null-value", "condition": { "type": "JavaScript", "value": null } },
+              { "label": "blank", "condition": { "type": "JavaScript", "value": "  " } },
+              { "label": "comment", "condition": { "type": "JavaScript", "value": "// later" } },
+              { "label": "bare-true", "condition": { "type": "Literal", "value": true } }
+            ]
+            """).RootElement.Clone();
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", @switch)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var value = Source(Input(Node(result.Value!.State, "switch"), "Value"));
+        foreach (var label in new[] { "absent", "null", "no-value", "null-value", "blank", "comment" })
+            Assert.Contains($"if (false) {{ return \"{label}\"; }}", value, StringComparison.Ordinal);
+        Assert.Contains("if (true) { return \"bare-true\"; }", value, StringComparison.Ordinal);
+    }
+
     /// <summary>#5789: a case condition the converter cannot read is refused at its case, never read as <c>false</c>.</summary>
     [Theory]
     [InlineData("""{ "type": "Liquid", "value": "{{ true }}" }""", "'Liquid' expression")]
     [InlineData("""{ "type": "JavaScript", "value": 1 }""", "source is not text")]
     [InlineData("""{ "language": "JavaScript", "script": "true" }""", "does not recognise")]
     [InlineData("""[ "true" ]""", "does not recognise")]
+    [InlineData("\"1 > 0\"", "does not recognise")]
+    [InlineData("2", "does not recognise")]
     public async Task An_unreadable_case_condition_is_refused_at_its_case(string condition, string reason)
     {
         var @switch = Activity("switch", "Elsa.Switch");

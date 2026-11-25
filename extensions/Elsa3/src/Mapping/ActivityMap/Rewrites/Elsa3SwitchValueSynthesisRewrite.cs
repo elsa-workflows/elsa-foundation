@@ -142,7 +142,7 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
     /// <summary>
     /// The case condition as JavaScript source. Elsa 3 exports a case condition as a bare expression
     /// <c>{ type, value }</c>, unlike the typed-value shape <c>{ typeName, expression: { type, value } }</c> of an activity
-    /// property; both are read. An absent condition, or one with no value, is false, as Elsa 3 evaluated it. Any other
+    /// property; both are read. An absent condition, or one with no or blank source, is false, as Elsa 3 evaluated it. Any other
     /// shape is refused rather than read as false (#5789).
     /// </summary>
     private static bool TryCondition(JsonElement @case, out string condition, out string reason)
@@ -151,6 +151,13 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
         reason = string.Empty;
         if (!@case.TryGetProperty("condition", out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             return true;
+
+        // Elsa 3 deserializes a case condition into an expression object; a bare JSON scalar is no shape it wrote.
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            reason = "has a shape the converter does not recognise";
+            return false;
+        }
 
         if (IsBareExpression(value))
             value = Wrap(value);
@@ -226,6 +233,13 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
         {
             reason = $"could not be parsed ({exception.Message})";
             return false;
+        }
+
+        // An empty source, or one holding only comments, evaluated to undefined in Elsa 3: false.
+        if (parsed.Body.Count == 0)
+        {
+            reason = string.Empty;
+            return true;
         }
 
         if (parsed.Body is not [ExpressionStatement statement])
