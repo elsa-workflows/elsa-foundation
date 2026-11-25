@@ -20,7 +20,8 @@ internal sealed partial class PostgresRootAdmission
         public FoundationTerminalStamp? Terminal { get; init; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public FoundationParkMark? Park { get; init; }
-        // A recover carries the ordinary admission window, which it gives each row it restores or clears.
+        // A recover, and a Terminate that names a parked root's Park, carry the ordinary admission window, which they give
+        // each kept row they restore or clear.
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public long? Window { get; init; }
     }
@@ -103,6 +104,10 @@ internal sealed partial class PostgresRootAdmission
                     park = PostgresRootSelection.OpenPark(cursor, selection, tenant, reference);
                     if (park is not { Revision: > 0, At: > 0 }) return null;
                 }
+                // S5b: in a parked-operator set a Terminate may name the root's Park instead of its running selection.
+                else if (db.UsesRootParkedOperators && !thenDelete &&
+                         PostgresRootSelection.OpenPark(cursor, selection, tenant, reference) is { Revision: > 0, At: > 0 } named)
+                    park = named;
                 else if (!PostgresRootSelection.MatchesRunning(cursor, selection, tenant, reference))
                     return null;
             }
@@ -130,7 +135,7 @@ internal sealed partial class PostgresRootAdmission
             // ended this actor, the receipt committed before the owner could consume it.
             var exactTerminal = terminal is not null && await LocksRootDeleteSelectionAsync(db, address, tenant, reference, terminal, token);
             var exactPark = park is not null && await LocksRootParkSelectionAsync(db, address, tenant, reference, park, token);
-            var selectedStatus = selected && !deletion && !recover
+            var selectedStatus = selected && !deletion && park is null
                 ? await AdmissionStatusAsync(db, address, tenant, reference, token, requireCheckpoint: true)
                 : null;
             var prior = await db.Database.SqlQuery<string>($"""
@@ -142,16 +147,16 @@ internal sealed partial class PostgresRootAdmission
                 await tx.CommitAsync(token);
                 return selected && prior != reference ? null : new(prior, true);
             }
-            if (!deletion && !recover)
+            if (!deletion && park is null)
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
-            // A composed Park set admits an unheld Terminate, or Terminate and delete, for a parked root. A held command
-            // there is refused at admission; one admitted before the Park opened is refused by the owner, which answers it.
+            // S5b: a composed Park set admits a Terminate for a parked root, held or not, only with the selection of its Park.
+            // A running selection, and Terminate and delete, are refused there; a command admitted before the Park opened is
+            // refused by the owner, which answers a held caller.
             var parked = selectedStatus == InstanceStatus.Faulted && db.UsesRootParkedOperators && kind == Kinds.Terminate &&
                 await LocksParkedRootAsync(db, address, tenant, reference, token);
-            var eligible = deletion ? exactTerminal : recover ? exactPark
-                : parked ? reply is null
-                : thenDelete ? selectedStatus is InstanceStatus.Running or InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled
-                : selectedStatus == InstanceStatus.Running;
+            var eligible = deletion ? exactTerminal : park is not null ? exactPark
+                : !parked && (thenDelete ? selectedStatus is InstanceStatus.Running or InstanceStatus.Finished or InstanceStatus.Faulted or InstanceStatus.Cancelled
+                    : selectedStatus == InstanceStatus.Running);
             if (!eligible)
             {
                 await tx.RollbackAsync(token);
@@ -197,7 +202,7 @@ internal sealed partial class PostgresRootAdmission
             var header = (replyAddress is null ? "" : HeldOperatorPrefix) + prefix +
                 DurableKeyJson.Write(new StoredOperator(reference, operation, address.Creation, kind, due == 0)
                 {
-                    Terminal = terminal, Park = park, Window = recover ? (long)deduplicationWindow.TotalMilliseconds : null
+                    Terminal = terminal, Park = park, Window = park is not null ? (long)deduplicationWindow.TotalMilliseconds : null
                 });
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Due", "KeepUntil", "Done", "Seen", "Attempts", "Trial", "ReplyTo")
@@ -226,6 +231,7 @@ internal sealed partial class PostgresRootAdmission
     }
 
     // The checkpoint stays shared-locked until the receipt and occurrence commit, so the Park cannot move underneath them.
+    // A parked root carries no terminal mark until it ends.
     private static async Task<bool> LocksRootParkSelectionAsync(KernelDb db, CreationAddress address, string tenant,
         string reference, FoundationParkMark mark, CancellationToken token) =>
         address.Creation == 1 && (await db.Database.SqlQuery<long>($"""
@@ -233,12 +239,12 @@ internal sealed partial class PostgresRootAdmission
             WHERE "Id" = {address.Id} AND "Partition" = {new InstanceRef(address.Id).Partition}
                 AND "FoundationTenant" = {tenant} AND "FoundationReference" = {reference} AND NOT "Retired"
                 AND "Status" = {(int)InstanceStatus.Faulted} AND "FoundationParkAt" = {mark.At} AND "FoundationParkRevision" = {mark.Revision}
+                AND "FoundationTerminalRevision" IS NULL
             FOR SHARE
             """).ToListAsync(token)).Count == 1;
 
-    // S5a: a composed Park set admits a Terminate for a parked root with the root's running selection. The owner refuses it
-    // there with a journalled reason; S5b checks it against the Park selection and ends the root. A Park keeps the row's
-    // Suspended flag, so a root parked while suspended is admitted the same way.
+    // A parked root in a composed Park set, whose running selection admission refuses. A Park keeps the row's Suspended
+    // flag, so a root parked while suspended is found the same way.
     private static async Task<bool> LocksParkedRootAsync(KernelDb db, CreationAddress address, string tenant, string reference,
         CancellationToken token) =>
         address.Creation == 1 && (await db.Database.SqlQuery<long>($"""
@@ -349,10 +355,10 @@ internal sealed partial class PostgresRootAdmission
 
     internal static Message DecodeOperator(KernelDb db, MessageEntity row, string reference) =>
         DecodeOperator(row, reference, db.UsesRootTermination, db.UsesRootRetirement, db.UsesRootTerminateThenDelete,
-            db.UsesRootRetention, db.UsesRootOperatorReplies, db.UsesRootParkRecovery);
+            db.UsesRootRetention, db.UsesRootOperatorReplies, db.UsesRootParkRecovery, db.UsesRootParkedOperators);
 
     internal static Message DecodeOperator(MessageEntity row, string reference, bool terminations, bool retirements, bool terminateThenDelete,
-        bool retentionDeletes = false, bool operatorReplies = false, bool parkRecovery = false)
+        bool retentionDeletes = false, bool operatorReplies = false, bool parkRecovery = false, bool parkedTerminate = false)
     {
         if (!IsOperatorOccurrence(new(row.Id, row.InboxScope)) || !IsStoredOperator(row.Start) || row.Kind is not (Kinds.Suspend or Kinds.Resume or Kinds.Terminate or Kinds.Delete or Kinds.Recover) ||
             (row.Kind == Kinds.Recover) != parkRecovery ||
@@ -364,14 +370,14 @@ internal sealed partial class PostgresRootAdmission
             row.Kind is not (Kinds.Terminate or Kinds.Delete)))
             throw new StoreException(Failure.Definite, "Unexpected stored operator reply route.");
         var (header, thenDelete, retentionDelete) = ReadOperatorHeader(row.Start!, reference, row.Id, row.Kind, row.Due,
-            held, terminateThenDelete, retentionDeletes);
+            held, terminateThenDelete, retentionDeletes, parkedTerminate);
         var suffix = row.Id.LastIndexOf('/');
         return FoundationIngressAddress.Occurrence(header.Operation, row.Id[..suffix], row.Id[(suffix + 1)..],
             new(row.Target), header.Creation, row.Kind, null, row.Due != 0 || header.ExplicitZeroDue ? row.Due : null, until, row.ReplyTo, new(null)
             {
                 QualifiedTerminal = header.Terminal, DeleteTarget = thenDelete ? reference : null,
                 RootThenDelete = thenDelete, RetentionDelete = retentionDelete, RootHeldReply = held,
-                RecoverMode = header.Park is null ? null : ParkRecoveryMode.Resume, RootParkMark = header.Park, RootParkWindow = header.Window
+                RecoverMode = row.Kind == Kinds.Recover ? ParkRecoveryMode.Resume : null, RootParkMark = header.Park, RootParkWindow = header.Window
             });
     }
 
@@ -386,12 +392,13 @@ internal sealed partial class PostgresRootAdmission
         if (held != hasReply || held && (!db.UsesRootOperatorReplies || kind is not (Kinds.Terminate or Kinds.Delete)))
             throw new StoreException(Failure.Definite, "Unexpected stored operator reply route.");
         var (header, _, _) = ReadOperatorHeader(wire, reference, occurrence, kind, due, held,
-            db.UsesRootTerminateThenDelete, db.UsesRootRetention);
+            db.UsesRootTerminateThenDelete, db.UsesRootRetention, db.UsesRootParkedOperators);
         return (header.Operation, kind, due != 0 || header.ExplicitZeroDue ? due : null);
     }
 
     private static (StoredOperator Header, bool ThenDelete, bool RetentionDelete) ReadOperatorHeader(string framing,
-        string reference, string occurrence, string kind, long due, bool held, bool terminateThenDelete, bool retentionDeletes)
+        string reference, string occurrence, string kind, long due, bool held, bool terminateThenDelete, bool retentionDeletes,
+        bool parkedTerminate)
     {
         var wire = held ? framing[HeldOperatorPrefix.Length..] : framing;
         var thenDelete = wire.StartsWith(TerminateThenDeletePrefix, StringComparison.Ordinal);
@@ -406,7 +413,10 @@ internal sealed partial class PostgresRootAdmission
         if (header is not { Operation.Length: > 0 } || header.Reference != reference || header.Creation != 1 || header.Kind != kind ||
             (kind == Kinds.Delete ? header.Terminal is not { Revision: > 0 } : header.Terminal is not null) ||
             (kind == Kinds.Recover ? header.Park is not { Revision: > 0, At: > 0 } || header.Window is not >= 0 || due != 0 || header.ExplicitZeroDue ||
-                held || thenDelete || retentionDelete : header.Park is not null || header.Window is not null) ||
+                held || thenDelete || retentionDelete
+            : kind == Kinds.Terminate && parkedTerminate && header.Park is not null
+                ? header.Park is not { Revision: > 0, At: > 0 } || header.Window is not >= 0 || thenDelete || retentionDelete
+            : header.Park is not null || header.Window is not null) ||
             thenDelete && (!terminateThenDelete || kind != Kinds.Terminate) ||
             retentionDelete && (!retentionDeletes || kind != Kinds.Delete || held) ||
             header.ExplicitZeroDue && due != 0 || !MatchesDirectOccurrence(reference, header.Operation, occurrence[OperatorOccurrencePrefix.Length..], retentionDelete))

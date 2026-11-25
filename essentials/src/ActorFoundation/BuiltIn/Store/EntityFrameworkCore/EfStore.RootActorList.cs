@@ -43,7 +43,7 @@ public sealed partial class EfStore
         private const string QualifiedGuard = "kernel_require_root_actor_list_v13";
 
         internal static ActorListProjection Of(KernelDb db) => new(db.UsesRootTerminalSelection,
-            db.UsesRootTerminalSelection || db.UsesRootRetirement, db.UsesRootParkInspection, db.UsesRootParkRecovery);
+            db.UsesRootTerminalSelection || db.UsesRootRetirement, db.UsesRootParkInspection, db.ProjectsRootParkRevision);
 
         // A qualified projector writes through its trigger's schema and has a guard that refuses root writes without it.
         internal bool Qualified => TerminalMarks || Retires;
