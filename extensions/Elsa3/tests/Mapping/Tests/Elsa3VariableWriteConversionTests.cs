@@ -579,6 +579,20 @@ public sealed class Elsa3VariableWriteConversionTests
         Assert.Equal(Elsa3ImportDiagnosticCodes.AmbiguousReference, Assert.Single(result.Diagnostics, item => item.IsError).Code);
     }
 
+    [Fact]
+    public async Task A_member_change_of_another_variable_is_refused_in_a_reusable_workflow_that_has_a_shared_name()
+    {
+        // FR-010a: the write analysis does not tie a member change to one name, so it is refused there (VF-IMP-002).
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("getVariable('Order').status = 'Paid'; return 1;"))));
+        var definition = ConversionServices.Definition(root, variables: [Order, new Elsa3Variable { Id = "amount-id", Name = "amount", TypeName = "Object" }]);
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.AmbiguousReference, Assert.Single(result.Diagnostics, item => item.IsError).Code);
+    }
+
     [Theory]
     [InlineData("return getTotal() + 1;")]
     [InlineData("setTotal(5); return 1;")]

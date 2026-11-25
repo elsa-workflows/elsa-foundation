@@ -67,8 +67,8 @@ ADR 0092 D-9 no new commit rule
    gets a dedicated refusal (`VF-IMP-005`): it writes the reusable workflow's input `<input>`; guidance: declare a
    variable, initialize it from the input, write that variable.
 3. Tests: the reusable refusal theory turns into conversion assertions; the input-write cases pin the refusal.
-4. FR-010a (added in review): a reusable workflow with a variable and an input of one name refuses a script that mentions
-   the name or that may write variables by `setVariable`, a computed name or dynamic code
+4. FR-010a (added in review): a reusable workflow with a variable and an input of one name refuses a script whose source
+   mentions the name, or that `ScriptMayWriteVariables` finds may write variables (anything but a generated setter)
    (`Elsa3ValueFlowLowerer.LowerScript`, `VF-IMP-002`); the rewriter's per-form checks give the exact message for a
    direct write.
 

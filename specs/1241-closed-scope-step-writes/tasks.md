@@ -34,9 +34,9 @@ Tests are xunit only. `[P]` = can run in parallel (different files).
 
 - [x] T011 `Elsa3ValueFlowLowerer`: reusable scripts write variables; remove `ReusableVariableWriteGuidance` paths.
 - [x] T012 Reusable input writes: dedicated refusal for `setVariable('<input>', v)`; generated input setter keeps its
-  refusal. Tests. *Also FR-010a (added in review): in a workflow where a variable and an input share a name, a script that
-  uses the name or may write by `setVariable`, a computed name or dynamic code is ambiguous (`VF-IMP-002`); tested in
-  `Elsa3VariableWriteConversionTests`.*
+  refusal. Tests. *Also FR-010a (added in review): in a workflow where a variable and an input share a name, a script whose
+  source mentions the name, or that may write variables other than through a generated setter, is ambiguous
+  (`VF-IMP-002`); tested in `Elsa3VariableWriteConversionTests`.*
 - [x] T013 Convert the reusable refusal tests into conversion assertions; `ApplyDiscount` conversion + import run test
   (SC-001, SC-002). *Done. The `ApplyDiscount` conversion is pinned in `ApplyDiscount_converts_with_no_refusal`, and its converted script runs in a hand-built body in `A_body_script_changes_its_variable_and_the_next_step_and_the_output_read_it`; end to end, `ImportedReusableVariableWriteTests` imports `ApplyDiscount` from Elsa 3 JSON, publishes it and calls it twice (Elsa3 import integration tests).*
 

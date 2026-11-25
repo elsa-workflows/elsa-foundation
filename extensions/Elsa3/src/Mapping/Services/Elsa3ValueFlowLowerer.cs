@@ -896,9 +896,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         }
 
         // Spec 1241 FR-010a: Elsa 3 declared a reusable workflow's inputs as variables too, so a name a variable and an input
-        // share named two variables there. In such a workflow a script is refused rather than guessed (VF-IMP-002) when it
-        // mentions that name in any form or letter case (a read, a getter, an alias, a helper), or when it may write
-        // variables in a way the converter does not tie to one name (setVariable, a computed name, dynamic code).
+        // share named two variables there. In such a workflow a script is refused rather than guessed (VF-IMP-002) when its
+        // source mentions that name in any letter case, or when the write analysis finds it may write variables other than
+        // through a generated setter (setVariable, a member change, a helper, a computed name, dynamic code).
         if (accessors.IsReusable && SharedVariableInputNames(definition) is { Count: > 0 } sharedNames)
         {
             var mentioned = sharedNames.FirstOrDefault(name => expression.Value.Contains(name, StringComparison.OrdinalIgnoreCase));
