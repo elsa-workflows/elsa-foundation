@@ -130,9 +130,14 @@ public static class PostgresPreviewHosting
         var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), actor, rootJobHandle: store.RootJobHandle,
             rootTimedJobClock: store.RootTimedJobSettlementEnabled ? store.ReadRootTimedJobPublicationTimeAsync : null,
             rootHeldReplies: replies is not null);
-        var host = DurableHost.ForNode(node, watched, adapter, partitions, replies is null ? null : new WorkerOptions { Transport = replies, Partitions = partitions });
+        // A store error a drain retried is reported as a loop error of the node made below: counted, and reported once per
+        // distinct error per window, so a drain the deadline kills shows why it made no progress.
+        RuntimeNode? reporter = null;
+        var workers = new WorkerOptions { Partitions = partitions, OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error) };
+        var host = DurableHost.ForNode(node, watched, adapter, partitions, replies is null ? workers : workers with { Transport = replies });
         var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,
             beforeRelease: host.DrainEnteredTurnsAsync, onFault: onFault);
+        Volatile.Write(ref reporter, runtime);
         try
         {
             await runtime.StartAsync(host, cancellationToken);

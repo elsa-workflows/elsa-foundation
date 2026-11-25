@@ -68,7 +68,12 @@ internal static class HostJobDrainChecks
             ("loop-errors-logged", LoopErrorsLoggedAsync),
             ("answer-put-back-newest", () => AnswerPutBackAsync(newerAfterConsumption: true)),
             ("dispose-deadline-boundary", DisposeDeadlineBoundaryAsync),
-            ("job-drain-own-cancel-then-kill", JobDrainOwnCancelThenKillAsync),
+            ("job-drain-own-cancel-then-kill", () => JobDrainThrowsThenKillAsync(new OperationCanceledException("the job drain's own cancellation"))),
+            ("job-drain-fault-then-kill", () => JobDrainThrowsThenKillAsync(new InvalidOperationException("injected job drain fault"))),
+            ("release-fault-after-kill", ReleaseFaultAfterKillAsync),
+            ("kill-linked-cancel-not-recorded", KillLinkedCancelNotRecordedAsync),
+            ("loop-error-null-data", LoopErrorNullDataAsync),
+            ("drain-store-error-reported", DrainStoreErrorReportedAsync),
             ("loop-error-window", LoopErrorWindowAsync),
             ("aggregate-inner-once", AggregateInnerOnceAsync),
         ];
@@ -1979,10 +1984,11 @@ internal static class HostJobDrainChecks
             $"loop errors reach the callback once per distinct error ({host.Passes} failing passes, {node.Errors} counted, logged pass {passErrors}, beside {besideErrors})");
     }
 
-    /// <summary>A host whose one scope's every pass throws.</summary>
-    private sealed class ThrowingHost : IScopeHost
+    /// <summary>A host whose one scope's every pass throws (an <see cref="InvalidOperationException"/>, or what it makes).</summary>
+    private sealed class ThrowingHost(Func<Exception>? make = null) : IScopeHost
     {
         internal const string Message = "a pass that fails every time";
+        internal Exception Make() => make?.Invoke() ?? new InvalidOperationException(Message);
         internal int Passes;
         public ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default) =>
             new(new ThrowingScope(this, scope));
@@ -1995,7 +2001,7 @@ internal static class HostJobDrainChecks
             public ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default)
             {
                 Interlocked.Increment(ref host.Passes);
-                throw new InvalidOperationException(Message);
+                throw host.Make();
             }
             public ValueTask DisposeAsync()
             {
@@ -2027,17 +2033,17 @@ internal static class HostJobDrainChecks
             $"dispose deadlines at the timer limit (limit - grace, limit - grace + 1 ms, limit) stop and release ({string.Join(", ", results)})");
     }
 
-    // The job drain throws its own cancellation (no kill); a deadline kill comes after. The cancellation is recorded once,
-    // as thrown.
-    private static async Task JobDrainOwnCancelThenKillAsync()
+    // The job drain throws its own cancellation, or faults, while the job it waits for ignores cancellation; the deadline
+    // kill lands after, while the drain still waits for that job. The kill abandons the run, so the stop returns and the
+    // fence is left for expiry. Once the job exits, the drain ends with what it threw, which is recorded once, as thrown.
+    private static async Task JobDrainThrowsThenKillAsync(Exception thrown)
     {
         var fixture = new Fixture();
         var type = new JobProbe();
-        var own = new OperationCanceledException("the job drain's own cancellation");
         var armed = 0;
-        var options = fixture.Options with { BeforeDrainRound = () => { if (Interlocked.Exchange(ref armed, 0) == 1) throw own; } };
+        var options = fixture.Options with { BeforeDrainRound = () => { if (Interlocked.Exchange(ref armed, 0) == 1) throw thrown; } };
         var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
-        var node = new RuntimeNode("job-own-cancel", fixture.Store, 1, new LoopOptions
+        var node = new RuntimeNode("job-drain-throws", fixture.Store, 1, new LoopOptions
         {
             BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
         }, onFault: logged.Enqueue);
@@ -2047,24 +2053,160 @@ internal static class HostJobDrainChecks
         Volatile.Write(ref armed, 1);
         using var deadline = new CancellationTokenSource();
         var stop = node.StopAsync(deadline.Token).AsTask();
-        await WaitFor(() => Volatile.Read(ref armed) == 0);     // the drain has thrown its own cancellation
+        await WaitFor(() => Volatile.Read(ref armed) == 0);     // the drain has thrown
         await Task.Delay(200);
         var insideAtKill = !type.Exited.Task.IsCompleted && !stop.IsCompleted;
         deadline.Cancel();     // the kill lands while the job drain still waits for the job, which ignores cancellation
         var outcome = await OutcomeAsync(stop);
+        var owner = fixture.Fence.Owner;
         type.Finish.TrySetResult();
         await type.Exited.Task.WaitAsync(Timeout);
         await Task.Delay(500);
         await DisposeQuietlyAsync(node);
-        Console.WriteLine($"  job drain own cancel then kill: inside at kill {insideAtKill}, stop {outcome?.GetType().Name ?? "returned"}, " +
-            $"logged [{string.Join(", ", logged.Select(entry => entry.Message))}], recorded {node.LastError?.Message ?? "nothing"}");
-        Check(insideAtKill, "the job drain threw its own cancellation, and the kill then landed while the drain was still inside");
-        // Known gap, filed as a follow-up (review B, finding 1): when the kill abandons the run, the job drain's own
-        // cancellation is taken for the deadline's and not recorded. This case shows it; it does not fail the suite.
-        var recorded = logged.Count(entry => ReferenceEquals(entry, own)) == 1 && ReferenceEquals(node.LastError, own);
-        Console.WriteLine(recorded
-            ? "ok the job drain's own cancellation, then a kill while the drain is inside, is recorded once, as thrown"
-            : "KNOWN GAP the job drain's own cancellation, then a kill while the drain is inside, is not recorded (follow-up)");
+        var kind = thrown is OperationCanceledException ? "own cancellation" : "fault";
+        Check(insideAtKill, $"the job drain threw its {kind}, and the kill then landed while the drain was still inside");
+        Check(outcome is null && owner == node.Node,
+            $"the kill abandons the run: the stop returns and the fence is left for expiry (stop {outcome?.GetType().Name ?? "returned"}, owner {owner ?? "none"})");
+        Check(logged.Count == 1 && ReferenceEquals(logged.First(), thrown) && ReferenceEquals(node.LastError, thrown),
+            $"the job drain's {kind}, then a kill while the drain is inside, is recorded once, as thrown (logged [{string.Join(", ", logged.Select(entry => entry.Message))}], recorded {node.LastError?.Message ?? "nothing"})");
+    }
+
+    // The stop's release of a scope is still in flight when the deadline kill lands; it faults once it returns. The stop
+    // returned at the kill, and the fault is recorded once.
+    private static async Task ReleaseFaultAfterKillAsync()
+    {
+        var fixture = new Fixture();
+        var host = new SlowReleaseHost();
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var node = new RuntimeNode("release-fault", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, onFault: logged.Enqueue);
+        await node.StartAsync(host);
+        await WaitFor(() => node.Runtime.Owns(0));
+        using var deadline = new CancellationTokenSource();
+        var stop = node.StopAsync(deadline.Token).AsTask();
+        await host.Releasing.Task.WaitAsync(Timeout);
+        deadline.Cancel();
+        var outcome = await OutcomeAsync(stop);
+        host.Finish.TrySetResult();     // the release returns, and faults
+        await Task.Delay(300);
+        await DisposeQuietlyAsync(node);
+        Check(outcome is null && logged.Count == 1 && ReferenceEquals(logged.First(), host.Fault) && ReferenceEquals(node.LastError, host.Fault),
+            $"a release that faults after the kill is recorded once (stop {outcome?.GetType().Name ?? "returned"}, logged [{string.Join(", ", logged.Select(entry => entry.Message))}], recorded {node.LastError?.Message ?? "nothing"})");
+    }
+
+    /// <summary>A host whose one scope's give-up waits for <see cref="Finish"/> and then throws <see cref="Fault"/>.</summary>
+    private sealed class SlowReleaseHost : IScopeHost
+    {
+        internal InvalidOperationException Fault { get; } = new("injected release fault after the kill");
+        internal TaskCompletionSource Releasing { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Finish { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default) =>
+            new(new SlowScope(this, scope));
+
+        private sealed class SlowScope(SlowReleaseHost host, int scope) : IScopeActivation
+        {
+            public int Scope => scope;
+            public bool Active { get; private set; } = true;
+            public ValueTask WokenAsync(InstanceRef? actor, CancellationToken cancellationToken = default) => default;
+            public ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default) => new(TimeSpan.FromMilliseconds(50));
+            public async ValueTask DisposeAsync()
+            {
+                host.Releasing.TrySetResult();
+                await host.Finish.Task;
+                Active = false;
+                throw host.Fault;
+            }
+        }
+    }
+
+    // The kill lands while the turn drain has a watched store call in flight. The call ends with a cancellation on the
+    // watchdog's token, linked to the kill's: that is the kill's, and nothing is recorded.
+    private static async Task KillLinkedCancelNotRecordedAsync()
+    {
+        var fixture = new Fixture();
+        var watchdog = new Watchdog(TimeSpan.FromSeconds(10), static _ => { });
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var node = new RuntimeNode("kill-linked-cancel", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, beforeRelease: async kill => await watchdog.RunAsync("commit", kill,
+            static token => new ValueTask(Task.Delay(System.Threading.Timeout.Infinite, token))), onFault: logged.Enqueue);
+        await node.StartAsync(fixture.Host(node, new JobProbe(), fixture.Store, ownedSet: true));
+        await WaitFor(() => fixture.Fence.Owner == node.Node);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        var outcome = await OutcomeAsync(node.StopAsync(deadline.Token).AsTask());
+        await Task.Delay(200);
+        await DisposeQuietlyAsync(node);
+        Check(outcome is null && logged.IsEmpty && node.LastError is null,
+            $"a watched call's cancellation that the kill caused is not recorded (outcome {outcome?.GetType().Name ?? "none"}, logged {logged.Count}, recorded {node.LastError?.GetType().Name ?? "nothing"})");
+    }
+
+    // A pass that fails every time with an exception whose Data is null. The clock passes the report window between
+    // reports, so a report carries a suppressed count: writing it must not end the pass loop.
+    private static async Task LoopErrorNullDataAsync()
+    {
+        var fixture = new Fixture();
+        long now = 0;
+        var step = (long)RuntimeNode.LoopErrorWindow.TotalMilliseconds / 2 + 1;     // report, suppress, report with a count, ...
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var host = new ThrowingHost(static () => new NullDataException(ThrowingHost.Message));
+        var node = new RuntimeNode("loop-null-data", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20),
+            ErrorReportClock = () => Interlocked.Add(ref now, step)
+        }, onFault: logged.Enqueue);
+        await node.StartAsync(host);
+        var clock = Stopwatch.StartNew();
+        while (Volatile.Read(ref host.Passes) < 8 && clock.Elapsed < Timeout) await Task.Delay(20);
+        var outcome = await OutcomeAsync(node.StopAsync().AsTask());
+        Check(host.Passes >= 8 && node.Errors >= 8 && logged.Count >= 4 && outcome is null,
+            $"a loop error whose Data is null is reported without its count and the pass loop survives ({host.Passes} failing passes, {node.Errors} counted, {logged.Count} reported, stop {outcome?.GetType().Name ?? "returned"})");
+    }
+
+    private sealed class NullDataException(string message) : Exception(message)
+    {
+        public override System.Collections.IDictionary Data => null!;
+    }
+
+    // The drain's store fails with a transient error every round until the deadline kills the drain. Wired as the
+    // PostgreSQL host wires it, the retried error is reported through the node's loop-error reports: the operator sees
+    // the kill's cause once, and every retry is counted.
+    private static async Task DrainStoreErrorReportedAsync()
+    {
+        var fixture = new Fixture();
+        var type = new JobProbe();
+        RuntimeNode? reporter = null;
+        var failing = 0;
+        const string message = "injected transient drain store error";
+        var options = fixture.Options with
+        {
+            BeforeDrainAnswer = () => { if (Volatile.Read(ref failing) == 1) throw new StoreException(Failure.Transient, message); },
+            OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error)
+        };
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        var node = new RuntimeNode("drain-store-error", fixture.Store, 1, new LoopOptions
+        {
+            BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
+        }, onFault: logged.Enqueue);
+        Volatile.Write(ref reporter, node);
+        var host = fixture.Host(node, type, fixture.Store, ownedSet: true, options);
+        await node.StartAsync(host);
+        await fixture.StartActorAsync(node);
+        await type.Entered.Task.WaitAsync(Timeout);
+        Volatile.Write(ref failing, 1);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(800));     // lands while the job drain retries
+        Exception? outcome;
+        try { outcome = await OutcomeAsync(node.StopAsync(deadline.Token).AsTask()); }
+        finally { type.Finish.TrySetResult(); }
+        await type.Exited.Task.WaitAsync(Timeout);
+        await Task.Delay(200);
+        await DisposeQuietlyAsync(node);
+        var retried = host.NodeWorker!.DrainStoreErrors.Count;
+        var reported = logged.Count(entry => entry is StoreException { Failure: Failure.Transient } && entry.Message == message);
+        Check(outcome is null && retried >= 2 && reported == 1 && node.Errors >= retried,
+            $"a store error the drain retried until the kill is reported once and every retry counted (stop {outcome?.GetType().Name ?? "returned"}, retried {retried}, reported {reported}, counted {node.Errors})");
     }
 
     // Loop-error reports are bounded: at most LoopErrorKeys distinct keys (the oldest evicted, so it reports again),

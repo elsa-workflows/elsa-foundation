@@ -107,7 +107,7 @@ internal static class PostgresPreviewLifetimeChecks
             Require((await ReadFenceAsync()).Owner is null, "the replacement also releases ownership through application shutdown");
         }
         // KERNEL_LIFETIME_PROBES=name[,name]: run only these deadline probes after the main flow (for fail-before witnesses).
-        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault", "joined-stop-warning", "aggregate-once"];
+        string[] probes = ["turn-deadline", "startup-deadline", "startup-retry", "dispose-prompt", "dispose-stuck", "dispose-report", "dispose-joins", "negative-deadline", "shutdown-fault", "joined-stop-warning", "aggregate-once", "loop-error-repeat"];
         var only = Environment.GetEnvironmentVariable("KERNEL_LIFETIME_PROBES")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (only is { Length: 0 } || only?.FirstOrDefault(name => !probes.Contains(name, StringComparer.Ordinal)) is { } unknown)
             throw new InvalidOperationException($"KERNEL_LIFETIME_PROBES names no known probe ({string.Join(", ", probes)}).");
@@ -123,7 +123,27 @@ internal static class PostgresPreviewLifetimeChecks
         if (Probe("shutdown-fault")) await CheckShutdownFaultAsync();
         if (Probe("joined-stop-warning")) await CheckJoinedStopWarningAsync();
         if (Probe("aggregate-once")) await CheckAggregateOnceAsync();
+        if (Probe("loop-error-repeat")) CheckLoopErrorRepeat();
         return 0;
+
+        // The node reports a loop error again once its window has passed, with the repeats it suppressed, also when the
+        // loop rethrows the same instance (an awaited faulted task): the service logs each report. An aggregate with no
+        // inner exceptions is logged as itself.
+        void CheckLoopErrorRepeat()
+        {
+            var log = new RecordingLogger();
+            var service = new PostgresPreviewHostedService(Open, "loop-error-repeat", new WaitingActor(false), Environment.FailFast, logger: log);
+            var repeated = new InvalidOperationException("injected loop error, rethrown as the same instance");
+            service.NodeFault(repeated);
+            repeated.Data["SuppressedRepeats"] = 3L;     // as the node sets it on the report after the window
+            service.NodeFault(repeated);
+            var messages = log.ErrorMessages;
+            Require(log.Errors.Count == 2 && log.Errors.All(error => ReferenceEquals(error, repeated)) && messages[^1].Contains("(3 earlier repeats", StringComparison.Ordinal),
+                $"a loop error the node reports again as the same instance is logged again, with its suppressed count ({log.Errors.Count} Error entr{(log.Errors.Count == 1 ? "y" : "ies")}{(messages.Count > 0 ? ": " + messages[^1] : "")})");
+            var empty = new AggregateException();
+            service.NodeFault(empty);
+            Require(log.Errors.Count == 3 && ReferenceEquals(log.Errors[^1], empty), "an aggregate with no inner exceptions is logged as itself");
+        }
 
         // An aggregate shutdown fault is logged as its inner faults, one Error each, never as the aggregate as well.
         async Task CheckAggregateOnceAsync()
@@ -429,15 +449,20 @@ internal static class PostgresPreviewLifetimeChecks
     private sealed class RecordingLogger : ILogger<PostgresPreviewHostedService>
     {
         private readonly List<Exception?> _errors = [];
-        private readonly List<string> _warnings = [];
+        private readonly List<string> _warnings = [], _errorMessages = [];
         internal IReadOnlyList<Exception?> Errors { get { lock (_errors) return [.. _errors]; } }
+        internal IReadOnlyList<string> ErrorMessages { get { lock (_errors) return [.. _errorMessages]; } }
         internal IReadOnlyList<string> Warnings { get { lock (_errors) return [.. _warnings]; } }
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
         public bool IsEnabled(LogLevel logLevel) => true;
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
             lock (_errors)
-                if (logLevel == LogLevel.Error) _errors.Add(exception);
+                if (logLevel == LogLevel.Error)
+                {
+                    _errors.Add(exception);
+                    _errorMessages.Add(formatter(state, exception));
+                }
                 else if (logLevel == LogLevel.Warning) _warnings.Add(formatter(state, exception));
         }
     }

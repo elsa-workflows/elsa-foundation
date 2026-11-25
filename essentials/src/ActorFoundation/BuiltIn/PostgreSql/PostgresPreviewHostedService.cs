@@ -18,18 +18,24 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     private Exception? _shutdownFault;
 
     // One Error entry per fault, whether the node recorded it or the shutdown around it raised it.
-    private void Fault(Exception fault)
+    private void Fault(Exception fault) => Log(fault, again: false);
+
+    // The node's own reports: it reports each stop fault once, and a loop error again once its window has passed, with
+    // the repeats it suppressed, also when the loop rethrows the same instance. Each is logged as reported.
+    internal void NodeFault(Exception fault) => Log(fault, again: true);
+
+    private void Log(Exception fault, bool again)
     {
-        if (!_logged.TryAdd(fault, fault)) return;
-        if (fault is AggregateException aggregate)
+        if (!_logged.TryAdd(fault, fault) && !again) return;
+        if (fault is AggregateException { InnerExceptions.Count: > 0 } aggregate)     // an empty one is logged as itself
         {
             // The node has logged an aggregate's inner exceptions already: log only those that are not, never the aggregate.
-            foreach (var inner in aggregate.InnerExceptions) Fault(inner);
+            foreach (var inner in aggregate.InnerExceptions) Log(inner, again);
             return;
         }
         // The phase the node was in: a loop error on a running node is no stop fault.
         var phase = Volatile.Read(ref _shutdown) is null ? "running" : "stopping";
-        var repeats = fault.Data["SuppressedRepeats"] is long suppressed ? suppressed : 0;
+        var repeats = fault.Data?["SuppressedRepeats"] is long suppressed ? suppressed : 0;
         logger?.LogError(fault, "The PostgreSQL preview node {Node} recorded an error while {Phase} ({Repeats} earlier repeats not logged).",
             node, phase, repeats);
     }
@@ -62,7 +68,7 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         using var startup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancelStartup.Token);
         Kernel.Durable.IReplyTransport? replies = _requests;
         if (replies is not null && ObserveReplies is { } observe) replies = observe(replies);
-        return await PostgresPreviewHosting.StartAsync(create, node, actor, Escalate, options, startup.Token, Fault, replies);
+        return await PostgresPreviewHosting.StartAsync(create, node, actor, Escalate, options, startup.Token, NodeFault, replies);
     }
 
     /// <summary>

@@ -207,10 +207,10 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// Host administration's release of some partitions: on the node's scheduler, through
     /// <see cref="PartitionRuntime.ReleaseAsync"/>. Each one given up is free at its epoch, and placement decides who takes
     /// it next: the next balancing round may give it back to this node when it is below its share. Nothing is given up once
-    /// a stop or kill has begun, and a stop joins a release under way before its own drain. A kill ends the release; what
-    /// is still owned then runs out by its lease.
+    /// a stop or kill has begun, and a stop joins a release under way before its own drain. A kill stops the release before
+    /// its next give-up, and a give-up already in flight completes; what is still owned then runs out by its lease.
     /// </summary>
-    /// <returns>The listed partitions this node held and gave up.</returns>
+    /// <returns>The listed partitions this node held and gave up (<see cref="PartitionRuntime.ReleaseAsync"/>).</returns>
     internal async ValueTask<IReadOnlyList<int>> ReleaseAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(partitions);
@@ -331,8 +331,23 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         {
             var node = (RuntimeNode)state!;
             if (ended.IsFaulted) node.RecordFault(ended.Exception!.InnerException ?? ended.Exception);
-            else if (OwnCancellation(ended) is { } own && own.CancellationToken != node._kill.Token) node.KeepOwnCancellation(own);
+            else if (OwnCancellation(ended) is { } own && !node.KillCaused(own)) node.KeepOwnCancellation(own);
         }, this, CancellationToken.None, TaskContinuationOptions.NotOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+    // A cancellation the kill caused: on the kill's token, or on a token linked to it (a watched store call's, see
+    // Watchdog.RunAsync), which the kill has cancelled too. One of a drain's own carries a token the kill did not cancel.
+    private bool KillCaused(OperationCanceledException cancellation) =>
+        _kill.IsCancellationRequested && (cancellation.CancellationToken == _kill.Token || cancellation.CancellationToken.IsCancellationRequested);
+
+    // The runtime's stop returns at the kill. The job drain or release it interrupted may still fault, or end with a
+    // cancellation of its own, once it returns. A fence lost then is the kill's: renewal ended with it.
+    private async Task InterruptedAsync(Task stopping)
+    {
+        await stopping.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        if (_runtime.Interrupted is not { } interrupted) return;
+        try { await interrupted.ConfigureAwait(false); }
+        catch (ScopeOwnershipLostException) { }
+    }
 
     private static OperationCanceledException? OwnCancellation(Task canceled)
     {
@@ -356,7 +371,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         lock (_faults)
             if (!_faults.TryAdd(fault, fault)) return;
         RecordError(fault);
-        if (fault is AggregateException aggregate)
+        if (fault is AggregateException { InnerExceptions.Count: > 0 } aggregate)     // an empty one is reported as itself
         {
             foreach (var inner in aggregate.InnerExceptions)
                 lock (_faults)
@@ -418,7 +433,11 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                     : StopHeartbeatsAsync;
                 var stopping = OnNode(() => _runtime.StopAsync(_kill.Token, beforeRelease).AsTask());
                 try { await stopping.WaitAsync(_kill.Token); }
-                catch (OperationCanceledException) when (_kill.IsCancellationRequested) { RecordLater(stopping); }
+                catch (OperationCanceledException) when (_kill.IsCancellationRequested)
+                {
+                    RecordLater(stopping);
+                    RecordLater(InterruptedAsync(stopping));
+                }
                 catch (Exception abandoned) when (abandon && ReferenceEquals(abandoned, drainError)) { }
                 // The job drain's or the release's own cancellation, no kill: keep it as thrown, whatever comes after.
                 catch (OperationCanceledException own) when (drainError is null)
@@ -466,7 +485,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                 _loopErrors[key] = seen with { Suppressed = seen.Suppressed + 1 };
                 return;
             }
-            if (seen.Suppressed > 0) error.Data["SuppressedRepeats"] = seen.Suppressed;
+            if (seen.Suppressed > 0)
+                try { error.Data["SuppressedRepeats"] = seen.Suppressed; }
+                catch (Exception) { }     // an exception type whose Data is null or read-only is reported without its count
             if (!_loopErrors.ContainsKey(key) && _loopErrors.Count >= LoopErrorKeys)
                 _loopErrors.Remove(_loopErrors.MinBy(entry => entry.Value.ReportedAt).Key);
             _loopErrors[key] = (now, 0);
