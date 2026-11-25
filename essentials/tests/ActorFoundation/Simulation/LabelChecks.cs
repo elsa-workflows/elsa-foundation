@@ -28,7 +28,7 @@ internal static class LabelChecks
             .Add(Workflow("plan", Event("wait", "never")))
             // A host expression reads the correlation id the model set (K10's instance parameter).
             .Add(Workflow("host-read", Sequence("root", SetCorrelationId("c", "order-9"),
-                SetInstanceName("n", Binding.Host("JavaScript", "echo", ("c", Binding.Instance(InstanceBinding.CorrelationId)), ("i", Binding.Instance(InstanceBinding.Id)))),
+                SetInstanceName("n", Binding.Host("JavaScript", "echo", ("c", Binding.Instance(InstanceField.CorrelationId)), ("i", Binding.Instance(InstanceField.Id)))),
                 Event("wait", "never"))));
         var model = new NativeExecutionModel(registry, new NativeExecutionOptions { Expressions = new EchoExpressions() });
         await using var driver = new ContractWorkload.InMemoryDriver(4, Flaw.None, new PublicWorkflow([model]), authorizeOperator: (_, _) => true);
@@ -108,8 +108,8 @@ internal static class LabelChecks
     {
         public INativeExpressionSession Open(CancellationToken cancellationToken) => this;
 
-        public JsonNode? Evaluate(HostExpression expression, IReadOnlyDictionary<string, JsonNode?> parameters, IReadOnlyDictionary<string, JsonNode?> variables, string instanceId) =>
-            JsonValue.Create($"{parameters["c"]?.GetValue<string>()} {parameters["i"]?.GetValue<string>() == instanceId}");
+        public JsonNode? Evaluate(HostExpression expression, IReadOnlyDictionary<string, JsonNode?> parameters, IReadOnlyDictionary<string, JsonNode?> variables) =>
+            JsonValue.Create($"{parameters["c"]?.GetValue<string>()} {parameters["i"]?.GetValue<string>()?.Length > 0}");
 
         public void Dispose() { }
     }

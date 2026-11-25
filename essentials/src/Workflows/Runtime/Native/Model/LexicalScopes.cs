@@ -181,7 +181,7 @@ internal sealed class CompositeReadScope(Burst burst, Frame owner, string lexica
 /// <summary>What a binding reads from a set of values alone: a GraphActivity input's default sees the inputs given so far.</summary>
 internal sealed class ValuesScope(Burst burst, IReadOnlyDictionary<string, JsonNode?> values) : IScope, IVisibleScope
 {
-    public IReadOnlyDictionary<string, JsonNode?> Visible() => values;
+    public IReadOnlyDictionary<string, JsonNode?> Visible() => new VisibleValues([values]);
     public JsonNode? Variable(string name) => values.GetValueOrDefault(name);
     public JsonNode? Result(string node) => burst.Result(node);
 }

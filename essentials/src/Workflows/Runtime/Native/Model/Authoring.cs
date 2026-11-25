@@ -21,7 +21,7 @@ public abstract record Binding
     public static Binding Host(string language, string text, params (string Name, Binding Value)[] parameters) =>
         new HostExpressionBinding(language, text, [.. parameters.Select(p => new HostParameter(p.Name, p.Value))]);
     /// <summary>The instance's id or correlation id (<see cref="InstanceBinding"/>).</summary>
-    public static Binding Instance(string field) => new InstanceBinding(field);
+    public static Binding Instance(InstanceField field) => new InstanceBinding(field);
     public static Binding Result(string node, string? path = null) => new ResultBinding(node, path);
     public static Binding Expr(string text) => new ExpressionBinding(text);
     public static implicit operator Binding(string literal) => Literal(literal);
@@ -34,12 +34,14 @@ public sealed record LiteralBinding(JsonNode? Value) : Binding;
 /// <summary>A variable, or a member of it by a dotted path (a workflow input's member is the variable <c>input</c>'s).</summary>
 public sealed record VariableBinding(string Name, string? Path = null) : Binding;
 
-/// <summary>A fact of the running instance: <see cref="Id"/> or <see cref="CorrelationId"/>.</summary>
-public sealed record InstanceBinding(string Field) : Binding
-{
-    public const string Id = "instanceId";
-    public const string CorrelationId = "correlationId";
-}
+/// <summary>A fact of the running instance.</summary>
+public sealed record InstanceBinding(InstanceField Field) : Binding;
+
+/// <summary>
+/// The instance's id, or the correlation id Set Correlation Id last set (null until then). A correlation id given when the
+/// instance starts is K10's start path's to carry.
+/// </summary>
+public enum InstanceField { Id, CorrelationId }
 
 /// <summary>
 /// An expression the host evaluates (owner decision of 25 November: JavaScript and Liquid, through the host's portable
@@ -222,7 +224,11 @@ internal static class Hydrator
     {
         var snapshot = new JsonObject();
         foreach (var property in Of(node.Type))
-            if (node.Inputs.TryGetValue(property.Name, out var binding)) snapshot[property.Name] = evaluate(binding)?.DeepClone();
+            if (node.Inputs.TryGetValue(property.Name, out var binding))
+            {
+                try { snapshot[property.Name] = evaluate(binding)?.DeepClone(); }
+                catch (NativeExpressionException failed) when (failed.Input is null) { throw failed.For(property.Name); }
+            }
         return snapshot;
     }
 

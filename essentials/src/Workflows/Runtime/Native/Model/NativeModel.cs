@@ -392,7 +392,10 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             else if (System.Text.Json.JsonSerializer.Deserialize<BackgroundResult>(finished.Result!)! is var r) Apply(frame, new Transition(r.Kind, r.Result, r.Outcome, r.Fault));
             return;
         }
-        var activity = (IStateful?)CreateActivity(frame, node, frame.RecoveryStateful ? (JsonObject)frame.RecoveryInputs!.DeepClone() : null, new FrameScope(this, frame));
+        // The wait and the frame are gone by now, so a host expression that fails here faults the frame directly.
+        IStateful? activity;
+        try { activity = (IStateful?)CreateActivity(frame, node, frame.RecoveryStateful ? (JsonObject)frame.RecoveryInputs!.DeepClone() : null, new FrameScope(this, frame)); }
+        catch (NativeExpressionException failed) { Fail(frame, ExpressionFault(frame, failed)); return; }
         if (activity is null) return;
         var context = Context(frame);
         var state = frame.RecoveryStateful ? frame.State?.DeepClone() : frame.State;
@@ -726,8 +729,8 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     {
         LiteralBinding l => l.Value?.DeepClone(),
         VariableBinding v => Values.Path(scope.Variable(v.Name), v.Path)?.DeepClone(),
-        InstanceBinding { Field: InstanceBinding.Id } => JsonValue.Create(turn.Actor.Id),
-        InstanceBinding { Field: InstanceBinding.CorrelationId } => _s.CorrelationId is { } correlation ? JsonValue.Create(correlation) : null,
+        InstanceBinding { Field: InstanceField.Id } => JsonValue.Create(turn.Actor.Id),
+        InstanceBinding { Field: InstanceField.CorrelationId } => _s.CorrelationId is { } correlation ? JsonValue.Create(correlation) : null,
         HostExpressionBinding h => EvaluateHost(h, scope),
         ResultBinding r => Values.Path(_s.Results.GetValueOrDefault(r.Node), r.Path)?.DeepClone(),
         ExpressionBinding e => Expression.Evaluate(e.Text, scope),
