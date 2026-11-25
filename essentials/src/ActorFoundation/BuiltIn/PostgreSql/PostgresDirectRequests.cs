@@ -32,6 +32,7 @@ public sealed class PostgresDirectRequests : IReplyTransport
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
         if (startType is not null) PostgresRootAdmission.RequireActorType(startType);
         (this.admission, this.store, this.node, this.startType) = (admission, store, node, startType);
+        ReplyClock = admission.ReadReplyTimeAsync;
     }
 
     /// <summary>The node whose callers these are: a reply addressed to another node is not this edge's.</summary>
@@ -49,8 +50,8 @@ public sealed class PostgresDirectRequests : IReplyTransport
     /// <summary>
     /// Delivers an owner's replies to the callers they address, in the order the owner sent them, each checked against
     /// database time on arrival: one reader drains what has arrived, reads the time once, and hands the batch over in order.
-    /// Not durable, as the transport is not: a batch whose time cannot be read is dropped, and its callers end at their
-    /// deadlines.
+    /// A batch whose time cannot be read is kept and retried, ahead of later replies. Not durable, as the transport is not:
+    /// replies still waiting when the process ends are lost, and their callers with them.
     /// </summary>
     void IReplyTransport.Send(string destination, Reply reply)
     {
@@ -59,25 +60,37 @@ public sealed class PostgresDirectRequests : IReplyTransport
         if (Interlocked.Exchange(ref delivering, 1) == 0) _ = Task.Run(DeliverAsync);
     }
 
+    /// <summary>Database time for a delivered batch; a check substitutes a clock that fails.</summary>
+    internal Func<CancellationToken, ValueTask<long>> ReplyClock { get; set; }
+
     private async Task DeliverAsync()
     {
         var batch = new List<Reply>();
+        var backoff = TimeSpan.FromMilliseconds(25);
         while (true)
         {
             while (arrivals.Reader.TryRead(out var next)) batch.Add(next);
             if (batch.Count == 0)
             {
-                Volatile.Write(ref delivering, 0);
-                // A reply written after the drain and before the flag cleared finds no reader: take it up again.
+                // A full fence: Send writes and then exchanges the flag, so a reply written after the drain is seen here or
+                // by the reader that Send starts.
+                Interlocked.Exchange(ref delivering, 0);
                 if (!arrivals.Reader.TryPeek(out _) || Interlocked.Exchange(ref delivering, 1) == 1) return;
                 continue;
             }
-            try
+            long receivedAt;
+            try { receivedAt = await ReplyClock(CancellationToken.None); }
+            catch (Exception)
             {
-                var receivedAt = await admission.ReadReplyTimeAsync(CancellationToken.None);
-                foreach (var reply in batch) requests.TryReceive(reply, receivedAt);
+                // The batch stays, ahead of whatever arrives meanwhile, and is delivered once the time can be read: no
+                // later reply (a turn's end) overtakes an earlier one (its response). A caller past its deadline then ends
+                // with a timeout on arrival.
+                await Task.Delay(backoff);
+                backoff = TimeSpan.FromMilliseconds(Math.Min(backoff.TotalMilliseconds * 2, 1_000));
+                continue;
             }
-            catch (Exception) { /* dropped: its callers end at their deadlines */ }
+            backoff = TimeSpan.FromMilliseconds(25);
+            foreach (var reply in batch) requests.TryReceive(reply, receivedAt);
             batch.Clear();
         }
     }

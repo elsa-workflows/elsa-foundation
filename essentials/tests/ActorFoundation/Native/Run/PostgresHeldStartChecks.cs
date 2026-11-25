@@ -208,6 +208,39 @@ internal static class PostgresHeldStartChecks
         }, stop)));
         Require(lost == 0, $"each of {callers} callers sent a response and an end back to back, at once, takes the response");
 
+        // A time read that fails while a response waits: its end, sent after the failure, does not overtake it.
+        var failures = 0;
+        var failing = 0;
+        var readTime = requests.ReplyClock;
+        requests.ReplyClock = token =>
+        {
+            if (Volatile.Read(ref failing) > 0)
+            {
+                Interlocked.Decrement(ref failing);
+                Interlocked.Increment(ref failures);
+                throw new TimeoutException("injected: the reply clock read failed");
+            }
+            return readTime(token);
+        };
+        var overtaken = 0;
+        for (var i = 0; i < 20; i++)
+        {
+            var caller = requests.Pending.OpenBound("failing-" + i, now + 120_000, "order", null);
+            var before = Volatile.Read(ref failures);
+            Volatile.Write(ref failing, 2);
+            transport.Send(Node, new Reply(caller.Registration, $"f{i}#0", Request.Response, "response") { Tenant = "order" });
+            while (Volatile.Read(ref failures) == before) await Task.Delay(1, stop);
+            transport.Send(Node, new Reply(caller.Registration, $"f{i}#end", null, null, InstanceStatus.Finished) { Tenant = "order" });
+            // A dropped reply leaves its caller waiting: fail by name instead of at the run's deadline.
+            Reply answer;
+            try { answer = await requests.Pending.CompletionOf(caller).WaitAsync(TimeSpan.FromSeconds(10), stop); }
+            catch (TimeoutException) { throw new InvalidOperationException($"caller {i} was never answered after a failed time read: a reply was dropped"); }
+            if (answer.Channel != Request.Response) overtaken++;
+        }
+        requests.ReplyClock = readTime;
+        Require(overtaken == 0 && failures >= 20,
+            $"after {failures} failed time reads, each response is still delivered before the end sent after the failure");
+
         var registry = new WorkflowRegistry().Add(Wf.Workflow("orders", Wf.Sequence("main",
             Wf.HttpEndpoint("start", "orders"), Wf.Respond("created", Binding.Result("start", "Body.name"), 201))));
         var routes = new HttpRoutes(registry);
