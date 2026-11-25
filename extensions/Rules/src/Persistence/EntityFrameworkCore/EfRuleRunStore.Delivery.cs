@@ -180,7 +180,7 @@ internal sealed partial class EfRuleRunStore
                     invocation = state.Invocation;
                     envelope = ReadEnvelope(row);
                     if (row.DeliveryAcknowledged)
-                        return string.Equals(row.DeliveryAcknowledgementJson, acknowledgementJson, StringComparison.Ordinal)
+                        return Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(row.DeliveryAcknowledgementJson, acknowledgementJson)
                             ? DeliveryConfirmation(RuleTransitionDisposition.Replay, identity, lease.DeliveryId, row.TerminalId64, row.ModelRevision)
                             : DeliveryConfirmation(RuleTransitionDisposition.Conflict, identity);
 
@@ -233,7 +233,7 @@ internal sealed partial class EfRuleRunStore
                     return DeliveryConfirmation(RuleTransitionDisposition.LeaseLost, identity);
                 var currentEnvelope = ReadEnvelope(row);
                 if (row.DeliveryAcknowledged)
-                    return string.Equals(row.DeliveryAcknowledgementJson, acknowledgementJson, StringComparison.Ordinal)
+                    return Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(row.DeliveryAcknowledgementJson, acknowledgementJson)
                         ? DeliveryConfirmation(RuleTransitionDisposition.Replay, identity, lease.DeliveryId, row.TerminalId64, row.ModelRevision)
                         : DeliveryConfirmation(RuleTransitionDisposition.Conflict, identity);
                 if (!FrozenEnvelopesEqual(envelope, currentEnvelope) || !ProofMatches(currentEnvelope, acknowledgement.Proof))
@@ -301,8 +301,8 @@ internal sealed partial class EfRuleRunStore
         && string.Equals(proof.PayloadSha256, envelope.CanonicalPayloadSha256, StringComparison.Ordinal);
 
     private static bool FrozenEnvelopesEqual(RuleTerminalEnvelope left, RuleTerminalEnvelope right) =>
-        RuleRecordCodec.DeliveryRecordBytes(left.DeliveryId, left.Destination, left.Result)
-            .AsSpan().SequenceEqual(RuleRecordCodec.DeliveryRecordBytes(right.DeliveryId, right.Destination, right.Result));
+        Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(RuleRecordCodec.DeliveryRecordBytes(left.DeliveryId, left.Destination, left.Result),
+            RuleRecordCodec.DeliveryRecordBytes(right.DeliveryId, right.Destination, right.Result));
 
     private static RuleTransitionConfirmation DeliveryConfirmation(RuleTransitionDisposition disposition,
         RuleRunIdentity identity, string? transitionId = null, string? terminalId = null, long? modelRevision = null) =>

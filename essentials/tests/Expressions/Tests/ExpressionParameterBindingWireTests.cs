@@ -99,10 +99,11 @@ public sealed class ExpressionParameterBindingWireTests
         var persistedDefinition = serializer.Serialize(definition);
 
         Assert.Equal(
-            """{"capabilityProfile":"binding-readonly-v1","language":"JavaScript","metadata":{},"options":{"strict":true},"parameters":{"ActivityResult":{"kind":"ActivityResult","isOptional":true,"producerNodeId":"calculate","projectionKey":"amount"},"Literal":{"kind":"Literal","value":{"amount":1.5}},"Variable":{"kind":"Variable","declaringScopeNodeId":"workflow","variableKey":"tax"},"WorkflowRequest":{"kind":"WorkflowRequest","memberKey":"order","path":"lines[0]"}},"resultType":{"alias":"String","collectionKind":"Single"},"source":"args.a \u002B args.b \u002B args.c \u002B args.d"}""",
+            """{"capabilityProfile":"binding-readonly-v1","language":"JavaScript","metadata":{},"options":{"strict":true},"parameters":{"ActivityResult":{"kind":"ActivityResult","isOptional":true,"producerNodeId":"calculate","projectionKey":"amount"},"Literal":{"kind":"Literal","value":{"amount":1.5}},"Variable":{"kind":"Variable","declaringScopeNodeId":"workflow","variableKey":"tax"},"WorkflowRequest":{"kind":"WorkflowRequest","memberKey":"order","path":"lines[0]"}},"resultType":{"alias":"String","collectionKind":"Single"},"source":"args.a + args.b + args.c + args.d"}""",
             persistedDefinition);
         Assert.Equal(persistedDefinition, serializer.Serialize(serializer.Deserialize<ExpressionDefinition>(persistedDefinition)));
-        Assert.Equal("sha256:59539e91737f1bf352276d8f63d795b8cce8d53a061ac5fd28eaeb0931473fbb", definition.Fingerprint);
+        Assert.True(definition.Fingerprint == "sha256:911e277f98da160216f15ae3756335b78e3ada6b7e7ce7bd71ccde68f05a7d02",
+            "First-stable hash freeze: changes require an explicit identity/migration decision. Actual: " + definition.Fingerprint);
 
         // A persisted variable definition reads back as a typed variable through the expressions converter.
         var variable = serializer.Deserialize<IVariable>(

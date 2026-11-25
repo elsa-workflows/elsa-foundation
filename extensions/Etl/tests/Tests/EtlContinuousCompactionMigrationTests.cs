@@ -9,14 +9,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Tests;
 
-/// <summary>Spec 1196: a continuous run written by the spec 1192 writer migrates, resumes and compacts.</summary>
+/// <summary>Spec 1196: current continuous history survives schema checks, resumes and compacts. The historical writer is retained separately.</summary>
 public sealed partial class EtlRuntimeJourneyTests
 {
     [Fact]
-    public async Task A_spec_1192_continuous_run_migrates_keeps_its_rows_and_compacts_its_history()
+    public async Task A_current_continuous_run_keeps_its_rows_and_compacts_its_history_on_resume()
     {
         var fixture = Path.Combine(EtlV1CompatibilityFixture.FindRepositoryRoot(),
-            "extensions", "Etl", "tests", "Shared", "Fixtures", "Continuous1192", "runtime.db");
+            "specs", "1207-json-data-integrity-baseline", "evidence", "fixtures", "etl", "current-continuous", "runtime.db");
         await using var files = new RuntimeFiles(CsvJourneySource, new("tenant-fixture", "compaction-1192"));
         var database = Path.Combine(Path.GetDirectoryName(files.SnapshotRoot)!, "runtime.db");
         File.Copy(fixture, database);
@@ -24,7 +24,7 @@ public sealed partial class EtlRuntimeJourneyTests
         Directory.CreateDirectory(files.SnapshotRoot);
         var priorRows = await PriorConnectorRowsAsync(database);
 
-        // Migrate alone first: every claim compacts, so the prior rows can only be compared before a host runs.
+        // Check the current schema alone first: every claim compacts, so compare original rows before starting the host.
         await using (var migrating = new EtlRuntimeSqliteDbContext(new DbContextOptionsBuilder<EtlRuntimeSqliteDbContext>()
             .UseSqlite($"Data Source={database};Pooling=False", sqlite => sqlite
                 .MigrationsAssembly(typeof(EtlRuntimeSqliteDbContext).Assembly.GetName().Name)

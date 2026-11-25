@@ -138,8 +138,8 @@ public sealed class WeaverAnthropicProviderTests
     {
         var client = new ScriptedChatClient();
         var provider = BuildProvider(client, includeSensitiveContextContent: includeSensitive);
-        var sensitive = IndependentContext() with { Sensitivity = WeaverContextSensitivity.Sensitive, Content = new { value = "SENSITIVE_CONTENT_ONLY" } };
-        var secret = IndependentContext() with { Id = "secret", Sensitivity = WeaverContextSensitivity.Secret, Content = new { value = "SECRET_CONTENT_ONLY" } };
+        var sensitive = IndependentContext() with { Sensitivity = WeaverContextSensitivity.Sensitive, Content = WeaverJsonData.From(new { value = "SENSITIVE_CONTENT_ONLY" }) };
+        var secret = IndependentContext() with { Id = "secret", Sensitivity = WeaverContextSensitivity.Secret, Content = WeaverJsonData.From(new { value = "SECRET_CONTENT_ONLY" }) };
 
         await Collect(provider.ContinueTurnAsync(WeaverTurnContext.ForMessage("s1", "Inspect", [sensitive, secret])));
 
@@ -156,8 +156,8 @@ public sealed class WeaverAnthropicProviderTests
     {
         var client = new ScriptedChatClient();
         var provider = BuildProvider(client);
-        var resource = IndependentContext() with { Content = new { instructions = "UNTRUSTED_RESOURCE_INSTRUCTION" } };
-        var guidance = IndependentContext() with { Id = "guidance", Target = null, Origin = WeaverContextOrigin.InstalledGuidance, Content = new { instructions = "INSTALLED_MODULE_GUIDANCE" } };
+        var resource = IndependentContext() with { Content = WeaverJsonData.From(new { instructions = "UNTRUSTED_RESOURCE_INSTRUCTION" }) };
+        var guidance = IndependentContext() with { Id = "guidance", Target = null, Origin = WeaverContextOrigin.InstalledGuidance, Content = WeaverJsonData.From(new { instructions = "INSTALLED_MODULE_GUIDANCE" }) };
 
         await Collect(provider.ContinueTurnAsync(WeaverTurnContext.ForMessage("s1", "Inspect", [resource, guidance])));
 
@@ -192,7 +192,7 @@ public sealed class WeaverAnthropicProviderTests
     }
 
     private static WeaverContextAttachment IndependentContext() => new("context", "independent.context", null, "Resource", "independent.context",
-        WeaverContextSensitivity.Internal, "selection", "Bounded resource data.", new { value = "same-domain-content" }, new Dictionary<string, string>())
+        WeaverContextSensitivity.Internal, "selection", "Bounded resource data.", WeaverJsonData.From(new { value = "same-domain-content" }), new Dictionary<string, string>())
     {
         ModuleId = "independent.module", SchemaVersion = "7", Origin = WeaverContextOrigin.ClientSnapshot,
         Target = new("independent.module", "independent.resource", "envelope-only-resource", "envelope-only-revision"),

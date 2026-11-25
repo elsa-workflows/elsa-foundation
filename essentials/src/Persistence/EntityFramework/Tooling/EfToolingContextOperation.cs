@@ -86,7 +86,7 @@ internal static class EfToolingContextOperation
                 "configuration-context-invalid", "The selected host context operation could not be completed."));
         }
 
-        await JsonSerializer.SerializeAsync(response, result, EfToolingContextContract.Json, cancellationToken);
+        await JsonSerializer.SerializeAsync(response, result, options: EfToolingContextContract.Json, cancellationToken);
         await response.WriteAsync(Newline, cancellationToken);
         await response.FlushAsync(cancellationToken);
         return result.ExitCode;

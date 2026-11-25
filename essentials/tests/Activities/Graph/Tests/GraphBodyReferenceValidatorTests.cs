@@ -160,6 +160,46 @@ public sealed partial class GraphActivityProviderTests
         Assert.Equal($"/rootActivity/{propertyName}", finding.Location?.JsonPointer);
     }
 
+    [Theory]
+    [InlineData("Inputs", "[{\"referenceKey\":\"value\"}]")]
+    [InlineData("OUTPUTS", "[]")]
+    public async Task A_wrongly_cased_argument_list_is_refused_even_when_its_entries_are_valid(string propertyName, string list)
+    {
+        var manifest = WithRootProperty(BodyManifest([], []), propertyName, JsonNode.Parse(list));
+
+        var draft = await _provider.ValidateAsync(manifest, BodyContract());
+        var compilation = await _provider.CompileAsync(CompilationRequest(manifest));
+
+        foreach (var diagnostics in new[] { draft, compilation.Diagnostics })
+        {
+            var finding = Assert.Single(diagnostics, x => x.Code == "activity.graph.argument-malformed");
+            Assert.Equal($"/rootActivity/{propertyName}", finding.Location?.JsonPointer);
+        }
+    }
+
+    [Fact]
+    public async Task An_intrinsic_with_a_wrongly_cased_argument_list_is_refused_rather_than_failing()
+    {
+        var contract = BodyContract() with { Outputs = [new("sum-key", "Sum", new("Int32"), true, false, "elsa.json")] };
+        var authored = BodyManifest([BodyArgument("name", "Literal", "Sum"), BodyArgument("value", "Literal", 7)], []);
+        var payload = JsonNode.Parse(authored.Payload.GetRawText())!;
+        payload["variables"] = new JsonArray();
+        var setter = payload["rootActivity"]!.AsObject();
+        setter["activityVersionId"] = "elsa.intrinsic.set-output@1";
+        setter["intrinsic"] = JsonNode.Parse("""{"kind":"setOutput","valueType":{"alias":"Elsa.Any","collectionKind":"Single"}}""");
+        var inputs = setter["inputs"]!.DeepClone();
+        setter.Remove("inputs");
+        setter["Inputs"] = inputs;
+        var manifest = authored with { Payload = JsonSerializer.SerializeToElement(payload) };
+
+        var draft = await _provider.ValidateAsync(manifest, contract);
+        var compilation = await _provider.CompileAsync(CompilationRequest(manifest) with { Contract = contract });
+
+        foreach (var diagnostics in new[] { draft, compilation.Diagnostics })
+            Assert.Contains(diagnostics, x => x.Code == "activity.graph.argument-malformed" && x.Location?.JsonPointer == "/rootActivity/Inputs");
+        Assert.Null(compilation.ExecutableRoot);
+    }
+
     [Fact]
     public async Task A_body_that_cannot_be_read_is_refused_rather_than_left_unchecked()
     {

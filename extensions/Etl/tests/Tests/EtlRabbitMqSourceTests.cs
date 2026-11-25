@@ -70,7 +70,7 @@ public sealed class EtlRabbitMqSourceTests : IDisposable
     }
 
     [Fact]
-    public void A_destination_binding_keeps_its_spec_1200_handle_whatever_queues_it_lists()
+    public void A_destination_binding_pins_its_json_identity_without_source_queue_metadata()
     {
         var destination = new EtlHostRabbitMqBindingOptions
         {
@@ -78,18 +78,15 @@ public sealed class EtlRabbitMqSourceTests : IDisposable
             Revision = "v1", ConnectionString = "amqp://etl:secret@broker:5672/sales", AllowedExchanges = ["etl.orders"],
             AllowedQueues = ["people"]
         };
-        var target = new TestRabbitMqPublisher().DescribeTarget(destination.ConnectionString);
-        // The identity spec 1200 pinned, so runs admitted before this source existed still resolve their destination.
-        var spec1200 = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            FormatVersion = 1, ScopeIdentity = EtlRuntimeIdentity.ScopeKey(Scope), destination.Alias, destination.Role,
-            destination.Revision, target.Host, target.Port, target.VirtualHost, target.User, AllowedExchanges = new[] { "etl.orders" }
-        })));
+        const string expected = "c1a01f3440a08c8fb6bba4660e25d44563400afb107ad39256dd0ca837e80dbe";
 
         var resolved = new HostRabbitMqBindings([destination], [new TestRabbitMqPublisher()])
             .ResolveCurrent(Scope, "events-out", "MainOutput", "etl.orders");
 
-        Assert.Equal(spec1200, resolved.Handle);
+        Assert.True(expected == resolved.Handle, "First-stable hash freeze: changes require an explicit identity/migration decision.");
+        destination.AllowedQueues = ["different-source-queue"];
+        Assert.Equal(resolved.Handle, new HostRabbitMqBindings([destination], [new TestRabbitMqPublisher()])
+            .ResolveCurrent(Scope, "events-out", "MainOutput", "etl.orders").Handle);
     }
 
     [Theory]

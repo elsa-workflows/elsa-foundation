@@ -3,6 +3,7 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../../../../../../specs/1207-json-data-integrity-baseline/evidence/template-hash-vectors.json" LogicalName="template-hash-vectors.json" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />

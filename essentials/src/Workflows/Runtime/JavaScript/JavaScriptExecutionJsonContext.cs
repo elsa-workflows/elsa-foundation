@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.JavaScript;
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(RequestModel))]
 [JsonSerializable(typeof(JavaScriptExecutionErrorResponse))]
 [JsonSerializable(typeof(JavaScriptExecutionProblemDetailsResponse))]
@@ -12,4 +12,12 @@ namespace Elsa.Workflows.Runtime.JavaScript;
 [JsonSerializable(typeof(JavaScriptExecutionFailureResponse))]
 internal partial class JavaScriptExecutionJsonContext : JsonSerializerContext
 {
+    internal static JavaScriptExecutionJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
 }

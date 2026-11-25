@@ -14,12 +14,18 @@ public sealed class WorkflowExecutableInputValidation
         Findings = findings;
     }
 
+    /// <summary>Non-refusing typed-copy diagnostics; accepted starts record them on the root invocation.</summary>
+    public IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning> Warnings { get; init; } = [];
+
     public bool IsValid => Findings.Count == 0;
     public IReadOnlyDictionary<string, JsonElement> NormalizedInputs { get; }
     public IReadOnlyCollection<WorkflowExecutableInputValidationFinding> Findings { get; }
 
-    public static WorkflowExecutableInputValidation Success(IEnumerable<KeyValuePair<string, JsonElement>> inputs)
+    public static WorkflowExecutableInputValidation Success(IEnumerable<KeyValuePair<string, JsonElement>> inputs) => Success(inputs, []);
+
+    public static WorkflowExecutableInputValidation Success(IEnumerable<KeyValuePair<string, JsonElement>> inputs, IEnumerable<Elsa.Expressions.Core.Models.ExecutionWarning> warnings)
     {
+        ArgumentNullException.ThrowIfNull(warnings);
         ArgumentNullException.ThrowIfNull(inputs);
 
         var snapshot = inputs
@@ -28,7 +34,7 @@ public sealed class WorkflowExecutableInputValidation
 
         return new WorkflowExecutableInputValidation(
             new ReadOnlyDictionary<string, JsonElement>(snapshot),
-            []);
+            []) { Warnings = Array.AsReadOnly(warnings.ToArray()) };
     }
 
     public static WorkflowExecutableInputValidation Failure(IEnumerable<WorkflowExecutableInputValidationFinding> findings)
@@ -61,6 +67,8 @@ public sealed class WorkflowExecutableInputValidationFinding
     public string ReasonCode { get; }
     public string Message { get; }
     public string? InputName { get; }
+    /// <summary>The precise serializer path for a refused typed input conversion.</summary>
+    public string? JsonPath { get; init; }
 }
 
 /// <summary>Stable reason codes emitted by executable input validation.</summary>

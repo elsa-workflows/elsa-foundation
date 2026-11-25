@@ -77,7 +77,7 @@ internal sealed partial class EtlArtifactCompiler
         var artifact = new EtlArtifact(EtlArtifactV2Json.FormatVersion,
             EtlArtifactJson.CreateArtifactId(EtlArtifactV2Json.FormatVersion, definitionId, definitionVersion, hash),
             hash, definitionId, definitionVersion, document);
-        if (JsonSerializer.SerializeToUtf8Bytes(artifact).Length > artifactLimit)
+        if (JsonSerializer.SerializeToUtf8Bytes(artifact, Elsa.Serialization.Core.JsonBaseline.Options).Length > artifactLimit)
         {
             diagnostics.Add("artifact.too-large", "artifact", "The serialized artifact envelope exceeds the configured byte limit.");
             return Failure(diagnostics);

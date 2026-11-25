@@ -29,7 +29,7 @@ internal static class ChildControlInboxEvaluation
 
         var pending = current.Pending.ToDictionary(item => item.Batch.Ordinal);
         var alreadyPending = pending.TryGetValue(ordinal, out var existing);
-        if (alreadyPending && !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(existing), JsonSerializer.SerializeToElement(incoming)))
+        if (alreadyPending && !Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(existing, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(incoming, Elsa.Serialization.Core.JsonBaseline.Options)))
             throw new InvalidOperationException("A pending ordinal cannot change its immutable source or payload.");
         pending[ordinal] = incoming;
         // Validate terminal placement before releasing anything; an earlier terminal cannot discard already accepted later data.

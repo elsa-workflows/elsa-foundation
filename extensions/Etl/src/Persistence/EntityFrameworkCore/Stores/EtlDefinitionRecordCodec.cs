@@ -13,7 +13,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Provider-neutral persistence encoding and integrity checks for ETL authoring records.</summary>
 internal static class EtlDefinitionRecordCodec
 {
-    private static readonly JsonSerializerOptions ArtifactJsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions ArtifactJsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow
     };
@@ -87,7 +87,7 @@ internal static class EtlDefinitionRecordCodec
         object pipeline;
         using (var document = JsonDocument.Parse(row.PipelineJson))
             pipeline = ReadPipeline(row.FormatVersion, document.RootElement);
-        if (!StringComparer.Ordinal.Equals(WritePipeline(pipeline), row.PipelineJson))
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(WritePipeline(pipeline), row.PipelineJson))
             throw new InvalidDataException("The ETL draft row is not in the canonical pipeline representation.");
         DateTimeOffset updatedAt;
         try
@@ -231,7 +231,8 @@ internal static class EtlDefinitionRecordCodec
         }
 
         var pipelineHash = HashPipeline(canonicalPipeline);
-        if (!StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonicalPipeline) ||
+        using var canonicalDocument = JsonDocument.Parse(canonicalPipeline);
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(artifact.Pipeline, canonicalDocument.RootElement) ||
             !StringComparer.Ordinal.Equals(artifact.ContentHash, pipelineHash))
             throw new ArgumentException("The published ETL artifact pipeline is not canonical or its content hash is invalid.", nameof(artifact));
 
@@ -259,12 +260,12 @@ internal static class EtlDefinitionRecordCodec
         var validated = ValidateArtifact(definitionId, artifact);
         if (artifact.DefinitionVersion != row.DefinitionVersion || artifact.FormatVersion != row.FormatVersion ||
             !StringComparer.Ordinal.Equals(validated.PipelineHash, row.PipelineHash) ||
-            !StringComparer.Ordinal.Equals(validated.ArtifactJson, row.ArtifactJson))
+            !Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(validated.ArtifactJson, row.ArtifactJson))
             throw new InvalidDataException("The published ETL artifact row does not match its version or pipeline hash.");
         return artifact;
     }
 
-    public static string HashText(string value) => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+    public static string HashText(string value) => Elsa.Serialization.Core.JsonHashInput.HashJson(value);
 
     private static void EnsureScopeIdentity(string scopeKey, string? tenantId, string persistencePartition, EtlScope scope)
     {

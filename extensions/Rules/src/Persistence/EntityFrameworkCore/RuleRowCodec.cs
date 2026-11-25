@@ -52,7 +52,7 @@ internal static class RuleRowCodec
             var deliveryId = DeliveryId(terminalId);
             row.DeliveryId64 = deliveryId;
             row.DeliveryPayloadJson = Encoding.UTF8.GetString(RuleRecordCodec.DeliveryRecordBytes(deliveryId, destination, result));
-            row.DeliveryPayloadSha25664 = RuleRecordCodec.Hash(RuleRecordCodec.DeliveryBytes(deliveryId, destination, result));
+            row.DeliveryPayloadSha25664 = RuleRecordCodec.JsonHash(RuleRecordCodec.DeliveryBytes(deliveryId, destination, result));
         }
     }
 
@@ -110,7 +110,7 @@ internal static class RuleRowCodec
                 "rules.terminal-delivery");
             var envelope = RuleRecordCodec.ReadDeliveryRecord(Bytes(row.DeliveryPayloadJson!));
             Require(envelope.DeliveryId == row.DeliveryId64 && envelope.CanonicalPayloadSha256 == row.DeliveryPayloadSha25664
-                && row.DeliveryPayloadJson == Encoding.UTF8.GetString(RuleRecordCodec.DeliveryRecordBytes(row.DeliveryId64!, destination, terminal)),
+                && Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(row.DeliveryPayloadJson, Encoding.UTF8.GetString(RuleRecordCodec.DeliveryRecordBytes(row.DeliveryId64!, destination, terminal))),
                 "rules.delivery-projection");
             if (row.DeliveryAcknowledged)
             {

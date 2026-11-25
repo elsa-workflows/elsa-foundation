@@ -25,7 +25,7 @@ internal sealed class EtlHttpPageCacheException(string code)
 
 /// <summary>Retains bounded HTTP response bytes and publishes one request-addressed manifest as their authority point.</summary>
 /// <remarks>
-/// The raw JSON object is content-addressed and published first. The fixed-size <c>.page</c> manifest is
+/// The raw JSON object is isolated by page and capture attempt and published first. The fixed-size <c>.page</c> manifest is
 /// published create-only after it and is the only object that makes those bytes a recoverable page. An unreferenced
 /// body after cancellation or a competing publication is therefore not a page and is intentionally left for the
 /// runtime's later cleanup policy. Manifest reads never refetch. The caller still validates the original HTTP permit
@@ -33,7 +33,6 @@ internal sealed class EtlHttpPageCacheException(string code)
 /// </remarks>
 internal sealed class EtlHttpPageCache
 {
-    private const string BodyIdentityPrefix = "etl-http-page-body-v1:";
     private const string PageBodyIdentityPrefix = "etl-http-page-body-v2:";
     private const int MagicLength = 8;
     private const int IdentityLength = 64;
@@ -222,9 +221,11 @@ internal sealed class EtlHttpPageCache
                 return SameBody(existing, ownedBody) ? existing : throw Conflict();
         }
 
-        var bodyHash = Convert.ToHexString(SHA256.HashData(ownedBody)).ToLowerInvariant();
-        // A continuous run deletes each page's body once the shard leaves it, so its body is never shared (spec 1196).
-        var bodyIdentity = _continuous ? PageBodyIdentity(identity, bodyHash) : BodyIdentity(bodyHash);
+        var bodyHash = Elsa.Serialization.Core.JsonHashInput.HashUtf8(ownedBody);
+        // Equal JSON values may retain different original bytes. The manifest selects one capture's
+        // exact representation and provenance; neither another page nor another attempt can overwrite it.
+        var provenance = new EtlHttpPageProvenance(attemptId.ToString("N").ToLowerInvariant(), fence, responseReceivedAtUtc);
+        var bodyIdentity = PageBodyIdentity(identity, provenance, bodyHash);
         EtlChunk bodyChunk;
         try
         {
@@ -245,7 +246,6 @@ internal sealed class EtlHttpPageCache
             throw Corrupt();
 
         cancellationToken.ThrowIfCancellationRequested();
-        var provenance = new EtlHttpPageProvenance(attemptId.ToString("N").ToLowerInvariant(), fence, responseReceivedAtUtc);
         var manifestBytes = WriteManifest(identity, provenance, bodyChunk.Key, bodyHash, bodyChunk.ByteLength);
         try
         {
@@ -275,8 +275,8 @@ internal sealed class EtlHttpPageCache
     }
 
     /// <summary>
-    /// Removes a continuous page's manifest and per-page body once its shard has left it (spec 1196). A missing page is
-    /// not an error, and a legacy shared body is left in place because another page may still reference it.
+    /// Removes a continuous page's manifest and capture-specific body once its shard has left it (spec 1196).
+    /// A missing page is not an error.
     /// </summary>
     public async ValueTask DeleteAsync(long pageSequence, EtlHttpRequest request, CancellationToken cancellationToken = default)
     {
@@ -291,8 +291,7 @@ internal sealed class EtlHttpPageCache
         {
             // The manifest goes first: a crash in between leaves an unreferenced body, never a manifest without one.
             _manifestStore.Delete(_approvedRoot, identity);
-            if (StringComparer.Ordinal.Equals(metadata.BodyIdentity, PageBodyIdentity(identity, metadata.BodyHash)))
-                _bodyStore.Delete(_approvedRoot, metadata.BodyIdentity);
+            _bodyStore.Delete(_approvedRoot, metadata.BodyIdentity);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -383,10 +382,8 @@ internal sealed class EtlHttpPageCache
             fence <= 0 || receivedTicks < DateTimeOffset.MinValue.UtcTicks || receivedTicks > DateTimeOffset.MaxValue.UtcTicks ||
             !IsLowerSha256(bodyHash) || bodyByteLength <= 0 || bodyByteLength > _policy.MaxPageBytes)
             throw Corrupt();
-        // A continuous page published before spec 1196 keeps its shared body, which is read but never deleted.
-        var bodyIdentity = _continuous && StringComparer.Ordinal.Equals(bodyKey, _bodyStore.KeyFor(PageBodyIdentity(identity, bodyHash)))
-            ? PageBodyIdentity(identity, bodyHash)
-            : BodyIdentity(bodyHash);
+        var provenance = new EtlHttpPageProvenance(attemptIdText, fence, new DateTimeOffset(receivedTicks, TimeSpan.Zero));
+        var bodyIdentity = PageBodyIdentity(identity, provenance, bodyHash);
         if (!StringComparer.Ordinal.Equals(bodyKey, _bodyStore.KeyFor(bodyIdentity)))
             throw Corrupt();
 
@@ -452,16 +449,20 @@ internal sealed class EtlHttpPageCache
     private static bool FixedTimeEqualsSha256(byte[] bytes, string expectedHash)
     {
         var expected = Convert.FromHexString(expectedHash);
-        var actual = SHA256.HashData(bytes);
-        return CryptographicOperations.FixedTimeEquals(actual, expected);
+        try
+        {
+            var actual = Convert.FromHexString(Elsa.Serialization.Core.JsonHashInput.HashUtf8(bytes));
+            return CryptographicOperations.FixedTimeEquals(actual, expected);
+        }
+        catch (Exception exception) when (exception is System.Text.Json.JsonException or InvalidOperationException) { return false; }
     }
 
-    private static string BodyIdentity(string hash) => BodyIdentityPrefix + hash;
-
-    private static string PageBodyIdentity(string pageIdentity, string hash) => PageBodyIdentityPrefix + pageIdentity + ":" + hash;
+    private static string PageBodyIdentity(string pageIdentity, EtlHttpPageProvenance provenance, string hash) =>
+        PageBodyIdentityPrefix + pageIdentity + ":" + provenance.AttemptId + ":" +
+        provenance.Fence.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + hash;
 
     private static bool SameBody(EtlCachedHttpPage existing, byte[] candidate) =>
-        existing.RawBody.Span.SequenceEqual(candidate);
+        existing.Descriptor.Body.ContentHash == Elsa.Serialization.Core.JsonHashInput.HashUtf8(candidate);
 
     private static EtlHttpPageCacheException Refused(string code) => new(code);
     private static EtlHttpPageCacheException Corrupt() => new("etl.http.page-cache-corrupt");

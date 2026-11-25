@@ -229,7 +229,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             WorkflowExecutionId: _workflowExecutionId,
             Kind: WorkflowExecutionCommandKind.ResumeBookmark,
             EnqueuedAt: Now,
-            Payload: JsonSerializer.SerializeToElement(payload),
+            Payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             Metadata: new Dictionary<string, string>());
 
         var envelope = new WorkflowExecutionCommandEnvelope(
@@ -898,7 +898,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     private static (string Kind, JsonElement Payload) NewClrDescriptor(Type activityType)
     {
         var kind = typeof(ClrActivityDescriptor).FullName!;
-        return (kind, JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType))));
+        return (kind, JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)), JsonBaseline.Options));
     }
 
     private static ValueTypeDescriptor NewValueType(Type type)
@@ -945,7 +945,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             WorkflowExecutionId: _workflowExecutionId,
             Kind: WorkflowExecutionCommandKind.Start,
             EnqueuedAt: Now,
-            Payload: JsonSerializer.SerializeToElement(payload),
+            Payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             Metadata: metadata);
 
         return new WorkflowExecutionCommandEnvelope(

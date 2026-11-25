@@ -61,7 +61,7 @@ public static class RuntimeWork
                 partition: null,
                 authority: null,
                 startAuthority: null,
-                dispatchNestingDepth: 0)),
+                dispatchNestingDepth: 0), Elsa.Serialization.Core.JsonBaseline.Options),
             now,
             envelopeId);
 

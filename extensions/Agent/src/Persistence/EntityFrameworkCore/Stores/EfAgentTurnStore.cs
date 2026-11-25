@@ -15,7 +15,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfAgentTurnStore(DbContext context, IPersistenceAccessContextAccessor access) : IAgentTurnStore
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { MaxDepth = 32 };
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options) { MaxDepth = 32 };
     private static readonly UTF8Encoding Utf8 = new(false, true);
     private const int MaximumRecordBytes = 64 * 1024 * 1024;
     public ValueTask<AgentJournalCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
@@ -324,7 +324,7 @@ internal sealed partial class EfAgentTurnStore(DbContext context, IPersistenceAc
         var scope = access.Current.RequireScope();
         access.Current.EnsureTenantScope(tenantId);
         if (scope.Value != persistencePartition) throw new InvalidOperationException("The agent operation does not belong to the selected persistence scope.");
-        return Convert.ToHexString(SHA256.HashData(Utf8.GetBytes(JsonSerializer.Serialize(new[] { persistencePartition, tenantId })))).ToLowerInvariant();
+        return Elsa.Serialization.Core.JsonHashInput.Hash(new[] { persistencePartition, tenantId });
     }
 
     private static AgentTurnDocument Replay(AgentTurnDocument existing, AgentTurnDocument candidate)

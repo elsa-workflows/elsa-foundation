@@ -70,6 +70,81 @@ public sealed class Elsa3VariableWriteConversionTests
         Assert.Equal("variables.Total = variables.Total * 2;\nreturn 1;", script);
     }
 
+    /// <summary>
+    /// Elsa 3 generated setters for variables only: a workflow input is read-only. With an input and a variable of one name,
+    /// get{Name} read the input but set{Name} wrote the variable (spec 247 R-2).
+    /// </summary>
+    [Fact]
+    public async Task A_generated_setter_writes_the_variable_even_when_an_input_has_the_name()
+    {
+        var result = await ConvertWithInputAsync("setStatus('Paid');\nreturn 1;", "Status",
+            new Elsa3Variable { Id = "status-id", Name = "Status", TypeName = "String" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("variables.Status = 'Paid';\nreturn 1;", Text(Input(Node(result.Value!.State, "node"), "script")));
+    }
+
+    /// <summary>Two variables Elsa 3 generated one setter for: the setter is ambiguous, whatever an input of the name does.</summary>
+    [Fact]
+    public async Task An_ambiguous_setter_next_to_an_input_is_refused_as_ambiguous_not_read_only()
+    {
+        var result = await ConvertWithInputAsync("setStatus(1);\nreturn 1;", "Status",
+            new Elsa3Variable { Id = "v1", Name = "status", TypeName = "String" },
+            new Elsa3Variable { Id = "v2", Name = "Status", TypeName = "String" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Message.Contains("read-only", StringComparison.Ordinal));
+    }
+
+    /// <summary>In an input expression any generated setter is a write, refused as such even when it is ambiguous.</summary>
+    [Fact]
+    public async Task An_ambiguous_setter_in_an_input_expression_is_refused_as_a_write()
+    {
+        var definition = ConversionServices.Definition(
+            Sequence("root", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "setStatus(1)")))),
+            variables:
+            [
+                new Elsa3Variable { Id = "v1", Name = "status", TypeName = "String" },
+                new Elsa3Variable { Id = "v2", Name = "Status", TypeName = "String" },
+            ]);
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, diagnostic.Code);
+        Assert.Contains("mutates workflow state", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>An input named Outcome has no setter, so setOutcome is still Elsa 3's built-in, not a read-only input.</summary>
+    [Fact]
+    public async Task SetOutcome_next_to_an_input_named_outcome_is_not_a_read_only_input()
+    {
+        var definition = ConversionServices.Definition(Sequence("root",
+            Activity("before", "Elsa.WriteLine", ("text", Literal("a"))),
+            Activity("node", "Elsa.RunJavaScript", ("script", Literal("setOutcome('Done')")))));
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Outcome", Type = "String" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var converted = Text(Input(Node(result.Value!.State, "node"), "script"));
+        Assert.Contains("complete(", converted, StringComparison.Ordinal);
+        Assert.DoesNotContain("setOutcome(", converted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_setter_named_after_a_workflow_input_is_refused_as_read_only()
+    {
+        var result = await ConvertWithInputAsync("setStatus('Paid');\nreturn 1;", "Status");
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, diagnostic.Code);
+        Assert.Contains("read-only", diagnostic.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("setVariable('Total', 3)", "return void (variables.Total = 3)")]
     [InlineData("var r = setVariable('Total', 3); r", "var r = void (variables.Total = 3); return r")]
@@ -699,6 +774,15 @@ public sealed class Elsa3VariableWriteConversionTests
 
         Assert.False(result.Succeeded);
         return Assert.Single(result.Diagnostics, item => item.IsError);
+    }
+
+    private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertWithInputAsync(
+        string script, string input, params Elsa3Variable[] variables)
+    {
+        var definition = ConversionServices.Definition(
+            Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(script)))), variables: variables);
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = input, Type = "String" }];
+        return ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
     }
 
     private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertAsync(Elsa3Activity root, params Elsa3Variable[] variables) =>

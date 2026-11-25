@@ -7,6 +7,13 @@ namespace Elsa.Api.AspNetCore;
 /// <summary>Registers the endpoint pipeline every Elsa module maps its group onto.</summary>
 public static class ElsaEndpointsServiceCollectionExtensions
 {
+    /// <summary>Installs the JSON header middleware in the application's root services before Build.</summary>
+    public static IServiceCollection AddElsaJsonResponseHeaders(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<Microsoft.AspNetCore.Hosting.IStartupFilter, ElsaJsonResponseHeadersStartupFilter>());
+        return services;
+    }
     /// <summary>
     /// Adds the MinimalEndpoints pipeline configured the way Elsa's published documents expect.
     /// </summary>
@@ -33,6 +40,7 @@ public static class ElsaEndpointsServiceCollectionExtensions
         // Registered before AddMinimalEndpoints, which uses TryAdd: first registration wins, so this
         // is what displaces the package's ProblemDetails default rather than racing it.
         services.TryAddSingleton<IEndpointProblemWriter, ElsaFallbackEndpointProblemWriter>();
+        services.AddElsaJsonResponseHeaders();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IEndpointExceptionTranslator, SchemaWriteRefusalTranslator>());
         services.AddMinimalEndpoints(options => options.OperationConvention = ElsaEndpointConventions.ElsaModuleOperation);
         return services;

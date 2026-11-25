@@ -28,13 +28,13 @@ public sealed class RuntimeHistoryStartCausationTests
         var key = web ? "historyCausation" : "HistoryCausation";
         var absentStart = new WorkflowExecutionStartCommandPayload(Pin, Pin.ArtifactId);
         var absentCheckpoint = new RuntimeCheckpointCommandPayload(Pin, RuntimeCheckpointNames.WorkflowStarted, [], RuntimeCheckpointCommandPayload.WorkflowStartReason);
-        Assert.False(JsonSerializer.SerializeToElement(absentStart, options).TryGetProperty(key, out _));
-        Assert.False(JsonSerializer.SerializeToElement(absentCheckpoint, options).TryGetProperty(key, out _));
+        Assert.False(JsonSerializer.SerializeToElement(absentStart, options: options).TryGetProperty(key, out _));
+        Assert.False(JsonSerializer.SerializeToElement(absentCheckpoint, options: options).TryGetProperty(key, out _));
         var start = new WorkflowExecutionStartCommandPayload(Pin, Pin.ArtifactId) { HistoryCausation = Origin };
         var checkpoint = new RuntimeCheckpointCommandPayload(Pin, RuntimeCheckpointNames.WorkflowStarted, [], RuntimeCheckpointCommandPayload.WorkflowStartReason)
             { HistoryCausation = Origin };
-        Assert.Equal(Origin, JsonSerializer.Deserialize<WorkflowExecutionStartCommandPayload>(JsonSerializer.Serialize(start, options), options)!.HistoryCausation);
-        Assert.Equal(Origin, JsonSerializer.Deserialize<RuntimeCheckpointCommandPayload>(JsonSerializer.Serialize(checkpoint, options), options)!.HistoryCausation);
+        Assert.Equal(Origin, JsonSerializer.Deserialize<WorkflowExecutionStartCommandPayload>(JsonSerializer.Serialize(start, options: options), options: options)!.HistoryCausation);
+        Assert.Equal(Origin, JsonSerializer.Deserialize<RuntimeCheckpointCommandPayload>(JsonSerializer.Serialize(checkpoint, options: options), options: options)!.HistoryCausation);
         Assert.Null(start.StartAuthority); Assert.Null(start.Authority); // Diagnostic origin does not create start authority.
     }
 
@@ -52,7 +52,7 @@ public sealed class RuntimeHistoryStartCausationTests
         var services = scope.ServiceProvider;
         var executableStore = services.GetRequiredService<IWorkflowExecutableStore>();
         await executableStore.SaveAsync(new(Pin,
-            new("node", "authored", "test/activity", "1", "test", JsonSerializer.SerializeToElement(new { type = "test" }),
+            new("node", "authored", "test/activity", "1", "test", JsonSerializer.SerializeToElement(new { type = "test" }, options: Elsa.Serialization.Core.JsonBaseline.Options),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
             new Dictionary<string, WorkflowExecutableResumeTarget>(), At, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference));
         var policy = captured ? RuntimeHistoryRegistration.ResolvePolicy(services, "run") : null;
@@ -66,9 +66,9 @@ public sealed class RuntimeHistoryStartCausationTests
         var committer = services.GetRequiredService<RuntimeCheckpointCommitter>();
         var start = new WorkflowStartSchedulerWorkHandler(executableStore, queue, services.GetRequiredService<IRuntimeExecutionIdGenerator>(), clock, states);
         await start.HandleAsync(new("start-work", "run", "start-command", WorkflowExecutionCommandKind.Start, "envelope", "start-key", At, At,
-            payload: JsonSerializer.SerializeToElement(payload)));
+            payload: JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options)));
         var work = Assert.Single((await queue.ListAsync(new("run"))).Items);
-        var checkpointPayload = work.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var checkpointPayload = work.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(expected, checkpointPayload.HistoryCausation);
         if (policy is null) Assert.Null(checkpointPayload.HistoryCapturePolicy);
         else Assert.True(policy.IsEquivalentTo(checkpointPayload.HistoryCapturePolicy));

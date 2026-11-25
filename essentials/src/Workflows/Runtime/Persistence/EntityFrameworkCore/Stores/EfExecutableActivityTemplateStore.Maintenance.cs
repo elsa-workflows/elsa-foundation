@@ -105,7 +105,7 @@ public sealed partial class EfExecutableActivityTemplateStore
             if (expectedTemplate is not null &&
                 (!ObservedMaterial.TryGetValue(expectedTemplate, out var observation) || observation.Scope != scope ||
                  observation.Incarnation != row.IncarnationId || expectedTemplate.CreatedAt != material.CreatedAt ||
-                 !JsonNode.DeepEquals(ComparableContent(expectedTemplate), ComparableContent(material)))) return false;
+                 !Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(ComparableContent(expectedTemplate), ComparableContent(material)))) return false;
 
             (WorkflowExecutableSourceReferenceEntity Row, WorkflowExecutableSourceReference Value)? source = null;
             if (expectedReference is not null)

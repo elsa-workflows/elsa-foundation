@@ -161,7 +161,7 @@ public sealed class StandaloneHttpTriggerTests
         var invocation = fixture.Port.Invocation!;
         await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.SourceContext.GetAsync().AsTask());
         Assert.NotNull(invocation.WaitCandidate);
-        var input = invocation.WaitCandidate.Input!.Value.Deserialize<HttpRequestModel>()!;
+        var input = invocation.WaitCandidate.Input!.Value.Deserialize<HttpRequestModel>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("{\"amount\":18446744073709551615}", input.Body);
         Assert.False(input.Headers.ContainsKey("Authorization"));
         Assert.False(input.Headers.ContainsKey("Cookie"));

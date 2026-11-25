@@ -52,7 +52,7 @@ public sealed class FencedCommandExecutor(IRuntimeExecutionOwnershipService owne
         {
             await ownership.EnsureCurrentAsync(envelope.WorkflowExecutionId, lease.FencingToken, cancellationToken);
             if (envelope.Command is { Kind: WorkflowExecutionCommandKind.Start, Payload: { } payload } &&
-                payload.Deserialize<WorkflowExecutionStartCommandPayload>() is { } start)
+                payload.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options) is { } start)
             {
                 var now = lease.AcquiredAt;
                 await executions.SaveAsync(new WorkflowExecutionState(

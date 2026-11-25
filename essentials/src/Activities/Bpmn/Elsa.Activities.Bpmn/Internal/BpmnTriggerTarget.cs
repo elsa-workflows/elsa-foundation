@@ -26,7 +26,7 @@ internal sealed class BpmnTriggerTarget(IWorkflowExecutableStore materials,
     TimeProvider clock, IRuntimeModelExecutionReader? models = null,
     CoalescingInner<IWorkflowSchedulerWorkQueue>? physicalQueue = null) : IStandaloneTriggerRuntimeTarget
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private IWorkflowSchedulerWorkQueue Queue => selectedQueue.GetType() == typeof(CoalescingWorkflowSchedulerWorkQueue)
         ? physicalQueue?.Value ?? throw new NotSupportedException("The actual model queue is unavailable.") : selectedQueue;
     public string ModelKey => "bpmn";

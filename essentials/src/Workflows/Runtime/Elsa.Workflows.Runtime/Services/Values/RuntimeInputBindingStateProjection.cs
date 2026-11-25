@@ -148,7 +148,7 @@ public static class RuntimeInputBindingStateProjection
     public static IReadOnlyDictionary<string, string>? ProjectTriggerMetadata(IEnumerable<DurableValueState> durableValues) =>
         ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.TriggerMetadataName)
             .GetValueOrDefault(RuntimeWorkflowStateSeed.TriggerMetadataSlotName) is JsonElement { ValueKind: JsonValueKind.Object } inline
-            ? inline.Deserialize<Dictionary<string, string>>()
+            ? inline.Deserialize<Dictionary<string, string>>(Elsa.Serialization.Core.JsonBaseline.Options)
             : null;
 
     /// <summary>

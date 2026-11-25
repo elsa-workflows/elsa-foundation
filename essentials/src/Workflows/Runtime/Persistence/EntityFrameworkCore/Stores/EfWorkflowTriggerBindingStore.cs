@@ -41,7 +41,7 @@ public sealed class EfWorkflowTriggerBindingStore(
         if (existing is not null)
         {
             var current = Read(existing, scope, binding.TriggerBindingId);
-            if (StringComparer.Ordinal.Equals(RuntimeArtifactJson.Serialize(current), RuntimeArtifactJson.Serialize(binding)))
+            if (Elsa.Serialization.Core.JsonCanonicalForm.Equals(RuntimeJsonHashProjection.Project(current), RuntimeJsonHashProjection.Project(binding)))
                 return binding;
             Copy(existing, binding, scope, revision: checked(existing.Revision + 1));
         }
@@ -65,7 +65,7 @@ public sealed class EfWorkflowTriggerBindingStore(
         {
             context.ChangeTracker.Clear();
             var winner = await context.WorkflowTriggerBindings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-            if (winner is not null && StringComparer.Ordinal.Equals(RuntimeArtifactJson.Serialize(Read(winner, scope, binding.TriggerBindingId)), RuntimeArtifactJson.Serialize(binding)))
+            if (winner is not null && Elsa.Serialization.Core.JsonCanonicalForm.Equals(RuntimeJsonHashProjection.Project(Read(winner, scope, binding.TriggerBindingId)), RuntimeJsonHashProjection.Project(binding)))
                 return binding;
             throw new InvalidOperationException($"Workflow trigger binding '{binding.TriggerBindingId}' changed concurrently.", exception);
         }
@@ -495,7 +495,8 @@ public sealed class EfWorkflowTriggerBindingStore(
     }
     private static void EnsureProjection(WorkflowTriggerBindingProjectionStateEntity state, IEnumerable<WorkflowTriggerBindingEntity> rows, string scope, string activation) { if (!ProjectionMatches(state, rows, scope, activation)) throw ProjectionMismatch(activation); }
     private static InvalidDataException ProjectionMismatch(string activation) => new($"Trigger-binding activation projection '{activation}' does not match its rows.");
-    private static string Fingerprint(IEnumerable<WorkflowTriggerBinding> xs) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(xs.Select(x => x with { IsActive = false }).OrderBy(x => x.TriggerBindingId, StringComparer.Ordinal).ToArray()))));
+    private static string Fingerprint(IEnumerable<WorkflowTriggerBinding> xs) => Elsa.Serialization.Core.JsonHashInput.Hash(
+        RuntimeJsonHashProjection.Project(xs.Select(x => x with { IsActive = false }).OrderBy(x => x.TriggerBindingId, StringComparer.Ordinal).ToArray())).ToUpperInvariant();
 
     private static string EncodeCursor(WorkflowTriggerBindingPageRequest q, string scope, string binding, string id) { var payload = Encoding.UTF8.GetBytes($"{Hash(QueryBinding(q))}\0{Hash(scope)}\0{id}"); var sum = SHA256.HashData(payload); return $"tbq1.{B64(payload)}.{B64(sum)}"; }
     private static string? DecodeCursor(string? token, WorkflowTriggerBindingPageRequest q, string scope, string binding) { if (token is null) return null; try { var p = token.Split('.'); if (p is not ["tbq1", var a, var b]) throw new FormatException(); var payload = B64D(a); var sum = B64D(b); if (!CryptographicOperations.FixedTimeEquals(sum, SHA256.HashData(payload))) throw new FormatException(); var parts = Encoding.UTF8.GetString(payload).Split('\0'); if (parts.Length != 3 || parts[0] != Hash(QueryBinding(q)) || parts[1] != Hash(scope) || string.IsNullOrWhiteSpace(parts[2])) throw new FormatException(); return Order(parts[2]); } catch (Exception e) when (e is FormatException or ArgumentException) { throw new ArgumentException("The trigger-binding continuation token is invalid or belongs to another query.", nameof(token), e); } }

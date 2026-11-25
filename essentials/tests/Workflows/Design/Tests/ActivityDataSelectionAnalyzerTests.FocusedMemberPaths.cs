@@ -99,7 +99,7 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     private static (ActivityDataSelectionDocument Document, ArgumentValue Source) Focused(string source) => source switch
     {
         "result" => (Document(Sequence(Node("producer"), Node("consumer"))), ScopeFree("producer")),
-        "variable" => (VariableDocument(), new(new VariableReference("customer", "workflow"), "Variable")),
+        "variable" => (VariableDocument(), ArgumentValue.FromClr(new VariableReference("customer", "workflow"), "Variable")),
         "request" => (RequestDocument(), Json("WorkflowRequest", """{"memberKey":"customer"}""")),
         "workflow-input" => (RequestDocument(), Json("Input", """{"referenceKey":"customer-ref"}""")),
         "body-input" => (RequestDocument() with { ResourceKind = "ActivityDefinition" }, Json("Input", """{"referenceKey":"customer-ref"}""")),

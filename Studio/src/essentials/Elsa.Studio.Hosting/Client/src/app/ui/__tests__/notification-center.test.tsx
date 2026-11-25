@@ -1,3 +1,4 @@
+import { formatStudioDate } from "../../../sdk/timeZone";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -263,8 +264,8 @@ describe("NotificationCenter sheet", () => {
     flushSync(() => { controller.api.notify({ level: "info", title: "Hello" }); });
     openCenter();
     const time = document.querySelector<HTMLElement>(".studio-notification-time")!;
-    expect(time.textContent).toBe("5 minutes ago");
-    expect(time.title).toBe(new Date(1_000_000).toLocaleString());
+    expect(time.textContent).toBe(`5 minutes ago · ${formatStudioDate(1_000_000)}`);
+    expect(time.title).toBe(formatStudioDate(1_000_000));
   });
 
   it("the Close button closes the center", () => {

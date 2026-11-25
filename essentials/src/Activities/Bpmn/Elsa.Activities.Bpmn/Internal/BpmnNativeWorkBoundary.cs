@@ -32,7 +32,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         kind == StartIntentKind(origin);
     internal const string ResultKind = "Elsa.Bpmn.NativeWorkResult.v1";
     internal const string CancelKind = "Elsa.Bpmn.CancelNativeWork.v1";
-    internal static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     internal IWorkflowExecutionStateStore PhysicalWorkflows => workflows.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
         ? physicalWorkflows?.Value ?? throw new NotSupportedException("The physical native workflow reader is unavailable.") : workflows;
     internal IActivityExecutionStateStore PhysicalActivities => activities.GetType() == typeof(CoalescingActivityExecutionStateStore)
@@ -131,7 +131,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
             !WorkflowExecutionAuthoritySnapshot.Matches(state.Authority, worker.Authority.SystemIdentity, worker.Authority.RootInitiator, worker.Authority.Metadata) ||
             source.StimulusDeliverySourceScope != state.Scope || source.Intent.Kind != ResultKind ||
             source.Intent.WorkflowExecutionId != origin.WorkerExecutionId || source.Intent.Payload is not { } payload ||
-            !JsonElement.DeepEquals(payload, JsonSerializer.SerializeToElement(result, Web)))
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(payload, JsonSerializer.SerializeToElement(result, Web)))
             throw new BpmnModelValidationException("The native result differs from its committed terminal owner and outbox source.");
     }
 
@@ -186,7 +186,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
             cancellation.SourceOutboxItemId != source.SourceOutboxItemId || cancellation.Settled ||
             retained is null || retained.SourceOutboxItemId != cancellation.SourceOutboxItemId ||
             source.Intent.IntentId != CancellationIntentId(origin) || source.Intent.Payload is not { } payload ||
-            !JsonElement.DeepEquals(payload, JsonSerializer.SerializeToElement(cancellation, Web)))
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(payload, JsonSerializer.SerializeToElement(cancellation, Web)))
             throw new BpmnModelValidationException("The native cancellation differs from its model's retained responsibility.");
         return model;
     }
@@ -213,7 +213,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         if (document.FormatVersion is not (11 or 12 or 13 or 14) && model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" || source.StimulusDeliverySourceScope != origin.Scope ||
             source.Intent.Kind != CancelKind || source.Intent.WorkflowExecutionId != model.ExecutionId ||
             source.Intent.IntentId != CancellationIntentId(origin) || source.Intent.Payload is not { } payload ||
-            !JsonElement.DeepEquals(payload, JsonSerializer.SerializeToElement(cancellation with { Settled = false, NotAdmitted = false }, Web)))
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(payload, JsonSerializer.SerializeToElement(cancellation with { Settled = false, NotAdmitted = false }, Web)))
             throw new BpmnModelValidationException("Native start retirement requires its exact committed model cancellation.");
         return (model, cancellation, source);
     }

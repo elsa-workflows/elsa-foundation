@@ -232,12 +232,12 @@ public sealed class BpmnEventSubprocessTier2Tests
 
         // First timer fire.
         var firstTimer = Assert.Single(await fixture.BookmarksAsync(), b => b.ExecutableNodeId == "node-es-listener");
-        var afterFirst = await fixture.ResumeAsync(firstTimer, JsonSerializer.SerializeToElement(new DurableTimerElapsed(firstTimer.StimulusHash)));
+        var afterFirst = await fixture.ResumeAsync(firstTimer, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(firstTimer.StimulusHash)));
         Assert.Single(afterFirst.States("node-es-probe"));
 
         // Second timer fire via the re-armed one-shot Delay.
         var secondTimer = Assert.Single(await fixture.BookmarksAsync(), b => b.ExecutableNodeId == "node-es-listener");
-        var afterSecond = await fixture.ResumeAsync(secondTimer, JsonSerializer.SerializeToElement(new DurableTimerElapsed(secondTimer.StimulusHash)));
+        var afterSecond = await fixture.ResumeAsync(secondTimer, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(secondTimer.StimulusHash)));
         Assert.Equal(2, afterSecond.States("node-es-probe").Count);
     }
 

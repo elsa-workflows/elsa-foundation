@@ -9,10 +9,21 @@ namespace Elsa.Secrets.Api;
 /// options (camel-cased string enums), so this context only mirrors that shape for the group.
 /// </summary>
 [JsonSourceGenerationOptions(
-    PropertyNameCaseInsensitive = true,
+    PropertyNameCaseInsensitive = false,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase,
     UseStringEnumConverter = true,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(SecretMetadata))]
-internal partial class SecretsJsonContext : JsonSerializerContext;
+internal partial class SecretsJsonContext : JsonSerializerContext
+{
+    internal static SecretsJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.Converters.Add(new JsonStringEnumConverter());
+        return options;
+    }
+
+}

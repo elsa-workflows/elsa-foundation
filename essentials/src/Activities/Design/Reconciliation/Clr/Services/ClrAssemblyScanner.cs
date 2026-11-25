@@ -59,7 +59,7 @@ public sealed class ClrAssemblyScanner(
     /// <summary>The design facet that records the activity type names an activity declares it replaces.</summary>
     public const string ReplacedActivityTypesFacetKind = "elsa.replaced-activity-types";
     private static readonly string StringTypeFullName = typeof(string).FullName!;
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public IReadOnlyList<ActivityVersionReconciliationModel> Scan(string folderPath)
     {
@@ -312,12 +312,12 @@ public sealed class ClrAssemblyScanner(
             facets.Add(new ActivityDesignFacet(
                 VariableAccessDesignFacet.Kind,
                 VariableAccessDesignFacet.SchemaVersion,
-                JsonSerializer.SerializeToElement(payload)));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(payload)));
         }
 
         if (Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsAccessedBy(type))
             facets.Add(new ActivityDesignFacet(WorkflowStateDesignFacet.Kind, WorkflowStateDesignFacet.SchemaVersion,
-                JsonSerializer.SerializeToElement(new { declared = Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsDeclaredBy(type) })));
+                JsonSerializer.SerializeToElement(new { declared = Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsDeclaredBy(type) }, Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var iconFacet = BuildIconFacet(type);
         if (iconFacet is not null)
@@ -778,7 +778,7 @@ public sealed class ClrAssemblyScanner(
         if (targetType?.FullName != typeof(string).FullName)
             throw InvalidInputMetadata(activityTypeName, inputName, $"String option value '{value}' is not compatible with input type '{targetType?.FullName ?? "<unknown>"}'.");
 
-        return new ActivityInputOptionSpecification(value, JsonSerializer.SerializeToElement(value));
+        return new ActivityInputOptionSpecification(value, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value));
     }
 
     private static ActivityInputOptionSpecification ToTypedOption(CustomAttributeData attribute, Type? targetType, string activityTypeName, string inputName)
@@ -816,18 +816,18 @@ public sealed class ClrAssemblyScanner(
             if (enumName is null)
                 throw InvalidInputMetadata(activityTypeName, inputName, $"Enum option value '{value}' is not defined by '{targetType.FullName}'.");
 
-            return JsonSerializer.SerializeToElement(enumName);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(enumName);
         }
 
         if (targetType?.FullName == typeof(string).FullName && value is string stringValue)
         {
             if (string.IsNullOrWhiteSpace(stringValue))
                 throw InvalidInputMetadata(activityTypeName, inputName, "A typed string option value cannot be blank.");
-            return JsonSerializer.SerializeToElement(stringValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(stringValue);
         }
 
         if (targetType?.FullName == typeof(bool).FullName && value is bool boolValue)
-            return JsonSerializer.SerializeToElement(boolValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(boolValue);
 
         if (targetType is not null && IsNumericType(targetType) && IsNumericType(sourceType))
         {
@@ -848,7 +848,7 @@ public sealed class ClrAssemblyScanner(
                     _ => typeof(decimal)
                 }, CultureInfo.InvariantCulture);
                 ValidateNumericFidelity(converted, targetType, activityTypeName, inputName);
-                return JsonSerializer.SerializeToElement(converted);
+                return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(converted);
             }
             catch (Exception exception) when (exception is InvalidCastException or FormatException or OverflowException)
             {
@@ -984,36 +984,37 @@ public sealed class ClrAssemblyScanner(
 
     private static JsonElement ParseDefaultValue(string value, Type? valueType)
     {
+        valueType = UnwrapNullable(valueType);
         var typeName = valueType?.FullName;
 
         if (typeName == typeof(bool).FullName && bool.TryParse(value, out var boolValue))
-            return JsonSerializer.SerializeToElement(boolValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(boolValue);
         if (typeName == typeof(byte).FullName && byte.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var byteValue))
-            return JsonSerializer.SerializeToElement(byteValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(byteValue);
         if (typeName == typeof(sbyte).FullName && sbyte.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sbyteValue))
-            return JsonSerializer.SerializeToElement(sbyteValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(sbyteValue);
         if (typeName == typeof(short).FullName && short.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shortValue))
-            return JsonSerializer.SerializeToElement(shortValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(shortValue);
         if (typeName == typeof(ushort).FullName && ushort.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ushortValue))
-            return JsonSerializer.SerializeToElement(ushortValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(ushortValue);
         if (typeName == typeof(int).FullName && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intValue))
-            return JsonSerializer.SerializeToElement(intValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(intValue);
         if (typeName == typeof(uint).FullName && uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var uintValue))
-            return JsonSerializer.SerializeToElement(uintValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(uintValue);
         if (typeName == typeof(long).FullName && long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
-            return JsonSerializer.SerializeToElement(longValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(longValue);
         if (typeName == typeof(ulong).FullName && ulong.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ulongValue))
-            return JsonSerializer.SerializeToElement(ulongValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(ulongValue);
         if (typeName == typeof(float).FullName && float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var floatValue))
-            return JsonSerializer.SerializeToElement(floatValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(floatValue);
         if (typeName == typeof(double).FullName && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
-            return JsonSerializer.SerializeToElement(doubleValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(doubleValue);
         if (typeName == typeof(decimal).FullName && decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue))
-            return JsonSerializer.SerializeToElement(decimalValue);
+            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(decimalValue);
         if (IsJsonType(valueType) && TryParseJson(value, out var jsonValue))
             return jsonValue;
 
-        return JsonSerializer.SerializeToElement(value);
+        return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value);
     }
 
     // A JSON-typed input declares its default as JSON text (`DefaultValue = "{}"`). Read it as that JSON value,

@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { AlertCircle, AlertTriangle, Check, ChevronDown, Flag, Layers, MapPin, Wrench } from "lucide-react";
 import { CopyableIdentifier, DisclosureFold, StudioButton, TechnicalDetails } from "@elsa-workflows/studio-ui";
@@ -194,6 +195,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
   observation?: TestRunObservation;
   executionControls?: ReactNode;
 }) {
+  useStudioTimeZone();
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   if (!testRun) {
@@ -364,6 +366,7 @@ function RejectedReason({
   reason: string;
   activityLabels?: ValidationActivityLabels;
 }) {
+
   const humanized = activityLabels?.humanizeMessage(reason) ?? { message: reason };
   return (
     <div className="wf-runtime-reason" title={reason}>
@@ -373,4 +376,3 @@ function RejectedReason({
     </div>
   );
 }
-

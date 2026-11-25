@@ -47,15 +47,15 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await SaveBookmarkAsync();
         var capture = StimulusResumeRecipient.From((await _bookmarkStateStore.ObserveAsync("wfexec-1", "bookmark-1"))!,
             (await _exactWorkflowStates.FindAsync("wfexec-1"))!, ExactScope);
-        var original = NewResumeWorkItem(input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)), triggerDelivery: Delivery(type, "dedupe-42"));
-        var payload = original.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var original = NewResumeWorkItem(input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)), triggerDelivery: Delivery(type, "dedupe-42"));
+        var payload = original.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         var capturedPayload = new RuntimeResumeBookmarkCommandPayload(payload.PinnedExecutable, payload.BookmarkId,
             payload.ActivityExecutionId, payload.ExecutableNodeId, payload.ResumeTargetId, payload.StimulusType, payload.StimulusHash,
             payload.Input, payload.Reason, payload.TriggerDelivery,
             testReceipt ? new("test-scope", "c4c0377d-3c4b-4b21-bacc-0c6cdce13608", "bookmark-1", new string('a', 64)) : null) { ExpectedBookmarkResume = capture };
         return (new(original.WorkItemId, original.WorkflowExecutionId, original.CommandId, original.CommandKind,
             original.EnvelopeId, original.IdempotencyKey, original.EnqueuedAt, original.RecordedAt, original.Sequence,
-            JsonSerializer.SerializeToElement(capturedPayload), original.CommandMetadata, original.EnvelopeMetadata), clock);
+            JsonSerializer.SerializeToElement(capturedPayload, Elsa.Serialization.Core.JsonBaseline.Options), original.CommandMetadata, original.EnvelopeMetadata), clock);
     }
 
     private WorkflowSchedulerDrainer ExactDrainer(ServiceProvider provider, FakeTimeProvider clock, InMemoryWorkflowSchedulerPoisonStore poison) =>

@@ -15,6 +15,52 @@ etl=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(etl)
 EVIDENCE=etl.q.REPO/"specs/1017-direct-bpmn-hosting/evidence/pipeline/native-http-reference"
 
 
+class ProtectedWorkerSchemaTests(unittest.TestCase):
+    def test_each_capture_pins_its_exact_known_writer(self):
+        state={'modelWorkOrigin': {'workerExecutionId': 'opaque'}}
+        for expected in ('2.0.0','2.1.0'):
+            for actual in ('1.0.0','2.0.0','2.1.0','2.2.0','unknown'):
+                with self.subTest(expected=expected,actual=actual):
+                    self.assertEqual(actual==expected,etl.protected_worker_schema(actual,state,expected))
+        self.assertFalse(etl.protected_worker_schema('2.2.0',state,'2.2.0'))
+
+    def test_historical_version_refuses_even_null_protected_fields(self):
+        for name in ('ingressOrigin','IngressOrigin','stimulusDeliveryOrigin','STIMULUSDELIVERYORIGIN'):
+            with self.subTest(name=name):
+                self.assertFalse(etl.protected_worker_schema('2.0.0',{'modelWorkOrigin':{},name:None},'2.0.0'))
+        for name in ('ingressOrigin','IngressOrigin','INGRESSORIGIN'):
+            self.assertFalse(etl.protected_worker_schema('2.0.0',{'modelWorkOrigin':{name:None}},'2.0.0'))
+            for alias in ('ModelWorkOrigin','MODELWORKORIGIN'):
+                self.assertFalse(etl.protected_worker_schema('2.0.0',{'modelWorkOrigin':{},alias:{name:None}},'2.0.0'))
+
+    def test_current_gate_version_is_valid_with_or_without_ingress(self):
+        for state in ({'modelWorkOrigin':{}}, {'modelWorkOrigin':{'ingressOrigin':None},'ingressOrigin':None}):
+            self.assertTrue(etl.protected_worker_schema('2.1.0',state,'2.1.0'))
+
+
+class ProtectedProductInventoryTests(unittest.TestCase):
+    def test_current_canonical_writers_cannot_borrow_the_historical_inventory(self):
+        names = ['Elsa.Workbench', 'Elsa.Etl.Core', 'Elsa.Etl.Runtime', 'Elsa.Etl.Workflows.Runtime',
+                 'Elsa.Etl.Persistence.EntityFrameworkCore', 'Elsa.Etl.Runtime.Api', 'Elsa.Activities.Bpmn.Core',
+                 'Elsa.Activities.Bpmn', 'Elsa.Activities.Bpmn.Api', 'Elsa.Workflows.Runtime.Core', 'Elsa.Workflows.Runtime',
+                 'Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore', 'Elsa.Serialization.Core', 'Elsa.Activities.Runtime.Core']
+        source='1'*40
+        products={'sourceCommit':source,'metadataOnly':True,'actualProductVersions':[
+            {'name':name+'.dll','productVersion':'1.0.0+'+source,'sha256':'2'*64} for name in names]}
+        self.assertTrue(etl.protected_product_inventory(products,source,True,2))
+        self.assertFalse(etl.protected_product_inventory(products,source,True,1))
+        self.assertFalse(etl.protected_product_inventory(products,source,True,3))
+        self.assertFalse(etl.protected_product_inventory(products,source,False,2))
+        for index in range(len(names)):
+            changed={**products,'actualProductVersions':[row for number,row in enumerate(products['actualProductVersions']) if number!=index]}
+            self.assertFalse(etl.protected_product_inventory(changed,source,True,2))
+        historical={**products,'actualProductVersions':products['actualProductVersions'][:-2]}
+        self.assertTrue(etl.protected_product_inventory(historical,source,True,1))
+        self.assertFalse(etl.protected_product_inventory(historical,source,True,2))
+        duplicate={**products,'actualProductVersions':[*products['actualProductVersions'][:-1],products['actualProductVersions'][0]]}
+        self.assertFalse(etl.protected_product_inventory(duplicate,source,True,2))
+
+
 class _ActualRecoveryControls(unittest.TestCase):
     evidence=EVIDENCE
 

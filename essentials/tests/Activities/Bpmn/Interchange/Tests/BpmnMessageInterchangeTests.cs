@@ -220,7 +220,6 @@ public sealed class BpmnMessageInterchangeTests
         var eventName = child.Inputs.Single(input => input.ReferenceKey == "EventName").Value.Value;
         Assert.Equal(expectedEventName, eventName switch
         {
-            string text => text,
             JsonElement json => json.GetString(),
             _ => eventName?.ToString()
         });

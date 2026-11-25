@@ -1,0 +1,30 @@
+{
+  "model": {
+    "executionId": "bpmn:94d326c7600e03ec080e794d1086a33ff6e283a70a40fe24c271caa728b1d9cb",
+    "revision": 2,
+    "status": "TerminalPendingSettlement",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:cca4ac0403a76990e109bc44a2f34ea02457d32079352f9688f361ea6605234d",
+      "definitionId": "bpmn-model:sha256:cca4ac0403a76990e109bc44a2f34ea02457d32079352f9688f361ea6605234d",
+      "definitionVersionId": "sha256:cca4ac0403a76990e109bc44a2f34ea02457d32079352f9688f361ea6605234d",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:cca4ac0403a76990e109bc44a2f34ea02457d32079352f9688f361ea6605234d"
+    },
+    "materialIncarnationId": "28a854a18ca2403d8f076f39bce19ec1",
+    "createdAt": "2026-11-24T04:56:33.5802463+00:00",
+    "updatedAt": "2026-11-24T04:56:35.894779+00:00",
+    "result": {
+      "status": "Cancelled",
+      "reason": "Retire the original native start before admission."
+    }
+  },
+  "native": [],
+  "runs": {
+    "items": [],
+    "nextCursor": null
+  }
+}

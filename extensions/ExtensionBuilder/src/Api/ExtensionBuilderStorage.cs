@@ -62,7 +62,7 @@ internal sealed record RemoteDivergence(bool RemoteBranchExists, int Ahead, int 
 
 internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         WriteIndented = true,
         Converters = { new JsonStringEnumConverter() }

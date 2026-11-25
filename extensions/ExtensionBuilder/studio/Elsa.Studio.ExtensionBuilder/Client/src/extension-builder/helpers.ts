@@ -1,3 +1,4 @@
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import type { StudioCodeDiagnostic, StudioCodeDiagnosticSeverity, StudioCodeDocument } from "@elsa-workflows/studio-code-editor";
 import type { StudioStatusTone } from "@elsa-workflows/studio-ui";
 import {
@@ -337,7 +338,7 @@ export function extractDiagnosticCode(message: string) {
 
 export function formatDate(value?: string | null) {
   if (!value) return "n/a";
-  return new Date(value).toLocaleString();
+  return formatStudioDate(value);
 }
 
 export function formatArtifactSize(size?: number | null) {

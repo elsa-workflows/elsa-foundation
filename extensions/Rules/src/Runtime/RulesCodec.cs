@@ -14,7 +14,7 @@ internal static class RulesCodec
         ValidateProgram(program);
         var bytes = RuleJson.Write(writer => WriteProgram(writer, program), RuleLimits.MaxArtifactBytes);
         Require(bytes.Length <= RuleLimits.MaxArtifactBytes, "rules.artifact-too-large");
-        var hash = RuleRecordCodec.Hash(bytes);
+        var hash = RuleRecordCodec.JsonHash(bytes);
         return new RuleArtifactSnapshot(1, "rules:" + hash, hash, bytes);
     }
 
@@ -23,7 +23,7 @@ internal static class RulesCodec
         ArgumentNullException.ThrowIfNull(artifact);
         var bytes = artifact.CanonicalBytes;
         Require(bytes.Length <= RuleLimits.MaxArtifactBytes, "rules.artifact-too-large");
-        Require(RuleRecordCodec.Hash(bytes.Span) == artifact.Sha256 && artifact.ArtifactId == "rules:" + artifact.Sha256,
+        Require(RuleRecordCodec.ArtifactHash(artifact.FormatVersion, bytes.Span) == artifact.Sha256 && artifact.ArtifactId == "rules:" + artifact.Sha256,
             "rules.artifact-identity");
         if (artifact.FormatVersion != 1) throw new NotSupportedException("rules.artifact-version");
         using var json = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 12 });
@@ -37,7 +37,7 @@ internal static class RulesCodec
                 rule.GetProperty("id").GetString()!, ReadFacts(rule.GetProperty("premises")),
                 new RuleFact(rule.GetProperty("conclusion").GetString()!))).ToArray());
         var canonical = CreateArtifact(program);
-        Require(canonical.CanonicalBytes.Span.SequenceEqual(bytes.Span), "rules.noncanonical-artifact");
+        Require(Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(canonical.CanonicalBytes, bytes), "rules.noncanonical-artifact");
         return program;
     }
 

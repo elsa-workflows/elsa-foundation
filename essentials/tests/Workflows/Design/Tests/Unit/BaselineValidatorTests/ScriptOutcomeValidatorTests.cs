@@ -125,7 +125,7 @@ public sealed class ScriptOutcomeValidatorTests : IDisposable
         var node = new ActivityNode("js", ScriptVersionId,
         [
             LiteralInput(ScriptInput, "return complete(1, 'Anything');"),
-            new ArgumentState("possibleOutcomes", new ArgumentValue("['A']", "JavaScript"), null, null, null, null)
+            new ArgumentState("possibleOutcomes", ArgumentValue.FromClr("['A']", "JavaScript"), null, null, null, null)
         ], []);
 
         Assert.Empty(await Validate(node));
@@ -274,7 +274,7 @@ public sealed class ScriptOutcomeValidatorTests : IDisposable
     {
         var inputs = new List<ArgumentState> { LiteralInput(ScriptInput, script) };
         if (possibleOutcomes.Length > 0)
-            inputs.Add(new ArgumentState("possibleOutcomes", new ArgumentValue(JsonSerializer.SerializeToElement(possibleOutcomes), "Literal"), null, null, null, null));
+            inputs.Add(new ArgumentState("possibleOutcomes", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(possibleOutcomes), "Literal"), null, null, null, null));
         return new ActivityNode(nodeId, ScriptVersionId, inputs, []);
     }
 

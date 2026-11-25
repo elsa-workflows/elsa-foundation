@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -31,10 +33,52 @@ public sealed class MemberReadMaterializationTests
     private static readonly JsonElement CustomerJson = JsonSerializer.SerializeToElement(new
     {
         customerId = "c-1", count = 3, address = new { street = "Main", zip = (string?)null }, tags = new[] { "x" }
-    });
+    }, options: Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly DurableValueExternalReference CustomerReference = new("external", "customers/c-1", new Dictionary<string, string>());
 
     public static TheoryData<string, bool> Roles => new() { { "request", false }, { "request", true }, { "variable", false }, { "variable", true } };
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Retention_only_typed_input_conversions_hide_nested_warning_keys_and_keep_raw_snapshots(bool expression)
+    {
+        const string raw = """{ "known":1, "SecretBranch": { "n":1.00, "nil":null, "large":9007199254740993, "text":"\u0041 <+>" } }""";
+        using var value = JsonDocument.Parse(raw);
+        using var source = JsonDocument.Parse("{\"selected\":" + raw + "}");
+        var type = new ValueTypeDescriptor("RetainedWarningOrder");
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, retentionPolicy: "retain");
+        var binding = expression
+            ? new RuntimeInputBinding("message", type, policy, RuntimeInputBindingSource.Expression,
+                expression: new RuntimeExpressionBinding("Test", "raw"))
+            : new RuntimeInputBinding("message", type, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.WorkflowRequestMember,
+                Deferred(["selected"]), workflowRequest: new RuntimeWorkflowRequestReference("source"));
+        var warnings = new ExecutionWarningCollector(); // Neither reader may rely on a protecting parent sink.
+        var context = new RuntimeInputBindingResolutionContext("workflow", "invocation-1",
+            workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+            {
+                ["source"] = ValueEnvelope.Inline(Customer, source.RootElement, policy)
+            }) { Warnings = warnings };
+        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new TypeRegistry(),
+            new RetainedWarningExpressionEvaluator(value.RootElement));
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(Node(binding, inputType: type), "invocation-1", context, Now);
+
+        var retained = snapshot.Values["message"];
+        Assert.Equal(raw, retained.InlineValue!.Value.GetRawText());
+        Assert.Equal(policy.Lifecycle, retained.Policy.Lifecycle);
+        Assert.Equal(policy.Storage, retained.Policy.Storage);
+        Assert.Equal(policy.RetentionPolicy, retained.Policy.RetentionPolicy);
+        Assert.False(retained.Policy.IsSensitive);
+        Assert.False(retained.Policy.RequiresEncryption);
+        Assert.Null(retained.Policy.RedactionMode);
+        Assert.True(RuntimeModelMetadata.AreEqual(policy.Metadata, retained.Policy.Metadata));
+        Assert.Equal(ValuePresence.Present, retained.Presence);
+        var warning = Assert.Single(warnings.Warnings);
+        Assert.Equal("json-unmatched-member", warning.Code);
+        Assert.Equal("args.message", warning.Details!["path"]);
+        Assert.DoesNotContain("SecretBranch", JsonSerializer.Serialize(warning, JsonBaseline.Options), StringComparison.Ordinal);
+    }
 
     [Theory]
     [InlineData(false, "inline")]
@@ -128,11 +172,11 @@ public sealed class MemberReadMaterializationTests
 
     /// <summary>
     /// A member segment matches the stored name exactly. A variable seeded from a CLR value at start is stored with
-    /// its CLR property names, so it is read by those names; the camelCase name reads the member as absent.
+    /// the default camelCase conversion contract, so its camelCase name is read exactly.
     /// </summary>
     [Theory]
-    [InlineData("CustomerId", null)]
-    [InlineData("customerId", RuntimeReadSelectionException.AbsentMember)]
+    [InlineData("customerId", null)]
+    [InlineData("CustomerId", RuntimeReadSelectionException.AbsentMember)]
     public async Task A_member_of_a_clr_seeded_variable_is_read_by_its_stored_name(string segment, string? code)
     {
         var seeded = WorkflowExecutionStartCommandPayload.ToJsonValues(new Dictionary<string, object?> { ["customer"] = new SeededCustomer("c-1") })["customer"];
@@ -155,8 +199,8 @@ public sealed class MemberReadMaterializationTests
 
     /// <summary>The same rule for a request member supplied as a CLR value when the run starts.</summary>
     [Theory]
-    [InlineData("CustomerId", null)]
-    [InlineData("customerId", RuntimeReadSelectionException.AbsentMember)]
+    [InlineData("customerId", null)]
+    [InlineData("CustomerId", RuntimeReadSelectionException.AbsentMember)]
     public async Task A_member_of_a_clr_seeded_request_member_is_read_by_its_stored_name(string segment, string? code)
     {
         var seeded = WorkflowExecutionStartCommandPayload.ToJsonValues(new Dictionary<string, object?> { ["customer"] = new SeededCustomer("c-1") })["customer"];
@@ -337,11 +381,12 @@ public sealed class MemberReadMaterializationTests
     {
         var snapshot = await MaterializeAsync(Member("variable", ["address", "street"]), Context("variable", external: false), Store());
 
-        Assert.Equal(ExpectedMemberFingerprint, snapshot.BindingFingerprint);
+        Assert.True(ExpectedMemberFingerprint == snapshot.BindingFingerprint,
+            $"Member binding JSON hash golden: Actual={snapshot.BindingFingerprint}. From Elsa 4's first stable release, this hash is frozen and changes require an explicit decision.");
     }
 
-    // Computed on this slice's first build of the framed rendering; it must never change.
-    internal const string ExpectedMemberFingerprint = "sha256:cedd66e95b724715ae7cce2ff05715cbf8842bb1f2aa568587d045b1e3c353f4";
+    // Regenerated once by S-9 before the first stable release; frozen from that release.
+    internal const string ExpectedMemberFingerprint = "sha256:325f3a1be7f006b79de9fb0c2a7b9f9518994fe20956a777d9f67f4ba700a2ff";
 
     [Fact]
     public void A_request_or_variable_member_needs_no_activity_history_and_a_result_member_does()
@@ -572,7 +617,8 @@ public sealed class MemberReadMaterializationTests
     {
         private static readonly Dictionary<string, Type> Types = new(StringComparer.Ordinal)
         {
-            ["String"] = typeof(string), ["Int32"] = typeof(int), ["Any"] = typeof(System.Text.Json.JsonElement), ["Customer"] = typeof(object)
+            ["String"] = typeof(string), ["Int32"] = typeof(int), ["Any"] = typeof(System.Text.Json.JsonElement), ["Customer"] = typeof(object),
+            ["RetainedWarningOrder"] = typeof(RetainedWarningOrder)
         };
 
         public void RegisterType(Type type, string alias) => throw new NotSupportedException();
@@ -591,6 +637,13 @@ public sealed class MemberReadMaterializationTests
             type = known ?? typeof(object);
             return found;
         }
+    }
+
+    public sealed class RetainedWarningOrder { public int Known { get; set; } }
+
+    private sealed class RetainedWarningExpressionEvaluator(JsonElement value) : IPortableExpressionEvaluator
+    {
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) => ValueTask.FromResult(value.Clone());
     }
 
     private sealed class NoPayloadSerializer : IPayloadSerializer

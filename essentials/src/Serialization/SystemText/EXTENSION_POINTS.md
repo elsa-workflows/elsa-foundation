@@ -32,12 +32,22 @@ The per-domain catalog (framework ยง2.22.1). Anchored at `Elsa.Serialization` โ€
   of the same aliases used during publication; a CLR reference-type fallback does not override a known null contract.
 
 ### `ITypeConverter` *(Core, `Elsa.Serialization.Core`)*
-- **Kind:** Contributor (a custom conversion `IObjectConverter` tries first).
+- **Kind:** Contributor for CLR conversions outside the JSON conversion contract.
 - **Signature:** `Type TargetType { get; set; }` and `object? Convert(object? value);`
 - **Register:** `services.AddSingleton<ITypeConverter, MyConverter>()`. The object converter is a singleton and resolves every registered `ITypeConverter` from the root provider on each conversion, so register it as a singleton or a transient, not scoped.
-- **Consumed by:** `ObjectConverter` (this feature). Before any built-in strategy, it takes the first registered `ITypeConverter` whose `TargetType` equals the requested target type exactly (a `Nullable<T>` target does not match a `T` converter) and returns what its `Convert` returns. `ObjectConverterOptions` do not apply to it.
+- **Consumed by:** `ObjectConverter` (this feature). JSON elements/nodes, strings and temporal values use the selected conversion contract first. Already assignable CLR values return directly; implicit floating-point to integral conversions are refused. For other CLR values, the first registered `ITypeConverter` whose `TargetType` equals the requested target type exactly runs before the fallback serialization/read (a `Nullable<T>` target does not match a `T` converter). `ObjectConverterOptions` do not apply to the extension converter.
 
 **Known implementations (shipped):** none.
+
+### `IJsonConversionMemberMatcher` *(Core, `Elsa.Serialization.Core`)*
+
+- **Kind:** Optional capability on a custom `JsonConverter` used by a typed conversion contract.
+- **Signature:** `bool TryGetMemberType(string name, out Type memberType);`
+- **Select:** implement it on the converter selected by the target type's or member's JSON metadata, for example through `JsonConverterAttribute`.
+- **Consumed by:** `UnmatchedMemberScanner` before deserialization. Return true and the effective value type for each object key the converter consumes; return false for an unmatched key. The selected scoped contract controls warning or refusal, and matching keys are inspected recursively with their declared value type.
+- **Without it:** custom converters still perform conversion, with `json-unmatched-coverage-unavailable` instead of invented unmatched-member warnings.
+
+**Known implementations (shipped):** none in production.
 
 ---
 

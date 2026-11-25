@@ -26,7 +26,7 @@ internal static class RuntimeArtifactJson
         // normalized collections cannot silently replace a persisted source body with a different export.
         using var output = new BoundedSnapshotStream(Encoding.UTF8.GetByteCount(value));
         using (var writer = new Utf8JsonWriter(output, new JsonWriterOptions { MaxDepth = maximumDepth }))
-        { JsonSerializer.Serialize(writer, result, options); writer.Flush(); }
+        { JsonSerializer.Serialize(writer, result, options: options); writer.Flush(); }
         using var original = JsonDocument.Parse(value, new JsonDocumentOptions { MaxDepth = maximumDepth });
         using var reconstructed = JsonDocument.Parse(output.GetBuffer().AsMemory(0, checked((int)output.Length)), new JsonDocumentOptions { MaxDepth = maximumDepth });
         if (ActivityTemplateHasher.ComputeCanonicalValueHash(original.RootElement) != ActivityTemplateHasher.ComputeCanonicalValueHash(reconstructed.RootElement))
@@ -44,7 +44,7 @@ internal static class RuntimeArtifactJson
         var inline = data.InlineValue;
         if (data.Storage == DurableValueStorage.Inline && !inline.HasValue)
         {
-            // Match the selected serializer's spelling and last-member semantics, including legacy case aliases.
+            // Match the selected serializer's exact current spelling and last-member semantics.
             JsonElement? member = null;
             foreach (var property in document.RootElement.EnumerateObject())
                 if (string.Equals(property.Name, "inlineValue", options.PropertyNameCaseInsensitive
@@ -73,7 +73,7 @@ internal static class RuntimeArtifactJson
             else if (bounded && info.Type == typeof(ExecutableActivityTemplate))
                 info.Properties.Remove(info.Properties.Single(x => x.Name.Equals(nameof(ExecutableActivityTemplate.NodesById), StringComparison.OrdinalIgnoreCase)));
         });
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) { TypeInfoResolver = resolver };
         options.Converters.Add(new JsonStringEnumConverter());
         // Runtime artifact identities are opaque UTF-16 values. Encoding string values as framed UTF-16
         // preserves accepted lone surrogates in JSON before the payload reaches a provider.

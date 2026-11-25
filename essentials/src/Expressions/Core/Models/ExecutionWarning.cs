@@ -20,6 +20,20 @@ public sealed record ExecutionWarning(
     ExecutionWarningSeverity Severity = ExecutionWarningSeverity.Warning,
     IReadOnlyDictionary<string, string>? Details = null)
 {
+    /// <summary>Records a typed JSON conversion diagnostic with a protected form that reveals no nested data keys.</summary>
+    public static ExecutionWarning FromJsonConversion(string code, string path, Type targetType, string? converter, string root)
+    {
+        var severity = code == "json-unmatched-coverage-unavailable" ? ExecutionWarningSeverity.Information : ExecutionWarningSeverity.Warning;
+        var target = targetType.FullName ?? targetType.Name;
+        var details = new Dictionary<string, string> { ["path"] = root + path.TrimStart('$'), ["targetType"] = target };
+        if (converter is not null) details["converter"] = converter;
+        var message = code == "json-unmatched-coverage-unavailable" ? $"Unmatched-member coverage is unavailable for {target} using {converter}." : $"JSON member {details["path"]} matches no member of {target}. Conversion continued.";
+        return new(code, message, severity, details)
+        {
+            ProtectedForm = new(code, $"A JSON conversion of {root} to {target} reported {code}.", severity,
+                new Dictionary<string, string> { ["path"] = root, ["targetType"] = target })
+        };
+    }
     /// <summary>
     /// The form kept when a value involved is protected: it names roots only (<c>variables.order</c>, <c>args</c>),
     /// never a member below them. Null when the warning names nothing below a root; it is never stored.

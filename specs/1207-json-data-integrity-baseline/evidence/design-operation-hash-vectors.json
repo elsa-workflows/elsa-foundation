@@ -1,0 +1,214 @@
+{
+  "version": 1,
+  "owner": "EfDesignSupport.FingerprintJson",
+  "freeze": "FR-021: frozen from Elsa 4 first stable; later recipe changes require the agreed compatibility process.",
+  "vectors": [
+    {
+      "name": "workflow.definition.create.v1-spelling-a",
+      "operationKind": "workflow.definition.create.v1",
+      "materialType": "CreateWorkflowDefinitionRequestMaterial",
+      "material": "{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{ \"total\":1.0, \"text\":\"\\u0061\" }}",
+      "canonical": "{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "frame": "23:elsa-design-material:v129:workflow.definition.create.v11:1222:{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "sha256": "sha256:f91ff50c322ac3cc5682823b59275cfd89caabadafe4454ef3c4e2680192a731"
+    },
+    {
+      "name": "workflow.definition.create-in-folder.v1-spelling-a",
+      "operationKind": "workflow.definition.create-in-folder.v1",
+      "materialType": "CreateWorkflowDefinitionRequestMaterial",
+      "material": "{\"actorId\":\"actor\",\"folderId\":\"folder\",\"requestMaterial\":{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{ \"total\":1.0, \"text\":\"\\u0061\" }}}",
+      "canonical": "{\"actorId\":\"actor\",\"folderId\":\"folder\",\"requestMaterial\":{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0}}}",
+      "frame": "23:elsa-design-material:v139:workflow.definition.create-in-folder.v11:1280:{\"actorId\":\"actor\",\"folderId\":\"folder\",\"requestMaterial\":{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0}}}",
+      "sha256": "sha256:a66039bfccd4f6e9fcdf94a2c8de26bd65d515d4a8b141d7d0b9e8d1ec98a406"
+    },
+    {
+      "name": "workflow.draft.create.v1-spelling-a",
+      "operationKind": "workflow.draft.create.v1",
+      "materialType": "CreateDraftRequestMaterial",
+      "material": "{\"layout\":[],\"sourceVersionId\":null,\"stateJson\":{ \"total\":1.0, \"text\":\"\\u0061\" },\"workflowDefinitionId\":\"definition\"}",
+      "canonical": "{\"layout\":[],\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0},\"workflowDefinitionId\":\"definition\"}",
+      "frame": "23:elsa-design-material:v124:workflow.draft.create.v11:1109:{\"layout\":[],\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0},\"workflowDefinitionId\":\"definition\"}",
+      "sha256": "sha256:8bbd78c53f5805065bf9a9f480d1c4176e900a6d16b02ec70dbcee16abc35a86"
+    },
+    {
+      "name": "workflow.version.add.v1-spelling-a",
+      "operationKind": "workflow.version.add.v1",
+      "materialType": "AddWorkflowDefinitionVersionRequestMaterial",
+      "material": "{\"definitionId\":\"definition\",\"stateJson\":{ \"total\":1.0, \"text\":\"\\u0061\" }}",
+      "canonical": "{\"definitionId\":\"definition\",\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "frame": "23:elsa-design-material:v123:workflow.version.add.v11:166:{\"definitionId\":\"definition\",\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "sha256": "sha256:6d5016668da4084902f53d5dd769e20de31d81588768f4647210977b951f8746"
+    },
+    {
+      "name": "workflow.version.materialize.v1-spelling-a",
+      "operationKind": "workflow.version.materialize.v1",
+      "materialType": "MaterializeWorkflowDefinitionVersionRequestMaterial",
+      "material": "{\"definitionId\":\"definition\",\"sourceCreatedAt\":null,\"sourceDraftId\":null,\"stateJson\":{ \"total\":1.0, \"text\":\"\\u0061\" },\"version\":\"1.0.0\",\"versionId\":\"version\"}",
+      "canonical": "{\"definitionId\":\"definition\",\"sourceCreatedAt\":null,\"sourceDraftId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0},\"version\":\"1.0.0\",\"versionId\":\"version\"}",
+      "frame": "23:elsa-design-material:v131:workflow.version.materialize.v11:1150:{\"definitionId\":\"definition\",\"sourceCreatedAt\":null,\"sourceDraftId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0},\"version\":\"1.0.0\",\"versionId\":\"version\"}",
+      "sha256": "sha256:572dbbce80f5c2e3552558327e01d1e899f239dfc07bc15b3ed64a3c591623d0"
+    },
+    {
+      "name": "workflow.draft.replace.v1-spelling-a",
+      "operationKind": "workflow.draft.replace.v1",
+      "materialType": "UpdateDraftRequestMaterial",
+      "material": "{\"activityPresentation\":[],\"draftId\":\"draft\",\"layout\":[],\"stateJson\":{ \"total\":1.0, \"text\":\"\\u0061\" }}",
+      "canonical": "{\"activityPresentation\":[],\"draftId\":\"draft\",\"layout\":[],\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "frame": "23:elsa-design-material:v125:workflow.draft.replace.v11:194:{\"activityPresentation\":[],\"draftId\":\"draft\",\"layout\":[],\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "sha256": "sha256:d6b774a558c216fe26a610322b8739fbf8f9d6b3bcffde49563046993d0001de"
+    },
+    {
+      "name": "workflow.definition.submit.v1-spelling-a",
+      "operationKind": "workflow.definition.submit.v1",
+      "materialType": "SubmitWorkflowDefinitionRequestMaterial",
+      "material": "{\"description\":null,\"name\":\"Workflow\",\"stateJson\":{ \"total\":1.0, \"text\":\"\\u0061\" }}",
+      "canonical": "{\"description\":null,\"name\":\"Workflow\",\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "frame": "23:elsa-design-material:v129:workflow.definition.submit.v11:175:{\"description\":null,\"name\":\"Workflow\",\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "sha256": "sha256:5f432e1d440a8338ee2c0711865c8672baf5bfc99074acb7518afd63b4b212b1"
+    },
+    {
+      "name": "workflow.definition.create.v1-spelling-b",
+      "operationKind": "workflow.definition.create.v1",
+      "materialType": "CreateWorkflowDefinitionRequestMaterial",
+      "material": "{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "canonical": "{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "frame": "23:elsa-design-material:v129:workflow.definition.create.v11:1222:{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "sha256": "sha256:f91ff50c322ac3cc5682823b59275cfd89caabadafe4454ef3c4e2680192a731"
+    },
+    {
+      "name": "workflow.definition.create-in-folder.v1-spelling-b",
+      "operationKind": "workflow.definition.create-in-folder.v1",
+      "materialType": "CreateWorkflowDefinitionRequestMaterial",
+      "material": "{\"actorId\":\"actor\",\"folderId\":\"folder\",\"requestMaterial\":{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0}}}",
+      "canonical": "{\"actorId\":\"actor\",\"folderId\":\"folder\",\"requestMaterial\":{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0}}}",
+      "frame": "23:elsa-design-material:v139:workflow.definition.create-in-folder.v11:1280:{\"actorId\":\"actor\",\"folderId\":\"folder\",\"requestMaterial\":{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"Ren\\u00E9 \\u003C\\u002B\\u003E\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0}}}",
+      "sha256": "sha256:a66039bfccd4f6e9fcdf94a2c8de26bd65d515d4a8b141d7d0b9e8d1ec98a406"
+    },
+    {
+      "name": "workflow.draft.create.v1-spelling-b",
+      "operationKind": "workflow.draft.create.v1",
+      "materialType": "CreateDraftRequestMaterial",
+      "material": "{\"layout\":[],\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0},\"workflowDefinitionId\":\"definition\"}",
+      "canonical": "{\"layout\":[],\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0},\"workflowDefinitionId\":\"definition\"}",
+      "frame": "23:elsa-design-material:v124:workflow.draft.create.v11:1109:{\"layout\":[],\"sourceVersionId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0},\"workflowDefinitionId\":\"definition\"}",
+      "sha256": "sha256:8bbd78c53f5805065bf9a9f480d1c4176e900a6d16b02ec70dbcee16abc35a86"
+    },
+    {
+      "name": "workflow.version.add.v1-spelling-b",
+      "operationKind": "workflow.version.add.v1",
+      "materialType": "AddWorkflowDefinitionVersionRequestMaterial",
+      "material": "{\"definitionId\":\"definition\",\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "canonical": "{\"definitionId\":\"definition\",\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "frame": "23:elsa-design-material:v123:workflow.version.add.v11:166:{\"definitionId\":\"definition\",\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "sha256": "sha256:6d5016668da4084902f53d5dd769e20de31d81588768f4647210977b951f8746"
+    },
+    {
+      "name": "workflow.version.materialize.v1-spelling-b",
+      "operationKind": "workflow.version.materialize.v1",
+      "materialType": "MaterializeWorkflowDefinitionVersionRequestMaterial",
+      "material": "{\"definitionId\":\"definition\",\"sourceCreatedAt\":null,\"sourceDraftId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0},\"version\":\"1.0.0\",\"versionId\":\"version\"}",
+      "canonical": "{\"definitionId\":\"definition\",\"sourceCreatedAt\":null,\"sourceDraftId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0},\"version\":\"1.0.0\",\"versionId\":\"version\"}",
+      "frame": "23:elsa-design-material:v131:workflow.version.materialize.v11:1150:{\"definitionId\":\"definition\",\"sourceCreatedAt\":null,\"sourceDraftId\":null,\"stateJson\":{\"text\":\"a\",\"total\":1e0},\"version\":\"1.0.0\",\"versionId\":\"version\"}",
+      "sha256": "sha256:572dbbce80f5c2e3552558327e01d1e899f239dfc07bc15b3ed64a3c591623d0"
+    },
+    {
+      "name": "workflow.draft.replace.v1-spelling-b",
+      "operationKind": "workflow.draft.replace.v1",
+      "materialType": "UpdateDraftRequestMaterial",
+      "material": "{\"activityPresentation\":[],\"draftId\":\"draft\",\"layout\":[],\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "canonical": "{\"activityPresentation\":[],\"draftId\":\"draft\",\"layout\":[],\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "frame": "23:elsa-design-material:v125:workflow.draft.replace.v11:194:{\"activityPresentation\":[],\"draftId\":\"draft\",\"layout\":[],\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "sha256": "sha256:d6b774a558c216fe26a610322b8739fbf8f9d6b3bcffde49563046993d0001de"
+    },
+    {
+      "name": "workflow.definition.submit.v1-spelling-b",
+      "operationKind": "workflow.definition.submit.v1",
+      "materialType": "SubmitWorkflowDefinitionRequestMaterial",
+      "material": "{\"description\":null,\"name\":\"Workflow\",\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "canonical": "{\"description\":null,\"name\":\"Workflow\",\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "frame": "23:elsa-design-material:v129:workflow.definition.submit.v11:175:{\"description\":null,\"name\":\"Workflow\",\"stateJson\":{\"text\":\"a\",\"total\":1e0}}",
+      "sha256": "sha256:5f432e1d440a8338ee2c0711865c8672baf5bfc99074acb7518afd63b4b212b1"
+    },
+    {
+      "name": "missing",
+      "operationKind": "workflow.version.add.v1",
+      "materialType": "AddWorkflowDefinitionVersionRequestMaterial",
+      "material": "{\"definitionId\":\"definition\",\"stateJson\":{}}",
+      "canonical": "{\"definitionId\":\"definition\",\"stateJson\":{}}",
+      "frame": "23:elsa-design-material:v123:workflow.version.add.v11:144:{\"definitionId\":\"definition\",\"stateJson\":{}}",
+      "sha256": "sha256:1b4d583cad1bf1210998ee2eb157079689ca5473abf68bca94fc649d40fe9f2e"
+    },
+    {
+      "name": "null",
+      "operationKind": "workflow.version.add.v1",
+      "materialType": "AddWorkflowDefinitionVersionRequestMaterial",
+      "material": "{\"definitionId\":\"definition\",\"stateJson\":{\"x\":null}}",
+      "canonical": "{\"definitionId\":\"definition\",\"stateJson\":{\"x\":null}}",
+      "frame": "23:elsa-design-material:v123:workflow.version.add.v11:152:{\"definitionId\":\"definition\",\"stateJson\":{\"x\":null}}",
+      "sha256": "sha256:0db2b1cd589f528b73987d8e1e86f4023a4245f827a40101fd650d326d48704e"
+    },
+    {
+      "name": "forward",
+      "operationKind": "workflow.version.add.v1",
+      "materialType": "AddWorkflowDefinitionVersionRequestMaterial",
+      "material": "{\"definitionId\":\"definition\",\"stateJson\":[1e0,2e0]}",
+      "canonical": "{\"definitionId\":\"definition\",\"stateJson\":[1e0,2e0]}",
+      "frame": "23:elsa-design-material:v123:workflow.version.add.v11:151:{\"definitionId\":\"definition\",\"stateJson\":[1e0,2e0]}",
+      "sha256": "sha256:de150485b74a44779a7ccc374336f24e15ae1e2e01ec4774163021e0343ab9a3"
+    },
+    {
+      "name": "reverse",
+      "operationKind": "workflow.version.add.v1",
+      "materialType": "AddWorkflowDefinitionVersionRequestMaterial",
+      "material": "{\"definitionId\":\"definition\",\"stateJson\":[2e0,1e0]}",
+      "canonical": "{\"definitionId\":\"definition\",\"stateJson\":[2e0,1e0]}",
+      "frame": "23:elsa-design-material:v123:workflow.version.add.v11:151:{\"definitionId\":\"definition\",\"stateJson\":[2e0,1e0]}",
+      "sha256": "sha256:6752f1667814f83cdab143ac0f3d0b2047114034dd987e3194f0b7832a44b5aa"
+    },
+    {
+      "name": "large-a",
+      "operationKind": "workflow.version.add.v1",
+      "materialType": "AddWorkflowDefinitionVersionRequestMaterial",
+      "material": "{\"definitionId\":\"definition\",\"stateJson\":9007199254740993e0}",
+      "canonical": "{\"definitionId\":\"definition\",\"stateJson\":9007199254740993e0}",
+      "frame": "23:elsa-design-material:v123:workflow.version.add.v11:160:{\"definitionId\":\"definition\",\"stateJson\":9007199254740993e0}",
+      "sha256": "sha256:b32d645a2f8ac66669b33658a4b5c5ee4ce741ac61244ea770d9fdbb8c5d442d"
+    },
+    {
+      "name": "large-b",
+      "operationKind": "workflow.version.add.v1",
+      "materialType": "AddWorkflowDefinitionVersionRequestMaterial",
+      "material": "{\"definitionId\":\"definition\",\"stateJson\":9007199254740992e0}",
+      "canonical": "{\"definitionId\":\"definition\",\"stateJson\":9007199254740992e0}",
+      "frame": "23:elsa-design-material:v123:workflow.version.add.v11:160:{\"definitionId\":\"definition\",\"stateJson\":9007199254740992e0}",
+      "sha256": "sha256:a45f4d667708bbe6cda56601f445086bc6a80900759f84081e314024beb70d89"
+    },
+    {
+      "name": "text-a",
+      "operationKind": "workflow.definition.create.v1",
+      "materialType": "CreateWorkflowDefinitionRequestMaterial",
+      "material": "{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"{}\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{}}",
+      "canonical": "{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"{}\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{}}",
+      "frame": "23:elsa-design-material:v129:workflow.definition.create.v11:1174:{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\"{}\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{}}",
+      "sha256": "sha256:3d3d7f7c7adef6bcb14a0ec73b60eddb1cd743797c4aa4c1a2413d9e8562f388"
+    },
+    {
+      "name": "text-b",
+      "operationKind": "workflow.definition.create.v1",
+      "materialType": "CreateWorkflowDefinitionRequestMaterial",
+      "material": "{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\" { }\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{}}",
+      "canonical": "{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\" { }\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{}}",
+      "frame": "23:elsa-design-material:v129:workflow.definition.create.v11:1176:{\"activityPresentation\":[],\"deletedAt\":null,\"deletedReason\":null,\"description\":\" { }\",\"isSourceOwned\":false,\"layout\":[],\"name\":\"Workflow\",\"sourceVersionId\":null,\"stateJson\":{}}",
+      "sha256": "sha256:079597223385302667425cb7c7ddc1d65c2b95752ce8d5ef45f7d596173bb2f9"
+    },
+    {
+      "name": "boolean-result",
+      "operationKind": "workflow.draft.discard.v1.result",
+      "materialType": null,
+      "material": "true",
+      "canonical": "true",
+      "frame": "23:elsa-design-material:v132:workflow.draft.discard.v1.result1:14:true",
+      "sha256": "sha256:3c0c08e5daeaf273523773a68b0e6a3cf6e94d196c10e2d91321139783104bee"
+    }
+  ]
+}

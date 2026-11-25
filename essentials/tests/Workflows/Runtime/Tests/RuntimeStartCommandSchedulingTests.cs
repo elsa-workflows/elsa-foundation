@@ -42,9 +42,9 @@ public sealed class RuntimeStartCommandSchedulingTests
         {
             HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled
         };
-        await NewHandler(material, queue).HandleAsync(NewStartWorkItem(executable.Identity, payload: JsonSerializer.SerializeToElement(payload)));
+        await NewHandler(material, queue).HandleAsync(NewStartWorkItem(executable.Identity, payload: JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options)));
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        var queued = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var queued = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(enabled, queued.HistoryCaptureEnabledAtAdmission);
         Assert.Equal(policy is null, queued.HistoryCapturePolicy is null);
         if (policy is not null) Assert.True(policy.IsEquivalentTo(queued.HistoryCapturePolicy));
@@ -82,7 +82,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled
         };
         var command = new WorkflowExecutionCommand("command", "wfexec-1", WorkflowExecutionCommandKind.Start, _now,
-            JsonSerializer.SerializeToElement(payload), new Dictionary<string, string>());
+            JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options), new Dictionary<string, string>());
         var envelope = new WorkflowExecutionCommandEnvelope("envelope", "wfexec-1", command, "start",
             WorkflowExecutionCommandDeliveryMode.AtLeastOnce, _now);
         var unreadable = false;
@@ -118,7 +118,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             HistoryCapturePolicy = new("replacement", 3, true, ["WorkflowStarted", "WorkflowCompleted"]),
             HistoryCaptureEnabledAtAdmission = true
         };
-        var work = NewStartWorkItem(executable.Identity, WorkflowExecutionCommandKind.Checkpoint, JsonSerializer.SerializeToElement(replacement));
+        var work = NewStartWorkItem(executable.Identity, WorkflowExecutionCommandKind.Checkpoint, JsonSerializer.SerializeToElement(replacement, options: Elsa.Serialization.Core.JsonBaseline.Options));
         var context = new WorkflowRuntimePipelineContext(work);
         var handler = new WorkflowCheckpointSchedulerWorkHandler(new InMemoryActivityExecutionStateStore(),
             new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), new InMemoryRuntimeCheckpointCommitStore(),
@@ -134,14 +134,14 @@ public sealed class RuntimeStartCommandSchedulingTests
     [Fact]
     public void Legacy_start_and_checkpoint_wire_omit_unknown_capture_choice()
     {
-        var start = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(NewIdentity(), "artifact-1"));
-        var checkpoint = JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(NewIdentity(), "test", [], "test"));
+        var start = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(NewIdentity(), "artifact-1"), options: Elsa.Serialization.Core.JsonBaseline.Options);
+        var checkpoint = JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(NewIdentity(), "test", [], "test"), options: Elsa.Serialization.Core.JsonBaseline.Options);
         Assert.False(start.TryGetProperty(nameof(WorkflowExecutionStartCommandPayload.HistoryCapturePolicy), out _));
         Assert.False(start.TryGetProperty(nameof(WorkflowExecutionStartCommandPayload.HistoryCaptureEnabledAtAdmission), out _));
         Assert.False(checkpoint.TryGetProperty(nameof(RuntimeCheckpointCommandPayload.HistoryCapturePolicy), out _));
         Assert.False(checkpoint.TryGetProperty(nameof(RuntimeCheckpointCommandPayload.HistoryCaptureEnabledAtAdmission), out _));
         var state = JsonSerializer.SerializeToElement(new WorkflowExecutionState("wfexec-1", NewIdentity(),
-            WorkflowExecutionStatus.Running, null, _now, _now, _now, null, null, null, null, new Dictionary<string, string>()));
+            WorkflowExecutionStatus.Running, null, _now, _now, _now, null, null, null, null, new Dictionary<string, string>()), options: Elsa.Serialization.Core.JsonBaseline.Options);
         Assert.False(state.TryGetProperty(nameof(WorkflowExecutionState.HistoryCapturePolicy), out _));
         Assert.False(state.TryGetProperty(nameof(WorkflowExecutionState.HistoryCaptureEnabledAtAdmission), out _));
     }
@@ -163,7 +163,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         Assert.Equal(RuntimeChainId.Derive("start-work", "checkpoint:WorkflowStarted"), checkpointWork.WorkItemId);
         Assert.Equal(_now, checkpointWork.EnqueuedAt);
         Assert.Equal(_now, checkpointWork.RecordedAt);
-        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, checkpointPayload.CheckpointName);
         Assert.Equal(RuntimeCheckpointCommandPayload.WorkflowStartReason, checkpointPayload.Reason);
         Assert.Empty(checkpointPayload.ActivityExecutionIds);
@@ -171,12 +171,12 @@ public sealed class RuntimeStartCommandSchedulingTests
         Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, intent.Kind);
         Assert.Null(intent.ActivityExecutionId);
 
-        var scheduled = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var scheduled = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
         Assert.Equal(RuntimeChainId.Derive("start-work", "schedule:node-start"), scheduled.WorkItemId);
         Assert.Equal(12, scheduled.Sequence);
         Assert.Equal(_now.ToString("O"), scheduled.CommandMetadata[RuntimeMetadataKeys.WorkflowStartedAt]);
-        var payload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        var payload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("node-start", payload.ExecutableNodeId);
         Assert.Equal("actexec-1", payload.ActivityExecutionId);
         Assert.Equal(RuntimeScheduleActivityCommandPayload.WorkflowStartReason, payload.Reason);
@@ -195,10 +195,10 @@ public sealed class RuntimeStartCommandSchedulingTests
         await handler.HandleAsync(NewStartWorkItem(executable.Identity));
 
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         var intent = Assert.Single(checkpointPayload.PostCommitIntents);
-        var scheduled = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
-        var payload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        var scheduled = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
+        var payload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("node-a", payload.ExecutableNodeId);
         Assert.Equal("actexec-1", payload.ActivityExecutionId);
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
@@ -271,9 +271,9 @@ public sealed class RuntimeStartCommandSchedulingTests
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(_now, checkpointWork.EnqueuedAt);
         Assert.Equal(delayedRecordedAt, checkpointWork.RecordedAt);
-        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         var rootWork = Assert.Single(checkpointPayload.PostCommitIntents).Payload!.Value
-            .Deserialize<RuntimeSchedulerWorkItem>()!;
+            .Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(_now, rootWork.EnqueuedAt);
         Assert.Equal(delayedRecordedAt, rootWork.RecordedAt);
     }
@@ -349,9 +349,9 @@ public sealed class RuntimeStartCommandSchedulingTests
         Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var pending = Assert.Single(await checkpointWriter.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1")));
         Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, pending.Intent.Kind);
-        var scheduled = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var scheduled = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
-        var schedulePayload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        var schedulePayload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("node-start", schedulePayload.ExecutableNodeId);
         Assert.Equal("actexec-1", schedulePayload.ActivityExecutionId);
     }
@@ -375,7 +375,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             executable.Identity,
             "artifact-1",
-            runKind: WorkflowRunKind.BackgroundWeaverRun));
+            runKind: WorkflowRunKind.BackgroundWeaverRun), Elsa.Serialization.Core.JsonBaseline.Options);
         await queue.EnqueueAsync(NewStartWorkItem(executable.Identity, payload: payload));
 
         await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
@@ -418,7 +418,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             executable.Identity,
             "artifact-1",
             runKind: WorkflowRunKind.PublishedRun,
-            pinnedSource: provenance));
+            pinnedSource: provenance), Elsa.Serialization.Core.JsonBaseline.Options);
         await queue.EnqueueAsync(NewStartWorkItem(executable.Identity, payload: payload));
 
         await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
@@ -488,7 +488,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             identity,
             "artifact-1",
             variables: WorkflowExecutionStartCommandPayload.ToJsonValues(new Dictionary<string, object?> { ["greeting"] = "Hello" }),
-            inputs: WorkflowExecutionStartCommandPayload.ToJsonValues(new Dictionary<string, object?> { ["name"] = "World" })));
+            inputs: WorkflowExecutionStartCommandPayload.ToJsonValues(new Dictionary<string, object?> { ["name"] = "World" })), Elsa.Serialization.Core.JsonBaseline.Options);
 
     [Fact]
     public async Task CheckpointHandler_DoesNotDispatchStartNodeSchedulingWhenWorkflowStartedWriteFails()
@@ -550,7 +550,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         {
             PinnedExecutable = NewIdentity(),
             RequestedArtifactId = ""
-        });
+        }, Elsa.Serialization.Core.JsonBaseline.Options);
         var store = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = NewHandler(store, queue);
@@ -663,7 +663,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var resolvedPayload = includePayload
             ? payload ?? JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
                 pinnedExecutable ?? NewIdentity(),
-                "artifact-1"))
+                "artifact-1"), Elsa.Serialization.Core.JsonBaseline.Options)
             : (JsonElement?)null;
 
         return new RuntimeSchedulerWorkItem(

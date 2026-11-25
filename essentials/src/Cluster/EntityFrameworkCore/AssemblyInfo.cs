@@ -3,6 +3,9 @@ using Elsa.Cluster.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 
+// Exercise the provider's canonical report comparison through its real bounded store write.
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Cluster.EntityFrameworkCore.Tests")]
+
 // The single, discoverable declaration of this module. EfModuleCatalog.Discover reads this, so the
 // persistence tool finds the membership table in any host closure that carries this assembly, and EfModuleBinding.For
 // derives the registration's binding from it.

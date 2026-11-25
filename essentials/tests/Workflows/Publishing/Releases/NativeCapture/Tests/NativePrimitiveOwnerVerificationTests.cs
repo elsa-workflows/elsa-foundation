@@ -1,6 +1,6 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Serialization.Core;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
@@ -118,7 +118,7 @@ public sealed class NativePrimitiveOwnerVerificationTests
     private sealed class Replaced(IReleaseContentReader actual, ReleaseContentMember member, byte[] bytes) : IReleaseContentReader
     {
         private readonly ReleaseContentMember _replacement = new(new(member.Descriptor.Kind, member.Descriptor.Identity, member.Descriptor.Codec, member.Descriptor.CodecVersion,
-            "sha256:" + Convert.ToHexStringLower(SHA256.HashData(bytes)), bytes.Length), member.OwnerVersion);
+            "sha256:" + JsonHashInput.HashUtf8(bytes), bytes.Length), member.OwnerVersion);
         public IReadOnlyList<ReleaseContentMember> Members => actual.Members.Select(value => value.Key == member.Key ? _replacement : value).ToArray();
         public ReleaseContentMember GetMember(ReleaseMemberKey key) => key == member.Key ? _replacement : actual.GetMember(key);
         public ReadOnlyMemory<byte> GetPayload(ReleaseMemberKey key) => key == member.Key ? (byte[])bytes.Clone() : actual.GetPayload(key);

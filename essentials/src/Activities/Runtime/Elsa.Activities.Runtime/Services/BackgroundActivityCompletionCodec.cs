@@ -1,3 +1,4 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
@@ -12,7 +13,6 @@ namespace Elsa.Activities.Runtime.Services;
 /// </summary>
 internal sealed class BackgroundActivityCompletionCodec(IWellKnownTypeRegistry types)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public Type ResolveResultType(ActivityContract contract)
     {
@@ -35,17 +35,19 @@ internal sealed class BackgroundActivityCompletionCodec(IWellKnownTypeRegistry t
             throw new BackgroundActivityValidationException("BG-ACT-005: The background activity did not return its required result.");
         if (completion.Result is not null && !type.IsInstanceOfType(completion.Result))
             throw new BackgroundActivityValidationException("BG-ACT-005: The background result does not match its pinned result type.");
-        var json = JsonSerializer.Serialize(completion.Result, type, JsonOptions);
+        var json = JsonValueConversion.Serialize(completion.Result, type);
         ValidateSize(json, maximumBytes);
         return json;
     }
 
-    public ActivityTransition Deserialize(ActivityContract contract, string json, OutcomeSelection selection, int maximumBytes)
+    public ActivityTransition Deserialize(ActivityContract contract, string json, OutcomeSelection selection, int maximumBytes, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings = null)
     {
         ValidateOutcome(contract, selection);
         ValidateSize(json, maximumBytes);
         var type = ResolveResultType(contract);
-        var result = JsonSerializer.Deserialize(json, type, JsonOptions);
+        using var document = JsonDocument.Parse(json);
+        var result = JsonConversionContract.For(type).Read(document.RootElement, type, diagnostic => warnings?.Report(
+            Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, "result")));
         if (result is null && contract.Result.IsRequired)
             throw new BackgroundActivityValidationException("BG-ACT-005: The background receipt is missing its required result.");
         return new RehydratedCompletion(result, type, selection);

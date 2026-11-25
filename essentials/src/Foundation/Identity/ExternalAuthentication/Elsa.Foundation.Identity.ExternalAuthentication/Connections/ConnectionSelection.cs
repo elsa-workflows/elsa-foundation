@@ -90,7 +90,7 @@ internal static partial class ConnectionSelection
         // Presentation is not authentication material. Observations live outside the connection document.
         var material = new { record.Key, record.Protocol, record.Settings, record.Secrets, record.Admission,
             record.Enabled, record.OverridesDeployment, record.ArchivedAt };
-        return Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(material)));
+        return Elsa.Serialization.Core.JsonHashInput.Hash(material);
     }
 
     private static bool CredentialField(string key) => new string(key.Where(char.IsAsciiLetterOrDigit).ToArray()).ToLowerInvariant()

@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Net;
 using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Models;
@@ -124,7 +125,7 @@ internal static class StudioExtensionBuilderBridge
         // every policy allows anonymously (demo shell). The browser carries no Elsa host management key. The policies
         // travel inline (RequireStudioBridgePermission) because this is mapped from a shell feature, which cannot add
         // named policies to the host's authorization options.
-        var group = endpoints.MapGroup(RouteGroup);
+        var group = endpoints.MapGroup(RouteGroup).WithElsaJsonResponseHeaders();
 
         group.MapGet(CapabilitiesRoute, GetCapabilitiesAsync)
             .RequireStudioBridgePermission(ExtensionBuilderPermissions.ReadKeys);

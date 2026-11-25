@@ -13,12 +13,21 @@ namespace Elsa.Studio.Dashboard.Api;
 
 public static class DashboardResourcesApi
 {
-    internal static JsonSerializerOptions Json { get; } = new(JsonSerializerDefaults.Web)
-    { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, PropertyNameCaseInsensitive = false, MaxDepth = 32 };
+    internal static JsonSerializerOptions Json { get; } = CreateJson();
+
+    private static JsonSerializerOptions CreateJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        options.MaxDepth = 32;
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.MakeReadOnly();
+        return options;
+    }
 
     public static void MapDashboardResourcesApi(IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapEndpointGroup(typeof(DashboardResourcesApi).Assembly.GetName().Name!, DashboardResourcesJsonContext.Default);
+        var group = endpoints.MapEndpointGroup(typeof(DashboardResourcesApi).Assembly.GetName().Name!, DashboardResourcesJsonContext.WireContext);
         foreach (var (plural, kind) in new[] { ("questions", DashboardResourceKinds.Question), ("dashboards", DashboardResourceKinds.Dashboard) })
         {
             var route = $"/_elsa/studio/{plural}";
@@ -77,6 +86,11 @@ public static class DashboardResourcesApi
                 "preconditionRequired" => 428, "validation" => 422, _ => 503 };
             await Results.Problem(statusCode: status, title: error.Message, extensions: new Dictionary<string, object?> { ["code"] = error.Code }).ExecuteAsync(context);
         }
+        catch (Elsa.Serialization.Core.JsonConversionException error)
+        {
+            await Results.Problem(statusCode: 400, title: "Supply Z or an explicit offset for the indicated date-time.",
+                extensions: new Dictionary<string, object?> { ["code"] = error.Code, ["path"] = error.Path }).ExecuteAsync(context);
+        }
         catch (JsonException) { await Results.Problem(statusCode: 400, title: "The request contains malformed or unsupported fields.").ExecuteAsync(context); }
     }
 
@@ -113,4 +127,7 @@ public static class DashboardResourcesApi
 [JsonSerializable(typeof(DashboardAudienceCandidatePage))]
 [JsonSerializable(typeof(DashboardHistoryPage))]
 [JsonSerializable(typeof(object))]
-internal partial class DashboardResourcesJsonContext : JsonSerializerContext;
+internal partial class DashboardResourcesJsonContext : JsonSerializerContext
+{
+    internal static DashboardResourcesJsonContext WireContext { get; } = new(new JsonSerializerOptions(DashboardResourcesApi.Json));
+}

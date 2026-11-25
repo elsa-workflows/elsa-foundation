@@ -28,7 +28,7 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
             try
             {
                 if (continuationToken.Length > 512) Invalid("The continuation is invalid. Reload this collection.");
-                var cursor = JsonSerializer.Deserialize<Cursor>(Convert.FromBase64String(continuationToken));
+                var cursor = JsonSerializer.Deserialize<Cursor>(Convert.FromBase64String(continuationToken), options: Elsa.Serialization.Core.JsonBaseline.Options);
                 if (cursor is null || cursor.Scope != scope) Invalid("The continuation belongs to another collection scope.");
                 var position = Array.FindIndex(visible, document => document.Id == cursor.Id);
                 if (position < 0) Invalid("The continuation expired after collection or access changes. Reload this collection.");
@@ -44,7 +44,7 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
                 throw new DashboardResourceException("conflict", "The collection changed while it was being read. Reload this collection.");
             result.Add(await ProjectAsync(actor, document, cancellationToken, includeUses: false));
         }
-        var continuation = offset + result.Count < visible.Length ? Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new Cursor(scope, result[^1].Id))) : null;
+        var continuation = offset + result.Count < visible.Length ? Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new Cursor(scope, result[^1].Id), options: Elsa.Serialization.Core.JsonBaseline.Options)) : null;
         return new(result, continuation);
     }
 
@@ -226,7 +226,7 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
 
     private static void ValidateContentSize(string kind, DashboardResourceContent content)
     {
-        if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(content)) > (kind == DashboardResourceKinds.Question ? 65_536 : 131_072))
+        if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(content, options: Elsa.Serialization.Core.JsonBaseline.Options)) > (kind == DashboardResourceKinds.Question ? 65_536 : 131_072))
             Invalid("The resource definition exceeds its supported size.");
     }
 
@@ -345,33 +345,7 @@ internal sealed class DashboardResourceService(IDashboardResourceStore store, ID
         return definition with { Visualization = presentation ?? definition.Visualization, ParameterValues = values };
     }
 
-    private static string Fingerprint(object value)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            WriteCanonical(writer, JsonSerializer.SerializeToElement(value));
-        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
-    }
+    private static string Fingerprint(object value) => Elsa.Serialization.Core.JsonHashInput.Hash(value);
 
-    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement value)
-    {
-        switch (value.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var member in value.EnumerateObject().OrderBy(member => member.Name, StringComparer.Ordinal))
-                { writer.WritePropertyName(member.Name); WriteCanonical(writer, member.Value); }
-                writer.WriteEndObject();
-                break;
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in value.EnumerateArray()) WriteCanonical(writer, item);
-                writer.WriteEndArray();
-                break;
-            default:
-                value.WriteTo(writer);
-                break;
-        }
-    }
     private sealed record Cursor(string Scope, string Id);
 }

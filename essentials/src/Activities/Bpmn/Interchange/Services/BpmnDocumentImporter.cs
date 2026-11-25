@@ -39,7 +39,7 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// </summary>
 public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDefinitionLookup? catalog = null) : IBpmnDocumentImporter
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>Placeholder activity version id for nested BPMN process nodes; API hosts override via options later.</summary>
     public const string DefaultBpmnProcessActivityVersionId = BpmnProcessActivity.ProcessAlias;
@@ -320,7 +320,7 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 new ActivityNodeStructure(
                     BpmnProcessActivity.StructureKind,
                     BpmnProcessActivity.StructureSchemaVersion,
-                    JsonSerializer.SerializeToElement(structure, SerializerOptions)));
+                    JsonSerializer.SerializeToElement(structure, options: SerializerOptions)));
         }
 
         private ActivityNode? MaterializeChild(LibInterchange.BpmnWorkBinding binding, LibModel.BpmnElement source)
@@ -415,7 +415,7 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 // Give an inherited language its equivalent explicit expression language, so export keeps
                 // its meaning even though the frozen process envelope has no expressionLanguage field.
                 var retained = new LibModel.BpmnConditionExpression(expression.Body, expression.Language ?? process.ExpressionLanguage, expression.Extensions);
-                properties[BpmnRetainedAuthoring.ConditionExpressionPrefix + flow.FlowId] = JsonSerializer.Serialize(retained, SerializerOptions);
+                properties[BpmnRetainedAuthoring.ConditionExpressionPrefix + flow.FlowId] = JsonSerializer.Serialize(retained, options: SerializerOptions);
             }
             return properties;
         }

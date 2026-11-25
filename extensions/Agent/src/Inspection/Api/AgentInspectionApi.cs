@@ -43,7 +43,7 @@ public sealed record AgentInvocationEvidenceRequest([property: JsonIgnore] strin
 /// <summary>One runtime occurrence's agent evidence; the result's value is left out unless <see cref="ValuesPermitted"/>.</summary>
 public sealed record AgentInvocationEvidenceView(AgentInvocationEvidence Invocation, bool ValuesPermitted);
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata,
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata,
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, UseStringEnumConverter = true)]
 [JsonSerializable(typeof(AgentTestRunEvidenceRequest))]
 [JsonSerializable(typeof(AgentTestRunEvidenceView))]
@@ -51,12 +51,18 @@ public sealed record AgentInvocationEvidenceView(AgentInvocationEvidence Invocat
 [JsonSerializable(typeof(AgentInvocationEvidenceView))]
 internal partial class AgentInspectionApiJsonContext : JsonSerializerContext
 {
-    internal static AgentInspectionApiJsonContext WireContext => Wire.Context;
+    internal static AgentInspectionApiJsonContext WireContext { get; } = new(CreateWireOptions());
 
-    private static class Wire
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
     {
-        internal static readonly AgentInspectionApiJsonContext Context = new(new JsonSerializerOptions(Default.Options));
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        options.Converters.Add(new JsonStringEnumConverter());
+        return options;
     }
+
+
 }
 
 /// <summary>

@@ -11,7 +11,7 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProviderReferenceRewriter(IActivityStructureService structureService)
     : IActivityProviderReferenceRewriter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly IReadOnlySet<string> Schemas = new HashSet<string>(
         [ActivityGraphManifest.SchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion],
         StringComparer.Ordinal);
@@ -69,6 +69,6 @@ public sealed class GraphActivityProviderReferenceRewriter(IActivityStructureSer
         if (missing.Length != 0)
             throw new InvalidOperationException($"Upgrade occurrences were not found: {string.Join(", ", missing)}.");
         var rewrittenGraph = graph with { RootActivity = JsonSerializer.SerializeToElement(updated[root.NodeId], JsonOptions) };
-        return ValueTask.FromResult(manifest with { Payload = rewrittenGraph.ToCanonicalJsonElement() });
+        return ValueTask.FromResult(manifest with { Payload = rewrittenGraph.ToJsonElement() });
     }
 }

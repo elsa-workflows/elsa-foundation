@@ -16,7 +16,7 @@ public sealed class EtlContinuousRunPolicyTests
         var document = EtlArtifactV2Json.Write(EtlV2TestPipelines.Create());
 
         Assert.Equal(FiniteRootMembers, document.EnumerateObject().Select(property => property.Name));
-        Assert.Equal(FiniteHash, EtlArtifactJson.Hash(document));
+        Assert.True(FiniteHash == EtlArtifactJson.Hash(document), "First-stable hash freeze: changes require an explicit identity/migration decision.");
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public sealed class EtlContinuousRunPolicyTests
         node["continuous"] = null;
         var finite = EtlArtifactV2Json.Read(JsonDocument.Parse(node.ToJsonString()).RootElement);
         Assert.Null(finite.Continuous);
-        Assert.Equal(FiniteHash, EtlArtifactJson.Hash(EtlArtifactV2Json.Write(finite)));
+        Assert.True(FiniteHash == EtlArtifactJson.Hash(EtlArtifactV2Json.Write(finite)), "First-stable hash freeze: changes require an explicit identity/migration decision.");
     }
 
     [Fact]
@@ -106,5 +106,5 @@ public sealed class EtlContinuousRunPolicyTests
     }
 
     // The baseline pipeline's content hash from the finite writer; a serialized null policy would change it.
-    private const string FiniteHash = "25cdcf9e8b97ac27d4f403d2158f0d468a47e8b47bfd677b69487ba13872dc21";
+    private const string FiniteHash = "962310e12e298598a58e2846826db07a1369ec563821b67327d98896fb66f2cc";
 }

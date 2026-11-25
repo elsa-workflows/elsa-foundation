@@ -1,4 +1,5 @@
 import { StudioButton } from "../ui/forms/Button";
+import { StudioTimestamp } from "../ui/data-grid/StudioTimestamp";
 import React, { Suspense } from "react";
 import { AlertTriangle, Check, Loader2, Play, X } from "lucide-react";
 import { presentsResourceModule, type StudioWeaverResultControlContribution, type StudioWeaverResultRendererContribution, type StudioWeaverResultRendererProps } from "../../sdk";
@@ -272,7 +273,7 @@ function AuditDetails({ proposal }: { proposal: WeaverActionProposal }) {
       {audit.recordedAt ? (
         <div>
           <dt>Recorded</dt>
-          <dd>{audit.recordedAt}</dd>
+          <dd><StudioTimestamp value={audit.recordedAt} format="date-time" /></dd>
         </div>
       ) : null}
     </dl>

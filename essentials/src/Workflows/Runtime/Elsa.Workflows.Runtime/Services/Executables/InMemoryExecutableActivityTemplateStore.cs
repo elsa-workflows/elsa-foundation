@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// </summary>
 public sealed class InMemoryExecutableActivityTemplateStore : IExecutableActivityTemplateStore
 {
-    private static readonly JsonSerializerOptions ComparisonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions ComparisonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly Dictionary<string, ExecutableActivityTemplate> _byId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ExecutableActivityTemplate> _byHash = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
@@ -222,7 +222,7 @@ public sealed class InMemoryExecutableActivityTemplateStore : IExecutableActivit
 
         var existingJson = ComparableContent(existing);
         var candidateJson = ComparableContent(candidate);
-        if (!JsonNode.DeepEquals(existingJson, candidateJson))
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(existingJson, candidateJson))
         {
             throw new InvalidOperationException(
                 $"Template id '{candidate.TemplateId}' and hash '{candidate.TemplateHash}' are already bound to different content.");

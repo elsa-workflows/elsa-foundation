@@ -64,7 +64,7 @@ internal static class RuntimeClosedScope
                 !long.TryParse(raw, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var version))
                 continue;
             var writer = row.Metadata.TryGetValue(RuntimeMetadataKeys.RowVariableWriter, out var json)
-                ? System.Text.Json.JsonSerializer.Deserialize<VariableWriter>(json)
+                ? System.Text.Json.JsonSerializer.Deserialize<VariableWriter>(json, Elsa.Serialization.Core.JsonBaseline.Options)
                 : null;
             (versions ??= new Dictionary<string, VariableVersion>(StringComparer.Ordinal))[key] =
                 new VariableVersion(version, row.Metadata.GetValueOrDefault(RuntimeMetadataKeys.RowVariableDigest), writer);
@@ -82,7 +82,7 @@ internal static class RuntimeClosedScope
         if (version.Digest is not null && !hidesValue)
             result[RuntimeMetadataKeys.RowVariableDigest] = version.Digest;
         if (version.Writer is not null)
-            result[RuntimeMetadataKeys.RowVariableWriter] = System.Text.Json.JsonSerializer.Serialize(version.Writer);
+            result[RuntimeMetadataKeys.RowVariableWriter] = System.Text.Json.JsonSerializer.Serialize(version.Writer, Elsa.Serialization.Core.JsonBaseline.Options);
         return result;
     }
 

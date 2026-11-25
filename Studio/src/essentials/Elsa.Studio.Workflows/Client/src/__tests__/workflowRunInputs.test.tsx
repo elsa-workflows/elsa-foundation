@@ -1,3 +1,4 @@
+import { setStudioTimeZonePreference } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -15,6 +16,7 @@ import { createEnumWorkflowRunInputEditorContribution } from "../workflowRunInpu
 let active: { root: Root; container: HTMLElement } | null = null;
 
 afterEach(() => {
+  setStudioTimeZonePreference("browser");
   if (!active) return;
   flushSync(() => active!.root.unmount());
   active.container.remove();
@@ -352,6 +354,28 @@ describe("workflow run inputs", () => {
       },
       errors: {}
     });
+  });
+
+  it.each([
+    ["2026-01-15T12:30", "Europe/Amsterdam", "2026-01-15T12:30+01:00"],
+    ["2026-07-15T12:30", "Europe/Amsterdam", "2026-07-15T12:30+02:00"],
+    ["2026-07-15T12:30", "UTC", "2026-07-15T12:30+00:00"]
+  ])("sends an explicit date-specific offset from the actual Run parser (%s, %s)", (draft, zone, expected) => {
+    setStudioTimeZonePreference(zone);
+    const input = workflowInput("when", "When", "DateTime", true);
+    expect(parseWorkflowRunInputs([input], { when: draft })).toEqual({ values: { When: expected }, errors: {} });
+    const collection = workflowInput("dates", "Dates", "DateTimeOffset", true, "Array");
+    expect(parseWorkflowRunInputs([collection], { dates: JSON.stringify([draft]) })).toEqual({ values: { Dates: [expected] }, errors: {} });
+    const editor = editorContribution("date", 1, () => true);
+    editor.serialize = () => draft;
+    expect(parseWorkflowRunInputs([input], { when: draft }, [editor])).toEqual({ values: { When: expected }, errors: {} });
+  });
+
+  it("refuses DST gaps and impossible dates through the Run parser", () => {
+    setStudioTimeZonePreference("Europe/Amsterdam");
+    const input = workflowInput("when", "When", "DateTime", true);
+    expect(parseWorkflowRunInputs([input], { when: "2026-03-29T02:30" }).errors.when).toContain("does not exist");
+    expect(parseWorkflowRunInputs([input], { when: "2026-02-30T12:30" }).errors.when).toContain("calendar");
   });
 
   it("preserves explicit blank optional strings and reports declared scalar type errors", () => {
@@ -702,6 +726,44 @@ describe("workflow run inputs", () => {
     expect(document.activeElement).toBe(container.querySelector('[aria-label="Close dialog"]'));
     first.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("restores the original Run control when asynchronous contract loading already moved focus to body", async () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    opener.blur(); // Browsers blur Run while its input contract is loading and the button is disabled.
+    expect(document.activeElement).toBe(document.body);
+    const container = render(
+      <WorkflowRunInputDialog inputs={[workflowInput("when", "When", "DateTimeOffset", true)]}
+        returnFocusTo={opener} onSubmit={vi.fn()} onCancel={vi.fn()} />
+    );
+    expect(document.activeElement).toBe(container.querySelector("input"));
+    flushSync(() => active!.root.render(null));
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
+    opener.remove();
+  });
+
+  it("retains shared dialog focus restoration when no explicit original Run control is supplied", async () => {
+    const opener = document.createElement("button"); document.body.append(opener); opener.focus();
+    try {
+      render(<WorkflowRunInputDialog inputs={[]} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+      flushSync(() => active!.root.render(null));
+      await vi.waitFor(() => expect(document.activeElement).toBe(opener));
+    } finally { opener.remove(); }
+  });
+
+  it("does not steal newly assigned focus when the Run dialog closes", async () => {
+    const opener = document.createElement("button"), destination = document.createElement("button");
+    document.body.append(opener, destination); opener.focus();
+    try {
+      render(<WorkflowRunInputDialog inputs={[]} returnFocusTo={opener} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+      flushSync(() => active!.root.render(null));
+      destination.focus();
+      // The shared dialog dispatches close autofocus on the next task after unmount.
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      expect(document.activeElement).toBe(destination);
+    } finally { opener.remove(); destination.remove(); }
   });
 });
 

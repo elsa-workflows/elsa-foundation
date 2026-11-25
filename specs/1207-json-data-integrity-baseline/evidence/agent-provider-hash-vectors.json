@@ -1,0 +1,173 @@
+[
+  {
+    "vendor": "anthropic",
+    "name": "base",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": true,
+    "hosts": [
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"anthropic\",\"anthropic/12.32.0;messages/2023-06-01;meai/10.10.1;http1.1;api-key;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,true,\"fixed\",[\"provider.fixture.invalid\"]]",
+    "expected": "07DB08D558E316A98D79483ED858E4371F80E30F7CBFF1F90362C358AEADB77C"
+  },
+  {
+    "vendor": "anthropic",
+    "name": "token-limit",
+    "maximumOutputTokens": 8191,
+    "temperatureSupported": true,
+    "hosts": [
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"anthropic\",\"anthropic/12.32.0;messages/2023-06-01;meai/10.10.1;http1.1;api-key;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8191e0,true,true,\"fixed\",[\"provider.fixture.invalid\"]]",
+    "expected": "900655A679E5403EB012B0A62DB43FB262B430234882815B34238B1AC47B0766"
+  },
+  {
+    "vendor": "anthropic",
+    "name": "host-order-a",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": true,
+    "hosts": [
+      "secondary.fixture.invalid",
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"anthropic\",\"anthropic/12.32.0;messages/2023-06-01;meai/10.10.1;http1.1;api-key;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,true,\"fixed\",[\"provider.fixture.invalid\",\"secondary.fixture.invalid\"]]",
+    "expected": "C4C65BCA3891578B65F437784D2A957B91EEA4CB42A000D89B51440BE8E5ED93"
+  },
+  {
+    "vendor": "anthropic",
+    "name": "host-order-b",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": true,
+    "hosts": [
+      "provider.fixture.invalid",
+      "secondary.fixture.invalid"
+    ],
+    "canonical": "[\"anthropic\",\"anthropic/12.32.0;messages/2023-06-01;meai/10.10.1;http1.1;api-key;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,true,\"fixed\",[\"provider.fixture.invalid\",\"secondary.fixture.invalid\"]]",
+    "expected": "C4C65BCA3891578B65F437784D2A957B91EEA4CB42A000D89B51440BE8E5ED93"
+  },
+  {
+    "vendor": "anthropic",
+    "name": "temperature",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": false,
+    "hosts": [
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"anthropic\",\"anthropic/12.32.0;messages/2023-06-01;meai/10.10.1;http1.1;api-key;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,false,\"fixed\",[\"provider.fixture.invalid\"]]",
+    "expected": "0B96EE1314526414A259937901D91977BEC77C5388E68E95CCF6A086F90F856E"
+  },
+  {
+    "vendor": "azure-openai",
+    "name": "base",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": true,
+    "hosts": [
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"azure-openai\",\"azure-openai/2.1.0;api/2024-10-21;openai/2.14.0;meai/10.10.1;http1.1;api-key;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,true,\"fixed\",[\"provider.fixture.invalid\"]]",
+    "expected": "72A9264CFE4B0D3FBA4658888EFC1A2C2FA5118FE6C63FB6CAAD510835BF6B9D"
+  },
+  {
+    "vendor": "azure-openai",
+    "name": "token-limit",
+    "maximumOutputTokens": 8191,
+    "temperatureSupported": true,
+    "hosts": [
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"azure-openai\",\"azure-openai/2.1.0;api/2024-10-21;openai/2.14.0;meai/10.10.1;http1.1;api-key;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8191e0,true,true,\"fixed\",[\"provider.fixture.invalid\"]]",
+    "expected": "F31D8FD28094A0331665D336B122A1A831416F816AAAFDF665EDAE3A92CB457A"
+  },
+  {
+    "vendor": "azure-openai",
+    "name": "host-order-a",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": true,
+    "hosts": [
+      "secondary.fixture.invalid",
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"azure-openai\",\"azure-openai/2.1.0;api/2024-10-21;openai/2.14.0;meai/10.10.1;http1.1;api-key;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,true,\"fixed\",[\"provider.fixture.invalid\",\"secondary.fixture.invalid\"]]",
+    "expected": "E101928066298215694615127DF19E55860460F3ACC3C1BFA4DC1242925839ED"
+  },
+  {
+    "vendor": "azure-openai",
+    "name": "host-order-b",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": true,
+    "hosts": [
+      "provider.fixture.invalid",
+      "secondary.fixture.invalid"
+    ],
+    "canonical": "[\"azure-openai\",\"azure-openai/2.1.0;api/2024-10-21;openai/2.14.0;meai/10.10.1;http1.1;api-key;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,true,\"fixed\",[\"provider.fixture.invalid\",\"secondary.fixture.invalid\"]]",
+    "expected": "E101928066298215694615127DF19E55860460F3ACC3C1BFA4DC1242925839ED"
+  },
+  {
+    "vendor": "azure-openai",
+    "name": "temperature",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": false,
+    "hosts": [
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"azure-openai\",\"azure-openai/2.1.0;api/2024-10-21;openai/2.14.0;meai/10.10.1;http1.1;api-key;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,false,\"fixed\",[\"provider.fixture.invalid\"]]",
+    "expected": "85DC8B9F1DBDDFE010A43CE82B9379AB4E0EE9D8ADC52AF0E33EBFD540551144"
+  },
+  {
+    "vendor": "openai",
+    "name": "base",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": true,
+    "hosts": [
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"openai\",\"openai/2.14.0;chat-completions/v1;meai/10.10.1;http1.1;bearer;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,true,\"fixed\",[\"provider.fixture.invalid\"]]",
+    "expected": "0704F0EE52772506D2089EF78E9B3E4B93CC2F7481CA3DD1C96DDE98E4DEF2D9"
+  },
+  {
+    "vendor": "openai",
+    "name": "token-limit",
+    "maximumOutputTokens": 8191,
+    "temperatureSupported": true,
+    "hosts": [
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"openai\",\"openai/2.14.0;chat-completions/v1;meai/10.10.1;http1.1;bearer;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8191e0,true,true,\"fixed\",[\"provider.fixture.invalid\"]]",
+    "expected": "2F7D637FCBFAA340986C1905FDE37287D4857B9BCD1CB4C58B65195D514787AD"
+  },
+  {
+    "vendor": "openai",
+    "name": "host-order-a",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": true,
+    "hosts": [
+      "secondary.fixture.invalid",
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"openai\",\"openai/2.14.0;chat-completions/v1;meai/10.10.1;http1.1;bearer;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,true,\"fixed\",[\"provider.fixture.invalid\",\"secondary.fixture.invalid\"]]",
+    "expected": "B60B81725088893136D161C512FDC8B56EA73C97FE1C0E7CC0534AFEAB5D42DE"
+  },
+  {
+    "vendor": "openai",
+    "name": "host-order-b",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": true,
+    "hosts": [
+      "provider.fixture.invalid",
+      "secondary.fixture.invalid"
+    ],
+    "canonical": "[\"openai\",\"openai/2.14.0;chat-completions/v1;meai/10.10.1;http1.1;bearer;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,true,\"fixed\",[\"provider.fixture.invalid\",\"secondary.fixture.invalid\"]]",
+    "expected": "B60B81725088893136D161C512FDC8B56EA73C97FE1C0E7CC0534AFEAB5D42DE"
+  },
+  {
+    "vendor": "openai",
+    "name": "temperature",
+    "maximumOutputTokens": 8192,
+    "temperatureSupported": false,
+    "hosts": [
+      "provider.fixture.invalid"
+    ],
+    "canonical": "[\"openai\",\"openai/2.14.0;chat-completions/v1;meai/10.10.1;http1.1;bearer;retries0;redirects0;stream1\",\"elsa.agent.structured-object/1\",\"https://provider.fixture.invalid/\",\"fixture-model\",8192e0,true,false,\"fixed\",[\"provider.fixture.invalid\"]]",
+    "expected": "DB32F540B7705925C468A682D545CCE83950DC6F667D2CE6724A9EB678565DF2"
+  }
+]

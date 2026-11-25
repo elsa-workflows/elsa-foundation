@@ -39,7 +39,9 @@ public static class DecisionsModelBuilderExtensions
         entity.Property(row => row.Json).HasColumnType(providerName switch
         {
             EfProviderNames.Sqlite => "TEXT", EfProviderNames.SqlServer => "nvarchar(max)",
-            EfProviderNames.PostgreSql => "jsonb", EfProviderNames.MySql => "json",
+            // Cases and receipts carry raw JsonElement values. Native JSON columns normalize
+            // their spelling, so the persistence boundary must retain ordinary text.
+            EfProviderNames.PostgreSql => "text", EfProviderNames.MySql => "longtext",
             _ => throw new ArgumentOutOfRangeException(nameof(providerName))
         });
         EfOrdinalCollation.ApplyToEntities(modelBuilder, providerName, new[] { typeof(DecisionRecord) });

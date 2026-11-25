@@ -248,7 +248,7 @@ public sealed class DispatchWorkflowCheckpointTests
         var continuation = Assert.Single(
             commit.PostCommitIntents,
             intent => intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
-        var continuationWork = continuation.Payload?.Deserialize<RuntimeSchedulerWorkItem>();
+        var continuationWork = continuation.Payload?.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options);
         Assert.NotNull(continuationWork);
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, continuationWork.CommandKind);
         Assert.Single(

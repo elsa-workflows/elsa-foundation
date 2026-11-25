@@ -117,10 +117,10 @@ internal static class ValidatorTestHelpers
     );
 
     public static ArgumentState VariableInput(string referenceKey, object? variableReference) =>
-        new(referenceKey, new ArgumentValue(variableReference, "Variable"), null, null, null, null);
+        new(referenceKey, ArgumentValue.FromClr(variableReference, "Variable"), null, null, null, null);
 
     public static ArgumentState LiteralInput(string referenceKey, object? literalValue) =>
-        new(referenceKey, new ArgumentValue(literalValue, "Literal"), null, null, null, null);
+        new(referenceKey, ArgumentValue.FromClr(literalValue, "Literal"), null, null, null, null);
 
     private static ActivityNode? RootActivity(IEnumerable<ActivityNode>? activities)
     {

@@ -8,12 +8,12 @@ import { getDraft, promoteDraft } from "../api/workflowDesign";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { assertLosslessBpmnImport } from "../api/bpmnInterchange";
 import type { WorkflowDraft } from "../workflowTypes";
+import { sha256 } from "../sha256";
 
 vi.mock("../api/workflowDesign", () => ({ getDraft: vi.fn(), promoteDraft: vi.fn() }));
 let operationSequence = 0;
 beforeEach(() => { vi.stubGlobal("crypto", { randomUUID: () => `operation-${++operationSequence}`, subtle: { digest: vi.fn(async (_algorithm: string, bytes: Uint8Array) => {
-  // This fixture only needs stable, content-sensitive fingerprints; Web Crypto itself is not under test.
-  const result = new Uint8Array(32); bytes.forEach((value, index) => { result[index % 32] ^= value; }); return result.buffer;
+  return sha256(bytes).buffer;
 }) } }); sessionStorage.clear(); clearApiCapabilityCache(); });
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); sessionStorage.clear(); });
 
@@ -44,6 +44,17 @@ function fixture() {
 }
 
 describe("Studio direct BPMN publication", () => {
+  it("pins the retained publication receipt to its saved draft projection", async () => {
+    const view = fixture(); view.postJson.mockRejectedValueOnce(new TypeError("Response lost"));
+    try {
+      view.click();
+      await vi.waitFor(() => expect(view.setError).toHaveBeenCalledWith(expect.stringContaining("identity is retained")));
+      const receipt = JSON.parse(sessionStorage.getItem(sessionStorage.key(0)!)!);
+      expect(receipt.draftHash, "First-stable hash freeze: changes require an explicit identity/migration decision.")
+        .toBe("fdbae92830b9932f381c7bea7227a21c660a34b1fc96095cbe2cf233e9e9e24b");
+      expect(view.postJson).toHaveBeenCalledTimes(1);
+    } finally { view.dispose(); }
+  });
   it("saves and promotes a version before publishing, without native publication", async () => {
     const view = fixture();
     try {

@@ -200,8 +200,8 @@ internal static class EfDesignSupport
     private static bool IsSerializationFailure(Exception exception) =>
         exception is not (OperationCanceledException or OutOfMemoryException or StackOverflowException or AccessViolationException);
 
-    public static string Json<T>(T value) => JsonSerializer.Serialize(value, JsonSerializerOptions.Web);
-    public static T ReadJson<T>(string value) => JsonSerializer.Deserialize<T>(value, JsonSerializerOptions.Web) ?? throw new InvalidDataException("Workflow design JSON is empty.");
+    public static string Json<T>(T value) => JsonSerializer.Serialize(value, JsonBaseline.Options);
+    public static T ReadJson<T>(string value) => JsonSerializer.Deserialize<T>(value, JsonBaseline.Options) ?? throw new InvalidDataException("Workflow design JSON is empty.");
 
     public static void Stamp(Elsa.Primitives.Entities.Entity entity, DateTimeOffset now, DateTimeOffset? created = null)
     {
@@ -211,77 +211,40 @@ internal static class EfDesignSupport
 
     public static string Fingerprint<T>(string operationKind, T value)
     {
-        var json = Json(value);
-        return FingerprintJson(operationKind, json);
+        return FingerprintJson(operationKind, JsonHashInput.SerializeToElement(value).GetRawText());
     }
 
-    /// <summary>
-    /// Computes the pre-canonical EF marker format used before the provider-neutral framing was
-    /// introduced. It remains available only to read existing markers during the transition.
-    /// </summary>
-    public static string LegacyFingerprint<T>(string operationKind, T value) =>
-        LegacyFingerprintJson(operationKind, Json(value));
-
-    public static bool IsResultFingerprintValid(string operationKind, string fingerprint, string json)
+    /// <summary>Detaches the state value for a hash projection while the persisted state keeps its received text.</summary>
+    public static JsonElement StateHashValue(string source, string operationKind)
     {
-        if (StringComparer.Ordinal.Equals(fingerprint, FingerprintJson(operationKind, json)))
-            return true;
-
-        // Preserve replay of markers written by the initial EF implementation.
-        if (StringComparer.Ordinal.Equals(fingerprint, LegacyFingerprintJson(operationKind, json)))
-            return true;
-
-        return false;
+        try
+        {
+            using var document = JsonDocument.Parse(source, new JsonDocumentOptions { MaxDepth = 1000 });
+            return document.RootElement.Clone();
+        }
+        catch (Exception exception) when (IsSerializationFailure(exception))
+        {
+            throw new DesignPersistenceException(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Serialization,
+                operationKind, "workflow state", exception);
+        }
     }
+
+    public static bool IsResultFingerprintValid(string operationKind, string fingerprint, string json) =>
+        StringComparer.Ordinal.Equals(fingerprint, FingerprintJson(operationKind, json));
 
     private static string FingerprintJson(string operationKind, string json)
     {
-        using var document = JsonDocument.Parse(json);
-        var canonical = Canonical(document.RootElement);
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 1000 });
+        var canonical = Encoding.UTF8.GetString(JsonHashInput.CanonicalBytes(document.RootElement));
         var material = string.Concat(
             Frame("elsa-design-material:v1"),
             Frame(operationKind),
             Frame("1"),
             Frame(canonical));
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(material));
-        return $"sha256:{Convert.ToHexStringLower(bytes)}";
+        return "sha256:" + JsonHashInput.HashFramed(Encoding.UTF8.GetBytes(material));
     }
-
-    private static string LegacyFingerprintJson(string operationKind, string json) =>
-        $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"elsa-design-material:v1\n{operationKind}\n{json}")))}";
 
     private static string Frame(string value) => $"{Encoding.UTF8.GetByteCount(value).ToString(System.Globalization.CultureInfo.InvariantCulture)}:{value}";
-
-    private static string Canonical(JsonElement element)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            WriteCanonical(writer, element);
-        return Encoding.UTF8.GetString(stream.ToArray());
-    }
-
-    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
-    {
-        if (element.ValueKind == JsonValueKind.Object)
-        {
-            writer.WriteStartObject();
-            foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
-            {
-                writer.WritePropertyName(property.Name);
-                WriteCanonical(writer, property.Value);
-            }
-            writer.WriteEndObject();
-        }
-        else if (element.ValueKind == JsonValueKind.Array)
-        {
-            writer.WriteStartArray();
-            foreach (var item in element.EnumerateArray())
-                WriteCanonical(writer, item);
-            writer.WriteEndArray();
-        }
-        else
-            element.WriteTo(writer);
-    }
 
     public static string OperationKey(string operationKind, string operationKey) => operationKind + "\u001f" + operationKey;
 
@@ -292,7 +255,7 @@ internal static class EfDesignSupport
             record.Y,
             record.Width,
             record.Height,
-            record.AdditionalProperties?.GetRawText())).ToArray();
+            record.AdditionalProperties is { } json ? Encoding.UTF8.GetString(JsonHashInput.CanonicalBytes(json)) : null)).ToArray();
 
     public static DesignActivityPresentationMaterial[] PresentationMaterial(IReadOnlyCollection<ActivityPresentationRecord> records) =>
         records.Select(record => new DesignActivityPresentationMaterial(

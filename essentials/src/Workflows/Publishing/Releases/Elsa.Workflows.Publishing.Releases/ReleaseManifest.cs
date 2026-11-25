@@ -96,7 +96,7 @@ internal static class ReleaseManifest
                 .ThenBy(x => ReadKey(x.GetProperty("to")), KeyComparer).ToArray(),
             prerequisites = prerequisites.OrderBy(x => Text(x, "key"), StringComparer.Ordinal).ToArray(),
             resourceRequirements = requirements.OrderBy(x => x.GetProperty("key"), Comparer<JsonElement>.Create(CompareRequirementKeys)).ToArray()
-        });
+        }, options: Elsa.Serialization.Core.JsonBaseline.Options);
         return (normalized, descriptors.OrderBy(x => x.Key, KeyComparer).Select(x => x.Value).ToArray());
     }
 
@@ -176,32 +176,15 @@ internal static class ReleaseManifest
         }
     }
 
-    internal static string Hash(ReadOnlySpan<byte> bytes) => "sha256:" + Convert.ToHexStringLower(SHA256.HashData(bytes));
-    internal static string HashManifest(JsonElement element) => Hash(Encoding.UTF8.GetBytes(CanonicalText(element)));
-    internal static string CanonicalText(JsonElement element)
+    internal static string Hash(ReadOnlyMemory<byte> bytes)
     {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream)) WriteCanonical(writer, element);
-        return Encoding.UTF8.GetString(stream.ToArray());
+        try { return "sha256:" + Elsa.Serialization.Core.JsonHashInput.HashUtf8(bytes); }
+        catch (Exception error) when (error is JsonException or InvalidOperationException)
+        { throw Refuse("invalid_json"); }
     }
-
-    // Identical recursive recipe to ExecutableActivityTemplateBehaviorHasher: ordinal object properties,
-    // ordered arrays and JsonElement.WriteTo for scalars. Kept private to avoid a Design-bearing dependency.
-    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
-    {
-        if (element.ValueKind == JsonValueKind.Object)
-        {
-            writer.WriteStartObject();
-            foreach (var property in element.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal))
-            { writer.WritePropertyName(property.Name); WriteCanonical(writer, property.Value); }
-            writer.WriteEndObject();
-        }
-        else if (element.ValueKind == JsonValueKind.Array)
-        {
-            writer.WriteStartArray(); foreach (var value in element.EnumerateArray()) WriteCanonical(writer, value); writer.WriteEndArray();
-        }
-        else element.WriteTo(writer);
-    }
+    internal static string HashManifest(JsonElement element) => "sha256:" + Elsa.Serialization.Core.JsonHashInput.Hash(element);
+    internal static string CanonicalText(JsonElement element) =>
+        Encoding.UTF8.GetString(Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(element));
 
     internal static void CheckDigest(string digest)
     {

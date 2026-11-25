@@ -29,6 +29,26 @@ namespace Elsa.Activities.Bpmn.Interchange.Tests;
 /// <summary>Projection and authorization controls; actual host execution is a separate integration gate.</summary>
 public sealed class BpmnAuthoredDirectPublisherTests
 {
+    [Fact]
+    public async Task Publication_identity_and_supplied_intent_have_independent_canonical_goldens()
+    {
+        using var stream = typeof(BpmnAuthoredDirectPublisherTests).Assembly.GetManifestResourceStream("BpmnPublicationHashVectors.json")!;
+        using var vectors = JsonDocument.Parse(stream);
+        foreach (var vector in vectors.RootElement.EnumerateArray())
+        {
+            var fixture = new Fixture();
+            var action = vector.GetProperty("action");
+            var slot = vector.GetProperty("slot").GetString();
+            var revision = vector.GetProperty("revision");
+            await fixture.Publish(action.ValueKind == JsonValueKind.Null ? null : new((PublicationAction)action.GetInt32(), slot),
+                revision.ValueKind == JsonValueKind.Null ? null : revision.GetInt64());
+            var publication = Assert.IsType<PublicationRecord>(fixture.RetainedPublication);
+            var rule = vector.GetProperty("name").GetString() + ": First-stable hash freeze: changes require an explicit identity/migration decision.";
+            Assert.True(publication.PublicationId == vector.GetProperty("publicationId").GetString(), rule);
+            Assert.True(publication.RequestFingerprint == vector.GetProperty("expected").GetString(), rule);
+        }
+    }
+
     // Match the normal JsonPayloadSerializer writer: missing nullable defaults are omitted.
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
 

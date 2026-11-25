@@ -47,7 +47,7 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
         Assert.Equal(received.HistoryEventId, result.Causation!.HistoryEventId);
         Assert.Equal(reason, result.Metadata["history.reasonCode"]);
         var envelope = Assert.Single(f.Actors.Actor.Envelopes);
-        var payload = envelope.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(received.HistoryEventId, payload.HistoryCausation!.HistoryEventId);
         Assert.Equal("run", payload.HistoryCausation.WorkflowExecutionId);
         Assert.Equal(received.Causation!.DeliveryId, payload.HistoryCausation.DeliveryId);
@@ -55,7 +55,7 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
         Assert.NotNull(await f.Bookmarks.FindAsync("run", "wait"));
         Assert.Equal(RuntimeHistoryBookmarkStatus.Active, (await f.History.FindBookmarkAsync("run", "wait"))!.Status);
         Assert.DoesNotContain(page.Items, e => e.Name is "BookmarkConsumed" or "ActivityResumeClaimed" or "ActivityCompleted" or "WorkflowFaulted");
-        Assert.DoesNotContain("private", JsonSerializer.Serialize(page));
+        Assert.DoesNotContain("private", JsonSerializer.Serialize(page, options: Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     [Theory]
@@ -110,7 +110,7 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
         var fault = Assert.Single(page.Items, e => e.Name == "DeliveryFaulted");
         Assert.Equal(received.HistoryEventId, fault.Causation!.HistoryEventId);
         Assert.Equal("dispatch-threw", fault.Metadata["history.reasonCode"]);
-        Assert.DoesNotContain("private", JsonSerializer.Serialize(page));
+        Assert.DoesNotContain("private", JsonSerializer.Serialize(page, options: Elsa.Serialization.Core.JsonBaseline.Options));
         Assert.DoesNotContain(page.Items, e => e.Name is "ActivityFaulted" or "WorkflowFaulted" or "BookmarkConsumed");
     }
 
@@ -268,10 +268,10 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
     [Fact]
     public void Absent_request_causation_preserves_the_older_null_omitted_transport_shape()
     {
-        Assert.DoesNotContain("HistoryCausation", JsonSerializer.Serialize(Request()));
+        Assert.DoesNotContain("historyCausation", JsonSerializer.Serialize(Request(), options: Elsa.Serialization.Core.JsonBaseline.Options));
         var request = new BookmarkResumeDispatchRequest("run", "task", "hash")
             { HistoryCausation = new(WorkflowExecutionId: "parent", HistoryEventId: "source-event") };
-        var restored = JsonSerializer.Deserialize<BookmarkResumeDispatchRequest>(JsonSerializer.Serialize(request))!;
+        var restored = JsonSerializer.Deserialize<BookmarkResumeDispatchRequest>(JsonSerializer.Serialize(request, options: Elsa.Serialization.Core.JsonBaseline.Options), options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(request.HistoryCausation, restored.HistoryCausation);
     }
 
@@ -292,7 +292,7 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
         Assert.Null(received.Causation.HistoryEventId); // No source history event is invented.
         Assert.Equal("wait", received.BookmarkId);
         Assert.Equal("activity", received.ActivityExecutionId);
-        var payload = Assert.Single(f.Actors.Actor.Envelopes).Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var payload = Assert.Single(f.Actors.Actor.Envelopes).Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(received.HistoryEventId, payload.HistoryCausation!.HistoryEventId);
         Assert.NotNull(payload.ExpectedBookmarkResume!.RegistrationCapture);
         Assert.Equal(source.Intent.Payload!.Value.GetRawText(), payload.Input!.Value.GetRawText());
@@ -315,7 +315,7 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
         var source = await f.SourceAsync(origin: origin);
         var nativeCommits = f.Commits.ListCommits().Count;
         await f.Router.RouteSourceAsync(source);
-        var payload = Assert.Single(f.Actors.Actor.Envelopes).Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var payload = Assert.Single(f.Actors.Actor.Envelopes).Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         var page = await f.History.ReadPageAsync(new("run"));
         if (profile == "captured")
         {
@@ -431,8 +431,8 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
         await f.Dispatcher.DispatchAsync(source, "run", "wait");
         Assert.Equal(0, f.Probe.FactoryCalls);
         var payload = Assert.Single(f.Actors.Actor.Envelopes).Command.Payload!.Value;
-        Assert.False(payload.TryGetProperty("HistoryCausation", out _));
-        Assert.NotNull(payload.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.ExpectedBookmarkResume);
+        Assert.False(payload.TryGetProperty("historyCausation", out _));
+        Assert.NotNull(payload.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!.ExpectedBookmarkResume);
     }
 
     [Theory]
@@ -473,7 +473,7 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
         Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, (await dispatcher.DispatchAsync(Request())).Status);
         Assert.Single(f.Actors.Actor.Envelopes);
         Assert.Equal(0, f.Probe.FactoryCalls);
-        Assert.False(f.Actors.Actor.Envelopes[0].Command.Payload!.Value.TryGetProperty("HistoryCausation", out _));
+        Assert.False(f.Actors.Actor.Envelopes[0].Command.Payload!.Value.TryGetProperty("historyCausation", out _));
     }
 
     private sealed class LegacyDispatcher : IBookmarkResumeDispatcher
@@ -491,7 +491,7 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
                 { ResumeAllMatchingBookmarks = true };
     }
 
-    private static BookmarkResumeDispatchRequest Request() => new("run", "task", "hash", JsonSerializer.SerializeToElement("private input"),
+    private static BookmarkResumeDispatchRequest Request() => new("run", "task", "hash", JsonSerializer.SerializeToElement("private input", options: Elsa.Serialization.Core.JsonBaseline.Options),
         "delivery-key", "private requester", new Dictionary<string, string> { ["private"] = "private metadata" });
     private sealed class Access : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current { get; set; } = PersistenceAccessContext.Scoped(new("scope-a")); }
@@ -627,7 +627,7 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
                 null, 1, At, At, null, null, null, null, null, ActivitySchedulingProvenance.From("run", null, null, null, null, null, "activity", "test"),
                 0, [], [], 0, 0, new Dictionary<string, string>(), ExecutionScopeId: "activity"));
             await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(new(Pin,
-                new("node", "authored", "test/activity", "1", "test", JsonSerializer.SerializeToElement(new { type = "test" }),
+                new("node", "authored", "test/activity", "1", "test", JsonSerializer.SerializeToElement(new { type = "test" }, options: Elsa.Serialization.Core.JsonBaseline.Options),
                     new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
                 new Dictionary<string, WorkflowExecutableResumeTarget> { ["resume"] = new("resume", "node", "handler", new Dictionary<string, string>()) },
                 At, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference));
@@ -641,7 +641,7 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
                 { Partition = new("scope-a"), RunKind = WorkflowRunKind.PublishedRun };
             await Workflows.SaveAsync(publisher);
             var intent = new RuntimePostCommitIntent("send", "publisher", "test.history-delivery", At, "publisher-activity", "source-key",
-                JsonSerializer.SerializeToElement(new { value = "private canonical input" })) { HistoryCausation = origin };
+                JsonSerializer.SerializeToElement(new { value = "private canonical input" }, options: Elsa.Serialization.Core.JsonBaseline.Options)) { HistoryCausation = origin };
             var persistenceScope = new PersistenceScope("scope-a");
             await Commits.AddPendingForTestingAsync(new("source:send", intent, RuntimePostCommitOutboxStatus.Pending, At, At,
                 new(4, TimeSpan.FromSeconds(1)), 0, null, null, null, null, null, 0, null, 1, persistenceScope, null));
@@ -658,9 +658,9 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
         internal async Task CreateWaitAsync(string id, DateTimeOffset? expiresAt = null)
         {
             var payload = new RuntimeCreateBookmarkCommandPayload(Pin, id, "activity", "node", "resume", "task", "hash",
-                JsonSerializer.SerializeToElement("private bookmark"), expiresAt, RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason);
+                JsonSerializer.SerializeToElement("private bookmark", options: Elsa.Serialization.Core.JsonBaseline.Options), expiresAt, RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason);
             var work = new RuntimeSchedulerWorkItem("create-" + id, "run", "command-" + id, WorkflowExecutionCommandKind.CreateBookmark,
-                "envelope-" + id, "key-" + id, Clock.GetUtcNow(), Clock.GetUtcNow(), payload: JsonSerializer.SerializeToElement(payload));
+                "envelope-" + id, "key-" + id, Clock.GetUtcNow(), Clock.GetUtcNow(), payload: JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options));
             var selected = _scope.ServiceProvider;
             await new WorkflowCreateBookmarkSchedulerWorkHandler(selected.GetRequiredService<IWorkflowExecutableStore>(), Activities,
                 selected.GetRequiredService<RuntimeCheckpointCommitter>(), selected.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>(), Clock).HandleAsync(work);

@@ -99,7 +99,7 @@ internal sealed class BasicUserTaskForms : IUserTaskFormProvider
                 _ => false
             };
             if (!valid) errors[field.Key] = customError ?? "Enter a value matching this field's type and constraints.";
-            if (field.ReadOnly && (!prefill.TryGetProperty(field.Key, out var initial) || !JsonElement.DeepEquals(initial, value)))
+            if (field.ReadOnly && (!prefill.TryGetProperty(field.Key, out var initial) || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(initial, value)))
                 errors[field.Key] = "This value cannot be changed.";
         }
         // Omitting a read-only prefilled value must not turn an immutable input into absent output.
@@ -107,7 +107,7 @@ internal sealed class BasicUserTaskForms : IUserTaskFormProvider
             if (field.Required && (!prefill.TryGetProperty(field.Key, out var required) || required.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ||
                 (required.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(required.GetString()))))
                 errors[field.Key] = "The workflow must prefill this required read-only field.";
-            else if (prefill.TryGetProperty(field.Key, out var initial) && (!response.TryGetProperty(field.Key, out var actual) || !JsonElement.DeepEquals(initial, actual)))
+            else if (prefill.TryGetProperty(field.Key, out var initial) && (!response.TryGetProperty(field.Key, out var actual) || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(initial, actual)))
                 errors[field.Key] = "This value cannot be changed.";
         return errors;
     }

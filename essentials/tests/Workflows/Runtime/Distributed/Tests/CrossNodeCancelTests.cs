@@ -285,7 +285,7 @@ public sealed class CrossNodeCancelTests
     {
         // The artifact id rides on the command and the envelope, as WorkflowStartDispatcher puts it there.
         var metadata = new Dictionary<string, string> { ["runtime.artifactId"] = executable.ArtifactId };
-        var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(executable, executable.ArtifactId));
+        var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(executable, executable.ArtifactId), Elsa.Serialization.Core.JsonBaseline.Options);
         return new(
             envelopeId: "env-start",
             workflowExecutionId: executionId,

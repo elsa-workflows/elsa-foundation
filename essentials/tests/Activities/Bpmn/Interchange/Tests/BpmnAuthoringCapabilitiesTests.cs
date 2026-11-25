@@ -31,7 +31,7 @@ public sealed class BpmnAuthoringCapabilitiesTests
         Assert.Equal(xml, new BpmnDocumentExporter().Export(node));
         var refusal = Assert.Throws<NotSupportedException>(() => handler.CompileExecutableStructure(node));
         Assert.Contains("not qualified", refusal.Message, StringComparison.Ordinal);
-        var serialized = JsonSerializer.Serialize(capability, BpmnInterchangeJsonContext.Default.BpmnDocumentAuthoringCapabilities);
+        var serialized = JsonSerializer.Serialize(capability, BpmnInterchangeJsonContext.WireContext.BpmnDocumentAuthoringCapabilities);
         Assert.Equal("{\"structureKind\":\"elsa.bpmn.structure\",\"schemaVersion\":\"2.0.0\"}", serialized);
     }
 

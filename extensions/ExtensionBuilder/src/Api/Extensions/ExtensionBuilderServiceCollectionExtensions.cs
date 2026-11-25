@@ -1,4 +1,5 @@
 using Elsa.Cluster.Readability;
+using Elsa.Api.AspNetCore;
 using Elsa.ExtensionBuilder.Api.Authorization;
 using Elsa.Foundation.Identity.Extensions;
 using Microsoft.Extensions.Configuration;
@@ -30,6 +31,7 @@ public static class ExtensionBuilderServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddElsaExtensionBuilder(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddElsaJsonResponseHeaders();
         services.Configure<ExtensionBuilderOptions>(configuration.GetSection(ConfigurationSection));
         services.AddPermissionContributor<ExtensionBuilderPermissionContributor>();
         services.AddSingleton<IExtensionBuilderTemplateCatalog, ExtensionBuilderTemplateCatalog>();

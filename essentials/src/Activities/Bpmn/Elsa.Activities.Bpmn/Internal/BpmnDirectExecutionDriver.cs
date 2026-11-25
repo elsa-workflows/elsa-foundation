@@ -21,8 +21,8 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
     BpmnDurationTimerDelivery? durationTimers = null, IWorkflowExecutableInputValidator? inputValidator = null,
     IRuntimeIngressDeliveryStore? ingress = null, IWorkflowExecutableStore? materials = null) : IRuntimeExecutionProtocolDriver
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
-    private static readonly JsonSerializerOptions Strict = new(JsonSerializerDefaults.Web) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
+    private static readonly JsonSerializerOptions Strict = new(Elsa.Serialization.Core.JsonBaseline.Options) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
     private IRuntimeModelExecutionReader Reader => reader ?? throw new RuntimeSchedulerWorkUnavailableException(
         "bpmn.state-unavailable", "The selected host has no model state reader.");
     private BpmnNativeWorkBoundary NativeWork => nativeWork ?? throw new NotSupportedException("The native BPMN work binding is not installed.");
@@ -347,7 +347,7 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
             else if (work is null) rejection = timer is null ? "obsolete-human-work" : "obsolete-timer-work";
             else if (timer is null && nativeResult is null && (work.NativeWork is not null || work.Timer is not null)) rejection = "not-human-work";
             else if (timer is null && nativeResult is null && ClaimRejection(definition, document, work, claimed) is { } claimRejection) rejection = claimRejection;
-            else if (timer is not null && (work.Timer is null || !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work.Timer, Web), command.Payload))) rejection = "obsolete-timer-work";
+            else if (timer is not null && (work.Timer is null || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(work.Timer, Web), command.Payload))) rejection = "obsolete-timer-work";
             else if (nativeResult is not null && !nativeResult.Origin.IsEquivalentTo(work.NativeWork)) rejection = "obsolete-native-work";
             else
             {
@@ -479,7 +479,7 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
         {
             var intent = "bpmn-native-parent:" + BpmnModelIdentity.Create(executionId);
             intents.Add(new(intent, executionId, BpmnEmbeddingBoundary.ResultKind, now, null, intent,
-                JsonSerializer.SerializeToElement(new RunBpmnCompletion(1, nativeParent.Invocation, terminal.Value))));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new RunBpmnCompletion(1, nativeParent.Invocation, terminal.Value))));
         }
         var commit = new RuntimeCheckpointCommit(commitId, new(commitId, "ModelDecision", executionId, now, [], new Dictionary<string, string>()),
             new(null, null, [], [], [], [], []), intents, new Dictionary<string, string>())
@@ -683,7 +683,7 @@ internal sealed partial class BpmnDirectExecutionDriver(RuntimeCheckpointCommitt
                     snapshot?.ActiveWork.Any(item => item.TokenId == failure.TokenId && item.ElementId == failure.ElementId && item.NodeId == failure.BindingId && item.IterationId == failure.IterationId) != true ||
                     failure.Status == "Open" && (state.Lifecycle != RuntimeModelLifecycle.WaitingIncident || state.TerminalResult is not null ||
                         failure.AttemptNumber >= failure.MaxAttempts || !result.Work.Any(work => work.InvocationId == failure.InvocationId && work.AttemptId == failure.FailedAttemptId && work.AttemptNumber == failure.AttemptNumber) ||
-                        !JsonElement.DeepEquals(failure.SemanticState, JsonSerializer.SerializeToElement(result.State, Web))))
+                        !Elsa.Serialization.Core.JsonCanonicalForm.Equals(failure.SemanticState, JsonSerializer.SerializeToElement(result.State, Web))))
                     throw new BpmnModelValidationException("A retained service failure lost its original attempt or active semantic snapshot.");
             }
             if ((state.Lifecycle == RuntimeModelLifecycle.WaitingIncident) != failures.Any(item => item.Status == "Open"))

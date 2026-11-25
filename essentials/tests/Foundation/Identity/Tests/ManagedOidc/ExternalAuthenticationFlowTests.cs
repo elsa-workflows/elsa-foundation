@@ -1,6 +1,8 @@
 using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Iam;
@@ -28,6 +30,142 @@ namespace Elsa.Foundation.Identity.Tests.ManagedOidc;
 
 public sealed class ExternalAuthenticationFlowTests
 {
+    [Theory]
+    [InlineData(AuthenticationArtifactPurpose.SignIn)]
+    [InlineData(AuthenticationArtifactPurpose.Preview)]
+    public async Task Protected_flow_metadata_keeps_the_previous_writer_and_reader_contract(AuthenticationArtifactPurpose purpose)
+    {
+        await using var harness = await Harness.Create();
+        await using var writer = await harness.Node();
+        var actor = purpose == AuthenticationArtifactPurpose.Preview ? Administrator() : null;
+        const string returnUrl = "/workflows?folder=René&filter=<+>";
+        var callback = await harness.Authorize(writer, purpose, actor, returnUrl);
+        var actual = await ReadRetainedFlowArtifactAsync(writer, purpose);
+        var previous = JsonSerializer.Deserialize<PreviousFlowMetadata>(actual.Json, JsonSerializerOptions.Default)!;
+        AssertPreviousMetadataRoundTrip(actual.Json, previous);
+        Assert.Equal(1, previous.Format);
+        Assert.Equal("company", previous.ConnectionKey);
+        Assert.Equal(returnUrl, previous.ReturnUrl);
+        Assert.Equal("oidc", previous.Protocol);
+        Assert.Equal(harness.Server.Issuer, previous.Issuer);
+        Assert.False(string.IsNullOrWhiteSpace(previous.ConnectionRecordId));
+        Assert.False(string.IsNullOrWhiteSpace(previous.MaterialRevision));
+        Assert.False(string.IsNullOrWhiteSpace(previous.Nonce));
+        Assert.False(string.IsNullOrWhiteSpace(previous.CodeVerifier));
+        Assert.False(string.IsNullOrWhiteSpace(previous.CredentialBinding));
+        Assert.Equal(Flow(writer).GetCallbackUri("company", purpose), previous.RedirectUri);
+
+        // Use the actual old default writer, including its escaping and a non-UTC offset.
+        // These instants still match the independently stored artifact envelope.
+        var offset = TimeSpan.FromMinutes(330);
+        var oldJson = JsonSerializer.Serialize(previous with
+        {
+            CreatedAt = previous.CreatedAt.ToOffset(offset), ExpiresAt = previous.ExpiresAt.ToOffset(offset)
+        }, JsonSerializerOptions.Default);
+        Assert.Contains("\\u00E9", oldJson, StringComparison.Ordinal);
+        var oldProtected = actual.Protector.Protect(oldJson);
+        await ReplaceRetainedFlowArtifactAsync(writer, actual.Id, oldProtected);
+        var retained = await ReadRetainedFlowArtifactAsync(writer, purpose);
+        Assert.Equal(oldProtected, retained.ProtectedPayload);
+        Assert.Equal(Encoding.UTF8.GetBytes(oldJson), Encoding.UTF8.GetBytes(retained.Json));
+
+        await using var reader = await harness.Node();
+        var completed = await Flow(reader).CompleteAsync(callback, actor);
+        Assert.Equal(ExternalFlowFailure.None, completed.Failure);
+        Assert.Equal(returnUrl, completed.ReturnUrl);
+        Assert.Equal(1, harness.Server.TokenRequests);
+        if (purpose == AuthenticationArtifactPurpose.Preview)
+            Assert.NotNull(completed.PreviewResultHandle);
+        else
+            Assert.NotNull(completed.UserId);
+    }
+
+    [Fact]
+    public async Task Protected_preview_metadata_keeps_old_bytes_nulls_and_offsets_until_the_real_reader_consumes_it()
+    {
+        await using var harness = await Harness.Create();
+        await using var writer = await harness.Node();
+        var actor = Administrator();
+        var callback = await harness.Authorize(writer, AuthenticationArtifactPurpose.Preview, actor);
+        var completed = await Flow(writer).CompleteAsync(callback, actor);
+        Assert.Equal(ExternalFlowFailure.None, completed.Failure);
+        var actual = await ReadRetainedFlowArtifactAsync(writer, AuthenticationArtifactPurpose.PreviewResult);
+        var previous = JsonSerializer.Deserialize<PreviousPreviewMetadata>(actual.Json, JsonSerializerOptions.Default)!;
+        AssertPreviousMetadataRoundTrip(actual.Json, previous);
+        Assert.Equal(1, previous.Format);
+        Assert.Equal("company", previous.Preview.ConnectionKey);
+        Assert.Equal("opaque-Subject", previous.Preview.Subject);
+        Assert.Equal(["reader"], previous.Preview.RoleIds);
+
+        var offset = TimeSpan.FromMinutes(330);
+        var oldPreview = previous.Preview with
+        {
+            DisplayName = "René <+>", Email = null, ObservedAt = previous.Preview.ObservedAt.ToOffset(offset)
+        };
+        var oldJson = JsonSerializer.Serialize(previous with
+        {
+            Preview = oldPreview, CreatedAt = previous.CreatedAt.ToOffset(offset), ExpiresAt = previous.ExpiresAt.ToOffset(offset)
+        }, JsonSerializerOptions.Default);
+        Assert.Contains("\\u00E9", oldJson, StringComparison.Ordinal);
+        Assert.Contains("\"Email\":null", oldJson, StringComparison.Ordinal);
+        var oldProtected = actual.Protector.Protect(oldJson);
+        await ReplaceRetainedFlowArtifactAsync(writer, actual.Id, oldProtected);
+        var retained = await ReadRetainedFlowArtifactAsync(writer, AuthenticationArtifactPurpose.PreviewResult);
+        Assert.Equal(oldProtected, retained.ProtectedPayload);
+        Assert.Equal(Encoding.UTF8.GetBytes(oldJson), Encoding.UTF8.GetBytes(retained.Json));
+
+        await using var reader = await harness.Node();
+        var result = await Flow(reader).ReadPreviewAsync("company", completed.PreviewResultHandle!, callback.BrowserBinding, actor);
+        Assert.Equal(ExternalFlowFailure.None, result.Failure);
+        Assert.Equal(oldPreview.DisplayName, result.Preview!.DisplayName);
+        Assert.Null(result.Preview.Email);
+        Assert.Equal(offset, result.Preview.ObservedAt.Offset);
+        Assert.Equal(oldPreview.ObservedAt, result.Preview.ObservedAt);
+        Assert.Equal(oldPreview.RoleIds, result.Preview.RoleIds);
+        Assert.False(result.Preview.Stale);
+    }
+
+    private static void AssertPreviousMetadataRoundTrip<T>(string currentJson, T previous)
+    {
+        using var current = JsonDocument.Parse(currentJson);
+        using var oldReader = JsonDocument.Parse(JsonSerializer.Serialize(previous, JsonSerializerOptions.Default));
+        Assert.True(current.RootElement.TryGetProperty("Format", out _));
+        Assert.False(current.RootElement.TryGetProperty("format", out _));
+        Assert.True(JsonElement.DeepEquals(current.RootElement, oldReader.RootElement), "The previous reader lost a current metadata member.");
+    }
+
+    private static async Task<RetainedFlowArtifact> ReadRetainedFlowArtifactAsync(ServiceProvider node, AuthenticationArtifactPurpose purpose)
+    {
+        await using var scope = Scope(node);
+        var context = scope.ServiceProvider.GetRequiredService<ExternalAuthenticationDbContext>();
+        await context.Database.OpenConnectionAsync();
+        await using var command = context.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "SELECT Id, BrowserBinding, AdministratorBinding, ProtectedPayload FROM identity_authentication_artifacts WHERE Purpose = $purpose";
+        var parameter = command.CreateParameter(); parameter.ParameterName = "$purpose"; parameter.Value = (int)purpose;
+        command.Parameters.Add(parameter);
+        await using var rows = await command.ExecuteReaderAsync();
+        Assert.True(await rows.ReadAsync());
+        var id = rows.GetString(0);
+        var protector = node.GetRequiredService<IDataProtectionProvider>().CreateProtector("Elsa.ExternalAuthentication.Artifact.v1",
+            "default", id, purpose.ToString(), rows.GetString(1), rows.IsDBNull(2) ? "" : rows.GetString(2));
+        var protectedPayload = rows.GetString(3);
+        var json = protector.Unprotect(protectedPayload);
+        Assert.False(await rows.ReadAsync());
+        return new(id, protectedPayload, json, protector);
+    }
+
+    private static async Task ReplaceRetainedFlowArtifactAsync(ServiceProvider node, string id, string protectedPayload)
+    {
+        await using var scope = Scope(node);
+        var context = scope.ServiceProvider.GetRequiredService<ExternalAuthenticationDbContext>();
+        Assert.Equal(1, await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE identity_authentication_artifacts SET ProtectedPayload = {protectedPayload} WHERE Id = {id}"));
+    }
+
+    private sealed record RetainedFlowArtifact(string Id, string ProtectedPayload, string Json, IDataProtector Protector);
+    private sealed record PreviousFlowMetadata(int Format, string ConnectionKey, string ConnectionRecordId, string MaterialRevision, string Protocol,
+        string RedirectUri, string ReturnUrl, string Nonce, string CodeVerifier, string Issuer, string CredentialBinding, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt);
+    private sealed record PreviousPreviewMetadata(int Format, ExternalAuthenticationPreview Preview, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt);
+
     [Theory]
     [InlineData("missing", "Development")]
     [InlineData("volatile", "Production")]

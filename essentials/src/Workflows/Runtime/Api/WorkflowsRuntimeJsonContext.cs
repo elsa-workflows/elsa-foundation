@@ -43,13 +43,11 @@ namespace Elsa.Workflows.Runtime.Api;
 [JsonSerializable(typeof(UserTasks.TaskCompletionRequest))]
 [JsonSerializable(typeof(UserTasks.TaskAssignmentRequest))]
 [JsonSerializable(typeof(UserTasks.UserTaskProblem))]
-[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskPage))]
-[JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskRecord))]
 [JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm))]
 [JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFieldPresentation))]
 [JsonSerializable(typeof(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion))]
 [JsonSerializable(typeof(IReadOnlyList<Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormVersion>))]
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = false, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSourceGenerationOptions(WriteIndented = false, GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(GetWorkflowInstance))]
 [JsonSerializable(typeof(ListInstanceVariables))]
 [JsonSerializable(typeof(ListVariableWrites))]
@@ -126,7 +124,18 @@ namespace Elsa.Workflows.Runtime.Api;
 [JsonSerializable(typeof(ActivityExecutionProblemDetailsView))]
 [JsonSerializable(typeof(ActivityExecutionCursorProblemView))]
 [JsonSerializable(typeof(ActivityExecutionProblemDiagnosticView))]
-internal partial class WorkflowsRuntimeJsonContext : JsonSerializerContext;
+internal partial class WorkflowsRuntimeJsonContext : JsonSerializerContext
+{
+    internal static WorkflowsRuntimeJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+
+}
 
 internal sealed record RuntimeProblemDetails(
     string Type,

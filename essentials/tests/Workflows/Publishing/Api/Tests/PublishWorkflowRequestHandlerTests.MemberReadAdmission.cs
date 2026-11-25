@@ -90,7 +90,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             "WorkflowRequest+memberPath" => ("WorkflowRequest", new { memberKey = "customer", memberPath = path }),
             _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, null)
         };
-        return new(inputKey, new ArgumentValue(JsonSerializer.SerializeToElement(payload), kind), null, null, null, null);
+        return new(inputKey, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(payload), kind), null, null, null, null);
     }
 
     [Theory]
@@ -132,7 +132,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task With_member_reads_on_a_result_member_read_publishes_with_its_selection_and_requirement()
     {
-        var read = new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new
+        var read = new WorkflowArgumentState("Text", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new
         {
             producerNodeId = "producer", projectionKey = "$result", isOptional = false, memberPath = new[] { "address", "a.b", "" }
         }), "ActivityResultMember"), null, null, null, null);
@@ -289,12 +289,11 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task With_member_reads_on_a_reusable_activity_body_admits_a_result_member_read()
     {
-        // A graph manifest is read with web defaults, so the body's structure payload is written with them too.
+        // The graph manifest and body structure use the shared baseline's exact member names.
         var body = new ActivityNode("body", "activity-sequence", [], [], new ActivityNodeStructure(
             SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion,
-            JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(
-                [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("consumer", MemberRead("ActivityResultMember"))]),
-                new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(
+                [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("consumer", MemberRead("ActivityResultMember"))]))));
 
         var compiled = await CompileReusableBodyAsync(body, memberReads: true);
 

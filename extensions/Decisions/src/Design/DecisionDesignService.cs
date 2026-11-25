@@ -11,7 +11,7 @@ namespace Elsa.Decisions.Design;
 public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWriter writer, IDecisionCompiler compiler,
     IDecisionEvaluator evaluator, IDecisionAccessPolicy policy, DecisionDesignOptions options)
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly HashSet<string> Statuses = ["Success", "NoMatch", "InvalidInput", "Unsupported", "HitPolicyViolation", "Unavailable"];
 
     public async ValueTask<IReadOnlyList<DecisionAssetView>> ListAsync(DecisionCaller caller, CancellationToken ct = default)
@@ -62,7 +62,8 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
     {
         await Ensure(caller, DecisionPermissions.Publish, id, ct); await Ensure(caller, DecisionPermissions.Read, id, ct);
         var operation = Operation(caller, request.OperationId);
-        var fingerprint = Fingerprint(new { kind = "publish", command = new { AssetId = id, request.ExpectedRevision } });
+        // Match the store's explicit object command slot, including its CLR-versus-carried-JSON discriminator.
+        var fingerprint = Fingerprint(new { kind = "publish", command = (object)new { AssetId = id, request.ExpectedRevision } });
         if (await reader.FindOperationAsync(operation, ct) is { } prior)
         {
             if (prior.Kind != "publish" || prior.Fingerprint != fingerprint) throw Conflict();
@@ -237,7 +238,7 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
                 result.Trace.Where(x => x.Matched).Select(x => x.RuleId).ToArray(),
                 result.Trace.Where(x => x.Selected).Select(x => x.RuleId).ToArray(), result.Trace));
         }
-        var runId = "run-" + Hash(JsonSerializer.Serialize(new[] { caller.TenantId, caller.SubjectId, request.OperationId }, Json));
+        var runId = "run-" + Elsa.Serialization.Core.JsonHashInput.Hash(new[] { caller.TenantId, caller.SubjectId, request.OperationId });
         var transient = new DecisionTestReceipt(runId, id, caller.SubjectId, fingerprint, candidateId, request.CandidateHash, identities,
             comparisons, comparisons.All(x => x.Passed), true, sensitive, evaluatedAt, DateTimeOffset.UtcNow)
         { CaseInputs = frozenCases.ToDictionary(item => item.Id, item => (IReadOnlyDictionary<string, DecisionValue>)new Dictionary<string, DecisionValue>(item.Inputs, StringComparer.Ordinal), StringComparer.Ordinal) };
@@ -334,17 +335,7 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
     }
     private static string Fingerprint(object value)
     {
-        var element = JsonSerializer.SerializeToElement(value, Json);
-        using var stream = new MemoryStream(); using (var writer = new Utf8JsonWriter(stream)) Canonical(element, writer);
-        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
-    }
-    private static void Canonical(JsonElement value, Utf8JsonWriter writer)
-    {
-        if (value.ValueKind == JsonValueKind.Object)
-        { writer.WriteStartObject(); foreach (var property in value.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal)) { writer.WritePropertyName(property.Name); Canonical(property.Value, writer); } writer.WriteEndObject(); }
-        else if (value.ValueKind == JsonValueKind.Array)
-        { writer.WriteStartArray(); foreach (var item in value.EnumerateArray()) Canonical(item, writer); writer.WriteEndArray(); }
-        else value.WriteTo(writer);
+        return Elsa.Serialization.Core.JsonHashInput.Hash(Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(value, _ => null));
     }
     private static string? Difference(JsonElement expected, JsonElement actual, string path)
     {
@@ -366,7 +357,7 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
             for (var index = 0; index < expected.GetArrayLength(); index++) { var diff = Difference(expected[index], actual[index], path + "[" + index + "]"); if (diff is not null) return diff; }
             return null;
         }
-        return expected.GetRawText() == actual.GetRawText() ? null : path;
+        return Elsa.Serialization.Core.JsonCanonicalForm.Equals(expected, actual) ? null : path;
     }
     private static void ValidateExpected(JsonElement value, int depth = 0)
     {

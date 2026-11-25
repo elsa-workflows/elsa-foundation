@@ -60,6 +60,21 @@ public sealed class AgentSchemaTests
     }
 
     [Fact]
+    public void Expanded_unicode_schema_keeps_the_actual_utf8_budget()
+    {
+        var text = new string('雪', 11_000);
+        var schema = JsonSerializer.SerializeToElement(new { type = "string", @const = text }, Elsa.Serialization.Core.JsonBaseline.Options);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(schema.GetRawText()) < AgentSchemaValidator.MaximumSchemaBytes);
+        var prepared = new AgentSchemaValidator().Prepare(schema);
+        Assert.Empty(prepared.Problems);
+        Assert.NotNull(prepared.Schema);
+        Assert.Empty(prepared.Schema.Validate(JsonSerializer.SerializeToElement(text, Elsa.Serialization.Core.JsonBaseline.Options)));
+        Assert.NotEmpty(prepared.Schema.Validate(JsonSerializer.SerializeToElement(text + "changed", Elsa.Serialization.Core.JsonBaseline.Options)));
+        var tooLarge = JsonSerializer.SerializeToElement(new { type = "string", @const = new string('雪', 22_000) }, Elsa.Serialization.Core.JsonBaseline.Options);
+        Assert.Null(new AgentSchemaValidator().Prepare(tooLarge).Schema);
+    }
+
+    [Fact]
     public void Expanded_reference_graph_has_a_finite_budget()
     {
         var definitions = new JsonObject { ["d0"] = new JsonObject { ["type"] = "integer" } };

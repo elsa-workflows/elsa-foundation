@@ -1,39 +1,7 @@
 #nullable enable
-const Elsa.Workflows.Publishing.Core.Contracts.PublicationPolicyProjectionStoreBackend.EntityFramework = "entity-framework" -> string!
-const Elsa.Workflows.Publishing.Core.Contracts.PublicationPolicyProjectionStoreBackend.InMemory = "in-memory" -> string!
-const Elsa.Workflows.Publishing.Core.Contracts.PublicationSnapshotReviewStoreBackend.EntityFramework = "entity-framework" -> string!
-const Elsa.Workflows.Publishing.Core.Contracts.PublicationSnapshotReviewStoreBackend.InMemory = "in-memory" -> string!
-const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.ActivityDraftTestRuns = "activity-draft-test-runs" -> string!
-const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.ActivityPublicationCommands = "activity-publication-commands" -> string!
-const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.ActivityPublicationReceipts = "activity-publication-receipts" -> string!
-const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.ActivityUpgradeMutation = "activity-upgrade-mutation" -> string!
-const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.EntityFramework = "entity-framework" -> string!
-const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.InMemory = "in-memory" -> string!
-const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.PublicationRecords = "publication-records" -> string!
-const Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunIdentity.GlobalOperationScope = "global" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ActivationCompensationFailed = "activation_compensation_failed" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ArtifactAlreadyServing = "artifact_already_serving" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ChannelNotDeclared = "channel_not_declared" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ExpectedPublicationMismatch = "expected_publication_mismatch" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ExplicitSlotRequired = "explicit_slot_required" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.InvalidDefaultSlot = "invalid_default_slot" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.InvalidHostPolicy = "invalid_host_policy" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.NamedSlotRequired = "named_slot_required" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.PolicyRevisionConflict = "policy_revision_conflict" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ProjectionActivationFailed = "projection_activation_failed" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ProjectionDeliveryFailed = "projection_delivery_failed" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ProjectionPreparationFailed = "projection_preparation_failed" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.PublicationActivationFailed = "publication_activation_failed" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.PublicationActivationRefused = "publication_activation_refused" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.PublicationSnapshotStale = "publication_snapshot_stale" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.SlotOwnerConflict = "slot_owner_conflict" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.SlotRevisionConflict = "slot_revision_conflict" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.TriggerConflict = "trigger_conflict" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.UnsupportedAction = "unsupported_action" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.WorkflowPolicyMismatch = "workflow_policy_mismatch" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationProjectionKinds.HttpRoutes = "HttpRoutes" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationProjectionKinds.RecurringSchedules = "RecurringSchedules" -> string!
-const Elsa.Workflows.Publishing.Core.Models.PublicationProjectionKinds.TriggerBindings = "TriggerBindings" -> string!
+Elsa.Workflows.Publishing.Core.Contracts.IActivityCatalogProjection
+Elsa.Workflows.Publishing.Core.Contracts.IActivityCatalogProjection.CatalogVersion(Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition! definition, Elsa.Activities.Design.Core.Models.ActivityContract! contract, Elsa.Activities.Design.Core.Models.ActivityProviderManifest! provider, string! versionId, string! version, string! sourceKind, string! sourceId, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate! template, System.DateTimeOffset now) -> Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion!
+Elsa.Workflows.Publishing.Core.Contracts.IActivityCatalogProjection.Publication(Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition! definition, Elsa.Activities.Design.Core.Models.ActivityContract! contract, Elsa.Activities.Design.Core.Models.ActivityProviderManifest! provider, string! versionId, string! version, string! providerFingerprint, string! sourceReferenceId, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate! template, Elsa.Activities.Design.Core.Models.ActivityResourceMeasurements! measurements, System.DateTimeOffset now, Elsa.Activities.Design.Core.Models.ActivityDefinitionVersionResolutionKind resolutionKind = Elsa.Activities.Design.Core.Models.ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary, string? sourceDraftId = null, string? sourceVersionId = null) -> Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersionPublication!
 Elsa.Workflows.Publishing.Core.Contracts.IActivityDependencyProjectionRebuildCoordinator
 Elsa.Workflows.Publishing.Core.Contracts.IActivityDependencyProjectionRebuildCoordinator.RebuildAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Activities.Design.Core.Models.ActivityDependencyProjectionRebuild!>!
 Elsa.Workflows.Publishing.Core.Contracts.IActivityDraftTestRunStore
@@ -42,9 +10,20 @@ Elsa.Workflows.Publishing.Core.Contracts.IActivityDraftTestRunStore.FindAsync(st
 Elsa.Workflows.Publishing.Core.Contracts.IActivityDraftTestRunStore.FindByIdempotencyKeyAsync(string! operationScope, string! draftId, string! idempotencyKey, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt?>
 Elsa.Workflows.Publishing.Core.Contracts.IActivityDraftTestRunStore.TryCreateAsync(Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt! receipt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunCreateResult!>
 Elsa.Workflows.Publishing.Core.Contracts.IActivityDraftTestRunStore.TryUpdateAsync(Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt! receipt, long expectedRevision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationCandidateEvaluator
+Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationCandidateEvaluator.EvaluateAsync(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest! request, Elsa.Activities.Design.Core.Models.ActivityDraftValidation! validation, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate!>!
+Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReadiness
+Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReadiness.Fingerprint(string! artifactHash, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement!>! runtime, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement!>! storage) -> string!
+Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReadiness.ReadinessDiagnostics(Elsa.Activities.Design.Core.Models.ActivityDiagnosticSubject! subject, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement!>! runtime, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement!>! storage) -> System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>!
+Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReadiness.RuntimeReadiness(System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement!>! requirements) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness!>!
+Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReadiness.StorageReadiness(System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement!>! requirements) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness!>!
 Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReceiptStore
 Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReceiptStore.FindAsync(string? tenantId, string! idempotencyKey, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt?>
 Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReceiptStore.TryCreateAsync(Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt! receipt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationVersionPolicy
+Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationVersionPolicy.Choices(string? headVersion, Elsa.Activities.Design.Core.Models.ActivityVersionBump requiredBump) -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateCompiler
+Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateCompiler.CompileAsync(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult!>
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateDependencyDiscoverer
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateDependencyDiscoverer.DiscoverDependenciesAsync(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscovery!>
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateDependencyDiscoverer.ProviderKey.get -> string!
@@ -52,6 +31,11 @@ Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateDependencyDiscoverer.S
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateDependencyDiscovererRegistry
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateDependencyDiscovererRegistry.Add(Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateDependencyDiscoverer! discoverer) -> void
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateDependencyDiscovererRegistry.Resolve(string! providerKey, string! manifestSchemaVersion) -> Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateDependencyDiscoverer!
+Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler
+Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.CompileGraphInputs(string! nodeId, System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.InputDefinition!>! inputDefinitions, System.Collections.Generic.IEnumerable<Elsa.Workflows.Design.Core.Models.ArgumentState!>! inputStates) -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding!>!
+Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.CompileGraphIntrinsicInputs(string! nodeId, System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.InputDefinition!>! inputDefinitions, System.Collections.Generic.IEnumerable<Elsa.Workflows.Design.Core.Models.ArgumentState!>! inputStates) -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding!>!
+Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.CompileGraphVariables(string! nodeId, System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.VariableDefinition!>! variables) -> System.Text.Json.JsonElement
+Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.PinAssignmentSourceConversion(string! nodeId, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding! binding, Elsa.Primitives.Models.TypeReference? sourceType) -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding!
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateProviderCompiler
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateProviderCompiler.CompileAsync(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation!>
 Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateProviderCompiler.CompilerFingerprint.get -> string!
@@ -70,8 +54,16 @@ Elsa.Workflows.Publishing.Core.Contracts.IExecutableNodeMetadataEnricher.EnrichA
 Elsa.Workflows.Publishing.Core.Contracts.IExecutableNodeMetadataEnricher.EnrichCompilationAsync(Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest! request, Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileSource! source, Elsa.Workflows.Runtime.Core.Models.ExecutableNode! rootActivity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationEnrichment!>
 Elsa.Workflows.Publishing.Core.Contracts.IExecutableNodeMetadataSource
 Elsa.Workflows.Publishing.Core.Contracts.IExecutableNodeMetadataSource.GetMetadataAsync(Elsa.Workflows.Publishing.Core.Models.ExecutableNodeMetadataContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Publishing.Core.Models.ExecutableNodeMetadataContribution!>!>
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureAuthorization
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureAuthorization.AuthorizeSelectedMaterialAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! definitionVersionId, string! sourceReferenceId, string! artifactId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureAuthorization.AuthorizeWorkflowVersionAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! definitionVersionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureContextAccessor
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureContextAccessor.Current.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCatalogCaptureAuthorization
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCatalogCaptureAuthorization.AuthorizeActivityVersionAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! activityVersionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Publishing.Core.Contracts.IPublicationActivator
 Elsa.Workflows.Publishing.Core.Contracts.IPublicationActivator.ActivateAsync(Elsa.Workflows.Publishing.Core.Models.PublicationActivationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.PublicationActivationResult!>
+Elsa.Workflows.Publishing.Core.Contracts.IPublicationActivator.ActivateMaterialAsync(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.PublicationActivationResult!>
 Elsa.Workflows.Publishing.Core.Contracts.IPublicationActivator.CompleteAsync(string! workflowDefinitionId, string! slotName, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult!>
 Elsa.Workflows.Publishing.Core.Contracts.IPublicationPolicyResolver
 Elsa.Workflows.Publishing.Core.Contracts.IPublicationPolicyResolver.Resolve(string! workflowDefinitionId, string! workflowDefinitionVersionId, Elsa.Workflows.Publishing.Core.Models.PublicationRequestIntent? request, Elsa.Workflows.Publishing.Core.Models.PublicationPolicy? workflowPolicy, Elsa.Workflows.Publishing.Core.Models.PublicationPolicy! hostPolicy) -> Elsa.Workflows.Publishing.Core.Models.ResolvedPublicationAction!
@@ -90,6 +82,7 @@ Elsa.Workflows.Publishing.Core.Contracts.IPublicationProjectionIntentStore.TryTr
 Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore
 Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore.FindAsync(string! publicationId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.PublicationRecord?>
 Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore.FindByIdsAsync(System.Collections.Generic.IReadOnlyCollection<string!>! publicationIds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Publishing.Core.Models.PublicationRecord!>!>
+Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore.FindOriginBoundedAsync(string! publicationId, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! expectedScope, Elsa.Workflows.Runtime.Core.Models.RuntimeSourceReadLimits! limits, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot?>
 Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore.ListByDefinitionIdsAsync(System.Collections.Generic.IReadOnlyCollection<string!>! workflowDefinitionIds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Publishing.Core.Models.PublicationRecord!>!>
 Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore.ListBySlotAsync(string! slotId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Publishing.Core.Models.PublicationRecord!>!>
 Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore.SaveAsync(Elsa.Workflows.Publishing.Core.Models.PublicationRecord! publication, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
@@ -113,6 +106,7 @@ Elsa.Workflows.Publishing.Core.Contracts.IWorkflowTestRunStore.FindAsync(string!
 Elsa.Workflows.Publishing.Core.Contracts.IWorkflowTestRunStore.FindDraftSnapshotAsync(string! definitionVersionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunDraftSnapshot?>
 Elsa.Workflows.Publishing.Core.Contracts.IWorkflowTestRunStore.SaveAsync(Elsa.Workflows.Publishing.Core.Models.WorkflowTestRun! testRun, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Publishing.Core.Contracts.IWorkflowTestRunStore.SaveDraftSnapshotAsync(Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunDraftSnapshot! snapshot, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Publishing.Core.Contracts.NativeReleaseCaptureSelections
 Elsa.Workflows.Publishing.Core.Contracts.PublicationPolicyProjectionStoreBackend
 Elsa.Workflows.Publishing.Core.Contracts.PublicationPolicyProjectionStoreBackend.EnsureOwnsRegisteredContracts(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Workflows.Publishing.Core.Contracts.PublicationPolicyProjectionStoreBackend.Name.get -> string!
@@ -224,10 +218,10 @@ Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.OperationScope
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.OperationScope.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.ReceiptExpiresAt.get -> System.DateTimeOffset
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.ReceiptExpiresAt.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.RequestedAt.get -> System.DateTimeOffset
-Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.RequestedAt.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.RequestFingerprint.get -> string!
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.RequestFingerprint.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.RequestedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.RequestedAt.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.ResourceTenantId.get -> string?
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.ResourceTenantId.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceipt.Revision.get -> long
@@ -250,8 +244,8 @@ Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus.DispatchAccepted = 3 -> Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus.DispatchAmbiguous = 6 -> Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus.DispatchDeferred = 4 -> Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus
-Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus.Dispatching = 2 -> Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus.DispatchRejected = 5 -> Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus
+Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus.Dispatching = 2 -> Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus.Preparing = 0 -> Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus.ValidationRejected = 1 -> Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunReceiptStatus
 Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunStorageException
@@ -297,10 +291,10 @@ Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.IdempotencyKey.
 Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.IdempotencyKey.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.Outcome.get -> Elsa.Workflows.Publishing.Core.Models.ActivityPublicationOutcome?
 Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.Outcome.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.RequestedVersion.get -> string!
-Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.RequestedVersion.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.RequestFingerprint.get -> string!
 Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.RequestFingerprint.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.RequestedVersion.get -> string!
+Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.RequestedVersion.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.ReviewToken.get -> string!
 Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.ReviewToken.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.Status.get -> Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceiptStatus
@@ -315,6 +309,21 @@ Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceiptStatus.Failed = 
 Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceiptStatus.OutcomeUnknown = 4 -> Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceiptStatus
 Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceiptStatus.Rejected = 1 -> Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceiptStatus
 Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceiptStatus.Stale = 2 -> Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceiptStatus
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.ActivityTemplateCandidate(string! SubjectKind, string! Id, long Revision, Elsa.Activities.Design.Core.Models.ActivityContract! Contract, Elsa.Activities.Design.Core.Models.ActivityProviderManifest! Provider) -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Contract.get -> Elsa.Activities.Design.Core.Models.ActivityContract!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Contract.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Deconstruct(out string! SubjectKind, out string! Id, out long Revision, out Elsa.Activities.Design.Core.Models.ActivityContract! Contract, out Elsa.Activities.Design.Core.Models.ActivityProviderManifest! Provider) -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Equals(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate? other) -> bool
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Id.get -> string!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Id.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Provider.get -> Elsa.Activities.Design.Core.Models.ActivityProviderManifest!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Provider.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Revision.get -> long
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Revision.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.SubjectKind.get -> string!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.SubjectKind.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation!
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation.ActivityTemplateCompilation(Elsa.Workflows.Runtime.Core.Models.ExecutableNode? ExecutableRoot, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableResumeTarget!>! TemplateLocalResumeTargets, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityResolvedDependency!>! DirectDependencies, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement!>! RuntimeRequirements, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement!>! StorageDriverRequirements, Elsa.Activities.Design.Core.Models.ActivityResourceMeasurements! ResourceMeasurements, string! ProviderFingerprint, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityVersionChange!>! ProviderCompatibilityChanges, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>! Diagnostics, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation!>? Occurrences = null) -> void
@@ -365,6 +374,38 @@ Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.Revisio
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.Revision.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.SubjectKind.get -> string!
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.SubjectKind.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.ActivityTemplateCompilerRequest(Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition! Definition, Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionDraft! Draft, string! CandidateDefinitionVersionId, string! CandidateVersion, long LayoutBytes) -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.ActivityTemplateCompilerRequest(Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition! Definition, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate! Candidate, string! CandidateDefinitionVersionId, string! CandidateVersion, long LayoutBytes) -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Candidate.get -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Candidate.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.CandidateDefinitionVersionId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.CandidateDefinitionVersionId.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.CandidateVersion.get -> string!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.CandidateVersion.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Deconstruct(out Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition! Definition, out Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate! Candidate, out string! CandidateDefinitionVersionId, out string! CandidateVersion, out long LayoutBytes) -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Definition.get -> Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Definition.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Equals(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest? other) -> bool
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.LayoutBytes.get -> long
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.LayoutBytes.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.ActivityTemplateCompilerResult(Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate? Template, Elsa.Activities.Design.Core.Models.ActivityResourceMeasurements! Measurements, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityResolvedDependency!>! DirectDependencies, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>! Diagnostics) -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate? Template, out Elsa.Activities.Design.Core.Models.ActivityResourceMeasurements! Measurements, out System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityResolvedDependency!>! DirectDependencies, out System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>! Diagnostics) -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Diagnostics.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.DirectDependencies.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityResolvedDependency!>!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.DirectDependencies.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Equals(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult? other) -> bool
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.IsSuccessful.get -> bool
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Measurements.get -> Elsa.Activities.Design.Core.Models.ActivityResourceMeasurements!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Measurements.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.ProviderCompatibilityChanges.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityVersionChange!>!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.ProviderCompatibilityChanges.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Template.get -> Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate?
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Template.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration!
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration.ActivityTemplateDependencyDeclaration(string! DefinitionVersionId, string! OccurrenceId, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityNodeOrigin!>! NodeOrigin, string? ParentOccurrenceId = null, string! ChildSlotName = "activity-graph", int ChildIndex = 0, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityContractMemberUsage!>? MemberUsage = null) -> void
@@ -408,6 +449,25 @@ Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.Revision.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.SubjectKind.get -> string!
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.SubjectKind.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ActivityTemplateDependencyRequest(string! DefinitionVersionId, string! OccurrenceId, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityNodeOrigin!>! NodeOrigin, string? ParentOccurrenceId = null, string! ChildSlotName = "activity-graph", int ChildIndex = 0, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityContractMemberUsage!>? MemberUsage = null) -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ChildIndex.get -> int
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ChildIndex.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ChildSlotName.get -> string!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ChildSlotName.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.Deconstruct(out string! DefinitionVersionId, out string! OccurrenceId, out System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityNodeOrigin!>! NodeOrigin, out string? ParentOccurrenceId, out string! ChildSlotName, out int ChildIndex, out System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityContractMemberUsage!>? MemberUsage) -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.DefinitionVersionId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.DefinitionVersionId.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.Equals(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? other) -> bool
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.MemberUsage.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityContractMemberUsage!>!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.MemberUsage.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.NodeOrigin.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityNodeOrigin!>!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.NodeOrigin.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.OccurrenceId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.OccurrenceId.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ParentOccurrenceId.get -> string?
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ParentOccurrenceId.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation!
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.ActivityTemplateOccurrenceCompilation(string! OccurrenceId, System.Text.Json.JsonElement InputBindings, Elsa.Workflows.Design.Core.Models.ActivityNodeStructure? Structure, System.Text.Json.JsonElement? OutputBindings = null) -> void
@@ -421,6 +481,19 @@ Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.Outp
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.OutputBindings.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.Structure.get -> Elsa.Workflows.Design.Core.Models.ActivityNodeStructure?
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.Structure.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.StructureInputs.get -> Elsa.Workflows.Design.Core.Models.ActivityStructureInputProjection?
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.StructureInputs.init -> void
+Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate
+Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate!
+Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Compilation.get -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult!
+Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Compilation.init -> void
+Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Deconstruct(out Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult! Compilation, out System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>! Diagnostics, out bool IsPublishable) -> void
+Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>!
+Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Diagnostics.init -> void
+Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Equals(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? other) -> bool
+Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.EvaluatedPublicationCandidate(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult! Compilation, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>! Diagnostics, bool IsPublishable) -> void
+Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.IsPublishable.get -> bool
+Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.IsPublishable.init -> void
 Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext
 Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext!
 Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext.Deconstruct(out Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest! Request, out Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileSource! Source, out Elsa.Workflows.Runtime.Core.Models.ExecutableNode! RootActivity) -> void
@@ -535,6 +608,21 @@ Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet.Publicati
 Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet.PublicationId.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet.SlotName.get -> string!
 Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet.SlotName.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness!
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Deconstruct(out string! Kind, out string! Key, out string? SchemaVersion, out string! Status, out System.Collections.Generic.IReadOnlyList<string!>! SupportedSchemaVersions) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Equals(Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness? other) -> bool
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Key.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Key.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Kind.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Kind.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.PublicationCapabilityReadiness(string! Kind, string! Key, string? SchemaVersion, string! Status, System.Collections.Generic.IReadOnlyList<string!>! SupportedSchemaVersions) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.SchemaVersion.get -> string?
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.SchemaVersion.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Status.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Status.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.SupportedSchemaVersions.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.SupportedSchemaVersions.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult
 Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult!
 Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult.Deconstruct(out bool Succeeded, out Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot! Slot, out Elsa.Workflows.Publishing.Core.Models.PublicationRecord? Publication, out Elsa.Workflows.Publishing.Core.Models.PublicationFailure? Failure) -> void
@@ -558,6 +646,29 @@ Elsa.Workflows.Publishing.Core.Models.PublicationFailure.Message.get -> string!
 Elsa.Workflows.Publishing.Core.Models.PublicationFailure.Message.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationFailure.PublicationFailure(string! Code, string! Message) -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest!
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Candidate.get -> Elsa.Workflows.Publishing.Core.Models.PublicationRecord!
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Candidate.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Deconstruct(out Elsa.Workflows.Publishing.Core.Models.PublicationRecord! Candidate, out Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! Material, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! Reference) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Equals(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? other) -> bool
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Material.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Material.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.PublicationMaterialActivationRequest(Elsa.Workflows.Publishing.Core.Models.PublicationRecord! Candidate, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! Material, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! Reference) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Reference.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference!
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Reference.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.ActivatedAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.ArtifactId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.PublicationId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.PublicationOriginSnapshot(string! publicationId, string! slotId, string! workflowDefinitionId, string! workflowDefinitionVersionId, string! artifactId, string? sourceReferenceId, Elsa.Workflows.Publishing.Core.Models.PublicationStatus status, System.DateTimeOffset? activatedAt, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, int storedMetadataBytes) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.SlotId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.SourceReferenceId.get -> string?
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.Status.get -> Elsa.Workflows.Publishing.Core.Models.PublicationStatus
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.StoredMetadataBytes.get -> int
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.WorkflowDefinitionId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.WorkflowDefinitionVersionId.get -> string!
 Elsa.Workflows.Publishing.Core.Models.PublicationPolicy
 Elsa.Workflows.Publishing.Core.Models.PublicationPolicy.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.PublicationPolicy!
 Elsa.Workflows.Publishing.Core.Models.PublicationPolicy.Deconstruct(out string? WorkflowDefinitionId, out Elsa.Workflows.Publishing.Core.Models.PublicationPolicyDefaultAction DefaultAction, out string! DefaultSlotName, out long Revision, out System.DateTimeOffset UpdatedAt) -> void
@@ -651,6 +762,8 @@ Elsa.Workflows.Publishing.Core.Models.PublicationRecord.Failure.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationRecord.PublicationId.get -> string!
 Elsa.Workflows.Publishing.Core.Models.PublicationRecord.PublicationId.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationRecord.PublicationRecord(string! PublicationId, string! SlotId, string! WorkflowDefinitionId, string! WorkflowDefinitionVersionId, string! ArtifactId, string? SourceReferenceId, long ExpectedSlotRevision, Elsa.Workflows.Publishing.Core.Models.PublicationStatus Status, System.DateTimeOffset CreatedAt, System.DateTimeOffset? ActivatedAt, System.DateTimeOffset? RetiredAt, Elsa.Workflows.Publishing.Core.Models.PublicationFailure? Failure, string! SlotName = "default") -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationRecord.RequestFingerprint.get -> string?
+Elsa.Workflows.Publishing.Core.Models.PublicationRecord.RequestFingerprint.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationRecord.RetiredAt.get -> System.DateTimeOffset?
 Elsa.Workflows.Publishing.Core.Models.PublicationRecord.RetiredAt.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationRecord.SlotId.get -> string!
@@ -665,6 +778,9 @@ Elsa.Workflows.Publishing.Core.Models.PublicationRecord.WorkflowDefinitionId.get
 Elsa.Workflows.Publishing.Core.Models.PublicationRecord.WorkflowDefinitionId.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationRecord.WorkflowDefinitionVersionId.get -> string!
 Elsa.Workflows.Publishing.Core.Models.PublicationRecord.WorkflowDefinitionVersionId.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException
+Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException.PublicationId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException.PublicationRecordAlreadyExistsException(string! publicationId) -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationRequestIntent
 Elsa.Workflows.Publishing.Core.Models.PublicationRequestIntent.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.PublicationRequestIntent!
 Elsa.Workflows.Publishing.Core.Models.PublicationRequestIntent.Action.get -> Elsa.Workflows.Publishing.Core.Models.PublicationAction
@@ -707,6 +823,10 @@ Elsa.Workflows.Publishing.Core.Models.PublicationSnapshotReview.SlotRevision.get
 Elsa.Workflows.Publishing.Core.Models.PublicationSnapshotReview.SlotRevision.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationSnapshotReview.TenantId.get -> string?
 Elsa.Workflows.Publishing.Core.Models.PublicationSnapshotReview.TenantId.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException
+Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException.PublicationId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException.PublicationSourceSnapshotPersistenceException(string! publicationId, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Exception! innerException) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
 Elsa.Workflows.Publishing.Core.Models.PublicationStatus
 Elsa.Workflows.Publishing.Core.Models.PublicationStatus.Active = 2 -> Elsa.Workflows.Publishing.Core.Models.PublicationStatus
 Elsa.Workflows.Publishing.Core.Models.PublicationStatus.Candidate = 0 -> Elsa.Workflows.Publishing.Core.Models.PublicationStatus
@@ -817,6 +937,8 @@ Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.Status.get -> Elsa.W
 Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.Status.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.VersionId.get -> string!
 Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.VersionId.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.Warnings.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.Warnings.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.WasCreated.get -> bool
 Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.WasCreated.init -> void
 Elsa.Workflows.Publishing.Core.Models.ResolvedPublicationAction
@@ -850,8 +972,8 @@ Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.Compatibi
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.CompatibilityMetadata.init -> void
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.CreatedAt.get -> System.DateTimeOffset
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.CreatedAt.init -> void
-Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.Deconstruct(out string! versionId, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope scope, out System.DateTimeOffset createdAt, out System.DateTimeOffset? publishedAt, out System.DateTimeOffset? expiresAt, out string! artifactIdPrefix, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>? compatibilityMetadata) -> void
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.Deconstruct(out string! VersionId, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope Scope, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset? PublishedAt, out System.DateTimeOffset? ExpiresAt, out string! ArtifactIdPrefix, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>? CompatibilityMetadata, out string? TenantId) -> void
+Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.Deconstruct(out string! versionId, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope scope, out System.DateTimeOffset createdAt, out System.DateTimeOffset? publishedAt, out System.DateTimeOffset? expiresAt, out string! artifactIdPrefix, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>? compatibilityMetadata) -> void
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.Equals(Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest? other) -> bool
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.ExpiresAt.get -> System.DateTimeOffset?
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.ExpiresAt.init -> void
@@ -865,6 +987,8 @@ Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.TenantId.
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.TenantId.init -> void
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.VersionId.get -> string!
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.VersionId.init -> void
+Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
+Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.Warnings.init -> void
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.WorkflowExecutableCompileRequest(string! VersionId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope Scope, System.DateTimeOffset CreatedAt, System.DateTimeOffset? PublishedAt, System.DateTimeOffset? ExpiresAt, string! ArtifactIdPrefix, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? CompatibilityMetadata = null, string? TenantId = null) -> void
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.WorkflowExecutableCompileRequest(string! versionId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope scope, System.DateTimeOffset createdAt, System.DateTimeOffset? publishedAt, System.DateTimeOffset? expiresAt, string! artifactIdPrefix, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? compatibilityMetadata) -> void
 Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileSource
@@ -943,8 +1067,8 @@ Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.DispatchDuplicate = 
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.DispatchRejected = 3 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.Prepared = 5 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.Rejected = 0 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
-Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.Stopped = 6 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
 Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.StopRequested = 7 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
+Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus.Stopped = 6 -> Elsa.Workflows.Publishing.Core.Models.WorkflowTestRunStatus
 Elsa.Workflows.Publishing.Core.Requests.PublishWorkflow
 Elsa.Workflows.Publishing.Core.Requests.PublishWorkflow.<Clone>$() -> Elsa.Workflows.Publishing.Core.Requests.PublishWorkflow!
 Elsa.Workflows.Publishing.Core.Requests.PublishWorkflow.Action.get -> Elsa.Workflows.Publishing.Core.Models.PublicationAction?
@@ -979,6 +1103,42 @@ Elsa.Workflows.Publishing.Core.Services.InMemoryPublicationSnapshotReviewStore.F
 Elsa.Workflows.Publishing.Core.Services.InMemoryPublicationSnapshotReviewStore.InMemoryPublicationSnapshotReviewStore(int capacity = 4096) -> void
 Elsa.Workflows.Publishing.Core.Services.InMemoryPublicationSnapshotReviewStore.TryAddAsync(Elsa.Workflows.Publishing.Core.Models.PublicationSnapshotReview! review, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Publishing.Core.Services.InMemoryPublicationSnapshotReviewStore.TryConsumeAsync(string! preflightToken, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+const Elsa.Workflows.Publishing.Core.Contracts.NativeReleaseCaptureSelections.WorkflowDefinitionVersion = "elsa.workflow-definition-version" -> string!
+const Elsa.Workflows.Publishing.Core.Contracts.PublicationPolicyProjectionStoreBackend.EntityFramework = "entity-framework" -> string!
+const Elsa.Workflows.Publishing.Core.Contracts.PublicationPolicyProjectionStoreBackend.InMemory = "in-memory" -> string!
+const Elsa.Workflows.Publishing.Core.Contracts.PublicationSnapshotReviewStoreBackend.EntityFramework = "entity-framework" -> string!
+const Elsa.Workflows.Publishing.Core.Contracts.PublicationSnapshotReviewStoreBackend.InMemory = "in-memory" -> string!
+const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.ActivityDraftTestRuns = "activity-draft-test-runs" -> string!
+const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.ActivityPublicationCommands = "activity-publication-commands" -> string!
+const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.ActivityPublicationReceipts = "activity-publication-receipts" -> string!
+const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.ActivityUpgradeMutation = "activity-upgrade-mutation" -> string!
+const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.EntityFramework = "entity-framework" -> string!
+const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.InMemory = "in-memory" -> string!
+const Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.PublicationRecords = "publication-records" -> string!
+const Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunIdentity.GlobalOperationScope = "global" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ActivationCompensationFailed = "activation_compensation_failed" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ArtifactAlreadyServing = "artifact_already_serving" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ChannelNotDeclared = "channel_not_declared" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ExpectedPublicationMismatch = "expected_publication_mismatch" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ExplicitSlotRequired = "explicit_slot_required" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.InvalidDefaultSlot = "invalid_default_slot" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.InvalidHostPolicy = "invalid_host_policy" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.NamedSlotRequired = "named_slot_required" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.PolicyRevisionConflict = "policy_revision_conflict" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ProjectionActivationFailed = "projection_activation_failed" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ProjectionDeliveryFailed = "projection_delivery_failed" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.ProjectionPreparationFailed = "projection_preparation_failed" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.PublicationActivationFailed = "publication_activation_failed" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.PublicationActivationRefused = "publication_activation_refused" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.PublicationSnapshotStale = "publication_snapshot_stale" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.SlotOwnerConflict = "slot_owner_conflict" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.SlotRevisionConflict = "slot_revision_conflict" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.TriggerConflict = "trigger_conflict" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.UnsupportedAction = "unsupported_action" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationFailureCodes.WorkflowPolicyMismatch = "workflow_policy_mismatch" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationProjectionKinds.HttpRoutes = "HttpRoutes" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationProjectionKinds.RecurringSchedules = "RecurringSchedules" -> string!
+const Elsa.Workflows.Publishing.Core.Models.PublicationProjectionKinds.TriggerBindings = "TriggerBindings" -> string!
 override Elsa.Workflows.Publishing.Core.Contracts.PublicationPolicyWriteResult.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Contracts.PublicationPolicyWriteResult.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Contracts.PublicationPolicyWriteResult.ToString() -> string!
@@ -1000,12 +1160,21 @@ override Elsa.Workflows.Publishing.Core.Models.ActivityPublicationOutcome.ToStri
 override Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.ToString() -> string!
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.ToString() -> string!
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation.ToString() -> string!
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.ToString() -> string!
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.ToString() -> string!
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.ToString() -> string!
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration.ToString() -> string!
@@ -1015,9 +1184,15 @@ override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscove
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.ToString() -> string!
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ToString() -> string!
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.ToString() -> string!
+override Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.ToString() -> string!
 override Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext.ToString() -> string!
@@ -1048,12 +1223,18 @@ override Elsa.Workflows.Publishing.Core.Models.PublicationActivationResult.ToStr
 override Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet.ToString() -> string!
+override Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.ToString() -> string!
 override Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult.ToString() -> string!
 override Elsa.Workflows.Publishing.Core.Models.PublicationFailure.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Models.PublicationFailure.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Models.PublicationFailure.ToString() -> string!
+override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.ToString() -> string!
 override Elsa.Workflows.Publishing.Core.Models.PublicationPolicy.Equals(object? obj) -> bool
 override Elsa.Workflows.Publishing.Core.Models.PublicationPolicy.GetHashCode() -> int
 override Elsa.Workflows.Publishing.Core.Models.PublicationPolicy.ToString() -> string!
@@ -1124,9 +1305,9 @@ static Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBacke
 static Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.RegisterAdded(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! family, string! name, System.Collections.Generic.IReadOnlyCollection<System.Type!>! contracts, int firstAddedIndex) -> Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend!
 static Elsa.Workflows.Publishing.Core.Contracts.PublishingPersistenceFamilyBackend.TryAddInMemory<TService, TImplementation>(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! family, System.Collections.Generic.IReadOnlyCollection<System.Type!>! contracts) -> void
 static Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery.Inline(string! targetId, System.ReadOnlyMemory<byte> payload) -> Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery!
+static Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery.Receipt(string! targetId, string! location) -> Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery!
 static Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery.operator !=(Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery? left, Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery? right) -> bool
 static Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery.operator ==(Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery? left, Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery? right) -> bool
-static Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery.Receipt(string! targetId, string! location) -> Elsa.Workflows.Publishing.Core.Contracts.WorkflowArtifactExportDelivery!
 static Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunCreateResult.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunCreateResult? left, Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunCreateResult? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunCreateResult.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunCreateResult? left, Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunCreateResult? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunFailure.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunFailure? left, Elsa.Workflows.Publishing.Core.Models.ActivityDraftTestRunFailure? right) -> bool
@@ -1142,18 +1323,29 @@ static Elsa.Workflows.Publishing.Core.Models.ActivityPublicationOutcome.operator
 static Elsa.Workflows.Publishing.Core.Models.ActivityPublicationOutcome.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityPublicationOutcome? left, Elsa.Workflows.Publishing.Core.Models.ActivityPublicationOutcome? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt? left, Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt? left, Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.FromDraft(Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionDraft! draft) -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate!
+static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilation? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDeclaration? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscovery.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscovery? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscovery? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscovery.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscovery? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscovery? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyDiscoveryRequest? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.operator !=(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? left, Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.operator ==(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? left, Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext.operator !=(Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext? left, Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext.operator ==(Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext? left, Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContribution.operator !=(Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContribution? left, Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContribution? right) -> bool
@@ -1174,10 +1366,14 @@ static Elsa.Workflows.Publishing.Core.Models.PublicationActivationResult.operato
 static Elsa.Workflows.Publishing.Core.Models.PublicationActivationResult.operator ==(Elsa.Workflows.Publishing.Core.Models.PublicationActivationResult? left, Elsa.Workflows.Publishing.Core.Models.PublicationActivationResult? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet.operator !=(Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet? left, Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet.operator ==(Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet? left, Elsa.Workflows.Publishing.Core.Models.PublicationAuthoritativeClaimSet? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.operator !=(Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness? left, Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.operator ==(Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness? left, Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult.operator !=(Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult? left, Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult.operator ==(Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult? left, Elsa.Workflows.Publishing.Core.Models.PublicationCompletionResult? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.PublicationFailure.operator !=(Elsa.Workflows.Publishing.Core.Models.PublicationFailure? left, Elsa.Workflows.Publishing.Core.Models.PublicationFailure? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.PublicationFailure.operator ==(Elsa.Workflows.Publishing.Core.Models.PublicationFailure? left, Elsa.Workflows.Publishing.Core.Models.PublicationFailure? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.operator !=(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? left, Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? right) -> bool
+static Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? left, Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.PublicationPolicy.operator !=(Elsa.Workflows.Publishing.Core.Models.PublicationPolicy? left, Elsa.Workflows.Publishing.Core.Models.PublicationPolicy? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.PublicationPolicy.operator ==(Elsa.Workflows.Publishing.Core.Models.PublicationPolicy? left, Elsa.Workflows.Publishing.Core.Models.PublicationPolicy? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.PublicationPreflightResult.operator !=(Elsa.Workflows.Publishing.Core.Models.PublicationPreflightResult? left, Elsa.Workflows.Publishing.Core.Models.PublicationPreflightResult? right) -> bool
@@ -1216,197 +1412,3 @@ static Elsa.Workflows.Publishing.Core.Requests.PublishWorkflow.operator ==(Elsa.
 static Elsa.Workflows.Publishing.Core.Services.ActivityPublicationRequestFingerprint.Compute(string! draftId, long expectedDraftRevision, string? expectedDefinitionHeadVersionId, string! requestedVersion, string! reviewToken) -> string!
 static Elsa.Workflows.Publishing.Core.Services.ExecutableActivityTemplateBehaviorHasher.Compute(Elsa.Workflows.Runtime.Core.Models.ExecutableNode! root, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableResumeTarget!>! resumeTargets, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateDependency!>! directDependencies, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateIdentity!>! closedTemplates, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement!>! runtimeRequirements, System.Collections.Generic.IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement!>! storageDriverRequirements, string! providerFingerprint, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! compatibilityMetadata) -> string!
 static Elsa.Workflows.Publishing.Core.Services.ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(object! value) -> string!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.StructureInputs.get -> Elsa.Workflows.Design.Core.Models.ActivityStructureInputProjection?
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.StructureInputs.init -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness!
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Deconstruct(out string! Kind, out string! Key, out string? SchemaVersion, out string! Status, out System.Collections.Generic.IReadOnlyList<string!>! SupportedSchemaVersions) -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Equals(Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness? other) -> bool
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Key.get -> string!
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Key.init -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Kind.get -> string!
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Kind.init -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.PublicationCapabilityReadiness(string! Kind, string! Key, string? SchemaVersion, string! Status, System.Collections.Generic.IReadOnlyList<string!>! SupportedSchemaVersions) -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.SchemaVersion.get -> string?
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.SchemaVersion.init -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Status.get -> string!
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Status.init -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.SupportedSchemaVersions.get -> System.Collections.Generic.IReadOnlyList<string!>!
-Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.SupportedSchemaVersions.init -> void
-override Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Equals(object? obj) -> bool
-override Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.GetHashCode() -> int
-override Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.ToString() -> string!
-static Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.operator !=(Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness? left, Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness? right) -> bool
-static Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.operator ==(Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness? left, Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness? right) -> bool
-Elsa.Workflows.Publishing.Core.Contracts.IActivityCatalogProjection
-Elsa.Workflows.Publishing.Core.Contracts.IActivityCatalogProjection.CatalogVersion(Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition! definition, Elsa.Activities.Design.Core.Models.ActivityContract! contract, Elsa.Activities.Design.Core.Models.ActivityProviderManifest! provider, string! versionId, string! version, string! sourceKind, string! sourceId, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate! template, System.DateTimeOffset now) -> Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion!
-Elsa.Workflows.Publishing.Core.Contracts.IActivityCatalogProjection.Publication(Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition! definition, Elsa.Activities.Design.Core.Models.ActivityContract! contract, Elsa.Activities.Design.Core.Models.ActivityProviderManifest! provider, string! versionId, string! version, string! providerFingerprint, string! sourceReferenceId, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate! template, Elsa.Activities.Design.Core.Models.ActivityResourceMeasurements! measurements, System.DateTimeOffset now, Elsa.Activities.Design.Core.Models.ActivityDefinitionVersionResolutionKind resolutionKind = Elsa.Activities.Design.Core.Models.ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary, string? sourceDraftId = null, string? sourceVersionId = null) -> Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersionPublication!
-Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationCandidateEvaluator
-Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationCandidateEvaluator.EvaluateAsync(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest! request, Elsa.Activities.Design.Core.Models.ActivityDraftValidation! validation, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate!>!
-Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReadiness
-Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReadiness.Fingerprint(string! artifactHash, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement!>! runtime, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement!>! storage) -> string!
-Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReadiness.ReadinessDiagnostics(Elsa.Activities.Design.Core.Models.ActivityDiagnosticSubject! subject, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement!>! runtime, System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement!>! storage) -> System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>!
-Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReadiness.RuntimeReadiness(System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement!>! requirements) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness!>!
-Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationReadiness.StorageReadiness(System.Collections.Generic.IEnumerable<Elsa.Activities.Runtime.Core.Models.RuntimeStorageDriverRequirement!>! requirements) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness!>!
-Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationVersionPolicy
-Elsa.Workflows.Publishing.Core.Contracts.IActivityPublicationVersionPolicy.Choices(string? headVersion, Elsa.Activities.Design.Core.Models.ActivityVersionBump requiredBump) -> System.Collections.Generic.IReadOnlyList<string!>!
-Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateCompiler
-Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateCompiler.CompileAsync(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult!>
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.ActivityTemplateCandidate(string! SubjectKind, string! Id, long Revision, Elsa.Activities.Design.Core.Models.ActivityContract! Contract, Elsa.Activities.Design.Core.Models.ActivityProviderManifest! Provider) -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Contract.get -> Elsa.Activities.Design.Core.Models.ActivityContract!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Contract.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Deconstruct(out string! SubjectKind, out string! Id, out long Revision, out Elsa.Activities.Design.Core.Models.ActivityContract! Contract, out Elsa.Activities.Design.Core.Models.ActivityProviderManifest! Provider) -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Equals(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate? other) -> bool
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Id.get -> string!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Id.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Provider.get -> Elsa.Activities.Design.Core.Models.ActivityProviderManifest!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Provider.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Revision.get -> long
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Revision.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.SubjectKind.get -> string!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.SubjectKind.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.ActivityTemplateCompilerRequest(Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition! Definition, Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionDraft! Draft, string! CandidateDefinitionVersionId, string! CandidateVersion, long LayoutBytes) -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.ActivityTemplateCompilerRequest(Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition! Definition, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate! Candidate, string! CandidateDefinitionVersionId, string! CandidateVersion, long LayoutBytes) -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Candidate.get -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Candidate.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.CandidateDefinitionVersionId.get -> string!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.CandidateDefinitionVersionId.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.CandidateVersion.get -> string!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.CandidateVersion.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Deconstruct(out Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition! Definition, out Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate! Candidate, out string! CandidateDefinitionVersionId, out string! CandidateVersion, out long LayoutBytes) -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Definition.get -> Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Definition.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Equals(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest? other) -> bool
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.LayoutBytes.get -> long
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.LayoutBytes.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.ActivityTemplateCompilerResult(Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate? Template, Elsa.Activities.Design.Core.Models.ActivityResourceMeasurements! Measurements, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityResolvedDependency!>! DirectDependencies, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>! Diagnostics) -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate? Template, out Elsa.Activities.Design.Core.Models.ActivityResourceMeasurements! Measurements, out System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityResolvedDependency!>! DirectDependencies, out System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>! Diagnostics) -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Diagnostics.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.DirectDependencies.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityResolvedDependency!>!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.DirectDependencies.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Equals(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult? other) -> bool
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.IsSuccessful.get -> bool
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Measurements.get -> Elsa.Activities.Design.Core.Models.ActivityResourceMeasurements!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Measurements.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.ProviderCompatibilityChanges.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityVersionChange!>!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.ProviderCompatibilityChanges.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Template.get -> Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate?
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Template.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ActivityTemplateDependencyRequest(string! DefinitionVersionId, string! OccurrenceId, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityNodeOrigin!>! NodeOrigin, string? ParentOccurrenceId = null, string! ChildSlotName = "activity-graph", int ChildIndex = 0, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityContractMemberUsage!>? MemberUsage = null) -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ChildIndex.get -> int
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ChildIndex.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ChildSlotName.get -> string!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ChildSlotName.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.Deconstruct(out string! DefinitionVersionId, out string! OccurrenceId, out System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityNodeOrigin!>! NodeOrigin, out string? ParentOccurrenceId, out string! ChildSlotName, out int ChildIndex, out System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityContractMemberUsage!>? MemberUsage) -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.DefinitionVersionId.get -> string!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.DefinitionVersionId.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.Equals(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? other) -> bool
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.MemberUsage.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityContractMemberUsage!>!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.MemberUsage.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.NodeOrigin.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityNodeOrigin!>!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.NodeOrigin.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.OccurrenceId.get -> string!
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.OccurrenceId.init -> void
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ParentOccurrenceId.get -> string?
-Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ParentOccurrenceId.init -> void
-Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate
-Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate!
-Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Compilation.get -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult!
-Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Compilation.init -> void
-Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Deconstruct(out Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult! Compilation, out System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>! Diagnostics, out bool IsPublishable) -> void
-Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>!
-Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Diagnostics.init -> void
-Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Equals(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? other) -> bool
-Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.EvaluatedPublicationCandidate(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult! Compilation, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityDiagnostic!>! Diagnostics, bool IsPublishable) -> void
-Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.IsPublishable.get -> bool
-Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.IsPublishable.init -> void
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.Equals(object? obj) -> bool
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.GetHashCode() -> int
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.ToString() -> string!
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.Equals(object? obj) -> bool
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.GetHashCode() -> int
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.ToString() -> string!
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.Equals(object? obj) -> bool
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.GetHashCode() -> int
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.ToString() -> string!
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.Equals(object? obj) -> bool
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.GetHashCode() -> int
-override Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.ToString() -> string!
-override Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.Equals(object? obj) -> bool
-override Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.GetHashCode() -> int
-override Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.ToString() -> string!
-static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.FromDraft(Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionDraft! draft) -> Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate!
-static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate? right) -> bool
-static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCandidate? right) -> bool
-static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest? right) -> bool
-static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerRequest? right) -> bool
-static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult? right) -> bool
-static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilerResult? right) -> bool
-static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.operator !=(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? right) -> bool
-static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? right) -> bool
-static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.operator !=(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? left, Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? right) -> bool
-static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.operator ==(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? left, Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? right) -> bool
-Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.Warnings.get -> System.Collections.Generic.IReadOnlyList<string!>?
-Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.Warnings.init -> void
-Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore.FindOriginBoundedAsync(string! publicationId, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! expectedScope, Elsa.Workflows.Runtime.Core.Models.RuntimeSourceReadLimits! limits, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot?>
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.PublicationOriginSnapshot(string! publicationId, string! slotId, string! workflowDefinitionId, string! workflowDefinitionVersionId, string! artifactId, string? sourceReferenceId, Elsa.Workflows.Publishing.Core.Models.PublicationStatus status, System.DateTimeOffset? activatedAt, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, int storedMetadataBytes) -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.PublicationId.get -> string!
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.SlotId.get -> string!
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.WorkflowDefinitionId.get -> string!
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.WorkflowDefinitionVersionId.get -> string!
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.ArtifactId.get -> string!
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.SourceReferenceId.get -> string?
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.Status.get -> Elsa.Workflows.Publishing.Core.Models.PublicationStatus
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.ActivatedAt.get -> System.DateTimeOffset?
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
-Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.StoredMetadataBytes.get -> int
-Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException
-Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException.PublicationSourceSnapshotPersistenceException(string! publicationId, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Exception! innerException) -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException.PublicationId.get -> string!
-Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
-Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureAuthorization
-Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureAuthorization.AuthorizeSelectedMaterialAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! definitionVersionId, string! sourceReferenceId, string! artifactId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
-Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureAuthorization.AuthorizeWorkflowVersionAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! definitionVersionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
-Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureContextAccessor
-Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureContextAccessor.Current.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
-Elsa.Workflows.Publishing.Core.Contracts.NativeReleaseCaptureSelections
-const Elsa.Workflows.Publishing.Core.Contracts.NativeReleaseCaptureSelections.WorkflowDefinitionVersion = "elsa.workflow-definition-version" -> string!
-Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCatalogCaptureAuthorization
-Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCatalogCaptureAuthorization.AuthorizeActivityVersionAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! activityVersionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
-override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.ToString() -> string!
-static Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.operator !=(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? left, Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? right) -> bool
-Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest!
-static Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? left, Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? right) -> bool
-Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Equals(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? other) -> bool
-Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Reference.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference!
-override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.GetHashCode() -> int
-Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest
-Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Deconstruct(out Elsa.Workflows.Publishing.Core.Models.PublicationRecord! Candidate, out Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! Material, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! Reference) -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Candidate.get -> Elsa.Workflows.Publishing.Core.Models.PublicationRecord!
-Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Material.init -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Reference.init -> void
-Elsa.Workflows.Publishing.Core.Contracts.IPublicationActivator.ActivateMaterialAsync(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.PublicationActivationResult!>
-override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Equals(object? obj) -> bool
-Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Material.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!
-Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Candidate.init -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.PublicationMaterialActivationRequest(Elsa.Workflows.Publishing.Core.Models.PublicationRecord! Candidate, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! Material, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! Reference) -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationRecord.RequestFingerprint.get -> string?
-Elsa.Workflows.Publishing.Core.Models.PublicationRecord.RequestFingerprint.init -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException
-Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException.PublicationRecordAlreadyExistsException(string! publicationId) -> void
-Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException.PublicationId.get -> string!
-Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler
-Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.CompileGraphInputs(string! nodeId, System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.InputDefinition!>! inputDefinitions, System.Collections.Generic.IEnumerable<Elsa.Workflows.Design.Core.Models.ArgumentState!>! inputStates) -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding!>!
-Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.CompileGraphIntrinsicInputs(string! nodeId, System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.InputDefinition!>! inputDefinitions, System.Collections.Generic.IEnumerable<Elsa.Workflows.Design.Core.Models.ArgumentState!>! inputStates) -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding!>!
-Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.CompileGraphVariables(string! nodeId, System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.VariableDefinition!>! variables) -> System.Text.Json.JsonElement
-Elsa.Workflows.Publishing.Core.Contracts.IActivityTemplateInputBindingCompiler.PinAssignmentSourceConversion(string! nodeId, Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding! binding, Elsa.Primitives.Models.TypeReference? sourceType) -> Elsa.Workflows.Runtime.Core.Models.RuntimeInputBinding!

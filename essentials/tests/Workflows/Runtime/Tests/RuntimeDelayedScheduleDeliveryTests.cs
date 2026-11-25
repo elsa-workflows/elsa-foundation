@@ -414,7 +414,7 @@ public sealed class RuntimeDelayedScheduleDeliveryTests
             recordedAt: Now,
             activityExecutionId: "actexec-parent",
             idempotencyKey: $"post-commit:{workItemId}",
-            payload: JsonSerializer.SerializeToElement(workItem),
+            payload: JsonSerializer.SerializeToElement(workItem, Elsa.Serialization.Core.JsonBaseline.Options),
             materializedSchedulerWorkItem: workItem,
             notBefore: notBefore);
     }

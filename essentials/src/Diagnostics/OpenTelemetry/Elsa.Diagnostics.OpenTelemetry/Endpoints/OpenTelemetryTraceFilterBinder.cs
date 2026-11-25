@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Text.Json;
+using Elsa.Serialization.Core;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Microsoft.Extensions.Primitives;
 
@@ -61,10 +63,16 @@ public sealed class OpenTelemetryTraceFilterBinder
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
-            return parsed;
-
-        throw new InvalidTelemetryQueryException($"Invalid '{name}' timestamp '{value}'.");
+        try
+        {
+            return ((DateTimeOffset)JsonConversionContract.For(typeof(DateTimeOffset))
+                .Read(JsonSerializer.SerializeToElement(value, JsonBaseline.Options), typeof(DateTimeOffset))!).ToUniversalTime();
+        }
+        catch (JsonException error)
+        {
+            var code = error is JsonConversionException refusal ? refusal.Code : "invalid-query";
+            throw new InvalidTelemetryQueryException($"{code}: $.{name} requires an ISO 8601 DateTimeOffset with Z or an explicit offset.");
+        }
     }
 
     private static int? ParseTake(string? value)

@@ -19,9 +19,9 @@ internal sealed class BpmnModelActivityRuntime(BpmnEmbeddingBoundary boundary) :
         var invocation = BpmnEmbeddingBoundary.Read(context.State);
         if (invocation.RegistrationId != context.RegistrationId || invocation.NativeExecutionId != context.WorkflowExecutionId ||
             invocation.NativeInvocationId != context.InvocationId || invocation.NativeNodeId != context.ExecutableNodeId || context.Trigger.FormatVersion != 1 ||
-            !JsonElement.DeepEquals(context.State.Invocation, context.Trigger.Invocation)) throw BpmnEmbeddingJson.Invalid();
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(context.State.Invocation, context.Trigger.Invocation)) throw BpmnEmbeddingJson.Invalid();
         var model = await boundary.RequireModelAsync(invocation, context.CancellationToken);
-        if (model.TerminalResult is not { } result || !JsonElement.DeepEquals(result, context.Trigger.Result)) throw BpmnEmbeddingJson.Invalid();
+        if (model.TerminalResult is not { } result || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(result, context.Trigger.Result)) throw BpmnEmbeddingJson.Invalid();
         return result.GetProperty("status").GetString() switch
         {
             "Completed" => ActivityTransition<RunBpmnResult, RunBpmnState>.Complete(new(invocation.ExecutionId, result), "Done"),

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Api.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Xunit;
 
@@ -25,7 +26,10 @@ public sealed partial class StandaloneTriggerManagementTests
         fixture.Store.Resource = new(trigger, [new("subscription-a", trigger.Id, "definition-a", "default", "native", 1, 1, false, [], new(TriggerManagementKind.Studio))]);
 
         var page = await fixture.Management.SubscriptionsAsync(new(TriggerId: trigger.Id), default);
-        var summary = JsonSerializer.SerializeToElement(Assert.Single(page.Items).TriggerSummary);
+        var summary = Assert.Single(page.Items).TriggerSummary!.Value;
+        var wire = JsonSerializer.SerializeToElement(page, StandaloneTriggersApi.Json).GetProperty("items")[0].GetProperty("triggerSummary");
+        Assert.Equal(summary.GetRawText(), wire.GetRawText());
+        Assert.True(wire.TryGetProperty("name", out _));
         var http = summary.GetProperty("http");
         Assert.Equal(mode, http.GetProperty("mode").GetString());
         Assert.Equal(policy, http.GetProperty("admissionPolicy").GetString());

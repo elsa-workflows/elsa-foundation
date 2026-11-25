@@ -63,7 +63,7 @@ internal sealed partial class EtlArtifactCompiler : IEtlArtifactCompiler, IEtlAr
         var contentHash = EtlArtifactJson.Hash(document);
         var artifactId = EtlArtifactJson.CreateArtifactId(formatVersion, definitionId, definitionVersion, contentHash);
         var artifact = new EtlArtifact(formatVersion, artifactId, contentHash, definitionId, definitionVersion, document);
-        if (JsonSerializer.SerializeToUtf8Bytes(artifact).Length > effectiveArtifactBytes)
+        if (JsonSerializer.SerializeToUtf8Bytes(artifact, Elsa.Serialization.Core.JsonBaseline.Options).Length > effectiveArtifactBytes)
         {
             diagnostics.Add("artifact.too-large", "artifact", "The serialized artifact envelope exceeds the configured byte limit.");
             return Failure(diagnostics);
@@ -242,9 +242,9 @@ internal sealed partial class EtlArtifactCompiler : IEtlArtifactCompiler, IEtlAr
             try
             {
                 using var stream = new BoundedCountingStream(byteBudget);
-                using (var writer = new Utf8JsonWriter(stream))
+                using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder }))
                 {
-                    filter.Value.WriteTo(writer);
+                    JsonSerializer.Serialize(writer, filter.Value, Elsa.Serialization.Core.JsonBaseline.Options);
                     writer.Flush();
                 }
                 byteBudget -= checked((int)stream.BytesWritten);
@@ -271,7 +271,7 @@ internal sealed partial class EtlArtifactCompiler : IEtlArtifactCompiler, IEtlAr
         try
         {
             using var stream = new BoundedCountingStream(byteBudget);
-            using (var writer = new Utf8JsonWriter(stream))
+            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder }))
             {
                 writer.WriteStringValue(value);
                 writer.Flush();

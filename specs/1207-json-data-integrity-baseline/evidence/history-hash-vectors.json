@@ -1,0 +1,263 @@
+[
+  {
+    "name": "simple",
+    "family": "id",
+    "fields": [
+      "YwBoAGUAYwBrAHAAbwBpAG4AdAA=",
+      "bgBhAG0AZQA=",
+      "cwB1AGIAagBlAGMAdAA="
+    ],
+    "canonical": "{\"logicalCheckpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"name\":\"bgBhAG0AZQA=\",\"subject\":\"cwB1AGIAagBlAGMAdAA=\"}",
+    "sha256": "b870c20bd947ed0de98d04557a078a7615db0274cf6aa70873d00a0e8ae82ea1"
+  },
+  {
+    "name": "framing-a",
+    "family": "id",
+    "fields": [
+      "YQAAAGIA",
+      "YwA=",
+      "ZAA="
+    ],
+    "canonical": "{\"logicalCheckpointId\":\"YQAAAGIA\",\"name\":\"YwA=\",\"subject\":\"ZAA=\"}",
+    "sha256": "06ffad74621f1dd1939442a23d579498c95816ca2e697c7fadbd7d9f7ba34af9"
+  },
+  {
+    "name": "framing-b",
+    "family": "id",
+    "fields": [
+      "YQA=",
+      "YgAAAGMA",
+      "ZAA="
+    ],
+    "canonical": "{\"logicalCheckpointId\":\"YQA=\",\"name\":\"YgAAAGMA\",\"subject\":\"ZAA=\"}",
+    "sha256": "6cab1e0835587cee809c01be464ffa8b7d815534c6af79b6015ac53e3d8e9060"
+  },
+  {
+    "name": "surrogate-a",
+    "family": "id",
+    "fields": [
+      "YQA=",
+      "YgA=",
+      "ANg="
+    ],
+    "canonical": "{\"logicalCheckpointId\":\"YQA=\",\"name\":\"YgA=\",\"subject\":\"ANg=\"}",
+    "sha256": "88605484cf6716ba45db65710b2cedb09ae471366d7d64fbb28be39e3dcef195"
+  },
+  {
+    "name": "surrogate-b",
+    "family": "id",
+    "fields": [
+      "YQA=",
+      "YgA=",
+      "Adg="
+    ],
+    "canonical": "{\"logicalCheckpointId\":\"YQA=\",\"name\":\"YgA=\",\"subject\":\"Adg=\"}",
+    "sha256": "90fe72aeac3ba2b8ce418e726f55e2b71eae916908f3b0716c5f63381cf64843"
+  },
+  {
+    "name": "null",
+    "family": "binding",
+    "fields": [
+      null
+    ],
+    "canonical": "[null]",
+    "sha256": "1d8fc6ceb1f94c6326d6d5483d258fcb2e179e9869325b245d105c2219bf69fd"
+  },
+  {
+    "name": "empty",
+    "family": "binding",
+    "fields": [
+      ""
+    ],
+    "canonical": "[\"\"]",
+    "sha256": "055539df4a0b804c58caf46c0cd2941af10d64c1395ddd8e50b5f55d945841e6"
+  },
+  {
+    "name": "order-a",
+    "family": "binding",
+    "fields": [
+      "YQA=",
+      "YgA="
+    ],
+    "canonical": "[\"YQA=\",\"YgA=\"]",
+    "sha256": "816715e00c197f147a151d39562d98c32e296b8cdbe03fc8865ebf1c6dc060cc"
+  },
+  {
+    "name": "order-b",
+    "family": "binding",
+    "fields": [
+      "YgA=",
+      "YQA="
+    ],
+    "canonical": "[\"YgA=\",\"YQA=\"]",
+    "sha256": "dea7c8d16fdab10d0c9b22f91f91fb6c6b3cba6112d08de796b323f43ec8bdf4"
+  },
+  {
+    "name": "surrogate-a",
+    "family": "binding",
+    "fields": [
+      "ANg="
+    ],
+    "canonical": "[\"ANg=\"]",
+    "sha256": "55cf9baf792556f781125e3b4c4445994f9ad18ac456e3bdbe3917abf8afe7d4"
+  },
+  {
+    "name": "surrogate-b",
+    "family": "binding",
+    "fields": [
+      "Adg="
+    ],
+    "canonical": "[\"Adg=\"]",
+    "sha256": "381bfb668bed48f1ca77132c121d405c0949d1fbfa34a553df5bebe83e5a8496"
+  },
+  {
+    "name": "missing",
+    "family": "event",
+    "payload": null,
+    "ancestry": null,
+    "occurrence": null,
+    "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":false,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":null,\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+    "sha256": "0160bbe8024f42dd1e7039f6ac027ddae6d58c74600c100edd6afd08521c44c4"
+  },
+  {
+    "name": "null",
+    "family": "event",
+    "payload": "null",
+    "ancestry": null,
+    "occurrence": null,
+    "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":true,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":null,\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+    "sha256": "8ab4764486c7839f6a2d822b2014299734df1879008213865cfad0043f9c9bd2"
+  },
+  {
+    "name": "spelling-a",
+    "family": "event",
+    "payload": "{\"n\":1.0,\"OwnerKey\":\"\\u0061\"}",
+    "ancestry": null,
+    "occurrence": null,
+    "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":true,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":{\"OwnerKey\":\"a\",\"n\":1e0},\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+    "sha256": "39b55834dd33d7cc0be75af7478d757f94fe215b00d4e581f0a450eee7d98c9b"
+  },
+  {
+    "name": "spelling-b",
+    "family": "event",
+    "payload": "{\"OwnerKey\":\"a\",\"n\":1e0}",
+    "ancestry": null,
+    "occurrence": null,
+    "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":true,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":{\"OwnerKey\":\"a\",\"n\":1e0},\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+    "sha256": "39b55834dd33d7cc0be75af7478d757f94fe215b00d4e581f0a450eee7d98c9b"
+  },
+  {
+    "name": "large-a",
+    "family": "event",
+    "payload": "{\"n\":9007199254740993}",
+    "ancestry": null,
+    "occurrence": null,
+    "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":true,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":{\"n\":9007199254740993e0},\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+    "sha256": "f4da13b749ffe1bdf03915186806f2a8b79cbafb887b49bfed38f447c622103a"
+  },
+  {
+    "name": "large-b",
+    "family": "event",
+    "payload": "{\"n\":9007199254740992}",
+    "ancestry": null,
+    "occurrence": null,
+    "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":true,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":{\"n\":9007199254740992e0},\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+    "sha256": "8421b5112cd1f058fb17cc1271191d0afb4f917a5a6c4e388ed88ee8374f1afc"
+  },
+  {
+    "name": "order-a",
+    "family": "event",
+    "payload": "[1,2]",
+    "ancestry": null,
+    "occurrence": null,
+    "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":true,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":[1e0,2e0],\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+    "sha256": "f1b44c365731438347f7867141edc717cd93ddcdc11aa2ae359cc1a30f839c10"
+  },
+  {
+    "name": "order-b",
+    "family": "event",
+    "payload": "[2,1]",
+    "ancestry": null,
+    "occurrence": null,
+    "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":true,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":[2e0,1e0],\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+    "sha256": "427e23237a9ecfe0a3cf33bdf14049850510ae442b522b8a7686e816e9a2fbe8"
+  },
+  {
+    "name": "ancestry-false",
+    "family": "event",
+    "payload": null,
+    "ancestry": false,
+    "occurrence": null,
+    "stages": [
+      {
+        "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":false,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":null,\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+        "sha256": "0160bbe8024f42dd1e7039f6ac027ddae6d58c74600c100edd6afd08521c44c4"
+      }
+    ],
+    "canonical": "{\"ancestryVersion\":1e0,\"event\":\"MAAxADYAMABiAGIAZQA4ADAAMgA0AGYANAAyAGQAZAAxAGUANwAwADMAOQBmADYAYQBjADAAMgA3AGQAZABhAGUANgBkADUAOABjADcANAA2ADAAMABjADEAMAAwAGUAZABkADYAYQBmAGQAMAA4ADUAMgAxAGMANAA0AGMANAA=\",\"known\":false}",
+    "sha256": "68e68c4515b7085c15dcf6640aa786223092ee8906bc78b4333620537c7f9f48"
+  },
+  {
+    "name": "ancestry-true",
+    "family": "event",
+    "payload": null,
+    "ancestry": true,
+    "occurrence": null,
+    "stages": [
+      {
+        "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":false,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":null,\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+        "sha256": "0160bbe8024f42dd1e7039f6ac027ddae6d58c74600c100edd6afd08521c44c4"
+      }
+    ],
+    "canonical": "{\"ancestryVersion\":1e0,\"event\":\"MAAxADYAMABiAGIAZQA4ADAAMgA0AGYANAAyAGQAZAAxAGUANwAwADMAOQBmADYAYQBjADAAMgA3AGQAZABhAGUANgBkADUAOABjADcANAA2ADAAMABjADEAMAAwAGUAZABkADYAYQBmAGQAMAA4ADUAMgAxAGMANAA0AGMANAA=\",\"known\":true}",
+    "sha256": "b1c417d8bdd3822e372c41866b9f90faf8c4ee2be6b1696c8639ccf97c4e50ee"
+  },
+  {
+    "name": "occurrence-false",
+    "family": "event",
+    "payload": null,
+    "ancestry": null,
+    "occurrence": false,
+    "stages": [
+      {
+        "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":false,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":null,\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+        "sha256": "0160bbe8024f42dd1e7039f6ac027ddae6d58c74600c100edd6afd08521c44c4"
+      }
+    ],
+    "canonical": "{\"event\":\"MAAxADYAMABiAGIAZQA4ADAAMgA0AGYANAAyAGQAZAAxAGUANwAwADMAOQBmADYAYQBjADAAMgA3AGQAZABhAGUANgBkADUAOABjADcANAA2ADAAMABjADEAMAAwAGUAZABkADYAYQBmAGQAMAA4ADUAMgAxAGMANAA0AGMANAA=\",\"known\":false,\"occurrenceVersion\":1e0}",
+    "sha256": "96b9a541d94d7ab7d478ea0030efb9607ef40e1734bd9b33eb74a62eb0e21ff9"
+  },
+  {
+    "name": "both-known",
+    "family": "event",
+    "payload": null,
+    "ancestry": true,
+    "occurrence": true,
+    "stages": [
+      {
+        "canonical": "{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"attemptId\":null,\"authority\":\"CommittedTransition\",\"bookmarkId\":null,\"category\":\"ActivityLifecycle\",\"causation\":{\"commandId\":null,\"deliveryId\":null,\"historyEventId\":\"YwBhAHUAcwBlAA==\",\"schedulerWorkItemId\":null,\"workflowExecutionId\":null},\"checkpointId\":\"YwBoAGUAYwBrAHAAbwBpAG4AdAA=\",\"checkpointOrdinal\":0,\"executableNodeId\":\"bgBvAGQAZQA=\",\"executionScopeId\":null,\"hasPayload\":false,\"historyEventId\":\"ZQB2AGUAbgB0AA==\",\"incidentId\":null,\"iterationId\":null,\"metadata\":[{\"key\":\"TwB3AG4AZQByAEsAZQB5AA==\",\"value\":\"UgBlAG4A6QA=\"}],\"name\":\"QQBjAHQAaQB2AGkAdAB5AFMAdABhAHIAdABlAGQA\",\"occurredAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"parentActivityExecutionId\":null,\"payload\":null,\"schemaVersion\":1e0,\"workflowExecutionId\":\"cgB1AG4A\"}",
+        "sha256": "0160bbe8024f42dd1e7039f6ac027ddae6d58c74600c100edd6afd08521c44c4"
+      },
+      {
+        "canonical": "{\"ancestryVersion\":1e0,\"event\":\"MAAxADYAMABiAGIAZQA4ADAAMgA0AGYANAAyAGQAZAAxAGUANwAwADMAOQBmADYAYQBjADAAMgA3AGQAZABhAGUANgBkADUAOABjADcANAA2ADAAMABjADEAMAAwAGUAZABkADYAYQBmAGQAMAA4ADUAMgAxAGMANAA0AGMANAA=\",\"known\":true}",
+        "sha256": "b1c417d8bdd3822e372c41866b9f90faf8c4ee2be6b1696c8639ccf97c4e50ee"
+      }
+    ],
+    "canonical": "{\"event\":\"YgAxAGMANAAxADcAZAA4AGIAZABkADMAOAAyADIAZQAzADcAMgBjADQAMQA4ADYANgBiADkAZgA5ADAAZgBhAGYAOABjADQAZQBlADIAYgBlADYAYgAxADYAOQA2AGMAOAA2ADMAOQBjAGMAZgA5ADcAYwA0AGUANQAwAGUAZQA=\",\"known\":true,\"occurrenceVersion\":1e0}",
+    "sha256": "0b354f1b9644027b5bbb48ca1ebdea459451b45e489a6cf2c0a200466bb8a4b4"
+  },
+  {
+    "name": "consumed",
+    "family": "candidate",
+    "status": "Consumed",
+    "canonical": "{\"bookmarkMutation\":{\"bookmark\":{\"createdAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"expiresAt\":null,\"identity\":{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"bookmarkId\":\"YgBvAG8AawBtAGEAcgBrAA==\",\"resumeTargetId\":\"cgBlAHMAdQBtAGUA\",\"workflowExecutionId\":\"cgB1AG4A\"},\"stimulusHash\":\"aABhAHMAaAA=\",\"stimulusType\":\"UwBpAGcAbgBhAGwA\"},\"reason\":\"cwBlAGwAZQBjAHQAZQBkAA==\",\"selectedBookmarkId\":null,\"status\":\"Consumed\"},\"event\":\"NAA4AGYAOQBkAGUAMgA3ADcAMAAyADYAYgA0ADYAYgA1AGQAYwBhADYANQA5ADEAMgBlADQAYQAwADkAOAA2AGEANwAxADIAMQBmADEAYQA2AGYAYQAwAGQAOAA5ADgAOQBhADgAYwAwADMAYwA3ADMAMAA3AGIAMQBjADUAZAA=\"}",
+    "sha256": "f97b202c0231c3d93842610802b1ea3f25d0c7dd4584638bc4df8e93cd944be7"
+  },
+  {
+    "name": "removed",
+    "family": "candidate",
+    "status": "Removed",
+    "canonical": "{\"bookmarkMutation\":{\"bookmark\":{\"createdAt\":\"1970-01-01T00:00:00\\u002B00:00\",\"expiresAt\":null,\"identity\":{\"activityExecutionId\":\"YQBjAHQAaQB2AGkAdAB5AA==\",\"bookmarkId\":\"YgBvAG8AawBtAGEAcgBrAA==\",\"resumeTargetId\":\"cgBlAHMAdQBtAGUA\",\"workflowExecutionId\":\"cgB1AG4A\"},\"stimulusHash\":\"aABhAHMAaAA=\",\"stimulusType\":\"UwBpAGcAbgBhAGwA\"},\"reason\":\"cwBlAGwAZQBjAHQAZQBkAA==\",\"selectedBookmarkId\":null,\"status\":\"Removed\"},\"event\":\"NAA4AGYAOQBkAGUAMgA3ADcAMAAyADYAYgA0ADYAYgA1AGQAYwBhADYANQA5ADEAMgBlADQAYQAwADkAOAA2AGEANwAxADIAMQBmADEAYQA2AGYAYQAwAGQAOAA5ADgAOQBhADgAYwAwADMAYwA3ADMAMAA3AGIAMQBjADUAZAA=\"}",
+    "sha256": "c6e04b000b705a0a1ecfa8459f72f56453ba0c59c9467a09fe36bdf0fe63dfbc"
+  }
+]

@@ -3,11 +3,49 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Xunit;
+using Elsa.Studio.Preferences.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Studio.Preferences.Tests;
 
 public sealed class StudioPreferencesApiWriteContractTests
 {
+    [Fact]
+    public async Task Owned_request_and_response_options_preserve_raw_values_under_conflicting_host_options()
+    {
+        await using var host = await StudioPreferencesCanaryHost.StartMigratedAsync(services =>
+            services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+            {
+                options.SerializerOptions.WriteIndented = true;
+                options.SerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default;
+                options.SerializerOptions.PropertyNameCaseInsensitive = true;
+                options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+            }));
+        const string raw = """{ "OrderTotal":1.00, "text":"Ren\u00e9 <>&", "explicit":null, "large":9007199254740993 }""";
+        using var saved = await host.Client.SendAsync(PutRequest("write", "attention", StudioPreferencesCanaryHost.HostId,
+            ifNoneMatch: "*", body: "{\"schemaVersion\":1,\"value\":" + raw + "}"));
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        using var response = JsonDocument.Parse(await saved.Content.ReadAsStringAsync());
+        Assert.Equal(raw, response.RootElement.GetProperty("value").GetRawText());
+
+        using var get = PutRequest("read", "attention", StudioPreferencesCanaryHost.HostId);
+        get.Method = HttpMethod.Get; get.Content = null;
+        using var read = await host.Client.SendAsync(get);
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        using var returned = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+        Assert.Equal(raw, returned.RootElement.GetProperty("value").GetRawText());
+        using var scope = host.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IStudioPreferenceStore>();
+        var key = new StudioPreferenceKey(StudioPreferencesCanaryHost.SubjectId, StudioPreferencesCanaryHost.TenantId, StudioPreferencesCanaryHost.HostId, "attention");
+        Assert.Equal(raw, (await store.FindAsync(key))!.Value.GetRawText());
+
+        using var wrongCase = await host.Client.SendAsync(PutRequest("write", "attention", StudioPreferencesCanaryHost.HostId,
+            ifMatch: saved.Headers.ETag!.ToString(), body: "{\"SchemaVersion\":1,\"Value\":{\"changed\":true}}"));
+        Assert.Contains(wrongCase.StatusCode, new[] { HttpStatusCode.BadRequest, HttpStatusCode.UnprocessableEntity });
+        Assert.Equal(raw, (await store.FindAsync(key))!.Value.GetRawText());
+    }
+
     [Fact]
     public async Task Put_creates_and_updates_documents_with_route_namespace_authority_and_quoted_etags()
     {

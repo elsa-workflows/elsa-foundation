@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { studioRowInteraction, StudioField, StudioPageHeader, StudioResizeHandle, StudioTabPanel, StudioTabs, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioRouteComponentProps } from "@elsa-workflows/studio-sdk";
@@ -207,6 +209,7 @@ export function register(api: ElsaStudioModuleApi) {
 }
 
 export function OpenTelemetryPanel() {
+
   const state = useOpenTelemetry();
   const selectedTrace = state.selectedTrace;
   const selectedSpan = selectedTrace?.spans.find(span => span.spanId === state.selectedSpanId) ?? selectedTrace?.spans[0] ?? null;
@@ -424,6 +427,7 @@ function useOpenTelemetry() {
 type OTelState = ReturnType<typeof useOpenTelemetry>;
 
 function OverviewPanel({ state }: { state: OTelState }) {
+  useStudioTimeZone();
   const storageRead = state.storageRead;
   const resourcesRead = state.resourcesRead;
   return (
@@ -458,6 +462,7 @@ function OverviewPanel({ state }: { state: OTelState }) {
 }
 
 function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState; selectedTrace: OTelTraceDetail | null; selectedSpan: OTelSpan | null }) {
+  useStudioTimeZone();
   const instanceId = useId();
   const traceListId = `otel-trace-list-${instanceId}`;
   const traceDetailId = `otel-trace-detail-${instanceId}`;
@@ -600,6 +605,7 @@ function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState;
 }
 
 function TraceToolbar({ state }: { state: OTelState }) {
+
   return (
     <div className="otel-toolbar">
       <input aria-label="Filter by trace ID" placeholder="Trace ID" value={state.filters.traceId} onChange={event => state.setFilters({ ...state.filters, traceId: event.target.value })} />
@@ -620,6 +626,7 @@ function TraceToolbar({ state }: { state: OTelState }) {
 }
 
 function TraceDetailHeader({ trace, onCopy, onDownload }: { trace: OTelTraceDetail; onCopy(): Promise<void>; onDownload(): void }) {
+  useStudioTimeZone();
   const resourceById = new Map(trace.resources.map(resource => [resource.id, resource]));
   const serviceNames = getServiceNames(trace.resourceIds, resourceById);
   return (
@@ -639,6 +646,7 @@ function TraceDetailHeader({ trace, onCopy, onDownload }: { trace: OTelTraceDeta
 }
 
 function TraceWaterfall({ trace, selectedSpanId, onSelectSpan }: { trace: OTelTraceDetail; selectedSpanId: string | null; onSelectSpan(spanId: string): void }) {
+
   const rows = useMemo(() => buildWaterfallRows(trace.spans), [trace.spans]);
   const start = Math.min(...trace.spans.map(span => Date.parse(span.startTime)));
   const duration = Math.max(1, trace.durationMs);
@@ -663,6 +671,7 @@ function TraceWaterfall({ trace, selectedSpanId, onSelectSpan }: { trace: OTelTr
 }
 
 function SpanInspector({ span, id }: { span: OTelSpan; id: string }) {
+  useStudioTimeZone();
   return (
     <aside className="otel-span-inspector" id={id} aria-label="Span details">
       <header>
@@ -685,11 +694,13 @@ function SpanInspector({ span, id }: { span: OTelSpan; id: string }) {
 }
 
 function StoredCountCard({ label, count }: { label: string; count: number | null | undefined }) {
+
   const displayCount = typeof count === "number" && Number.isFinite(count) && count >= 0 ? count : "Unavailable";
   return <div className="otel-signal-card"><span>Stored data</span><strong>{displayCount}</strong><h4>{label} stored</h4><p>Currently stored by the backend.</p></div>;
 }
 
 function StatusChip({ status }: { status: SpanStatus }) {
+
   return <span className="otel-status-chip" data-status={status.toLowerCase()}>{status}</span>;
 }
 

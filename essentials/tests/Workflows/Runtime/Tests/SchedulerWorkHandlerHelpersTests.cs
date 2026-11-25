@@ -261,7 +261,7 @@ public sealed class SchedulerWorkHandlerHelpersTests
         Assert.Equal(source.CommandMetadata, intent.Metadata);
 
         // Payload is the serialized follow-up work item, round-trippable back to the same identity.
-        var roundTripped = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>();
+        var roundTripped = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options);
         Assert.NotNull(roundTripped);
         Assert.Equal("follow-work", roundTripped!.WorkItemId);
     }

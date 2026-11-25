@@ -1495,6 +1495,17 @@
   white-space: normal;
 }
 
+.wf-instance-meta dd:has(> time) {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.wf-instance-meta dd > time {
+  white-space: normal;
+}
+
 .wf-instance-meta small {
   color: var(--wf-muted-text);
 }

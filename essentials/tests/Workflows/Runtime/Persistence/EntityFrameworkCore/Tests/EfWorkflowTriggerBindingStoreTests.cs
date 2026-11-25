@@ -17,6 +17,28 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class EfWorkflowTriggerBindingStoreTests
 {
     [Fact]
+    public async Task Metadata_order_is_a_no_op_but_key_casing_and_opaque_code_units_change_content()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await context.Database.EnsureCreatedAsync();
+        var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
+        var binding = Binding("json", null, "stimulus") with { Metadata = new Dictionary<string, string> { ["A"] = "one", ["b"] = "two" } };
+        await store.SaveAsync(binding);
+        await store.SaveAsync(binding with { Metadata = new Dictionary<string, string> { ["b"] = "two", ["A"] = "one" } });
+        Assert.Equal(1, await context.WorkflowTriggerBindings.Select(x => x.Revision).SingleAsync());
+        await store.SaveAsync(binding with { Metadata = new Dictionary<string, string> { ["a"] = "one", ["b"] = "two" } });
+        Assert.Equal(2, await context.WorkflowTriggerBindings.Select(x => x.Revision).SingleAsync());
+
+        // SQLite storage uses escaped UTF-16 identities; the content comparison must not collapse
+        // distinct code units through UTF-8 replacement fallback.
+        await store.SaveAsync(binding with { Metadata = new Dictionary<string, string> { ["A"] = "one\ud800" } });
+        await store.SaveAsync(binding with { Metadata = new Dictionary<string, string> { ["A"] = "one\ud801" } });
+        Assert.Equal(4, await context.WorkflowTriggerBindings.Select(x => x.Revision).SingleAsync());
+    }
+
+    [Fact]
     public void Registration_is_explicit_and_uses_the_shared_operational_context()
     {
         var services = new ServiceCollection();

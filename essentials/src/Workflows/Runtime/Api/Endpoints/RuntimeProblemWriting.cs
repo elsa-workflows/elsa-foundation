@@ -23,6 +23,10 @@ internal static class RuntimeProblemWriting
     public static Task ProblemAsync(HttpContext context, int status, string code, string detail) =>
         ProblemAsync(context, new RuntimeProblemDetails("https://elsa.dev/problems/runtime-request", "Runtime request failed", status, detail, null, Code: code));
 
+    public static Task InputProblemAsync(HttpContext context, string code, string detail, string? path) =>
+        ProblemAsync(context, new RuntimeProblemDetails("https://elsa.dev/problems/runtime-request", "Runtime request failed", StatusCodes.Status400BadRequest, detail, null,
+            path is null ? null : new Dictionary<string, string[]> { [path] = [detail] }, code));
+
     /// <summary>
     /// A schema write refusal in the generic runtime problem: a 409 carrying the refusal's code, and
     /// its entries, the family and both versions among them, as errors.
@@ -38,7 +42,7 @@ internal static class RuntimeProblemWriting
     {
         context.Response.StatusCode = problem.Status;
         context.Response.ContentType = $"{ProblemJson}; charset=utf-8";
-        await JsonSerializer.SerializeAsync(context.Response.Body, problem, WorkflowsRuntimeJsonContext.Default.RuntimeProblemDetails, context.RequestAborted);
+        await JsonSerializer.SerializeAsync(context.Response.Body, problem, WorkflowsRuntimeJsonContext.WireContext.RuntimeProblemDetails, context.RequestAborted);
     }
 
     /// <summary>The FastEndpoints-era validation envelope the binder failures are published in.</summary>
@@ -46,7 +50,7 @@ internal static class RuntimeProblemWriting
     {
         context.Response.StatusCode = StatusCodes.Status400BadRequest;
         context.Response.ContentType = $"{ProblemJson}; charset=utf-8";
-        await JsonSerializer.SerializeAsync(context.Response.Body, new RuntimeValidationProblemDetails(errors, "One or more errors occurred!", StatusCodes.Status400BadRequest), WorkflowsRuntimeJsonContext.Default.RuntimeValidationProblemDetails, context.RequestAborted);
+        await JsonSerializer.SerializeAsync(context.Response.Body, new RuntimeValidationProblemDetails(errors, "One or more errors occurred!", StatusCodes.Status400BadRequest), WorkflowsRuntimeJsonContext.WireContext.RuntimeValidationProblemDetails, context.RequestAborted);
     }
 
     /// <summary>The fixed alteration problem tuple, served as plain JSON — deliberately not problem+json.</summary>
@@ -54,6 +58,6 @@ internal static class RuntimeProblemWriting
     {
         context.Response.StatusCode = status;
         context.Response.ContentType = $"{Json}; charset=utf-8";
-        await JsonSerializer.SerializeAsync(context.Response.Body, new WorkflowAlterationProblemView(code, message, status), WorkflowsRuntimeJsonContext.Default.WorkflowAlterationProblemView, context.RequestAborted);
+        await JsonSerializer.SerializeAsync(context.Response.Body, new WorkflowAlterationProblemView(code, message, status), WorkflowsRuntimeJsonContext.WireContext.WorkflowAlterationProblemView, context.RequestAborted);
     }
 }

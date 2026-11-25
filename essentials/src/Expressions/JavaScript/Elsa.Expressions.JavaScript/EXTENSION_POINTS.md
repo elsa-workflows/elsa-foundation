@@ -74,16 +74,11 @@ with portable expression evaluation.
   effectful declaration ships with its boundary (#4831).
 - **Reads:** `ReadsVariables: true` makes publish treat a call as an opaque read and set the fallback marker; the
   function reads through the call's `Variables`.
-- **Replaced globals:** `ReplacesGlobalFunctions` (optional) names the unprefixed global functions of another system or
-  earlier generation that the function replaces, for example `["getSettings"]` on `acme.getSettings` (#5664). Each
-  must be a JavaScript identifier without a namespace, and only a prefixed function may declare one; otherwise
-  construction throws `ArgumentException` naming the function. The Elsa 3 converter rewrites calls to a replaced global
-  into calls to the function.
 - **Registration:** `services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookup", call => ...))`.
 - **Aggregation:** `JavaScriptHostFunctions` (Jint, internal) collects every declaration, checks the naming rule at shell
   activation (`JavaScriptHostFunctionCheck`) and installs the functions into each evaluation. The analyzers, the
-  expression tooling and the Elsa 3 converter (`Elsa3ExpressionRewriter`, for `ReplacesGlobalFunctions`) read the same
-  registrations.
+  expression tooling and the Elsa 3 converter (`Elsa3ExpressionRewriter`, which matches an Elsa 3 global to the
+  function with that member name, #5664) read the same registrations.
 - **Known implementations:** the eight built-ins, registered by `JintFeature` (intra-domain, `JavaScriptBuiltIns`).
 - **Publish:** a script that declares `variables` gets the error `Scripts/ReservedName`. A script that declares `input`,
   `activities`, `workflow`, a built-in name or a namespace root gets the warning `Scripts/ShadowedFunction`, and an

@@ -323,7 +323,14 @@ public sealed class RuntimeOutputCaptureProjector
         if (projected.Presence == ValuePresence.Withheld || projected.HoldsValueRequiringEncryption())
             return projected;
         ValidateDurableCaptureBoundary(capture, projected);
-        var converted = capture.ConversionPlan is null ? projected : _valueConversionExecutor.Convert(projected, capture.ConversionPlan);
+        var converted = capture.ConversionPlan is null ? projected : _valueConversionExecutor.Convert(projected, capture.ConversionPlan, diagnostic =>
+        {
+            var warning = Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path,
+                diagnostic.TargetType, diagnostic.Converter, $"outputs.{capture.OutputName}");
+            var policy = projected.Policy;
+            var protect = policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) || !string.IsNullOrWhiteSpace(policy.RetentionPolicy);
+            _warnings?.Report(protect ? warning.ProtectedForm! : warning);
+        });
         if (converted.Presence != ValuePresence.ExplicitNull)
             return converted;
         var targetType = capture.ConversionPlan?.TargetType.ToTypeReference()

@@ -420,8 +420,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
 
     private static string Scope(params object?[] values)
     {
-        var json = JsonSerializer.Serialize(values);
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
+        return Elsa.Serialization.Core.JsonHashInput.Hash(Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(values, _ => null));
     }
 
     private static ActivityAuthoringException Invalid(string message) => new(

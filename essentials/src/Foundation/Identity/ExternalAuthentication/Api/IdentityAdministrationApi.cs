@@ -19,7 +19,7 @@ public static partial class ExternalAuthenticationApi
 {
     private static void MapIdentityAdministration(IEndpointRouteBuilder endpoints)
     {
-        var api = endpoints.MapEndpointGroup(typeof(ExternalAuthenticationApiFeature).Assembly.GetName().Name!, ExternalAuthenticationApiJsonContext.Default, tag: "Identity");
+        var api = endpoints.MapEndpointGroup(typeof(ExternalAuthenticationApiFeature).Assembly.GetName().Name!, ExternalAuthenticationApiJsonContext.WireContext, tag: "Identity");
         api.MapUnboundOperation("GET", ManagementPath + "/users", "ExternalIdentityUsers", typeof(ManagedIdentityUsersResponse), 200, null,
                 context => Run(context, InspectUsers, 65536), name: "ExternalIdentityUsers", containFailures: false)
             .DisableCookieRedirect().RequirePermission(DefaultIdentityPermissionKeys.IdentityUsersRead);
@@ -71,7 +71,7 @@ public static partial class ExternalAuthenticationApi
             LinkAdministrationAvailable(context, services) ? null : "link-administration-unavailable",
             sessionsAvailable ? null : "session-administration-unavailable",
             users.Items.Select(item => new ManagedUserLookup(item.Id, item.UserName, item.DisplayName, item.Status)).ToArray(), users.TotalCount),
-            ExternalAuthenticationApiJsonContext.Default.ManagedIdentityUsersResponse);
+            ExternalAuthenticationApiJsonContext.WireContext.ManagedIdentityUsersResponse);
     }
 
     private static async Task InspectSessions(HttpContext context)
@@ -104,7 +104,7 @@ public static partial class ExternalAuthenticationApi
                     item.CreatedAt, item.ExpiresAt, item.RevokedAt, state, item.Revision!,
                     current.Length == 1 && current[0].Value == item.Id, canRevoke && state != "revoked"));
             }
-            await ManagementJson(context, new ManagedSessionPage(userId, items, records.TotalCount), ExternalAuthenticationApiJsonContext.Default.ManagedSessionPage);
+            await ManagementJson(context, new ManagedSessionPage(userId, items, records.TotalCount), ExternalAuthenticationApiJsonContext.WireContext.ManagedSessionPage);
         }
         catch (Exception exception) when (!(exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
         { await ManagementFailure(context, "session-administration-unavailable", 503); }
@@ -149,7 +149,7 @@ public static partial class ExternalAuthenticationApi
         var choices = canAttach ? registry.Connections.Where(view => view.Record.ArchivedAt is null)
             .Select(view => new ManagedLinkConnectionChoice(view.Record.Id, view.Record.Key, view.Record.DisplayName, view.Effective, view.Record.Enabled)).ToArray() : [];
         items = items.Select(item => item with { CanRemove = canAttach && item.Qualified && item.Revision is not null }).ToList();
-        await ManagementJson(context, new ManagedIdentityLinkPage(userId, items, links.TotalCount, user?.Revision, registry.Revision, canAttach, choices), ExternalAuthenticationApiJsonContext.Default.ManagedIdentityLinkPage);
+        await ManagementJson(context, new ManagedIdentityLinkPage(userId, items, links.TotalCount, user?.Revision, registry.Revision, canAttach, choices), ExternalAuthenticationApiJsonContext.WireContext.ManagedIdentityLinkPage);
     }
 
     private static async Task AttachLink(HttpContext context)
@@ -157,7 +157,7 @@ public static partial class ExternalAuthenticationApi
         if (!await CurrentPermission(context, DefaultIdentityPermissionKeys.IdentityLinksManage) ||
             !await CurrentPermission(context, DefaultIdentityPermissionKeys.IdentityUsersRead) || !await ManagementPost(context)) return;
         var userId = Route(context, "userId");
-        var request = await context.Request.ReadFromJsonAsync(ExternalAuthenticationApiJsonContext.Default.ManagedLinkAttachRequest, context.RequestAborted);
+        var request = await context.Request.ReadFromJsonAsync(ExternalAuthenticationApiJsonContext.WireContext.ManagedLinkAttachRequest, context.RequestAborted);
         if (!IdentityText(userId) || request is null || !IdentityText(request.Subject) || !IdentityText(request.ConnectionRecordId) || !IdentityText(request.ExpectedUserRevision))
         { await ManagementFailure(context, "invalid-request", 400); return; }
         await using var scope = ManagementScope(context); var services = scope.ServiceProvider;
@@ -225,7 +225,7 @@ public static partial class ExternalAuthenticationApi
         await SecurityNotification(context, "link.attach", attached ? AuthEventOutcome.Success : AuthEventOutcome.Denied, userId,
             attached ? "attached" : result.Failure ?? "link-conflict", category: AuthEventCategory.IdentityChange);
         await ManagementJson(context, new ManagedLinkAttachResponse(attached, attached ? null : result.Failure ?? "link-conflict"),
-            ExternalAuthenticationApiJsonContext.Default.ManagedLinkAttachResponse, attached ? 200 : 409);
+            ExternalAuthenticationApiJsonContext.WireContext.ManagedLinkAttachResponse, attached ? 200 : 409);
     }
 
     private static async Task RemoveLink(HttpContext context)
@@ -233,7 +233,7 @@ public static partial class ExternalAuthenticationApi
         if (!await CurrentPermission(context, DefaultIdentityPermissionKeys.IdentityLinksManage) ||
             !await CurrentPermission(context, DefaultIdentityPermissionKeys.IdentityUsersRead) || !await ManagementPost(context)) return;
         var userId = Route(context, "userId");
-        var request = await context.Request.ReadFromJsonAsync(ExternalAuthenticationApiJsonContext.Default.ManagedLinkRemoveRequest, context.RequestAborted);
+        var request = await context.Request.ReadFromJsonAsync(ExternalAuthenticationApiJsonContext.WireContext.ManagedLinkRemoveRequest, context.RequestAborted);
         if (!IdentityText(userId) || request is null || !IdentityText(request.Provider) || !IdentityText(request.Issuer) || !IdentityText(request.Subject) ||
             !IdentityText(request.ExpectedUserRevision) || !IdentityText(request.ExpectedLinkRevision))
         { await ManagementFailure(context, "invalid-request", 400); return; }
@@ -287,7 +287,7 @@ public static partial class ExternalAuthenticationApi
         await SecurityNotification(context, "link.remove", removed ? AuthEventOutcome.Success : AuthEventOutcome.Denied, authorization.User.Id,
             removed ? "removed" : result.Status.ToString(), category: AuthEventCategory.IdentityChange);
         await ManagementJson(context, new ManagedLinkRemoveResponse(removed, removed ? null : result.Status == ExternalIdentityRemovalStatus.Missing ? "link-not-found" : "revision-conflict"),
-            ExternalAuthenticationApiJsonContext.Default.ManagedLinkRemoveResponse, removed ? 200 : result.Status == ExternalIdentityRemovalStatus.Missing ? 404 : 409);
+            ExternalAuthenticationApiJsonContext.WireContext.ManagedLinkRemoveResponse, removed ? 200 : result.Status == ExternalIdentityRemovalStatus.Missing ? 404 : 409);
     }
 
     private static bool LinkAdministrationAvailable(HttpContext context, IServiceProvider services)
@@ -307,7 +307,7 @@ public static partial class ExternalAuthenticationApi
         if (!await CurrentPermission(context, DefaultIdentityPermissionKeys.IdentitySessionsManage) ||
             !await CurrentPermission(context, DefaultIdentityPermissionKeys.IdentityUsersRead) || !await ManagementPost(context)) return;
         var userId = Route(context, "userId"); var id = Route(context, "sessionId");
-        var request = await context.Request.ReadFromJsonAsync(ExternalAuthenticationApiJsonContext.Default.ManagedSessionRevokeRequest, context.RequestAborted);
+        var request = await context.Request.ReadFromJsonAsync(ExternalAuthenticationApiJsonContext.WireContext.ManagedSessionRevokeRequest, context.RequestAborted);
         if (!IdentityText(userId) || !SessionHex(id) || request is null || !SessionHex(request.ExpectedRevision))
         { await ManagementFailure(context, "invalid-request", 400); return; }
         await using var scope = ManagementScope(context); var services = scope.ServiceProvider;
@@ -324,14 +324,14 @@ public static partial class ExternalAuthenticationApi
                 userId, result.ToString(), id);
             await ManagementJson(context, new ManagedSessionRevokeResponse(success, result == AuthenticationSessionRevocationStatus.AlreadyRevoked,
                 success ? null : result == AuthenticationSessionRevocationStatus.Conflict ? "revision-conflict" : "session-not-found"),
-                ExternalAuthenticationApiJsonContext.Default.ManagedSessionRevokeResponse,
+                ExternalAuthenticationApiJsonContext.WireContext.ManagedSessionRevokeResponse,
                 success ? 200 : result == AuthenticationSessionRevocationStatus.Conflict ? 409 : 404);
         }
         catch (Exception exception) when (!(exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
         {
             await SecurityNotification(context, "session.revoke", AuthEventOutcome.Failure, userId, "storage-unavailable", id);
             await ManagementJson(context, new ManagedSessionRevokeResponse(false, Failure: "session-revocation-failed"),
-                ExternalAuthenticationApiJsonContext.Default.ManagedSessionRevokeResponse, 503);
+                ExternalAuthenticationApiJsonContext.WireContext.ManagedSessionRevokeResponse, 503);
         }
     }
 

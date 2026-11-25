@@ -59,8 +59,8 @@ internal static class StepStateCommit
         if (session.HasNameAssignment) kinds.Add("instanceName");
         var accepted = writes.Apply(invocation);
         var attribution = accepted.Metadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-        attribution[StepWorkflowStateEffects.MetadataKey] = JsonSerializer.Serialize(StepWorkflowStateEffects.Read(attribution).Concat(kinds).Distinct(StringComparer.Ordinal));
-        attribution[StepWorkflowStateEffects.ReceiptsMetadataKey] = JsonSerializer.Serialize(
+        attribution[StepWorkflowStateEffects.MetadataKey] = JsonSerializer.Serialize(StepWorkflowStateEffects.Read(attribution).Concat(kinds).Distinct(StringComparer.Ordinal), Elsa.Serialization.Core.JsonBaseline.Options);
+        attribution[StepWorkflowStateEffects.ReceiptsMetadataKey] = StepWorkflowStateEffects.WriteReceipts(
             StepWorkflowStateEffects.ReadReceipts(attribution).Append(new StepWorkflowStateEffectReceipt(
                 invocation.Attempts?.LastOrDefault()?.AttemptId, occurredAt,
                 invocation.Status == ActivityExecutionStatus.Suspended ? "Suspension" : "Completion", kinds.ToArray())));

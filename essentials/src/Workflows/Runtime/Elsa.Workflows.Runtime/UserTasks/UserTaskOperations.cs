@@ -77,7 +77,7 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
         await access.AuthorizeAsync(task, "act", cancellationToken);
         if (task.Decision is { } accepted && accepted.RequestId == request.RequestId)
         {
-            if (accepted.ActorId != actor.UserId || accepted.Response.Action != request.Action || !JsonElement.DeepEquals(accepted.Response.Data, request.Data))
+            if (accepted.ActorId != actor.UserId || accepted.Response.Action != request.Action || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(accepted.Response.Data, request.Data))
                 throw Failure("conflict", "This request ID already names a different response.");
             return task;
         }

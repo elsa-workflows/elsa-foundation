@@ -150,7 +150,7 @@ internal sealed class EventReceivedJsonConverter : JsonConverter<EventReceived>
     public override void Write(Utf8JsonWriter writer, EventReceived value, JsonSerializerOptions options)
     {
         if (value?.Payload is { ValueKind: not (JsonValueKind.Undefined or JsonValueKind.Null) } payload)
-            payload.WriteTo(writer);
+            JsonSerializer.Serialize(writer, payload, options);
         else
             writer.WriteNullValue();
     }

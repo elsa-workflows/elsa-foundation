@@ -37,11 +37,11 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         EfIdentityAuthorityConflict conflict = EfIdentityAuthorityConflict.None;
         var result = await ExecuteAsync(
             "save-user-authority-aggregate",
-            EfIdentityStoreSupport.Fingerprint(
+            EfIdentityStoreSupport.JsonFingerprint(
                 user.TenantId, user.Id, user.UserName, user.Email, user.DisplayName,
                 ((int)user.Status).ToString(CultureInfo.InvariantCulture), ((int)user.Ownership).ToString(CultureInfo.InvariantCulture),
-                EfIdentityStoreSupport.SerializeSet(user.RoleIds),
-                EfIdentityStoreSupport.SerializeSet(user.DirectPermissions),
+                EfIdentityStoreSupport.SetProjection(user.RoleIds),
+                EfIdentityStoreSupport.SetProjection(user.DirectPermissions),
                 expectedVersion?.ToString(CultureInfo.InvariantCulture), requireUniqueEmail.ToString(), requestIdentity),
             async _ =>
             {
@@ -111,9 +111,9 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         EfIdentityAuthorityConflict conflict = EfIdentityAuthorityConflict.None;
         var result = await ExecuteAsync(
             "save-role-authority-aggregate",
-            EfIdentityStoreSupport.Fingerprint(
+            EfIdentityStoreSupport.JsonFingerprint(
                 role.TenantId, role.Id, role.Name, role.Description, role.System.ToString(),
-                EfIdentityStoreSupport.SerializeSet(role.Permissions), expectedVersion?.ToString(CultureInfo.InvariantCulture), requestIdentity),
+                EfIdentityStoreSupport.SetProjection(role.Permissions), expectedVersion?.ToString(CultureInfo.InvariantCulture), requestIdentity),
             async _ =>
             {
                 var id = EfIdentityStoreSupport.RecordId(role.TenantId, role.Id);

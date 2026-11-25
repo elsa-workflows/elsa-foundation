@@ -40,10 +40,11 @@ public class RuleAdmissionTests
     {
         var invocation = Invocation();
         var invalid = Encoding.UTF8.GetBytes("{\"formatVersion\":1}");
-        var hash = RuleRecordCodec.Hash(invalid);
+        var hash = RuleRecordCodec.JsonHash(invalid);
         var malformed = Copy(invocation, artifact: new(1, "rules:" + hash, hash, invalid));
         Assert.Equal(RuleAdmissionValidationDisposition.Refused, (await Validate(malformed, invocation.ExpectedImplementation)).Disposition);
-        var unknown = Copy(invocation, artifact: new(2, "rules:" + hash, hash, invalid));
+        var opaqueHash = RuleRecordCodec.Hash(invalid);
+        var unknown = Copy(invocation, artifact: new(2, "rules:" + opaqueHash, opaqueHash, invalid));
         Assert.Equal(RuleAdmissionValidationDisposition.Unavailable, (await Validate(unknown, invocation.ExpectedImplementation)).Disposition);
     }
 

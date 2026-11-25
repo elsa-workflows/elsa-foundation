@@ -445,7 +445,8 @@ public sealed class EfActivityExecutionHierarchyStore(
     private static ActivityExecutionHierarchyCursorException ExpiredCursor(string message) => new(ActivityExecutionHierarchyCursorFailure.Expired, message,
         metadata: new ActivityExecutionCursorFailureMetadata("activity-execution-hierarchy", ActivityExecutionCursorBindingState.Matched, ActivityExecutionCursorBindingState.Matched, ActivityExecutionCursorBindingState.Matched, true, "restart-from-first-page"));
 
-    private static string SnapshotFingerprint(ActivityExecutionHierarchyRecord record) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(record))));
+    private static string SnapshotFingerprint(ActivityExecutionHierarchyRecord record) => Elsa.Serialization.Core.JsonHashInput.Hash(
+        RuntimeJsonHashProjection.Project(record)).ToUpperInvariant();
 
     private static void EnsureProviderPageProgress(IReadOnlyCollection<ActivityExecutionHierarchyEntity> rows, int limit)
     {

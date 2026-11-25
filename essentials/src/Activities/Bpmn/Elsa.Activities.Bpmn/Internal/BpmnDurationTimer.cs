@@ -61,7 +61,7 @@ internal sealed class BpmnDurationTimerDelivery(BpmnNativeWorkBoundary sources, 
     IWorkflowSchedulerWorkQueue queue, IPersistenceAccessContextAccessor access, IWorkflowExecutionActorProvider actors,
     TimeProvider clock, IRuntimeModelExecutionReader? models = null) : IRuntimePostCommitDurableSourceIntentHandler
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     internal async ValueTask ValidateAsync(RuntimeModelExecutionState model, RuntimeModelExecutionCommand command, CancellationToken cancellationToken)
     {
@@ -73,7 +73,7 @@ internal sealed class BpmnDurationTimerDelivery(BpmnNativeWorkBoundary sources, 
             ?? throw Pending("The committed duration timer source is unavailable.");
         if (source.StimulusDeliverySourceScope != model.Scope || source.Intent.Kind != BpmnDurationTimer.Kind ||
             source.Intent.IntentId != timer.IntentId || source.Intent.WorkflowExecutionId != model.ExecutionId ||
-            source.Intent.NotBefore != timer.DueAt || source.Intent.Payload is not { } payload || !JsonElement.DeepEquals(payload, command.Payload))
+            source.Intent.NotBefore != timer.DueAt || source.Intent.Payload is not { } payload || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(payload, command.Payload))
             throw new BpmnModelValidationException("The duration timer differs from its committed deadline and source.");
         if (clock.GetUtcNow() < timer.DueAt) throw Pending("The duration timer deadline has not arrived.");
     }

@@ -533,7 +533,7 @@ public sealed class ActivityDefinitionPublisher(
                 draft,
                 versionId,
                 version,
-                ComputeLayoutBytes(layout.Records) + JsonSerializer.SerializeToUtf8Bytes(layout.ActivityPresentation).LongLength),
+                ComputeLayoutBytes(layout.Records) + JsonSerializer.SerializeToUtf8Bytes(layout.ActivityPresentation, Elsa.Serialization.Core.JsonBaseline.Options).LongLength),
             context.Validation,
             cancellationToken);
         var compilation = evaluated.Compilation;

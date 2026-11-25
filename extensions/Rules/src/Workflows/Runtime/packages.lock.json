@@ -97,7 +97,8 @@
       "elsa.expressions.core": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Primitives": "[4.0.0-dev, )"
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.pipelines.core": {
@@ -115,7 +116,8 @@
       "elsa.rules.persistence.core": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Rules.Core": "[4.0.0-dev, )"
+          "Elsa.Rules.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.rules.runtime": {

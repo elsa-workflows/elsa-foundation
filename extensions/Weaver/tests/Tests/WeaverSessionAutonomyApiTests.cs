@@ -21,6 +21,43 @@ namespace Elsa.Weaver.Tests;
 /// </summary>
 public sealed class WeaverSessionAutonomyApiTests
 {
+    // Supply every pinned member explicitly: the source-generated wire reader can assign null to omitted
+    // init-only members instead of retaining their CLR initializer. The raw selection remains caller data.
+    [Theory]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":[1,null]}""", "BA4D2C350D280329FC304200E919AA51A86ACA57F688B28CADA2AEF75A48FFBE")]
+    [InlineData(""" { "rows": [1e0,null], "n":9007199254740993.0,"OwnerKey":"Ren\u00e9" } """, "BA4D2C350D280329FC304200E919AA51A86ACA57F688B28CADA2AEF75A48FFBE")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993}""", "C99170E843DDEFB4C0DD52EA1C6C49C9B81D9154A146034C1C67D0B923AA4FD3")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":null}""", "B0086CA76C41C509DD09F478D9E959F99D2226F95C77695D2A44C5B16D658CF7")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740993,"rows":[null,1]}""", "7439C596B0B1817AF6F76417A4A9F816E78C8657CB753DBF15D27BFF1F9F9C9F")]
+    [InlineData("""{"OwnerKey":"René","n":9007199254740992,"rows":[1,null]}""", "6DF849F0E5086C3E7DFEC3819746052406DE4570621AB2DBB885D87331133637")]
+    public async Task Actual_post_owner_pins_delivery_fingerprint_for_carried_selection(string raw, string expected)
+    {
+        using var fixture = new Fixture();
+        var session = await fixture.CreateAsync();
+        var request = "{\"sessionId\":\"\",\"message\":\"\",\"content\":\"hello\",\"role\":\"user\",\"mode\":\"explain\","
+            + "\"contextAttachmentIds\":[],\"contextAttachments\":[],\"capabilityId\":null,\"requestedCapabilities\":[],"
+            + "\"requestId\":\"hash-r1\",\"source\":null,\"promptMode\":null,"
+            + "\"activeSurface\":{\"route\":\"/\",\"resourceType\":null,\"resourceId\":null,\"selection\":" + raw + "}}";
+        var admitted = JsonSerializer.Deserialize(request, WireContext.WeaverMessageRequest);
+        Assert.NotNull(admitted);
+        using var projection = JsonDocument.Parse(request);
+        Assert.True(Elsa.Serialization.Core.JsonCanonicalForm.Equals(projection.RootElement, Elsa.Serialization.Core.JsonHashInput.SerializeToElement(admitted)),
+            "Weaver golden input must match the actual wire-reader projection before exercising the shipping hash owner.");
+        var (status, _) = await fixture.SendRawAsync("PostMessage", request, session.Id);
+        Assert.True(status == 200, "Weaver golden prompt admission: First-stable hash freeze requires an explicit identity/migration decision.");
+        var messages = (await fixture.Sessions.ListMessagesAsync(session.Id)).Where(item => item.Role == WeaverRole.User).ToArray();
+        Assert.True(messages.Length == 1, "Weaver golden prompt count: First-stable hash freeze requires an explicit identity/migration decision.");
+        var message = messages[0];
+        Assert.True(message.DeliveryFingerprint == expected,
+            $"Weaver post selection: First-stable hash freeze requires an explicit identity/migration decision. Expected {expected}; actual {message.DeliveryFingerprint}");
+        var (duplicate, _) = await fixture.SendRawAsync("PostMessage", request, session.Id);
+        Assert.True(duplicate == 200, "Weaver golden prompt replay: First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True((await fixture.Sessions.ListMessagesAsync(session.Id)).Count(item => item.Role == WeaverRole.User) == 1,
+            "Weaver golden prompt replay count: First-stable hash freeze requires an explicit identity/migration decision.");
+    }
+
+    private static WeaverJsonContext WireContext => (WeaverJsonContext)typeof(WeaverJsonContext)
+        .GetProperty("WireContext", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
     private const string Actor = "actor-1";
     private const string Tenant = "tenant-1";
 
@@ -347,7 +384,7 @@ public sealed class WeaverSessionAutonomyApiTests
     {
         var now = new DateTimeOffset(2026, 11, 2, 0, 0, 0, TimeSpan.Zero);
         var attachment = new WeaverContextAttachment("ctx-1", "source", "source-1", "Label", "text/plain", WeaverContextSensitivity.Internal,
-            "selection", "summary", "content", new Dictionary<string, string> { ["k"] = "v" }) { ModuleId = "module" };
+            "selection", "summary", WeaverJsonData.From("content"), new Dictionary<string, string> { ["k"] = "v" }) { ModuleId = "module" };
         var result = new WeaverToolResult("call-1", "echo", true, "ok");
         var message = new WeaverMessage("m-1", "s-1", WeaverRole.User, "hello", WeaverMessageStatus.Pending, "cap-1", now, now.AddMinutes(1),
             new WeaverError("code", "message", 409), ["ctx-1"], ["p-1"], [attachment])
@@ -367,7 +404,7 @@ public sealed class WeaverSessionAutonomyApiTests
         var domain = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(message, domainOptions))!.AsObject();
         var response = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(
             WeaverApiResponse<WeaverMessageAcceptedResponse>.Success(message.ToAcceptedResponse([])),
-            WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse))!["data"]!["message"]!.AsObject();
+            WireContext.WeaverApiResponseWeaverMessageAcceptedResponse))!["data"]!["message"]!.AsObject();
 
         Assert.Equal(domain.Select(x => x.Key).ToArray(), response.Select(x => x.Key).ToArray());
         domain.Remove("acceptedPolicy");
@@ -380,7 +417,7 @@ public sealed class WeaverSessionAutonomyApiTests
     {
         var message = new WeaverMessage("m", "s", WeaverRole.User, "c", WeaverMessageStatus.Pending, null, DateTimeOffset.UtcNow, null, null, [], [], []);
         var json = JsonSerializer.Serialize(WeaverApiResponse<WeaverMessageAcceptedResponse>.Success(message.ToAcceptedResponse([])),
-            WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse);
+            WireContext.WeaverApiResponseWeaverMessageAcceptedResponse);
 
         using var document = JsonDocument.Parse(json);
         Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("data").GetProperty("message").GetProperty("acceptedPolicy").ValueKind);
@@ -391,7 +428,7 @@ public sealed class WeaverSessionAutonomyApiTests
     {
         var view = new WeaverMessage("m", "s", WeaverRole.User, "c", WeaverMessageStatus.Completed, null, DateTimeOffset.UtcNow, null, null, [], [], [])
             .ToViewModel();
-        var json = JsonSerializer.Serialize(view, WeaverJsonContext.Default.WeaverMessageViewModelResponse);
+        var json = JsonSerializer.Serialize(view, WireContext.WeaverMessageViewModelResponse);
 
         using var document = JsonDocument.Parse(json);
         Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("acceptedPolicyRevision").ValueKind);

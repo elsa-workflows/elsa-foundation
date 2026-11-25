@@ -97,7 +97,7 @@ public sealed class PoisonedFirstCheckpointContractTests
             new EfRuntimeCheckpointCommitStore(context, access, RuntimeCheckpointCommitContractBackend.Clock, lease),
             new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         var envelope = StartEnvelope();
-        var pinned = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.PinnedExecutable;
+        var pinned = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.PinnedExecutable;
         var executables = new InMemoryWorkflowExecutableStore();
         await executables.SaveAsync(new WorkflowExecutable(
             identity: pinned,
@@ -120,7 +120,7 @@ public sealed class PoisonedFirstCheckpointContractTests
             WorkItemId, WorkflowId, envelope.Command.CommandId, WorkflowExecutionCommandKind.Checkpoint,
             envelope.EnvelopeId, "checkpoint-start", OccurredAt, OccurredAt,
             payload: JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(
-                pinned, RuntimeCheckpointNames.WorkflowStarted, [], RuntimeCheckpointCommandPayload.WorkflowStartReason))));
+                pinned, RuntimeCheckpointNames.WorkflowStarted, [], RuntimeCheckpointCommandPayload.WorkflowStartReason), Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var drain = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest(WorkflowId));
 
@@ -242,7 +242,7 @@ public sealed class PoisonedFirstCheckpointContractTests
             WorkflowExecutionId: WorkflowId,
             Kind: WorkflowExecutionCommandKind.Start,
             EnqueuedAt: OccurredAt,
-            Payload: JsonSerializer.SerializeToElement(payload),
+            Payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             Metadata: new Dictionary<string, string>());
         return new WorkflowExecutionCommandEnvelope(
             envelopeId: "envelope-start",

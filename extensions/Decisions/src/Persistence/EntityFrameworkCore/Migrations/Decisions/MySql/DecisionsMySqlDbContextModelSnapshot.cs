@@ -42,7 +42,7 @@ namespace Elsa.Decisions.Persistence.EntityFrameworkCore.Migrations.Decisions.My
 
                     b.Property<string>("Json")
                         .IsRequired()
-                        .HasColumnType("json");
+                        .HasColumnType("longtext");
 
                     b.Property<string>("OwnerId")
                         .IsRequired()

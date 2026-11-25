@@ -40,7 +40,7 @@ internal static partial class StudioRuntimeEndpoint
     internal static string Serialize(Dictionary<string, object?> value)
     {
         // Module-owned DTO metadata must die with this read, rather than enter the shared serializer cache.
-        var options = new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
         return JsonSerializer.Serialize(value, options);
     }
 

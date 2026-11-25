@@ -4,6 +4,7 @@ using System.Reflection;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Cluster.EntityFrameworkCore;
 using Elsa.Connections.Persistence.EntityFrameworkCore;
+using Elsa.Decisions.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.DataProtection.EntityFrameworkCore;
@@ -33,6 +34,7 @@ internal static class ModuleContextCatalog
         typeof(WeaverDbContext).Assembly,
         typeof(ClusterMembershipDbContext).Assembly,
         typeof(ConnectionsDbContext).Assembly,
+        typeof(DecisionsEfModule).Assembly,
         typeof(AgentDbContext).Assembly,
         typeof(DataProtectionKeysDbContext).Assembly,
         typeof(OpenTelemetryDbContext).Assembly,
@@ -80,7 +82,7 @@ internal static class ModuleContextCatalog
     /// </summary>
     public static readonly string[] OrdinalModules =
     [
-        "ExternalAuthentication", "ActivitiesDesign", "ClusterMembership", "Connections", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
+        "ExternalAuthentication", "ActivitiesDesign", "ClusterMembership", "Connections", "Decisions", "Elsa3Import", "IdentityIam", "IdentityProviderConfiguration",
         "PublishingSnapshotReview", "Secrets", "Agent", "Weaver", "WorkflowsDesign"
     ];
 

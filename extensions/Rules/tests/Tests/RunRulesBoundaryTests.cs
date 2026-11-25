@@ -23,7 +23,7 @@ public sealed class RunRulesBoundaryTests
     {
         var fixture = new Fixture(Witness(), ["seed"]);
         var suspension = await fixture.ExecuteAsync();
-        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>()!);
+        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>(Elsa.Serialization.Core.JsonConversionContract.Default.Options)!);
 
         Assert.Equal(7, request.MaxRounds);
         Assert.Equal(fixture.Pin.Artifact.Sha256, request.Program.Artifact.Sha256);
@@ -36,7 +36,7 @@ public sealed class RunRulesBoundaryTests
     {
         var fixture = new Fixture(Program(["seed"], []), ["seed", "outside"]);
         var suspension = await fixture.ExecuteAsync();
-        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>()!);
+        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>(Elsa.Serialization.Core.JsonConversionContract.Default.Options)!);
 
         Assert.Equal(1, request.MaxRounds);
         Assert.Equal(["outside", "seed"], request.InitialFacts.Select(fact => fact.Atom).Order(StringComparer.Ordinal));
@@ -47,7 +47,7 @@ public sealed class RunRulesBoundaryTests
     {
         var fixture = new Fixture(Witness(), ["seed"], maxRounds: 0);
         var suspension = await fixture.ExecuteAsync();
-        var requestState = suspension.StatePayload.Deserialize<RunRulesState>()!;
+        var requestState = suspension.StatePayload.Deserialize<RunRulesState>(Elsa.Serialization.Core.JsonConversionContract.Default.Options)!;
         var request = RulesNativeBoundary.ReadState(requestState);
         Assert.Equal(0, request.MaxRounds);
 
@@ -70,7 +70,7 @@ public sealed class RunRulesBoundaryTests
     {
         var fixture = new Fixture(Witness(), ["seed"]);
         var suspension = await fixture.ExecuteAsync();
-        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>()!);
+        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>(Elsa.Serialization.Core.JsonConversionContract.Default.Options)!);
         var address = fixture.Address(request);
         var expected = Terminal(["final", "joined", "left", "right", "seed"]);
         var carried = Terminal(["seed", "right", "left", "joined", "final"]);
@@ -97,7 +97,7 @@ public sealed class RunRulesBoundaryTests
     {
         var fixture = new Fixture(Witness(), ["seed"]);
         var suspension = await fixture.ExecuteAsync();
-        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>()!);
+        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>(Elsa.Serialization.Core.JsonConversionContract.Default.Options)!);
         var address = fixture.Address(request);
         var terminal = Terminal(["final", "joined", "left", "right", "seed"]);
         var completion = new RunRulesCompletion(1, address, "model-delivery", TerminalElement(terminal), null);
@@ -118,7 +118,7 @@ public sealed class RunRulesBoundaryTests
     {
         var fixture = new Fixture(Witness(), ["seed"], maxRounds: 0);
         var suspension = await fixture.ExecuteAsync();
-        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>()!);
+        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>(Elsa.Serialization.Core.JsonConversionContract.Default.Options)!);
         var address = fixture.Address(request);
         var completion = new RunRulesCompletion(1, address, RulesNativeBoundary.InvalidDeliveryId(request, address),
             null, RulesNativeBoundary.InvalidRoundLimit);
@@ -134,7 +134,7 @@ public sealed class RunRulesBoundaryTests
     {
         var fixture = new Fixture(Witness(), ["seed"]);
         var suspension = await fixture.ExecuteAsync();
-        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>()!);
+        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>(Elsa.Serialization.Core.JsonConversionContract.Default.Options)!);
         var address = fixture.Address(request);
         var expected = Terminal(["final", "joined", "left", "right", "seed"]);
         var altered = Terminal(["final", "joined", "left", "right", "tampered"]);
@@ -156,7 +156,7 @@ public sealed class RunRulesBoundaryTests
     {
         var fixture = new Fixture(Witness(), ["seed"]);
         var suspension = await fixture.ExecuteAsync();
-        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>()!);
+        var request = RulesNativeBoundary.ReadState(suspension.StatePayload.Deserialize<RunRulesState>(Elsa.Serialization.Core.JsonConversionContract.Default.Options)!);
         var address = fixture.Address(request);
         var terminal = Terminal(["final", "joined", "left", "right", "seed"]);
         var rulesDeliveryId = "rules-delivery-3";
@@ -296,7 +296,7 @@ public sealed class RunRulesBoundaryTests
             var stateValue = ValueEnvelope.Inline(stateType, suspension.StatePayload, ValueProtectionPolicy.InstanceInline);
             var privateState = new ActivityPrivateState(ActivityId, 1, stateValue, AttemptId, Now);
             var triggerType = RulesNativeBoundary.CompletionType;
-            var triggerPayload = JsonSerializer.SerializeToElement(completion);
+            var triggerPayload = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(completion);
             var persistedPayload = ValueEnvelope.Inline(triggerType, triggerPayload, ValueProtectionPolicy.InstanceInline);
             var receipt = new ActivityTriggerDelivery(nativeDeliveryId, receiptRegistrationId ?? RegistrationId,
                 triggerType, persistedPayload, RulesNativeBoundary.ProviderId, Now,
@@ -304,7 +304,7 @@ public sealed class RunRulesBoundaryTests
                 ActivityTriggerDeliveryStatus.Consumed);
             var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                [RulesNativeBoundary.AddressMetadataKey] = JsonSerializer.Serialize(storedAddress)
+                [RulesNativeBoundary.AddressMetadataKey] = JsonSerializer.Serialize(storedAddress, Elsa.Serialization.Core.JsonBaseline.Options)
             };
             _activityStates.State = NewActivityState(metadata, privateState, null, [receipt], [storedAddress.BookmarkId]);
         }
@@ -314,7 +314,7 @@ public sealed class RunRulesBoundaryTests
         {
             var attempt = new ActivityExecutionContext(WorkflowId, ActivityId, "attempt-resume", NodeId,
                 CancellationToken.None);
-            var triggerPayload = JsonSerializer.SerializeToElement(completion);
+            var triggerPayload = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(completion);
             var request = new ActivityResumeRequest(attempt, suspension.StateValueType, suspension.StatePayload,
                 RulesNativeBoundary.CompletionType, triggerPayload, RegistrationId, deliveryId);
             var freshActivation = CreateActivity(

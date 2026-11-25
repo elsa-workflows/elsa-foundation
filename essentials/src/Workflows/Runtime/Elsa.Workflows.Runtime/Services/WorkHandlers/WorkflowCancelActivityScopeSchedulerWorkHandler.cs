@@ -129,7 +129,7 @@ public sealed class WorkflowCancelActivityScopeSchedulerWorkHandler(
             throw new InvalidOperationException("CancelActivityScope scheduler work requires a payload.");
         try
         {
-            return payload.Deserialize<CancelActivityScopeCommand>()
+            return payload.Deserialize<CancelActivityScopeCommand>(Elsa.Serialization.Core.JsonBaseline.Options)
                    ?? throw new InvalidOperationException("CancelActivityScope scheduler work payload resolved to null.");
         }
         catch (JsonException exception)

@@ -15,7 +15,7 @@ public sealed class ActivityExecutionHierarchyCursorOptions
 
 public sealed class HmacActivityExecutionHierarchyCursorCodec : IActivityExecutionHierarchyCursorCodec
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly byte[] _key;
 
     public HmacActivityExecutionHierarchyCursorCodec(IOptions<ActivityExecutionHierarchyCursorOptions> options)
@@ -40,7 +40,7 @@ public sealed class HmacActivityExecutionHierarchyCursorCodec : IActivityExecuti
     public string Encode(ActivityExecutionHierarchyCursorState state)
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(state, JsonOptions);
-        return $"{Base64Url(payload)}.{Base64Url(HMACSHA256.HashData(_key, payload))}";
+        return $"{Base64Url(payload)}.{Base64Url(Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(payload, _key))}";
     }
 
     public ActivityExecutionHierarchyCursorState Decode(string cursor)
@@ -52,14 +52,14 @@ public sealed class HmacActivityExecutionHierarchyCursorCodec : IActivityExecuti
                 throw Invalid();
             var payload = FromBase64Url(payloadPart);
             var signature = FromBase64Url(signaturePart);
-            if (!CryptographicOperations.FixedTimeEquals(signature, HMACSHA256.HashData(_key, payload)))
+            if (!CryptographicOperations.FixedTimeEquals(signature, Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(payload, _key)))
                 throw Invalid();
             var state = JsonSerializer.Deserialize<ActivityExecutionHierarchyCursorState>(payload, JsonOptions);
             if (state is null || state.SchemaVersion != 1 || state.EffectiveLimit <= 0 || state.CommittedThroughSequence < 0)
                 throw Invalid();
             return state;
         }
-        catch (Exception exception) when (exception is FormatException or JsonException)
+        catch (Exception exception) when (exception is FormatException or JsonException or InvalidOperationException)
         {
             throw Invalid(exception);
         }

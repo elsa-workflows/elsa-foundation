@@ -72,7 +72,7 @@ public sealed class ScriptBodyWriteAnalysisEndpointTests : IDisposable
     {
         var state = new WorkflowDefinitionState(
             [new VariableDefinition("order-key", "order", new TypeReference("Any"), null, null), new VariableDefinition("count-key", "count", new TypeReference("Int32"), null, null)],
-            new ActivityNode("script", versionId, [new ArgumentState("script", new ArgumentValue(script, "Literal"), null, null, null, null)], []),
+            new ActivityNode("script", versionId, [new ArgumentState("script", ArgumentValue.FromClr(script, "Literal"), null, null, null, null)], []),
             [],
             [],
             null);

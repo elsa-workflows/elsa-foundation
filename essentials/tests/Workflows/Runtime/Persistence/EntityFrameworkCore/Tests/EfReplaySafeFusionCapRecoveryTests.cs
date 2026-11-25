@@ -236,7 +236,7 @@ public sealed partial class EfReplaySafeFusionCapRecoveryTests
                         workflowExecutionId: WorkflowExecutionId,
                         intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork)));
                     var pendingWorkItem = Assert.IsType<RuntimeSchedulerWorkItem>(
-                        pending.Intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>());
+                        pending.Intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options));
                     Assert.Equal(WorkflowExecutionId, pending.Intent.WorkflowExecutionId);
                     Assert.Equal(WorkflowExecutionId, pendingWorkItem.WorkflowExecutionId);
                     Assert.DoesNotContain(queueBefore, item =>
@@ -1028,7 +1028,7 @@ public sealed partial class EfReplaySafeFusionCapRecoveryTests
     private static string ReadScheduleNodeId(RuntimeSchedulerWorkItem workItem)
     {
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, workItem.CommandKind);
-        var payload = workItem.Payload?.Deserialize<RuntimeScheduleActivityCommandPayload>();
+        var payload = workItem.Payload?.Deserialize<RuntimeScheduleActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options);
         Assert.NotNull(payload);
         return payload!.ExecutableNodeId;
     }

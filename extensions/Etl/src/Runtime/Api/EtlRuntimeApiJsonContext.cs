@@ -4,7 +4,7 @@ using Elsa.Etl.Runtime.Api.Models;
 
 namespace Elsa.Etl.Runtime.Api;
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata,
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata,
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
 [JsonSerializable(typeof(EtlRunPageRequest))]
 [JsonSerializable(typeof(EtlRunPartitionsRequest))]
@@ -18,10 +18,15 @@ namespace Elsa.Etl.Runtime.Api;
 [JsonSerializable(typeof(EtlRunCompletionView))]
 internal partial class EtlRuntimeApiJsonContext : JsonSerializerContext
 {
-    internal static EtlRuntimeApiJsonContext WireContext => Wire.Context;
+    internal static EtlRuntimeApiJsonContext WireContext { get; } = new(CreateWireOptions());
 
-    private static class Wire
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
     {
-        internal static readonly EtlRuntimeApiJsonContext Context = new(new JsonSerializerOptions(Default.Options));
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
     }
+
+
 }

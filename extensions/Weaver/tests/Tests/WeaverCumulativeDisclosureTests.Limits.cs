@@ -81,7 +81,7 @@ public sealed partial class WeaverCumulativeDisclosureTests
         await sessions.SetMessageStatusAsync(fixture.Session.Id, original.Id, WeaverMessageStatus.Completed);
         var attachment = Assert.Single(original.Context);
         WeaverDisclosureSnapshot Snapshot(int index, IReadOnlyList<int> pads) => new(pads.Select((pad, item) =>
-            attachment with { Id = $"seed-{index}-{item}", Content = new { index, item, pad = new string('p', pad) } }).ToArray(), []);
+            attachment with { Id = $"seed-{index}-{item}", Content = WeaverJsonData.From(new { index, item, pad = new string('p', pad) }) }).ToArray(), []);
         long Size(WeaverDisclosureSnapshot snapshot) => WeaverDisclosureHistory.Record(snapshot).Size;
         var target = WeaverDisclosureHistory.MaximumBytes - room;
         var snapshots = new List<WeaverDisclosureSnapshot>();
@@ -244,7 +244,7 @@ public sealed partial class WeaverCumulativeDisclosureTests
         await sessions.SetMessageStatusAsync(fixture.Session.Id, original.Id, WeaverMessageStatus.Completed);
         var attachment = Assert.Single(original.Context);
         var history = WeaverDisclosureHistory.Freeze(Enumerable.Range(0, retained).Select(index => new WeaverDisclosureSnapshot(
-            [index == 0 ? attachment : attachment with { Content = new { snapshot = index } }], [])));
+            [index == 0 ? attachment : attachment with { Content = WeaverJsonData.From(new { snapshot = index }) }], [])));
         const string priorAnswer = "The authorized earlier snapshots were observed.";
         await sessions.AddMessageAsync(fixture.Session.Id, new(WeaverRole.Assistant, priorAnswer, WeaverMessageStatus.Completed, null, [], [])
         {

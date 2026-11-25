@@ -205,7 +205,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         public bool TryGetAlias(Type type, out string alias) { alias = "Int32"; return type == typeof(int); }
         public bool TryGetType(string alias, out Type type)
         {
-            type = alias switch { "Int32" => typeof(int), "Guid" => typeof(Guid), "DateTime" => typeof(DateTime), "TimeSpan" => typeof(TimeSpan), "Any" => typeof(JsonElement), _ => typeof(void) };
+            type = alias switch { "Int32" => typeof(int), "Guid" => typeof(Guid), "DateTime" => typeof(DateTime), "TimeSpan" => typeof(TimeSpan), "Any" => typeof(JsonElement), "Test.ValidationWarningRecord" => typeof(ValidationWarningRecord), _ => typeof(void) };
             return type != typeof(void);
         }
         public IEnumerable<Type> ListTypes() => [typeof(int)];
@@ -214,11 +214,18 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         public bool TryGetTypeOrDefault(string alias, out Type type) => TryGetType(alias, out type);
     }
 
-    private async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(ExecutableNode node, object payloadValue, bool external, bool captureHistory = false, WorkflowValuePolicies? policies = null)
+    private async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(ExecutableNode node, object payloadValue, bool external, bool captureHistory = false, WorkflowValuePolicies? policies = null,
+        WorkflowIntrinsicExecutor? executor = null)
     {
         var scheduled = ActivityState(IntrinsicExecutionId, node.ExecutableNodeId, ActivityExecutionStatus.Scheduled) with { Attempts = [] };
         var isProjection = node.InputBindings["value"].WorkflowRequest?.Path is not null || node.InputBindings["value"].Selection is not null;
-        var json = JsonSerializer.SerializeToElement(isProjection ? new { count = payloadValue } : payloadValue);
+        JsonElement json;
+        if (payloadValue is JsonElement raw)
+        {
+            using var projected = JsonDocument.Parse(isProjection ? "{\"count\":" + raw.GetRawText() + "}" : raw.GetRawText());
+            json = projected.RootElement.Clone();
+        }
+        else json = JsonSerializer.SerializeToElement(isProjection ? new { count = payloadValue } : payloadValue, JsonBaseline.Options);
         var source = ValueEnvelope.Inline(node.InputBindings["value"].ConversionPlan?.SourceType ?? new ValueTypeDescriptor("Elsa.Any"), json, ValueProtectionPolicy.InstanceInline);
         if (external)
         {
@@ -251,11 +258,11 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
             Now,
             Now,
             1,
-            JsonSerializer.SerializeToElement(payload),
+            JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             new Dictionary<string, string>(),
             new Dictionary<string, string>());
 
-        return await _executor.ExecuteAsync(workItem, payload, executable, node, scheduled);
+        return await (executor ?? _executor).ExecuteAsync(workItem, payload, executable, node, scheduled);
     }
 
     private static ActivityExecutionState ActivityState(

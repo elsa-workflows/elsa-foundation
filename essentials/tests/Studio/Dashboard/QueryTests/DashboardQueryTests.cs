@@ -13,6 +13,24 @@ namespace Elsa.Studio.Dashboard.QueryTests;
 
 public sealed class DashboardQueryTests
 {
+    // Independent full request projection includes null/default members, resolved parameters and the fixed host clock.
+    [Theory]
+    [InlineData("reader-a", 50, "1f13b09b5afbcd087ed1d8ba48283a0f79adee5e2a4670236b435b7361856954")]
+    [InlineData("reader-b", 50, "0d02b00c116cc1d524d9fbe51e76bcb4e1b5ace941b418d87b44da8f341280f4")]
+    [InlineData("reader-a", 2, "8c4152d31fe4388c8b90d2f0bf72b18067009f680180c676d270c1e80487f243")]
+    public async Task Actual_prepare_owner_pins_the_query_context_and_result_fingerprint(string subject, int limit, string expected)
+    {
+        var source = new ExampleSource();
+        using var host = new Host(source);
+        var question = Question();
+        question = question with { Query = question.Query with { Limit = limit } };
+        var result = await host.Service.ExecuteAsync(Caller with { SubjectId = subject }, question);
+        Assert.True(source.Executed.Count == 1, "Dashboard prepare execution count: First-stable hash freeze requires an explicit identity/migration decision.");
+        var context = source.Executed[0];
+        Assert.True(context.QueryFingerprint == expected && result.QueryFingerprint == expected,
+            $"Dashboard prepare/{subject}/{limit}: First-stable hash freeze requires an explicit identity/migration decision. Expected {expected}; actual {context.QueryFingerprint}");
+    }
+
     private static readonly DashboardRequestScope Caller = new("tenant-a", "reader-a", "studio");
 
     [Fact]

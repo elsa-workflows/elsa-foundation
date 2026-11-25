@@ -22,15 +22,15 @@ public sealed class RuntimeHistoryCheckpointTests
     [InlineData(true)]
     public void History_free_commits_keep_the_existing_golden_fingerprint(bool explicitEmpty)
     {
-        // Same envelope and compiled-parent golden as StimulusDeliverySnapshotTests.
+        // Same empty envelope, pinned by the independent S-9 checkpoint projection.
         var legacy = new RuntimeCheckpointCommit("commit", new("checkpoint", "name", "waiter", At, [], new Dictionary<string, string>()),
             new(null, null, [], [], [], [], []), [], new Dictionary<string, string>())
         {
             HistoryBatches = explicitEmpty ? [] : null
         };
-        Assert.Equal("af976cb76bbef3f226bc15cbbdae5d8b330ec98ae9f287ff18e15aadc2df1f1a", RuntimeCheckpointCommitFingerprint.Compute(legacy));
+        RuntimeCheckpointHashGoldenTests.AssertEmptyCommitPin(legacy);
         if (!explicitEmpty)
-            Assert.False(JsonSerializer.SerializeToElement(legacy).TryGetProperty("HistoryBatches", out _));
+            Assert.False(JsonSerializer.SerializeToElement(legacy, options: Elsa.Serialization.Core.JsonBaseline.Options).TryGetProperty("historyBatches", out _));
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class RuntimeHistoryCheckpointTests
             changes.WithAlterationJobTerminalChange(null), changes.WithBackgroundActivityWork(BackgroundActivityWorkCheckpointChanges.Empty)
         };
         Assert.All(variants, variant => Assert.Same(batch, Assert.Single((commit with { StateChanges = variant }).HistoryBatches!)));
-        var copy = JsonSerializer.Deserialize<RuntimeHistoryBatch>(JsonSerializer.Serialize(batch))!;
+        var copy = JsonSerializer.Deserialize<RuntimeHistoryBatch>(JsonSerializer.Serialize(batch, options: Elsa.Serialization.Core.JsonBaseline.Options), options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(commit), RuntimeCheckpointCommitFingerprint.Compute(commit with { HistoryBatches = [copy] }));
         Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(commit), RuntimeCheckpointCommitFingerprint.Compute(commit with { HistoryBatches = null }));
     }

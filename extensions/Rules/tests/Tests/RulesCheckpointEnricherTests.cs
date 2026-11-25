@@ -241,7 +241,7 @@ public sealed class RulesCheckpointEnricherTests
         var privateState = includePrivateState
             ? new ActivityPrivateState("activity-1", 1,
                 ValueEnvelope.Inline(new(typeof(RunRulesState).FullName!, schemaVersion: 1),
-                    JsonSerializer.SerializeToElement(state), ValueProtectionPolicy.InstanceInline), "attempt-1", Now)
+                    Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(state), ValueProtectionPolicy.InstanceInline), "attempt-1", Now)
             : null;
         return new(new("activity-1", "workflow-1", "node-1", "authored-1", RunRules.ActivityType, "1"),
             ActivityExecutionStatus.Suspended, "TriggerWaiting", 1, Now, Now, null, null, "parent-1", null, null,

@@ -325,5 +325,5 @@ public sealed class RuntimeInProcessHopFastPathTests
             recordedAt: Now,
             activityExecutionId: null,
             idempotencyKey: $"checkpoint:{intentId}",
-            payload: JsonSerializer.SerializeToElement(NewWorkItem(payloadWorkItemId)));
+            payload: JsonSerializer.SerializeToElement(NewWorkItem(payloadWorkItemId), Elsa.Serialization.Core.JsonBaseline.Options));
 }

@@ -25,7 +25,7 @@ internal static class JavaScriptRenderingApi
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
         var api = endpoints.MapEndpointGroup(
             OwnerId,
-            JavaScriptRenderingJsonContext.Default,
+            JavaScriptRenderingJsonContext.WireContext,
             jsonContentType: "application/json",
             tag: string.IsNullOrWhiteSpace(applicationName) ? null : applicationName);
 
@@ -49,7 +49,7 @@ internal static class JavaScriptRenderingApi
             var rendered = renderer.Render(document);
             await Results.Json(
                 new JavaScriptRenderingSuccessResponse(true, rendered),
-                JavaScriptRenderingJsonContext.Default.JavaScriptRenderingSuccessResponse,
+                JavaScriptRenderingJsonContext.WireContext.JavaScriptRenderingSuccessResponse,
                 contentType: "application/json")
                 .ExecuteAsync(context);
         }
@@ -57,7 +57,7 @@ internal static class JavaScriptRenderingApi
         {
             await Results.Json(
                     new JavaScriptRenderingFailureResponse(false, exception.Message),
-                    JavaScriptRenderingJsonContext.Default.JavaScriptRenderingFailureResponse,
+                    JavaScriptRenderingJsonContext.WireContext.JavaScriptRenderingFailureResponse,
                     contentType: "application/json",
                     statusCode: StatusCodes.Status500InternalServerError)
                 .ExecuteAsync(context);

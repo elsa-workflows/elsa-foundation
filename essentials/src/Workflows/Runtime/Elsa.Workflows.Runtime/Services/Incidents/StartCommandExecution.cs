@@ -19,7 +19,7 @@ internal static class StartCommandExecution
             return null;
         try
         {
-            var cause = element.GetProperty(nameof(WorkflowExecutionStartCommandPayload.HistoryCausation)).Deserialize<RuntimeHistoryCausation>();
+            var cause = element.GetProperty("historyCausation").Deserialize<RuntimeHistoryCausation>(Elsa.Serialization.Core.JsonBaseline.Options);
             return cause is not null && new[] { cause.HistoryEventId, cause.WorkflowExecutionId, cause.DeliveryId, cause.CommandId, cause.SchedulerWorkItemId }
                 .Any(value => value is not null && (string.IsNullOrWhiteSpace(value) || value.Length > 1024)) ? null : cause;
         }
@@ -50,7 +50,7 @@ internal static class StartCommandExecution
         WorkflowExecutionStartCommandPayload? payload;
         try
         {
-            payload = WithoutHistoryCausation(payloadElement).Deserialize<WorkflowExecutionStartCommandPayload>();
+            payload = WithoutHistoryCausation(payloadElement).Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -98,14 +98,14 @@ internal static class StartCommandExecution
     private static JsonElement WithoutHistoryCausation(JsonElement element)
     {
         if (element.ValueKind != JsonValueKind.Object ||
-            !element.TryGetProperty(nameof(WorkflowExecutionStartCommandPayload.HistoryCausation), out _))
+            !element.TryGetProperty("historyCausation", out _))
             return element;
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartObject();
             foreach (var property in element.EnumerateObject())
-                if (!property.NameEquals(nameof(WorkflowExecutionStartCommandPayload.HistoryCausation)))
+                if (!property.NameEquals("historyCausation"))
                     property.WriteTo(writer);
             writer.WriteEndObject();
         }

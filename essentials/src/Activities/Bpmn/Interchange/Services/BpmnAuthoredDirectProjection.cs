@@ -18,7 +18,7 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 internal static class BpmnAuthoredDirectProjection
 {
     internal const string DiagramNodePrefix = "bpmn-diagram:";
-    private static readonly JsonSerializerOptions Strict = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions Strict = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }

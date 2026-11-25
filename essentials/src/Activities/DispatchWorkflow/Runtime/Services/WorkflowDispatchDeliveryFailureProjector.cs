@@ -11,7 +11,7 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 public sealed class WorkflowDispatchDeliveryFailureProjector(
     IWorkflowDispatchStore workflowDispatchStore) : IPostCommitFailureProjector
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly RuntimePostCommitRetryPolicy ResumeRetryPolicy =
         RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1));
 

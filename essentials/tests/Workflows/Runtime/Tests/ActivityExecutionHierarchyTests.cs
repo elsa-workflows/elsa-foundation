@@ -163,7 +163,10 @@ public class ActivityExecutionHierarchyTests
             "tenant:a", "structure", "wf", "outer", [], 100, 42, 12, "child",
             RootSnapshotFingerprint: "root-fingerprint");
 
-        var decoded = secondHost.Decode(firstHost.Encode(state));
+        var token = firstHost.Encode(state);
+        Assert.True(token.Split('.')[1] == "wxnixGh9Cp2-KF35DLLfmdldxDGgCblmE2zxW1kjwqA",
+            "First-stable hash freeze: changes require an explicit identity/migration decision.");
+        var decoded = secondHost.Decode(token);
         Assert.Equal(state.TenantScope, decoded.TenantScope);
         Assert.Equal(state.CommittedThroughSequence, decoded.CommittedThroughSequence);
         Assert.Equal(state.LastActivityExecutionId, decoded.LastActivityExecutionId);

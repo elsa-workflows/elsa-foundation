@@ -1,4 +1,7 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text.Json;
+using System.Reflection;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
@@ -102,7 +105,6 @@ public sealed class ActivityCall<TResult>
 
 internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TRequest, TResult>
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly HashSet<string> _nodeIds = new(StringComparer.Ordinal) { "root" };
     private readonly SequenceBuilder _root;
     private int _nodeOrdinal;
@@ -249,7 +251,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
                 name,
                 TypeReferenceFactory.FromClrType(typeof(T), TypeAliasConvention.CanonicalAlias),
                 StorageDriverType: null,
-                Default: new ArgumentValue(initialValue, AuthoringExpressionTypes.Literal)));
+                Default: ArgumentValue.FromClr(initialValue, AuthoringExpressionTypes.Literal, typeof(T))));
             return new Variable<T>(referenceKey, name, VariableScopeId);
         }
 
@@ -279,7 +281,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
                     AuthoredWorkflowIntrinsicKind.SetOutput,
                     TypeReferenceFactory.FromClrType(typeof(T), TypeAliasConvention.CanonicalAlias)),
                 [
-                    new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Name, new ArgumentValue(outputKey, AuthoringExpressionTypes.Literal), null, null, null, null),
+                    new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Name, ArgumentValue.FromClr(outputKey, AuthoringExpressionTypes.Literal), null, null, null, null),
                     new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Value, value.Lower(), null, null, null, null)
                 ]);
         }
@@ -290,7 +292,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
             AddIntrinsic(
                 WorkflowIntrinsicAuthoringIds.Finish,
                 new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Finish),
-                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Outcome, new ArgumentValue(outcomeKey, AuthoringExpressionTypes.Literal), null, null, null, null)]);
+                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Outcome, ArgumentValue.FromClr(outcomeKey, AuthoringExpressionTypes.Literal), null, null, null, null)]);
         }
 
         public void Return<T>(WorkflowValue<T> result)
@@ -311,7 +313,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
             AddIntrinsic(
                 WorkflowIntrinsicAuthoringIds.Control,
                 new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Control),
-                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Outcome, new ArgumentValue(outcomeKey, AuthoringExpressionTypes.Literal), null, null, null, null)]);
+                [new ArgumentState(WorkflowIntrinsicAuthoringInputKeys.Outcome, ArgumentValue.FromClr(outcomeKey, AuthoringExpressionTypes.Literal), null, null, null, null)]);
         }
 
         public ActivityCall<TActivityResult> Add<TActivity, TActivityResult>(
@@ -331,7 +333,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
 
         public ActivityNode Lower(string nodeId, string activityVersionId)
         {
-            var payload = JsonSerializer.SerializeToElement(new { activities = _activities, variables = _variables }, JsonOptions);
+            var payload = JsonValueConversion.SerializeToElement(new { activities = _activities, variables = _variables });
             return new ActivityNode(
                 nodeId,
                 activityVersionId,
@@ -443,7 +445,10 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
                     return this;
                 if (argument.Kind == ActivityArgumentKind.Source)
                     sequence.EnsureVisible(argument.Source!.Scope);
-                _inputs[inputKey] = new ArgumentState(inputKey, argument.Lower(inputKey), null, null, null, null, argument.Conversion);
+                var member = typeof(TActivity).GetProperties(BindingFlags.Public | BindingFlags.Instance).FirstOrDefault(property =>
+                    property.GetCustomAttribute<ActivityInputAttribute>(inherit: true) is { } attribute &&
+                    (attribute.Key ?? property.Name) == inputKey);
+                _inputs[inputKey] = new ArgumentState(inputKey, argument.Lower(inputKey, member), null, null, null, null, argument.Conversion);
                 return this;
             }
 

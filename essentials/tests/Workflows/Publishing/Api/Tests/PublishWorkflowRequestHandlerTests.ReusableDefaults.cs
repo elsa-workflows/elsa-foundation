@@ -196,7 +196,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         var fixture = await ReusableDefaultAsync(new("Literal", JsonSerializer.SerializeToElement("hello")),
             callerStructure: ignored, noPublicInputs: true,
-            rootFactory: producer => SequenceNode("sequence", [producer, Node("capture", new WorkflowArgumentState("Text", new(read, "JavaScript"), null, null, null, null))]));
+            rootFactory: producer => SequenceNode("sequence", [producer, Node("capture", new WorkflowArgumentState("Text", Elsa.Expressions.Core.Models.ArgumentValue.FromClr(read, "JavaScript"), null, null, null, null))]));
         var sourceBefore = JsonSerializer.Serialize(fixture.Version.State);
         var publication = await fixture.Handler.Handle(new PublishWorkflow(fixture.Version.Id), CancellationToken.None);
         Assert.NotNull(await _store.FindAsync(publication.ArtifactId));
@@ -204,7 +204,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     }
 
     private static ActivityInputDefault ResultDefault(bool portable, string producer) => portable
-        ? new("JavaScript", JsonSerializer.SerializeToElement(new ExpressionDefinition("JavaScript", "p", new("String"),
+        ? new("JavaScript", Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ExpressionDefinition("JavaScript", "p", new("String"),
             new Dictionary<string, ExpressionParameterBinding> { ["p"] = new ActivityResultExpressionParameterBinding(producer, "$result") },
             JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1)))
         : new("ActivityResult", JsonSerializer.SerializeToElement(new { producerNodeId = producer, projectionKey = "$result", producerScopeId = "workflow" }));
@@ -276,7 +276,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         {
             registry.RegisterType(typeof(SwitchActivity), TypeAliasConvention.CanonicalAlias(typeof(SwitchActivity)));
             switchVersion.DesignFacets = [StructureFacet(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion)];
-            root = new("switch", switchVersion.Id, [new("Value", new("hello", "Literal"), null, null, null, null)], [],
+            root = new("switch", switchVersion.Id, [new("Value", Elsa.Expressions.Core.Models.ArgumentValue.FromClr("hello", "Literal"), null, null, null, null)], [],
                 new(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(
                     new Dictionary<string, object> { [nativeSwitchCaseProperty] = new[] { new { match = "hello", caseId = "case-a", activity = consumer } } },
                     new JsonSerializerOptions(JsonSerializerDefaults.Web))));

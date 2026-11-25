@@ -32,7 +32,7 @@ public sealed class ActivityDraftDiffCandidateCompiler(
             State = request.State,
             TenantId = definition.TenantId
         };
-        var layoutBytes = JsonSerializer.SerializeToUtf8Bytes(request.Layout).LongLength + JsonSerializer.SerializeToUtf8Bytes(request.ActivityPresentation).LongLength;
+        var layoutBytes = JsonSerializer.SerializeToUtf8Bytes(request.Layout, Elsa.Serialization.Core.JsonBaseline.Options).LongLength + JsonSerializer.SerializeToUtf8Bytes(request.ActivityPresentation, Elsa.Serialization.Core.JsonBaseline.Options).LongLength;
         var result = await compiler.CompileAsync(new(
             definition,
             draft,

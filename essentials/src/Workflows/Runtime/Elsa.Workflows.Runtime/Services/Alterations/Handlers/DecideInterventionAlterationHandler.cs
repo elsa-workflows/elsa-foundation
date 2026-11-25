@@ -118,7 +118,7 @@ public sealed class DecideInterventionAlterationHandler(
 
         try
         {
-            return JsonSerializer.Deserialize<string[]>(raw) ?? [];
+            return JsonSerializer.Deserialize<string[]>(raw, Elsa.Serialization.Core.JsonBaseline.Options) ?? [];
         }
         catch (JsonException)
         {
@@ -211,7 +211,7 @@ public sealed class DecideInterventionAlterationHandler(
             RuntimeChainId.Derive(context.Job.JobId, $"alteration-{Slug}-idempotency:{suffix}"),
             now,
             now,
-            payload: JsonSerializer.SerializeToElement(payload),
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: commandMetadata,
             envelopeMetadata: new Dictionary<string, string>(),
             executionScopeId: requester.ExecutionScopeId ?? requester.Provenance.ExecutionScopeId,
@@ -223,7 +223,7 @@ public sealed class DecideInterventionAlterationHandler(
             now,
             requester.Execution.ActivityExecutionId,
             workItem.IdempotencyKey,
-            JsonSerializer.SerializeToElement(workItem),
+            JsonSerializer.SerializeToElement(workItem, Elsa.Serialization.Core.JsonBaseline.Options),
             workItem.CommandMetadata,
             materializedSchedulerWorkItem: workItem);
     }

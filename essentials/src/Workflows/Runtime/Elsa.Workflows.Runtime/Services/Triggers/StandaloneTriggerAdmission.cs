@@ -56,7 +56,7 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
             source = new { family = producer.SourceFamily, key = signal.SourceKey, recordedAt = now, actor = context.Actor },
             trigger = new { trigger.Id, trigger.Name, trigger.TypeKey, trigger.SchemaVersion, trigger.Revision,
                 trigger.ConfigurationRevision, trigger.AssociationRevision, trigger.Configuration }
-        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        }, new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options));
         var source = new RuntimeStandaloneIngressSource(1, sourceId, sourceId, now, context.Scope.Persistence,
             context.Scope.TenantId, context.Partition, trigger.Id, trigger.Revision, trigger.AssociationRevision,
             producer.SourceFamily, signal.SourceKey, requestFingerprint, signal.PayloadSchema, envelope, policy, context.Actor);
@@ -115,7 +115,7 @@ internal sealed class StandaloneTriggerAdmission(IStandaloneTriggerStore resourc
 
     internal static bool SchemasMatch(Elsa.Primitives.Models.ValueTypeDescriptor left, Elsa.Primitives.Models.ValueTypeDescriptor right) =>
         left.Alias == right.Alias && left.CollectionKind == right.CollectionKind && left.SchemaVersion == right.SchemaVersion &&
-        (left.Schema is null && right.Schema is null || left.Schema is { } a && right.Schema is { } b && JsonElement.DeepEquals(a, b));
+        (left.Schema is null && right.Schema is null || left.Schema is { } a && right.Schema is { } b && Elsa.Serialization.Core.JsonCanonicalForm.Equals(a, b));
 
     private static bool IsWorkflowResponse(StandaloneTrigger trigger) => trigger.TypeKey == "http" &&
         trigger.Configuration.TryGetProperty("http", out var http) && http.TryGetProperty("mode", out var mode) && mode.GetString() == "WorkflowResponse";

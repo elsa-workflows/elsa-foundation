@@ -100,7 +100,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
         var result = await f.SweepTerminalAsync(); AssertTerminalFailure(result, "runtime.history.integrity");
         var retained = Assert.IsType<RuntimeHistoryIntegrityException>(Assert.Single(log.Exceptions));
         Assert.IsType<IOException>(Assert.IsType<InvalidDataException>(retained.InnerException).InnerException);
-        Assert.DoesNotContain("private", JsonSerializer.Serialize(result.Dispatches));
+        Assert.DoesNotContain("private", JsonSerializer.Serialize(result.Dispatches, options: Elsa.Serialization.Core.JsonBaseline.Options));
         Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run))); Assert.Equal(0, f.Activator.Calls);
         Assert.DoesNotContain((await f.History.ReadPageAsync(new(Run))).Items, IsTerminalResumeDecision);
     }
@@ -237,7 +237,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
             return await workflows.SaveAsync(retained, token);
         }, default);
         var work = Assert.Single(await f.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(Run)));
-        var payload = work.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var payload = work.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         var expected = payload.ExpectedBookmarkResume!; var capture = expected.RegistrationCapture!;
         var updatedCapture = new StimulusResumeCapture(capture.Generation, capture.Executable,
             new(physical, retained.TenantId, retained.Partition, retained.RunKind, retained.TestScope),
@@ -250,7 +250,7 @@ public sealed partial class RuntimeHistoryNativeDeliveryTests
             payload.TriggerDelivery, payload.TestRunDelivery) { ExpectedBookmarkResume = updatedExpected, HistoryCausation = payload.HistoryCausation };
         Assert.True(await f.Queue.DeleteAsync(Run, work.WorkItemId));
         await f.Queue.EnqueueAsync(new(work.WorkItemId, work.WorkflowExecutionId, work.CommandId, work.CommandKind, work.EnvelopeId,
-            work.IdempotencyKey, work.EnqueuedAt, work.RecordedAt, work.Sequence, JsonSerializer.SerializeToElement(updatedPayload),
+            work.IdempotencyKey, work.EnqueuedAt, work.RecordedAt, work.Sequence, JsonSerializer.SerializeToElement(updatedPayload, options: Elsa.Serialization.Core.JsonBaseline.Options),
             work.CommandMetadata, work.EnvelopeMetadata, work.ExecutionScopeId, work.Attempt));
         var result = await f.SweepTerminalAsync();
         if (mode == "bound")

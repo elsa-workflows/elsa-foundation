@@ -151,10 +151,10 @@ public sealed class HttpEndpointRoutesResolver(
     private static string ReservationIdentity(RuntimeIngressReservation reservation)
     {
         // Resource revisions, mode and source-access changes participate even when the route template stays equal.
-        var content = System.Text.Json.JsonSerializer.Serialize(new { reservation.ReservationId, reservation.OwnerId,
+        var content = Elsa.Serialization.Core.JsonHashInput.Hash(new { reservation.ReservationId, reservation.OwnerId,
             reservation.OwnerRevision, reservation.ConfigurationRevision, reservation.Scope, reservation.StimulusHash,
             Metadata = reservation.Metadata.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray() });
-        return "standalone-http:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
+        return "standalone-http:" + content.ToUpperInvariant();
     }
 
     // Order-insensitive and length-framed, so neither the order the stores return identities in nor an identity that

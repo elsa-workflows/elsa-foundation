@@ -173,8 +173,8 @@ public sealed class BpmnCallActivityInterchangeTests
         // A Studio-authored bound call activity (no bpmn.calledElement property) exports calledElement = the child's
         // authored WorkflowDefinitionId, so re-import binds and round-trips.
         var childNode = new ActivityNode("node-call", BpmnDocumentImporter.DefaultDispatchWorkflowActivityVersionId,
-            [new ArgumentState("WorkflowDefinitionId", new Expressions.Core.Models.ArgumentValue("child-def-9", "Literal"), null, null, null, null),
-             new ArgumentState("WaitForCompletion", new Expressions.Core.Models.ArgumentValue(true, "Literal"), null, null, null, null)],
+            [new ArgumentState("WorkflowDefinitionId", Expressions.Core.Models.ArgumentValue.FromClr("child-def-9", "Literal"), null, null, null, null),
+             new ArgumentState("WaitForCompletion", Expressions.Core.Models.ArgumentValue.FromClr(true, "Literal"), null, null, null, null)],
             []);
         var authored = new BpmnAuthoredStructure(
             activities: [childNode],

@@ -69,7 +69,7 @@ public sealed class BpmnDecisionPublicationTests
             Version(typeof(WriteLine), new InputDefinition("text", "Text", new TypeReference("String"), null, "Text", null, IsNullable: false))
         }.ToDictionary(version => version.Id);
         ActivityNode Leaf(string id, Type type, string inputKey, string value) => new(id, type.FullName!,
-            [new ArgumentState(inputKey, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null)], []);
+            [new ArgumentState(inputKey, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null)], []);
         var decision = Leaf("decision", typeof(BpmnDecision), "Outcome", outcome);
         var high = Leaf("high", typeof(WriteLine), "text", "High order");
         var low = Leaf("low", typeof(WriteLine), "text", "Default order");

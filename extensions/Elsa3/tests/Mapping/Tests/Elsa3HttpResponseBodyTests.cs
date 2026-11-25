@@ -205,7 +205,8 @@ public sealed class Elsa3HttpResponseBodyTests
     {
         var definition = Assert.IsType<JsonElement>(argument.Value.Value);
         var resultType = definition.GetProperty("resultType");
-        return resultType.TryGetProperty("alias", out var alias) ? alias.GetString() : resultType.GetProperty("Alias").GetString();
+        Assert.False(resultType.TryGetProperty("Alias", out _));
+        return resultType.GetProperty("alias").GetString();
     }
 
     private static Task<Elsa3MigrationResult<Elsa3.Mapping.Conversion.Elsa3ConvertedDefinition>> ConvertResultAsync(Elsa3Activity root) =>

@@ -629,14 +629,14 @@ public sealed class EfDurableValuePageReuseTests
         var base64Payload = parts[1].Replace('-', '+').Replace('_', '/');
         base64Payload = base64Payload.PadRight((base64Payload.Length + 3) / 4 * 4, '=');
         var payload = JsonNode.Parse(Convert.FromBase64String(base64Payload))!;
-        var cursor = payload["Cursor"]!;
-        var innerToken = cursor["InnerContinuation"]!.GetValue<string>().Split('.');
+        var cursor = payload["cursor"]!;
+        var innerToken = cursor["innerContinuation"]!.GetValue<string>().Split('.');
         Assert.Equal(3, innerToken.Length);
         Assert.NotEmpty(innerToken[2]);
         innerToken[2] = (innerToken[2][0] == 'A' ? "B" : "A") + innerToken[2][1..];
-        cursor["InnerContinuation"] = string.Join('.', innerToken);
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-        return $"crsp1.{Encode(bytes)}.{Encode(SHA256.HashData(bytes))}";
+        cursor["innerContinuation"] = string.Join('.', innerToken);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, Elsa.Serialization.Core.JsonBaseline.Options);
+        return $"crsp1.{Encode(bytes)}.{Encode(Convert.FromHexString(Elsa.Serialization.Core.JsonHashInput.HashUtf8(bytes)))}";
 
         static string Encode(byte[] value) => Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }

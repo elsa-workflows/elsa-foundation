@@ -362,7 +362,7 @@ public sealed partial class RuleRoundStoreTests : IAsyncLifetime
     {
         var unsigned = new RuleRoundReceipt(source.Identity, source.ImplementationPinHash,
             additions ?? source.AddedFacts, firings ?? source.FiringEvidence, new string('0', 64));
-        var digest = RuleRecordCodec.Hash(RuleRecordCodec.ReceiptBytes(unsigned));
+        var digest = RuleRecordCodec.JsonHash(RuleRecordCodec.ReceiptBytes(unsigned));
         return new(unsigned.Identity, unsigned.ImplementationPinHash, unsigned.AddedFacts, unsigned.FiringEvidence, digest);
     }
 

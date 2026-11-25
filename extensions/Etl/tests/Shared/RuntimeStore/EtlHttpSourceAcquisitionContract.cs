@@ -170,7 +170,7 @@ public abstract partial class EtlRuntimeStoreContract
         var retained = Assert.IsType<EtlCachedHttpPage>(recovered.Page);
         var expectedBody = published ? originalBody : changedBody;
         Assert.Equal(expectedBody, Encoding.UTF8.GetString(retained.RawBody.Span));
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(expectedBody))).ToLowerInvariant(),
+        Assert.Equal(Elsa.Serialization.Core.JsonHashInput.HashJson(expectedBody),
             retained.Descriptor.Body.ContentHash);
         Assert.Equal(published ? original.Fence : successor.Fence, retained.Provenance.Fence);
         Assert.Equal(published, permit.RequestId == retained.Provenance.AttemptId);

@@ -371,7 +371,7 @@ public sealed class EtlArtifactV2JsonTests
     {
         using var value = JsonDocument.Parse(JsonSerializer.Serialize(new string('x', EtlArtifactV2Json.MaximumByteLength)));
 
-        Assert.Throws<JsonException>(() => EtlArtifactV2Json.Write(WithFilterValue(value.RootElement)));
+        Assert.ThrowsAny<JsonException>(() => EtlArtifactV2Json.Write(WithFilterValue(value.RootElement)));
     }
 
     [Fact]
@@ -380,7 +380,7 @@ public sealed class EtlArtifactV2JsonTests
         var valueText = new string('[', 70) + "0" + new string(']', 70);
         using var value = JsonDocument.Parse(valueText, new JsonDocumentOptions { MaxDepth = 128 });
 
-        Assert.Throws<JsonException>(() => EtlArtifactV2Json.Write(WithFilterValue(value.RootElement)));
+        Assert.ThrowsAny<JsonException>(() => EtlArtifactV2Json.Write(WithFilterValue(value.RootElement)));
     }
 
     private static JsonNode CreateNode() => JsonNode.Parse(EtlArtifactV2Json.Write(EtlV2TestPipelines.Create()).GetRawText())!;

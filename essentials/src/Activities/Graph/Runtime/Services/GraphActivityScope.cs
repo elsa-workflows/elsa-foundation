@@ -602,7 +602,7 @@ public sealed class GraphActivityScopeFactory(IRuntimeDurableValueStorageDriverR
             var hasMatchingType = StringComparer.Ordinal.Equals(state.Type.Id, declaration.StorageDriverKey) &&
                                   StringComparer.Ordinal.Equals(state.Type.Kind, expectedKind) &&
                                   state.Type.Schema is { } schema &&
-                                  JsonElement.DeepEquals(schema, declaration.Type);
+                                  Elsa.Serialization.Core.JsonCanonicalForm.Equals(schema, declaration.Type);
             if (!hasMatchingMetadata || !hasMatchingType)
             {
                 throw new InvalidOperationException(

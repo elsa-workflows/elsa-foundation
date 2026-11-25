@@ -571,7 +571,7 @@ public sealed class BackgroundActivityWorkerTests
             var snapshot = new ActivityInputSnapshot("invocation-1", contract.SchemaFingerprint, "bindings-1", new Dictionary<string, ValueEnvelope>(), now);
             var requestIdentity = requestIdentityOverride ?? identity;
             var coordinatorPayload = JsonSerializer.SerializeToElement(new RuntimeInvokeActivityCommandPayload(
-                requestIdentity, "node-1", "activity-execution-1", "BackgroundActivityResult"));
+                requestIdentity, "node-1", "activity-execution-1", "BackgroundActivityResult"), Elsa.Serialization.Core.JsonBaseline.Options);
             var coordinatorWork = new RuntimeSchedulerWorkItem(
                 "coordinator-work-1", "workflow-1", "coordinator-command-1", WorkflowExecutionCommandKind.InvokeActivity,
                 "envelope-1", "idempotency-1", now, now, payload: coordinatorPayload);

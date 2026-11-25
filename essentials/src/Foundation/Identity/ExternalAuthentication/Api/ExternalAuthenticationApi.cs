@@ -26,13 +26,22 @@ namespace Elsa.Foundation.Identity.ExternalAuthentication.Api;
 
 public static partial class ExternalAuthenticationApi
 {
+    private static readonly JsonSerializerOptions CorrelationJson = CreateCorrelationJson();
+    private static JsonSerializerOptions CreateCorrelationJson()
+    {
+        // Keep the existing protected correlation-cookie metadata representation.
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.PropertyNamingPolicy = null;
+        options.MakeReadOnly();
+        return options;
+    }
     private const string PublicCategory = "identity-protocol";
     private const string PublicReason = "External authentication protocol validates one-time protected browser state and verified provider evidence.";
 
     public static void MapExternalAuthenticationApi(IEndpointRouteBuilder endpoints)
     {
         var owner = typeof(ExternalAuthenticationApiFeature).Assembly.GetName().Name!;
-        var api = endpoints.MapEndpointGroup(owner, ExternalAuthenticationApiJsonContext.Default, tag: "Identity");
+        var api = endpoints.MapEndpointGroup(owner, ExternalAuthenticationApiJsonContext.WireContext, tag: "Identity");
         var path = endpoints.ServiceProvider.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value.CallbackPath;
         if (!Local(path) || path.Contains('?') || path.Contains('#') || path.Split('/').Any(segment => segment is "." or ".."))
             throw new InvalidOperationException("External authentication requires a local callback path.");
@@ -133,7 +142,7 @@ public static partial class ExternalAuthenticationApi
         finally { context.User = principal; }
         if (tokens.RequestToken is null) { await Failure(context, 503); return; }
         await Results.Json(new ExternalAntiforgeryResponse(tokens.RequestToken, tokens.FormFieldName, tokens.HeaderName),
-            ExternalAuthenticationApiJsonContext.Default.ExternalAntiforgeryResponse).ExecuteAsync(context);
+            ExternalAuthenticationApiJsonContext.WireContext.ExternalAntiforgeryResponse).ExecuteAsync(context);
     }
 
     private static async Task Chooser(HttpContext context)
@@ -247,7 +256,7 @@ public static partial class ExternalAuthenticationApi
         var result = await context.RequestServices.GetRequiredService<IExternalAuthenticationFlowService>().ReadPreviewAsync(key, handle, browser, actor, context.RequestAborted);
         if (result.Failure is not (ExternalFlowFailure.ExpiredOrUsed or ExternalFlowFailure.Denied)) DeleteCorrelation(context, key, AuthenticationArtifactPurpose.PreviewResult, handle);
         if (result.Failure != ExternalFlowFailure.None || result.Preview is null) { await Failure(context, 400); return; }
-        await Results.Json(result.Preview, ExternalAuthenticationApiJsonContext.Default.ExternalAuthenticationPreview).ExecuteAsync(context);
+        await Results.Json(result.Preview, ExternalAuthenticationApiJsonContext.WireContext.ExternalAuthenticationPreview).ExecuteAsync(context);
     }
 
     private static async Task<ClaimsPrincipal?> Administrator(HttpContext context)
@@ -276,7 +285,7 @@ public static partial class ExternalAuthenticationApi
         var options = context.RequestServices.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value;
         var clock = context.RequestServices.GetRequiredService<TimeProvider>();
         var expiry = clock.GetUtcNow() + (purpose == AuthenticationArtifactPurpose.PreviewResult ? options.PreviewResultLifetime : options.FlowLifetime);
-        var value = Protector(context, key, purpose, handle).Protect(JsonSerializer.Serialize(new Correlation(browser, expiry)));
+        var value = Protector(context, key, purpose, handle).Protect(JsonSerializer.Serialize(new Correlation(browser, expiry), options: CorrelationJson));
         context.Response.Cookies.Append(CookieName(key, purpose, handle), value, CookieOptions(context, expiry));
     }
 
@@ -287,7 +296,7 @@ public static partial class ExternalAuthenticationApi
         if (raw is null || raw.Length > 4096) return null;
         try
         {
-            var value = JsonSerializer.Deserialize<Correlation>(Protector(context, key, purpose, handle).Unprotect(raw));
+            var value = JsonSerializer.Deserialize<Correlation>(Protector(context, key, purpose, handle).Unprotect(raw), options: CorrelationJson);
             return value is not null && value.ExpiresAt > context.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow() ? value.Browser : null;
         }
         catch (Exception exception) when (exception is CryptographicException or JsonException) { return null; }
@@ -315,6 +324,6 @@ public static partial class ExternalAuthenticationApi
         !value.Any(character => char.IsControl(character) || char.IsWhiteSpace(character));
     private static string Route(HttpContext context, string key) => context.Request.RouteValues[key]?.ToString() ?? "";
     private static Task Failure(HttpContext context, int status) => Results.Json(new ExternalAuthenticationFailureResponse("external-authentication-failed"),
-        ExternalAuthenticationApiJsonContext.Default.ExternalAuthenticationFailureResponse, statusCode: status).ExecuteAsync(context);
+        ExternalAuthenticationApiJsonContext.WireContext.ExternalAuthenticationFailureResponse, statusCode: status).ExecuteAsync(context);
     private sealed record Correlation(string Browser, DateTimeOffset ExpiresAt);
 }

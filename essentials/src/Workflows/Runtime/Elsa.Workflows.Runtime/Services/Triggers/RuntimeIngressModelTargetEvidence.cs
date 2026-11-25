@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// <summary>Protocol-neutral physical proof for the versioned model trigger-start command.</summary>
 internal static class RuntimeIngressModelTargetEvidence
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     internal static RuntimeModelExecutionCommand ReadCommand(RuntimeCommittedRecipient committed)
     {
@@ -21,7 +21,7 @@ internal static class RuntimeIngressModelTargetEvidence
         if (command.Executable != recipient.Material || command.MaterialIncarnationId != recipient.MaterialIncarnation ||
             command.InputId != recipient.StartIdentity.InputId || command.InputKind != "start-trigger-v1" || command.TenantId != recipient.TenantId ||
             !RuntimeIngressAdmissionValidation.Same(command.Authority, recipient.Authority) ||
-            !payload.TryGetProperty("inputs", out var inputs) || !JsonElement.DeepEquals(inputs, JsonSerializer.SerializeToElement(recipient.Inputs, Json)) ||
+            !payload.TryGetProperty("inputs", out var inputs) || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(inputs, JsonSerializer.SerializeToElement(recipient.Inputs, Json)) ||
             !payload.TryGetProperty("sourceReferenceId", out var source) || source.GetString() != recipient.SourceProvenance.SourceReferenceId ||
             command.IngressOrigin?.IsEquivalentTo(expectedOrigin) != true ||
             !payload.TryGetProperty("origin", out var origin) || origin.Deserialize<RuntimeIngressCommandOrigin>(Json)?.IsEquivalentTo(expectedOrigin) != true ||

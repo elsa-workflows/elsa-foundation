@@ -44,7 +44,7 @@ public sealed class ReusableActivityImportOperationService(
     ILogger<ReusableActivityImportOperationService> logger,
     IActivityDefinitionVersionPublicationStore? publications = null) : IReusableActivityImportOperationService
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly ReusableActivityImportOptions _options = ValidateOptions(options.Value);
 
     /// <inheritdoc />

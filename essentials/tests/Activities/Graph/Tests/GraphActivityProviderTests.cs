@@ -75,7 +75,7 @@ public sealed partial class GraphActivityProviderTests
     {
         var projection = new ActivityStructureInputProjection([
             new("Case:a:Condition", new InputDefinition("Case:a:Condition", "Condition", new("Boolean"), null, "Condition", null, false),
-                new("foreign-key", unknownVariable ? new ArgumentValue(ParseJson("""{"referenceKey":"missing","declaringScopeId":"workflow"}"""), "Variable") : new ArgumentValue(true, "Literal"), null, null, null, null))], ["Value"]);
+                new("foreign-key", unknownVariable ? ArgumentValue.FromClr(ParseJson("""{"referenceKey":"missing","declaringScopeId":"workflow"}"""), "Variable") : ArgumentValue.FromClr(true, "Literal"), null, null, null, null))], ["Value"]);
         var provider = new GraphActivityProvider(new TestActivityStructureService { InputProjection = projection },
             new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
         var manifest = CreateManifest("""
@@ -312,6 +312,48 @@ public sealed partial class GraphActivityProviderTests
             diagnostics.Select(x => x.Code));
         Assert.Contains(diagnostics, x => x.Location!.JsonPointer == "/rootActivity/structure/payload/activities/0/activityVersionId");
         Assert.Contains(diagnostics, x => x.Location!.JsonPointer == "/rootActivity/structure/payload/activities/1/nodeId");
+    }
+
+    /// <summary>
+    /// A node with no arguments carries an empty list. A missing or null <c>inputs</c>/<c>outputs</c> list is refused,
+    /// on the root and on a nested node, by validation and by data selection, instead of being read as null.
+    /// </summary>
+    [Fact]
+    public async Task Validation_and_data_selection_refuse_a_missing_or_null_argument_list()
+    {
+        var manifest = CreateManifest("""
+            {
+              "rootActivity": {
+                "nodeId": "root",
+                "activityVersionId": "activity-ver-root",
+                "outputs": [],
+                "structure": {
+                  "kind": "Sequence",
+                  "schemaVersion": "1",
+                  "payload": {
+                    "activities": [
+                      { "nodeId": "child", "activityVersionId": "activity-ver-child", "inputs": [], "outputs": null, "structure": null }
+                    ]
+                  }
+                }
+              },
+              "variables": [],
+              "outputMappings": [{
+                "outputReferenceKey": "total",
+                "source": { "syntax": "Literal", "value": 42 }
+              }]
+            }
+            """);
+
+        var diagnostics = await _provider.ValidateAsync(manifest, CreateContract());
+
+        Assert.Equal(
+            ["/rootActivity/inputs", "/rootActivity/structure/payload/activities/0/outputs"],
+            diagnostics.Where(x => x.Code == "activity.graph.argument-malformed").Select(x => x.Location!.JsonPointer).Order(StringComparer.Ordinal));
+        var rejected = await Assert.ThrowsAsync<Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionRejectedException>(() =>
+            _provider.TryProjectAsync(manifest, CreateContract(), "draft", "revision").AsTask());
+        Assert.Contains(rejected.Findings, x => x.Path == "/rootActivity/inputs");
+        Assert.Contains(rejected.Findings, x => x.Path == "/rootActivity/structure/payload/activities/0/outputs");
     }
 
     [Fact]
