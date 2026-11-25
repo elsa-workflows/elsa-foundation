@@ -46,8 +46,9 @@ No alias is installed or resolved through Runtime. The caller retains resource a
 Type admission alone does not establish serialized member names for a Workflow input, variable or current
 item. Request seeding preserves caller JsonElement keys and uses default System.Text.Json for CLR values
 (`RuntimeWorkflowStateSeed.Serialize`); expression materialization also uses default JSON options. Those
-keys can differ from the activity completion profile. For a single admitted type with readable members
-this contribution returns `Declared` (`activity.shape.declared-type`): advisory member names for
+keys can differ from the activity completion profile. For an admitted type with readable members, or a
+List, Array, HashSet or Dictionary of one (members on the item or map value), this contribution returns
+`Declared` (`activity.shape.declared-type`): advisory member names for
 expression completion, which validation and the Activity Data picker treat as Unknown. Otherwise it
 returns Unknown with `activity.shape.serialization-profile-unbound`, retaining an admitted whole type but
 no selected type for a nonempty member path. Literal exact-key reads remain available with deferred fit; no source is

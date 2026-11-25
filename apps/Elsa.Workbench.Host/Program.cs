@@ -128,6 +128,9 @@ builder.Configuration
     .AddEnvironmentVariables()
     .AddCommandLine(args);
 var configuration = builder.Configuration;
+// With the Core Preview serving publications (Elsa:CorePreview:Publications), the default shell composes the kernel's shell
+// feature, so the one switch composes the host's serving state below and the shell's coordinator.
+var kernelShell = WorkbenchCorePreview.ComposeKernelShell(builder.Configuration);
 
 // OpenIddict's protocol behavior is composed by the shell feature, but its vendor EF token store is host-owned: one store on the
 // root container, which CShells copies into every shell. It binds the default shell's OpenIddict settings, selects the engine
@@ -473,6 +476,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddWorkbenchCorePreview(configuration);
 
 var app = builder.Build();
+if (kernelShell is not null) WorkbenchCorePreview.LogKernelShell(app.Logger, kernelShell);
 
 if (bootTimeline is not null)
 {

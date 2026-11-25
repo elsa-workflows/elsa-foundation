@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Kernel.Native;
 using Contract = Kernel.Foundation.Contracts;
@@ -6,34 +7,51 @@ using Models = Kernel.Model.Contracts;
 namespace Elsa.Workflows.Runtime.KernelHost.Tests;
 
 /// <summary>
-/// One start turn of the Native execution model, without a foundation: the turn records what the model asks of the kernel
-/// (its status and output, its labels, the children it starts), which is all a mapped workflow that runs to its end in one
-/// Balanced turn needs.
+/// One turn of the Native execution model, without a foundation: the turn records what the model asks of the kernel (its
+/// status and output, its labels, the children it starts, the messages it sends), which is all a mapped workflow that runs
+/// to its end in one Balanced turn needs. <see cref="ResumeAsync"/> runs the next turn of the instance on the messages it
+/// sent itself (a Delay's timer), from its state as the kernel would have stored it.
 /// </summary>
 internal sealed class NativeTurn : Models.ITurn
 {
     private int _sent;
 
-    private NativeTurn(Models.WorkflowStart start, object state)
+    private NativeTurn(Models.InstanceInfo instance, IReadOnlyList<Contract.Message> inbox, object state, int sent = 0)
     {
-        Instance = new Models.InstanceInfo(new Contract.ActorRef("instance-1"), "tenant", NativeExecutionModel.ModelKey, start.Workflow, null);
-        Inbox = [new Contract.Message("start-1", Contract.Kinds.Start, start.Input)];
+        Instance = instance;
+        Inbox = inbox;
         State = state;
+        _sent = sent;
     }
 
-    public static async Task<NativeTurn> StartAsync(Workflow workflow, NativeExecutionOptions? options = null, JsonObject? input = null)
+    public static Task<NativeTurn> StartAsync(Workflow workflow, NativeExecutionOptions? options = null, JsonObject? input = null) =>
+        StartAsync(new NativeExecutionModel(new WorkflowRegistry().Add(workflow), options), workflow, input);
+
+    /// <summary>A start of <paramref name="workflow"/> on <paramref name="model"/>, whose registry holds it.</summary>
+    public static async Task<NativeTurn> StartAsync(NativeExecutionModel model, Workflow workflow, JsonObject? input = null)
     {
-        var model = new NativeExecutionModel(new WorkflowRegistry().Add(workflow), options);
         var start = NativeExecutionModel.Start(workflow, Modes.Balanced, input);
-        var turn = new NativeTurn(start, model.CreateState(start));
+        var instance = new Models.InstanceInfo(new Contract.ActorRef("instance-1"), "tenant", NativeExecutionModel.ModelKey, start.Workflow, null);
+        var turn = new NativeTurn(instance, [new Contract.Message("start-1", Contract.Kinds.Start, start.Input)], model.CreateState(start));
         await model.TurnAsync(turn, CancellationToken.None);
         return turn;
+    }
+
+    /// <summary>The instance's next turn on <paramref name="model"/>, which may be another host's after a restart: its inbox the messages this turn sent the instance.</summary>
+    public async Task<NativeTurn> ResumeAsync(NativeExecutionModel model)
+    {
+        var stored = JsonSerializer.Serialize((NativeState)State);
+        var next = new NativeTurn(Instance, [.. Sent.Where(message => message.Target == Instance.Ref).Select(message => message.Message)],
+            JsonSerializer.Deserialize<NativeState>(stored)!, _sent);
+        await model.TurnAsync(next, CancellationToken.None);
+        return next;
     }
 
     public Contract.ActorStatus Status { get; private set; } = Contract.ActorStatus.Running;
     public JsonNode? Output { get; private set; }
     public Dictionary<string, string?> Labels { get; } = new(StringComparer.Ordinal);
     public List<(Models.WorkflowStart Start, bool Detached)> Children { get; } = [];
+    public List<(Contract.ActorRef Target, Contract.Message Message)> Sent { get; } = [];
     public NativeState Native => (NativeState)State;
 
     public Models.InstanceInfo Instance { get; }
@@ -44,7 +62,12 @@ internal sealed class NativeTurn : Models.ITurn
 
     public void Emit(string channel, object? item) { }
     public void Reply(Contract.Message message, string channel, object? item) { }
-    public string Send(Contract.ActorRef target, string kind, object? payload = null, long? dueAt = null) => $"sent-{++_sent}";
+    public string Send(Contract.ActorRef target, string kind, object? payload = null, long? dueAt = null)
+    {
+        var id = $"sent-{++_sent}";
+        Sent.Add((target, new Contract.Message(id, kind, payload is null ? null : JsonSerializer.Serialize(payload), Instance.Ref)));
+        return id;
+    }
     public void Recall(string id) { }
 
     public Contract.ActorRef Start(Models.WorkflowStart spec, Contract.Placement placement = Contract.Placement.WithParent, bool detached = false)

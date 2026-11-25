@@ -56,19 +56,19 @@ public sealed class NativeSchedules
             foreach (var node in workflow.Nodes.Values.Where(n => n.Type == typeof(Timer) || n.Type == typeof(Cron)).OrderBy(n => n.Id, StringComparer.Ordinal))
             {
                 if (!starts.Contains(node))
-                    throw new NativeScheduleException($"Workflow '{workflow.Id}', {node.Type.Name} '{node.Id}': a recurring start trigger must be where a run begins; use a Delay to wait in the middle of a workflow.");
+                    throw new NativeScheduleException($"Definition '{workflow.Definition}', {node.Type.Name} '{node.Id}': a recurring start trigger must be where a run begins; use a Delay to wait in the middle of a workflow.");
                 if (node.Type == typeof(Timer))
                 {
                     var interval = Literal(workflow, node, "Interval");
                     if (!ScheduleIntervals.TryParse(interval, out _))
-                        throw new NativeScheduleException($"Workflow '{workflow.Id}', Timer '{node.Id}': '{interval}' is no ISO 8601 duration or time span of at least {ScheduleIntervals.MinInterval.TotalSeconds:0} second.");
+                        throw new NativeScheduleException($"Definition '{workflow.Definition}', Timer '{node.Id}': '{interval}' is no ISO 8601 duration or time span of at least {ScheduleIntervals.MinInterval.TotalSeconds:0} second.");
                     _schedules.Add(new(workflow.Id, node.Id, NativeSchedule.Interval, interval.Trim()) { Definition = workflow.Definition });
                 }
                 else if (node.Type == typeof(Cron))
                 {
                     var expression = Literal(workflow, node, "Expression");
                     if ((cronError is null ? "the host reads no cron expressions" : cronError(expression)) is { } error)
-                        throw new NativeScheduleException($"Workflow '{workflow.Id}', Cron '{node.Id}': '{expression}' is refused: {error}.");
+                        throw new NativeScheduleException($"Definition '{workflow.Definition}', Cron '{node.Id}': '{expression}' is refused: {error}.");
                     _schedules.Add(new(workflow.Id, node.Id, NativeSchedule.Cron, expression.Trim()) { Definition = workflow.Definition });
                 }
             }
@@ -83,7 +83,7 @@ public sealed class NativeSchedules
         // Schedules are built over the workflows that serve, one per definition: two versions of one definition would
         // fire one schedule twice.
         foreach (var clash in _schedules.GroupBy(s => s.Key, StringComparer.Ordinal).Where(g => g.Count() > 1))
-            throw new NativeScheduleException($"Workflows {string.Join(" and ", clash.Select(s => $"'{s.Workflow}'"))} are versions of definition '{clash.First().Definition}' with a schedule on '{clash.First().Node}'; schedule one of them.");
+            throw new NativeScheduleException($"Definition '{clash.First().Definition}' would schedule '{clash.First().Node}' from {clash.Count()} versions at once. A definition's schedule runs one version: publish the scheduled definition to one channel.");
     }
 
     // Where a run can begin, as the graph engine begins it: the node itself; through a Sequence, its first child; through a
@@ -110,5 +110,5 @@ public sealed class NativeSchedules
     private static string Literal(Workflow workflow, Node node, string input) =>
         node.Inputs.GetValueOrDefault(input) is LiteralBinding { Value: JsonValue value } && value.TryGetValue<string>(out var text)
             ? text
-            : throw new NativeScheduleException($"Workflow '{workflow.Id}', {node.Type.Name} '{node.Id}': its {input} must be a literal, fixed when the definition is registered.");
+            : throw new NativeScheduleException($"Definition '{workflow.Definition}', {node.Type.Name} '{node.Id}': its {input} must be a literal, fixed when the definition is registered.");
 }

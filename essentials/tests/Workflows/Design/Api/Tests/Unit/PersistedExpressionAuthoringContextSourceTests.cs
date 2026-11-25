@@ -102,8 +102,48 @@ public sealed class PersistedExpressionAuthoringContextSourceTests
                         new("shop.street"), ownerContractIdentity, "profile", "metadata") { Members = [new("street", "Street", Scalar())] })]
                 }
                 : new ActivitySerializedShape(ActivitySerializedShapeState.Declared, ActivitySerializedValueKind.Scalar, declaredType, ownerContractIdentity, "profile", "metadata");
+            if (declaredType.CollectionKind is CollectionKind.List or CollectionKind.Dictionary)
+            {
+                var item = declared with { Type = declaredType with { CollectionKind = CollectionKind.Single } };
+                declared = new ActivitySerializedShape(ActivitySerializedShapeState.Declared,
+                    declaredType.CollectionKind == CollectionKind.List ? ActivitySerializedValueKind.Collection : ActivitySerializedValueKind.Map,
+                    declaredType, ownerContractIdentity, "profile", "metadata")
+                {
+                    Element = declaredType.CollectionKind == CollectionKind.List ? item : null,
+                    MapValue = declaredType.CollectionKind == CollectionKind.Dictionary ? item : null
+                };
+            }
             return ValueTask.FromResult<ActivitySerializedShape?>(declared with { ReasonCode = "activity.shape.declared-type" });
         }
+    }
+
+    [Fact]
+    public async Task A_declared_collection_variable_supplies_labeled_item_members()
+    {
+        var target = new ActivityNode("target", "activity", [], []);
+        var root = new ActivityNode("root", "container", [], []);
+        var structure = new RankedStructureService(root, [target], new Dictionary<string, string[]>());
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft", WorkflowDefinitionId = "workflow", LastModifiedAt = DateTimeOffset.UnixEpoch,
+            State = new([new("orders-key", "orders", new("shop.address", CollectionKind.List), null, null),
+                new("lookup-key", "lookup", new("shop.address", CollectionKind.Dictionary), null, null)], root, [], [], null)
+        };
+        var source = CreateSource([new SingleDraftStore(draft)], structure, new ScopedVariablePicker(new ScopedVariableResolver(structure)),
+            configure: services => services.AddSingleton<IActivitySerializedShapeSource>(new DeclaredVariableShape()));
+
+        var context = await source.TryResolveAsync(new(ExpressionToolingContractVersion.V1, "draft", "target", "text", "JavaScript", "document"), new(true), CancellationToken.None);
+
+        const string note = "From the declared type `shop.address`; the stored value may differ.";
+        var orders = Assert.Single(context!.RootSymbols, s => s.Kind == ExpressionSymbolKind.Variable && s.Name == "orders").ValueShape!;
+        Assert.Equal(ExpressionValueKind.Array, orders.Kind);
+        Assert.False(orders.HasLazyChildren);
+        var item = Assert.IsType<ExpressionValueShape>(orders.Item);
+        Assert.Equal(note, Assert.Single(item.Members!, m => m.Name == "city").Documentation);
+        Assert.Equal(note, Assert.Single(Assert.Single(item.Members!, m => m.Name == "home").Shape.Members!).Documentation);
+        var lookup = Assert.Single(context.RootSymbols, s => s.Kind == ExpressionSymbolKind.Variable && s.Name == "lookup").ValueShape!;
+        Assert.Equal(ExpressionValueKind.Map, lookup.Kind);
+        Assert.Equal(note, Assert.Single(lookup.Value!.Members!, m => m.Name == "city").Documentation);
     }
 
     [Fact]

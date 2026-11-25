@@ -65,6 +65,7 @@ CAPTURES = {
     'insert JavaScript activity data': ['reference', 'expression-sources', 'expression-cancelled', 'expression-history', 'expression-expanded', 'expression-escaped-member', 'expression-transformed', 'expression-reopened', 'expression-completed', 'expression-320'],
     'insert Liquid activity data': ['reference', 'expression-sources', 'expression-cancelled', 'expression-history', 'expression-expanded', 'expression-escaped-member', 'expression-transformed', 'expression-reopened', 'expression-completed', 'expression-320'],
     'complete typed variable members in JavaScript': ['reference', 'typed-compact-completion', 'typed-member-applied', 'typed-member-hover', 'untyped-no-members', 'typed-expanded-completion', 'chooser-typed-variable', 'chooser-typed-variable-whole'],
+    'complete typed collection items in JavaScript': ['reference', 'collection-item-completion', 'collection-item-applied', 'collection-item-hover', 'collection-member-picker'],
     'preserve expression data without optional modules': ['reference', 'missing-javascript', 'missing-javascript-reopened', 'missing-liquid', 'missing-liquid-reopened', 'missing-native-control', 'missing-320'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
     # Supplementary journeys (Studio/tests/acceptance/supplements.spec.ts) run once per their own project.
@@ -114,6 +115,8 @@ MEMBER_JOURNEYS = {'choose nested activity data', 'choose declared and scoped ac
 EXPRESSION_JOURNEYS = {'insert JavaScript activity data', 'insert Liquid activity data'}
 MINIMAL_ONLY_JOURNEYS = {'preserve expression data without optional modules'}
 DATA_JOURNEYS = MEMBER_JOURNEYS | COPY_JOURNEYS | {'choose data for activity outputs'} | EXPRESSION_JOURNEYS | MINIMAL_ONLY_JOURNEYS
+# Journeys that need the fixture's proof variable types (a Customer type that admits lists).
+PROOF_TYPE_JOURNEYS = {'complete typed collection items in JavaScript'}
 COMPOSITIONS = {'normal', 'minimal', 'default-off'}
 
 
@@ -138,6 +141,8 @@ def selected_journeys(journeys=None, composition='normal'):
 
 def configure_activity_data(backend_shells, studio_shells, composition, journeys):
     """Configure private copies only; default-off observes the committed default without forcing a false flag."""
+    if journeys & PROOF_TYPE_JOURNEYS:
+        backend_shells['CShells']['Shells']['default']['Features'].setdefault('ActivityDataSelectionProofTypes', {})
     if not journeys & DATA_JOURNEYS:
         return
     backend = backend_shells['CShells']['Shells']['default']['Features']
@@ -162,6 +167,7 @@ ADDITIONAL_ARTIFACTS = {
     'Double activity output binds to text': {'numeric-binding-proof.json'},
     'set output assigns reusable activity output': {'set-output-proof.json'},
     'complete typed variable members in JavaScript': {'activity-data-proof.json', 'typed-completion-proof.json'},
+    'complete typed collection items in JavaScript': {'activity-data-proof.json', 'typed-collection-proof.json'},
     **{journey: {'activity-data-proof.json', 'activity-data-copy-proof.json'} for journey in COPY_JOURNEYS},
     **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS - COPY_JOURNEYS},
     **{journey: {'activity-data-proof.json', 'expression-data-proof.json'} for journey in EXPRESSION_JOURNEYS},
@@ -1097,7 +1103,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             raise ValueError('The claimed PR head supplied neither observed source tree nor a verified CI merge parent')
         studio_project = studio_root / 'Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj'
         backend_command = ['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:1', '-nr:false', '-v:q', '-nologo']
-        if selected & DATA_JOURNEYS:
+        if selected & (DATA_JOURNEYS | PROOF_TYPE_JOURNEYS):
             fixture = ROOT / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
             backend_command.append(f'-p:CustomAfterMicrosoftCommonTargets={fixture}')
             report['fixture'] = {str(file.relative_to(ROOT)): hashlib.sha256(file.read_bytes()).hexdigest()

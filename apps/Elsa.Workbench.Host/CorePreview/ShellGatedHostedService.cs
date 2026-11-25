@@ -5,7 +5,9 @@ namespace Elsa.Workbench.CorePreview;
 /// the application's own start: the host's other services, the shell's warm-up among them, start meanwhile. A failure to
 /// pass the gate or to start ends the process, as the preview node's own escalations do.
 /// </summary>
-internal sealed class ShellGatedHostedService(IHostedService inner, Func<CancellationToken, Task> gate, Action<string> endProcess) : IHostedService
+/// <param name="starting">Runs once the gate opens, before the inner service starts. It reports its own failures, which end nothing.</param>
+internal sealed class ShellGatedHostedService(IHostedService inner, Func<CancellationToken, Task> gate, Action<string> endProcess,
+    Func<CancellationToken, Task>? starting = null) : IHostedService
 {
     private readonly CancellationTokenSource _stopping = new();
     private Task? _started;
@@ -18,6 +20,10 @@ internal sealed class ShellGatedHostedService(IHostedService inner, Func<Cancell
             try
             {
                 await gate(_stopping.Token);
+                // What runs before the node starts reports its own failures; the node starts either way.
+                if (starting is not null)
+                    try { await starting(_stopping.Token); }
+                    catch (Exception) when (!_stopping.IsCancellationRequested) { /* reported by the callback */ }
                 Volatile.Write(ref _entered, 1);
                 await inner.StartAsync(_stopping.Token);
             }
