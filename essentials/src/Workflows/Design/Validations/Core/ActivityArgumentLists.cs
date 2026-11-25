@@ -21,7 +21,9 @@ public static class ActivityArgumentLists
 
     /// <summary>
     /// The refusals for every node under <paramref name="root"/>, at any depth: some readers walk the whole tree, so the
-    /// check does too. Children are found through the node's structure, which never reads a node's argument lists.
+    /// check does too. Children are found through each node's structure handler, which does not read the lists of the
+    /// node it projects. A handler may still refuse a malformed child of its own payload with its own error while
+    /// projecting it (the BPMN complete-document handler does), which then surfaces before this refusal.
     /// </summary>
     public static IReadOnlyList<ValidationError> Refusals(ActivityNode? root, IActivityStructureService structures)
     {

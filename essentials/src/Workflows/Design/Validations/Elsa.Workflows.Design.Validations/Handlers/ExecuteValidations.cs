@@ -4,7 +4,6 @@ using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
-using Elsa.Workflows.Design.Validations.Internal;
 
 namespace Elsa.Workflows.Design.Validations.Handlers;
 
