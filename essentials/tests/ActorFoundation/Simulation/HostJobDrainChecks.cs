@@ -1808,10 +1808,11 @@ internal static class HostJobDrainChecks
                 if (turn.Sent.Any(message => message.Kind == Kinds.Job)) Volatile.Write(ref jobPartition, batch.PartitionOf(turn));
         });
         var turnLoss = new ScopeOwnershipLostException("injected turn drain loss");
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
         var node = new RuntimeNode("loss-in-both", store, partitions, new LoopOptions
         {
             BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
-        }, beforeRelease: _ => Task.FromException(turnLoss));
+        }, beforeRelease: _ => Task.FromException(turnLoss), onFault: logged.Enqueue);
         await node.StartAsync(fixture.Host(node, type, store, ownedSet: true));
         await WaitFor(() => fixture.Store.Partitions.All(row => row.Owner == node.Node));
         await fixture.StartActorAsync(node);
@@ -1828,8 +1829,10 @@ internal static class HostJobDrainChecks
         finally { type.Finish.TrySetResult(); }
         var reported = await OutcomeAsync(stop);
         await DisposeQuietlyAsync(node);
-        Check(reported is ScopeOwnershipLostException,
-            $"a fence lost in both drains is reported as one ScopeOwnershipLostException ({reported?.GetType().Name ?? "nothing"})");
+        await Task.Delay(200);
+        var losses = logged.Count(entry => entry is ScopeOwnershipLostException);
+        Check(reported is ScopeOwnershipLostException && losses == 1 && ReferenceEquals(logged.Single(entry => entry is ScopeOwnershipLostException), turnLoss),
+            $"a fence lost in both drains is reported, recorded and logged as one ScopeOwnershipLostException ({reported?.GetType().Name ?? "nothing"}, {losses} logged)");
     }
 
     // The job drain judges a lost fence before any kill. Then either the turn drain's abandon fault ends the stop, or the
