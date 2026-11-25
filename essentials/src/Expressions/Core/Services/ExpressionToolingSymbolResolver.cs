@@ -232,17 +232,10 @@ public static class ExpressionToolingSymbolResolver
             else
                 break;
         }
+        // To the right, an index ends the path: it selects an item, not the name under the cursor.
         if (includeRight)
-            while (end < source.Length)
-            {
-                if (IsPathCharacter(source[end]))
-                    end++;
-                else if (source[end] == '[' && source.IndexOf(']', end + 1) is var close and >= 0 &&
-                         source.AsSpan(end + 1, close - end - 1).IndexOfAny('\n', '[') < 0)
-                    end = close + 1;
-                else
-                    break;
-            }
+            while (end < source.Length && IsPathCharacter(source[end]))
+                end++;
         return source[start..end];
     }
 

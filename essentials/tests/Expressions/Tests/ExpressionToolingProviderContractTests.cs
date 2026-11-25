@@ -159,6 +159,12 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.Equal(note, item.Documentation);
         var hover = await provider.GetHoverAsync(new(scope, "variables.orders[0].city", new(0, 24)), CancellationToken.None);
         Assert.Contains("the stored value may differ", hover.Payload!.Contents, StringComparison.Ordinal);
+        // Hover on the collection itself names the collection, not a member after the index.
+        foreach (var (text, at) in new[] { ("variables.orders[0]", 13), ("variables.orders[0].city", 13), ("variables.lookup[\"k\"]", 13) })
+        {
+            var collection = await provider.GetHoverAsync(new(scope, text, new(0, at)), CancellationToken.None);
+            Assert.StartsWith(text[10..text.IndexOf('[')], collection.Payload!.Contents, StringComparison.Ordinal);
+        }
         var validation = await provider.ValidateAsync(new(scope, "variables.orders[0].cty + variables.lookup[\"k\"].home.stret"), CancellationToken.None);
         Assert.Empty(validation.Payload!.Diagnostics);
     }
