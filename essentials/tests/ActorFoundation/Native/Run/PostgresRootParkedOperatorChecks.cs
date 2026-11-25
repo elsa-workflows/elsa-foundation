@@ -99,6 +99,9 @@ internal static class PostgresRootParkedOperatorChecks
         var planned = await main.StartAsync("planned");
         var deleted = await main.StartAsync("deleted");
         var withheldDelete = await main.StartAsync("withheld-delete");
+        var heldRunning = await main.StartAsync("held-running");
+        var heldThenDelete = await main.StartAsync("held-then-delete");
+        var heldDelete = await main.StartAsync("held-delete");
         probe.FailsOn.Add((lone.Id, Contract.Kinds.Terminate));
         probe.FailsOn.Add((suspendedTerminate.Id, Contract.Kinds.Terminate));
         probe.FailsOn.Add((suspendedResume.Id, Contract.Kinds.Resume));
@@ -232,6 +235,48 @@ internal static class PostgresRootParkedOperatorChecks
                 (await main.InputsOfAsync(withheldPark.Actor.Id)).All(row => row.Done && !row.Content) && !probe.Saw(withheldDelete, "ordinary"),
             "the retirement settled the withheld input and no row stays in the retired root's slot");
 
+        // #5756: retirement answers each held direct input still pending on the root once, with "missing", as the in-memory
+        // reference answers an input that reaches a retired row; an unheld input settles with no answer. In a set without
+        // direct held replies a held input is refused at admission and nothing else changes. The inputs are due shortly
+        // after the command that retires the root, so they are still pending when it runs, or withheld by the Park.
+        var heldReplies = db.UsesRootReplyProtocol;
+        // A running root retired by its Terminate-then-delete.
+        var runningDue = (await main.ImageAsync(heldRunning)).AsOf + 1_500;
+        var runningRequest = await main.HeldSendAsync(heldRunning, "held-running-input", runningDue);
+        Check(runningRequest is not null == heldReplies &&
+                await main.SendAsync(heldRunning, "unheld-running-input", "ordinary", runningDue) &&
+                await main.OperateAsync(heldRunning, "held-running-delete", Contract.Kinds.Terminate, main.Selections[heldRunning], thenDelete: true) &&
+                await main.OperateAsync(heldRunning, "held-running-terminate", Contract.Kinds.Terminate, main.Selections[heldRunning], reply: true),
+            heldReplies ? "a held and an unheld input due shortly, a Terminate-then-delete and a held Terminate are admitted for the running root"
+                : "without held replies a held input is refused at admission; an unheld input, a Terminate-then-delete and a held Terminate are admitted");
+        var runningActor = (await main.ImageAsync(heldRunning)).Actor.Id;
+        await main.RetiredAsync(heldRunning);
+        await HeldInputsAnsweredAsync(runningActor, "held-running-input", runningRequest, "unheld-running-input", runningDue);
+        // A held command on the same root is answered once too, through the same retirement.
+        await main.AnsweredErrorEventuallyAsync("held-running-terminate", "missing", runningDue);
+        // A parked root retired by its Terminate-then-delete, and one retired by a Delete, both with the Park selection.
+        foreach (var (root, label, thenDelete) in new[] { (heldThenDelete, "held-then-delete", true), (heldDelete, "held-delete", false) })
+        {
+            var heldDue = (await main.ImageAsync(root)).AsOf + 1_500;
+            var heldRequest = await main.HeldSendAsync(root, label + "-input", heldDue);
+            // The faulting input is held too where held replies exist: its caller is answered with the Faulted end when the Park
+            // opens (Worker.Release answers a consumed input's route at a non-Running end), and the Park keeps the row Done.
+            var faultRequest = heldReplies ? await main.HeldSendAsync(root, label + "-fail", null, "fail") : null;
+            Check(heldRequest is not null == heldReplies && await main.SendAsync(root, "un" + label + "-input", "ordinary", heldDue) &&
+                    (heldReplies ? faultRequest is not null : await main.SendAsync(root, label + "-fail", "fail")),
+                $"held and unheld inputs due shortly, and a failing one, are admitted for the {label} root");
+            var retiredPark = await main.DriveAsync(root, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
+            while ((await main.ImageAsync(root)).AsOf <= heldDue) await Task.Delay(100, stop);
+            Check(await main.OperateAsync(root, label, thenDelete ? Contract.Kinds.Terminate : Contract.Kinds.Delete,
+                    await main.ParkSelectionAsync(root, 2), thenDelete: thenDelete),
+                $"a {(thenDelete ? "Terminate-then-delete" : "Delete")} with the Park selection is admitted for the {label} root");
+            await main.RetiredAsync(root);
+            await HeldInputsAnsweredAsync(retiredPark.Actor.Id, label + "-input", heldRequest, "un" + label + "-input", heldDue);
+            if (faultRequest is not null)
+                await main.AnsweredOnceAsync(faultRequest, heldDue, reply => reply is { Status: InstanceStatus.Faulted, Error: null },
+                    "the Faulted end at Park open and nothing from the retirement");
+        }
+
         // Admission on a parked root: a Suspend, a Resume, a held running selection and a held Terminate and delete are refused.
         var parkEarly = await main.ParkSelectionAsync(early, 2);
         Check(!await main.OperateAsync(early, "suspend-parked", Contract.Kinds.Suspend) &&
@@ -291,6 +336,17 @@ internal static class PostgresRootParkedOperatorChecks
         main.Answered("terminate-suspended-park", "terminated");
 
         await RefusalTriggers();
+
+        // The retired root's inputs all settled; a held one was answered "missing" once, and an unheld one not at all.
+        async Task HeldInputsAnsweredAsync(string actor, string held, string? request, string unheld, long due)
+        {
+            var inputs = await main.InputsOfAsync(actor);
+            Check(inputs.All(row => row.Done && !row.Content) && !main.AnsweredAny(unheld) &&
+                    inputs.Count(row => row.Id.Contains("/" + FoundationRootCreator.OperationDigest(unheld) + "/")) == 1 &&
+                    (request is null || inputs.Count(row => row.Id.Contains("/" + FoundationRootCreator.OperationDigest(held) + "/")) == 1),
+                $"the retirement settled the inputs of {actor}, and the unheld one got no answer");
+            if (request is not null) await main.AnsweredErrorEventuallyAsync(request, "missing", due);
+        }
         await ParkedRootPredicates();
 
         // Format 22 still refuses Terminate at admission and at decode.
@@ -1672,7 +1728,10 @@ internal static class PostgresRootParkedOperatorChecks
         {
             var store = Store();
             var scope = (await ShippedComposition.BindWorkerPartitionAsync(store, open, 0, stop)).Scope;
-            var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), Probe);
+            // A set with direct held replies dispatches held inputs, as PostgresPreviewHosting wires its owner.
+            bool heldReplies;
+            await using (var profile = open()) heldReplies = profile.UsesRootReplyProtocol;
+            var adapter = new ActorAdapter(new EfStore.RootHeaders(scope), Probe, rootHeldReplies: heldReplies);
             IKernelStore kernel = store;
             if (Write is { } write)
             {
@@ -1730,6 +1789,47 @@ internal static class PostgresRootParkedOperatorChecks
             await _ingress.SendAsync(tenant, new Contract.Target.Ref(root), id, Contract.Kinds.Terminate,
                 JsonSerializer.Serialize(new Contract.OperatorCommand(selection ?? Selections[root])), cancellationToken: stop) is
                 { Outcome: Contract.AdmissionOutcome.Accepted };
+
+        // #5756: a held direct input, admitted as an edge admits it, whose caller is this fixture's held caller. When admitted,
+        // the request its answer names (from its reply address); else null.
+        internal async Task<string?> HeldSendAsync(Contract.ActorRef root, string id, long? dueAt, string kind = "ordinary")
+        {
+            var deadline = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 600_000;
+            var request = new Requests().OpenBound(id, deadline, tenant.Tenant, null);
+            return await Admission.AdmitDirectRequestAsync(tenant.Tenant, root.Id, kind, "{}", HeldCaller, request, false, stop, dueAt: dueAt)
+                == PostgresRootAdmission.DirectResult.Accepted ? ReplyTo.Parse(request.ReplyAddress(HeldCaller, false)).Request : null;
+        }
+
+        internal bool AnsweredAny(string request) => _replies.Sent.Any(sent => sent.Reply.Request == request);
+
+        // A retirement answers its held callers after its commit lands, off the pass that drove it. Wait for the answer, then
+        // drive the owner until the database clock has passed the input's due time, so a late second answer fails too; then
+        // require exactly one, bound to the root's tenant (the caller's side accepts no other).
+        internal async Task AnsweredOnceAsync(string request, long settledAfter, Func<Reply, bool> expected, string what)
+        {
+            var deadline = System.Diagnostics.Stopwatch.StartNew();
+            while (!AnsweredAny(request) && deadline.Elapsed < TimeSpan.FromSeconds(10)) await Task.Delay(20, stop);
+            while (await DatabaseNowAsync() <= settledAfter + 500 && deadline.Elapsed < TimeSpan.FromSeconds(30))
+            {
+                await _owner.WokenAsync(null, stop);
+                await _owner.RunAsync(stop);
+                await Task.Delay(50, stop);
+            }
+            Check(_replies.Sent.Where(sent => sent.Reply.Request == request && sent.Node == HeldCaller).ToArray() is [var only] &&
+                    expected(only.Reply) && only.Reply.Tenant == tenant.Tenant,
+                $"the owner answers the held caller of {request} once, past its due time, with {what}, bound to the root's tenant");
+        }
+
+        internal Task AnsweredErrorEventuallyAsync(string request, string error, long settledAfter) =>
+            AnsweredOnceAsync(request, settledAfter, reply => reply.Error == error, $"the error {error}");
+
+        private async Task<long> DatabaseNowAsync()
+        {
+            await using var read = open();
+            return await read.Database.SqlQueryRaw<long>("""
+                SELECT floor(extract(epoch from clock_timestamp()) * 1000)::bigint AS "Value"
+                """).SingleAsync(stop);
+        }
 
         // Admission without the ingress: Suspend and Resume, held commands and Terminate and delete.
         internal async Task<bool> OperateAsync(Contract.ActorRef root, string id, string kind, string? selection = null, bool reply = false,

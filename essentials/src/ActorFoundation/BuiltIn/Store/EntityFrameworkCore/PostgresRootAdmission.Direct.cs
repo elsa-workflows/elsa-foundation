@@ -43,12 +43,12 @@ internal sealed partial class PostgresRootAdmission
         => await AdmitDirectCoreAsync(tenant, reference, id, kind, payload, due, keepFor, null, cancellationToken);
 
     internal Task<DirectResult> AdmitDirectRequestAsync(string tenant, string reference, string kind, string? payload,
-        string node, Request request, bool early, CancellationToken cancellationToken, TimeSpan? keepFor = null)
+        string node, Request request, bool early, CancellationToken cancellationToken, TimeSpan? keepFor = null, long? dueAt = null)
     {
         if (request.Tenant != tenant || request.Done || string.IsNullOrWhiteSpace(node) || node.Length > 256 ||
             node.Contains('|') || node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(node))
             return Task.FromResult(DirectResult.Refused);
-        return AdmitDirectCoreAsync(tenant, reference, request.Id, kind, payload, null, keepFor,
+        return AdmitDirectCoreAsync(tenant, reference, request.Id, kind, payload, dueAt, keepFor,
             new(request.ReplyAddress(node, early), request.Deadline), cancellationToken);
     }
 

@@ -3349,7 +3349,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 Apply(unit, seqs, handOver, cancellationToken, ReplyRelease.AfterCommit, fenced);
                 if (!LeaseUsable()) return Outcome.Lost;
             }
-            foreach (var retired in result.RetiredOperatorReplies)
+            foreach (var retired in result.RetiredReplies)
                 Send(retired.Route, retired.Occurrence + "#retired", null, null, error: "missing");
             if (result.ParkExpiries.Count > 0)
             {
