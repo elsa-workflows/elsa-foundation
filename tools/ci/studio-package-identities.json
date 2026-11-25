@@ -78,6 +78,7 @@
     { "id": "Elsa.Studio.Workflows.Dashboard", "project": "extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Elsa.Studio.Workflows.Dashboard.csproj" }
   ],
   "non_packable_projects": [
+    { "id": "Elsa.Studio.Essentials.Host", "project": "Studio/src/apps/Elsa.Studio.Essentials.Host/Elsa.Studio.Essentials.Host.csproj", "introduced_after_consolidation": true },
     { "id": "Elsa.Studio.Foundation.Host", "project": "Studio/src/apps/Elsa.Studio.Foundation.Host/Elsa.Studio.Foundation.Host.csproj", "introduced_after_consolidation": true },
     { "id": "Elsa.Studio.Workbench.Host", "project": "Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj", "renamed_from": "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" },
     { "id": "Elsa.Studio.Tests", "project": "Studio/tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj" }

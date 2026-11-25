@@ -3,6 +3,7 @@ import { defaultRunHealthSettings, loadPortfolio, loadRunHealth, type RunHealthS
 import { WorkflowPortfolioWidget } from "./WorkflowPortfolioWidget";
 import { WorkflowRunHealthWidget } from "./WorkflowRunHealthWidget";
 import "./styles.css";
+import { registerWorkflowHome } from "./home/registerWorkflowHome";
 const rangeDescriptor: StudioSettingDescriptor = {
   name: "range", displayName: "Date range", jsonType: "string", required: true,
   secret: false, sensitive: false, restartRequired: false, advanced: false, experimental: false,
@@ -13,6 +14,7 @@ const testsDescriptor: StudioSettingDescriptor = {
   secret: false, sensitive: false, restartRequired: false, advanced: false, experimental: false, options: []
 };
 export function register(api: ElsaStudioModuleApi) {
+  registerWorkflowHome(api);
   registerHomeWidget<WorkflowPortfolioSnapshot>(api, {
     id: "workflows.portfolio", requiresBackend:[{id:"elsa.api.workflow-dashboard",contractVersion:"1",relations:["workflow-portfolio"]}], moduleId: "Elsa.Studio.Workflows.Dashboard", title: "Workflow portfolio",
     description: "Current workflow definition readiness.", order: 10, defaultVisible: true, defaultSize: "medium",

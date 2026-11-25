@@ -77,6 +77,7 @@ describe("studio registry", () => {
     expect(api.routes.slot.id).toBe(studioSlotIds.routes);
     expect(api.dashboardWidgets.slot.id).toBe(studioSlotIds.dashboardWidgets);
     expect(api.dashboardRecordLinks?.slot.id).toBe(studioSlotIds.dashboardRecordLinks);
+    expect(api.homeSections.slot.id).toBe(studioSlotIds.homeSections);
     expect(api.workflowDesigner.panels.slot.id).toBe(studioSlotIds.workflowDesignerPanels);
     expect(typeof api.workflowDesigner.registerActivityIcons).toBe("function");
     api.workflowDesigner.registerActivityIcons?.({});

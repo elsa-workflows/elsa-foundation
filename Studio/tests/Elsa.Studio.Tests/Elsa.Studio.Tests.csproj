@@ -49,6 +49,10 @@
     of it is loaded here, and Private=false keeps its shells.json and appsettings.json out of this output, which holds the Workbench app's.
     -->
     <ProjectReference Include="../../src/apps/Elsa.Studio.Foundation.Host/Elsa.Studio.Foundation.Host.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <!-- Build order only, as above: EssentialsStudioHostBootTests and EssentialsStudioAddOnTests start the Essentials Studio app. -->
+    <ProjectReference Include="../../src/apps/Elsa.Studio.Essentials.Host/Elsa.Studio.Essentials.Host.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <!-- Build order only: EssentialsStudioAddOnTests packs the ETL Studio module from its own build output without rebuilding it. -->
+    <ProjectReference Include="../../../extensions/Etl/studio/Elsa.Studio.Etl/Elsa.Studio.Etl.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="../../../tools/studio/HostingReuse.Probe/Fixtures/First/First.csproj" />
     <ProjectReference Include="../../../tools/studio/HostingReuse.Probe/Fixtures/Second/Second.csproj" />
   </ItemGroup>

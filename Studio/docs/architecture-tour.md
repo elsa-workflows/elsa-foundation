@@ -23,9 +23,10 @@ flowchart LR
 
 ## Host and shell
 
-Two Studio apps ship: [`Elsa.Studio.Workbench.Host`](../src/apps/Elsa.Studio.Workbench.Host/Program.cs) compiles in every
-Studio module, and [`Elsa.Studio.Foundation.Host`](../src/apps/Elsa.Studio.Foundation.Host/README.md) is the bare shell whose
-modules arrive from a Nuplane feed. Each app's `Program.cs` names its in-box modules and calls
+Three Studio apps ship: [`Elsa.Studio.Workbench.Host`](../src/apps/Elsa.Studio.Workbench.Host/Program.cs) compiles in every
+Studio module, [`Elsa.Studio.Essentials.Host`](../src/apps/Elsa.Studio.Essentials.Host/README.md) compiles in the modules the
+Essentials server serves, and [`Elsa.Studio.Foundation.Host`](../src/apps/Elsa.Studio.Foundation.Host/README.md) is the bare
+shell whose modules arrive from a Nuplane feed. Each app's `Program.cs` names its in-box modules and calls
 [`Elsa.Studio.Hosting.Distribution`](../src/essentials/Elsa.Studio.Hosting.Distribution/README.md), which composes the public
 APIs of [`Elsa.Studio.Hosting`](../src/essentials/Elsa.Studio.Hosting), Backends, Nuplane administration and the Theme Store.
 Reusable Hosting code:
@@ -109,7 +110,7 @@ A Dashboard Contribution should be admitted only when it:
 - satisfies the Slot Owner's shape and ordering rules; and
 - remains available after Module Policy and Host Policy are applied.
 
-Accepted Contributions are ordered by explicit `order` and stable fallback values, never by module load order. Modules may contribute zero, one, or multiple Dashboard widgets. Dashboard Contributions are optional, and there is no one-widget-per-module rule. The host renders a valid empty state when no Dashboard widgets are registered.
+Accepted Contributions are ordered by explicit `order` and stable fallback values, never by module load order. Modules may contribute zero, one, or multiple Home widgets. Widget Contributions are optional, and there is no one-widget-per-module rule. Home and its widget area belong to the shell (`Elsa.Studio.Hosting`), so every Studio flavor has them; the shell renders a valid empty state when no widgets are registered. The Dashboard module adds saved dashboards and questions and does not replace Home.
 
 See [ADR 0004](adr/0004-keep-dashboard-and-diagnostics-as-separate-slots.md) for the boundary between Dashboard summaries and Diagnostics signals.
 

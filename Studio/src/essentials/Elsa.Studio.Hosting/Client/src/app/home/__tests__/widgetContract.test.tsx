@@ -1,16 +1,14 @@
 import React from "react";
-import { ChartColumn } from "lucide-react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AnonymousAuthProvider, AuthProvider, homeWidgetIds, registerHomeWidget, type AuthProviderManager, type AuthSession } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, AuthProvider, registerHomeWidget, type AuthProviderManager, type AuthSession } from "@elsa-workflows/studio-sdk";
 import { HomePage } from "../HomePage";
-import { DashboardPreferenceStore, reconcileDashboardPreferences } from "../dashboardPreferences";
 import { HomeLayoutStore, homeLayoutDefaultRoute, homeLayoutLocalStoragePrefix, homeLayoutRoute, reconcileHomeLayout, type HomeLayoutDocument } from "../homeLayout";
-import { register } from "../module";
+import { homePaths, registerHome } from "../registerHome";
 import { flush, seedHomeLayout, stubApi, waitUntil, widget } from "./testSupport";
 
-describe("dashboard widget contract", () => {
+describe("Home widget contract", () => {
   afterEach(() => {
     localStorage.clear();
     vi.unstubAllGlobals();
@@ -27,23 +25,12 @@ describe("dashboard widget contract", () => {
     expect(result.widgets[1]).toMatchObject({ id: "weather.forecast", size: "medium", visible: true });
   });
 
-  it("registers Home routes and core widgets through registerHomeWidget", () => {
+  it("registers the shell's Home navigation entry and routes", () => {
     const api = stubApi();
-    register(api);
-    expect(api.navigation.list().map(item => item.path)).toEqual(["/dashboard", "/dashboards", "/questions"]);
-    expect(api.navigation.list().map(item => item.label)).toEqual(["Home", "Dashboards", "Questions"]);
-    expect(api.navigation.list().find(item => item.id === "questions")?.icon).toBe(ChartColumn);
-    expect(api.routes.list().map(item => item.path)).toEqual(["/", "/dashboard", "/overview", "/dashboards", "/dashboards/new", "/dashboards/:resourceId/edit", "/dashboards/:resourceId", "/questions", "/questions/new", "/questions/:resourceId"]);
-    expect(api.routes.list().filter(item => item.id.startsWith("saved-")).every(item =>
-      item.requiresBackend?.some(requirement => requirement.id === "elsa.api.studio-dashboard" && requirement.contractVersion === "1"))).toBe(true);
-    expect(api.homeWidgets.list().map(item => item.id)).toEqual([
-      homeWidgetIds.getStarted,
-      homeWidgetIds.quickActions,
-      homeWidgetIds.recentWorkflows,
-      homeWidgetIds.recentRuns,
-      homeWidgetIds.needsAttention,
-      homeWidgetIds.tasks
-    ]);
+    registerHome(api);
+    expect(api.navigation.list().map(item => [item.id, item.path, item.placement])).toEqual([["home", "/dashboard", "main"]]);
+    expect(api.routes.list().map(item => item.path)).toEqual([...homePaths]);
+    expect(api.routes.list().every(item => item.label === "Home" && !item.requiresBackend)).toBe(true);
   });
 
   it("normalizes S/M/L sizes on registerHomeWidget", () => {
@@ -147,28 +134,6 @@ describe("dashboard widget contract", () => {
     flushSync(() => secondRoot.unmount());
   });
 
-  it("retains unknown preferences and repairs unsupported sizes and invalid settings", () => {
-    const result = reconcileDashboardPreferences({ refreshIntervalMs: 300_000, autoAddNewWidgets: true, widgets: [
-      { id: "workflows.runs", visible: true, size: "full", settingsSchemaVersion: 1, settings: { range: "bad" } },
-      { id: "missing.widget", visible: false, size: "small" }
-    ] }, [widget()]);
-    expect(result.widgets).toEqual([
-      { id: "workflows.runs", visible: true, size: "wide", settingsSchemaVersion: 1, settings: { range: "7d" } },
-      { id: "missing.widget", visible: false, size: "small" }
-    ]);
-  });
-
-  it("purges known unauthorized widget identities while retaining unloaded modules", () => {
-    const result = reconcileDashboardPreferences({ refreshIntervalMs: 300_000, autoAddNewWidgets: true, widgets: [
-      { id: "workflows.runs", visible: true, size: "wide" },
-      { id: "secrets.attention", visible: true, size: "wide", settings: { secretScope: "production" } },
-      { id: "missing.widget", visible: false, size: "small", settings: { retained: true } }
-    ] }, [widget()], [], undefined, new Set(["secrets.attention"]));
-
-    expect(result.widgets.map(entry => entry.id)).toEqual(["workflows.runs", "missing.widget"]);
-    expect(result.widgets.find(entry => entry.id === "missing.widget")?.settings).toEqual({ retained: true });
-  });
-
   it("removes revoked widget metadata from the next canonical preference write", async () => {
     const api = stubApi();
     api.dashboardWidgets.add(widget());
@@ -210,65 +175,6 @@ describe("dashboard widget contract", () => {
     expect(container.textContent).toContain("Workflow runs");
     expect(container.textContent).not.toContain("Secrets attention");
     flushSync(() => root.unmount());
-  });
-
-  it("lets host policy force a personally hidden widget visible", () => {
-    const result = reconcileDashboardPreferences({ refreshIntervalMs: 300_000, autoAddNewWidgets: false, widgets: [
-      { id: "workflows.runs", visible: false, size: "wide" }
-    ] }, [widget()], ["workflows.runs"]);
-    expect(result.widgets[0].visible).toBe(true);
-  });
-
-  it("keeps a newly discovered widget hidden when automatic add is disabled", () => {
-    const result = reconcileDashboardPreferences({ refreshIntervalMs: 300_000, autoAddNewWidgets: false, widgets: [] }, [widget()]);
-    expect(result.widgets[0]).toMatchObject({ id: "workflows.runs", visible: false });
-  });
-
-  it("resets only the widget whose saved settings cannot migrate", () => {
-    const reset: string[] = [];
-    const result = reconcileDashboardPreferences({ refreshIntervalMs: 300_000, autoAddNewWidgets: true, widgets: [
-      { id: "workflows.runs", visible: true, size: "wide", settingsSchemaVersion: 0, settings: { range: "legacy" } },
-      { id: "missing.widget", visible: false, size: "small", settings: { retained: true } }
-    ] }, [widget()], [], id => reset.push(id));
-
-    expect(reset).toEqual(["workflows.runs"]);
-    expect(result.widgets[0].settings).toEqual({ range: "7d" });
-    expect(result.widgets[1]).toMatchObject({ id: "missing.widget", settings: { retained: true } });
-  });
-
-  it("serializes canonical preference writes against the latest revision", async () => {
-    const api = stubApi();
-    const headers: Array<Record<string, string>> = [];
-    let revision = 0;
-    (api.backend.http as unknown as { putJson: ReturnType<typeof vi.fn> }).putJson = vi.fn(async (_url, body, options) => {
-      headers.push((options as { headers: Record<string, string> }).headers);
-      await new Promise(resolve => setTimeout(resolve, 1));
-      return { namespace: "dashboard", schemaVersion: 1, revision: `rev-${++revision}`, value: (body as { value: unknown }).value };
-    });
-    const store = new DashboardPreferenceStore(api, { studioHostId: "studio", backendBaseUrl: "backend", subjectId: "user", tenantId: "tenant" });
-    const document = { namespace: "dashboard", schemaVersion: 1, value: { refreshIntervalMs: 300_000 as const, autoAddNewWidgets: true, widgets: [] } };
-
-    await Promise.all([store.save(document), store.save({ ...document, value: { ...document.value, autoAddNewWidgets: false } })]);
-
-    expect(headers).toEqual([
-      expect.objectContaining({ "If-None-Match": "*" }),
-      expect.objectContaining({ "If-Match": '"rev-1"' })
-    ]);
-  });
-
-  it("isolates device-local fallback by tenant and host scope", async () => {
-    const values = new Map<string, string>();
-    vi.stubGlobal("localStorage", { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value) });
-    const api = stubApi();
-    const first = new DashboardPreferenceStore(api, { studioHostId: "studio-a", backendBaseUrl: "backend", subjectId: "anonymous", tenantId: "tenant-a" });
-    const second = new DashboardPreferenceStore(api, { studioHostId: "studio-a", backendBaseUrl: "backend", subjectId: "anonymous", tenantId: "tenant-b" });
-    const document = { namespace: "dashboard", schemaVersion: 1, value: { refreshIntervalMs: 60_000 as const, autoAddNewWidgets: true, widgets: [] } };
-
-    await first.save(document);
-
-    expect((await first.load()).value.refreshIntervalMs).toBe(60_000);
-    expect((await second.load()).value.refreshIntervalMs).toBe(300_000);
-    vi.unstubAllGlobals();
   });
 
   it("isolates anonymous Home layouts by tenant and host and resets to the builtin default", async () => {

@@ -121,25 +121,25 @@ Stop only the Workbench and Studio processes you started, with Ctrl+C in their t
 
 ## Earlier recorded source-edit exercise
 
-The following Dashboard heading edit and in-browser Write Line journey were last fully exercised on macOS 26.6 arm64 with Studio revision `2eabb6dc7112211b141d129f8849165f1816cbd7` and Foundation revision `592d6c0eb2a1ae45563ce5b234fb4e97af2867ed`. The file paths still exist under `Studio/` in this repository. They were **not** re-run on the Linux/amd64 SHA above.
+The following heading edit and in-browser Write Line journey were last fully exercised on macOS 26.6 arm64 with Studio revision `2eabb6dc7112211b141d129f8849165f1816cbd7` and Foundation revision `592d6c0eb2a1ae45563ce5b234fb4e97af2867ed`, when Home still lived in the Dashboard module. Home now belongs to the Studio shell, so the paths below are the shell's; this form of the exercise has not been re-run.
 
-The Dashboard page is registered at `/`, `/dashboard`, and `/overview`. Its empty state renders the `Dashboard` heading. From the `Studio/` directory, first change only the existing empty-state heading expectation in `src/essentials/Elsa.Studio.Dashboard/Client/src/__tests__/DashboardPage.test.tsx` from `Dashboard` to `Your first Studio change`.
+Home is registered at `/`, `/dashboard`, and `/overview`. With no module contributing a widget it renders the `Home` heading and an empty state. From the `Studio/` directory, first change only the heading expectation in the empty-state test of `src/essentials/Elsa.Studio.Hosting/Client/src/app/home/__tests__/HomePage.test.tsx` from `Home` to `Your first Studio change`.
 
-Run the focused test and observe the expected failure while the component still renders `Dashboard`:
+Run the focused test and observe the expected failure while the component still renders `Home`:
 
 ```bash
-pnpm --filter @elsa-workflows/studio-dashboard test src/__tests__/DashboardPage.test.tsx -t 'renders its empty state when no module contributes a widget'
+pnpm --filter @elsa-workflows/studio-web test src/app/home/__tests__/HomePage.test.tsx -t 'renders an empty state without Home actions when no module contributes a widget'
 ```
 
-Now change the visible heading in `src/essentials/Elsa.Studio.Dashboard/Client/src/DashboardPage.tsx` to `Your first Studio change` and rerun the same focused test; it should pass. To make this module edit visible, rebuild its Vite assets and the Studio host, then restart only the Studio process you started:
+Now change the `title` of the page header in `src/essentials/Elsa.Studio.Hosting/Client/src/app/home/HomePage.tsx` to `Your first Studio change` and rerun the same focused test; it should pass. To make the edit visible, rebuild the shell's Vite assets and the Studio host, then restart only the Studio process you started:
 
 ```bash
-pnpm --filter @elsa-workflows/studio-dashboard build
+pnpm --filter @elsa-workflows/studio-web build
 dotnet build src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj
 ```
 
-The Dashboard Vite build writes its module assets under `src/essentials/Elsa.Studio.Dashboard/wwwroot/studio/modules/dashboard`. Rebuilding and restarting is the recorded source-edit path; do not assume hot reload for this asset.
+The shell build writes its assets under `src/essentials/Elsa.Studio.Hosting/wwwroot/studio`. Rebuilding and restarting is the recorded source-edit path; do not assume hot reload for this asset.
 
-After restarting Studio, reload `http://localhost:5089` and confirm the Dashboard heading reads `Your first Studio change` before restoring the exercise. After restoration, rebuild and restart again, reload the page, and confirm the default `Dashboard` heading returns.
+After restarting Studio, reload `http://localhost:5089` and confirm the Home heading reads `Your first Studio change` before restoring the exercise. After restoration, rebuild and restart again, reload the page, and confirm the default `Home` heading returns.
 
 On that earlier macOS pair, the completed browser journey created and published `Contributor source journey 583`, ran it, and inspected a `Completed` run whose **Write Line** activity completed with no active incidents. That journey is also tracked under [Studio issue #583](https://github.com/elsa-workflows/elsa-foundation-studio/issues/583).
