@@ -19,9 +19,11 @@ namespace Kernel.Native.Run;
 // through them. A held start is answered from its own turn and then runs a job; a timed job passes its deadline; a selected
 // Terminate and Delete reach the roots, with workflow history beside them. The format 24 marker refuses the preview formats
 // it replaces, which are recreated, and they refuse it.
+// A Terminate of a root whose timed job runs settles the job in its terminal commit, and a Delete retires it after.
 // Deferred to the next slice, since the PostgreSQL root dispatch refuses both on every format today: output written after a
 // job turn (it reaches only a caller whose delivery the turn consumed), and a Native workflow that ends Faulted (a root
-// commits only Running, Finished, a timed-job timeout or a termination).
+// commits only Running, Finished, a timed-job timeout or a termination). Not carried yet: child Dispatch (the root
+// dispatch refuses a child start) and self-sends and timers (Delay), which do not compose with timed jobs yet.
 internal static class PostgresShippedFormatChecks
 {
     private const string Node = "shipped-node";
@@ -64,6 +66,9 @@ internal static class PostgresShippedFormatChecks
                 Wf.Http("send", "https://partner.example/ok", expectedStatusCodes: [200]),
                 Wf.Set("fetched", "outcome", Binding.Result("send", "StatusCode")))))
             .Add(Records("stuck", Wf.Http("send", "https://partner.example/stuck", timeout: TimeSpan.FromMilliseconds(400))))
+            .Add(Wf.Workflow("delayed", Wf.Sequence("main", Wf.Delay("pause", 300L), Wf.Set("after", "outcome", "delayed"))))
+            .Add(Wf.Workflow("long-fetch", Wf.Sequence("main",
+                Wf.Http("send", "https://partner.example/stuck", timeout: TimeSpan.FromSeconds(60)), Wf.WriteLine("after", "after"))))
             .Add(Wf.Workflow("waits", Wf.Sequence("main",
                 Wf.Node<PostgresHeldDirectChecks.ApprovalSignal>("approve"),
                 Wf.WriteLine("approved", "approved"))));
@@ -71,7 +76,7 @@ internal static class PostgresShippedFormatChecks
         var actor = new WorkflowActor.WorkflowActor([new NativeExecutionModel(registry,
             new NativeExecutionOptions { Http = new NativeHttpOptions { Client = new HttpClient(partner) } })]);
         var foundation = await PostgresPreviewHosting.OpenFoundationAsync(Open, WorkflowActor.WorkflowActor.ActorType,
-            replyNode: Node, cancellationToken: stop);
+            PostgresPreviewHosting.CreateRequests(Open, Node, WorkflowActor.WorkflowActor.ActorType), cancellationToken: stop);
         var clock = new PostgresRootAdmission(Open, TimeSpan.FromHours(1));
         var scope = EmbeddedTenant.Bind("shipped");
         var operators = await store.OpenSelectedRootIngressAsync(WorkflowActor.WorkflowActor.ActorType, TimeSpan.FromHours(1),
@@ -98,6 +103,13 @@ internal static class PostgresShippedFormatChecks
             var timedOut = await SettledAsync(stuck);
             Require(timedOut is { Status: InstanceStatus.Finished } && Variable(timedOut, "outcome") == SendHttpRequest.TimeoutOutcome,
                 "a timed job that passes its deadline settles on Timeout and the root finishes");
+
+
+            // A Terminate of a root whose timed job is running ends it Cancelled with nothing of it left pending; a Delete
+            // then retires it.
+            partner.Reset();
+            await TerminateAndDeleteAsync("long-fetch", "long-fetch-1", "a root whose timed SendHttpRequest job is running",
+                async () => { while (partner.Calls("/stuck") == 0) await Task.Delay(20, stop); });
 
 
             // A selected Terminate of a running root.
@@ -131,6 +143,51 @@ internal static class PostgresShippedFormatChecks
             await service.StopAsync(CancellationToken.None);
         }
         return 0;
+
+        async Task<Contract.ActorRef> StartAsync(string workflow, string id) =>
+            (await foundation.SendAsync(scope, new Contract.Target.Start(Start(workflow)), id, Contract.Kinds.Start, cancellationToken: stop)).Actor!.Value;
+
+        async Task TerminateAndDeleteAsync(string workflow, string id, string what, Func<Task>? ready = null)
+        {
+            var root = await StartAsync(workflow, id);
+            var running = await RunningImageAsync(root);
+            if (ready is not null) await ready();
+            var view = (await foundation.GetAsync(scope, root, stop))!;
+            Require((await operators.SendAsync(scope, new Contract.Target.Ref(root), "terminate-" + id, Contract.Kinds.Terminate,
+                    JsonSerializer.Serialize(new Contract.OperatorCommand(view.Selection)), cancellationToken: stop)).Outcome ==
+                Contract.AdmissionOutcome.Accepted, $"a selected Terminate of {what} is admitted");
+            var ended = await SettledAsync(root);
+            Require(ended is { Status: InstanceStatus.Cancelled } && await PendingAsync(running.Actor.Id) == 0,
+                $"the Terminate ends {what} Cancelled with nothing of it pending ({ended?.Status}, {await PendingAsync(running.Actor.Id)} pending)");
+            var cancelled = (await foundation.GetAsync(scope, root, stop))!;
+            Require((await operators.SendAsync(scope, new Contract.Target.Ref(root), "delete-" + id, Contract.Kinds.Delete,
+                    JsonSerializer.Serialize(new Contract.OperatorCommand(cancelled.Selection)), cancellationToken: stop)).Outcome ==
+                Contract.AdmissionOutcome.Accepted, $"a selected Delete of {what}, terminated, is admitted");
+            for (var attempt = 0; await store.ReadFirstRootAsync(scope.Tenant, root.Id, stop) is not null; attempt++)
+            {
+                if (attempt == 250) throw new InvalidOperationException($"The deleted {what} was not retired.");
+                await Task.Delay(20, stop);
+            }
+            Require(true, $"the Delete retires {what}");
+        }
+
+        async Task<EfStore.RootImage> RunningImageAsync(Contract.ActorRef root)
+        {
+            for (var attempt = 0; ; attempt++)
+            {
+                if (await store.ReadFirstRootAsync(scope.Tenant, root.Id, stop) is { Status: InstanceStatus.Running } image) return image;
+                if (attempt == 250) throw new InvalidOperationException("The root did not commit Running.");
+                await Task.Delay(20, stop);
+            }
+        }
+
+        async Task<int> PendingAsync(string actorId)
+        {
+            await using var db = Open();
+            return await db.Database.SqlQuery<int>($"""
+                SELECT count(*)::integer AS "Value" FROM "Messages" WHERE "Target" = {actorId} AND NOT "Done"
+                """).SingleAsync(stop);
+        }
 
         // A start's repeat names the root its operation started.
         async Task<Contract.ActorRef> RootOfAsync(string workflow, string id) =>
@@ -214,6 +271,8 @@ internal static class PostgresShippedFormatChecks
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> calls = new(StringComparer.Ordinal);
 
         internal int Calls(string path) => calls.GetValueOrDefault(path);
+
+        internal void Reset() => calls.Clear();
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {

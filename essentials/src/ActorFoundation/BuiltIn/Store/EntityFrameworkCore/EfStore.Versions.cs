@@ -116,6 +116,10 @@ internal static class RootProfiles
     /// <item>Untimed-only jobs (6): the poll reads either the timed or the untimed job scope, and the timed scope runs untimed jobs.</item>
     /// <item>Timed-job issuance (7): a qualification profile of its own, superseded by timed settlement.</item>
     /// </list>
+    /// Self-sends and timers do not compose with timed jobs yet: the root writer encodes a turn's sends as timed-job sends
+    /// when the profile settles timed jobs, so a Delay's self-send is refused (S6, the input-scope union).
+    /// The growth rule: each widening of this set takes a new protocol number, and a database installed with an older set
+    /// is refused. Before GA a preview database is recreated; after GA a widening migrates, with a rollback floor (K12).
     /// </summary>
     internal const RootCapabilities Shipped = Retention | RootCapabilities.OperatorReplies | TimedJobSettlement |
         RootCapabilities.TimedJobPreview | RootCapabilities.ReplyProtocol | ParkInspection;

@@ -25,26 +25,18 @@ public static class PostgresPreviewHosting
 
     /// <summary>
     /// Opens the Foundation's ingress and reads on an installed PostgreSQL Core Preview store, for the configured actor type.
-    /// With <paramref name="replyNode"/>, on a store with held replies (<c>ReplyProtocol</c>), its requests start a root or
-    /// send to one and hold the caller (<see cref="PostgresPreviewFoundation.Requests"/>); the node that owns the roots
-    /// answers its callers when it is given them as its <c>requests</c>.
-    /// </summary>
-    public static Task<PostgresPreviewFoundation> OpenFoundationAsync(Func<KernelDb> create, string actorType,
-        string? replyNode = null, TimeSpan? deduplicationWindow = null, int pageSize = 64, CancellationToken cancellationToken = default) =>
-        OpenFoundationAsync(create, actorType, replyNode is null ? null : CreateRequests(create, replyNode, actorType, deduplicationWindow),
-            deduplicationWindow, pageSize, cancellationToken);
-
-    /// <summary>
-    /// Opens the Foundation's ingress and reads, as <see cref="OpenFoundationAsync(Func{KernelDb}, string, string?, TimeSpan?, int, CancellationToken)"/>
-    /// does, with held requests the host created beforehand (<see cref="CreateRequests"/>): the node that owns the roots
-    /// answers those callers when it is given the same requests.
+    /// With <paramref name="requests"/> (<see cref="CreateRequests"/>), on a store with held replies (<c>ReplyProtocol</c>),
+    /// its requests start a root or send to one and hold the caller; the node that owns the roots answers those callers when
+    /// it is given the same requests. The deduplication window is the requests' when they are given.
     /// </summary>
     public static async Task<PostgresPreviewFoundation> OpenFoundationAsync(Func<KernelDb> create, string actorType,
-        PostgresDirectRequests? requests, TimeSpan? deduplicationWindow = null, int pageSize = 64, CancellationToken cancellationToken = default)
+        PostgresDirectRequests? requests = null, TimeSpan? deduplicationWindow = null, int pageSize = 64, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(create);
         PostgresRootAdmission.RequireActorType(actorType);
-        var window = deduplicationWindow ?? TimeSpan.FromHours(1);
+        if (requests is not null && deduplicationWindow is { } asked && asked != requests.DeduplicationWindow)
+            throw new ArgumentException("Held requests carry their own deduplication window.", nameof(deduplicationWindow));
+        var window = requests?.DeduplicationWindow ?? deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         await using (var db = create())
         {
@@ -64,7 +56,7 @@ public static class PostgresPreviewHosting
     /// <summary>
     /// The held callers of a node on a store with held replies, created before the store is opened: the host gives them to
     /// the node (<see cref="StartAsync"/>, its <c>requests</c>) and to the Foundation its edge requests through
-    /// (<see cref="OpenFoundationAsync(Func{KernelDb}, string, PostgresDirectRequests?, TimeSpan?, int, CancellationToken)"/>).
+    /// (<see cref="OpenFoundationAsync"/>).
     /// </summary>
     public static PostgresDirectRequests CreateRequests(Func<KernelDb> create, string node, string actorType, TimeSpan? deduplicationWindow = null)
     {
@@ -73,7 +65,7 @@ public static class PostgresPreviewHosting
         var window = deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         return new PostgresDirectRequests(new PostgresRootAdmission(create, window, lockOrdinaryWrites: true), new EfStore(create, postgres: true),
-            node, actorType);
+            node, actorType) { DeduplicationWindow = window };
     }
 
     /// <summary>
