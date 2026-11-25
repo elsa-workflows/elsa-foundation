@@ -504,6 +504,8 @@ apps/Elsa.Workbench/shells.Development.json
 apps/Elsa.Workbench.Host/nuplane.lock.json
 apps/Elsa.Workbench/nuplane.lock.json
 Studio/src/apps/Elsa.Studio.Workbench.Host/nuplane.lock.json
+Studio/src/apps/Elsa.Studio.Foundation.Host/nuplane.lock.json
+Studio/src/apps/Elsa.Studio.Essentials.Host/nuplane.lock.json
 **/.nuplane/
 
 # Speckit active-feature pointer: per-checkout working state written by speckit-specify, never shared.

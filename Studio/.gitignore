@@ -26,3 +26,7 @@ src/essentials/Elsa.Studio.Hosting/Client/harness/
 # Local Studio host Theme Store data
 src/apps/Elsa.Studio.Workbench.Host/studio-theme-store.json
 src/apps/Elsa.Studio.Workbench.Host/theme-assets/
+src/apps/Elsa.Studio.Foundation.Host/studio-theme-store.json
+src/apps/Elsa.Studio.Foundation.Host/theme-assets/
+src/apps/Elsa.Studio.Essentials.Host/studio-theme-store.json
+src/apps/Elsa.Studio.Essentials.Host/theme-assets/
