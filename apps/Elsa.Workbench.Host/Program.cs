@@ -437,9 +437,10 @@ var shellActivation = builder.AddFoundationShellHosting(shells =>
             typeof(OpenTelemetryFeature).Assembly,
 
             // Engine self-instrumentation: puts the WorkflowsRuntimeTracing feature in the catalog so it can be
-            // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The host-local
-            // OpenTelemetryEngineTracingBridge feature (below, in WithHostAssemblies) subscribes that source and forwards
-            // the spans into the OpenTelemetry ingestion store so Studio's timing view is populated.
+            // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The
+            // DiagnosticsOpenTelemetryEngineBridge feature (Elsa.Diagnostics.OpenTelemetry.Workflows, a project reference
+            // WithHostAssemblies() discovers) subscribes that source and forwards the spans into the OpenTelemetry
+            // ingestion store so Studio's timing view is populated.
             typeof(WorkflowsRuntimeTracingFeature).Assembly,
 
             // Test-host execution evidence: puts the WorkflowsExecutionEvidence feature in the catalog so an automated
