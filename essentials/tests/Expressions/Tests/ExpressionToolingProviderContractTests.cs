@@ -112,6 +112,22 @@ public sealed class ExpressionToolingProviderContractTests
     }
 
     [Fact]
+    public async Task Member_hover_keeps_its_name_when_the_type_name_starts_with_it()
+    {
+        var shape = new ExpressionValueShape("Order", ExpressionValueKind.Object,
+            Members: [new("Date", new("DateTime", ExpressionValueKind.Scalar, false), "Placed on.")]);
+        var symbol = new ExpressionSymbol("order", "order", ExpressionSymbolKind.Variable, shape);
+
+        var javascript = await new JavaScriptExpressionToolingProvider().GetHoverAsync(
+            new(CreateScope("JavaScript", [symbol]), "variables.order.Date", new(0, "variables.order.Date".Length)), CancellationToken.None);
+        var liquid = await new LiquidExpressionToolingProvider().GetHoverAsync(
+            new(CreateScope("Liquid", [symbol]), "{{ order.Date }}", new(0, "{{ order.Date".Length)), CancellationToken.None);
+
+        Assert.StartsWith("Date: DateTime" + Environment.NewLine, javascript.Payload!.Contents, StringComparison.Ordinal);
+        Assert.StartsWith("Date: DateTime" + Environment.NewLine, liquid.Payload!.Contents, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Typed_variable_members_complete_after_variables_dot_and_never_produce_member_diagnostics()
     {
         const string note = "From the declared type `shop.address`; the stored value may differ.";
