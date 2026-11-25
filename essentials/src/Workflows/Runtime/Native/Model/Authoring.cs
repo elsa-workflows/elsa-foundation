@@ -207,7 +207,8 @@ public sealed class WorkflowRegistry
 
     public Workflow Get(string id) => TryGet(id, out var w) ? w : throw new InvalidOperationException($"No workflow '{id}'.");
 
-    internal bool TryGet(string id, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Workflow? workflow)
+    /// <summary>The workflow with this id, read once, or false when none is registered.</summary>
+    public bool TryGet(string id, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Workflow? workflow)
     {
         lock (_lock) return _workflows.TryGetValue(id, out workflow);
     }

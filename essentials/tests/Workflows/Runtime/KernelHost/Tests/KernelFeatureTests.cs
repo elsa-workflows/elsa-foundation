@@ -163,4 +163,42 @@ public sealed class KernelFeatureTests
         Assert.Equal(typeof(WorkflowActivationCoordinator).FullName, WorkflowsRuntimeKernelFeature.DefaultCoordinatorTypeName);
         Assert.Equal(typeof(WorkflowTriggerBindingExtractor).FullName, WorkflowsRuntimeKernelFeature.DefaultExtractorTypeName);
     }
+
+    [Fact]
+    public void The_feature_unmounts_the_old_http_endpoint_middleware_and_keeps_its_test_runs()
+    {
+        var services = Shell();
+        services.AddScoped<Elsa.Activities.Http.Middleware.HttpEndpointMiddleware>();
+        services.Add(ServiceDescriptor.Scoped(TestRunMiddleware, TestRunMiddleware));
+
+        new WorkflowsRuntimeKernelFeature().PostConfigureServices(services);
+
+        var endpoint = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(Elsa.Activities.Http.Middleware.HttpEndpointMiddleware));
+        Assert.Equal((ServiceLifetime.Scoped, true, null), (endpoint.Lifetime, endpoint.ImplementationFactory is not null, endpoint.ImplementationType));
+        var testRuns = Assert.Single(services, descriptor => descriptor.ServiceType == TestRunMiddleware);
+        Assert.Equal(TestRunMiddleware, testRuns.ImplementationType);
+    }
+
+    [Fact]
+    public void A_shell_with_http_test_runs_but_no_endpoint_middleware_by_that_name_is_refused()
+    {
+        var services = Shell();
+        services.Add(ServiceDescriptor.Scoped(TestRunMiddleware, TestRunMiddleware));
+
+        var refused = Assert.Throws<InvalidOperationException>(() => new WorkflowsRuntimeKernelFeature().PostConfigureServices(services));
+
+        Assert.Contains(WorkflowsRuntimeKernelFeature.HttpEndpointMiddlewareTypeName, refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_old_http_activity_types_are_named_by_their_types()
+    {
+        Assert.Equal(typeof(Elsa.Activities.Http.Middleware.HttpEndpointMiddleware).FullName, WorkflowsRuntimeKernelFeature.HttpEndpointMiddlewareTypeName);
+        Assert.NotNull(TestRunMiddleware);
+        Assert.Equal(typeof(Elsa.Activities.Http.Options.HttpEndpointOptions).FullName, WorkflowsRuntimeKernelFeature.HttpEndpointOptionsTypeName);
+    }
+
+    // The HTTP activities' test-run middleware is internal to its module: found by the name the feature looks for.
+    private static readonly Type TestRunMiddleware = typeof(Elsa.Activities.Http.Middleware.HttpEndpointMiddleware).Assembly
+        .GetType(WorkflowsRuntimeKernelFeature.HttpTestRunMiddlewareTypeName, throwOnError: true)!;
 }
