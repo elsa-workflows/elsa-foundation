@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Kernel.Graph;
 using Models = Kernel.Model.Contracts;
 
 namespace Kernel.Native;
@@ -26,7 +27,7 @@ public sealed class NativeScheduleException(string message) : ArgumentException(
 /// <summary>
 /// The recurring start triggers of the registered definitions, as <see cref="HttpRoutes"/> holds their routes. A Timer or
 /// Cron must be where a run begins: the root, or, following the start path through containers, the first child of a
-/// Sequence or an entry of a Flowchart (a child no connection leads to). One elsewhere is refused, as the old core refuses to
+/// Sequence, a direct child of a Flowchart that no connection leads to, or deeper through a Flowchart's start node. One elsewhere is refused, as the old core refuses to
 /// publish it ("use Delay instead"). The interval or expression is a literal, fixed when the definition is registered; one
 /// that does not read is refused. The host's schedule actor fires each one.
 /// </summary>
@@ -65,15 +66,25 @@ public sealed class NativeSchedules
 
     public IReadOnlyList<NativeSchedule> All => _schedules;
 
-    // Where a run can begin: the node itself, and through a Sequence its first child, through a Flowchart its entries.
+    // Where a run can begin, as the graph engine begins it: the node itself; through a Sequence, its first child; through a
+    // Flowchart, a direct child no connection leads to (the run begins at its trigger), and deeper only through the start
+    // node, since a Flowchart whose trigger is deeper begins there (the old core's start-path rule, SelectTriggerStartChild).
     private static IEnumerable<Node> StartPath(Node node)
     {
         yield return node;
-        IEnumerable<Node> next = node.Type == typeof(Sequence) ? node.Children.Take(1)
-            : node.Type == typeof(Flowchart) ? node.Children.Where(child => !node.Connections.Any(c => c.Target == child.Id))
-            : [];
-        foreach (var child in next)
-            foreach (var start in StartPath(child)) yield return start;
+        if (node.Type == typeof(Sequence))
+        {
+            foreach (var child in node.Children.Take(1))
+                foreach (var start in StartPath(child)) yield return start;
+            yield break;
+        }
+        if (node.Type != typeof(Flowchart)) yield break;
+        foreach (var child in node.Children.Where(child => !node.Connections.Any(c => c.Target == child.Id))) yield return child;
+        FlowchartNode? entry;
+        try { entry = Flowchart.GraphOf(node).SelectStartNode(); }
+        catch (Exception refused) when (refused is Kernel.Graph.Exceptions.FlowchartExecutionException or ArgumentException) { yield break; }
+        if (entry is not null && node.Children.FirstOrDefault(c => c.Id == entry.NodeId) is { } first)
+            foreach (var start in StartPath(first)) yield return start;
     }
 
     private static string Literal(Workflow workflow, Node node, string input) =>

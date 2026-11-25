@@ -86,11 +86,14 @@ public sealed class ScheduleActor(ICronCalendar? cron = null) : IActorType
     /// <summary>
     /// Creates the trigger's schedule actor, or applies <paramref name="revision"/> to it (a publication of the definition,
     /// say): a repeat of one revision is a duplicate, an older one changes nothing, and a newer one replaces the schedule.
+    /// One revision means one schedule: a revision sent again with another schedule is a duplicate and keeps the first. A
+    /// schedule that does not read is refused; a cron expression is read with <paramref name="calendar"/> when one is given.
     /// </summary>
+    /// <remarks>To unpublish, stop the schedule before removing its run's registration, so no occurrence is published without one.</remarks>
     public static async ValueTask<Admission> SetAsync(IIngress ingress, BoundScope scope, string key, long revision, RecurringSchedule schedule, string startKey,
-        CancellationToken cancellationToken = default)
+        ICronCalendar? calendar = null, CancellationToken cancellationToken = default)
     {
-        if (schedule.Kind == RecurringSchedule.Interval ? !RecurringSchedule.TryParseInterval(schedule.Value, out _) : schedule.Kind != RecurringSchedule.Cron || string.IsNullOrWhiteSpace(schedule.Value))
+        if (schedule.Kind == RecurringSchedule.Interval ? !RecurringSchedule.TryParseInterval(schedule.Value, out _) : schedule.Kind != RecurringSchedule.Cron || !ReadsCron(calendar, schedule.Value))
             throw new ArgumentException($"The schedule {schedule.Kind} '{schedule.Value}' does not read.", nameof(schedule));
         var header = JsonSerializer.Serialize(new ScheduleHeader(schedule with { Value = schedule.Value.Trim() }, startKey, revision));
         var id = $"{key}#{revision.ToString(CultureInfo.InvariantCulture)}";
@@ -101,6 +104,14 @@ public sealed class ScheduleActor(ICronCalendar? cron = null) : IActorType
         return created is { Outcome: AdmissionOutcome.Refused, Reason: RefusalReason.Repeat or RefusalReason.Conflict }
             ? await ingress.SendAsync(scope, new Target.Key(key), id, SetKind, header, cancellationToken: cancellationToken)
             : created;
+    }
+
+    private static bool ReadsCron(ICronCalendar? calendar, string expression)
+    {
+        if (string.IsNullOrWhiteSpace(expression)) return false;
+        if (calendar is null) return true;
+        try { calendar.Next(expression.Trim(), 0); return true; }
+        catch (Exception refused) when (refused is FormatException or ArgumentException) { return false; }
     }
 
     /// <summary>Disarms the trigger's schedule at <paramref name="revision"/>; a later Set re-arms it. A repeat is a duplicate.</summary>

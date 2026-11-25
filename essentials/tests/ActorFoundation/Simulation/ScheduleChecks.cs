@@ -33,18 +33,22 @@ internal static class ScheduleChecks
         .Add(Workflow("flow-tick", Flowchart("flow",
             [Event("first", "never"), Timer("t", "00:01:00"), Set("after", "output", "timer")],
             [new("t", "after")])))
-        // The start path is followed through containers.
-        .Add(Workflow("nested", Sequence("root", Sequence("inner", Timer("t", "PT1H"), Set("o", "output", "nested")))));
+        // The start path is followed through containers, through a Flowchart by its start node.
+        .Add(Workflow("nested", Sequence("root", Sequence("inner", Timer("t", "PT1H"), Set("o", "output", "nested")))))
+        .Add(Workflow("deep-start", Flowchart("flow", [Sequence("s", Timer("t", "PT1M"), Set("o", "output", "deep"))], [])));
 
     public static async Task Run(Action<bool, string> check)
     {
         var registry = Registry();
         var table = new NativeSchedules(registry, CronError);
-        check(table.All.Select(s => $"{s.Workflow}/{s.Node}/{s.Kind}").SequenceEqual(["cron-tick/c/cron", "flow-tick/t/interval", "nested/t/interval", "tick/t/interval"]),
+        check(table.All.Select(s => $"{s.Workflow}/{s.Node}/{s.Kind}").SequenceEqual(["cron-tick/c/cron", "deep-start/t/interval", "flow-tick/t/interval", "nested/t/interval", "tick/t/interval"]),
             $"a Timer or Cron where a run begins is a schedule, also down the start path through containers ({string.Join(", ", table.All.Select(s => s.Key))})");
         check(Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("mid", Sequence("root", Set("a", "x", 1), Timer("t", "PT1M")))))) &&
-              Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("joined", Flowchart("flow", [Set("a", "x", 1), Timer("t", "PT1M")], [new("a", "t")]))))),
-            "a Timer away from where a run begins is refused, as the old core refuses to publish it");
+              Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("joined", Flowchart("flow", [Set("a", "x", 1), Timer("t", "PT1M")], [new("a", "t")]))))) &&
+              // Deeper than a Flowchart's direct children, a trigger counts only through the start node: here the run begins at 'a'.
+              Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("deep", Flowchart("flow",
+                  [Event("a", "never"), Sequence("s", Timer("t", "PT1M"), Set("o", "x", 1))], []))))),
+            "a Timer away from where a run begins is refused, as the old core refuses to publish it, also one below a Flowchart child that is not its start");
         check(Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("zero", Timer("t", "PT0S"))))) &&
               Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("tiny", Timer("t", "PT0.0001S"))))) &&
               Refused(() => new NativeSchedules(new WorkflowRegistry().Add(Workflow("huge", Timer("t", "P99999999Y"))))) &&
@@ -55,7 +59,8 @@ internal static class ScheduleChecks
             "an interval under a second, one that does not read or overflows, a computed one, and a cron expression the host does not read are refused");
         check(Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule(RecurringSchedule.Interval, "soon"), "s")) &&
               Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule(RecurringSchedule.Interval, "PT0.0001S"), "s")) &&
-              Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule("weekly", "x"), "s")),
+              Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule("weekly", "x"), "s")) &&
+              Argument(() => ScheduleActor.SetAsync(null!, null!, "k", 1, new RecurringSchedule(RecurringSchedule.Cron, "* * *"), "s", new Calendar())),
             "setting a schedule that does not read is refused before anything is sent");
 
         var model = new NativeExecutionModel(registry);
@@ -104,7 +109,7 @@ internal static class ScheduleChecks
 
         var created = await SetAll();
         await driver.PassAll(4);
-        check(created.All(o => o == Contract.AdmissionOutcome.Accepted) && (await List(ScheduleActor.ActorType)).Count == 4 && (await Runs("tick")).Finished == 0,
+        check(created.All(o => o == Contract.AdmissionOutcome.Accepted) && (await List(ScheduleActor.ActorType)).Count == 5 && (await Runs("tick")).Finished == 0,
             "setting the schedules creates one schedule actor each, and nothing runs before its first occurrence");
 
         // The clock moves in jumps, each an owner change, so every occurrence below fires after its timer was restored.
@@ -124,8 +129,9 @@ internal static class ScheduleChecks
             "no Timer run before its interval; a Cron whose owner comes late fires the due occurrence once, without the backlog");
         await Step(2_000);     // no Cron occurrence falls in these two seconds
         var flow = await Runs("flow-tick");
-        check((await Runs("tick")).Finished == 1 && flow is { Finished: 1, Running: 0 },
-            $"at its interval the Timer starts one run, and a Flowchart run begins at its Timer and finishes (tick {(await Runs("tick")).Finished}, flow {flow})");
+        var deep = await Runs("deep-start");
+        check((await Runs("tick")).Finished == 1 && flow is { Finished: 1, Running: 0 } && deep is { Finished: 1, Running: 0 },
+            $"at its interval the Timer starts one run; a Flowchart run begins at its Timer, or reaches it through its start node, and finishes (tick {(await Runs("tick")).Finished}, flow {flow}, deep {deep})");
 
         var again = await SetAll();
         await Step(61_000);
@@ -207,7 +213,7 @@ internal static class ScheduleChecks
         await ScheduleActor.RegisterRunAsync(driver.Ingress, scope, flowSchedule.StartKey, null);
         await Step(2 * 61_000);
         check((await Runs("flow-tick")).Finished == flowBefore, $"without its run registered, an occurrence starts nothing ({flowBefore}, {(await Runs("flow-tick")).Finished})");
-        check((await Runs("tick")).Running == 0 && (await Runs("flow-tick")).Running == 0 && (await Runs("cron-tick")).Running == 0, "every scheduled run finished");
+        check((await Runs("tick")).Running == 0 && (await Runs("flow-tick")).Running == 0 && (await Runs("cron-tick")).Running == 0 && (await Runs("deep-start")).Running == 0, "every scheduled run finished");
     }
 
     private static bool Argument(Func<ValueTask<Contract.Admission>> set)
