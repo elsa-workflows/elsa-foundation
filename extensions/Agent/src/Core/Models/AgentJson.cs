@@ -5,7 +5,7 @@ namespace Elsa.Agent.Core.Models;
 
 internal static class AgentJson
 {
-    public static JsonSerializerOptions Options { get; } = new(JsonSerializerDefaults.Web)
+    public static JsonSerializerOptions Options { get; } = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         MaxDepth = 32,
         NumberHandling = JsonNumberHandling.Strict

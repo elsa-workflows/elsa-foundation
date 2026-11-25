@@ -42,7 +42,7 @@ public sealed class RuntimeDownstreamSchedulingTests
 
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
-        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
         Assert.Empty(checkpointPayload.PostCommitIntents);
     }
@@ -99,7 +99,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         Assert.Equal(WorkflowExecutionStatus.Completed, (await harness.WorkflowStateStore.FindAsync("wfexec-1"))!.Status);
         Assert.Single(harness.CheckpointWriter.ListCommits());
         Assert.Equal(SchedulerCompletionKind.ContinuationScheduling,
-            firstChain.Continuation.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!.CompletionKind);
+            firstChain.Continuation.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.CompletionKind);
 
         // Re-deliver the original activity-completed stage and the exact continuation item that completed the first
         // chain. The first delivery was valid; once the workflow-completed checkpoint is durable, neither stage may
@@ -207,7 +207,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             completionKind: SchedulerCompletionKind.ContinuationScheduling));
 
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
         Assert.Empty(checkpointPayload.PostCommitIntents);
     }
@@ -228,7 +228,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             completionKind: SchedulerCompletionKind.ContinuationScheduling));
 
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
         Assert.Empty(checkpointPayload.PostCommitIntents);
     }
@@ -248,7 +248,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             completionKind: SchedulerCompletionKind.ContinuationScheduling));
 
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
         Assert.Empty(checkpointPayload.PostCommitIntents);
     }
@@ -448,7 +448,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         Assert.Single(checkpointWriter.ListCommits());
         Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var pending = Assert.Single(await checkpointWriter.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1")));
-        var queued = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var queued = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(downstreamWork.WorkItemId, queued.WorkItemId);
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, queued.CommandKind);
     }
@@ -478,7 +478,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         {
             "workflowExecutionId": "wfexec-1",
             "commandId": "command-1",
-            "commandKind": "ScheduleActivity",
+            "commandKind": 7,
             "envelopeId": "envelope-1",
             "idempotencyKey": "idem-1",
             "enqueuedAt": "2026-06-11T12:00:00Z",
@@ -637,7 +637,7 @@ public sealed class RuntimeDownstreamSchedulingTests
                 branchId: "branch-a",
                 outcomeNames: outcomeNames,
                 reason: CompletionReason(completionKind),
-                completionKind: completionKind)),
+                completionKind: completionKind), Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
             envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
 
@@ -671,12 +671,12 @@ public sealed class RuntimeDownstreamSchedulingTests
                 checkpointName,
                 activityExecutionIds ?? ["actexec-source"],
                 RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason,
-                postCommitIntents)),
+                postCommitIntents), Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: commandMetadata ?? new Dictionary<string, string>(),
             envelopeMetadata: new Dictionary<string, string>());
 
     private RuntimePostCommitIntent NewSchedulerIntent(RuntimeSchedulerWorkItem workItem) =>
-        NewSchedulerIntent(JsonSerializer.SerializeToElement(workItem), workItem.IdempotencyKey);
+        NewSchedulerIntent(JsonSerializer.SerializeToElement(workItem, Elsa.Serialization.Core.JsonBaseline.Options), workItem.IdempotencyKey);
 
     private RuntimePostCommitIntent NewSchedulerIntent(JsonElement payload, string idempotencyKey) =>
         new(
@@ -705,7 +705,7 @@ public sealed class RuntimeDownstreamSchedulingTests
                 "node-next",
                 "actexec-next",
                 RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
-                "actexec-source")),
+                "actexec-source"), Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: new Dictionary<string, string>
             {
                 ["command-origin"] = "scheduler-parity"

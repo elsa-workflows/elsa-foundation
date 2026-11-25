@@ -631,7 +631,7 @@ public sealed class WorkflowDrainContinuationSettlementTests
                     now,
                     activityExecutionId: null,
                     idempotencyKey: $"checkpoint:{work.WorkItemId}",
-                    payload: JsonSerializer.SerializeToElement(work)),
+                    payload: JsonSerializer.SerializeToElement(work, Elsa.Serialization.Core.JsonBaseline.Options)),
                 RuntimePostCommitOutboxStatus.Pending,
                 now,
                 now,

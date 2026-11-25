@@ -80,7 +80,7 @@ internal sealed class JintPortableJavaScriptEvaluator(
         foreach (var warning in values.Warnings)
             request.Warnings?.Report(warning);
         JavaScriptValueWrites.WarnLossyReads(values, written.Losses, request.Warnings, logger);
-        return written.Value ?? JsonSerializer.SerializeToElement<object?>(null);
+        return written.Value ?? JsonSerializer.SerializeToElement<object?>(null, options: Elsa.Serialization.Core.JsonBaseline.Options);
     }
 }
 

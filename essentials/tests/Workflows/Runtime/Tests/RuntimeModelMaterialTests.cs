@@ -12,6 +12,34 @@ public sealed class RuntimeModelMaterialTests
     private static readonly WorkflowExecutableIdentity Pin = new("artifact-model", "definition", "version", "1.0.0", "sha256:" + new string('a', 64));
     private static readonly RuntimeExecutionProtocol Protocol = new("test.semantic-model", 1);
 
+    public static IEnumerable<object[]> HashVectors()
+    {
+        using var source = typeof(RuntimeModelMaterialTests).Assembly.GetManifestResourceStream("model-material-hash-vectors.json")!;
+        using var document = JsonDocument.Parse(source);
+        return document.RootElement.EnumerateArray().Select(item => new object[] { item.Clone() }).ToArray();
+    }
+
+    [Theory]
+    [MemberData(nameof(HashVectors))]
+    public void Model_material_hash_pins_independent_canonical_preimages(JsonElement vector)
+    {
+        using var definition = JsonDocument.Parse(vector.GetProperty("definition").GetString()!);
+        var expected = "sha256:" + vector.GetProperty("sha256").GetString();
+        const string freeze = "First-stable hash freeze: changes require an explicit identity/migration decision.";
+        using var jsonNull = JsonDocument.Parse("null");
+        using var text = JsonDocument.Parse("\"René\"");
+        var material = vector.TryGetProperty("rich", out _) ? new RuntimeModelMaterial(1, Pin, Protocol, "test/1", definition.RootElement,
+            new(1, [new("value", new TypeReference("String"), false, vector.GetProperty("defaultKind").GetString() switch
+            {
+                "value" => text.RootElement,
+                "null" => jsonNull.RootElement,
+                _ => (JsonElement?)null
+            })]), [new("result", new TypeReference("String", CollectionKind.List))], [new("worker", Pin)], [new("test.consumer", "1.0")])
+            : NewMaterial(definition.RootElement);
+        Assert.True(expected == material.ComputeContentHash(), vector.GetProperty("name").GetString() + ": " + freeze);
+        Assert.True(expected == "sha256:" + Elsa.Serialization.Core.JsonHashInput.HashJson(vector.GetProperty("canonical").GetString()!), freeze);
+    }
+
     [Fact]
     public void Model_material_detaches_definition_and_binding_collections_without_a_native_root()
     {
@@ -82,6 +110,18 @@ public sealed class RuntimeModelMaterialTests
         var second = new RuntimeModelMaterial(1, Pin, new("test-\ud801", 1), "test/1", definition.RootElement,
             new WorkflowExecutableInputContract(1, []), [], [], []);
         Assert.NotEqual(first.ComputeContentHash(), second.ComputeContentHash());
+    }
+
+    [Fact]
+    public void Model_input_default_presence_and_all_opaque_protocol_code_units_remain_distinct()
+    {
+        using var definition = JsonDocument.Parse("{}"); using var jsonNull = JsonDocument.Parse("null");
+        RuntimeModelMaterial Material(JsonElement? value) => new(1, Pin, Protocol, "test/1", definition.RootElement,
+            new WorkflowExecutableInputContract(1, [new("value", new TypeReference("String"), false, value)]), [], [], []);
+        Assert.NotEqual(Material(null).ComputeContentHash(), Material(jsonNull.RootElement).ComputeContentHash());
+        var hashes = new[] { "test-\ud800", "test-\ud801", "test-\ufffd" }.Select(key =>
+            new RuntimeModelMaterial(1, Pin, new(key, 1), "test/1", definition.RootElement, new(1, []), [], [], []).ComputeContentHash());
+        Assert.Equal(3, hashes.Distinct().Count());
     }
 
     private static RuntimeModelMaterial NewMaterial(JsonElement definition, IReadOnlyList<RuntimeModelDependency>? dependencies = null,

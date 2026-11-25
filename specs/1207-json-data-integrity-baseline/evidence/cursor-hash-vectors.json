@@ -1,0 +1,20 @@
+[
+  {
+    "consumer": "hierarchy",
+    "canonical": "{\"authorizationProfile\":\"structure\",\"committedThroughSequence\":42e0,\"effectiveLimit\":1e2,\"include\":[],\"lastActivityExecutionId\":\"child\",\"lastExecutionSequence\":12e0,\"providerContinuation\":null,\"rootActivityExecutionId\":\"outer\",\"rootSnapshotFingerprint\":\"root-fingerprint\",\"schemaVersion\":1e0,\"tenantScope\":\"tenant:a\",\"workflowExecutionId\":\"wf\"}",
+    "digestHex": "c319e2c4687d0a9dbe285df90cb2df99d95dc431a009b966136cf15b5923c2a0",
+    "digestBase64Url": "wxnixGh9Cp2-KF35DLLfmdldxDGgCblmE2zxW1kjwqA"
+  },
+  {
+    "consumer": "etl",
+    "canonical": "{\"format\":1e0,\"kind\":\"versions\",\"lastAlias\":\"source\",\"lastId\":\"page-after-id\",\"lastRole\":\"reader\",\"lastVersion\":3e0,\"limit\":25e0,\"resourceId\":\"orders\",\"scopeKey\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"throughVersion\":7e0}",
+    "digestHex": "10947e19fb2564ce3760a1d91f5dbf04c08df3a7ade2122af4ce38c020fe5432",
+    "digestBase64Url": "EJR-GfslZM43YKHZH12_BMCN86et4hIq9M44wCD-VDI"
+  },
+  {
+    "consumer": "coalescing",
+    "canonical": "{\"binding\":\"coalesced-activity-state:workflow:wfexec-1\",\"cursor\":{\"innerContinuation\":null,\"innerExhausted\":true,\"lastIdentity\":\"a\"}}",
+    "digestHex": "688ae1259cc7dd33f82731adb8d8b7875920e9a3209a3ae9d9e0ff1fe9999e53",
+    "digestBase64Url": "aIrhJZzH3TP4JzGtuNi3h1kg6aMgmjrp2eD_H-mZnlM"
+  }
+]

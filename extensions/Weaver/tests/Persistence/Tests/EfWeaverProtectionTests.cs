@@ -42,7 +42,7 @@ public sealed class EfWeaverProtectionTests
         var plain = protectedColumns.Select(x => protector.Unprotect(x.Value)).ToArray();
         Assert.Contains(plain, x => x.Contains(Canary, StringComparison.Ordinal));
         var names = plain.SelectMany(x => PropertyNames(JsonDocument.Parse(x).RootElement))
-            .Concat(plain.Select(x => JsonDocument.Parse(x).RootElement.GetProperty("Value").GetString()!)
+            .Concat(plain.Select(x => JsonDocument.Parse(x).RootElement.GetProperty("value").GetString()!)
                 .Where(x => x.StartsWith('{')).SelectMany(x => PropertyNames(JsonDocument.Parse(x).RootElement)))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var forbidden in new[] { "$type", "ApiKey", "AccessToken", "Token", "Password", "Credential", "Credentials", "ClientSecret",

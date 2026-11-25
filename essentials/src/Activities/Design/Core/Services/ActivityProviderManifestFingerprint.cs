@@ -19,31 +19,11 @@ public static class ActivityProviderManifestFingerprint
             WriteCanonical(writer, manifest.Payload);
             writer.WriteEndObject();
         }
-        return $"sha256:{Convert.ToHexString(SHA256.HashData(stream.ToArray())).ToLowerInvariant()}";
+        return $"sha256:{Elsa.Serialization.Core.JsonHashInput.HashUtf8(stream.ToArray())}";
     }
 
     private static void WriteCanonical(Utf8JsonWriter writer, JsonElement value)
     {
-        switch (value.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var property in value.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal))
-                {
-                    writer.WritePropertyName(property.Name);
-                    WriteCanonical(writer, property.Value);
-                }
-                writer.WriteEndObject();
-                break;
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in value.EnumerateArray())
-                    WriteCanonical(writer, item);
-                writer.WriteEndArray();
-                break;
-            default:
-                value.WriteTo(writer);
-                break;
-        }
+        writer.WriteRawValue(Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(value), skipInputValidation: true);
     }
 }

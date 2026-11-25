@@ -74,7 +74,7 @@ internal static class DescendantFaultEvaluation
             enqueuedAt: now,
             recordedAt: now,
             sequence: sourceWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            payload: JsonSerializer.SerializeToElement(payload),
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: commandMetadata,
             envelopeMetadata: sourceWorkItem.EnvelopeMetadata,
             executionScopeId: receiver.ExecutionScopeId ?? receiver.Provenance.ExecutionScopeId,

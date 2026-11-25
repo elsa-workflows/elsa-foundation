@@ -3,6 +3,7 @@ import { isNavModePreference, navModeStorageKey, type NavModePreference } from "
 import { getStudioRuntimeConfig } from "../runtime";
 import { isWorkspaceStyle, type WorkspaceStyle } from "./workspaceStyles";
 import { isSidebarColorPreference, sidebarColorStorageKey, type SidebarColorPreference } from "./sidebarColor";
+import { isStudioTimeZone, setStudioTimeZonePreference, studioTimeZoneStorageKey } from "../../sdk/timeZone";
 
 /**
  * The user's appearance choices as one model: base preset, workspace style, color scheme,
@@ -22,6 +23,7 @@ export interface AppearancePreferences {
   mode: ThemeModePreference;
   navigation: NavModePreference;
   sidebarColor: SidebarColorPreference;
+  timeZone: string;
 }
 
 export const appearanceStorageKeys = {
@@ -30,7 +32,8 @@ export const appearanceStorageKeys = {
   colorSchemeId: "elsa-studio-color-scheme",
   mode: "elsa-studio-theme-mode",
   navigation: navModeStorageKey,
-  sidebarColor: sidebarColorStorageKey
+  sidebarColor: sidebarColorStorageKey,
+  timeZone: studioTimeZoneStorageKey
 } as const;
 
 /** Sidebar and dock keys Reset also clears. These are chrome, not theme/mode/nav preferences. */
@@ -51,6 +54,7 @@ export const appearanceResetStorageKeys = [
   appearanceStorageKeys.mode,
   appearanceStorageKeys.navigation,
   appearanceStorageKeys.sidebarColor,
+  appearanceStorageKeys.timeZone,
   appearanceChromeStorageKeys.sidebarCollapsed,
   appearanceChromeStorageKeys.bottomPanelCollapsed,
   appearanceChromeStorageKeys.bottomPanelHeight,
@@ -81,7 +85,8 @@ export const defaultAppearancePreferences: AppearancePreferences = {
   mode: "system",
   navigation: "theme",
   // A dark navigation keeps its contrast against every workspace appearance.
-  sidebarColor: "dark"
+  sidebarColor: "dark",
+  timeZone: "browser"
 };
 
 export function isThemeModePreference(value: unknown): value is ThemeModePreference {
@@ -134,6 +139,7 @@ export function readAppearancePreferences(storage: PreferenceStorage | undefined
   const mode = read(appearanceStorageKeys.mode);
   const navigation = read(appearanceStorageKeys.navigation);
   const sidebarColor = read(appearanceStorageKeys.sidebarColor);
+  const timeZone = read(appearanceStorageKeys.timeZone);
   const workspaceStyle = read(appearanceStorageKeys.workspaceStyle);
   const themeId = read(appearanceStorageKeys.themeId) || null;
   const colorSchemeId = read(appearanceStorageKeys.colorSchemeId);
@@ -144,7 +150,8 @@ export function readAppearancePreferences(storage: PreferenceStorage | undefined
     colorSchemeId: colorSchemeId === "@theme" ? null : colorSchemeId || (themeId ? null : defaults.colorSchemeId),
     mode: isThemeModePreference(mode) ? mode : defaults.mode,
     navigation: isNavModePreference(navigation) ? navigation : defaults.navigation,
-    sidebarColor: isSidebarColorPreference(sidebarColor) ? sidebarColor : defaults.sidebarColor
+    sidebarColor: isSidebarColorPreference(sidebarColor) ? sidebarColor : defaults.sidebarColor,
+    timeZone: isStudioTimeZone(timeZone) ? timeZone : defaults.timeZone
   };
 }
 
@@ -153,6 +160,10 @@ export function writeAppearancePreferences(
   preferences: Partial<AppearancePreferences>,
   storage: PreferenceStorage | undefined = defaultStorage()
 ) {
+  if (preferences.timeZone !== undefined) {
+    if (storage === defaultStorage()) setStudioTimeZonePreference(preferences.timeZone);
+    else if (storage) safely(() => storage.setItem(appearanceStorageKeys.timeZone, preferences.timeZone!), undefined);
+  }
   if (!storage) return;
   safely(() => {
     if (preferences.themeId !== undefined) {
@@ -177,6 +188,7 @@ export function resetAppearancePreferences(storage: PreferenceStorage | undefine
     appearanceResetStorageKeys.forEach(key => safely(() => storage.removeItem(key), undefined));
   }
   if (typeof window !== "undefined") {
+    if (storage === defaultStorage()) setStudioTimeZonePreference("browser");
     window.dispatchEvent(new CustomEvent(appearanceResetEventName));
   }
   return getDefaultAppearancePreferences();

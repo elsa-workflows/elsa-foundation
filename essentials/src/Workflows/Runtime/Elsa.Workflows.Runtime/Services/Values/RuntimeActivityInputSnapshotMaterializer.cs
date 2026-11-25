@@ -41,11 +41,10 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
             var literalSnapshot = await inputMaterializer.MaterializeSnapshotAsync(
                 executableNode,
                 state.InvocationId,
-                new RuntimeInputBindingResolutionContext(state.Execution.WorkflowExecutionId, state.InvocationId, state, executable: executable)
-                { Warnings = literalWarnings },
+                new RuntimeInputBindingResolutionContext(state.Execution.WorkflowExecutionId, state.InvocationId, state, executable: executable) { Warnings = literalWarnings },
                 materializedAt,
                 cancellationToken);
-            return literalWarnings.Warnings.Count == 0 ? literalSnapshot : literalSnapshot with { Warnings = literalWarnings.Warnings };
+            return literalWarnings.Warnings.Count > 0 ? literalSnapshot with { Warnings = literalWarnings.Warnings } : literalSnapshot;
         }
 
         var resolvedDurableValueStateStore = durableValueStateStore

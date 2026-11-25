@@ -43,7 +43,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
     internal const string WithheldDiagnostic = "weaver.workflow.server_read_withheld";
     internal const string PropertyContextUnverified = "weaver.workflow.property_context_unverified";
     private static readonly WeaverToolDescriptor ReadDescriptor = new WorkflowReadGraphTool().Descriptor;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     public WeaverContextProviderDescriptor Descriptor { get; } = new(
         "workflows.context", WorkflowWeaverSnapshot.ModuleId, "workflow",
         ["workflow.definition", "workflow.request", "workflow.guidance", WorkflowActivityCatalog.ContentType, PermissionsContentType,
@@ -476,9 +476,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
     private static bool TryAdmitRequest(WeaverContextAttachment caller, out WeaverContextAttachment? admitted)
     {
         admitted = null;
-        JsonElement content;
-        try { content = caller.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(caller.Content); }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
+        if (caller.Content is not { } content) return false;
         var kind = WorkflowWeaverSnapshot.Text(content, "requestKind");
         var reference = WorkflowWeaverSnapshot.Text(content, "referenceId");
         if (caller.ModuleId != WorkflowWeaverSnapshot.ModuleId || string.IsNullOrWhiteSpace(caller.Id) || caller.Id.Length > 256 || content.ValueKind != JsonValueKind.Object ||
@@ -493,7 +491,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
         {
             requestKind = kind, referenceId = reference, intent = Field(content, "intent", 2000), name = Field(content, "name", 256),
             description = Field(content, "description", 2000), rootActivityVersionId = Field(content, "rootActivityVersionId", 256)
-        });
+        }, Elsa.Serialization.Core.JsonBaseline.Options);
         admitted = new($"workflow:request:{caller.Id}", "workflow.request", reference, "Workflow request context", "workflow.request",
             AdmittedSensitivity(caller.Sensitivity), "request", "Module-admitted workflow request and reference metadata; this does not identify live working state.", data,
             new Dictionary<string, string>())

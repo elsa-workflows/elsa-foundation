@@ -87,5 +87,5 @@ public sealed class RuntimeModelNativeWorkOrigin
 
     private static bool InputsMatch(IReadOnlyDictionary<string, JsonElement>? left, IReadOnlyDictionary<string, JsonElement>? right) =>
         left is null ? right is null : right is not null && left.Count == right.Count &&
-            left.All(item => right.TryGetValue(item.Key, out var value) && JsonElement.DeepEquals(item.Value, value));
+            left.All(item => right.TryGetValue(item.Key, out var value) && Elsa.Serialization.Core.JsonCanonicalForm.Equals(item.Value, value));
 }

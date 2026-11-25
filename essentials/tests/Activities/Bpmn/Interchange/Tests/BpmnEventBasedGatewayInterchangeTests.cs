@@ -30,8 +30,8 @@ public sealed class BpmnEventBasedGatewayInterchangeTests
         var authored = new BpmnAuthoredStructure(
             activities:
             [
-                new ActivityNode("node-a", "Elsa.Event", [new ArgumentState("EventName", new ArgumentValue("evt-a", "Literal"), null, null, null, null)], []),
-                new ActivityNode("node-b", "Elsa.Event", [new ArgumentState("EventName", new ArgumentValue("evt-b", "Literal"), null, null, null, null)], [])
+                new ActivityNode("node-a", "Elsa.Event", [new ArgumentState("EventName", ArgumentValue.FromClr("evt-a", "Literal"), null, null, null, null)], []),
+                new ActivityNode("node-b", "Elsa.Event", [new ArgumentState("EventName", ArgumentValue.FromClr("evt-b", "Literal"), null, null, null, null)], [])
             ],
             elements:
             [

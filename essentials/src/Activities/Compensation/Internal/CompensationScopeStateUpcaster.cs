@@ -24,7 +24,7 @@ internal static class CompensationScopeStateUpcaster
                 UpgradeEntry(entry);
         }
 
-        return JsonSerializer.SerializeToElement(state);
+        return JsonSerializer.SerializeToElement(state, Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     /// <summary>
@@ -39,7 +39,7 @@ internal static class CompensationScopeStateUpcaster
         state["confirmations"] ??= new JsonArray();
         state["receivedHandOvers"] ??= new JsonArray();
         state["handOversInProgress"] ??= new JsonArray();
-        return JsonSerializer.SerializeToElement(state);
+        return JsonSerializer.SerializeToElement(state, Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     /// <summary>
@@ -52,7 +52,7 @@ internal static class CompensationScopeStateUpcaster
         if (JsonNode.Parse(payload.GetRawText()) is not JsonObject state)
             throw new CompensationScopeExecutionException("Compensation scope private state (version 3) is not an object.");
 
-        return JsonSerializer.SerializeToElement(state);
+        return JsonSerializer.SerializeToElement(state, Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     /// <summary>
@@ -64,7 +64,7 @@ internal static class CompensationScopeStateUpcaster
         if (JsonNode.Parse(payload.GetRawText()) is not JsonObject state)
             throw new CompensationScopeExecutionException("Compensation scope private state (version 4) is not an object.");
 
-        return JsonSerializer.SerializeToElement(state);
+        return JsonSerializer.SerializeToElement(state, Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     private static void UpgradeEntry(JsonObject entry)

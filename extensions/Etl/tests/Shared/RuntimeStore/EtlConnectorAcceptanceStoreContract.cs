@@ -26,9 +26,9 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(EtlStoreStatus.Applied, (await store.ReserveConnectorBatchAsync(lease, batch)).Status);
 
         var main = OutputRoute(admission, batch, EtlOutputRoute.Main, EtlConnectorKind.Jsonl,
-            "main-untrusted-label", EtlRuntimeRecordCodec.HashText("main-jsonl"), 17, 1);
+            "main-untrusted-label", Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes("main-jsonl")), 17, 1);
         var errors = OutputRoute(admission, batch, EtlOutputRoute.Error, EtlConnectorKind.Http,
-            "errors-body", EtlRuntimeRecordCodec.HashText("error-http"), 19, 1);
+            "errors-body", Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes("error-http")), 19, 1);
         var output = new EtlConnectorBatchOutput(1, 1, 0, main, errors);
         Assert.Equal(EtlStoreStatus.Applied, (await store.RetainConnectorBatchOutputAsync(lease, batch.BatchId, output)).Status);
 
@@ -299,7 +299,7 @@ public abstract partial class EtlRuntimeStoreContract
         var batch = HttpAcceptanceBatch(admission, run.Prepared!, lease, 0, 1, "rejected-final");
         Assert.Equal(EtlStoreStatus.Applied, (await store.ReserveConnectorBatchAsync(lease, batch)).Status);
         var error = OutputRoute(admission, batch, EtlOutputRoute.Error, EtlConnectorKind.Jsonl,
-            "error-body", EtlRuntimeRecordCodec.HashText("rejected-row"), 21, 1);
+            "error-body", Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes("rejected-row")), 21, 1);
         var output = new EtlConnectorBatchOutput(0, 1, 0, null, error);
         Assert.Equal(EtlStoreStatus.Applied, (await store.RetainConnectorBatchOutputAsync(lease, batch.BatchId, output)).Status);
         Assert.Equal(EtlStoreStatus.Applied, await store.RecordConnectorFilePublicationAsync(
@@ -343,16 +343,16 @@ public abstract partial class EtlRuntimeStoreContract
         var range = new EtlConnectorHttpBatchRange(position.PageSequence, page.RequestHash,
             page.Body.ContentHash, startItem, endItemExclusive);
         return ConnectorBatch(admission, prepared, lease, range, inputBytes: 7,
-            inputHash: EtlRuntimeRecordCodec.HashText(marker));
+            inputHash: Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes(marker)));
     }
 
     private protected static EtlConnectorBatchOutput HttpOutput(EtlConnectorRunAdmission admission,
         EtlConnectorBatchDescriptor batch, long accepted, long rejected, long filtered, string suffix)
     {
         var main = accepted == 0 ? null : OutputRoute(admission, batch, EtlOutputRoute.Main,
-            EtlConnectorKind.Http, $"{suffix}-main", EtlRuntimeRecordCodec.HashText($"{suffix}-main"), 17, accepted);
+            EtlConnectorKind.Http, $"{suffix}-main", Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes($"{suffix}-main")), 17, accepted);
         var errors = rejected == 0 ? null : OutputRoute(admission, batch, EtlOutputRoute.Error,
-            EtlConnectorKind.Jsonl, $"{suffix}-errors", EtlRuntimeRecordCodec.HashText($"{suffix}-errors"), 19, rejected);
+            EtlConnectorKind.Jsonl, $"{suffix}-errors", Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes($"{suffix}-errors")), 19, rejected);
         return new(accepted, rejected, filtered, main, errors);
     }
 

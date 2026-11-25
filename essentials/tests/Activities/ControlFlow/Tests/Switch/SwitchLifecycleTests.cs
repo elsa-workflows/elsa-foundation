@@ -187,7 +187,7 @@ public sealed class SwitchLifecycleTests
         public ValueTask HandleAsync(RuntimeSchedulerWorkItem item, CancellationToken cancellationToken = default)
         {
             if (!Released && item.Payload is { } payload
-                && payload.TryGetProperty(nameof(RuntimeStartActivityCommandPayload.ExecutableNodeId), out var id) && id.GetString() == "c")
+                && payload.TryGetProperty(JsonNamingPolicy.CamelCase.ConvertName(nameof(RuntimeStartActivityCommandPayload.ExecutableNodeId)), out var id) && id.GetString() == "c")
             {
                 Assert.Null(Captured);
                 Captured = item;
@@ -198,7 +198,7 @@ public sealed class SwitchLifecycleTests
         public ValueTask HandleAsync(RuntimeSchedulerWorkItem item, IRuntimePipelineContext context, CancellationToken cancellationToken = default)
         {
             if (!Released && item.Payload is { } payload
-                && payload.TryGetProperty(nameof(RuntimeStartActivityCommandPayload.ExecutableNodeId), out var id) && id.GetString() == "c")
+                && payload.TryGetProperty(JsonNamingPolicy.CamelCase.ConvertName(nameof(RuntimeStartActivityCommandPayload.ExecutableNodeId)), out var id) && id.GetString() == "c")
                 return HandleAsync(item, cancellationToken);
             return ((IRuntimePipelineWorkHandler)_inner).HandleAsync(item, context, cancellationToken);
         }
@@ -272,7 +272,7 @@ public sealed class SwitchLifecycleTests
 
     private static Task<WorkflowExecutionRun> Resume(WorkflowExecutionHarness harness, WorkflowExecutableIdentity identity, BookmarkState bookmark, bool @break = false) =>
         harness.ResumeAsync(identity, bookmark.BookmarkId, bookmark.ActivityExecutionId, bookmark.ExecutableNodeId,
-            bookmark.ResumeTargetId, bookmark.StimulusType, bookmark.StimulusHash, JsonSerializer.SerializeToElement(new SwitchWaitTrigger(true, @break)));
+            bookmark.ResumeTargetId, bookmark.StimulusType, bookmark.StimulusHash, JsonSerializer.SerializeToElement(new SwitchWaitTrigger(true, @break), Elsa.Serialization.Core.JsonBaseline.Options));
 }
 
 public sealed record SwitchWaitState(string Marker);

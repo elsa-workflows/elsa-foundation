@@ -90,7 +90,7 @@ public sealed class ScheduleActivityAlterationHandler(
             idempotencyKey: RuntimeChainId.Derive(context.Job.JobId, $"alteration-schedule-idempotency:{context.Ordinal}:{child.ExecutableNodeId}"),
             enqueuedAt: now,
             recordedAt: now,
-            payload: JsonSerializer.SerializeToElement(payload),
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["runtime.alteration.jobId"] = context.Job.JobId,
@@ -107,7 +107,7 @@ public sealed class ScheduleActivityAlterationHandler(
             recordedAt: now,
             activityExecutionId: parent.Execution.ActivityExecutionId,
             idempotencyKey: workItem.IdempotencyKey,
-            payload: JsonSerializer.SerializeToElement(workItem),
+            payload: JsonSerializer.SerializeToElement(workItem, Elsa.Serialization.Core.JsonBaseline.Options),
             metadata: workItem.CommandMetadata,
             materializedSchedulerWorkItem: workItem);
         context.Staging.Stage(new ScheduleActivityStagedChange(intent));

@@ -26,10 +26,10 @@ internal sealed class ScheduleTriggerTypeSource : IStandaloneTriggerTypeSource
     public IEnumerable<TriggerTypeDescriptor> GetTypes()
     {
         TriggerSourceField[] source = [new(["metadata", "dueAt"], "Due instant (UTC)", "string"), new(["metadata", "timezone"], "Schedule timezone", "string")];
-        yield return new("timer", 1, "Timer", "Timer", [new("interval", "Interval", Required: true, DefaultValue: JsonSerializer.SerializeToElement("PT5M"))], source,
+        yield return new("timer", 1, "Timer", "Timer", [new("interval", "Interval", Required: true, DefaultValue: JsonSerializer.SerializeToElement("PT5M", options: Elsa.Serialization.Core.JsonBaseline.Options))], source,
             "One resource-owned recurring interval; accepted subscribers start independently.");
         yield return new("cron", 1, "Cron", "Cron", [new("expression", "Cron expression", Required: true),
-            new("timezone", "Timezone", Required: true, DefaultValue: JsonSerializer.SerializeToElement("UTC"))], source,
+            new("timezone", "Timezone", Required: true, DefaultValue: JsonSerializer.SerializeToElement("UTC", options: Elsa.Serialization.Core.JsonBaseline.Options))], source,
             "Five or six Cron fields with an explicit timezone.");
     }
 }

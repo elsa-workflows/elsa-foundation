@@ -9,7 +9,7 @@ internal static class RuleJson
     public static byte[] Write(Action<Utf8JsonWriter> write, int maximumBytes)
     {
         var buffer = new BoundedBuffer(maximumBytes);
-        using (var writer = new Utf8JsonWriter(buffer)) write(writer);
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder })) write(writer);
         return buffer.WrittenBytes.ToArray();
     }
 

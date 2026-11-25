@@ -22,8 +22,8 @@ public sealed class DraftValidationFindingOwnershipTests
         using var root = ActivityDataSelectionTestSupport.Provider(catalog);
         using var scope = root.CreateScope();
         var node = new ActivityNode("consumer", "test",
-            [new("secret", new("private-literal", "Literal"), null, null, null, null),
-                new("value", new(new VariableReference("missing"), "Variable"), null, null, null, null)], []);
+            [new("secret", Elsa.Expressions.Core.Models.ArgumentValue.FromClr("private-literal", "Literal"), null, null, null, null),
+                new("value", Elsa.Expressions.Core.Models.ArgumentValue.FromClr(new VariableReference("missing"), "Variable"), null, null, null, null)], []);
         var draft = new Draft(new([], node, [], [], null));
         var validating = new DraftValidating(draft);
         await scope.ServiceProvider.GetRequiredService<IInlineEventPublisher>().Publish(validating, CancellationToken.None);

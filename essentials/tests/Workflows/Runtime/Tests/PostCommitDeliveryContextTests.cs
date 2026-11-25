@@ -107,7 +107,7 @@ public sealed class PostCommitDeliveryContextTests
     }
 
     [Fact]
-    public void New_numeric_normalization_does_not_rewrite_historical_checkpoint_replay_identity()
+    public void Checkpoint_replay_identity_uses_exact_canonical_numbers()
     {
         var first = Intent(payload: "{\"n\":1}");
         var second = Intent(payload: "{\"n\":1.0}");
@@ -115,7 +115,7 @@ public sealed class PostCommitDeliveryContextTests
         var changes = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []);
         var checkpoint = new RuntimeCheckpoint("checkpoint", "test", "publisher", Now, [], metadata);
         var bundle = new RuntimeCheckpointCommit("commit", checkpoint, changes, [first], metadata);
-        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(bundle),
+        Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(bundle),
             RuntimeCheckpointCommitFingerprint.Compute(bundle with { PostCommitIntents = [second] }));
         Assert.Equal(Fingerprint(first), Fingerprint(second));
     }

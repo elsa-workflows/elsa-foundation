@@ -24,6 +24,17 @@ internal sealed record ConnectionProof(string RecordId, string MaterialRevision,
 internal sealed class ConnectionProofStore(IServiceScopeFactory scopes, IDataProtectionProvider protection,
     IOptions<ExternalAuthenticationOptions> options)
 {
+    // This protected owner metadata retains its established CLR member names. Carried JSON
+    // still uses the shared baseline; no tolerant reader or workflow conversion policy is added.
+    private static readonly JsonSerializerOptions RetainedJson = CreateRetainedJson();
+    private static JsonSerializerOptions CreateRetainedJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.PropertyNamingPolicy = null;
+        options.MakeReadOnly();
+        return options;
+    }
+
     private const string Kind = "external-recovery-proofs/v1";
     private const string Setting = "protectedProofs";
     internal const int MaximumProofs = 16;
@@ -53,7 +64,7 @@ internal sealed class ConnectionProofStore(IServiceScopeFactory scopes, IDataPro
                 !(item.RecordId == proof.RecordId && item.UserId == proof.UserId && item.Issuer == proof.Issuer && item.Subject == proof.Subject))
                 .Append(proof).OrderByDescending(item => item.ObservedAt).ThenBy(item => item.UserId, StringComparer.Ordinal)
                 .Take(MaximumProofs).ToArray();
-            var payload = Protector(key).Protect(JsonSerializer.Serialize(new Envelope(1, options.Value.TenantId, key, merged)));
+            var payload = Protector(key).Protect(JsonSerializer.Serialize(new Envelope(1, options.Value.TenantId, key, merged), options: RetainedJson));
             if (payload.Length > MaximumCharacters) throw new InvalidOperationException("Recovery observations exceed their storage bound.");
             var record = new ProviderConfigurationRecord(Provider(key), null, Kind, true, false, ProviderCapabilities.FoundationReference,
                 new Dictionary<string, string> { [Setting] = payload });
@@ -70,7 +81,7 @@ internal sealed class ConnectionProofStore(IServiceScopeFactory scopes, IDataPro
             throw new InvalidOperationException("Recovery observations are invalid or unsupported.");
         try
         {
-            var envelope = JsonSerializer.Deserialize<Envelope>(Protector(key).Unprotect(payload));
+            var envelope = JsonSerializer.Deserialize<Envelope>(Protector(key).Unprotect(payload), options: RetainedJson);
             if (envelope is null || envelope.Format != 1 || envelope.Tenant != options.Value.TenantId || envelope.Key != key ||
                 envelope.Proofs is null || envelope.Proofs.Length > MaximumProofs || envelope.Proofs.Any(proof => proof is null || !Valid(proof)))
                 throw new InvalidOperationException("Recovery observations are invalid or unsupported.");

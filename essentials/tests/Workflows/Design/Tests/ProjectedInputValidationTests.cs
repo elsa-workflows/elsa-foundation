@@ -49,7 +49,7 @@ public sealed class ProjectedInputValidationTests
 
     private static WorkflowDefinitionState StateOf(params ActivityNode[] children) => new([], new("root", "sequence", [], [],
         new("elsa.sequence.structure", "1.0.0", JsonSerializer.SerializeToElement(new { activities = children }))), [], [], null);
-    private static ArgumentState Argument(string key, object value, string syntax) => new(key, new(value, syntax), null, null, null, null);
+    private static ArgumentState Argument(string key, object value, string syntax) => new(key, Elsa.Expressions.Core.Models.ArgumentValue.FromClr(value, syntax), null, null, null, null);
     private static ArgumentState Result(string key, string producer) => Argument(key,
         JsonSerializer.SerializeToElement(new { producerNodeId = producer, projectionKey = "$result", producerScopeId = "workflow", isOptional = false }), "ActivityResult");
 

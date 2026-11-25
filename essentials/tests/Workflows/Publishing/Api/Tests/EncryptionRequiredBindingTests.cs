@@ -327,18 +327,18 @@ public sealed class EncryptionRequiredBindingTests
         new(inputKey, binding switch
         {
             "NullValue" => null!,
-            "NullLiteral" => new ArgumentValue(null, "Literal"),
-            "JsonNullLiteral" => new ArgumentValue(JsonSerializer.SerializeToElement<object?>(null), "Literal"),
-            "Literal" => new ArgumentValue(JsonSerializer.SerializeToElement(Sentinel), "Literal"),
-            "EmptyLiteral" => new ArgumentValue(JsonSerializer.SerializeToElement(string.Empty), "Literal"),
-            "Object" => new ArgumentValue(JsonSerializer.SerializeToElement(new { note = Sentinel }), "Object"),
-            "Variable" => new ArgumentValue(JsonSerializer.SerializeToElement("var-token"), "Variable"),
-            "WorkflowRequest" => new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey = "token" }), "WorkflowRequest"),
-            "JavaScript" => new ArgumentValue(JsonSerializer.SerializeToElement($"'{Sentinel}'"), "JavaScript"),
-            "Default" => new ArgumentValue(null, "Default"),
-            "SecretText" => new ArgumentValue(JsonSerializer.SerializeToElement(Sentinel), "Secret"),
-            "SecretWithExtraMember" => new ArgumentValue(JsonSerializer.SerializeToElement(new { name = "payments.api-key", note = Sentinel }), "Secret"),
-            "UnpickedSecret" => new ArgumentValue(null, "Secret"),
+            "NullLiteral" => ArgumentValue.FromClr(null, "Literal"),
+            "JsonNullLiteral" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement<object?>(null), "Literal"),
+            "Literal" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(Sentinel), "Literal"),
+            "EmptyLiteral" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(string.Empty), "Literal"),
+            "Object" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { note = Sentinel }), "Object"),
+            "Variable" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement("var-token"), "Variable"),
+            "WorkflowRequest" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { memberKey = "token" }), "WorkflowRequest"),
+            "JavaScript" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement($"'{Sentinel}'"), "JavaScript"),
+            "Default" => ArgumentValue.FromClr(null, "Default"),
+            "SecretText" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(Sentinel), "Secret"),
+            "SecretWithExtraMember" => ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { name = "payments.api-key", note = Sentinel }), "Secret"),
+            "UnpickedSecret" => ArgumentValue.FromClr(null, "Secret"),
             _ => throw new ArgumentOutOfRangeException(nameof(binding), binding, null)
         }, null, null, null, null);
 }

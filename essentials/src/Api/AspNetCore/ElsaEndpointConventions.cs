@@ -20,6 +20,11 @@ public static class ElsaEndpointConventions
 {
     private const string JsonContentType = "application/json";
 
+    /// <summary>Applies Elsa's JSON response headers to an owned API route or group, including failure responses.</summary>
+    public static TBuilder WithElsaJsonResponseHeaders<TBuilder>(this TBuilder builder, bool normalizeContentType = true)
+        where TBuilder : IEndpointConventionBuilder => builder.AddEndpointMetadata(
+            normalizeContentType ? ElsaJsonResponseHeadersMetadata.Instance : ElsaJsonResponseHeadersMetadata.PreserveContentType);
+
     public static TBuilder WithOwner<TBuilder>(this TBuilder builder, string owner)
         where TBuilder : IEndpointConventionBuilder =>
         builder.AddEndpointMetadata(EndpointOwnershipMetadata.Module(owner));
@@ -96,6 +101,7 @@ public static class ElsaEndpointConventions
     /// </list>
     /// </remarks>
     public static readonly EndpointOperationConvention ElsaModuleOperation = (builder, context) =>
+    {
         builder
             // The package attaches this itself only from its own default convention, and the lifetime
             // validator names the group from it when it reports a violation.
@@ -110,6 +116,9 @@ public static class ElsaEndpointConventions
                 context.Tag,
                 context.DocumentAuthResponses ?? true,
                 context.SuccessContentType);
+        foreach (var parameter in EndpointParameterDescriber.Describe(context.ContractType, context.Pattern, context.ReadsBody, context.BodyKind))
+            builder.AddEndpointMetadata(parameter);
+    };
 
     /// <summary>
     /// Applies the endpoint metadata every module REST operation carries: its name and tag, its
@@ -179,7 +188,13 @@ public static class ElsaEndpointConventions
 
         // Ownership is validated as a final convention alongside the package's lifetime check, so
         // both see the completed metadata rather than whatever had been added by this point.
-        builder.Finally(endpointBuilder => EndpointOwnershipValidator.Validate(endpointBuilder));
+        builder.Finally(endpointBuilder =>
+        {
+            EndpointOwnershipValidator.Validate(endpointBuilder);
+            if (endpointBuilder.RequestDelegate is { } next)
+                endpointBuilder.RequestDelegate = context => ElsaJsonTemporalQueryBoundary.InvokeAsync(context, next);
+        });
+        builder.WithMetadata(ElsaJsonResponseHeadersMetadata.Instance);
         return builder.WithApiExplorerDescription().RequireStableEndpointMetadata();
     }
 

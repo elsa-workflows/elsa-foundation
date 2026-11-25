@@ -87,7 +87,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
         provenanceMetadata[RuntimeMetadataKeys.RetryReason] = command.Reason;
         provenanceMetadata[RuntimeMetadataKeys.RetryAbsentBoundaryInputs] = JsonSerializer.Serialize(
             prior.InputSnapshot?.Values.Where(pair => pair.Value.Presence == ValuePresence.Absent)
-                .Select(pair => pair.Key).Order(StringComparer.Ordinal).ToArray() ?? []);
+                .Select(pair => pair.Key).Order(StringComparer.Ordinal).ToArray() ?? [], options: Elsa.Serialization.Core.JsonBaseline.Options);
         var enclosingExecutionScopeId = prior.EnclosingExecutionScopeId ?? newActivityExecutionId;
         var provenance = ActivitySchedulingProvenance.From(
             workItem.WorkflowExecutionId,
@@ -120,7 +120,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
             occurredAt,
             occurredAt,
             workItem.Sequence is { } sequence ? sequence + 1 : null,
-            JsonSerializer.SerializeToElement(schedulePayload),
+            JsonSerializer.SerializeToElement(schedulePayload, Elsa.Serialization.Core.JsonBaseline.Options),
             provenanceMetadata,
             workItem.EnvelopeMetadata,
             enclosingExecutionScopeId,
@@ -243,7 +243,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
             throw new InvalidOperationException("RetryActivityBoundary scheduler work requires a payload.");
         try
         {
-            return payload.Deserialize<RetryActivityBoundaryCommand>()
+            return payload.Deserialize<RetryActivityBoundaryCommand>(Elsa.Serialization.Core.JsonBaseline.Options)
                    ?? throw new InvalidOperationException("RetryActivityBoundary scheduler work payload resolved to null.");
         }
         catch (JsonException exception)

@@ -56,7 +56,7 @@ public sealed class HttpRequestBodyParser : IHttpRequestBodyParser
         }
 
         if (mediaType.StartsWith("text/", StringComparison.OrdinalIgnoreCase))
-            return JsonSerializer.SerializeToElement(body);
+            return JsonSerializer.SerializeToElement(body, Elsa.Serialization.Core.JsonBaseline.Options);
 
         return null;
     }

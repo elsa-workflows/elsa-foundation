@@ -8,7 +8,7 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 
 internal static class WorkflowDispatchCancelIntentFactory
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public static RuntimePostCommitIntent Create(WorkflowDispatchRecord record, DateTimeOffset recordedAt)
     {

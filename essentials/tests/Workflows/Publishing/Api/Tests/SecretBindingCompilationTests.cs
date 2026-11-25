@@ -85,7 +85,7 @@ public sealed class SecretBindingCompilationTests
         var exception = Assert.ThrowsAny<ArgumentException>(() => _compiler.Compile(
             "node-1",
             Input("String"),
-            new WorkflowArgumentState(InputKey, new ArgumentValue(JsonDocument.Parse(payload).RootElement.Clone(), "Secret"), null, null, null, null)));
+            new WorkflowArgumentState(InputKey, ArgumentValue.FromClr(JsonDocument.Parse(payload).RootElement.Clone(), "Secret"), null, null, null, null)));
 
         Assert.Contains("'node-1'", exception.Message, StringComparison.Ordinal);
         Assert.Contains($"'{InputKey}'", exception.Message, StringComparison.Ordinal);
@@ -102,7 +102,7 @@ public sealed class SecretBindingCompilationTests
         var exception = Assert.Throws<ArgumentException>(() => _compiler.Compile(
             "node-1",
             Input("String"),
-            new WorkflowArgumentState(InputKey, new ArgumentValue(JsonDocument.Parse(payload).RootElement.Clone(), "Secret"), null, null, null, null)));
+            new WorkflowArgumentState(InputKey, ArgumentValue.FromClr(JsonDocument.Parse(payload).RootElement.Clone(), "Secret"), null, null, null, null)));
 
         Assert.EndsWith($"uses expression type 'Secret' but {defect}.", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("extra-member-sentinel", exception.Message, StringComparison.Ordinal);
@@ -211,7 +211,7 @@ public sealed class SecretBindingCompilationTests
         var descriptor = new RuntimeActivityDescriptor(
             WellKnownRuntimeActivityConsumers.ClrActivity,
             RuntimeActivityDescriptor.InitialSchemaVersion,
-            JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Test.Unregistered.Activity")));
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor("Test.Unregistered.Activity")));
 
         var exception = Assert.Throws<ArgumentException>(() =>
             _compiler.EnsureSecretBindingsAdmissible("node-1", descriptor, [Secret(InputKey)]));
@@ -245,7 +245,7 @@ public sealed class SecretBindingCompilationTests
         new(InputKey, InputKey, new TypeReference(alias, collectionKind), null, InputKey, null, IsNullable: true);
 
     private static WorkflowArgumentState State(object payload) =>
-        new(InputKey, new ArgumentValue(JsonSerializer.SerializeToElement(payload), "Secret"), null, null, null, null);
+        new(InputKey, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(payload), "Secret"), null, null, null, null);
 
     private static TheoryData<string, CollectionKind, string?> Cross(IEnumerable<(string Alias, CollectionKind CollectionKind)> targets)
     {

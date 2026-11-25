@@ -125,6 +125,75 @@ public sealed partial class WorkflowExecutableCompilerTests
         Assert.Equal("hello", input.DefaultValue!.Value.GetString());
     }
 
+    [Fact]
+    public async Task Workflow_input_on_a_storage_driver_other_than_elsa_json_is_refused()
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        version.State = version.State! with
+        {
+            Inputs = [new InputDefinition("input-1", "Document", new TypeReference("String"), "Acme.BlobStorageDriver",
+                "Document", null, IsNullable: true)]
+        };
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => CompileAsync(version));
+
+        Assert.IsType<ArgumentException>(exception.InnerException);
+        Assert.StartsWith("VF-ACT-005: Workflow input 'Document' uses storage driver 'Acme.BlobStorageDriver'.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Workflow_output_on_a_storage_driver_other_than_elsa_json_is_refused()
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        version.State = version.State! with
+        {
+            Outputs = [new OutputDefinition("output-1", "Report", new TypeReference("String"), "Acme.BlobStorageDriver",
+                "Report", null, IsNullable: true)]
+        };
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => CompileAsync(version));
+
+        Assert.StartsWith("VF-ACT-005: Workflow output 'Report' uses storage driver 'Acme.BlobStorageDriver'.", exception.Message);
+    }
+
+    [Fact]
+    public async Task Workflow_variable_on_a_storage_driver_other_than_elsa_json_is_refused()
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        version.State = version.State! with
+        {
+            Variables = [new Elsa.Expressions.Core.Models.VariableDefinition("var-draft", "Draft", new("String"), "Acme.BlobStorageDriver", null)]
+        };
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => CompileAsync(version));
+
+        Assert.Contains("VF-ACT-005: Variable 'var-draft'", exception.Message);
+        Assert.Contains("uses storage driver 'Acme.BlobStorageDriver'", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("elsa.json")]
+    public async Task Workflow_inputs_and_outputs_on_the_built_in_driver_compile(string? storageDriverType)
+    {
+        var version = WorkflowVersion(Node("consumer", Text("first")));
+        version.State = version.State! with
+        {
+            Inputs = [new InputDefinition("input-1", "Document", new TypeReference("String"), storageDriverType,
+                "Document", null, IsNullable: true)],
+            Outputs = [new OutputDefinition("output-1", "Report", new TypeReference("String"), storageDriverType,
+                "Report", null, IsNullable: true)]
+        };
+
+        var executable = await CompileAsync(version);
+
+        Assert.Single(executable.InputContract!.Inputs);
+    }
+
+    private Task<WorkflowExecutable> CompileAsync(WorkflowDefinitionVersion version) =>
+        TestCompiler.Create(new FakeVersionStore(version), new FakeActivityVersionStore([_writeLineActivity]),
+            _activityStructureService, TestWellKnownTypeRegistry.Create()).CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask();
+
     [Theory]
     [InlineData("Int32", "10", "0", false)]
     [InlineData("Boolean", "true", "false", false)]
@@ -273,7 +342,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         Assert.Equal((true, false), (inputs[nameof(DeclaredInputsActivity.Note)].Policy.IsSensitive, inputs[nameof(DeclaredInputsActivity.Note)].Policy.RequiresEncryption));
 
         var exception = Assert.Throws<CredentialLiteralRefusedException>(() =>
-            compiler.CompileAll("occurrence-1", inputs.Values, [new WorkflowArgumentState(nameof(DeclaredInputsActivity.ApiKey), new ArgumentValue("typed-in", "Literal"), null, null, null, null)]));
+            compiler.CompileAll("occurrence-1", inputs.Values, [new WorkflowArgumentState(nameof(DeclaredInputsActivity.ApiKey), ArgumentValue.FromClr("typed-in", "Literal"), null, null, null, null)]));
         Assert.Equal(
             CredentialLiteralFinding.For("occurrence-1", nameof(DeclaredInputsActivity.ApiKey), nameof(DeclaredInputsActivity.ApiKey)),
             Assert.Single(exception.Findings));
@@ -282,9 +351,9 @@ public sealed partial class WorkflowExecutableCompilerTests
     /// <summary>A literal, a value read and an expression, each a binding the credential-literal rule refuses.</summary>
     public static TheoryData<ArgumentValue> RefusedCredentialBindings => new()
     {
-        new ArgumentValue(JsonSerializer.SerializeToElement("typed-in"), "Literal"),
-        new ArgumentValue(JsonSerializer.SerializeToElement("variable-reference"), "Variable"),
-        new ArgumentValue(JsonSerializer.SerializeToElement("'typed-in'"), "JavaScript")
+        ArgumentValue.FromClr(JsonSerializer.SerializeToElement("typed-in"), "Literal"),
+        ArgumentValue.FromClr(JsonSerializer.SerializeToElement("variable-reference"), "Variable"),
+        ArgumentValue.FromClr(JsonSerializer.SerializeToElement("'typed-in'"), "JavaScript")
     };
 
     [Theory]
@@ -338,20 +407,19 @@ public sealed partial class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task An_undeclared_input_keeps_its_contract_fingerprint_and_verifies_historical_hashes()
+    public async Task An_undeclared_input_keeps_its_contract_fingerprint_and_refuses_pre_migration_hashes()
     {
-        // Sensitivity declarations preserve these contract fingerprints. #2515 added the side-effect
-        // profile to behavioral identity; #3331 emits hash schema v2 for complete input contracts.
-        // Keep fixed current identities and verify the previously published v1 identities as well.
+        // Q11 regenerates pre-stable identities once. The first stable release freezes these pins;
+        // the current consumer must never accept the superseded verifier's hashes.
         var unbound = await SecretBindingCompilerFixture.CompileAsync(SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity)), [typeof(TestWriteLineActivity)]);
         var literal = await SecretBindingCompilerFixture.CompileAsync(
-            SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity), new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null)),
+            SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity), new WorkflowArgumentState("Text", ArgumentValue.FromClr(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null)),
             [typeof(TestWriteLineActivity)]);
 
-        Assert.Equal("sha256:d4c0e91ccccf8bfd0650d563b933c2dc24fa6acf5db71de7614cd82adecd3cb5", unbound.RootActivity.ActivityContract!.SchemaFingerprint);
+        Pin("sha256:eadb27272b5b400e8ba3560cc70e7ae9e545d0ea592efd1df5ec6e61a1051811", unbound.RootActivity.ActivityContract!.SchemaFingerprint);
         Assert.Equal(unbound.RootActivity.ActivityContract.SchemaFingerprint, literal.RootActivity.ActivityContract!.SchemaFingerprint);
-        Assert.Equal("sha256:b31b6d3f70def126b45fc884773d951c46657b8d8d7b1bb77ff09ae35aa992f7", unbound.Identity.ArtifactHash);
-        Assert.Equal("sha256:bedaa44ae2dcda6b439f9b2475ed8a82f9984d701addd4225d444e625603236d", literal.Identity.ArtifactHash);
+        Pin("sha256:20dfb2b786da9b7a33db97bc46290644a1fc0e4a4091a4d0872d0ad2305bb6dd", unbound.Identity.ArtifactHash);
+        Pin("sha256:c85b8e878532897f76801ceaf0e28f6c52556ae1c6b8b4c21df866e042fcae70", literal.Identity.ArtifactHash);
         AssertLegacyHash(unbound, "sha256:0e1f299d066b2d136264598e6b1725ba9a28e974807cd7db0df8a7330b4a67ff");
         AssertLegacyHash(literal, "sha256:7b4d6b3a6d8b5c00b228dcb91f73de2f775839f9adc14beddd0b3639d96adf0d");
 
@@ -361,9 +429,12 @@ public sealed partial class WorkflowExecutableCompilerTests
             var identity = executable.Identity;
             var historicalIdentity = new WorkflowExecutableIdentity(hasher.CreateArtifactId("artifact-", hash), identity.DefinitionId,
                 identity.DefinitionVersionId, identity.ArtifactVersion, hash);
-            Assert.True(hasher.MatchesHash(LegacyWorkflowHashFixture.WithRoot(executable, executable.RootActivity,
+            Assert.False(hasher.MatchesHash(LegacyWorkflowHashFixture.WithRoot(executable, executable.RootActivity,
                 declaredIdentity: historicalIdentity)));
         }
+
+        void Pin(string expected, string actual) => Assert.True(expected == actual,
+            $"First-stable hash pin: expected {expected}; actual {actual}; contract {unbound.RootActivity.ActivityContract!.SchemaFingerprint}; unbound {unbound.Identity.ArtifactHash}; literal {literal.Identity.ArtifactHash}");
     }
 
     [Fact]
@@ -546,7 +617,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             [
                 new ArgumentState(
                     "value",
-                    new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "result-value" }), "Variable"),
+                    ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "result-value" }), "Variable"),
                     null,
                     null,
                     null,
@@ -631,7 +702,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         {
             null => [],
             "Secret" => [SecretBindingCompilerFixture.Secret(inputKey) with { IsSensitive = authoredIsSensitive }],
-            _ => [new WorkflowArgumentState(inputKey, new ArgumentValue("authored", binding), null, null, null, authoredIsSensitive)]
+            _ => [new WorkflowArgumentState(inputKey, ArgumentValue.FromClr("authored", binding), null, null, null, authoredIsSensitive)]
         };
         var executable = await SecretBindingCompilerFixture.CompileAsync(
             SecretBindingCompilerFixture.Node(typeof(DeclaredInputsActivity), inputs),
@@ -808,7 +879,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         var sidecars = new WorkflowExecutablePlacementSidecarContext();
         var outputTarget = new WorkflowArgumentState(
             "result",
-            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result", declaringScopeId = "workflow" }), "Variable"),
+            ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result", declaringScopeId = "workflow" }), "Variable"),
             null, null, null, null);
         var compiler = TestCompiler.Create(
             new FakeVersionStore(WorkflowVersion(
@@ -851,7 +922,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         // contract inputs must lower to a literal boundary binding that reaches the published executable.
         var compiler = PlacedReusableCompiler(new WorkflowArgumentState(
             "value",
-            new ArgumentValue(JsonSerializer.SerializeToElement(42), "Literal"),
+            ArgumentValue.FromClr(JsonSerializer.SerializeToElement(42), "Literal"),
             null, null, null, null));
 
         var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
@@ -873,7 +944,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     public async Task Placed_reusable_activity_accepts_an_authored_value_for_an_optional_nonnullable_reference_input()
     {
         var compiler = PlacedReusableCompiler(
-            new WorkflowArgumentState("value", new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null),
+            new WorkflowArgumentState("value", ArgumentValue.FromClr(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null),
             valueTypeAlias: "String",
             primaryInputIsRequired: false);
 
@@ -936,7 +1007,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     public async Task Background_placement_refuses_a_reusable_activity_boundary()
     {
         var compiler = PlacedReusableCompiler(
-            new WorkflowArgumentState("value", new ArgumentValue(JsonSerializer.SerializeToElement(42), "Literal"), null, null, null, null),
+            new WorkflowArgumentState("value", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(42), "Literal"), null, null, null, null),
             executionPlacement: ActivityExecutionPlacement.Background);
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
@@ -951,10 +1022,10 @@ public sealed partial class WorkflowExecutableCompilerTests
     public async Task Placed_reusable_activity_materializes_codec_backed_inputs_inline_without_an_external_payload_store()
     {
         var compiler = PlacedReusableCompiler(
-            new WorkflowArgumentState("A", new ArgumentValue(JsonSerializer.SerializeToElement(19), "Literal"), null, null, null, null),
+            new WorkflowArgumentState("A", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(19), "Literal"), null, null, null, null),
             extraInputs:
             [
-                ("Int32", new WorkflowArgumentState("B", new ArgumentValue(JsonSerializer.SerializeToElement(23), "Literal"), null, null, null, null))
+                ("Int32", new WorkflowArgumentState("B", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(23), "Literal"), null, null, null, null))
             ]);
         var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
         var boundary = executable.RootActivity;
@@ -977,7 +1048,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     {
         var authoredInput = new WorkflowArgumentState(
             "value",
-            new ArgumentValue(JsonSerializer.SerializeToElement(19), "Literal"),
+            ArgumentValue.FromClr(JsonSerializer.SerializeToElement(19), "Literal"),
             null,
             null,
             "external-input-profile",
@@ -996,7 +1067,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     {
         var authoredInput = new WorkflowArgumentState(
             "value",
-            new ArgumentValue(JsonSerializer.SerializeToElement(42), "Literal"),
+            ArgumentValue.FromClr(JsonSerializer.SerializeToElement(42), "Literal"),
             null, null, null, null);
         var request = NewRequest(DateTimeOffset.UtcNow);
         var external = await PlacedReusableCompiler(authoredInput).CompileAsync(request);
@@ -1028,7 +1099,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         var compiler = PlacedReusableCompiler(
             new WorkflowArgumentState(
                 "value",
-                new ArgumentValue(JsonSerializer.SerializeToElement(new { name = "payments.api-key" }), "Secret"),
+                ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { name = "payments.api-key" }), "Secret"),
                 null, null, null, null),
             valueTypeAlias: "String");
 
@@ -1054,7 +1125,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             [
                 ("Int32", new WorkflowArgumentState(
                     "aaa",
-                    new ArgumentValue(JsonSerializer.SerializeToElement("not-a-number"), "Literal"),
+                    ArgumentValue.FromClr(JsonSerializer.SerializeToElement("not-a-number"), "Literal"),
                     null, null, null, null))
             ]);
 
@@ -1087,7 +1158,7 @@ public sealed partial class WorkflowExecutableCompilerTests
 
     private static WorkflowArgumentState SecretInput(string referenceKey) => new(
         referenceKey,
-        new ArgumentValue(JsonSerializer.SerializeToElement(new { name = "payments.api-key" }), "Secret"),
+        ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { name = "payments.api-key" }), "Secret"),
         null, null, null, null);
 
     /// <summary>
@@ -1174,7 +1245,7 @@ public sealed partial class WorkflowExecutableCompilerTests
                 [new("local-root", "local-root", "local-root", 1, 2)], [])]));
         var outputTarget = new WorkflowArgumentState(
             "result",
-            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result", declaringScopeId = "workflow" }), "Variable"),
+            ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result", declaringScopeId = "workflow" }), "Variable"),
             null, null, null, null);
         return TestCompiler.Create(
             new FakeVersionStore(WorkflowVersion(
@@ -1356,7 +1427,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     public async Task WriteHttpResponse_candidate_profile_preserves_current_binding_families_and_pure_expression_contract()
     {
         static WorkflowArgumentState Input(string key, object? value, string expressionType) =>
-            new(key, new ArgumentValue(value, expressionType), null, null, null, null);
+            new(key, ArgumentValue.FromClr(value, expressionType), null, null, null, null);
 
         static Task<WorkflowExecutable> CompileAsync(
             WorkflowArgumentState input,
@@ -1384,7 +1455,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             "Response Body",
             new TypeReference("String"),
             null,
-            new ArgumentValue("variable-body", "Literal"));
+            ArgumentValue.FromClr("variable-body", "Literal"));
         var variable = await CompileAsync(
             Input(
                 nameof(WriteHttpResponse.Body),
@@ -1432,7 +1503,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         var endpoint = await SecretBindingCompilerFixture.CompileAsync(
             SecretBindingCompilerFixture.Node(
                 typeof(HttpEndpoint),
-                new WorkflowArgumentState(nameof(HttpEndpoint.Path), new ArgumentValue("/replay-safety", "Literal"), null, null, null, null)),
+                new WorkflowArgumentState(nameof(HttpEndpoint.Path), ArgumentValue.FromClr("/replay-safety", "Literal"), null, null, null, null)),
             [typeof(HttpEndpoint), typeof(WriteHttpResponse)]);
 
         Assert.Equal(
@@ -1543,7 +1614,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             []);
         var outputTarget = new WorkflowArgumentState(
             "sum",
-            new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result" }), "Variable"),
+            ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result" }), "Variable"),
             null, null, null, null);
         var captures = new RuntimeOutputCaptureCompiler(storageDrivers).CompileBoundaryOutputs(
             "use-reusable",
@@ -1634,7 +1705,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result });
         var outputTarget = new WorkflowArgumentState(
             "Value",
-            new ArgumentValue(
+            ArgumentValue.FromClr(
                 JsonSerializer.SerializeToElement(new { referenceKey = "orderId", declaringScopeId = "workflow" }),
                 "Variable"),
             null, null, null, null,
@@ -1701,7 +1772,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result });
         var outputTarget = new WorkflowArgumentState(
             "Value",
-            new ArgumentValue(
+            ArgumentValue.FromClr(
                 JsonSerializer.SerializeToElement(new { referenceKey = "orderId", declaringScopeId = "container-1" }),
                 "Variable"),
             null, null, null, null);
@@ -1727,7 +1798,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             sourceRepresentation: ValueRepresentation.TransientResource);
         var outputTarget = new WorkflowArgumentState(
             "Value",
-            new ArgumentValue(
+            ArgumentValue.FromClr(
                 JsonSerializer.SerializeToElement(new { referenceKey = "orderId", declaringScopeId = "workflow" }),
                 "Variable"),
             null, null, null, null);
@@ -1752,7 +1823,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         var activityVersion = ClrActivityVersion("activity-output-producer", "Test.OutputProducer", alias);
         var outputTarget = new WorkflowArgumentState(
             "Value",
-            new ArgumentValue(
+            ArgumentValue.FromClr(
                 JsonSerializer.SerializeToElement(new { referenceKey = "orderId", declaringScopeId = "workflow" }),
                 "Variable"),
             null, null, null, null);
@@ -2911,7 +2982,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             Name: "Counter",
             Type: new TypeReference("String"),
             StorageDriverType: null,
-            Default: new ArgumentValue("0", "Literal"));
+            Default: ArgumentValue.FromClr("0", "Literal"));
         var compiler = Compiler(WorkflowVersion(SequenceNode(
             "sequence",
             [Node("write-one", Text("one"))],
@@ -2949,7 +3020,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             Name: "Message",
             Type: new TypeReference("String"),
             StorageDriverType: null,
-            Default: new ArgumentValue("hello", "Literal"));
+            Default: ArgumentValue.FromClr("hello", "Literal"));
 
         var without = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
         var with = await Compiler(WorkflowVersion(node, variables: [message])).CompileAsync(NewRequest(now));
@@ -2977,7 +3048,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         Assert.Equal("String", analysis.Target.Type.Alias);
         Assert.Equal(WorkflowIntrinsicKind.Set, (await Compiler(version).CompileAsync(NewRequest(DateTimeOffset.UtcNow))).RootActivity.IntrinsicKind);
 
-        var nullValue = set with { Inputs = [new WorkflowArgumentState("value", new ArgumentValue(null, "Literal"), null, null, null, null)] };
+        var nullValue = set with { Inputs = [new WorkflowArgumentState("value", ArgumentValue.FromClr(null, "Literal"), null, null, null, null)] };
         var nullExecutable = await Compiler(WorkflowVersion(nullValue, variables: [variable])).CompileAsync(NewRequest(DateTimeOffset.UtcNow));
         Assert.Equal(ValuePresence.ExplicitNull, nullExecutable.RootActivity.InputBindings["value"].Literal!.Presence);
         var missingFailure = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
@@ -3004,7 +3075,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     [Fact]
     public async Task Json_storage_variables_compile_as_inline_workflow_state_including_defaults()
     {
-        var variable = new Elsa.Expressions.Core.Models.VariableDefinition("message", "Message", new TypeReference("String"), "elsa.json", new ArgumentValue("hello", "Literal"));
+        var variable = new Elsa.Expressions.Core.Models.VariableDefinition("message", "Message", new TypeReference("String"), "elsa.json", ArgumentValue.FromClr("hello", "Literal"));
         var executable = await Compiler(WorkflowVersion(Node("write-one", Text("hello")), variables: [variable]))
             .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
 
@@ -3062,7 +3133,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     public async Task Set_compiles_against_the_selected_variable_declaration(string syntax, string authoredAlias)
     {
         var counter = new Elsa.Expressions.Core.Models.VariableDefinition(
-            "counter", "Counter", new TypeReference("Int32"), null, new ArgumentValue(0, "Literal"));
+            "counter", "Counter", new TypeReference("Int32"), null, ArgumentValue.FromClr(0, "Literal"));
         object value = syntax switch
         {
             "JavaScript" => "getVariable('Counter') + 1",
@@ -3215,7 +3286,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         string scope = "workflow",
         string authoredAlias = "Any") =>
         new(nodeId, "elsa.intrinsic.set@1",
-            [new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Value, new ArgumentValue(JsonSerializer.SerializeToElement(value), syntax), null, null, null, null)], [])
+            [new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Value, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(value), syntax), null, null, null, null)], [])
         {
             Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.Set,
                 new TypeReference(authoredAlias), new Elsa.Expressions.Core.Models.VariableReference(variableKey, scope))
@@ -3230,7 +3301,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             "$intrinsic",
             [new WorkflowArgumentState(
                 WorkflowIntrinsicInputKeys.Value,
-                new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"),
+                ArgumentValue.FromClr(JsonSerializer.SerializeToElement("hello"), "Literal"),
                 null, null, null, null)],
             [])
         {
@@ -3452,7 +3523,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             now,
             now,
             1,
-            JsonSerializer.SerializeToElement(payload),
+            JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             new Dictionary<string, string>(),
             new Dictionary<string, string>());
 
@@ -3861,7 +3932,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             Structure: new ActivityNodeStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
 
     private static ActivityNode FlowchartNode(string nodeId, IReadOnlyCollection<ActivityNode> activities) =>
         new(
@@ -3872,7 +3943,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             Structure: new ActivityNodeStructure(
                 FlowchartActivity.StructureKind,
                 FlowchartActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new FlowchartAuthoredStructure(activities))));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new FlowchartAuthoredStructure(activities))));
 
     private static ActivityDefinitionVersionPublication SourceOwnedPublication(
         ActivityDefinitionVersion version,
@@ -3946,16 +4017,16 @@ public sealed partial class WorkflowExecutableCompilerTests
     }
 
     private static WorkflowArgumentState Text(string value) =>
-        new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
+        new("Text", ArgumentValue.FromClr(value, "Literal"), null, null, null, null);
 
     private static WorkflowArgumentState JavaScriptText(string expression) =>
-        new("Text", new ArgumentValue(expression, "JavaScript"), null, null, null, null);
+        new("Text", ArgumentValue.FromClr(expression, "JavaScript"), null, null, null, null);
 
     private static WorkflowArgumentState VariableText(JsonElement reference) =>
-        new("Text", new ArgumentValue(reference, "Variable"), null, null, null, null);
+        new("Text", ArgumentValue.FromClr(reference, "Variable"), null, null, null, null);
 
     private static WorkflowArgumentState ObjectLines(IReadOnlyCollection<string> lines) =>
-        new("Lines", new ArgumentValue(JsonSerializer.SerializeToElement(lines), "Object"), null, null, null, null);
+        new("Lines", ArgumentValue.FromClr(JsonSerializer.SerializeToElement(lines), "Object"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
         ActivityVersion(
@@ -3977,7 +4048,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(
+            DescriptorPayload = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor(
                 id switch
                 {
                     "activity-probe" => TypeAliasConvention.CanonicalAlias(typeof(ResumeProbeActivity)),
@@ -4006,7 +4077,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             ProviderSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
             ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
             ConsumerSchemaVersion = RuntimeActivityDescriptor.InitialSchemaVersion,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(typeAlias)),
+            DescriptorPayload = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ClrActivityDescriptor(typeAlias)),
             Inputs = []
         };
 

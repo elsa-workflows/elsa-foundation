@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
@@ -48,6 +49,7 @@ export function VariableValueStateLabel({ value, label, onShowValue }: {
   label?: string;
   onShowValue?(value: VariableValueStateView): void;
 }) {
+
   const text = valueStateLabels[value.state] ?? value.state;
   return (
     <span className="wf-variable-value-state" data-state={value.state} data-operational={value.isOperational || undefined}>
@@ -73,6 +75,7 @@ export function VariableWriteHistoryTable({ entries, onShowValue }: {
   entries: VariableWriteEntry[];
   onShowValue?(entry: VariableWriteEntry, value: VariableValueStateView): void;
 }) {
+
   if (entries.length === 0) return <div className="wf-empty">No variable writes recorded.</div>;
   return (
     <table className="wf-variable-history" aria-label="Variable write history">
@@ -133,6 +136,7 @@ export function VariableWriteHistoryTable({ entries, onShowValue }: {
 
 /** The instance journal: one block per commit, with its transitions, input refreshes and writes. */
 export function InstanceJournalList({ commits }: { commits: JournalCommit[] }) {
+  useStudioTimeZone();
   if (commits.length === 0) return <div className="wf-empty">No commits recorded.</div>;
   return (
     <ol className="wf-variable-journal" aria-label="Commit journal">
@@ -173,6 +177,7 @@ export function InstanceJournalList({ commits }: { commits: JournalCommit[] }) {
 
 /** Where two instances of one version first differ and which variables ended differently, by digest only. */
 export function InstanceComparisonSummary({ comparison }: { comparison: InstanceComparison }) {
+
   if (!comparison.comparable) {
     return (
       <div className="wf-variable-comparison" role="status">
@@ -226,6 +231,7 @@ export function VariableLifecyclePanel({ context, workflowExecutionId, initialFi
   initialFilter?: VariableWriteFilter;
   initialTab?: LifecycleTab;
 }) {
+
   const [tab, setTab] = useState<LifecycleTab>(initialTab);
   const [filter, setFilter] = useState<VariableWriteFilter>(initialFilter);
   const [history, setHistory] = useState<Loaded<VariableWriteEntry>>({ status: "idle" });
@@ -408,6 +414,7 @@ function PagedContent<T>({ loaded, onMore, children }: {
   onMore(next: string): void;
   children(items: T[]): ReactNode;
 }) {
+
   if (loaded.status === "failed") return <div className="wf-error" role="alert">{loaded.error}</div>;
   if (loaded.status !== "ready") return <div className="wf-empty">Loading…</div>;
   const next = loaded.next;
@@ -422,6 +429,7 @@ function PagedContent<T>({ loaded, onMore, children }: {
 type ShownValue = ({ status: "loading" } | { status: "ready"; payload: unknown; captureMode: string } | { status: "failed"; error: string }) & { label: string };
 
 function ShownValues({ values }: { values: Record<string, ShownValue> }) {
+
   const entries = Object.entries(values);
   if (entries.length === 0) return null;
   return (

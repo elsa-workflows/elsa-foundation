@@ -8,6 +8,8 @@ The org-wide [AGENTS.md][org-agents] is the protocol for finding, claiming, bran
 
 ## Repository intent
 
+Serialization work follows the [pre-stable regeneration and first-stable freeze rule](docs/serialization.md#baseline-deviations): regenerate changed fixtures now; change frozen formats and hashes only through an explicit decision after Elsa 4's first stable release.
+
 `elsa-foundation` is the transitional Elsa foundation workspace. It contains the main Elsa domain core libraries, default foundation implementations, Speckit specs, and architecture knowledge needed to guide the Elsa modular refactor.
 
 The repo still supports feature development, but the operating model is shaped so feature-workspace assets can later move to a dedicated `elsa-workspace` repository.
@@ -100,7 +102,7 @@ Maintainers publish organization-repository branches and contributors use fork P
 
 ## Constitution boundary
 
-Both constitutions are ratified at the document level (2026-08-08; now framework v6.1.0 and Elsa v6.4.0, after #2578, #2591, spec 257 and #3602/spec 1195); sections marked draft or provisional, framework §2.24 and Elsa §E2.8 activity versioning, Model X and §E2.9, are excluded from that ratification. Warn users when a section's draft or provisional status matters to their task, and route unratified material through [Constitution Readiness](docs/program-goals/constitution-readiness.md). Draft history: [docs/reports/archive/constitution-draft-history.md](docs/reports/archive/constitution-draft-history.md); current gaps: [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and [docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
+Both constitutions are ratified at the document level (2026-08-08; now framework v6.1.1 and Elsa v6.5.1, including ADR 0091's catalog synchronization); sections marked draft or provisional, framework §2.24 and Elsa §E2.8 activity versioning, Model X and §E2.9, are excluded from that ratification. Warn users when a section's draft or provisional status matters to their task, and route unratified material through [Constitution Readiness](docs/program-goals/constitution-readiness.md). Draft history: [docs/reports/archive/constitution-draft-history.md](docs/reports/archive/constitution-draft-history.md); current gaps: [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and [docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
 
 New work moves toward this rule: constitution for gates and governance, glossary for meanings, skills for executable workflows, maps and catalogs for navigation and generated facts, reports for current findings and unfinished work.
 

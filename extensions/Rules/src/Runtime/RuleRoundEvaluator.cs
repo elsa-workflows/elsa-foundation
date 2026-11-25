@@ -32,7 +32,7 @@ internal sealed class RuleRoundEvaluator : IRuleRoundValidator
         var receipt = new RuleRoundReceipt(input.Identity, RuleRecordCodec.PinHash(pin), additions, firings, new string('0', 64));
         var bytes = RuleRecordCodec.ReceiptBytes(receipt);
         if (bytes.Length > RuleLimits.MaxEnvelopeBytes) throw new InvalidDataException("rules.receipt-too-large");
-        var result = new RuleRoundReceipt(receipt.Identity, receipt.ImplementationPinHash, additions, firings, RuleRecordCodec.Hash(bytes));
+        var result = new RuleRoundReceipt(receipt.Identity, receipt.ImplementationPinHash, additions, firings, RuleRecordCodec.JsonHash(bytes));
         _ = RuleRecordCodec.ReceiptRecordBytes(result);
         return result;
     }
@@ -59,7 +59,7 @@ internal sealed class RuleRoundEvaluator : IRuleRoundValidator
             _ = RuleRecordCodec.ReceiptRecordBytes(candidate);
             var equivalent = bytes.Length <= RuleLimits.MaxEnvelopeBytes
                 && candidate.SemanticReceiptSha256 == expected.SemanticReceiptSha256
-                && bytes.AsSpan().SequenceEqual(RuleRecordCodec.ReceiptBytes(expected));
+                && Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(bytes, RuleRecordCodec.ReceiptBytes(expected));
             return ValueTask.FromResult(new RuleRoundValidationResult(
                 equivalent ? RuleValidationDisposition.Equivalent : RuleValidationDisposition.Invalid,
                 equivalent ? null : "rules.incomplete-or-conflicting-receipt"));

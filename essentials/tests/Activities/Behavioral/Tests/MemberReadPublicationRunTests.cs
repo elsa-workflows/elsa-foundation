@@ -255,7 +255,7 @@ public sealed class MemberReadPublicationRunTests
     }), "VariableMember"), null, null, null, null);
 
     private static VariableDefinition Customer() => new("customer", "Customer", new TypeReference("Object"), null,
-        new ArgumentValue(JsonSerializer.SerializeToElement(new { customerId = "c-1", address = new { street = "Main" } }), "Object"));
+        ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new { customerId = "c-1", address = new { street = "Main" } }), "Object"));
 
     private static ArgumentState Read(string[] path, string projection = "$result") => new(nameof(MemberReader.Value), new ArgumentValue(JsonSerializer.SerializeToElement(new
     {

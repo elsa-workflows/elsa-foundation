@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { OverflowMenu, StudioPageHeader, StudioField, StudioTimestamp, StudioToggleButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
@@ -184,14 +186,17 @@ export function register(api: ElsaStudioModuleApi) {
 }
 
 export function ConsoleStreamPanel() {
+
   return <ConsoleStreamView />;
 }
 
 export function ConsoleStreamPage() {
+
   return <ConsoleStreamView page />;
 }
 
 function ConsoleStreamView({ page = false }: { page?: boolean }) {
+  useStudioTimeZone();
   const [hostId, setHostId] = useState<ConsoleHostId>(defaultStudioHostId);
   const [sources, setSources] = useState<ConsoleLogSource[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState("");

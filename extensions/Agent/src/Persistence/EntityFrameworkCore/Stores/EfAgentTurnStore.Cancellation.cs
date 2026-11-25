@@ -30,7 +30,7 @@ internal sealed partial class EfAgentTurnStore
         }
         if (row.SchemaVersion != AgentEfModule.SchemaVersion || row.Version < 0 || row.Payload.Length > MaximumRecordBytes)
             throw new InvalidDataException("The agent operation gate schema or bounds are unsupported.");
-        var operation = JsonSerializer.Deserialize<AgentOperationDocument>(row.Payload, Json) ?? throw new InvalidDataException("The agent operation gate is missing.");
+        var operation = JsonSerializer.Deserialize<AgentOperationDocument>(row.Payload, options: Json) ?? throw new InvalidDataException("The agent operation gate is missing.");
         AgentOperationRules.Match(operation, identity);
         if (AgentTurnDocument.CalculateOperationKey(operation.Identity) != key) throw new InvalidDataException("The operation gate belongs to another native operation.");
         var nextVersion = checked(row.Version + 1);
@@ -75,7 +75,7 @@ internal sealed partial class EfAgentTurnStore
                             var updated = AgentConversationRules.Change(before, next, conversation is null ? null : ReadConversation(conversation));
                             if (updated is null || conversation is null) throw AgentOperationRules.Conflict();
                             AgentConversationRules.Validate(updated);
-                            var payload = JsonSerializer.Serialize(updated, Json);
+                            var payload = JsonSerializer.Serialize(updated, options: Json);
                             var saved = await owned.Set<AgentConversationRecord>().Where(item => item.ScopeKey == scope && item.Id == admission.ConversationId && item.Version == conversation.Version)
                                 .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.Version, conversation.Version + 1).SetProperty(item => item.Payload, payload), cancellationToken);
                             if (saved != 1) continue;
@@ -102,7 +102,7 @@ internal sealed partial class EfAgentTurnStore
     private static string OperationPayload(AgentOperationDocument document)
     {
         AgentOperationRules.Validate(document);
-        var payload = JsonSerializer.Serialize(document, Json);
+        var payload = JsonSerializer.Serialize(document, options: Json);
         if (Utf8.GetByteCount(payload) > MaximumRecordBytes) throw new InvalidDataException("The operation gate exceeds the journal record bound.");
         return payload;
     }

@@ -64,6 +64,14 @@ html:not([data-workspace-style]) .wf-page--executable-inspector > .wf-executable
     max-height: 18rem;
   }
 
+  .wf-executable-workbench:not(.inspector-maximized, .inspector-collapsed) {
+    grid-template-rows: minmax(24rem, 1fr) minmax(14rem, 18rem);
+  }
+
+  .wf-executable-workbench:not(.inspector-maximized, .inspector-collapsed) > .wf-instance-inspector {
+    min-height: 14rem;
+  }
+
   .wf-executable-workbench:not(.inspector-maximized) > .wf-side-resize-handle,
   .wf-executable-workbench:not(.inspector-maximized) > .wf-side-resize-spacer {
     display: none;

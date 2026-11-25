@@ -40,8 +40,9 @@ public sealed class StimulusResumeCapture
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public string PayloadFingerprint { get; }
 
-    internal static string Fingerprint(BookmarkState bookmark) => Convert.ToHexStringLower(SHA256.HashData(
-        Encoding.UTF8.GetBytes(bookmark.Payload is { } payload ? "json:" + payload.GetRawText() : "absent")));
+    internal static string Fingerprint(BookmarkState bookmark) => bookmark.Payload is { } payload
+        ? Elsa.Serialization.Core.JsonHashInput.HashFramed([.. "json:"u8, .. Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(payload)])
+        : Elsa.Serialization.Core.JsonHashInput.HashFramed("absent"u8);
 
     internal bool Matches(BookmarkState bookmark) => RuntimeModelMetadata.AreEqual(Metadata, bookmark.Metadata) &&
         PayloadFingerprint == Fingerprint(bookmark);
@@ -78,10 +79,13 @@ internal sealed class StimulusResumeCaptureJsonConverter : JsonConverter<Stimulu
     }
 
     public override void Write(Utf8JsonWriter writer, StimulusResumeCapture value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, new Wire(StimulusResumeCapture.CurrentVersion, value.Generation, value.Executable, value.Scope,
-            value.PinnedSource is null ? null : StimulusStartRecipientJsonConverter.ProvenanceWire.From(value.PinnedSource), value.Metadata, value.PayloadFingerprint), options);
+        JsonSerializer.Serialize(writer, HashProjection(value), options);
 
-    private sealed record Wire([property: JsonRequired] int Version, [property: JsonRequired] long Generation,
+    internal static Wire HashProjection(StimulusResumeCapture value) =>
+        new Wire(StimulusResumeCapture.CurrentVersion, value.Generation, value.Executable, value.Scope,
+            value.PinnedSource is null ? null : StimulusStartRecipientJsonConverter.ProvenanceWire.From(value.PinnedSource), value.Metadata, value.PayloadFingerprint);
+
+    internal sealed record Wire([property: JsonRequired] int Version, [property: JsonRequired] long Generation,
         [property: JsonRequired] WorkflowExecutableIdentity Executable, [property: JsonRequired] StimulusDeliveryScope Scope,
         [property: JsonRequired, JsonIgnore(Condition = JsonIgnoreCondition.Never)] StimulusStartRecipientJsonConverter.ProvenanceWire? PinnedSource,
         [property: JsonRequired] IReadOnlyDictionary<string, string> Metadata, [property: JsonRequired] string PayloadFingerprint);

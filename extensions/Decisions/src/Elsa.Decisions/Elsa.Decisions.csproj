@@ -6,4 +6,7 @@
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <ProjectReference Include="../Core/Elsa.Decisions.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

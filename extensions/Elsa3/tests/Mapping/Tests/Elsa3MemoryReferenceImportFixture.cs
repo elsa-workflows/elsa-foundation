@@ -138,7 +138,7 @@ internal sealed class Elsa3MemoryReferenceImportFixture
         if (value.Value.ValueKind != JsonValueKind.Object)
             throw new Xunit.Sdk.XunitException("The imported expression is not a portable ExpressionDefinition object.");
 
-        return value.Value.Deserialize<ExpressionDefinition>()
+        return value.Value.Deserialize<ExpressionDefinition>(JsonBaseline.Options)
             ?? throw new Xunit.Sdk.XunitException("The imported portable expression could not be deserialized.");
     }
 

@@ -7,7 +7,7 @@ namespace Elsa.Weaver.Workflows.Services;
 /// <summary>
 /// Parses the live workflow graph out of a <c>workflow.definition</c> context attachment. Studio sends the
 /// graph inline as the attachment <see cref="WeaverContextAttachment.Content"/> (a JSON object); the server
-/// builds the same shape. This reader normalizes either representation into a <see cref="WorkflowWeaverGraph"/>
+/// builds the same JSON shape. This reader projects it into a <see cref="WorkflowWeaverGraph"/>
 /// so authoring tools can validate operations against real activity node ids.
 /// </summary>
 public static class WorkflowWeaverGraphReader
@@ -26,7 +26,7 @@ public static class WorkflowWeaverGraphReader
 
     public static WorkflowWeaverGraph Read(WeaverContextAttachment attachment)
     {
-        var element = TryNormalize(attachment.Content);
+        var element = attachment.Content;
         var revision = ReadRevision(element)
             ?? (attachment.References.TryGetValue("revision", out var r) && !string.IsNullOrWhiteSpace(r) ? r : null);
 
@@ -72,28 +72,6 @@ public static class WorkflowWeaverGraphReader
                 GetString(x, "targetPort")))
             .Where(x => !string.IsNullOrWhiteSpace(x.Source) && !string.IsNullOrWhiteSpace(x.Target))
             .ToList();
-    }
-
-    private static JsonElement? TryNormalize(object? content)
-    {
-        switch (content)
-        {
-            case null:
-                return null;
-            case JsonElement element:
-                return element;
-            case string:
-                return null; // A plain summary string carries no graph.
-            default:
-                try
-                {
-                    return JsonSerializer.SerializeToElement(content);
-                }
-                catch (NotSupportedException)
-                {
-                    return null;
-                }
-        }
     }
 
     private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)

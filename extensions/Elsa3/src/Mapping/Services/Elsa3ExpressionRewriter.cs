@@ -24,9 +24,55 @@ namespace Elsa3.Mapping.Services;
 /// </summary>
 /// <param name="dotNetUsage">The default JavaScript strategy's .NET-usage analysis.</param>
 /// <param name="options">The converter's settings; the default refuses zone-dependent date usage.</param>
-public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNetUsage, Elsa3ConversionOptions? options = null)
+/// <param name="hostFunctions">
+/// The host's registered JavaScript functions: a call to an Elsa 3 global becomes a call to the prefixed host function
+/// whose member name is that global, <c>lookupCustomer()</c> to <c>acme.lookupCustomer()</c> (#5664). No declaration maps
+/// them: the name after the namespace prefix is the match.
+/// </param>
+public sealed class Elsa3ExpressionRewriter(
+    IJavaScriptDotNetUsageAnalyzer dotNetUsage,
+    Elsa3ConversionOptions? options = null,
+    IEnumerable<JavaScriptHostFunctionDeclaration>? hostFunctions = null)
 {
     private readonly Elsa3ConversionOptions _options = Validated(options ?? new());
+
+    /// <summary>Each member name of a prefixed host function, with the host functions that carry it, in name order.</summary>
+    private readonly IReadOnlyDictionary<string, string[]> _replacedGlobals = (hostFunctions ?? [])
+        .Select(declaration => (replaced: MemberName(declaration.Name), declaration.Name))
+        .Where(item => item.replaced is not null)
+        .GroupBy(item => item.replaced!, StringComparer.Ordinal)
+        .ToDictionary(
+            group => group.Key,
+            group => group.Select(item => item.Name).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            StringComparer.Ordinal);
+
+    /// <summary>The name after a host function's namespace prefix (<c>lookupCustomer</c> in <c>acme.lookupCustomer</c>), or null for an unprefixed built-in.</summary>
+    private static string? MemberName(string name)
+    {
+        var dot = name.LastIndexOf('.');
+        return dot > 0 && dot < name.Length - 1 ? name[(dot + 1)..] : null;
+    }
+
+    /// <summary>
+    /// What to do about a call to a function neither Elsa 4 nor a registered host function provides (VF-IMP-005). Elsa 4
+    /// host functions carry a namespace prefix (ADR 0045 §5 D-5, spec 1223 FR-027), so an Elsa 3 custom function rebuilt for
+    /// Elsa 4 matches the host function whose name after the prefix is the Elsa 3 name.
+    /// </summary>
+    internal static string UndeclaredFunctionGuidance(string name) =>
+        $"{RebuiltFunctionGuidance(name)} " +
+        "Otherwise compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, in the Elsa 3 workflow before import.";
+
+    /// <summary>How a host that rebuilt an Elsa 3 function for Elsa 4 gets its calls converted (#5664).</summary>
+    private static string RebuiltFunctionGuidance(string name) =>
+        $"If the host rebuilt '{name}' for Elsa 4, register a host function named '<prefix>.{name}' (for example 'acme.{name}') " +
+        "under one namespace only; the converter then rewrites the call.";
+
+    /// <summary>
+    /// What to do about a refused call to a name no host function can take over (a standard JavaScript global, a CLR
+    /// global): registering a host function of that member name would not change the result.
+    /// </summary>
+    private const string UnmatchableFunctionGuidance =
+        "Compute the value with JavaScript or an Elsa 4 built-in function, or in an activity, in the Elsa 3 workflow before import.";
 
     private static Elsa3ConversionOptions Validated(Elsa3ConversionOptions options)
     {
@@ -47,7 +93,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         {
             var script = new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source);
             // Count a loop value too: replacing a later read with its loop slot must not discard a legacy write.
-            var analyzer = new JavaScriptAnalyzer(resolve) { Mode = Elsa3JavaScriptMode.Expression, Source = source };
+            var analyzer = new JavaScriptAnalyzer(resolve) { Mode = Elsa3JavaScriptMode.Expression, Source = source, ReplacedGlobals = _replacedGlobals };
             analyzer.CollectReassignedNames(script);
             return analyzer.ReusableScriptMayWrite(script);
         }
@@ -179,6 +225,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
         var analyzer = new JavaScriptAnalyzer(resolve)
         {
+            ReplacedGlobals = _replacedGlobals,
             AllowsOutcomeSetters = mode == Elsa3JavaScriptMode.Script && scriptOutcomes is not null,
             Mode = mode,
             WritesVariables = scriptWritesVariables,
@@ -679,6 +726,14 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         public bool AllowsOutcomeSetters { get; init; }
 
         /// <summary>
+        /// Each member name of a prefixed host function, with the functions that carry it: the Elsa 3 globals they replace.
+        /// A name in <c>NeverMatchedGlobals</c> (<c>getVariable</c>, the setters, <c>getCorrelationId</c>, JavaScript and CLR
+        /// globals, …) keeps its own conversion or refusal. Of the Elsa 3 functions the converter refuses, the byte and stream helpers, <c>getConfig</c>, the
+        /// definition readers and <c>getLastResult</c> can be replaced.
+        /// </summary>
+        public IReadOnlyDictionary<string, string[]> ReplacedGlobals { get; init; } = new Dictionary<string, string[]>(StringComparer.Ordinal);
+
+        /// <summary>
         /// Both modes read variables through the Elsa 4 <c>variables</c> root (spec 1222 FR-026, FR-027): an input
         /// expression from its input snapshot, a RunJavaScript body over its variable session (FR-026a, FR-033). A
         /// computed read keeps its form and is served by the run-time lookup.
@@ -922,6 +977,9 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
         private readonly SortedSet<string> _helpers = new(StringComparer.Ordinal);
 
+        /// <summary>Replaced globals already refused for a non-call reference, so each is reported once (#5691).</summary>
+        private readonly HashSet<string> _reportedReplacedReferences = new(StringComparer.Ordinal);
+
         /// <summary>The local functions the rewritten source calls, one per line, or empty.</summary>
         public string Prelude =>
             string.Concat(_helpers.Select(helper => InlineHelpers[helper].Declaration + "\n")) +
@@ -948,6 +1006,43 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         {
             "DateTime", "DateTimeOffset", "TimeSpan", "Guid", "Random", "_", "moment",
         };
+
+        /// <summary>
+        /// Standard JavaScript globals: Elsa 3 ran them natively, so a host function that happens to carry one as its member
+        /// name did not replace them.
+        /// </summary>
+        private static readonly HashSet<string> NativeJavaScriptGlobals = new(StringComparer.Ordinal)
+        {
+            "globalThis", "undefined", "NaN", "Infinity", "eval", "isFinite", "isNaN", "parseFloat", "parseInt",
+            "decodeURI", "decodeURIComponent", "encodeURI", "encodeURIComponent", "escape", "unescape",
+            "String", "Number", "Boolean", "Array", "Object", "Date", "Math", "JSON", "Intl", "RegExp", "Map", "Set",
+            "WeakMap", "WeakSet", "WeakRef", "Symbol", "BigInt", "Promise", "Proxy", "Reflect", "Function",
+            "Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "EvalError", "URIError", "AggregateError",
+            "ArrayBuffer", "DataView", "Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array", "Uint16Array",
+            "Int32Array", "Uint32Array", "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array", "Float16Array",
+            "SharedArrayBuffer", "Atomics", "Iterator", "FinalizationRegistry", "DisposableStack", "AsyncDisposableStack",
+            "SuppressedError", "Temporal", "arguments",
+            // The global object inherits Object.prototype, so Elsa 3 ran these bare calls natively too.
+            "toString", "toLocaleString", "valueOf", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "constructor",
+            "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__", "__proto__",
+        };
+
+        /// <summary>
+        /// Names never matched to a host function (#5664): the Elsa 3 and Elsa 4 built-ins the converter converts itself,
+        /// the setters, <c>getOutputFrom</c>, the outcome setters and instance-state helpers, the CLR, lodash and moment globals, the read roots
+        /// (<c>variables</c>, <c>args</c>, …) and the standard JavaScript globals. The other Elsa 3 functions it refuses
+        /// (byte and stream helpers, <c>getConfig</c>, the definition readers, <c>getLastResult</c>) are matched. A host
+        /// function with one of them as its member name does not take it over, and a reference to one is not refused as a
+        /// replaced function.
+        /// </summary>
+        private static readonly HashSet<string> NeverMatchedGlobals = new(
+            PureGlobalCalls
+                .Concat(JavaScriptBuiltInFunctions.Names)
+                .Concat(["toJson", "setOutcome", "setOutcomes", "Date", "getVariable", "setVariable", "getInput", "getOutputFrom"])
+                .Concat(StateSetters).Concat(StateGetters).Concat(SetterCalls)
+                .Concat(InlineHelpers.Keys).Concat(InstanceMembers.Keys)
+                .Concat(ElsaThreeGlobals).Concat(NativeJavaScriptGlobals).Concat(JavaScriptBuiltInFunctions.ReadRoots),
+            StringComparer.Ordinal);
 
         private static Elsa3ExpressionRewriteIssue UnavailableGlobal(string name) => new(
             Elsa3ImportDiagnosticCodes.ForbiddenCapability,
@@ -1447,6 +1542,13 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     return;
                 }
 
+                // An Elsa 3 custom function the host rebuilt as a prefixed Elsa 4 host function (#5664).
+                if (!NeverMatchedGlobals.Contains(callee.Name) && ReplacedGlobals.TryGetValue(callee.Name, out var replacements))
+                {
+                    ConvertReplacedGlobal(call, callee, replacements);
+                    return;
+                }
+
                 // Elsa 3 generated get{Name}() per variable and workflow input; the resolver decides which (spec 247 R-2).
                 if (TryGetAccessorName(callee.Name, "get", out var accessor) &&
                     (call.Arguments.Count == 0 ||
@@ -1465,18 +1567,22 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     return;
                 }
 
-                if (TryGetAccessorName(callee.Name, "set", out var setter) &&
-                    resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, setter)).Succeeded)
+                var setterResolution = TryGetAccessorName(callee.Name, "set", out var setter)
+                    ? resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedSetter, setter))
+                    : null;
+                // Where no variable write converts (an input expression, a reusable script), a generated setter is refused as
+                // a write whether or not it resolves to one variable.
+                if (setterResolution is { Succeeded: true } or { NoSource: false } && !ConvertsVariableWrites)
                 {
-                    if (!ConvertsVariableWrites)
-                    {
-                        Issues.Add(new Elsa3ExpressionRewriteIssue(
-                            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                            $"JavaScript calls generated setter '{callee.Name}', which mutates workflow state.",
-                            Mode == Elsa3JavaScriptMode.Script ? ReusableVariableWriteGuidance : VariableWriteGuidance));
-                        return;
-                    }
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                        $"JavaScript calls generated setter '{callee.Name}', which mutates workflow state.",
+                        Mode == Elsa3JavaScriptMode.Script ? ReusableVariableWriteGuidance : VariableWriteGuidance));
+                    return;
+                }
 
+                if (setterResolution is { Succeeded: true })
+                {
                     if (call.Arguments.Count != 1 || call.Arguments[0] is SpreadElement)
                     {
                         Issues.Add(new Elsa3ExpressionRewriteIssue(
@@ -1486,7 +1592,27 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                         return;
                     }
 
-                    ConvertSetter(call, Elsa3AmbientReferenceKind.GeneratedAccessor, setter, callee.Name, call.Arguments[0]);
+                    ConvertSetter(call, Elsa3AmbientReferenceKind.GeneratedSetter, setter, callee.Name, call.Arguments[0]);
+                    return;
+                }
+
+                // Elsa 3 generated the setter but it does not resolve to one variable (two variables of the name, a capture).
+                if (setterResolution is { Succeeded: false, NoSource: false })
+                {
+                    Issues.Add(setterResolution.Issue!);
+                    return;
+                }
+
+                // Workflow inputs are read-only: Elsa 3 generated get{Input} but no set{Input}, so the call ran no setter.
+                if (setterResolution is { NoSource: true } && !NeverMatchedGlobals.Contains(callee.Name) &&
+                    resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, setter)) is
+                        { Succeeded: true, Binding: WorkflowRequestExpressionParameterBinding })
+                {
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                        $"JavaScript calls '{callee.Name}', but '{setter}' is a workflow input, which is read-only: Elsa 3 generated no setter for it.",
+                        "Copy the input into a declared variable and set that variable in the Elsa 3 workflow before import. " +
+                        RebuiltFunctionGuidance(callee.Name)));
                     return;
                 }
 
@@ -1545,7 +1671,11 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
                 if (RefusedHostFunctions.TryGetValue(callee.Name, out var refused))
                 {
-                    Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, refused.Message, refused.Guidance));
+                    // A refused Elsa 3 built-in a host function may take over says so (#5664); one it may not does not.
+                    var guidance = CanBeMatched(callee.Name)
+                        ? $"{refused.Guidance} {RebuiltFunctionGuidance(callee.Name)}"
+                        : refused.Guidance;
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, refused.Message, guidance));
                     return;
                 }
 
@@ -1554,7 +1684,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     Issues.Add(new Elsa3ExpressionRewriteIssue(
                         Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                         $"JavaScript calls unknown or unapproved host function '{callee.Name}'.",
-                        "Replace the call with deterministic language syntax or move it into a graph-visible activity."));
+                        CanBeMatched(callee.Name) ? UndeclaredFunctionGuidance(callee.Name) : UnmatchableFunctionGuidance));
                     return;
                 }
             }
@@ -1685,6 +1815,29 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 (StateSetters.Contains(stateHelper.Name) || StateGetters.Contains(stateHelper.Name)))
             {
                 Issues.Add(DynamicIssue($"JavaScript uses workflow-state helper '{stateHelper.Name}' as a value instead of a direct call."));
+                return;
+            }
+
+            // new.target and import.meta name no binding: their identifiers are syntax, not references to a global.
+            if (node is MetaProperty)
+                return;
+
+            // The converter rewrites only a direct call to a replaced global (#5664). Any other reference (an alias, a
+            // callback, a stored function) names nothing in Elsa 4, so it is refused (#5691). A write to the name is
+            // reported as an undeclared write instead.
+            if (node is Identifier replacedValue && !IsDeclared(replacedValue.Name) &&
+                !NeverMatchedGlobals.Contains(replacedValue.Name) && ReplacedGlobals.TryGetValue(replacedValue.Name, out var replacedBy) &&
+                !IsWriteTarget(replacedValue))
+            {
+                if (_reportedReplacedReferences.Add(replacedValue.Name))
+                {
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ReplacedFunctionReference,
+                        $"JavaScript uses '{replacedValue.Name}' as a value instead of calling it; the converter rewrites only direct calls " +
+                        $"to {string.Join(" or ", replacedBy.Select(name => $"'{name}'"))}.",
+                        $"Call '{replacedValue.Name}' directly in the Elsa 3 script before import, for example " +
+                        $"'items.map(item => {replacedValue.Name}(item))' instead of 'items.map({replacedValue.Name})'."));
+                }
                 return;
             }
 
@@ -1961,7 +2114,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
         public bool ReusableScriptMayWrite(Script script) =>
             new Elsa3ReusableVariableWriteAnalyzer(CachedScope, IsSessionVariable,
-                name => TryGetAccessorName(name, "get", out var accessor) ? accessor : null).MayWrite(script);
+                name => TryGetAccessorName(name, "get", out var accessor) ? accessor : null,
+                name => !NeverMatchedGlobals.Contains(name) && ReplacedGlobals.ContainsKey(name)).MayWrite(script);
 
         /// <summary>
         /// A Run JavaScript body reads a loop's item or index through args, as a copy: Elsa 4 freezes a loop value in a body
@@ -1996,6 +2150,37 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             }
 
             return names;
+        }
+
+        /// <summary>
+        /// Whether the identifier being visited is a name an assignment, update or for-in/of loop writes, directly or
+        /// through a destructuring target (<c>[x] = …</c>, <c>({ a: x } = …)</c>); <see cref="WrittenNames"/> reports those.
+        /// </summary>
+        private bool IsWriteTarget(Identifier identifier)
+        {
+            Node child = identifier;
+            for (var index = _syntaxParents.Count - 2; index >= 0; index--)
+            {
+                switch (_syntaxParents[index])
+                {
+                    case Property property when ReferenceEquals(property.Value, child):
+                    case ObjectPattern or ArrayPattern or RestElement:
+                    case AssignmentPattern pattern when ReferenceEquals(pattern.Left, child):
+                        child = _syntaxParents[index];
+                        continue;
+                    case AssignmentExpression assignment:
+                        return ReferenceEquals(assignment.Left, child);
+                    case UpdateExpression update:
+                        return ReferenceEquals(update.Argument, child);
+                    case ForInStatement forIn:
+                        return ReferenceEquals(forIn.Left, child);
+                    case ForOfStatement forOf:
+                        return ReferenceEquals(forOf.Left, child);
+                    default:
+                        return false;
+                }
+            }
+            return false;
         }
 
         private static Elsa3ExpressionRewriteIssue UndeclaredWrite(string name) => new(
@@ -2135,6 +2320,33 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         }
 
         /// <summary>
+        /// Whether Elsa 3 generated an accessor under <paramref name="name"/>, resolvable or not: a getter for a variable,
+        /// input or activity output, a setter for a variable only (and, in a reusable run, an input Elsa 3 declared as a
+        /// variable; spec 247 R-2).
+        /// </summary>
+        private bool ClashesWithGeneratedAccessor(string name) =>
+            HasAccessorShape(name, "get", out var getter)
+                ? !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, getter)).NoSource
+                : HasAccessorShape(name, "set", out var setter) &&
+                  !resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedSetter, setter)).NoSource;
+
+        /// <summary>
+        /// Whether registering a host function with <paramref name="name"/> as its member name would convert a call to it, so
+        /// a refusal may name that route (#5664).
+        /// </summary>
+        private bool CanBeMatched(string name) => !NeverMatchedGlobals.Contains(name) && !ClashesWithGeneratedAccessor(name);
+
+        /// <summary>
+        /// Whether <paramref name="name"/> has the shape of an Elsa 3 generated accessor (<c>get{Name}</c> or
+        /// <c>set{Name}</c>), built-in or not, and the <c>{Name}</c> part as written.
+        /// </summary>
+        private static bool HasAccessorShape(string name, string prefix, out string accessor)
+        {
+            accessor = name.Length > prefix.Length ? name[prefix.Length..] : string.Empty;
+            return accessor.Length > 0 && name.StartsWith(prefix, StringComparison.Ordinal);
+        }
+
+        /// <summary>
         /// Whether <paramref name="name"/> has the shape of an Elsa 3 generated accessor (<c>get{Name}</c> or
         /// <c>set{Name}</c>) rather than a built-in, and the <c>{Name}</c> part as written.
         /// </summary>
@@ -2143,6 +2355,51 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             accessor = name.Length > prefix.Length ? name[prefix.Length..] : string.Empty;
             return accessor.Length > 0 && name.StartsWith(prefix, StringComparison.Ordinal) &&
                    !Elsa3JavaScriptNames.BuiltIns.Contains(name);
+        }
+
+        /// <summary>
+        /// Rewrites a call to an Elsa 3 global into a call to the host function with that member name
+        /// (<c>getSettings()</c> becomes <c>acme.getSettings()</c>). The arguments convert as written.
+        /// </summary>
+        private void ConvertReplacedGlobal(CallExpression call, Identifier callee, string[] replacements)
+        {
+            if (replacements.Length > 1)
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                    $"JavaScript calls '{callee.Name}', which more than one registered host function carries as its name: {string.Join(", ", replacements.Select(name => $"'{name}'"))}.",
+                    $"Register '{callee.Name}' under one namespace only, or rename the other functions, before import."));
+                return;
+            }
+
+            // Elsa 3 registered custom functions and generated accessors in an order its source does not fix (R-3): any
+            // accessor Elsa 3 generated under the name, resolvable or not (two variables, an activity output), clashes.
+            // A matched Elsa 3 built-in (getConfig, getLastResult, …) clashes with an accessor too: Elsa 3 generated one for a
+            // variable named Config whatever the built-in was called.
+            if (ClashesWithGeneratedAccessor(callee.Name))
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                    $"JavaScript calls '{callee.Name}', which is both a replaced Elsa 3 function and the generated accessor of a variable, input or activity output.",
+                    $"Rename the variable, input or activity output in the Elsa 3 workflow, or register the host function under another name, so that '{callee.Name}' has one meaning, before import. " +
+                    "The converter cannot tell whether Elsa 3 had a custom function of that name."));
+                return;
+            }
+
+            var replacement = replacements[0];
+            var root = replacement[..replacement.IndexOf('.', StringComparison.Ordinal)];
+            if (IsDeclared(root))
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                    $"JavaScript declares its own '{root}', and the converter turns '{callee.Name}' into '{replacement}'.",
+                    $"Rename the script's '{root}' in the Elsa 3 workflow before import."));
+                return;
+            }
+
+            Edits.Add(new SourceEdit(callee.Start, callee.End, replacement));
+            foreach (var argument in call.Arguments)
+                Visit(argument);
         }
 
         /// <summary>
@@ -2754,6 +3011,13 @@ public enum Elsa3AmbientReferenceKind
     /// callee without <c>get</c>, as written. The resolver decides which declaration Elsa 3 bound it to.
     /// </summary>
     GeneratedAccessor,
+
+    /// <summary>
+    /// A call <c>set{Name}(value)</c> to a setter Elsa 3 generated per variable; <c>Name</c> is the callee without
+    /// <c>set</c>, as written. Elsa 3 generated no setter for a standalone workflow's input or for an activity output; in a
+    /// reusable run it declared each input as a variable, with a setter (spec 247 R-2).
+    /// </summary>
+    GeneratedSetter,
 }
 
 public sealed record Elsa3AmbientReference(Elsa3AmbientReferenceKind Kind, string Name);
@@ -2798,6 +3062,15 @@ public sealed class Elsa3ExpressionParameterResolution
         return new(binding, null, variableName) { ScriptValueKind = scriptValueKind };
     }
     public static Elsa3ExpressionParameterResolution Failure(Elsa3ExpressionRewriteIssue issue) => new(null, issue);
+
+    /// <summary>
+    /// Whether the reference has no Elsa 3 source at all, as opposed to a source that is ambiguous or refused: a
+    /// <c>get{Name}()</c> that Elsa 3 generated for no variable, input or activity output.
+    /// </summary>
+    internal bool NoSource { get; private init; }
+
+    /// <summary>A failure because nothing in the Elsa 3 definition is the reference's source.</summary>
+    internal static Elsa3ExpressionParameterResolution NotFound(Elsa3ExpressionRewriteIssue issue) => new(null, issue) { NoSource = true };
 }
 
 public sealed record Elsa3ExpressionRewriteIssue(string Code, string Message, string Guidance);
@@ -2928,4 +3201,35 @@ public static class Elsa3ImportDiagnosticCodes
     /// never creates a variable (spec 1231 FR-033): refused, with guidance to declare it.
     /// </summary>
     public const string SetterOfUndeclaredVariable = "ELS3-SETTER-UNDECLARED-VARIABLE";
+
+    /// <summary>
+    /// Info: a variable's Elsa 3 type is not registered in Elsa 4, so its Elsa 4 type is Any (#5666). It keeps its type
+    /// once an Elsa 4 feature registers the type and the workflow is converted again.
+    /// </summary>
+    public const string VariableTypeUnregistered = "ELS3-VARIABLE-TYPE-UNREGISTERED";
+
+    /// <summary>
+    /// Warning: a variable, input or output used Elsa 3's Memory storage driver, which never persisted its value. It
+    /// converts to Elsa 4's default storage (elsa.json), so the value is now persisted with the workflow instance; the
+    /// migrator decides whether that is acceptable (docs/migration/elsa3-storage-drivers.md). Metadata: VariableName,
+    /// InputName or OutputName, StorageDriverType (the Elsa 3 driver type), ComponentKind (storage-driver) and
+    /// ComponentName (the same driver type, for the migration report's component inventory).
+    /// </summary>
+    public const string MemoryStoragePersisted = "ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED";
+
+    /// <summary>
+    /// Warning: a variable, input or output used a custom Elsa 3 storage driver, which kept its value outside the workflow
+    /// instance. It converts to Elsa 4's default storage (elsa.json), so the value is now stored with the workflow
+    /// instance; the migrator plans an Elsa 4 solution if it must stay elsewhere (docs/migration/elsa3-storage-drivers.md).
+    /// Metadata: VariableName, InputName or OutputName, StorageDriverType (the Elsa 3 driver type), ComponentKind
+    /// (storage-driver) and ComponentName (the same driver type, for the migration report's component inventory).
+    /// </summary>
+    public const string CustomStorageDriverReplaced = "ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED";
+
+    /// <summary>
+    /// A script uses an Elsa 3 global that a host function replaces (#5664) other than in a direct call: aliased, passed as
+    /// a callback or stored (#5691). The converter rewrites only direct calls, so this is refused, with guidance to call the
+    /// function directly.
+    /// </summary>
+    public const string ReplacedFunctionReference = "ELS3-REPLACED-FUNCTION-REFERENCE";
 }

@@ -329,7 +329,7 @@ internal sealed class ReleaseSemanticVerifier(IReleaseBundleCodec codec, Release
     private static ReleaseMemberKey Key(JsonElement value) => new(value.GetProperty("kind").GetString()!, value.GetProperty("identity").GetString()!);
     private static ReleaseOwnerVersion? Version(JsonElement value) => value.ValueKind == JsonValueKind.Null ? null : value.GetProperty("scheme").GetString() == "integer"
         ? new("integer", null, value.GetProperty("value").GetInt64()) : new(value.GetProperty("scheme").GetString()!, value.GetProperty("value").GetString(), null);
-    private static string Token(params object?[] values) => JsonSerializer.Serialize(values);
+    private static string Token(params object?[] values) => JsonSerializer.Serialize(values, options: Elsa.Serialization.Core.JsonBaseline.Options);
     private static string EdgeToken(ReleaseSemanticEdge edge) => Token(edge.From.Kind, edge.From.Identity, edge.Relation.ToString(), edge.Occurrence, edge.To.Kind, edge.To.Identity);
     private static string ResourceToken(ReleaseResourceRequirement requirement) => Token(requirement.Member.Kind, requirement.Member.Identity, requirement.Origin, requirement.Reference, requirement.Kind, requirement.SchemaVersion);
     private static string PrerequisiteToken(ReleaseSemanticPrerequisite requirement) => Token(requirement.Key, requirement.Member.Kind, requirement.Member.Identity, requirement.Kind, requirement.Identity, requirement.Scheme, requirement.Constraint);

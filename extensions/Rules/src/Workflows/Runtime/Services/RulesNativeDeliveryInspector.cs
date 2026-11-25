@@ -29,7 +29,7 @@ internal sealed class RulesNativeDeliveryInspector(
     // array is therefore malformed/unsupported persisted state, not a valid retry chain.
     private const int MaxRetainedAttempts = 32;
     private const int MaxRetainedTriggerDeliveries = 32;
-    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions WebJson = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         MaxDepth = 24
@@ -196,7 +196,7 @@ internal sealed class RulesNativeDeliveryInspector(
                 return false;
 
             var delivery = RuleRecordCodec.DeliveryBytes(envelope.DeliveryId, address, envelope.Result);
-            return RuleRecordCodec.Hash(delivery) == envelope.CanonicalPayloadSha256 &&
+            return RuleRecordCodec.JsonHash(delivery) == envelope.CanonicalPayloadSha256 &&
                    expectedFingerprint.Sha256.Length == 64;
         }
         catch (Exception exception) when (IsMalformed(exception))
@@ -356,7 +356,7 @@ internal sealed class RulesNativeDeliveryInspector(
             var bytes = JsonMarshal.GetRawUtf8Value(json.Value);
             var observed = JsonSerializer.Deserialize<RuleTerminalResult>(bytes, WebJson);
             return observed is not null &&
-                   RuleRecordCodec.TerminalBytes(observed).AsSpan().SequenceEqual(
+                   Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(RuleRecordCodec.TerminalBytes(observed),
                        RuleRecordCodec.TerminalBytes(envelope.Result));
         }
         catch (Exception exception) when (IsMalformed(exception))
@@ -397,7 +397,7 @@ internal sealed class RulesNativeDeliveryInspector(
             if (bytes.Length > RuleLimits.MaxEnvelopeBytes)
                 return false;
             var result = RuleRecordCodec.ReadTerminal(bytes.ToArray());
-            return RuleRecordCodec.TerminalBytes(result).AsSpan().SequenceEqual(RuleRecordCodec.TerminalBytes(envelope.Result));
+            return Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(RuleRecordCodec.TerminalBytes(result), RuleRecordCodec.TerminalBytes(envelope.Result));
         }
         catch (Exception exception) when (IsMalformed(exception))
         {
@@ -414,7 +414,7 @@ internal sealed class RulesNativeDeliveryInspector(
 
     private static string ParentTerminalIdentity(WorkflowExecutionState parent, string partition, DateTimeOffset completedAt)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(new
+        return "rules-parent-terminal-v1:" + Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             Version = 1,
             parent.WorkflowExecutionId,
@@ -428,7 +428,6 @@ internal sealed class RulesNativeDeliveryInspector(
             Status = parent.Status.ToString(),
             CompletedAtUtcTicks = completedAt.UtcDateTime.Ticks
         });
-        return "rules-parent-terminal-v1:" + RuleRecordCodec.Hash(bytes);
     }
 
     private static bool IsMalformed(Exception exception) =>

@@ -111,6 +111,31 @@ public sealed class PackageManifestFeatureCatalogContributorTests : IAsyncDispos
     }
 
     [Fact]
+    public void ManifestHashPinsTheOriginalJsonValueIncludingUnknownMembers()
+    {
+        const string json = """{ "package":{"version":"1","id":"Pkg"}, "features":[], "extension":{"n":1.00} }""";
+        var original = PackageManifestCatalogMapper.ReadManifestBytes(Encoding.UTF8.GetBytes(json), "elsa-package.json");
+        var equivalent = Encoding.UTF8.GetBytes("""{"extension":{"n":1e0},"features":[],"package":{"id":"Pkg","version":"1"}}""");
+        var bom = new byte[] { 0xef, 0xbb, 0xbf }.Concat(equivalent).ToArray();
+        Assert.True(original.Hash == "20e40bfef63ba99a78916eeb3ef9ce7f2359bf3e467fb49b4d655791bd00695b",
+            "First-stable hash freeze: changing a manifest identity requires an explicit identity/migration decision.");
+        Assert.Equal(original.Hash, PackageManifestCatalogMapper.ReadManifestBytes(bom, "another-path.json").Hash);
+        Assert.NotEqual(original.Hash, PackageManifestCatalogMapper.ReadManifestBytes(
+            Encoding.UTF8.GetBytes(json.Replace("1.00", "2", StringComparison.Ordinal)), "elsa-package.json").Hash);
+        Assert.NotEqual(original.Hash, PackageManifestCatalogMapper.ReadManifestBytes(
+            Encoding.UTF8.GetBytes(json.Replace(", \"extension\":{\"n\":1.00}", "", StringComparison.Ordinal)), "elsa-package.json").Hash);
+    }
+
+    [Fact]
+    public void ReadManifestReportsInvalidUnicodeInAnUnknownExtensionValue()
+    {
+        WriteManifest("""{"package":{"id":"Pkg","version":"1"},"features":[],"extension":"\uD800"}""");
+        var result = PackageManifestFeatureCatalogContributor.ReadManifest(_directory);
+        Assert.Null(result.Manifest);
+        Assert.Contains("invalid JSON value", result.ReadError);
+    }
+
+    [Fact]
     public void ReadManifestReportsMissingManifest()
     {
         var result = PackageManifestFeatureCatalogContributor.ReadManifest(_directory);

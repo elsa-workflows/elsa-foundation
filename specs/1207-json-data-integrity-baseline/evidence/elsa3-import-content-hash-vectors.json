@@ -1,0 +1,183 @@
+{
+  "version": 1,
+  "owner": "Elsa3ImportRecordCodec collection/receipt content",
+  "freeze": "FR-021: frozen from Elsa 4 first stable; later recipe changes require the agreed compatibility process.",
+  "vectors": [
+    {
+      "name": "collection-writer",
+      "kind": "collection",
+      "writer": true,
+      "material": "{\"collection\":{\"handle\":\"handle <\\u00e9>\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"createdAt\":\"2026-01-15T09:30:00+00:00\",\"expiresAt\":\"2026-01-15T10:30:00+00:00\",\"contentLength\":1,\"collection\":{\"collectionId\":\"source <\\u00e9>\",\"definitions\":[]}}}",
+      "canonical": "{\"collection\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collection\":{\"collectionId\":\"source \\u003C\\u00E9\\u003E\",\"definitions\":[]},\"contentLength\":1e0,\"createdAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"expiresAt\":\"2026-01-15T10:30:00\\u002B00:00\",\"handle\":\"handle \\u003C\\u00E9\\u003E\"}}",
+      "sha256": "4e8f30e0c229abe6821744c239cc9c41d6357b876de5248cfc1f91780b101d9e"
+    },
+    {
+      "name": "collection-spelling-a",
+      "kind": "collection",
+      "writer": false,
+      "material": "{\"collection\":{\"handle\":\"handle <\\u00e9>\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"createdAt\":\"2026-01-15T09:30:00+00:00\",\"expiresAt\":\"2026-01-15T10:30:00+00:00\",\"contentLength\":1,\"collection\":{\"collectionId\":\"source <\\u00e9>\",\"definitions\":[]}},\"extra\":{ \"OrderID\":9007199254740993, \"amount\":1.0, \"text\":\"\\u0061\", \"nil\":null }}",
+      "canonical": "{\"collection\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collection\":{\"collectionId\":\"source \\u003C\\u00E9\\u003E\",\"definitions\":[]},\"contentLength\":1e0,\"createdAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"expiresAt\":\"2026-01-15T10:30:00\\u002B00:00\",\"handle\":\"handle \\u003C\\u00E9\\u003E\"},\"extra\":{\"OrderID\":9007199254740993e0,\"amount\":1e0,\"nil\":null,\"text\":\"a\"}}",
+      "sha256": "80d6ba0268e4562c73054f4e9a217d90d9124be1ee46007dfac4c57367e090ac"
+    },
+    {
+      "name": "collection-spelling-b",
+      "kind": "collection",
+      "writer": false,
+      "material": "{\"collection\":{\"handle\":\"handle <\\u00e9>\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"createdAt\":\"2026-01-15T09:30:00+00:00\",\"expiresAt\":\"2026-01-15T10:30:00+00:00\",\"contentLength\":1,\"collection\":{\"collectionId\":\"source <\\u00e9>\",\"definitions\":[]}},\"extra\":{\"nil\":null,\"text\":\"a\",\"amount\":1e0,\"OrderID\":9007199254740993}}",
+      "canonical": "{\"collection\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collection\":{\"collectionId\":\"source \\u003C\\u00E9\\u003E\",\"definitions\":[]},\"contentLength\":1e0,\"createdAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"expiresAt\":\"2026-01-15T10:30:00\\u002B00:00\",\"handle\":\"handle \\u003C\\u00E9\\u003E\"},\"extra\":{\"OrderID\":9007199254740993e0,\"amount\":1e0,\"nil\":null,\"text\":\"a\"}}",
+      "sha256": "80d6ba0268e4562c73054f4e9a217d90d9124be1ee46007dfac4c57367e090ac"
+    },
+    {
+      "name": "collection-missing",
+      "kind": "collection",
+      "writer": false,
+      "material": "{\"collection\":{\"handle\":\"handle <\\u00e9>\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"createdAt\":\"2026-01-15T09:30:00+00:00\",\"expiresAt\":\"2026-01-15T10:30:00+00:00\",\"contentLength\":1,\"collection\":{\"collectionId\":\"source <\\u00e9>\",\"definitions\":[]}},\"extra\":{}}",
+      "canonical": "{\"collection\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collection\":{\"collectionId\":\"source \\u003C\\u00E9\\u003E\",\"definitions\":[]},\"contentLength\":1e0,\"createdAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"expiresAt\":\"2026-01-15T10:30:00\\u002B00:00\",\"handle\":\"handle \\u003C\\u00E9\\u003E\"},\"extra\":{}}",
+      "sha256": "f26b85ebc53620685f4d6fe462587a3cb780b7af01245592dc1d9442f8022446"
+    },
+    {
+      "name": "collection-null",
+      "kind": "collection",
+      "writer": false,
+      "material": "{\"collection\":{\"handle\":\"handle <\\u00e9>\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"createdAt\":\"2026-01-15T09:30:00+00:00\",\"expiresAt\":\"2026-01-15T10:30:00+00:00\",\"contentLength\":1,\"collection\":{\"collectionId\":\"source <\\u00e9>\",\"definitions\":[]}},\"extra\":{\"x\":null}}",
+      "canonical": "{\"collection\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collection\":{\"collectionId\":\"source \\u003C\\u00E9\\u003E\",\"definitions\":[]},\"contentLength\":1e0,\"createdAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"expiresAt\":\"2026-01-15T10:30:00\\u002B00:00\",\"handle\":\"handle \\u003C\\u00E9\\u003E\"},\"extra\":{\"x\":null}}",
+      "sha256": "fd9858dca1472cbc540ff3c39808694fa23d599fac2b958eb6584c1bc4215be4"
+    },
+    {
+      "name": "collection-forward",
+      "kind": "collection",
+      "writer": false,
+      "material": "{\"collection\":{\"handle\":\"handle <\\u00e9>\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"createdAt\":\"2026-01-15T09:30:00+00:00\",\"expiresAt\":\"2026-01-15T10:30:00+00:00\",\"contentLength\":1,\"collection\":{\"collectionId\":\"source <\\u00e9>\",\"definitions\":[]}},\"extra\":[1,2]}",
+      "canonical": "{\"collection\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collection\":{\"collectionId\":\"source \\u003C\\u00E9\\u003E\",\"definitions\":[]},\"contentLength\":1e0,\"createdAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"expiresAt\":\"2026-01-15T10:30:00\\u002B00:00\",\"handle\":\"handle \\u003C\\u00E9\\u003E\"},\"extra\":[1e0,2e0]}",
+      "sha256": "ce6ef07e2e3adaa5f7946643b895f8bf8cbf511a5dba0b6e452778b66990e7a7"
+    },
+    {
+      "name": "collection-reverse",
+      "kind": "collection",
+      "writer": false,
+      "material": "{\"collection\":{\"handle\":\"handle <\\u00e9>\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"createdAt\":\"2026-01-15T09:30:00+00:00\",\"expiresAt\":\"2026-01-15T10:30:00+00:00\",\"contentLength\":1,\"collection\":{\"collectionId\":\"source <\\u00e9>\",\"definitions\":[]}},\"extra\":[2,1]}",
+      "canonical": "{\"collection\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collection\":{\"collectionId\":\"source \\u003C\\u00E9\\u003E\",\"definitions\":[]},\"contentLength\":1e0,\"createdAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"expiresAt\":\"2026-01-15T10:30:00\\u002B00:00\",\"handle\":\"handle \\u003C\\u00E9\\u003E\"},\"extra\":[2e0,1e0]}",
+      "sha256": "d5eae6f049b0830a395b45ba39ae4235314ef95e36461b0f4969b0b870b1746a"
+    },
+    {
+      "name": "collection-large-a",
+      "kind": "collection",
+      "writer": false,
+      "material": "{\"collection\":{\"handle\":\"handle <\\u00e9>\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"createdAt\":\"2026-01-15T09:30:00+00:00\",\"expiresAt\":\"2026-01-15T10:30:00+00:00\",\"contentLength\":1,\"collection\":{\"collectionId\":\"source <\\u00e9>\",\"definitions\":[]}},\"extra\":9007199254740993}",
+      "canonical": "{\"collection\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collection\":{\"collectionId\":\"source \\u003C\\u00E9\\u003E\",\"definitions\":[]},\"contentLength\":1e0,\"createdAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"expiresAt\":\"2026-01-15T10:30:00\\u002B00:00\",\"handle\":\"handle \\u003C\\u00E9\\u003E\"},\"extra\":9007199254740993e0}",
+      "sha256": "9126f644a815854f53c5ca7def5ef471694b6b90f30c8765611602ab5e396398"
+    },
+    {
+      "name": "collection-large-b",
+      "kind": "collection",
+      "writer": false,
+      "material": "{\"collection\":{\"handle\":\"handle <\\u00e9>\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"createdAt\":\"2026-01-15T09:30:00+00:00\",\"expiresAt\":\"2026-01-15T10:30:00+00:00\",\"contentLength\":1,\"collection\":{\"collectionId\":\"source <\\u00e9>\",\"definitions\":[]}},\"extra\":9007199254740992}",
+      "canonical": "{\"collection\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collection\":{\"collectionId\":\"source \\u003C\\u00E9\\u003E\",\"definitions\":[]},\"contentLength\":1e0,\"createdAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"expiresAt\":\"2026-01-15T10:30:00\\u002B00:00\",\"handle\":\"handle \\u003C\\u00E9\\u003E\"},\"extra\":9007199254740992e0}",
+      "sha256": "577d5f2e14508870a5a78a3bb542d8bcb9dca98f4ee6dd2bd45cf9bdad7e01ed"
+    },
+    {
+      "name": "collection-text-a",
+      "kind": "collection",
+      "writer": false,
+      "material": "{\"collection\":{\"handle\":\"handle <\\u00e9>\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"createdAt\":\"2026-01-15T09:30:00+00:00\",\"expiresAt\":\"2026-01-15T10:30:00+00:00\",\"contentLength\":1,\"collection\":{\"collectionId\":\"source <\\u00e9>\",\"definitions\":[]}},\"extra\":\"{}\"}",
+      "canonical": "{\"collection\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collection\":{\"collectionId\":\"source \\u003C\\u00E9\\u003E\",\"definitions\":[]},\"contentLength\":1e0,\"createdAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"expiresAt\":\"2026-01-15T10:30:00\\u002B00:00\",\"handle\":\"handle \\u003C\\u00E9\\u003E\"},\"extra\":\"{}\"}",
+      "sha256": "8ec64a665e87e5d81f5a1c0fa503041c827a354e0b47b447c0aa45b468960b32"
+    },
+    {
+      "name": "collection-text-b",
+      "kind": "collection",
+      "writer": false,
+      "material": "{\"collection\":{\"handle\":\"handle <\\u00e9>\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"createdAt\":\"2026-01-15T09:30:00+00:00\",\"expiresAt\":\"2026-01-15T10:30:00+00:00\",\"contentLength\":1,\"collection\":{\"collectionId\":\"source <\\u00e9>\",\"definitions\":[]}},\"extra\":\" { }\"}",
+      "canonical": "{\"collection\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collection\":{\"collectionId\":\"source \\u003C\\u00E9\\u003E\",\"definitions\":[]},\"contentLength\":1e0,\"createdAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"expiresAt\":\"2026-01-15T10:30:00\\u002B00:00\",\"handle\":\"handle \\u003C\\u00E9\\u003E\"},\"extra\":\" { }\"}",
+      "sha256": "f1e5b760bbb36e074a80788e6626767283b11b42479e4e6c0c7f85ef20725d49"
+    },
+    {
+      "name": "receipt-writer",
+      "kind": "receipt",
+      "writer": true,
+      "material": "{\"receipt\":{\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"collectionHandle\":\"handle <\\u00e9>\",\"planId\":\"plan\",\"idempotencyKey\":\"key\",\"selectionFingerprint\":\"sha256:selection\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"status\":0,\"completedAt\":\"2026-01-15T09:30:00+00:00\",\"sources\":[]}}",
+      "canonical": "{\"receipt\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collectionHandle\":\"handle \\u003C\\u00E9\\u003E\",\"completedAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"idempotencyKey\":\"key\",\"planId\":\"plan\",\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"selectionFingerprint\":\"sha256:selection\",\"sources\":[],\"status\":0}}",
+      "sha256": "93755f009248a8866c2ca87fe80dd21abc8dba689f20b971fc54ad91a5515c6a"
+    },
+    {
+      "name": "receipt-spelling-a",
+      "kind": "receipt",
+      "writer": false,
+      "material": "{\"receipt\":{\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"collectionHandle\":\"handle <\\u00e9>\",\"planId\":\"plan\",\"idempotencyKey\":\"key\",\"selectionFingerprint\":\"sha256:selection\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"status\":0,\"completedAt\":\"2026-01-15T09:30:00+00:00\",\"sources\":[]},\"extra\":{ \"OrderID\":9007199254740993, \"amount\":1.0, \"text\":\"\\u0061\", \"nil\":null }}",
+      "canonical": "{\"extra\":{\"OrderID\":9007199254740993e0,\"amount\":1e0,\"nil\":null,\"text\":\"a\"},\"receipt\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collectionHandle\":\"handle \\u003C\\u00E9\\u003E\",\"completedAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"idempotencyKey\":\"key\",\"planId\":\"plan\",\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"selectionFingerprint\":\"sha256:selection\",\"sources\":[],\"status\":0}}",
+      "sha256": "5d9ca14920c31f70fff0c50f3b678651b9bd40b2ac1663cd087e101c7bd37555"
+    },
+    {
+      "name": "receipt-spelling-b",
+      "kind": "receipt",
+      "writer": false,
+      "material": "{\"receipt\":{\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"collectionHandle\":\"handle <\\u00e9>\",\"planId\":\"plan\",\"idempotencyKey\":\"key\",\"selectionFingerprint\":\"sha256:selection\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"status\":0,\"completedAt\":\"2026-01-15T09:30:00+00:00\",\"sources\":[]},\"extra\":{\"nil\":null,\"text\":\"a\",\"amount\":1e0,\"OrderID\":9007199254740993}}",
+      "canonical": "{\"extra\":{\"OrderID\":9007199254740993e0,\"amount\":1e0,\"nil\":null,\"text\":\"a\"},\"receipt\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collectionHandle\":\"handle \\u003C\\u00E9\\u003E\",\"completedAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"idempotencyKey\":\"key\",\"planId\":\"plan\",\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"selectionFingerprint\":\"sha256:selection\",\"sources\":[],\"status\":0}}",
+      "sha256": "5d9ca14920c31f70fff0c50f3b678651b9bd40b2ac1663cd087e101c7bd37555"
+    },
+    {
+      "name": "receipt-missing",
+      "kind": "receipt",
+      "writer": false,
+      "material": "{\"receipt\":{\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"collectionHandle\":\"handle <\\u00e9>\",\"planId\":\"plan\",\"idempotencyKey\":\"key\",\"selectionFingerprint\":\"sha256:selection\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"status\":0,\"completedAt\":\"2026-01-15T09:30:00+00:00\",\"sources\":[]},\"extra\":{}}",
+      "canonical": "{\"extra\":{},\"receipt\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collectionHandle\":\"handle \\u003C\\u00E9\\u003E\",\"completedAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"idempotencyKey\":\"key\",\"planId\":\"plan\",\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"selectionFingerprint\":\"sha256:selection\",\"sources\":[],\"status\":0}}",
+      "sha256": "95bd30e7345252d1dcb69711e5a24a7a531b4a0e838e3ccd3f4e6d6bf97d3037"
+    },
+    {
+      "name": "receipt-null",
+      "kind": "receipt",
+      "writer": false,
+      "material": "{\"receipt\":{\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"collectionHandle\":\"handle <\\u00e9>\",\"planId\":\"plan\",\"idempotencyKey\":\"key\",\"selectionFingerprint\":\"sha256:selection\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"status\":0,\"completedAt\":\"2026-01-15T09:30:00+00:00\",\"sources\":[]},\"extra\":{\"x\":null}}",
+      "canonical": "{\"extra\":{\"x\":null},\"receipt\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collectionHandle\":\"handle \\u003C\\u00E9\\u003E\",\"completedAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"idempotencyKey\":\"key\",\"planId\":\"plan\",\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"selectionFingerprint\":\"sha256:selection\",\"sources\":[],\"status\":0}}",
+      "sha256": "e32803d88e145c6c85602087b18e05646773c9584406fd6b25a5a8b3ea6171de"
+    },
+    {
+      "name": "receipt-forward",
+      "kind": "receipt",
+      "writer": false,
+      "material": "{\"receipt\":{\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"collectionHandle\":\"handle <\\u00e9>\",\"planId\":\"plan\",\"idempotencyKey\":\"key\",\"selectionFingerprint\":\"sha256:selection\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"status\":0,\"completedAt\":\"2026-01-15T09:30:00+00:00\",\"sources\":[]},\"extra\":[1,2]}",
+      "canonical": "{\"extra\":[1e0,2e0],\"receipt\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collectionHandle\":\"handle \\u003C\\u00E9\\u003E\",\"completedAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"idempotencyKey\":\"key\",\"planId\":\"plan\",\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"selectionFingerprint\":\"sha256:selection\",\"sources\":[],\"status\":0}}",
+      "sha256": "6f585caf2118c171acea7b0a7aaf5a55d8cb6e91115a31ccf0f132a0d8a85dcf"
+    },
+    {
+      "name": "receipt-reverse",
+      "kind": "receipt",
+      "writer": false,
+      "material": "{\"receipt\":{\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"collectionHandle\":\"handle <\\u00e9>\",\"planId\":\"plan\",\"idempotencyKey\":\"key\",\"selectionFingerprint\":\"sha256:selection\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"status\":0,\"completedAt\":\"2026-01-15T09:30:00+00:00\",\"sources\":[]},\"extra\":[2,1]}",
+      "canonical": "{\"extra\":[2e0,1e0],\"receipt\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collectionHandle\":\"handle \\u003C\\u00E9\\u003E\",\"completedAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"idempotencyKey\":\"key\",\"planId\":\"plan\",\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"selectionFingerprint\":\"sha256:selection\",\"sources\":[],\"status\":0}}",
+      "sha256": "43ebf1c7d6316ac3b88bf66e27a3f8bf087865358e151ff63823f0d9f170a229"
+    },
+    {
+      "name": "receipt-large-a",
+      "kind": "receipt",
+      "writer": false,
+      "material": "{\"receipt\":{\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"collectionHandle\":\"handle <\\u00e9>\",\"planId\":\"plan\",\"idempotencyKey\":\"key\",\"selectionFingerprint\":\"sha256:selection\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"status\":0,\"completedAt\":\"2026-01-15T09:30:00+00:00\",\"sources\":[]},\"extra\":9007199254740993}",
+      "canonical": "{\"extra\":9007199254740993e0,\"receipt\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collectionHandle\":\"handle \\u003C\\u00E9\\u003E\",\"completedAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"idempotencyKey\":\"key\",\"planId\":\"plan\",\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"selectionFingerprint\":\"sha256:selection\",\"sources\":[],\"status\":0}}",
+      "sha256": "e6a606bfbd17c002d3145af8c262b60bac35bb0f71891d5c7bd7649f044d47f4"
+    },
+    {
+      "name": "receipt-large-b",
+      "kind": "receipt",
+      "writer": false,
+      "material": "{\"receipt\":{\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"collectionHandle\":\"handle <\\u00e9>\",\"planId\":\"plan\",\"idempotencyKey\":\"key\",\"selectionFingerprint\":\"sha256:selection\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"status\":0,\"completedAt\":\"2026-01-15T09:30:00+00:00\",\"sources\":[]},\"extra\":9007199254740992}",
+      "canonical": "{\"extra\":9007199254740992e0,\"receipt\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collectionHandle\":\"handle \\u003C\\u00E9\\u003E\",\"completedAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"idempotencyKey\":\"key\",\"planId\":\"plan\",\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"selectionFingerprint\":\"sha256:selection\",\"sources\":[],\"status\":0}}",
+      "sha256": "6ba530a54b0d4d0d6e2921b273b100d455b3f6be78ce835231520d97b566436b"
+    },
+    {
+      "name": "receipt-text-a",
+      "kind": "receipt",
+      "writer": false,
+      "material": "{\"receipt\":{\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"collectionHandle\":\"handle <\\u00e9>\",\"planId\":\"plan\",\"idempotencyKey\":\"key\",\"selectionFingerprint\":\"sha256:selection\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"status\":0,\"completedAt\":\"2026-01-15T09:30:00+00:00\",\"sources\":[]},\"extra\":\"{}\"}",
+      "canonical": "{\"extra\":\"{}\",\"receipt\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collectionHandle\":\"handle \\u003C\\u00E9\\u003E\",\"completedAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"idempotencyKey\":\"key\",\"planId\":\"plan\",\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"selectionFingerprint\":\"sha256:selection\",\"sources\":[],\"status\":0}}",
+      "sha256": "6501158d317c925eef03f71ff4a14524d3039a5b9927f45c34301e786c672d2c"
+    },
+    {
+      "name": "receipt-text-b",
+      "kind": "receipt",
+      "writer": false,
+      "material": "{\"receipt\":{\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"collectionHandle\":\"handle <\\u00e9>\",\"planId\":\"plan\",\"idempotencyKey\":\"key\",\"selectionFingerprint\":\"sha256:selection\",\"accessScope\":{\"tenantId\":\"tenant-a\",\"userId\":\"user-a\",\"tenantScope\":\"tenant:tenant-a\"},\"status\":0,\"completedAt\":\"2026-01-15T09:30:00+00:00\",\"sources\":[]},\"extra\":\" { }\"}",
+      "canonical": "{\"extra\":\" { }\",\"receipt\":{\"accessScope\":{\"tenantId\":\"tenant-a\",\"tenantScope\":\"tenant:tenant-a\",\"userId\":\"user-a\"},\"collectionHandle\":\"handle \\u003C\\u00E9\\u003E\",\"completedAt\":\"2026-01-15T09:30:00\\u002B00:00\",\"idempotencyKey\":\"key\",\"planId\":\"plan\",\"receiptId\":\"elsa3-receipt-447b9dab7841009cce96a57026e8e90fc3a34ed61040fabb621fd2fbf555a49e\",\"selectionFingerprint\":\"sha256:selection\",\"sources\":[],\"status\":0}}",
+      "sha256": "9e8e32f00ff1c329025ae6b7023d3cf4779dc698bd97f7ba05ff4a79083148e7"
+    }
+  ]
+}

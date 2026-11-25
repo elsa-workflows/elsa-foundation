@@ -215,7 +215,12 @@ public sealed class RuntimeBoundedSourceReadTests
     private sealed class Accessor : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(Owner.Partition); }
     private sealed class Cursor : IRuntimeRecoveryContinuationCodec
-    { public string Encode(string purpose, ReadOnlySpan<byte> payload) => Convert.ToBase64String(payload); public byte[] Decode(string purpose, string token) => Convert.FromBase64String(token); }
+    {
+        public string Encode(string purpose, ReadOnlySpan<byte> payload) => Convert.ToBase64String(payload);
+        public byte[] Decode(string purpose, string token) => Convert.FromBase64String(token);
+        public string EncodeJson(string purpose, ReadOnlySpan<byte> payload) => Encode(purpose, payload);
+        public byte[] DecodeJson(string purpose, string token) => Decode(purpose, token);
+    }
     private sealed class Spy : DbCommandInterceptor
     {
         public List<string> Commands { get; } = [];

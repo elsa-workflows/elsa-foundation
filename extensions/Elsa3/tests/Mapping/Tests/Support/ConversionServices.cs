@@ -33,9 +33,10 @@ internal static class ConversionServices
         IActivityDefinitionLookup catalog,
         Elsa3WorkflowDefinition definition,
         bool isReusable = false,
-        Elsa3MappingFeature? feature = null)
+        Elsa3MappingFeature? feature = null,
+        Action<IServiceCollection>? configure = null)
     {
-        await using var provider = Create(catalog, feature);
+        await using var provider = Create(catalog, feature, configure);
         await using var scope = provider.CreateAsyncScope();
         var converter = scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>();
         return await converter.ConvertAsync(new Elsa3ConversionRequest(definition, isReusable));
@@ -61,6 +62,8 @@ internal static class ConversionServices
         registry.RegisterType(typeof(decimal), "Decimal");
         registry.RegisterType(typeof(bool), "Boolean");
         registry.RegisterType(typeof(DateTime), "DateTime");
+        registry.RegisterType(typeof(DateTimeOffset), "DateTimeOffset");
+        registry.RegisterType(typeof(DateOnly), "DateOnly");
         registry.RegisterType(typeof(Guid), "Guid");
         return registry;
     }

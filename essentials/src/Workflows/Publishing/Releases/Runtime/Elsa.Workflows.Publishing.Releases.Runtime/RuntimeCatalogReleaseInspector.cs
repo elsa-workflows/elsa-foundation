@@ -72,10 +72,10 @@ internal sealed class RuntimeCatalogReleaseInspector(RuntimeCapturedContentCache
         using var provider = JsonDocument.Parse(providerBytes, new JsonDocumentOptions { MaxDepth = new ReleaseBundleLimits().MaxJsonDepth });
         Fields(provider.RootElement, "providerKey", "schemaVersion", "payload");
         if (Text(provider.RootElement, "providerKey") != version.ProviderKey || Text(provider.RootElement, "schemaVersion") != version.ProviderSchemaVersion ||
-            !JsonElement.DeepEquals(provider.RootElement.GetProperty("payload"), version.ProviderPayload)) throw Refuse("publication_provider_projection_mismatch");
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(provider.RootElement.GetProperty("payload"), version.ProviderPayload)) throw Refuse("publication_provider_projection_mismatch");
         var contractBytes = System.Text.Encoding.UTF8.GetBytes(publication.ContractJson); ReleaseRuntimeArtifactCodec.CheckJson(contractBytes, new());
         using var contract = JsonDocument.Parse(contractBytes, new JsonDocumentOptions { MaxDepth = new ReleaseBundleLimits().MaxJsonDepth });
-        if (!JsonElement.DeepEquals(contract.RootElement, version.Contract)) throw Refuse("publication_contract_projection_mismatch");
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(contract.RootElement, version.Contract)) throw Refuse("publication_contract_projection_mismatch");
         var metadata = publication.Metadata;
         Fields(metadata, "schemaVersion", "publicationId", "originalResolutionKind", "sourceDraftId", "sourceVersionId", "lifecycle", "publishedAt",
             "directDependencyCount", "closedTemplateCount", "resumeTargetCount", "runtimeRequirementsJson", "resourceMeasurementsJson");
@@ -119,7 +119,7 @@ internal sealed class RuntimeCatalogReleaseInspector(RuntimeCapturedContentCache
         Fields(version.ProviderPayload, "typeAlias"); var alias = Text(version.ProviderPayload, "typeAlias");
         var root = template.Root;
         if (root.Descriptor.ConsumerKey != WellKnownRuntimeActivityConsumers.ClrActivity || root.Descriptor.SchemaVersion != "1" ||
-            !JsonElement.DeepEquals(version.ProviderPayload, root.Descriptor.Payload) || template.NodesById.Count != 1 ||
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(version.ProviderPayload, root.Descriptor.Payload) || template.NodesById.Count != 1 ||
             root.ChildSlots.Count != 0 || root.Structure is not null || template.DirectDependencies.Count != 0 || template.ClosedTemplates.Count != 0 ||
             root.ActivityContract?.Activation.Capability != alias)
             throw Refuse("clr_provider_template_mismatch");
@@ -163,7 +163,7 @@ internal sealed class RuntimeCatalogReleaseInspector(RuntimeCapturedContentCache
                 if (type.Alias == typeof(ConnectionReference).FullName) throw Refuse("public_default_resource_unsupported");
                 var literal = value.GetProperty("value");
                 if (literal.ValueKind == JsonValueKind.Null && !actual.IsNullable) throw Refuse("public_default_null_mismatch");
-                if (!actual.HasDefault || !actual.DefaultValue.HasValue || !JsonElement.DeepEquals(literal, actual.DefaultValue.Value)) throw Refuse("public_default_template_mismatch");
+                if (!actual.HasDefault || !actual.DefaultValue.HasValue || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(literal, actual.DefaultValue.Value)) throw Refuse("public_default_template_mismatch");
             }
             else if (actual.HasDefault) throw Refuse("public_default_template_mismatch");
         }
@@ -193,7 +193,7 @@ internal sealed class RuntimeCatalogReleaseInspector(RuntimeCapturedContentCache
         if (!emitted.SetEquals(runtime.Outcomes)) throw Refuse("public_outcome_template_mismatch");
         var member = new ReleaseMemberKey(ReleaseRuntimeCodecs.ActivityVersionKind, version.VersionId);
         return new(ReleaseSemanticStatus.Verified, prerequisites: drivers.Order(StringComparer.Ordinal).Select(driver => new ReleaseSemanticPrerequisite(
-            JsonSerializer.Serialize(new[] { member.Kind, member.Identity, "storage-driver", driver, "opaque", "required" }), member, "storage-driver", driver, "opaque", "required")).ToArray());
+            JsonSerializer.Serialize(new[] { member.Kind, member.Identity, "storage-driver", driver, "opaque", "required" }, options: Elsa.Serialization.Core.JsonBaseline.Options), member, "storage-driver", driver, "opaque", "required")).ToArray());
     }
 
     private static ValueTypeDescriptor Type(JsonElement value)

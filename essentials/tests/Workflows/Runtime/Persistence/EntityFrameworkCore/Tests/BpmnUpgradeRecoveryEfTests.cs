@@ -18,7 +18,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-/// <summary>Consumes frozen databases from the preview host; this test never invokes their old writer.</summary>
+/// <summary>Consumes preview-host execution state with S-9-regenerated executable contracts; this test never invokes the old writer.</summary>
 public sealed partial class BpmnUpgradeRecoveryEfTests
 {
     [Theory]
@@ -221,7 +221,7 @@ public sealed partial class BpmnUpgradeRecoveryEfTests
                     Assert.Null(page.NextContinuationToken);
                     persistedWork = Assert.Single(page.Items, work =>
                         work.CommandKind == WorkflowExecutionCommandKind.CompleteActivity && work.Payload is { } body &&
-                        body.Deserialize<RuntimeCompleteActivityCommandPayload>()?.CompletedChildActivityExecutionId == loserId);
+                        body.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)?.CompletedChildActivityExecutionId == loserId);
                 }
                 await first.Provider.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new RuntimeResumptionSweepRequest());
                 var after = await states.ListAllAsync(WorkflowExecutionHarness.WorkflowExecutionId);

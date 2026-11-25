@@ -46,7 +46,7 @@ internal sealed record WorkflowWeaverSnapshot(WeaverResourceTarget Target, Weave
     /// <summary>Whether the target is one of this module's editor working states: a definition draft or a template.</summary>
     internal static bool IsEditorTarget(WeaverResourceTarget? target) =>
         target is { ModuleId: ModuleId } && target.ResourceType is ResourceType or TemplateResourceType;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>The same snapshot without the selected activity's property context, for when the owning catalog cannot confirm it.</summary>
     internal WorkflowWeaverSnapshot WithoutSelectedActivity()
@@ -73,9 +73,7 @@ internal sealed record WorkflowWeaverSnapshot(WeaverResourceTarget Target, Weave
             !ValidString(target.ResourceId) || target.ResourceId == "active-draft" || !ValidString(target.Revision) ||
             attachment.Client is not { } client || !ValidString(client.ClientId) || !ValidString(client.GenerationId))
             return false;
-        JsonElement body;
-        try { body = attachment.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(attachment.Content, JsonOptions); }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
+        if (attachment.Content is not { } body) return false;
         // Malformed UTF-16 (a lone surrogate escape) throws wherever a name or string is read (JsonProperty.Name,
         // GetString), so it is refused once, up front, like any other malformed snapshot; every later read is then safe.
         if (body.ValueKind != JsonValueKind.Object || body.GetRawText().Length > 65536 || !WellFormedText(body)) return false;

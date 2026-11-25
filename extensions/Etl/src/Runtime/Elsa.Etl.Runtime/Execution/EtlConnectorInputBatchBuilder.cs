@@ -466,7 +466,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
                     page.RawBody.Length != page.Descriptor.Body.ByteLength ||
                     page.RawBody.Length > _pipeline.Http.MaxPageBytes ||
                     !EtlConnectorCsvSupport.IsHash(page.Descriptor.Body.ContentHash) ||
-                    Convert.ToHexString(SHA256.HashData(page.RawBody.Span)).ToLowerInvariant() != page.Descriptor.Body.ContentHash ||
+                    !HasJsonHash(page.RawBody, page.Descriptor.Body.ContentHash) ||
                     page.Descriptor.RequestHash != EtlRuntimeIdentity.HttpRequestHash(http.Request) ||
                     !StringComparer.Ordinal.Equals(page.Descriptor.NextContinuation, page.DecodedPage.Continuation))
                     diagnostic = new EtlPreparationDiagnostic("etl.http.page-cache-corrupt");
@@ -476,6 +476,12 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
                 break;
         }
         return diagnostic is null;
+    }
+
+    private static bool HasJsonHash(ReadOnlyMemory<byte> json, string expected)
+    {
+        try { return Elsa.Serialization.Core.JsonHashInput.HashUtf8(json) == expected; }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException) { return false; }
     }
 
     private long ResolveFilePartitionStart() => new EtlPartitionPlan(_sourceRecordCount,
@@ -845,8 +851,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
     private static (long ByteLength, string ContentHash) HashCanonicalBatch(IReadOnlyList<EtlConnectorInputRecord> records,
         EtlPipelineV2 pipeline)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        using var stream = new EtlBoundedHashingStream(hash, pipeline.Limits.MaxBatchBytes);
+        using var stream = new EtlBoundedHashingStream(pipeline.Limits.MaxBatchBytes);
         using (var writer = NewJsonWriter(stream))
         {
             writer.WriteStartObject();
@@ -863,7 +868,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
             writer.WriteEndObject();
             writer.Flush();
         }
-        return (stream.ByteLength, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
+        return (stream.ByteLength, stream.ContentHash());
     }
 
     private static IReadOnlyList<(string Name, EtlColumnType Type)> SourceFieldNames(EtlPipelineV2 pipeline) =>
@@ -944,7 +949,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
     private static Utf8JsonWriter NewJsonWriter(Stream stream) => new(stream, new JsonWriterOptions
     {
         Indented = false,
-        Encoder = JavaScriptEncoder.Default
+        Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder
     });
 
     private static long EmptyEnvelopeBytes { get; } = System.Text.Encoding.UTF8.GetByteCount(EmptyEnvelope);

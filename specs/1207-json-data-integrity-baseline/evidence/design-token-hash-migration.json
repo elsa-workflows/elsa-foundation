@@ -1,0 +1,20 @@
+[
+  {
+    "consumer": "DependencyCursorFixture",
+    "originalTokenSha256": "6d786d499f05c2501ffa8877533019b9d5678a5d71536d8863717f3d1e29ba94",
+    "canonical": "{\"authorizationProfileFingerprint\":\"profile-fingerprint\",\"direction\":\"Outbound\",\"include\":[\"Drafts\",\"Versions\"],\"position\":7e0,\"rootVersionId\":\"version-1\",\"tenantScope\":\"tenant:tenant-a\",\"transitive\":true,\"watermark\":\"sha256-watermark\"}",
+    "token": "eyJ0ZW5hbnRTY29wZSI6InRlbmFudDp0ZW5hbnQtYSIsImF1dGhvcml6YXRpb25Qcm9maWxlRmluZ2VycHJpbnQiOiJwcm9maWxlLWZpbmdlcnByaW50Iiwicm9vdFZlcnNpb25JZCI6InZlcnNpb24tMSIsImRpcmVjdGlvbiI6Ik91dGJvdW5kIiwidHJhbnNpdGl2ZSI6dHJ1ZSwiaW5jbHVkZSI6WyJEcmFmdHMiLCJWZXJzaW9ucyJdLCJ3YXRlcm1hcmsiOiJzaGEyNTYtd2F0ZXJtYXJrIiwicG9zaXRpb24iOjd9.xl5sWfefK9oSXli-PQBwID9MYev3L1G6VZtmyNRGvnc"
+  },
+  {
+    "consumer": "ManagementCursorFixture",
+    "originalTokenSha256": "2af036d021837ea55be3b28d3baef72ecd686495a6ef9cee2c46918be21cebc2",
+    "canonical": "{\"offset\":25e0,\"scope\":\"tenant:tenant-a\",\"snapshotSequence\":42e0}",
+    "token": "eyJzY29wZSI6InRlbmFudDp0ZW5hbnQtYSIsIm9mZnNldCI6MjUsInNuYXBzaG90U2VxdWVuY2UiOjQyfQ.LGh4rsAEf8UrOmXXKpid3uYyT-DUetH7kIgqhczyTJo"
+  },
+  {
+    "consumer": "ForkCandidateIdFixture",
+    "originalTokenSha256": "c3e77fe1a0055bd7689fd982fa899762354983fc5d6364d7652165e5c7695bc3",
+    "canonical": "{\"expiresAt\":\"2026-07-18T12:15:00\\u002B00:00\",\"requestFingerprint\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"reservationId\":\"reservation-1\"}",
+    "token": "eyJyZXNlcnZhdGlvbklkIjoicmVzZXJ2YXRpb24tMSIsInJlcXVlc3RGaW5nZXJwcmludCI6InNoYTI1NjphYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwiZXhwaXJlc0F0IjoiMjAyNi0wNy0xOFQxMjoxNTowMCswMDowMCJ9.8athtPrnbX539iuINP-eRVywyVuCp4_VnmHtsbEOUkU"
+  }
+]

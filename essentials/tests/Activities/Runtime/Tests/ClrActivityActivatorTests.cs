@@ -166,6 +166,17 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Deferred_secret_conversion_receives_the_actual_activated_inputs_code_contract()
+    {
+        var contract = Contract(typeof(ScopedSecretActivity), "message");
+        await using var lease = await SecretActivator().ActivateAsync(WithheldRequest(Withheld(), contract));
+        var member = typeof(ScopedSecretActivity).GetProperty(nameof(ScopedSecretActivity.Message))!;
+        Assert.Same(JsonConversionContract.For(typeof(string), member), Assert.Single(_conversions.MemberContracts));
+        Assert.Equal(FakeRuntimeSecretResolver.ValueOf(ReferenceName), Assert.IsType<ScopedSecretActivity>(lease.Activity).Message);
+        Assert.Same(SecretResolutionTestSupport.TextPlan, Assert.Single(_conversions.Conversions).Plan);
+    }
+
+    [Fact]
     public async Task A_withheld_secret_on_an_any_typed_input_is_converted_with_its_canonical_any_plan_and_hydrated()
     {
         // An input whose catalog version declares a canonical any alias is compiled with a CanonicalAny plan from text.
@@ -862,7 +873,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     private static ClrActivityActivator ClrStrategy(IServiceProvider services)
     {
         var registry = SerializationServices.TypeRegistry();
-        foreach (var activityType in new[] { typeof(ServiceBearingActivity), typeof(TwoInputActivity) })
+        foreach (var activityType in new[] { typeof(ServiceBearingActivity), typeof(TwoInputActivity), typeof(ScopedSecretActivity) })
             registry.RegisterType(activityType, activityType.FullName!);
         return new ClrActivityActivator(services.GetRequiredService<IServiceScopeFactory>(), registry, Serializer, FixedPersistenceAccess.Unbound);
     }
@@ -956,6 +967,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         private readonly RuntimeValueConversionExecutor _inner = new();
 
         public List<(ValueEnvelope Source, ValueConversionPlan Plan)> Conversions { get; } = [];
+        public List<JsonConversionContract?> MemberContracts { get; } = [];
 
         public Func<ValueConversionPlan, Exception>? Failure { get; set; }
 
@@ -963,6 +975,14 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         {
             Conversions.Add((source, plan));
             return Failure is null ? _inner.Convert(source, plan) : throw Failure(plan);
+        }
+
+        public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan, JsonConversionContract? conversionContract,
+            Action<JsonConversionDiagnostic>? report)
+        {
+            Conversions.Add((source, plan));
+            MemberContracts.Add(conversionContract);
+            return Failure is null ? _inner.Convert(source, plan, conversionContract, report) : throw Failure(plan);
         }
     }
 
@@ -1009,6 +1029,14 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         [ActivityInput(Key = "message")]
         public string Message { get; set; } = null!;
 
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private sealed class ScopedSecretActivity : Activity
+    {
+        [ActivityInput(Key = "message"), JsonConversion(RefuseUnmatchedMembers = true)]
+        public string Message { get; set; } = null!;
         protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
             ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
     }

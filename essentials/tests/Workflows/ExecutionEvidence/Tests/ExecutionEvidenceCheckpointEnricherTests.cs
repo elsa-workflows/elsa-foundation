@@ -22,6 +22,25 @@ public sealed class ExecutionEvidenceCheckpointEnricherTests
 
     public ExecutionEvidenceCheckpointEnricherTests() => _enricher = new(_store, logger: _logger);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Json_equivalent_variable_writes_are_a_no_op_while_exact_changes_are_recorded(bool sensitive)
+    {
+        const string raw = "{ \"n\": 100000000000000000000000000000000000001.0, \"text\": \"\\u0061\", \"nil\": null }";
+        var policy = (sensitive ? EvidenceFactory.Secret("unused") : EvidenceFactory.Inline("unused")).Policy;
+        ValueEnvelope Value(string text) => ValueEnvelope.Inline(new Elsa.Primitives.Models.ValueTypeDescriptor("Object"), JsonDocument.Parse(text).RootElement.Clone(), policy);
+        await EnrichAsync(EvidenceFactory.Commit(checkpointId: "cp-1", variables: EvidenceFactory.Variables(("value", Value(raw)))));
+        await EnrichAsync(EvidenceFactory.Commit(checkpointId: "cp-2", variables: EvidenceFactory.Variables(("value", Value("{\"nil\":null,\"text\":\"a\",\"n\":100000000000000000000000000000000000001}")))));
+        var retained = Assert.Single(Records(ExecutionEvidenceKinds.VariableSet));
+        if (sensitive) Assert.Null(retained.Value);
+        else Assert.Equal(raw, retained.Value?.GetRawText());
+        await EnrichAsync(EvidenceFactory.Commit(checkpointId: "cp-3", variables: EvidenceFactory.Variables(("value", Value("{\"nil\":null,\"text\":\"a\",\"n\":100000000000000000000000000000000000002}")))));
+        await EnrichAsync(EvidenceFactory.Commit(checkpointId: "cp-4", variables: EvidenceFactory.Variables(("value", Value("{\"text\":\"a\",\"n\":100000000000000000000000000000000000002}")))));
+        Assert.Equal(3, Records(ExecutionEvidenceKinds.VariableSet).Count);
+        Assert.Empty(_logger.Warnings);
+    }
+
     [Fact]
     public async Task Lifecycle_checkpoint_is_recorded_under_its_runtime_checkpoint_name()
     {

@@ -28,6 +28,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
 public sealed class WorkflowsDesignPostgreSqlSmokeTests(WorkflowsDesignPostgreSqlFixture fixture)
 {
     [SkippableFact]
+    public Task PostgreSql_real_serializer_preserves_raw_and_scoped_argument_data() => WorkflowsDesignJsonIntegrityWitness.RunAsync(fixture, CreateContext);
+    [SkippableFact]
     public Task PostgreSql_shared_source_revisions_are_durable_scoped_and_atomic() => SourceRevisionNativeWitness.RunAsync(fixture, CreateContext);
 
     [SkippableFact]
@@ -72,6 +74,8 @@ public sealed class WorkflowsDesignPostgreSqlSmokeTests(WorkflowsDesignPostgreSq
 public sealed class WorkflowsDesignSqlServerSmokeTests(WorkflowsDesignSqlServerFixture fixture)
 {
     [SkippableFact]
+    public Task SqlServer_real_serializer_preserves_raw_and_scoped_argument_data() => WorkflowsDesignJsonIntegrityWitness.RunAsync(fixture, CreateContext);
+    [SkippableFact]
     public Task SqlServer_shared_source_revisions_are_durable_scoped_and_atomic() => SourceRevisionNativeWitness.RunAsync(fixture, CreateContext);
 
     [SkippableFact]
@@ -109,6 +113,8 @@ public sealed class WorkflowsDesignSqlServerSmokeTests(WorkflowsDesignSqlServerF
 [Collection(WorkflowsDesignMySqlFixture.CollectionName)]
 public sealed class WorkflowsDesignMySqlSmokeTests(WorkflowsDesignMySqlFixture fixture)
 {
+    [SkippableFact]
+    public Task MySql_real_serializer_preserves_raw_and_scoped_argument_data() => WorkflowsDesignJsonIntegrityWitness.RunAsync(fixture, CreateContext);
     [SkippableFact]
     public Task MySql_shared_source_revisions_are_durable_scoped_and_atomic() => SourceRevisionNativeWitness.RunAsync(fixture, CreateContext);
 
@@ -548,15 +554,15 @@ internal static class WorkflowsDesignNativeProviderSmoke
 
 internal sealed class NativeProviderSerializer : IPayloadSerializer
 {
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
-    public string Serialize(object payload) => JsonSerializer.Serialize(payload, Options);
-    public JsonElement SerializeToElement(object payload) => JsonSerializer.SerializeToElement(payload, Options);
-    public object Deserialize(string serializedData) => JsonSerializer.Deserialize<object>(serializedData, Options)!;
-    public object Deserialize(string serializedData, Type type) => JsonSerializer.Deserialize(serializedData, type, Options)!;
-    public object Deserialize(JsonElement serializedData) => serializedData.Deserialize<object>(Options)!;
-    public T Deserialize<T>(string serializedData) => JsonSerializer.Deserialize<T>(serializedData, Options)!;
-    public T Deserialize<T>(JsonElement serializedData) => serializedData.Deserialize<T>(Options)!;
-    public JsonSerializerOptions GetOptions() => Options;
+    private readonly IPayloadSerializer serializer = Elsa.Serialization.Testing.SerializationServices.PayloadSerializer();
+    public string Serialize(object payload) => serializer.Serialize(payload);
+    public JsonElement SerializeToElement(object payload) => serializer.SerializeToElement(payload);
+    public object Deserialize(string serializedData) => serializer.Deserialize(serializedData);
+    public object Deserialize(string serializedData, Type type) => serializer.Deserialize(serializedData, type);
+    public object Deserialize(JsonElement serializedData) => serializer.Deserialize(serializedData);
+    public T Deserialize<T>(string serializedData) => serializer.Deserialize<T>(serializedData);
+    public T Deserialize<T>(JsonElement serializedData) => serializer.Deserialize<T>(serializedData);
+    public JsonSerializerOptions GetOptions() => serializer.GetOptions();
 }
 
 public abstract class WorkflowsDesignProviderFixture : IAsyncLifetime

@@ -28,6 +28,15 @@ namespace Elsa.Activities.Design.Tests.Unit;
 /// </summary>
 public sealed class ClrAssemblyScannerTests
 {
+    private static string CatalogHash(Type type)
+    {
+        using var stream = typeof(ClrAssemblyScannerTests).Assembly.GetManifestResourceStream("catalog-hash-vectors.json")
+            ?? throw new InvalidOperationException("Missing independently hashed catalog projection fixtures.");
+        using var document = JsonDocument.Parse(stream);
+        return document.RootElement.EnumerateArray().Single(row => row.GetProperty("type").GetString() == type.FullName)
+            .GetProperty("sha256").GetString()!;
+    }
+
     private static ClrAssemblyScanner CreateScanner() =>
         new(new ActivityTypeVersionResolver(), new ActivityTypeCategoryResolver(), NullLogger<ClrAssemblyScanner>.Instance);
 
@@ -107,11 +116,11 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
-        { typeof(TriggerFixtureActivity), "7D221A0FEEFBD55AEA961DECEFFBF4709A66D759F9AAB53FF065A8B310A9E1E3" },
+        { typeof(TriggerFixtureActivity), CatalogHash(typeof(TriggerFixtureActivity)) },
         // Approved UX wording change: Start new workflows plus its help text.
         // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
-        // Spec 1228 FR-022: the CLR provider schema version went to 2 (nested collection types), which moves every snapshot.
-        { typeof(HttpEndpoint), "F28E2D5C692AE81A7652872385379DDFC7D13A84C1EB196701AB439E277C9FCE" }
+        // Spec 1228 schema2 and the S-9 descriptor baseline are pinned by independent literal catalog projections.
+        { typeof(HttpEndpoint), CatalogHash(typeof(HttpEndpoint)) }
     };
 
     [Theory]
@@ -123,7 +132,7 @@ public sealed class ClrAssemblyScannerTests
         var version = CatalogVersion(model, model, activityType.Assembly);
 
         Assert.Equal(ActivityExecutionType.Action, version.ExecutionType);
-        Assert.True(expectedHash == version.Hash, $"Expected hash '{expectedHash}', actual hash '{version.Hash}'.");
+        Assert.True(expectedHash == version.Hash, $"First-stable hash freeze: changes require an explicit identity/migration decision. Expected '{expectedHash}', actual '{version.Hash}'.");
     }
 
     [Fact]
@@ -166,12 +175,12 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> UndeclaredCatalogHashes => new()
     {
-        // PlainFixtureActivity still declares nothing, so it keeps the pre-sensitivity catalog hash.
+        // These inputs still declare no sensitivity metadata. Their complete catalog projection is independently pinned.
         // ComplexInputFixtureActivity declares input tiers, which are hashed, so its snapshot moves
         // with this PR rather than throwing on re-reconcile.
-        // Spec 1228 FR-022: the CLR provider schema version went to 2, which moves both snapshots.
-        { typeof(PlainFixtureActivity), "4D43EA4D1174EF977273A98C264FCE3679229FC229C5CC430C5676415855C760" },
-        { typeof(ComplexInputFixtureActivity), "E903892E9FB46DB7E0A1972EC2804C62844F217530CEFA5535D3B0997EEDAD1B" }
+        // Spec 1228 provider schema2 plus the S-9 descriptor baseline use the retained catalog projection goldens.
+        { typeof(PlainFixtureActivity), CatalogHash(typeof(PlainFixtureActivity)) },
+        { typeof(ComplexInputFixtureActivity), CatalogHash(typeof(ComplexInputFixtureActivity)) }
     };
 
     [Theory]
@@ -185,7 +194,7 @@ public sealed class ClrAssemblyScannerTests
         Assert.DoesNotContain(nameof(InputDefinition.IsSensitive), json, StringComparison.Ordinal);
         Assert.DoesNotContain(nameof(InputDefinition.IsCredential), json, StringComparison.Ordinal);
         var actualHash = CatalogVersion(model, model, activityType.Assembly).Hash;
-        Assert.True(expectedHash == actualHash, $"Expected hash '{expectedHash}', actual hash '{actualHash}'.");
+        Assert.True(expectedHash == actualHash, $"First-stable hash freeze: changes require an explicit identity/migration decision. Expected '{expectedHash}', actual '{actualHash}'.");
     }
 
     [Theory]
@@ -224,7 +233,7 @@ public sealed class ClrAssemblyScannerTests
             identity.ProviderSchemaVersion,
             identity.ConsumerKey,
             identity.ConsumerSchemaVersion,
-            JsonSerializer.SerializeToElement(identity.Descriptor, identity.Descriptor.GetType()),
+            JsonSerializer.SerializeToElement(identity.Descriptor, identity.Descriptor.GetType(), Elsa.Serialization.Core.JsonBaseline.Options),
             "CLR",
             assembly.GetName().Name!,
             content.Inputs,
@@ -426,6 +435,23 @@ public sealed class ClrAssemblyScannerTests
         var input = InputFor<JsonDefaultFixtureActivity>(CreateScanner().Scan(folder.Path), inputName);
 
         Assert.Equal(expectedJson, input.DefaultValue?.GetRawText());
+    }
+
+    [Fact]
+    public void Nullable_scalar_defaults_use_the_underlying_metadata_type_without_accepting_quoted_numbers()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(NullableDefaultFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+        var enabled = InputFor<NullableDefaultFixtureActivity>(models, nameof(NullableDefaultFixtureActivity.Enabled)).DefaultValue!.Value;
+        var count = InputFor<NullableDefaultFixtureActivity>(models, nameof(NullableDefaultFixtureActivity.Count)).DefaultValue!.Value;
+        var multiplier = InputFor<NullableDefaultFixtureActivity>(models, nameof(NullableDefaultFixtureActivity.Multiplier)).DefaultValue!.Value;
+        var quoted = InputFor<NullableDefaultFixtureActivity>(models, nameof(NullableDefaultFixtureActivity.QuotedMultiplier)).DefaultValue!.Value;
+
+        Assert.Equal(JsonValueKind.True, enabled.ValueKind);
+        Assert.Equal(7, count.GetInt32());
+        Assert.Equal(2.5, multiplier.GetDouble());
+        Assert.Equal(JsonValueKind.String, quoted.ValueKind);
+        Assert.ThrowsAny<Exception>(() => Elsa.Serialization.Core.JsonConversionContract.Deserialize<double?>(quoted));
     }
 
     [Theory]
@@ -852,25 +878,25 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(withoutIcon.Hash, withIcon.Hash);
     }
 
-    public static TheoryData<Type, string> BuiltInCatalogHashesUnchangedFromMain => new()
+    public static TheoryData<Type, string> BuiltInCatalogHashGoldens => new()
     {
-        // WriteLine and Parallel still declare no tier, so they keep the origin/main snapshot at
-        // 14dd6f6e7 (#2716). HttpEndpoint's version and ResponseMode default changed; SendHttpRequest
+        // These pins record the approved S-9 hash migration, including activities with no declared tier.
+        // HttpEndpoint's version and ResponseMode default changed; SendHttpRequest
         // declares tiers; #3064 promotes only its Connection tier to Essential. Those catalog changes move
         // their snapshots with their owning changes. Icon facets are present
         // on the descriptors but excluded from descriptor hashes.
         // Approved UX wording change: Start new workflows plus its help text.
         // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
-        // Spec 1228 FR-022: the CLR provider schema version went to 2 (nested collection types), which moves every snapshot.
-        { typeof(HttpEndpoint), "F28E2D5C692AE81A7652872385379DDFC7D13A84C1EB196701AB439E277C9FCE" },
-        { typeof(WriteLine), "D7C4859CD197CF853C9DE44D423FA0586CD321D20BE73376DE95DEFE161DF8C3" },
-        { typeof(ParallelActivity), "4748F128F029398F93C1D7BF29D3E266AFED437FCC4BD030DFDD4D4F8938FE61" },
-        { typeof(SendHttpRequest), "9463F02873B61470EE33E088315B7A7BC92A28A35FC8A8553CFDB53F7844E328" }
+        // Spec 1228 schema2 and the S-9 descriptor baseline are pinned by independent literal catalog projections.
+        { typeof(HttpEndpoint), CatalogHash(typeof(HttpEndpoint)) },
+        { typeof(WriteLine), CatalogHash(typeof(WriteLine)) },
+        { typeof(ParallelActivity), CatalogHash(typeof(ParallelActivity)) },
+        { typeof(SendHttpRequest), CatalogHash(typeof(SendHttpRequest)) }
     };
 
     [Theory]
-    [MemberData(nameof(BuiltInCatalogHashesUnchangedFromMain))]
-    public void BuiltInDescriptorHashes_MatchMainSnapshot(Type activityType, string expectedHash)
+    [MemberData(nameof(BuiltInCatalogHashGoldens))]
+    public void BuiltInDescriptorHashes_PinTheCatalogMigrationSnapshot(Type activityType, string expectedHash)
     {
         using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
         var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
@@ -878,7 +904,7 @@ public sealed class ClrAssemblyScannerTests
         // Icons remain available as presentation metadata; the descriptor hash deliberately ignores them.
         Assert.Contains(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
         var actualHash = CatalogVersion(model, model, activityType.Assembly).Hash;
-        Assert.True(expectedHash == actualHash, $"Expected hash '{expectedHash}', actual hash '{actualHash}'.");
+        Assert.True(expectedHash == actualHash, $"First-stable hash freeze: changes require an explicit identity/migration decision. Expected '{expectedHash}', actual '{actualHash}'.");
     }
 
     [Fact]

@@ -1,6 +1,15 @@
+# Match .editorconfig so raw/verbatim C# literals and compiled hash recipes are portable.
+*.cs text eol=lf
+*.css text eol=lf
+/Studio/.stylelintrc*.json text eol=lf
+
 # Retained compatibility fixtures are checked by byte length and SHA-256.
 # Preserve their captured bytes on checkouts with core.autocrlf enabled.
 /extensions/Etl/tests/Shared/Fixtures/** -text
 
 # JTest acceptance corpus (spec 1235): keep the source bytes, including CRLF files.
 /extensions/Elsa3/tests/JTest/** -text
+/specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-fault/** -text
+/specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-native/** -text
+/specs/1207-json-data-integrity-baseline/evidence/fixtures/bpmn/current-prior-cancellation/** -text
+/specs/1207-json-data-integrity-baseline/evidence/fixtures/etl/** -text

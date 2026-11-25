@@ -28,7 +28,7 @@ public static class JavaScriptExecutionApi
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
         var api = endpoints.MapEndpointGroup(
             OwnerId,
-            JavaScriptExecutionJsonContext.Default,
+            JavaScriptExecutionJsonContext.WireContext,
             jsonContentType: "application/json",
             tag: string.IsNullOrWhiteSpace(applicationName) ? null : applicationName);
 
@@ -52,7 +52,7 @@ public static class JavaScriptExecutionApi
         try
         {
             request = await context.Request.ReadFromJsonAsync(
-                JavaScriptExecutionJsonContext.Default.RequestModel,
+                JavaScriptExecutionJsonContext.WireContext.RequestModel,
                 context.RequestAborted);
         }
         catch (JsonException exception)
@@ -65,7 +65,7 @@ public static class JavaScriptExecutionApi
         {
             await Results.Json(
                     new JavaScriptExecutionErrorResponse("Script is null"),
-                    JavaScriptExecutionJsonContext.Default.JavaScriptExecutionErrorResponse,
+                    JavaScriptExecutionJsonContext.WireContext.JavaScriptExecutionErrorResponse,
                     contentType: "application/json",
                     statusCode: StatusCodes.Status400BadRequest)
                 .ExecuteAsync(context);
@@ -82,7 +82,7 @@ public static class JavaScriptExecutionApi
                 new JavaScriptScriptEvaluationRequest(request.Script, arguments, context.RequestAborted));
             await Results.Json(
                     new JavaScriptExecutionSuccessResponse(true, evaluation.Value),
-                    JavaScriptExecutionJsonContext.Default.JavaScriptExecutionSuccessResponse,
+                    JavaScriptExecutionJsonContext.WireContext.JavaScriptExecutionSuccessResponse,
                     contentType: "application/json")
                 .ExecuteAsync(context);
         }
@@ -93,7 +93,7 @@ public static class JavaScriptExecutionApi
                 .LogError(exception, "JavaScript script execution failed.");
             await Results.Json(
                     new JavaScriptExecutionFailureResponse(false, exception.Message),
-                    JavaScriptExecutionJsonContext.Default.JavaScriptExecutionFailureResponse,
+                    JavaScriptExecutionJsonContext.WireContext.JavaScriptExecutionFailureResponse,
                     contentType: "application/json",
                     statusCode: StatusCodes.Status500InternalServerError)
                 .ExecuteAsync(context);
@@ -110,7 +110,7 @@ public static class JavaScriptExecutionApi
                     "Bad Request",
                     context.TraceIdentifier,
                     "https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1"),
-                JavaScriptExecutionJsonContext.Default.JavaScriptExecutionProblemDetailsResponse,
+                JavaScriptExecutionJsonContext.WireContext.JavaScriptExecutionProblemDetailsResponse,
                 contentType: "application/problem+json",
                 statusCode: StatusCodes.Status400BadRequest).ExecuteAsync(context);
 

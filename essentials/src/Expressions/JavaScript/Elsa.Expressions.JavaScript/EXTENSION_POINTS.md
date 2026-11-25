@@ -76,8 +76,9 @@ with portable expression evaluation.
   function reads through the call's `Variables`.
 - **Registration:** `services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookup", call => ...))`.
 - **Aggregation:** `JavaScriptHostFunctions` (Jint, internal) collects every declaration, checks the naming rule at shell
-  activation (`JavaScriptHostFunctionCheck`) and installs the functions into each evaluation. The analyzers and the
-  expression tooling read the same registrations.
+  activation (`JavaScriptHostFunctionCheck`) and installs the functions into each evaluation. The analyzers, the
+  expression tooling and the Elsa 3 converter (`Elsa3ExpressionRewriter`, which matches an Elsa 3 global to the
+  function with that member name, #5664) read the same registrations.
 - **Known implementations:** the eight built-ins, registered by `JintFeature` (intra-domain, `JavaScriptBuiltIns`).
 - **Publish:** a script that declares `variables` gets the error `Scripts/ReservedName`. A script that declares `input`,
   `activities`, `workflow`, a built-in name or a namespace root gets the warning `Scripts/ShadowedFunction`, and an

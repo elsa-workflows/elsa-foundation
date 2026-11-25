@@ -45,7 +45,7 @@ public sealed partial class StimulusDeliveryStoreTests
         var first = await dispatcher.DispatchAsync(SavedRequest(source, publisher: publisher));
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, first.CommandDispatch.Status);
         var firstEnvelope = Assert.Single(actors.Envelopes);
-        var firstPayload = firstEnvelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var firstPayload = firstEnvelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(Pin, firstPayload.PinnedExecutable);
         Assert.Equal(SelectedSource(), firstPayload.PinnedSource);
         Assert.Equal(0, Assert.Single(firstPayload.Inputs).Value.GetInt32());
@@ -85,7 +85,7 @@ public sealed partial class StimulusDeliveryStoreTests
 
         var retained = (await harness.Lookup.FindDurableAsync(source.SourceOutboxItemId))!;
         var retrySeal = SavedStimulusStartSeal.Read(retained, key.WorkflowExecutionId);
-        var retainedPayload = retrySeal.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var retainedPayload = retrySeal.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(0, retainedPayload.Inputs["count"].GetInt32());
         Assert.Equal(Pin, retainedPayload.PinnedExecutable);
         Assert.Equal(SelectedSource(), retainedPayload.PinnedSource);

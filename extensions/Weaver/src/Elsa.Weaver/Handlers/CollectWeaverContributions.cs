@@ -189,7 +189,7 @@ internal sealed class CollectWeaverContext(IEnumerable<IWeaverContextProvider> s
             return attachment with
             {
                 Content = attachment.Content is null || attachment.Sensitivity == WeaverContextSensitivity.Secret
-                    ? null : JsonSerializer.SerializeToElement(attachment.Content).Clone(),
+                    ? null : attachment.Content?.Clone(),
                 References = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(attachment.References.ToDictionary()),
                 WeaverScopes = Array.AsReadOnly(attachment.WeaverScopes.ToArray())
             };

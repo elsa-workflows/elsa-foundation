@@ -572,7 +572,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
                 NewIdentity(),
                 checkpointName,
                 [activityExecutionId],
-                RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason)),
+                RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason), Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: new Dictionary<string, string>(),
             envelopeMetadata: new Dictionary<string, string>());
 

@@ -21,8 +21,8 @@ public sealed class UserTaskOutcomePublicationTests
         var activityType = script ? typeof(RunJavaScript) : typeof(SendHttpRequest);
         var key = script ? "script" : nameof(SendHttpRequest.Url);
         var value = script ? "return 1;" : "https://example.invalid/";
-        var inputs = new List<ArgumentState> { new(key, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null) };
-        if (explicitNull) inputs.Add(new(script ? RunJavaScript.PossibleOutcomesInputKey : nameof(SendHttpRequest.ExpectedStatusCodes), new ArgumentValue(JsonSerializer.SerializeToElement((object?)null), "Literal"), null, null, null, null));
+        var inputs = new List<ArgumentState> { new(key, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(value), "Literal"), null, null, null, null) };
+        if (explicitNull) inputs.Add(new(script ? RunJavaScript.PossibleOutcomesInputKey : nameof(SendHttpRequest.ExpectedStatusCodes), ArgumentValue.FromClr(JsonSerializer.SerializeToElement((object?)null), "Literal"), null, null, null, null));
         var executable = await CompileAsync(Node(activityType, inputs.ToArray()), [activityType], includeDeclaredInputDefaults: true);
         Assert.Contains("Done", executable.RootActivity.ActivityContract!.Outcomes);
     }
@@ -34,7 +34,7 @@ public sealed class UserTaskOutcomePublicationTests
         var authoredDefaults = new[] { nameof(CreateUserTask.Actions), nameof(CreateUserTask.OptionalFormActions), nameof(CreateUserTask.Prefill) }
             .Select(key => {
                 var declaration = typeof(CreateUserTask).GetProperty(key)!.GetCustomAttribute<ActivityInputAttribute>()!;
-                return new ArgumentState(key, new ArgumentValue(JsonSerializer.SerializeToElement(declaration.DefaultValue), declaration.DefaultSyntax!), null, null, null, null);
+                return new ArgumentState(key, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(declaration.DefaultValue), declaration.DefaultSyntax!), null, null, null, null);
             }).ToArray();
         var executable = await CompileAsync(Node(typeof(CreateUserTask), authoredDefaults), [typeof(CreateUserTask)], includeDeclaredInputDefaults: true);
         var bindings = executable.RootActivity.InputBindings;
@@ -47,14 +47,14 @@ public sealed class UserTaskOutcomePublicationTests
     [Fact]
     public async Task Dynamic_action_names_are_refused_before_a_task_can_open()
     {
-        var node = Node(typeof(CreateUserTask), new ArgumentState(nameof(CreateUserTask.Actions), new ArgumentValue(JsonSerializer.SerializeToElement("[\"Approve\"]"), "JavaScript"), null, null, null, null));
+        var node = Node(typeof(CreateUserTask), new ArgumentState(nameof(CreateUserTask.Actions), ArgumentValue.FromClr(JsonSerializer.SerializeToElement("[\"Approve\"]"), "JavaScript"), null, null, null, null));
         var failure = await Assert.ThrowsAnyAsync<ArgumentException>(() => CompileAsync(node, [typeof(CreateUserTask)]));
         Assert.Contains("authored literal", failure.Message);
     }
     [Fact]
     public async Task Literal_action_names_are_pinned_to_the_executable_contract()
     {
-        var node = Node(typeof(CreateUserTask), new ArgumentState(nameof(CreateUserTask.Actions), new ArgumentValue(JsonSerializer.SerializeToElement(new[] { "Approve", "Request More Info" }), "Literal"), null, null, null, null));
+        var node = Node(typeof(CreateUserTask), new ArgumentState(nameof(CreateUserTask.Actions), ArgumentValue.FromClr(JsonSerializer.SerializeToElement(new[] { "Approve", "Request More Info" }), "Literal"), null, null, null, null));
         var executable = await CompileAsync(node, [typeof(CreateUserTask)]);
         Assert.Contains("Approve", executable.RootActivity.ActivityContract!.Outcomes);
         Assert.Contains("Request More Info", executable.RootActivity.ActivityContract!.Outcomes);

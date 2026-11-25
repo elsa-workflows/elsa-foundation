@@ -120,7 +120,7 @@ public sealed class RunRules(IWorkflowExecutionStateStore workflows, IWorkflowEx
         if (terminal.Disposition == RuleTerminalReadDisposition.Unavailable)
             throw new RuntimeSchedulerWorkUnavailableException("rules.store-unavailable", "The Rules store is temporarily unavailable.");
         if (terminal.Result is null ||
-            !RuleRecordCodec.TerminalBytes(terminal.Result).AsSpan().SequenceEqual(RuleRecordCodec.TerminalBytes(result)))
+            !Elsa.Serialization.Core.JsonCanonicalForm.EqualsUtf8(RuleRecordCodec.TerminalBytes(terminal.Result), RuleRecordCodec.TerminalBytes(result)))
             throw RulesNativeBoundary.Invalid();
         _ = RuleRecordCodec.DeliveryBytes(completion.DeliveryId, completion.Destination, result);
         return result.Kind switch

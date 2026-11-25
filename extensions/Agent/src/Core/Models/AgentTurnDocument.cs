@@ -73,8 +73,7 @@ public sealed record AgentTurnDocument(string Handle, string Key, string Request
                 ArgumentException.ThrowIfNullOrWhiteSpace(tenant);
                 _ = utf8.GetByteCount(tenant);
             }
-            var material = JsonSerializer.Serialize(new { identity.TenantId, identity.PersistencePartition, identity.WorkflowExecutionId, identity.OperationKey });
-            return Convert.ToHexString(SHA256.HashData(utf8.GetBytes(material))).ToLowerInvariant();
+            return Elsa.Serialization.Core.JsonHashInput.Hash(new { identity.TenantId, identity.PersistencePartition, identity.WorkflowExecutionId, identity.OperationKey });
         }
         catch (EncoderFallbackException exception)
         {

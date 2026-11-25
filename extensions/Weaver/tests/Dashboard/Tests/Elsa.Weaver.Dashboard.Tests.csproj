@@ -9,6 +9,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../../../../specs/1207-json-data-integrity-baseline/evidence/dashboard-weaver-hash-vectors.json" LogicalName="S9DashboardWeaverHashVectors.json" />
     <ProjectReference Include="../../../src/Dashboard/Elsa.Weaver.Dashboard.csproj" />
     <ProjectReference Include="../../../../../essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
     <ProjectReference Include="../../../../../essentials/src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />

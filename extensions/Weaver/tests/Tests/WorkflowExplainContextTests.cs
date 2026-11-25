@@ -320,12 +320,10 @@ public sealed partial class WorkflowExplainContextTests
     }
 
     [Fact]
-    public void An_unrelated_InvalidOperationException_is_not_disguised_as_malformed_text()
+    public void A_producer_conversion_failure_surfaces_before_snapshot_admission()
     {
-        // Only a malformed name or string read is refused; any other failure surfaces as itself, never as a silent refusal.
-        var caller = WorkflowWeaverTests.Snapshot() with { Content = new ThrowingContent() };
-
-        var thrown = Assert.Throws<InvalidOperationException>(() => WorkflowWeaverSnapshot.TryRead(caller, out _, out _));
+        // The public carrier accepts JSON. A CLR producer must complete its conversion before admission.
+        var thrown = Assert.Throws<InvalidOperationException>(() => WeaverJsonData.From(new ThrowingContent()));
         Assert.Equal(ThrowingContent.Message, thrown.Message);
     }
 

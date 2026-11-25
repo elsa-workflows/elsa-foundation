@@ -61,7 +61,7 @@ internal sealed class TestRunWaitOperations(
 
         // The canonical payload is module-owned. A prior receipt is checked against the submitted configuration
         // digest before bookmark lookup, so retries remain safe after the wait has been consumed.
-        var configurationDigest = TestRunDeliveryReceipt.Digest(JsonSerializer.SerializeToElement(new { modeId = request.ModeId, data = request.Data }));
+        var configurationDigest = TestRunDeliveryReceipt.Digest(JsonSerializer.SerializeToElement(new { modeId = request.ModeId, data = request.Data }, Elsa.Serialization.Core.JsonBaseline.Options));
         var receipt = new TestRunDeliveryReceipt(request.TestRunId, request.DeliveryId, request.WaitId, configurationDigest);
         if (receipt.MatchesExisting(execution) is { } matches)
             return matches ? new("AlreadyDelivered") : new("Rejected", "This delivery ID already names different data or another wait.");

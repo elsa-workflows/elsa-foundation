@@ -43,7 +43,7 @@ public sealed class RuntimeHistoryCleanupOwnerTests
         {
             var summary = Assert.Single(inventory.HistoryBookmarks!);
             Assert.Equal(ActivityExecutionBookmarkSummary.From(selected), summary);
-            Assert.DoesNotContain("private", JsonSerializer.Serialize(summary));
+            Assert.DoesNotContain("private", JsonSerializer.Serialize(summary, options: Elsa.Serialization.Core.JsonBaseline.Options));
         }
     }
 
@@ -109,7 +109,7 @@ public sealed class RuntimeHistoryCleanupOwnerTests
                 null, "failure", "private incident detail", At, null));
         var command = workflowWide ? WorkflowExecutionCommandKind.Cancel : WorkflowExecutionCommandKind.CancelActivityScope;
         var item = new RuntimeSchedulerWorkItem("work", "run", "command", command, "envelope", "idempotency", At, At,
-            payload: workflowWide ? null : JsonSerializer.SerializeToElement(new CancelActivityScopeCommand("activity", "activity", "owner-request")));
+            payload: workflowWide ? null : JsonSerializer.SerializeToElement(new CancelActivityScopeCommand("activity", "activity", "owner-request"), options: Elsa.Serialization.Core.JsonBaseline.Options));
         var committer = selected.GetRequiredService<RuntimeCheckpointCommitter>();
         var accumulator = selected.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>();
         var clock = selected.GetRequiredService<TimeProvider>();
@@ -218,7 +218,7 @@ public sealed class RuntimeHistoryCleanupOwnerTests
         return services;
     }
     private static BookmarkState Bookmark(string id, string activity) => new(id, "run", activity, "node", "resume", "task", "hash",
-        JsonSerializer.SerializeToElement("private bookmark payload"), new Dictionary<string, string> { ["private"] = "private metadata" }, At, null);
+        JsonSerializer.SerializeToElement("private bookmark payload", options: Elsa.Serialization.Core.JsonBaseline.Options), new Dictionary<string, string> { ["private"] = "private metadata" }, At, null);
     private static WorkflowExecutionState Workflow(RuntimeHistoryCapturePolicy? policy) => new("run", new("artifact", "definition", "version", "1", "hash"),
         WorkflowExecutionStatus.Running, null, At, At, At, null, null, null, null, new Dictionary<string, string>()) { HistoryCapturePolicy = policy };
     private static ActivityExecutionState Activity() => new(new("activity", "run", "node", "authored", "test", "1"), ActivityExecutionStatus.Suspended,

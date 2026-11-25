@@ -33,7 +33,7 @@ internal static class GraphBodyReferenceValidator
     // The whole result of an activity, which every activity with a result produces.
     private const string WholeResultProjectionKey = "$result";
     private const string LegacyGraphScopeId = "activity-graph";
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
@@ -212,7 +212,7 @@ internal static class GraphBodyReferenceValidator
             yield break;
         }
 
-        var value = argument.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(argument.Value.Value);
+        var value = argument.Value.Value is JsonElement element ? element : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(argument.Value.Value);
         if (value.ValueKind != JsonValueKind.Object)
             yield break;
 

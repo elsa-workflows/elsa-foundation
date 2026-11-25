@@ -38,7 +38,7 @@ public static class RuntimeCompleteActivityPayloadMemo
         if (workItem.Payload is not { } payload)
             return null;
 
-        var parsed = payload.Deserialize<RuntimeCompleteActivityCommandPayload>();
+        var parsed = payload.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options);
         if (parsed is not null)
             Cache.AddOrUpdate(workItem, parsed);
 

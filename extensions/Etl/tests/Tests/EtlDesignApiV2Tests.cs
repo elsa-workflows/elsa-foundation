@@ -13,6 +13,28 @@ namespace Elsa.Etl.Tests;
 
 public sealed partial class EtlDesignApiHttpTests
 {
+    [Fact]
+    public async Task Connector_api_and_store_preserve_the_authored_filter_token()
+    {
+        const string raw = "\"\\u0041da\"";
+        var pipeline = EtlV2TestPipelines.Create() with
+        {
+            Filters = [new EtlFilter("name", EtlComparison.Equal, JsonDocument.Parse(raw).RootElement.Clone())]
+        };
+        var body = "{\"id\":\"raw-filter\",\"pipeline\":" + EtlArtifactV2Json.Write(pipeline).GetRawText() + "}";
+        await using var host = await ConnectorHostAsync(new ConnectorBindingState());
+        using var created = await host.SendRawAsync(HttpMethod.Post, "/etl/v2/definitions", body,
+            permissions: [EtlDesignPermissions.ManageDefinitions]);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var (_, saved) = await ReadConnectorDraftPipelineAsync(created);
+        Assert.Equal(raw, Assert.Single(saved.Filters).Value.GetRawText());
+        using var reopened = await host.SendAsync(HttpMethod.Get, "/etl/v2/definitions/raw-filter",
+            permissions: [EtlDesignPermissions.ReadDefinitions]);
+        Assert.Equal(HttpStatusCode.OK, reopened.StatusCode);
+        var (_, read) = await ReadConnectorDraftPipelineAsync(reopened);
+        Assert.Equal(raw, Assert.Single(read.Filters).Value.GetRawText());
+    }
+
     private static readonly string[] ConnectorAuthorPermissions =
     [
         EtlDesignPermissions.ReadDefinitions,

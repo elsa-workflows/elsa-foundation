@@ -976,7 +976,7 @@ public abstract partial class EtlRuntimeStoreContract
     private protected static EtlBatchDescriptor CreateBatch(EtlRunAdmission admission, EtlPreparedRun prepared, int partition,
         long start, long end, string marker)
     {
-        var inputHash = EtlRuntimeRecordCodec.HashText(marker);
+        var inputHash = Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes(marker));
         const long inputBytes = 100;
         return new(EtlRuntimeIdentity.BatchId(admission, prepared, partition, start, end, inputBytes, inputHash),
             start, end, inputBytes, inputHash);

@@ -13,7 +13,7 @@ namespace Elsa.Activities.Bpmn.Hosting.Tests;
 public sealed class DelayedCompensationWorkbenchTests
 {
     [Fact]
-    public async Task The_standard_host_recovers_the_original_cancelled_result_with_obsolete_native_retry_and_retains_it_after_a_cold_start()
+    public async Task The_standard_host_recovers_a_current_writer_cancelled_result_with_obsolete_native_retry_and_retains_it_after_a_cold_start()
     {
         const string model = "bpmn:a29cc5c675038cc802eabef05ca3c36a517ddbf17c66304badea80379b1e56cd";
         const string resultKind = "Elsa.Bpmn.NativeWorkResult.v1";
@@ -25,7 +25,7 @@ public sealed class DelayedCompensationWorkbenchTests
             await using (var input = File.OpenRead(fixture))
             await using (var gzip = new GZipStream(input, CompressionMode.Decompress))
             await using (var output = File.Create(original)) await gzip.CopyToAsync(output);
-            Assert.Equal("dedc7041baf31ad6d0b3de251049de7d55ff421dbe7e65e3059b6e35f9bf9e63", Hash(await File.ReadAllBytesAsync(original)));
+            Assert.Equal("1c692410bd6101187866160e16da4812ea6bc06db27b4cec805290e18b80a25c", Hash(await File.ReadAllBytesAsync(original)));
             await using var host = await OwnedWorkbench.StartAsync(directBpmn: true, runtimeOnly: true,
                 runtimeSnapshotPath: original, recoverySweepSeconds: 0.2);
             LegacyUpgradeInspection.AssertStandardHost(host);
@@ -63,7 +63,7 @@ public sealed class DelayedCompensationWorkbenchTests
                 x["result"]!["status"]!.GetValue<string>() == "Accepted");
             Assert.Empty(completed["queuedModelInputs"]!.AsArray()); Assert.Empty(completed["queuedNativeWork"]!.AsArray());
             // The frozen due time eventually passes in CI. Fresh journey tests always create a new one-hour wait;
-            // this old-writer replay must also recover once its ordinary obsolete transport becomes due.
+            // this retained current-writer replay must also recover once its ordinary obsolete transport becomes due.
             if (retryDue > completedAt) Assert.True(JsonNode.DeepEquals(retry, Source(completed, retrySource)));
             Assert.True(completed["model"]!["updatedAt"]!.GetValue<DateTimeOffset>() <= Source(completed, resultSource)["deliveredAt"]!.GetValue<DateTimeOffset>());
             var api = await host.GetAsync("/bpmn/executions/" + model, HttpStatusCode.NotFound);
@@ -90,7 +90,7 @@ public sealed class DelayedCompensationWorkbenchTests
                     sourceRevision = source, first, second, firstExit, secondExit, completedStore, retainedStore, observedAt, completedAt, retryDue,
                     obsoleteRetryStillFutureAtSettlement = retryDue > completedAt, retrySource, resultSource,
                     binaries = host.DescribeBinaries(source), fixtureSha256 = Hash(await File.ReadAllBytesAsync(fixture)), runtimeOnly = true,
-                    scopeLimit = "Standard SQLite runtime-only host recovers authentic old SDK queued result; no new Studio, ETL or other-provider acceptance."
+                    scopeLimit = "Standard SQLite runtime-only host recovers the S9 current-writer queued result; historical old-writer proof remains in the unchanged spec1017 archive. No Studio, ETL or other-provider acceptance."
                 }, new JsonSerializerOptions { WriteIndented = true }));
             }
 

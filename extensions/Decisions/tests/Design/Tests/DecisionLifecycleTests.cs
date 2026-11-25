@@ -13,6 +13,26 @@ namespace Elsa.Decisions.Design.Tests;
 
 public sealed class DecisionLifecycleTests
 {
+    // Independent canonical preimages: ["tenant-a", "user-a", operationId], SHA-256 lower hex, then "run-".
+    [Theory]
+    [InlineData("run", "run-d9201f50107159b174a8f0f1e080c14e42d1ed16b86fe15f98dd56c39d92b725")]
+    [InlineData("run-é", "run-65fe2b508eefbdcdb95b66922479b59c8d7fa4031521bf500cc1301c50ac618c")]
+    public async Task Actual_test_run_owner_pins_returned_and_retained_run_identity(string operationId, string expected)
+    {
+        await using var fixture = await Fixture.Create();
+        var asset = await fixture.Service.SaveAsync(fixture.Caller, null, new("create", "Hash fixture", Fixture.Xml));
+        var item = await fixture.Service.SaveCaseAsync(fixture.Caller, asset.Id, null,
+            new("case", "Expected result", Fixture.Input("1"), "Success", Fixture.Expected("Automatic")));
+        var current = await fixture.Reader.FindAssetAsync(fixture.Caller.TenantId, asset.Id) ?? throw new InvalidOperationException("Missing fixture asset.");
+        var request = new TestDecisionRequest(operationId, current.SourceHash, [new(item.Id, item.Revision)], current.Revision);
+        var receipt = await fixture.Service.TestAsync(fixture.Caller, asset.Id, request);
+        Assert.True(receipt.Id == expected, $"Decision test run/{operationId}: First-stable hash freeze requires an explicit identity/migration decision. Expected {expected}; actual {receipt.Id}");
+        var retained = await fixture.Reader.FindRunAsync(fixture.Caller.TenantId, asset.Id, expected);
+        Assert.True(retained?.Id == expected, $"Decision retained test run/{operationId}: First-stable hash freeze requires an explicit identity/migration decision.");
+        Assert.True((await fixture.Service.TestAsync(fixture.Caller, asset.Id, request)).Id == expected,
+            $"Decision test replay/{operationId}: First-stable hash freeze requires an explicit identity/migration decision.");
+    }
+
     [Fact]
     public async Task Unpublish_and_recycle_preserve_history_restore_unpublished_and_purge_retained_records()
     {

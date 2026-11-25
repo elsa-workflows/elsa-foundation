@@ -257,7 +257,7 @@ public sealed class WorkflowsVersionReconciler(
         if (stored?.State is null || incoming.State is null)
             return;
 
-        if (payloadSerializer.Serialize(incoming.State) != payloadSerializer.Serialize(stored.State))
+        if (!Elsa.Serialization.Core.JsonCanonicalForm.EqualsJson(payloadSerializer.Serialize(incoming.State), payloadSerializer.Serialize(stored.State)))
             LogContentMismatch(definitionId, incoming.Version);
     }
 

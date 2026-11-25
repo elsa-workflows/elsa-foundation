@@ -114,7 +114,7 @@ internal static class UpdateDraftTestKit
         new(referenceKey, name, new TypeReference((type ?? typeof(string)).Name), null, name, null, false);
 
     public static ArgumentState Arg(string referenceKey, string? value = null) =>
-        new(referenceKey, new ArgumentValue(value), null, null, null, null);
+        new(referenceKey, ArgumentValue.FromClr(value), null, null, null, null);
 
     public static DesignMetadataRecord LayoutRecord(string nodeId, double x, double y, double? width = null, double? height = null) =>
         new(nodeId, x, y, width, height);

@@ -1,0 +1,73 @@
+[
+  {
+    "name": "spelling-a",
+    "payload": "{ \"text\":\"\\u0061\", \"n\":1.0 }",
+    "canonical": "{\"n\":1e0,\"text\":\"a\"}",
+    "frame": "9:tenant-𐀀7:scope-a8:stream-a7:token-120:{\"n\":1e0,\"text\":\"a\"}",
+    "sha256": "D183A94C552B76BFD2729E512A191BEE7EBDBBD94151F23347A17A1CA145BD9B"
+  },
+  {
+    "name": "spelling-b",
+    "payload": "{\"n\":1e0,\"text\":\"a\"}",
+    "canonical": "{\"n\":1e0,\"text\":\"a\"}",
+    "frame": "9:tenant-𐀀7:scope-a8:stream-a7:token-120:{\"n\":1e0,\"text\":\"a\"}",
+    "sha256": "D183A94C552B76BFD2729E512A191BEE7EBDBBD94151F23347A17A1CA145BD9B"
+  },
+  {
+    "name": "empty",
+    "payload": "{}",
+    "canonical": "{}",
+    "frame": "9:tenant-𐀀7:scope-a8:stream-a7:token-12:{}",
+    "sha256": "A47B0E4A44285C8565BB2AC9D06A7F99EC08FB96F640EF41D2956CA73E296137"
+  },
+  {
+    "name": "present-null",
+    "payload": "{\"x\":null}",
+    "canonical": "{\"x\":null}",
+    "frame": "9:tenant-𐀀7:scope-a8:stream-a7:token-110:{\"x\":null}",
+    "sha256": "C1B3930451C1C4340F2A6ADF244F5569CEFE0EED96BD5745230B69F2ABA9B931"
+  },
+  {
+    "name": "array-forward",
+    "payload": "[1,2]",
+    "canonical": "[1e0,2e0]",
+    "frame": "9:tenant-𐀀7:scope-a8:stream-a7:token-19:[1e0,2e0]",
+    "sha256": "11AAEA49EB787B028A0B543A4C22EF7D84ED30D9F2521555FFB3FDF26C10B9CE"
+  },
+  {
+    "name": "array-reverse",
+    "payload": "[2,1]",
+    "canonical": "[2e0,1e0]",
+    "frame": "9:tenant-𐀀7:scope-a8:stream-a7:token-19:[2e0,1e0]",
+    "sha256": "EC8865C237CCFAFD7EBD9771622B2877176CE24733D542E2368B260E559341A4"
+  },
+  {
+    "name": "large-a",
+    "payload": "9007199254740993",
+    "canonical": "9007199254740993e0",
+    "frame": "9:tenant-𐀀7:scope-a8:stream-a7:token-118:9007199254740993e0",
+    "sha256": "AF9871E8B6D6F67258FD7CB6AA6BFA39B308E8A9E6DC1304F20EF3AB6714A9E6"
+  },
+  {
+    "name": "large-b",
+    "payload": "9007199254740992",
+    "canonical": "9007199254740992e0",
+    "frame": "9:tenant-𐀀7:scope-a8:stream-a7:token-118:9007199254740992e0",
+    "sha256": "B624BF694DCAFC2C2FCA6006536D1050916CFACED78A64380E5BCAE1163A2FD8"
+  },
+  {
+    "name": "two-items",
+    "items": [
+      {
+        "token": "token-1",
+        "payload": "{\"x\":1.0}"
+      },
+      {
+        "token": "token-2",
+        "payload": "{\"x\":2,\"nil\":null}"
+      }
+    ],
+    "frame": "9:tenant-𐀀7:scope-a8:stream-a7:token-19:{\"x\":1e0}7:token-220:{\"nil\":null,\"x\":2e0}",
+    "sha256": "D8F5338F955F4848FBC7B8B2A8951E740A64A5ACDDCE493286BB64E0010F7020"
+  }
+]

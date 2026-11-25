@@ -159,9 +159,9 @@ public sealed class RuntimeHistoryFirstFaultTests
     [InlineData(false, "42")] [InlineData(true, "42")]
     [InlineData(false, "\"unreadable\"")] [InlineData(true, "\"unreadable\"")]
     [InlineData(false, "[]")] [InlineData(true, "[]")]
-    [InlineData(false, "{\"CommandId\":42}")] [InlineData(true, "{\"CommandId\":42}")]
-    [InlineData(false, "{\"HistoryEventId\":[]}")] [InlineData(true, "{\"HistoryEventId\":[]}")]
-    [InlineData(false, "{\"SchedulerWorkItemId\":{}}")] [InlineData(true, "{\"SchedulerWorkItemId\":{}}")]
+    [InlineData(false, "{\"commandId\":42}")] [InlineData(true, "{\"commandId\":42}")]
+    [InlineData(false, "{\"historyEventId\":[]}")] [InlineData(true, "{\"historyEventId\":[]}")]
+    [InlineData(false, "{\"schedulerWorkItemId\":{}}")] [InlineData(true, "{\"schedulerWorkItemId\":{}}")]
     public async Task Wrong_shaped_optional_cause_cannot_suppress_either_eligible_first_fault_owner(bool poison, string rawCause)
     {
         using var f = new Fixture();
@@ -195,14 +195,14 @@ public sealed class RuntimeHistoryFirstFaultTests
             variables: null, inputs: null, stimulusInput: null, triggerNodeId: null, runKind: WorkflowRunKind.Unknown,
             pinnedSource: null, parentWorkflowExecutionId: parent, correlationId: null, tenantId: null, partition: null, authority: null)
         { HistoryCausation = historyCausation, HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = enabled };
-        var element = malformed ? JsonSerializer.SerializeToElement("unreadable") : JsonSerializer.SerializeToElement(payload);
+        var element = malformed ? JsonSerializer.SerializeToElement("unreadable", options: Elsa.Serialization.Core.JsonBaseline.Options) : JsonSerializer.SerializeToElement(payload, options: Elsa.Serialization.Core.JsonBaseline.Options);
         if (rawCause is not null)
         {
             var properties = element.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone());
             using var raw = JsonDocument.Parse(rawCause);
-            properties[nameof(WorkflowExecutionStartCommandPayload.HistoryCausation)] = raw.RootElement.Clone();
-            if (malformedNativeField is not null) properties[malformedNativeField] = JsonSerializer.SerializeToElement(42);
-            element = JsonSerializer.SerializeToElement(properties);
+            properties["historyCausation"] = raw.RootElement.Clone();
+            if (malformedNativeField is not null) properties[JsonNamingPolicy.CamelCase.ConvertName(malformedNativeField)] = JsonSerializer.SerializeToElement(42, options: Elsa.Serialization.Core.JsonBaseline.Options);
+            element = JsonSerializer.SerializeToElement(properties, options: Elsa.Serialization.Core.JsonBaseline.Options);
         }
         var command = new WorkflowExecutionCommand("command", execution, WorkflowExecutionCommandKind.Start, At, element, new Dictionary<string, string>());
         return new("envelope", execution, command, "idempotency", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, At);

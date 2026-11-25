@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { SkeletonRows, TechnicalDetails, StudioTimestamp, StudioAlert, StudioButton, StudioTableContainer, StudioField, OverflowMenu, StudioResultState, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import { useDialogFocus, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
@@ -49,6 +51,7 @@ export function ValueInput({ clause, value, onChange, label, displayLabel = labe
   </div>;
 }
 function CaseEditorDialog({ title, busy, onClose, onRestoreFocus, children }: { title: string; busy: boolean; onClose(): void; onRestoreFocus(): void; children: React.ReactNode }) {
+  useStudioTimeZone();
   const dialogRef = useRef<HTMLElement>(null), titleId = useId();
   useDialogFocus(dialogRef, busy ? null : onClose, true, onRestoreFocus);
   return <div className="decision-case-dialog-backdrop" role="presentation"><section ref={dialogRef} className="decision-case-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>

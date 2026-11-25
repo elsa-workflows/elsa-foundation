@@ -85,7 +85,7 @@ public sealed class WholeVariableConversionTests
     {
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
         var variable = State("bare", Request("Json"));
-        var credential = new ArgumentState("credential", new ArgumentValue("credential-sentinel", "Literal"), null, null, null, null);
+        var credential = new ArgumentState("credential", global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr("credential-sentinel", "Literal"), null, null, null, null);
         var refusal = Assert.Throws<CredentialLiteralRefusedException>(() =>
         {
             if (pinned)

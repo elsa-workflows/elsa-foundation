@@ -15,7 +15,7 @@ internal sealed class UserTaskResumeGuard(IUserTaskStore tasks, IWorkflowExecuti
         try
         {
             var payload = @event.Payload;
-            var response = payload.Input?.Deserialize<UserTaskResponse>() ?? throw Invalid();
+            var response = payload.Input?.Deserialize<UserTaskResponse>(Elsa.Serialization.Core.JsonBaseline.Options) ?? throw Invalid();
             var execution = await executions.FindAsync(@event.State.Execution.WorkflowExecutionId, cancellationToken);
             var task = execution?.TenantId is { } tenant ? await tasks.FindAsync(tenant, response.TaskId, cancellationToken) : null;
             if (task?.Status != UserTaskStatus.CompletionPending || task.Decision is null || task.Recipient is null ||
@@ -24,8 +24,8 @@ internal sealed class UserTaskResumeGuard(IUserTaskStore tasks, IWorkflowExecuti
                 task.ExecutableNodeId != payload.ExecutableNodeId || task.Recipient.BookmarkId != payload.BookmarkId ||
                 payload.StimulusType != UserTaskProtocol.StimulusType || payload.StimulusHash != task.Id ||
                 payload.ExpectedBookmarkResume is null ||
-                !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(task.Recipient), JsonSerializer.SerializeToElement(payload.ExpectedBookmarkResume)) ||
-                !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(task.Decision.Response), JsonSerializer.SerializeToElement(response)))
+                !Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(task.Recipient, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(payload.ExpectedBookmarkResume, Elsa.Serialization.Core.JsonBaseline.Options)) ||
+                !Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(task.Decision.Response, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(response, Elsa.Serialization.Core.JsonBaseline.Options)))
                 throw Invalid();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }

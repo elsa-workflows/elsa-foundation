@@ -104,7 +104,7 @@ internal sealed class NativeCatalogSourceMemberContributor(IReleaseRuntimeArtifa
                     publishedAt = details.PublishedAt, directDependencyCount = details.DirectDependencyCount, closedTemplateCount = details.ClosedTemplateCount,
                     resumeTargetCount = details.ResumeTargetCount, runtimeRequirementsJson = Encoding.UTF8.GetString(requirementsBytes),
                     resourceMeasurementsJson = Encoding.UTF8.GetString(measurementsBytes)
-                });
+                }, options: Elsa.Serialization.Core.JsonBaseline.Options);
                 var resolution = publication.ResolutionKind == ActivityDefinitionVersionResolutionKind.Unspecified
                     ? string.IsNullOrWhiteSpace(publication.SourceDraftId) ? "AuthorableActivity" : "ReusableTemplateBoundary" : publication.ResolutionKind.ToString();
                 additions.Add(codec.EncodeActivityVersion(new(scope, publication.DefinitionId, publication.VersionId, publication.Version, publication.ActivityTypeKey,
@@ -125,11 +125,7 @@ internal sealed class NativeCatalogSourceMemberContributor(IReleaseRuntimeArtifa
                 actual.Descriptor.ByteLength != member.Descriptor.ByteLength || actual.Descriptor.PayloadDigest != member.Descriptor.PayloadDigest)
                 throw Refuse("native_catalog_captured_member_conflict");
             var payload = captured.GetPayload(member.Key);
-            if (payload.Length > limits.MaxBlobBytes || payload.Length != member.Descriptor.ByteLength) throw Refuse("native_catalog_captured_member_conflict");
-            var copy = payload.ToArray();
-            if ("sha256:" + Convert.ToHexStringLower(SHA256.HashData(copy)) != member.Descriptor.PayloadDigest)
-                throw Refuse("native_catalog_captured_member_conflict");
-            return copy;
+            return ValidateCapturedPayload(payload, member.Descriptor, limits.MaxBlobBytes);
         }
         void Add(string id)
         { if (string.IsNullOrWhiteSpace(id) || new UTF8Encoding(false, true).GetByteCount(id) > 4096) throw Refuse("native_catalog_version_invalid"); if (ids.Add(id) && ids.Count > limits.MaxMembers) throw Refuse("native_catalog_member_limit"); }
@@ -142,6 +138,20 @@ internal sealed class NativeCatalogSourceMemberContributor(IReleaseRuntimeArtifa
         void CheckScope(ReleaseRuntimeContentScope actual) { if (actual != scope) throw Refuse("native_catalog_scope_mismatch"); }
         void CheckContext() { if (Context() != scope) throw Refuse("native_catalog_scope_changed"); }
     }
+    private static byte[] ValidateCapturedPayload(ReadOnlyMemory<byte> payload, ReleaseBundleMember descriptor, int maxBlobBytes)
+    {
+        if (payload.Length > maxBlobBytes || payload.Length != descriptor.ByteLength) throw Refuse("native_catalog_captured_member_conflict");
+        var copy = payload.ToArray();
+        try
+        {
+            if ("sha256:" + Elsa.Serialization.Core.JsonHashInput.HashUtf8(copy) != descriptor.PayloadDigest)
+                throw Refuse("native_catalog_captured_member_conflict");
+        }
+        catch (Exception error) when (error is JsonException or InvalidOperationException)
+        { throw Refuse("native_catalog_captured_member_conflict"); }
+        return copy;
+    }
+
     private ReleaseRuntimeContentScope Context()
     {
         var scope = source.Current;

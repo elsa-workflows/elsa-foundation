@@ -151,7 +151,7 @@ public sealed class ActivityDataSelectionContextTests
     public async Task Real_shared_analysis_rejects_a_missing_producer_with_a_located_finding()
     {
         using var fixture = new Fixture();
-        var request = fixture.Request() with { Query = new() { Source = new ArgumentValue(Element(new
+        var request = fixture.Request() with { Query = new() { Source = ArgumentValue.FromClr(Element(new
         { producerNodeId = "missing", projectionKey = "$result", producerScopeId = "workflow" }), "ActivityResult") } };
         var result = await fixture.Service.ResolveAsync(request, default);
         Assert.Equal("invalid", result.State);

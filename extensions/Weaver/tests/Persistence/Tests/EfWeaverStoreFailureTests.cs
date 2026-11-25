@@ -117,18 +117,16 @@ public sealed class EfWeaverStoreFailureTests
     }
 
     [Fact]
-    public async Task An_unavailable_database_and_an_unrecordable_value_are_wrapped_with_their_cause()
+    public async Task A_producer_refuses_cycles_before_storage_and_an_unavailable_database_keeps_its_cause()
     {
         using var database = new WeaverSqliteDatabase();
         var clock = new RestartTestClock();
         var store = database.RecordStore(clock);
-        var fence = (await store.CreateAsync(new(Records.Session("session-1")), Owner)).Fence!;
+        Assert.True((await store.CreateAsync(new(Records.Session("session-1")), Owner)).Succeeded);
         var cycle = new Cycle();
         cycle.Self = cycle;
 
-        var encoding = await Assert.ThrowsAsync<WeaverContributionException>(() =>
-            store.WriteAsync(new("session-1", fence) { Context = [Records.Attachment("attachment-1", cycle)] }));
-        Assert.IsType<JsonException>(encoding.InnerException);
+        Assert.ThrowsAny<JsonException>(() => Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(cycle));
 
         using var missing = WeaverSqliteDatabase.Contexts($"Data Source={Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "absent.db")};Mode=ReadOnly");
         var unavailable = await Assert.ThrowsAsync<WeaverContributionException>(() => database.RecordStore(clock, contexts: missing).LoadAsync("session-1"));

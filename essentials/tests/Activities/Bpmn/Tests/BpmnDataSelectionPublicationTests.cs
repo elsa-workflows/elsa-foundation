@@ -188,7 +188,7 @@ public sealed class BpmnDataSelectionPublicationTests
     { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } };
 
     private static ArgumentState Input(string key, object value, string role = "Literal") =>
-        new(key, new ArgumentValue(JsonSerializer.SerializeToElement(value), role), null, null, null, null);
+        new(key, ArgumentValue.FromClr(JsonSerializer.SerializeToElement(value), role), null, null, null, null);
     private static ActivityNode Decision(string id = "decision") => new(id, "decision-version", [Input("Outcome", "Done")], []);
     private static ActivityNode Capture(string producer = "decision") => new("capture", "elsa.intrinsic.set-output@1",
         [Input("name", "decisionResult"), Input("value", new { producerNodeId = producer, producerScopeId = "process", projectionKey = "$result" }, "ActivityResult")], [])

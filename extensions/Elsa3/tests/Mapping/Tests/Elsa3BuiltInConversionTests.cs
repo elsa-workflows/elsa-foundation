@@ -267,8 +267,7 @@ public sealed class Elsa3BuiltInConversionTests
     {
         null => null,
         JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
-        JsonElement element => element.GetRawText(),
-        var value => value.ToString()
+        JsonElement element => element.GetRawText()
     };
 
     /// <summary>The source of a lowered portable expression (<c>{ language, source }</c>).</summary>

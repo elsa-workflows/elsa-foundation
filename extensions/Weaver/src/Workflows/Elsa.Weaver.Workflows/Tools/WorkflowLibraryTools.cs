@@ -259,7 +259,7 @@ internal sealed class WorkflowLibraryAssignTagsTool(IEnumerable<IWorkflowLibrary
                     target.GetProperty("definitionId").GetString()!, NotApplied, target.GetProperty("revision").GetString(),
                     $"Not changed: creating the tag '{name}' was {result.Status}.")).ToArray();
                 var (_, targetData) = Summarize(untouched);
-                var none = JsonSerializer.SerializeToElement(new { kind = "tags", status = stopped, creations, targets = targetData }, JsonOptions);
+                var none = JsonSerializer.SerializeToElement(new { kind = "tags", status = stopped, creations, targets = targetData }, options: JsonOptions);
                 return (stopped, $"Creating the tag '{name}' was {result.Status}: {result.Message} No workflow tags were changed on "
                     + string.Join(", ", untouched.Select(outcome => outcome.DefinitionId)) + ".", none, untouched);
             }
@@ -277,7 +277,7 @@ internal sealed class WorkflowLibraryAssignTagsTool(IEnumerable<IWorkflowLibrary
         var (status, targets) = Summarize(outcomes);
         // A created tag is a persisted effect even when no assignment applied.
         if (status == "refused" && created.Count > 0) status = "partial";
-        var data = JsonSerializer.SerializeToElement(new { kind = "tags", status, creations, targets }, JsonOptions);
+        var data = JsonSerializer.SerializeToElement(new { kind = "tags", status, creations, targets }, options: JsonOptions);
         return (status, Describe(status, outcomes.Count(outcome => outcome.Status == WorkflowLibraryCommandStatus.Applied), outcomes.Count, "applied the change"), data, outcomes);
     }
 
@@ -333,7 +333,7 @@ internal sealed class WorkflowLibrarySetFavoriteTool(IEnumerable<IWorkflowLibrar
         var outcomes = result.Succeeded && result.Value is not null ? result.Value
             : ids.Select(id => new WorkflowLibraryTargetOutcome(id, result.Status, null, result.Message)).ToArray();
         var (status, targets) = Summarize(outcomes);
-        var data = JsonSerializer.SerializeToElement(new { kind = "favorite", status, favorite, targets }, JsonOptions);
+        var data = JsonSerializer.SerializeToElement(new { kind = "favorite", status, favorite, targets }, options: JsonOptions);
         return (status, Describe(status, outcomes.Count(outcome => outcome.Status == WorkflowLibraryCommandStatus.Applied), outcomes.Count, "applied the change"), data, outcomes);
     }
 }
@@ -371,7 +371,7 @@ internal sealed class WorkflowLibraryMoveToFolderTool(IEnumerable<IWorkflowLibra
         var result = await library.MoveDefinitionsAsync(actor, ids, folderId, arguments.GetProperty("operationKey").GetString()!, cancellationToken);
         var outcomes = result.Value ?? ids.Select(id => new WorkflowLibraryTargetOutcome(id, result.Status, null, result.Message)).ToArray();
         var (status, targets) = Summarize(outcomes);
-        var data = JsonSerializer.SerializeToElement(new { kind = "folder", status, folderId, targets }, JsonOptions);
+        var data = JsonSerializer.SerializeToElement(new { kind = "folder", status, folderId, targets }, options: JsonOptions);
         return (status, status == "applied" ? $"The workflow library moved all {ids.Length} workflow(s) and reread the result."
             : $"The workflow library moved nothing ({result.Status}): {result.Message}", data, outcomes);
     }
@@ -434,7 +434,7 @@ internal sealed class WorkflowLibrarySaveViewTool(IEnumerable<IWorkflowLibraryCo
         // Weaver creates only under a key, so a lost response can be resolved by rereading it; an update names its view.
         if (viewId is null && key is null)
             return ("refused", "The view change names neither an existing view nor an operation key for a new one; nothing was saved.",
-                JsonSerializer.SerializeToElement(new { kind = "view", status = "refused", view = (object?)null, targets = Array.Empty<object>() }, JsonOptions), []);
+                JsonSerializer.SerializeToElement(new { kind = "view", status = "refused", view = (object?)null, targets = Array.Empty<object>() }, options: JsonOptions), []);
         WorkflowLibraryCommandResult<WorkflowLibraryViewSnapshot> result;
         try { result = await library.SaveViewAsync(actor, viewId, input, key, cancellationToken); }
         catch (Exception) when (key is not null && !cancellationToken.IsCancellationRequested)
@@ -449,7 +449,7 @@ internal sealed class WorkflowLibrarySaveViewTool(IEnumerable<IWorkflowLibraryCo
         {
             kind = "view", status, view = result.Value is { } view ? new { view.Id, view.Name, ownerKind = view.Shared ? "shared" : "private", view.Revision } : null,
             targets = new[] { new { outcome.DefinitionId, outcome.Status, outcome.Revision, outcome.Message } }
-        }, JsonOptions);
+        }, options: JsonOptions);
         return (status, result.Succeeded ? $"The workflow library saved the view '{result.Value!.Name}' and reread it." : $"The view was not saved ({result.Status}): {result.Message}",
             data, [outcome]);
     }

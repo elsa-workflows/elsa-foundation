@@ -203,11 +203,13 @@ internal static class RuntimeOperationalStateProviderSmoke
                 (await new EfWorkflowDispatchStore(context, accessor).FindAsync(testDispatch.DispatchId))!.DispatchId);
             var durableId = $"native-checkpoint-value-{Guid.NewGuid():N}";
             await values.SaveAsync(Value(durableId, "workflow-a"));
+            const string rawValue = """{ "OrderID":9007199254740993, "amount":1.00, "nil":null, "text":"\u0061 <+>" }""";
+            using var rawDocument = JsonDocument.Parse(rawValue);
             var durableReplacement = new DurableValueState(
                 durableId, "workflow-a", durableId,
                 new RuntimeValueTypeDescriptor("json", null, null),
                 DurableValueLifecycle.Result, DurableValueStorage.Inline,
-                JsonDocument.Parse("43").RootElement, null, null, futureAt,
+                rawDocument.RootElement.Clone(), null, null, futureAt,
                 new Dictionary<string, string>());
             var durableCommit = EmptyCheckpointCommit($"checkpoint-durable-{Guid.NewGuid():N}");
             durableCommit = durableCommit with
@@ -220,7 +222,15 @@ internal static class RuntimeOperationalStateProviderSmoke
             };
             await checkpointStore.CommitAsync(durableCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
             await checkpointStore.CommitAsync(durableCommit, new(RuntimeCheckpointPersistenceMode.Immediate));
-            Assert.Equal("43", (await values.FindAsync("workflow-a", durableId))!.InlineValue!.Value.GetRawText());
+            Assert.Equal(rawValue, (await values.FindAsync("workflow-a", durableId))!.InlineValue!.Value.GetRawText());
+            await using (var cold = createContext(connectionString))
+            {
+                var stored = (await new EfDurableValueStateStore(cold, accessor, codec).FindAsync("workflow-a", durableId))!.InlineValue!.Value;
+                Assert.Equal(rawValue, stored.GetRawText());
+                Assert.Equal(9007199254740993L, stored.GetProperty("OrderID").GetInt64());
+                Assert.Equal(JsonValueKind.Null, stored.GetProperty("nil").ValueKind);
+                Assert.False(stored.TryGetProperty("missing", out _));
+            }
             Assert.Equal(2, (await context.DurableValueStates.AsNoTracking().SingleAsync(row =>
                 row.DurableValueId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(durableId))).Revision);
             var cleanupBookmarkId = $"native-cleanup-bookmark-{Guid.NewGuid():N}";

@@ -12,7 +12,7 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 internal static class WorkflowControlTransport
 {
     internal const string NotifyIntentKind = "Elsa.Activities.DispatchWorkflow.NotifyControl";
-    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     internal static string NotifyIntentId(RuntimeChildControlTarget target, long ordinal) =>
         "intent:dispatch-control:v1:" + target.DispatchId + ":" + ordinal.ToString(CultureInfo.InvariantCulture);
@@ -23,7 +23,7 @@ internal static class WorkflowControlTransport
         RuntimePostCommitOutboxIdentity.CreateLogicalValue(commitId, intentId), batch);
 
     internal static bool Equivalent(RuntimeChildControlTransport? left, RuntimeChildControlTransport? right) =>
-        JsonElement.DeepEquals(JsonSerializer.SerializeToElement(left, Json), JsonSerializer.SerializeToElement(right, Json));
+        Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(left, Json), JsonSerializer.SerializeToElement(right, Json));
 
     internal static void ValidateTarget(RuntimeChildControlTransport carried, RuntimeChildControlTarget target)
     {

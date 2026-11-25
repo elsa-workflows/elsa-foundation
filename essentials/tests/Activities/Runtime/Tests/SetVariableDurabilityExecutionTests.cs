@@ -51,7 +51,7 @@ public sealed class SetVariableDurabilityExecutionTests
         Assert.Empty(committedActivity.Attempts!);
         Assert.Null(committedActivity.InputSnapshot);
         var completionIntent = Assert.Single(commit.PostCommitIntents);
-        var completionWorkItem = completionIntent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>();
+        var completionWorkItem = completionIntent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options);
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, completionWorkItem!.CommandKind);
 
         var persistedWorkflow = await harness.WorkflowStore.FindAsync("wfexec-1");
@@ -128,8 +128,8 @@ public sealed class SetVariableDurabilityExecutionTests
         var workflow = await harness.WorkflowStore.FindAsync("wfexec-1");
         Assert.Equal(0, workflow!.RootVariableFrame!.Revision);
         var intent = Assert.Single(commit.PostCommitIntents);
-        var workItem = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>();
-        var payload = workItem!.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>();
+        var workItem = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options);
+        var payload = workItem!.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options);
         Assert.Equal([expectedOutcome], payload!.OutcomeNames);
     }
 
@@ -526,7 +526,7 @@ public sealed class SetVariableDurabilityExecutionTests
                 identity,
                 node.ExecutableNodeId,
                 "actexec-set",
-                RuntimeStartActivityCommandPayload.ScheduledActivityReason)),
+                RuntimeStartActivityCommandPayload.ScheduledActivityReason), Elsa.Serialization.Core.JsonBaseline.Options),
             new Dictionary<string, string>(),
             new Dictionary<string, string>());
 

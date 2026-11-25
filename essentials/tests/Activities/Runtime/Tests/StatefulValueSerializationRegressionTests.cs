@@ -18,7 +18,7 @@ public sealed class StatefulValueSerializationRegressionTests
             state,
             [new ActivityTriggerRegistration<string>("continue", "test", "snapshot:1")]);
         var suspension = Assert.IsAssignableFrom<IStatefulActivitySuspensionTransition<StatefulGetterState>>(transition);
-        var frozenValue = suspension.StatePayload.GetProperty(nameof(StatefulGetterState.Value)).GetInt32();
+        var frozenValue = suspension.StatePayload.GetProperty("value").GetInt32();
 
         Assert.Equal(1, state.GetterReads);
         Assert.Equal(40, frozenValue);

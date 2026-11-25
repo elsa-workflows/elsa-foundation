@@ -1,0 +1,8 @@
+{
+  "consumer": "Workflow explain context full-draft revision",
+  "originalFixtureSha256": "d4fb1d78eae20bee5875fd9e638fe3127d76ed79b6544f22c875c59d78ac4cff",
+  "oldRevision": "sha256:35627411077a2839a0b99a43f17ff96d00afeed9bbceb65e7075d036fc75fb11",
+  "revision": "sha256:d700ae21e0487446041bd38a16fe3896ae79d78ec23a18a605c34359d4711ec7",
+  "admittedLength": 3349,
+  "scope": "Full editor state/layout/presentation before disclosure redaction; credential content remains absent from this receipt."
+}

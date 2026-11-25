@@ -4,7 +4,6 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
@@ -76,7 +75,7 @@ public sealed class GraphActivityProvider(
     private const string ArgumentMalformedCode = "activity.graph.argument-malformed";
     private const string UnorderedWriteCode = "activity.graph.unordered-variable-write";
     private const string DuplicateCaptureTargetCode = "activity.graph.duplicate-capture-target";
-    private static readonly JsonSerializerOptions NodeSerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions NodeSerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
@@ -190,7 +189,7 @@ public sealed class GraphActivityProvider(
                 UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,
                 DefaultValue: x.Default?.Value, DefaultSyntax: x.Default?.Syntax)).ToImmutableArray(),
             graph.Variables.Select(x => new VariableDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
-                x.InitialValue is null ? null : new ArgumentValue(x.InitialValue.Value, x.InitialValue.Syntax))).ToImmutableArray(),
+                x.InitialValue is null ? null : ArgumentValue.FromClr(x.InitialValue.Value, x.InitialValue.Syntax))).ToImmutableArray(),
             contract.Outputs.Select(x => new OutputDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
                 x.DisplayName ?? x.Name, x.Category, contractCapabilities.AllowsNull(x.Type), Description: x.Description, Order: x.Order,
                 UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,
@@ -347,7 +346,7 @@ public sealed class GraphActivityProvider(
                 EffectiveInputArray(node),
                 structures[node.NodeId],
                 // A body node's captures into graph variables; absent when it captures nothing.
-                ReadCanonicalArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null)
+                ReadCarriedArray(node.Element, "outputs") is { } outputs && outputs.GetArrayLength() > 0 ? outputs : null)
             { StructureInputs = OptionalInputProjection(node.Activity) })
             .ToArray();
 
@@ -401,13 +400,13 @@ public sealed class GraphActivityProvider(
 
     private JsonElement EffectiveInputArray(GraphNode node) => OptionalInputProjection(node.Activity) is { } projection
         ? JsonSerializer.SerializeToElement(projection.ApplyToInputs(node.Activity.Inputs), NodeSerializerOptions)
-        : ReadCanonicalArray(node.Element, "inputs");
+        : ReadCarriedArray(node.Element, "inputs");
 
     private JsonElement EffectiveReferenceElement(GraphNode node)
     {
         if (OptionalInputProjection(node.Activity) is null) return node.Element;
-        var element = JsonNode.Parse(node.Element.GetRawText())!.AsObject();
-        element["inputs"] = JsonNode.Parse(EffectiveInputArray(node).GetRawText());
+        var element = node.Element.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
+        element["inputs"] = EffectiveInputArray(node);
         return JsonSerializer.SerializeToElement(element, NodeSerializerOptions);
     }
 
@@ -416,7 +415,7 @@ public sealed class GraphActivityProvider(
         ActivityNode? node;
         try
         {
-            node = element.Deserialize<ActivityNode>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            node = element.Deserialize<ActivityNode>(new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options));
         }
         catch (JsonException)
         {
@@ -425,6 +424,9 @@ public sealed class GraphActivityProvider(
 
         if (node is null)
             return [];
+        // Exact reads leave a wrongly cased or missing argument list unbound; MalformedArguments refuses the wrongly
+        // cased one. Structure projections and the usage below read it as empty.
+        node = node with { Inputs = node.Inputs ?? [], Outputs = node.Outputs ?? [] };
 
         var projection = activityStructureService.ProjectInputs(node);
         var consumedUnused = projection.ConsumedInputKeys.Except(projection.Inputs.Where(input => input.Definition is null).Select(input => input.ReferenceKey), StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
@@ -473,7 +475,7 @@ public sealed class GraphActivityProvider(
                 OutcomeMappings = []
             }
             : graph;
-        var migrated = new ActivityProviderManifest(Key, request.TargetSchemaVersion, migratedGraph.ToCanonicalJsonElement());
+        var migrated = new ActivityProviderManifest(Key, request.TargetSchemaVersion, migratedGraph.ToJsonElement());
         return ValueTask.FromResult(new ActivityManifestMigration(migrated, diagnostics));
     }
 
@@ -820,8 +822,7 @@ public sealed class GraphActivityProvider(
                 {
                     JsonElement { ValueKind: JsonValueKind.String } text => JsonDocument.Parse(text.GetString()!).RootElement,
                     JsonElement json => json,
-                    string text => JsonDocument.Parse(text).RootElement,
-                    var other => JsonSerializer.SerializeToElement(other)
+                    var other => Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(other)
                 };
                 if (element.ValueKind != JsonValueKind.Array)
                     return null;
@@ -860,7 +861,7 @@ public sealed class GraphActivityProvider(
             JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
             JsonElement { ValueKind: JsonValueKind.Array } element => element.GetArrayLength() == 0 ? null : element.GetRawText(),
             JsonElement element => element.GetRawText(),
-            _ => JsonSerializer.Serialize(value)
+            _ => Elsa.Serialization.Core.JsonConversionContract.Serialize(value)
         };
         if (string.IsNullOrWhiteSpace(text))
             return true;
@@ -890,7 +891,6 @@ public sealed class GraphActivityProvider(
         var value = inputs[0].Value.Value switch
         {
             JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
-            string text => text,
             _ => null
         };
         return string.IsNullOrWhiteSpace(value) ? null : value;
@@ -1051,8 +1051,8 @@ public sealed class GraphActivityProvider(
         var structure = activityStructureService.CompileExecutableStructure(node.Activity);
         var variables = activityStructureService.ProjectScopedVariables(node.Activity);
         if (structure is null || variables.Count == 0) return structure;
-        var payload = JsonNode.Parse(structure.Payload.GetRawText())!.AsObject();
-        payload["variables"] = JsonNode.Parse(compiler!.CompileGraphVariables(node.NodeId, variables).GetRawText());
+        var payload = structure.Payload.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
+        payload["variables"] = compiler!.CompileGraphVariables(node.NodeId, variables);
         return new ActivityNodeStructure(structure.Kind, structure.SchemaVersion, JsonSerializer.SerializeToElement(payload, NodeSerializerOptions));
     }
 
@@ -1098,7 +1098,7 @@ public sealed class GraphActivityProvider(
         {
             kind = "SetOutput", output.ReferenceKey, output.Type, output.StorageDriverKey,
             isNullable = contractCapabilities.AllowsNull(output.Type), node.ParentOccurrenceId, node.ChildSlotName, node.ChildIndex
-        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        }, new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options));
         return new ExecutableNode($"set-output:{node.NodeId}", node.NodeId, "elsa.intrinsic.setoutput", "1.0.0",
             WellKnownRuntimeActivityConsumers.Intrinsic, payload, bindings, new Dictionary<string, string>(),
             intrinsicKind: WorkflowIntrinsicKind.SetOutput, descriptorSchemaVersion: WorkflowIntrinsicDescriptorSchemas.ActivityOutput);
@@ -1303,6 +1303,10 @@ public sealed class GraphActivityProvider(
         {
             if (string.IsNullOrWhiteSpace(item.Node.NodeId) || string.IsNullOrWhiteSpace(item.Node.ActivityVersionId))
                 continue;
+            // The exact node reader leaves a missing or wrongly cased argument list null. MalformedArguments reports the
+            // wrongly cased one; every later read sees an empty list instead of failing.
+            if (item.Node.Inputs is null || item.Node.Outputs is null)
+                item.Node = item.Node with { Inputs = item.Node.Inputs ?? [], Outputs = item.Node.Outputs ?? [] };
             var pointer = pointers.GetValueOrDefault(item.Node.NodeId, "/rootActivity");
             var element = FindNodeElement(root, item.Node.NodeId) ?? root;
             var memberUsage = PublicMemberUsage(element)
@@ -1514,12 +1518,18 @@ public sealed class GraphActivityProvider(
     // The relative pointer of each argument the activity node reader cannot read, or that has no reference key.
     private static IEnumerable<string> MalformedArguments(JsonElement node, string propertyName)
     {
-        if (!TryGetPropertyIgnoreCase(node, propertyName, out var property) ||
-            property.Value.ValueKind == JsonValueKind.Null)
+        if (node.ValueKind != JsonValueKind.Object)
             yield break;
 
-        var name = EscapePointer(property.Name);
-        var arguments = property.Value;
+        // The node reader is exact (spec 1207): a list under any other casing would be silently ignored, so it is refused.
+        foreach (var variant in node.EnumerateObject())
+            if (string.Equals(variant.Name, propertyName, StringComparison.OrdinalIgnoreCase) && !string.Equals(variant.Name, propertyName, StringComparison.Ordinal))
+                yield return $"/{EscapePointer(variant.Name)}";
+
+        if (!node.TryGetProperty(propertyName, out var arguments) || arguments.ValueKind == JsonValueKind.Null)
+            yield break;
+
+        var name = EscapePointer(propertyName);
         if (arguments.ValueKind != JsonValueKind.Array)
         {
             yield return $"/{name}";
@@ -1593,16 +1603,6 @@ public sealed class GraphActivityProvider(
         _ => false
     };
 
-    private static JsonElement Canonicalize(JsonElement element)
-    {
-        using var document = JsonDocument.Parse(element.GetRawText());
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            ActivityGraphCanonicalJson.Write(writer, document.RootElement);
-        using var canonical = JsonDocument.Parse(stream.ToArray());
-        return canonical.RootElement.Clone();
-    }
-
     private bool TryGraphVariableDefault(TypeReference type, out object? value)
     {
         value = null;
@@ -1652,12 +1652,12 @@ public sealed class GraphActivityProvider(
                     childIndex = dependency.ChildIndex,
                     authoredDepth = node.Depth,
                     inputBindings = EffectiveInputArray(node),
-                    outputBindings = ReadCanonicalArray(node.Element, "outputs")
+                    outputBindings = ReadCarriedArray(node.Element, "outputs")
                 };
             }).ToArray(),
             variables = graph.Variables.Select(variable => variable.InitialValue is null &&
                 !contractCapabilities.AllowsNull(variable.Type) && TryGraphVariableDefault(variable.Type, out var initial)
-                ? variable with { InitialValue = new ActivityInputDefault("Literal", JsonSerializer.SerializeToElement(initial, initial!.GetType())) }
+                ? variable with { InitialValue = new ActivityInputDefault("Literal", JsonSerializer.SerializeToElement(initial, initial!.GetType(), Elsa.Serialization.Core.JsonBaseline.Options)) }
                 : variable).ToArray(),
             outputMappings = graph.OutputMappings,
             inputs = contract.Inputs
@@ -1688,19 +1688,19 @@ public sealed class GraphActivityProvider(
             requiredInputReferenceKeys = contract.Inputs.Where(x => x.IsRequired).Select(x => x.ReferenceKey).Order(StringComparer.Ordinal).ToArray(),
             requiredOutputReferenceKeys = contract.Outputs.Where(x => x.IsRequired).Select(x => x.ReferenceKey).Order(StringComparer.Ordinal).ToArray()
         };
-        var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var serializerOptions = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         var payload = JsonSerializer.SerializeToElement(plan, serializerOptions);
-        var closedPayload = JsonNode.Parse(payload.GetRawText())!.AsObject();
+        var closedPayload = payload.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
         // The body is a closed value scope. Placement reads this to remap body references and mark the
         // boundary; versions compiled before it keep resolving their body against the caller.
-        closedPayload["scopeModel"] = Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScopeClosed;
+        closedPayload["scopeModel"] = JsonSerializer.SerializeToElement(Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.ActivityExecutionScopeClosed, serializerOptions);
         if (!StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion))
-            return Canonicalize(JsonSerializer.SerializeToElement(closedPayload, serializerOptions));
+            return JsonSerializer.SerializeToElement(closedPayload, serializerOptions);
 
         var schemaTwoPayload = closedPayload;
-        schemaTwoPayload["outcomeMappings"] = JsonSerializer.SerializeToNode(outcomeMappings, serializerOptions);
+        schemaTwoPayload["outcomeMappings"] = JsonSerializer.SerializeToElement(outcomeMappings, serializerOptions);
 
-        // Written only when the body has a Complete node, so every other graph compiles to the same bytes as before.
+        // Only graphs with a Complete node need explicit completion routes.
         if (completeNodes.Count != 0)
         {
             var completeOutcomes = completeNodes
@@ -1713,10 +1713,10 @@ public sealed class GraphActivityProvider(
                     boundaryOutcomeName = boundaryOutcomes[referenceKey].Name
                 })
                 .ToArray();
-            schemaTwoPayload["completeOutcomes"] = JsonSerializer.SerializeToNode(completeOutcomes, serializerOptions);
+            schemaTwoPayload["completeOutcomes"] = JsonSerializer.SerializeToElement(completeOutcomes, serializerOptions);
         }
 
-        return Canonicalize(JsonSerializer.SerializeToElement(schemaTwoPayload, serializerOptions));
+        return JsonSerializer.SerializeToElement(schemaTwoPayload, serializerOptions);
     }
 
     private Elsa.Activities.Runtime.Core.Models.ActivityContract BuildRuntimeContract(
@@ -1766,11 +1766,11 @@ public sealed class GraphActivityProvider(
                 WellKnownRuntimeActivityConsumers.GraphActivity));
     }
 
-    private static JsonElement ReadCanonicalArray(JsonElement node, string propertyName)
+    private static JsonElement ReadCarriedArray(JsonElement node, string propertyName)
     {
         if (!node.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.Array)
             return EmptyArray();
-        return Canonicalize(value);
+        return value.Clone();
     }
 
     private static ActivityTemplateCompilation EmptyCompilation(

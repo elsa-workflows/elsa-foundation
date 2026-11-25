@@ -66,7 +66,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         foreach (var (dependency, root) in new[]
                  {
                      (_writeLineActivity, Node("write", Text("body"))),
-                     (write, new ActivityNode("write", write.Id, [new WorkflowArgumentState("text", new ArgumentValue("body", "Literal"), null, null, null, null)], [])),
+                     (write, new ActivityNode("write", write.Id, [new WorkflowArgumentState("text", global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr("body", "Literal"), null, null, null, null)], [])),
                      (_sequenceActivity, SequenceNode("steps", [Node("write", Text("body"))])),
                      (_flowchartActivity, FlowchartNode("chart", [Node("write", Text("body"))], [], "write")),
                      (bpmn, bpmnRoot)
@@ -118,7 +118,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
 
         var inputKey = Assert.Single(contract.Inputs).ReferenceKey;
         var calls = new[] { ("call-one", "one"), ("call-two", "two") }.Select(call => new ActivityNode(call.Item1, publication.DefinitionVersionId,
-            [new WorkflowArgumentState(inputKey, new ArgumentValue(call.Item2, "Literal"), null, null, null, null)], [])).ToArray();
+            [new WorkflowArgumentState(inputKey, global::Elsa.Expressions.Core.Models.ArgumentValue.FromClr(call.Item2, "Literal"), null, null, null, null)], [])).ToArray();
         var workflow = WorkflowVersion(SequenceNode("workflow", calls));
         var versionStore = new FakeVersionStore(workflow);
         var compiler = TestCompiler.Create(versionStore, dependencyVersions, _activityStructureService, registry, publications, templates,

@@ -80,7 +80,7 @@ catch (Exception failure) when (candidateMode && (failure is BadImageFormatExcep
         Error = new() { Code = "candidate-host-unavailable", Message = "The selected installed host closure could not be inspected." } };
 }
 
-await JsonSerializer.SerializeAsync(response, result, WorkerContract.Json, cancellation.Token);
+await JsonSerializer.SerializeAsync(response, result, options: WorkerContract.Json, cancellation.Token);
 await response.FlushAsync(cancellation.Token);
 return result.ExitCode;
 

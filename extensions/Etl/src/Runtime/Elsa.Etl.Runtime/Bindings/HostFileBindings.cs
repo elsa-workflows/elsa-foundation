@@ -33,12 +33,12 @@ internal sealed class HostFileBindings : IEtlBindingCatalog
                 throw new EtlBindingException("etl.binding-ambiguous", "An ETL host binding has ambiguous revisions.");
 
             var snapshot = binding with { Path = Path.GetFullPath(binding.Path), ExpectedSha256 = input ? binding.ExpectedSha256!.ToLowerInvariant() : null };
-            var identity = JsonSerializer.SerializeToUtf8Bytes(new
+            var identity = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new
             {
                 FormatVersion = 1, ScopeIdentity = EtlRuntimeIdentity.ScopeKey(snapshot.Scope), snapshot.Alias, snapshot.Role, snapshot.Revision,
                 snapshot.Path, snapshot.ExpectedSha256, snapshot.ImmutableInput, snapshot.AtomicPublication
-            });
-            var handle = Convert.ToHexString(SHA256.HashData(identity)).ToLowerInvariant();
+            }, _ => null);
+            var handle = Elsa.Serialization.Core.JsonHashInput.Hash(identity);
             snapshots.Add((snapshot, new PinnedFileBinding(snapshot.Scope, snapshot.Alias, snapshot.Role,
                 snapshot.Revision, handle, snapshot.ExpectedSha256)));
         }

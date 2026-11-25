@@ -26,6 +26,9 @@ internal sealed class Elsa3ConversionPlan(Elsa3ConversionRequest request, Elsa3W
 
     public List<Elsa3MigrationDiagnostic> Diagnostics { get; } = [];
 
+    /// <summary>Starting values translated once with the import's date interpretation and diagnostics.</summary>
+    public Dictionary<Elsa3Variable, VariableDefinition> WorkflowVariables { get; } = new(ReferenceEqualityComparer.Instance);
+
     /// <summary>Literal outcomes named by converted Complete/End nodes of a reusable workflow, with their node ids.</summary>
     public List<(string Outcome, string NodeId, string JsonPath)> CompleteOutcomes { get; } = [];
 

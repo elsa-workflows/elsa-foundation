@@ -82,7 +82,7 @@ internal sealed class AgentSchemaCompiler(AgentSchemaValidator validator)
             ["$schema"] = AgentSchemaValidator.DialectUri,
             ["type"] = "object", ["properties"] = properties, ["required"] = required, ["additionalProperties"] = false
         };
-        var compiled = validator.Prepare(JsonSerializer.SerializeToElement(root));
+        var compiled = validator.Prepare(JsonSerializer.SerializeToElement(root, Elsa.Serialization.Core.JsonBaseline.Options));
         problems.AddRange(compiled.Problems.Select(x => x with { Path = path + x.Path[1..] }));
         return compiled.Schema;
     }
@@ -178,20 +178,20 @@ internal sealed class AgentSchemaCompiler(AgentSchemaValidator validator)
         }
         foreach (var (lower, upper) in new[] { ("minimum", "maximum"), ("minLength", "maxLength"), ("minItems", "maxItems"), ("minProperties", "maxProperties") })
             if (schema[lower] is { } min && schema[upper] is { } max && !Within("minimum", min, max)) throw Refinement(path);
-        var prepared = validator.Prepare(JsonSerializer.SerializeToElement(schema));
+        var prepared = validator.Prepare(JsonSerializer.SerializeToElement(schema, Elsa.Serialization.Core.JsonBaseline.Options));
         if (prepared.Schema is null) throw Refinement(path);
         if (schema["enum"] is JsonArray enumeration)
             foreach (var item in enumeration)
-                if (prepared.Schema.Validate(JsonSerializer.SerializeToElement(item)).Count != 0) throw Refinement(path);
+                if (prepared.Schema.Validate(JsonSerializer.SerializeToElement(item, Elsa.Serialization.Core.JsonBaseline.Options)).Count != 0) throw Refinement(path);
         if (schema.TryGetPropertyValue("const", out var constant) &&
-            prepared.Schema.Validate(JsonSerializer.SerializeToElement(constant)).Count != 0) throw Refinement(path);
+            prepared.Schema.Validate(JsonSerializer.SerializeToElement(constant, Elsa.Serialization.Core.JsonBaseline.Options)).Count != 0) throw Refinement(path);
     }
 
     private static void ValidateNativeRefinements(JsonObject schema, TypeReference type, bool nullable, string path)
     {
         bool Representable(JsonNode? node)
         {
-            var value = JsonSerializer.SerializeToElement(node);
+            var value = JsonSerializer.SerializeToElement(node, Elsa.Serialization.Core.JsonBaseline.Options);
             return value.ValueKind == JsonValueKind.Null ? nullable : AgentWireTypes.CanConvert(value, type.Alias, type.CollectionKind);
         }
         if (schema["enum"] is JsonArray enumeration && enumeration.Any(x => !Representable(x))) throw Refinement(path);
@@ -215,8 +215,8 @@ internal sealed class AgentSchemaCompiler(AgentSchemaValidator validator)
     private bool Within(string keyword, JsonNode bound, JsonNode? value)
     {
         // Let the pinned engine compare JSON numbers exactly; double rounding can widen Int64 by one.
-        var guard = validator.Prepare(JsonSerializer.SerializeToElement(new JsonObject { [keyword] = bound.DeepClone() }));
-        return guard.Schema is not null && guard.Schema.Validate(JsonSerializer.SerializeToElement(value)).Count == 0;
+        var guard = validator.Prepare(JsonSerializer.SerializeToElement(new JsonObject { [keyword] = bound.DeepClone() }, Elsa.Serialization.Core.JsonBaseline.Options));
+        return guard.Schema is not null && guard.Schema.Validate(JsonSerializer.SerializeToElement(value, Elsa.Serialization.Core.JsonBaseline.Options)).Count == 0;
     }
     private static AgentSchemaException Refinement(string path) => new(path, "agent.schema.refinement", "The constraint must be a compatible refinement of the public type.");
     private sealed record Member(string Key, string Name, TypeReference Type, bool Required, bool Nullable);

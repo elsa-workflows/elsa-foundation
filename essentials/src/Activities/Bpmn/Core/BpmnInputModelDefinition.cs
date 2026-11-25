@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Bpmn.Core;
@@ -60,6 +61,6 @@ public sealed class BpmnModelInputSource
     }
     public string Kind { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Name { get; }
-    [JsonConverter(typeof(BpmnModelInputValueJsonConverter))]
+    [JsonConverter(typeof(NullableJsonElementConverter))]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public JsonElement? Value { get; }
 }

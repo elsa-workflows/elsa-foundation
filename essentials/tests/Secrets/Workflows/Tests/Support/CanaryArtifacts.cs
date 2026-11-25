@@ -55,7 +55,7 @@ public static class CanaryArtifacts
         var binding = compiler.Compile(
             nodeId,
             Input(parentType, nameof(CanaryStructuralActivity.Primary)),
-            new ArgumentValue(JsonSerializer.SerializeToElement(reference), SecretExpressionTypes.Secret));
+            ArgumentValue.FromClr(JsonSerializer.SerializeToElement(reference), SecretExpressionTypes.Secret));
         var root = ClrNode(
             nodeId,
             parentType,

@@ -224,7 +224,7 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
                     envelope.Destination.WorkflowExecutionId,
                     envelope.Destination.StimulusType,
                     envelope.Destination.StimulusHash,
-                    JsonSerializer.SerializeToElement(completion),
+                    Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(completion),
                     envelope.DeliveryId,
                     requestedBy: "rules-persisted-proof-test",
                     metadata: null,

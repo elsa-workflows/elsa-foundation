@@ -25,10 +25,10 @@ internal sealed class HttpTriggerTypeSource : IStandaloneTriggerTypeSource
     public IEnumerable<TriggerTypeDescriptor> GetTypes()
     {
         yield return new("http", 1, "HTTP", "Http",
-            [new("method", "Method", Required: true, DefaultValue: JsonSerializer.SerializeToElement("POST"),
+            [new("method", "Method", Required: true, DefaultValue: JsonSerializer.SerializeToElement("POST", options: Elsa.Serialization.Core.JsonBaseline.Options),
                 Choices: [new("GET", "GET"), new("POST", "POST"), new("PUT", "PUT"), new("PATCH", "PATCH"), new("DELETE", "DELETE")]),
              new("path", "Route", Required: true, Description: "A route relative to the configured HTTP endpoint mount."),
-             new("sourceAccess", "Source access", Required: true, DefaultValue: JsonSerializer.SerializeToElement("Authenticated"),
+             new("sourceAccess", "Source access", Required: true, DefaultValue: JsonSerializer.SerializeToElement("Authenticated", options: Elsa.Serialization.Core.JsonBaseline.Options),
                 Choices: [new("Authenticated", "Authenticated caller"), new("Anonymous", "Public endpoint")])],
             [new(["payload"], "Request payload", "object"), new(["metadata", "method"], "HTTP method", "string"),
              new(["metadata", "path"], "Request path", "string")], "One exclusive endpoint with an explicit response mode.");

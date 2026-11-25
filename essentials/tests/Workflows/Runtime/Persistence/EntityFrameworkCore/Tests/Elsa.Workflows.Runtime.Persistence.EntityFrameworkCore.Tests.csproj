@@ -88,6 +88,7 @@
     <Compile Include="..\..\..\Tests\Fixtures\ForwardingActivationSwitch.cs" Link="ForwardingActivationSwitch.cs" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../../../../../../specs/1207-json-data-integrity-baseline/evidence/nested-binding-hash-vectors.json" LogicalName="S9NestedBindingVectors.json" />
     <ProjectReference Include="../Fixtures/TimerHistoryRestartHost/TimerHistoryRestartHost.csproj" ReferenceOutputAssembly="false" />
     <Compile Include="../Fixtures/TimerHistoryRestartHost/Protocol.cs" Link="TimerHistoryRestartProtocol.cs" />
     <ProjectReference Include="../Fixtures/RuntimeHistoryRestartHost/RuntimeHistoryRestartHost.csproj" ReferenceOutputAssembly="false" />

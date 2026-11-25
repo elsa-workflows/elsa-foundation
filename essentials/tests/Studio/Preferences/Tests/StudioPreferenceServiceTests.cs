@@ -25,6 +25,27 @@ public sealed class StudioPreferenceServiceTests
     }
 
     [Fact]
+    public async Task Quota_counts_the_retained_raw_utf8_value_including_whitespace_and_unicode()
+    {
+        var service = new StudioPreferenceService(new StudioPreferenceNamespaceRegistry([new RawQuotaNamespace()]), new InMemoryStudioPreferenceStore(), TimeProvider.System);
+        var key = Key("raw-quota");
+        var oversized = "{" + new string(' ', 65) + "\"n\":1}";
+        await Assert.ThrowsAsync<StudioPreferenceQuotaExceededException>(async () =>
+            await service.WriteAsync(key, new(1, Json(oversized)), StudioPreferenceWriteCondition.MustNotExist));
+        Assert.Null(await service.FindAsync(key));
+        var unicode = "{\"note\":\"" + new string('雪', 10) + "\"}";
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(unicode) < 64);
+        var saved = await service.WriteAsync(key, new(1, Json(unicode)), StudioPreferenceWriteCondition.MustNotExist);
+        Assert.Equal(unicode, saved.Value.GetRawText());
+    }
+
+    private sealed class RawQuotaNamespace : ObjectPreferenceNamespace
+    {
+        public override string Name => "raw-quota";
+        public override int MaxBytes => 64;
+    }
+
+    [Fact]
     public async Task CreateAndUpdateRequireMatchingRevisions()
     {
         var key = Key(StudioPreferenceNamespaces.Dashboard);

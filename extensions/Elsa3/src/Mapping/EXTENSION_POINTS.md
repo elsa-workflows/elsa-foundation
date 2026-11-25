@@ -74,6 +74,24 @@ Replace both: implement both contracts on one class, or register a node converte
   `[ReplacesActivityType]` on the Elsa 4 activity. Any change alters converter output (spec 235's converter revision
   rule).
 
+### Replaced Elsa 3 JavaScript functions (consumed contribution)
+
+- **Contract:** the name of every registered `JavaScriptHostFunctionDeclaration` (Elsa.Expressions.JavaScript.Core),
+  read by `Elsa3ExpressionRewriter` (#5664). No declaration or mapping: the name after the namespace prefix is the match.
+- **Purpose:** an Elsa 3 custom function rebuilt as a prefixed Elsa 4 host function of the same member name:
+  `getSettings()` converts to `acme.getSettings()`. A name two namespaces carry, a name that is also a variable's or
+  input's or activity output's generated accessor (the converter cannot tell whether Elsa 3 had a custom function of that name), or a script
+  that declares the namespace root is refused with `VF-IMP-002`. A standard JavaScript global, an Elsa 4 built-in or an
+  Elsa 3 built-in the converter converts itself, the setters, `getOutputFrom`, the outcome setters, the instance-state helpers, the read
+  roots (`variables`, `input`, `activities`, `workflow`, `args`) and the CLR, lodash and moment globals are never
+  matched; the byte and stream helpers, `getConfig`, the definition readers
+  (`getWorkflowDefinitionId`, `getWorkflowDefinitionVersionId`, `getWorkflowDefinitionVersion`) and `getLastResult` are
+  matched like custom functions.
+- **When to use:** register each Elsa 3 custom JavaScript function a host rebuilt for Elsa 4 under its Elsa 3 name with a
+  namespace prefix; the migration plan records the prefix. There is no opt-in: registering or removing any prefixed host
+  function, or a second namespace with the same member name, can change converter output (spec 235's converter revision
+  rule).
+
 ### `IReusableActivityImportMaterializer` contribution
 
 - **Implementation:** `Elsa3ReusableActivityImportMaterializer`.

@@ -1,6 +1,6 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Studio.Preferences.Core;
 
@@ -97,23 +97,48 @@ public static partial class StudioHomeLayout
 
     public static JsonElement Normalize(JsonElement value)
     {
-        var root = JsonNode.Parse(value.GetRawText()) as JsonObject
-            ?? throw new InvalidOperationException("Home layout value must be an object.");
-        if (root["widgets"] is not JsonArray widgets)
+        if (value.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException("Home layout value must be an object.");
+        if (!value.TryGetProperty("widgets", out var widgets) || widgets.ValueKind != JsonValueKind.Array)
             throw new InvalidOperationException("Home layout value must contain a widgets array.");
+        if (!widgets.EnumerateArray().Any(NeedsNormalization)) return value.Clone();
 
-        foreach (var node in widgets)
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = JsonBaseline.Options.Encoder }))
         {
-            if (node is not JsonObject entry)
-                continue;
-            var size = entry["size"]?.GetValue<string>();
-            entry["size"] = NormalizeSize(size);
-            if (entry["visible"] is null)
-                entry["visible"] = true;
+            writer.WriteStartObject();
+            foreach (var property in value.EnumerateObject())
+            {
+                writer.WritePropertyName(property.Name);
+                if (property.Name != "widgets") { WriteRaw(property.Value); continue; }
+                writer.WriteStartArray();
+                foreach (var entry in widgets.EnumerateArray())
+                {
+                    if (!NeedsNormalization(entry)) { WriteRaw(entry); continue; }
+                    writer.WriteStartObject();
+                    foreach (var member in entry.EnumerateObject())
+                    {
+                        // Only these two owned metadata fields change. In particular, extension
+                        // widget options retain their original JSON tokens and inner whitespace.
+                        if (member.Name is "size" or "visible") continue;
+                        writer.WritePropertyName(member.Name);
+                        WriteRaw(member.Value);
+                    }
+                    writer.WriteString("size", NormalizeSize(entry.TryGetProperty("size", out var size) ? size.GetString() : null));
+                    writer.WriteBoolean("visible", !entry.TryGetProperty("visible", out var visible) || visible.ValueKind == JsonValueKind.Null || visible.GetBoolean());
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+            }
+            writer.WriteEndObject();
+            void WriteRaw(JsonElement element) => writer.WriteRawValue(element.GetRawText(), skipInputValidation: true);
         }
-
-        using var document = JsonDocument.Parse(root.ToJsonString());
+        using var document = JsonDocument.Parse(stream.ToArray());
         return document.RootElement.Clone();
+
+        static bool NeedsNormalization(JsonElement entry) => entry.ValueKind == JsonValueKind.Object &&
+            (!entry.TryGetProperty("size", out var size) || size.GetString() != NormalizeSize(size.GetString()) ||
+             !entry.TryGetProperty("visible", out var visible) || visible.ValueKind == JsonValueKind.Null);
     }
 
     public static string NormalizeSize(string? size) => size switch

@@ -60,7 +60,7 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook", "POST"), dispatched.StimulusHash);
         Assert.Equal(StimulusRoutingMode.StartAndResume, dispatched.Mode);
         Assert.NotNull(dispatched.Input);
-        Assert.Empty(dispatched.Input!.Value.GetProperty("RouteData").EnumerateObject());
+        Assert.Empty(dispatched.Input!.Value.GetProperty("routeData").EnumerateObject());
 
         var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
         var started = payload.GetProperty("started");
@@ -84,7 +84,7 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
         var dispatched = Assert.Single(router.Requests);
         Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", "GET"), dispatched.StimulusHash);
-        Assert.Equal("42", dispatched.Input!.Value.GetProperty("RouteData").GetProperty("id").GetString());
+        Assert.Equal("42", dispatched.Input!.Value.GetProperty("routeData").GetProperty("id").GetString());
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public sealed class HttpEndpointMiddlewareTests
         var dispatched = Assert.Single(router.Requests);
         Assert.Equal(HttpEndpointStimulus.Hash("orders/list", "GET"), dispatched.StimulusHash);
         // The literal template captured no route parameter.
-        Assert.Empty(dispatched.Input!.Value.GetProperty("RouteData").EnumerateObject());
+        Assert.Empty(dispatched.Input!.Value.GetProperty("routeData").EnumerateObject());
     }
 
     [Fact]
@@ -372,7 +372,7 @@ public sealed class HttpEndpointMiddlewareTests
         await middleware.InvokeAsync(context, _ => Task.CompletedTask);
 
         var dispatched = Assert.Single(router.Requests);
-        Assert.Equal("POST", dispatched.Input!.Value.GetProperty("Method").GetString());
+        Assert.Equal("POST", dispatched.Input!.Value.GetProperty("method").GetString());
     }
 
     [Fact]
@@ -494,9 +494,9 @@ public sealed class HttpEndpointMiddlewareTests
         await middleware.InvokeAsync(context, _ => Task.CompletedTask);
 
         var dispatched = Assert.Single(router.Requests);
-        Assert.Equal("""{"orderId":7}""", dispatched.Input!.Value.GetProperty("Body").GetString());
+        Assert.Equal("""{"orderId":7}""", dispatched.Input!.Value.GetProperty("body").GetString());
         Assert.False(
-            dispatched.Input!.Value.TryGetProperty("ParsedContent", out _),
+            dispatched.Input!.Value.TryGetProperty("parsedContent", out _),
             "ParsedContent must not be persisted on the stimulus payload.");
     }
 

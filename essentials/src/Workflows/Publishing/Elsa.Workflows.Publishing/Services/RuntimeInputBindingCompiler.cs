@@ -1,3 +1,4 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
@@ -40,7 +41,12 @@ public sealed class RuntimeInputBindingCompiler(
     private bool DefersTemplateNullPolicy { get; init; }
     private RuntimeInputBindingCompiler ForNeutralTemplate() =>
         new(wellKnownTypeRegistry, resolvedConversionPlanResolver, _typeDescriptors, WorkflowValuePolicies.Off)
-        { DefersTemplateNullPolicy = true };
+        {
+            DefersTemplateNullPolicy = true,
+            ConversionActivityType = ConversionActivityType,
+            ConversionWarnings = ConversionWarnings,
+            ConversionNodeId = ConversionNodeId
+        };
 
     // A reusable template has no host workflow policy. Its retained null literal is admitted when placed into a host.
     internal void ValidateTemplateLiteralNulls(ExecutableNode source, IReadOnlyDictionary<string, RuntimeInputBinding> bindings,
@@ -67,7 +73,13 @@ public sealed class RuntimeInputBindingCompiler(
     }
 
     internal RuntimeInputBindingCompiler WithValuePolicies(WorkflowValuePolicies policies) =>
-        new(wellKnownTypeRegistry, resolvedConversionPlanResolver, _typeDescriptors, policies);
+        new(wellKnownTypeRegistry, resolvedConversionPlanResolver, _typeDescriptors, policies)
+        {
+            DefersTemplateNullPolicy = DefersTemplateNullPolicy,
+            ConversionActivityType = ConversionActivityType,
+            ConversionWarnings = ConversionWarnings,
+            ConversionNodeId = ConversionNodeId
+        };
 
     /// <summary>Uses the activated type descriptors for authored member nullability.</summary>
     public RuntimeInputBindingCompiler(
@@ -92,7 +104,7 @@ public sealed class RuntimeInputBindingCompiler(
     private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
-    private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
@@ -120,6 +132,32 @@ public sealed class RuntimeInputBindingCompiler(
         requiresEncryption: true);
 
     private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
+    private Type? ConversionActivityType { get; init; }
+    private Elsa.Expressions.Core.Contracts.IExecutionWarningSink? ConversionWarnings { get; init; }
+    private string? ConversionNodeId { get; init; }
+
+    internal RuntimeInputBindingCompiler WithConversionBoundary(Type? activityType, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings, string nodeId) =>
+        new(wellKnownTypeRegistry, resolvedConversionPlanResolver, _typeDescriptors, _valuePolicies)
+        {
+            DefersTemplateNullPolicy = DefersTemplateNullPolicy,
+            ConversionActivityType = activityType,
+            ConversionWarnings = warnings,
+            ConversionNodeId = nodeId
+        };
+
+    private JsonConversionContract ConversionFor(Type type, InputDefinition? input)
+    {
+        var member = input is null ? null : ConversionActivityType?.GetProperties(BindingFlags.Public | BindingFlags.Instance).FirstOrDefault(property =>
+            property.GetCustomAttribute<ActivityInputAttribute>(inherit: true) is { } attribute &&
+            (attribute.Key ?? property.Name) == input.ReferenceKey);
+        return JsonConversionContract.For(type, member);
+    }
+
+    private void ReportConversion(JsonConversionDiagnostic diagnostic, InputDefinition? input)
+    {
+        var warning = ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"nodes.{ConversionNodeId}.inputs.{input?.ReferenceKey ?? "default"}");
+        ConversionWarnings?.Report(input?.IsSensitive == true ? warning.ProtectedForm! : warning);
+    }
 
     IReadOnlyDictionary<string, RuntimeInputBinding> IActivityTemplateInputBindingCompiler.CompileGraphInputs(
         string nodeId, IEnumerable<InputDefinition> inputDefinitions, IEnumerable<ArgumentState> inputStates)
@@ -172,24 +210,19 @@ public sealed class RuntimeInputBindingCompiler(
         // The same wire form ExecutableNodeCompiler.CompileStructure writes and placement reads back.
         return JsonSerializer.SerializeToElement(
             declarations.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray(),
-            DescriptorPayloadSerializer.Options);
+            options: DescriptorPayloadSerializer.Options);
     }
 
     internal RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
     {
         var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
-        // The built-in JSON driver encodes into the checkpoint itself. It is not an external
-        // storage profile; Studio advertises this driver for durable variable declarations.
-        var storageProfile = StringComparer.Ordinal.Equals(variable.StorageDriverType, WellKnownRuntimeDurableValueStorageDrivers.Json)
-            ? null
-            : variable.StorageDriverType;
+        // The built-in JSON driver encodes into the checkpoint itself; Studio advertises it for durable variable
+        // declarations. Variable frames do not store values through any other driver yet (#5698).
+        if (!UnsupportedStorageDriverDiagnostics.IsBuiltIn(variable.StorageDriverType))
+            throw UnsupportedStorageDriverDiagnostics.Variable(nodeId, variable.ReferenceKey, variable.StorageDriverType!);
+        string? storageProfile = null;
         var policy = ValuePolicyCombiner.ToProtectionPolicy(
             ValuePolicyCombiner.FromAuthoredStorage(storageProfile));
-        if (policy.Storage != DurableValueStorage.Inline)
-        {
-            throw new ArgumentException(
-                $"VF-ACT-005: Variable '{variable.ReferenceKey}' on activity node '{nodeId}' selects external storage profile '{variable.StorageDriverType}', but canonical variable-frame externalization is not implemented. Publication is refused instead of accepting an unusable declaration.");
-        }
         RuntimeInputBinding? initialBinding = null;
         if (RuntimeInputBindingCompiler.IsSecretBinding(variable.Default))
             throw SecretBindingDiagnostics.VariableDefaultRefused(nodeId, variable.ReferenceKey);
@@ -215,7 +248,7 @@ public sealed class RuntimeInputBindingCompiler(
             if (!TryAuthoredDefault(variable.Type, out var defaultValue))
                 throw new ArgumentException($"VF-ACT-003: Variable '{variable.Name}' on '{nodeId}' requires a declared default.");
             initialBinding = new RuntimeInputBinding(variable.ReferenceKey, type, policy, RuntimeInputBindingSource.Literal,
-                literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(defaultValue, defaultValue!.GetType()), policy));
+                literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(defaultValue, defaultValue!.GetType(), JsonBaseline.Options), policy));
         }
 
         return new RuntimeVariableDeclaration(variable.ReferenceKey, variable.Name, type, policy, initialBinding);
@@ -510,7 +543,7 @@ public sealed class RuntimeInputBindingCompiler(
     {
         ValidateDeclaration(inputDefinition);
         return inputDefinition.DefaultValue.HasValue
-            ? CompileDefault(nodeId, inputDefinition, declaredPolicy, new ArgumentValue(null, DefaultExpressionType))
+            ? CompileDefault(nodeId, inputDefinition, declaredPolicy, ArgumentValue.FromClr(null, DefaultExpressionType))
             : !inputDefinition.IsRequired
                 ? CompileOmitted(inputDefinition, ValuePolicyCombiner.ToProtectionPolicy(declaredPolicy))
                 : throw MissingRequiredInput(nodeId, inputDefinition.ReferenceKey);
@@ -571,7 +604,7 @@ public sealed class RuntimeInputBindingCompiler(
                     nameof(inputDefinition));
             }
 
-            var pinnedLiteral = JsonSerializer.SerializeToElement(defaultValue, inputType);
+            var pinnedLiteral = ConversionFor(inputType, inputDefinition).Write(defaultValue, inputType);
             return new RuntimeInputBinding(
                 inputKey: inputDefinition.ReferenceKey,
                 targetType: targetType,
@@ -821,7 +854,7 @@ public sealed class RuntimeInputBindingCompiler(
 
         var reference = new Elsa.Activities.Runtime.Core.Models.ConnectionReference(members.Name, members.Type ?? requiredType);
         var targetType = ToValueTypeDescriptor(inputDefinition);
-        var literal = JsonSerializer.SerializeToElement(reference);
+        var literal = JsonValueConversion.SerializeToElement(reference);
         return new RuntimeInputBinding(
             inputKey: inputDefinition.ReferenceKey,
             targetType: targetType,
@@ -894,13 +927,13 @@ public sealed class RuntimeInputBindingCompiler(
             targetType: type,
             effectivePolicy: policy,
             source: RuntimeInputBindingSource.Literal,
-            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(new { name, scopeId, variableKey = reference.ReferenceKey }), policy),
+            literal: ValueEnvelope.Inline(type, JsonValueConversion.SerializeToElement(new { name, scopeId, variableKey = reference.ReferenceKey }), policy),
             metadata: BuildInputMetadata(inputDefinition));
     }
 
     private static string? ReadVariableName(object? value)
     {
-        var element = value is JsonElement json ? json : JsonSerializer.SerializeToElement(value);
+        var element = value is JsonElement json ? json : JsonValueConversion.SerializeToElement(value);
         if (element.ValueKind != JsonValueKind.Object)
             return null;
         foreach (var member in new[] { "name", "Name" })
@@ -1141,10 +1174,10 @@ public sealed class RuntimeInputBindingCompiler(
         var defaultSyntax = inputDefinition.DefaultSyntax;
         if (string.IsNullOrWhiteSpace(defaultSyntax) ||
             string.Equals(defaultSyntax, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileLiteralInput(nodeId, inputDefinition, new ArgumentValue(inputDefinition.DefaultValue.Value, LiteralExpressionType), effectivePolicy, conversion: null);
+            return CompileLiteralInput(nodeId, inputDefinition, ArgumentValue.FromClr(inputDefinition.DefaultValue.Value, LiteralExpressionType), effectivePolicy, conversion: null);
 
         if (string.Equals(defaultSyntax, ObjectExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileObjectInput(nodeId, inputDefinition, new ArgumentValue(inputDefinition.DefaultValue.Value, ObjectExpressionType), effectivePolicy, conversion: null);
+            return CompileObjectInput(nodeId, inputDefinition, ArgumentValue.FromClr(inputDefinition.DefaultValue.Value, ObjectExpressionType), effectivePolicy, conversion: null);
 
         throw new ArgumentException(
             $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' default syntax '{defaultSyntax}' is executable. Canonical activity defaults must be pinned literals.");
@@ -1152,7 +1185,7 @@ public sealed class RuntimeInputBindingCompiler(
 
     private static VariableReference ParseVariableReference(string nodeId, InputDefinition inputDefinition, object? value)
     {
-        var unwrapped = value is JsonElement jsonElement ? jsonElement : JsonSerializer.SerializeToElement(value);
+        var unwrapped = value is JsonElement jsonElement ? jsonElement : JsonValueConversion.SerializeToElement(value);
         if (!VariableReference.TryParse(unwrapped, out var reference) || reference is null)
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type 'Variable' but carries no resolvable variable reference (a reference key is required).");
 
@@ -1173,7 +1206,7 @@ public sealed class RuntimeInputBindingCompiler(
         object? converted;
         try
         {
-            converted = ConvertLiteral(value.Value, inputType);
+            converted = ConvertLiteral(value.Value, inputType, inputDefinition);
         }
         catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidCastException or OverflowException or JsonException or NotSupportedException)
         {
@@ -1181,16 +1214,20 @@ public sealed class RuntimeInputBindingCompiler(
             // fault: surface it as the structured VF-COER-001 diagnostic (with node id + reference key) so preflight
             // returns a validation result instead of letting the raw JsonException/FormatException escape as a 500 (#924).
             throw ValueConversionPublicationException.LiteralCoercionFailed(
-                $"VF-COER-001: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{DescribeAuthoredValue(value.Value)}' cannot be converted to alias '{inputDefinition.Type.ToDisplayString()}'.",
+                $"VF-COER-001: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value cannot be converted to alias '{inputDefinition.Type.ToDisplayString()}'.",
                 ToValueTypeDescriptor(inputDefinition),
                 InputBindingContext(nodeId, inputDefinition),
                 exception);
         }
 
         ValidateNull(inputDefinition, inputType, converted, nodeId);
+        // Validate a typed copy; the executable carries the original data, including unmatched members and raw tokens.
+        var literalValue = value.Value is JsonElement original ? original.Clone()
+            : converted is null ? JsonValueConversion.SerializeToElement<object?>(null)
+            : ConversionFor(inputType, inputDefinition).Write(converted, inputType);
         var targetType = ToValueTypeDescriptor(inputDefinition);
         var literal = converted is null ? ValueEnvelope.Null(targetType, policy)
-            : ValueEnvelope.Inline(targetType, JsonSerializer.SerializeToElement(converted, inputType), policy);
+            : ValueEnvelope.Inline(targetType, literalValue, policy);
         return new RuntimeInputBinding(
             inputKey: inputDefinition.ReferenceKey,
             targetType: targetType,
@@ -1223,7 +1260,7 @@ public sealed class RuntimeInputBindingCompiler(
         var targetType = ToValueTypeDescriptor(inputDefinition);
         var literal = raw is null
             ? ValueEnvelope.Null(sourceType, policy)
-            : ValueEnvelope.Inline(sourceType, JsonSerializer.SerializeToElement(raw), policy);
+            : ValueEnvelope.Inline(sourceType, JsonValueConversion.SerializeToElement(raw), policy);
 
         return new RuntimeInputBinding(
             inputKey: inputDefinition.ReferenceKey,
@@ -1252,15 +1289,19 @@ public sealed class RuntimeInputBindingCompiler(
     {
         var inputType = ResolveInputType(inputDefinition);
         object? converted;
+        JsonElement structured;
         try
         {
             var authored = value.Value is JsonElement jsonElement
                 ? jsonElement
-                : JsonSerializer.SerializeToElement(value.Value);
-            var structured = authored.ValueKind == JsonValueKind.String
-                ? JsonSerializer.Deserialize<JsonElement>(authored.GetString()!)
+                : value.Value is not null && inputType.IsInstanceOfType(value.Value)
+                    ? ConversionFor(inputType, inputDefinition).Write(value.Value, inputType)
+                    : JsonValueConversion.SerializeToElement(value.Value);
+            structured = authored.ValueKind == JsonValueKind.String
+                ? JsonValueConversion.Deserialize<JsonElement>(authored.GetString()!)
                 : authored;
-            converted = structured.Deserialize(inputType);
+            converted = structured.ValueKind == JsonValueKind.Null ? null
+                : ConversionFor(inputType, inputDefinition).Read(structured, inputType, diagnostic => ReportConversion(diagnostic, inputDefinition));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
@@ -1274,7 +1315,7 @@ public sealed class RuntimeInputBindingCompiler(
         ValidateNull(inputDefinition, inputType, converted, nodeId);
         try
         {
-            var literal = JsonSerializer.SerializeToElement(converted, inputType);
+            var literal = structured.Clone();
             var targetType = ToValueTypeDescriptor(inputDefinition);
             return new RuntimeInputBinding(
                 inputKey: inputDefinition.ReferenceKey,
@@ -1313,9 +1354,6 @@ public sealed class RuntimeInputBindingCompiler(
     {
         if (string.IsNullOrWhiteSpace(value.ExpressionType))
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not declare an expression type.");
-
-        if (value.Value is not null and not string and not JsonElement and not ExpressionDefinition)
-            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' has an unsupported CLR expression payload. Supply plain text, ExpressionDefinition or JsonElement.");
 
         if (TryReadPortableExpressionDefinition(value.Value, out var definition))
             return CompilePortableExpressionInput(nodeId, inputDefinition, value.ExpressionType, definition, effectivePolicy);
@@ -1441,7 +1479,7 @@ public sealed class RuntimeInputBindingCompiler(
     {
         var payload = value.Value is JsonElement element
             ? element
-            : JsonSerializer.SerializeToElement(value.Value);
+            : JsonValueConversion.SerializeToElement(value.Value);
         if (payload.ValueKind != JsonValueKind.Object)
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{expressionType}' but carries no object reference payload.");
 
@@ -1498,109 +1536,17 @@ public sealed class RuntimeInputBindingCompiler(
         }
     }
 
-    private static object? ConvertLiteral(object? value, Type targetType)
+    private object? ConvertLiteral(object? value, Type targetType, InputDefinition? input = null)
     {
         if (value is null)
             return null;
-
-        var nullableTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-        if (value is JsonElement jsonElement)
-        {
-            if (jsonElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
-                return null;
-
-            if (jsonElement.ValueKind is JsonValueKind.Array or JsonValueKind.Object)
-                return jsonElement.Deserialize(nullableTargetType);
-
-            value = jsonElement.ValueKind == JsonValueKind.String ? jsonElement.GetString() : jsonElement.ToString();
-        }
-
-        if (nullableTargetType.IsInstanceOfType(value))
-            return value;
-
-        if (nullableTargetType == typeof(string))
-            return $"{value}";
-
-        if (nullableTargetType.IsEnum)
-            return Enum.Parse(nullableTargetType, $"{value}", ignoreCase: true);
-
-        // A scalar authored into a collection-typed input is coerced into a single-element collection, and a
-        // comma-separated scalar into one element per trimmed item ("GET" → ["GET"], "200, 404" → [200, 404]).
-        // The Studio surfaces collection inputs with a list editor now (#924), but users still type a bare value or
-        // a comma list into the scalar box — accepting both keeps that authoring gesture publishable.
-        if (value is string scalarText && TryGetCollectionElementType(nullableTargetType, out var elementType) &&
-            TryCoerceScalarToCollection(scalarText, nullableTargetType, elementType, out var coercedCollection))
-            return coercedCollection;
-
-        if (!typeof(IConvertible).IsAssignableFrom(nullableTargetType) || value is not IConvertible)
-            return JsonSerializer.SerializeToElement(value).Deserialize(nullableTargetType);
-
-        return Convert.ChangeType(value, nullableTargetType, CultureInfo.InvariantCulture);
-    }
-
-    /// <summary>
-    /// Resolves the element type of a supported collection target (array, or a single-argument generic collection:
-    /// <c>List&lt;T&gt;</c>, <c>HashSet&lt;T&gt;</c>, <c>ICollection&lt;T&gt;</c> and friends). Dictionaries are not
-    /// scalar-coercible (no key), so they are excluded.
-    /// </summary>
-    private static bool TryGetCollectionElementType(Type collectionType, out Type elementType)
-    {
-        if (collectionType.IsArray && collectionType.GetElementType() is { } arrayElement)
-        {
-            elementType = arrayElement;
-            return true;
-        }
-
-        if (collectionType is { IsGenericType: true } && collectionType.GetGenericArguments() is [var single])
-        {
-            var definition = collectionType.GetGenericTypeDefinition();
-            if (definition == typeof(List<>) || definition == typeof(IList<>) || definition == typeof(ICollection<>) ||
-                definition == typeof(IEnumerable<>) || definition == typeof(IReadOnlyList<>) ||
-                definition == typeof(IReadOnlyCollection<>) || definition == typeof(HashSet<>) || definition == typeof(ISet<>))
-            {
-                elementType = single;
-                return true;
-            }
-        }
-
-        elementType = null!;
-        return false;
-    }
-
-    /// <summary>
-    /// Coerces a scalar (single value or comma-separated list) into the target collection, converting each trimmed,
-    /// non-empty item to the element type. Returns false when the element conversion is unsupported so the caller can
-    /// fall through to the ordinary JSON path (and, ultimately, a structured coercion diagnostic).
-    /// </summary>
-    private static bool TryCoerceScalarToCollection(string scalarText, Type collectionType, Type elementType, out object? result)
-    {
-        var items = scalarText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var elements = Array.CreateInstance(elementType, items.Length);
-        for (var i = 0; i < items.Length; i++)
-        {
-            var element = ConvertLiteral(items[i], elementType);
-            if (element is null && elementType.IsValueType && Nullable.GetUnderlyingType(elementType) is null)
-            {
-                result = null;
-                return false;
-            }
-
-            elements.SetValue(element, i);
-        }
-
-        if (collectionType.IsArray)
-        {
-            result = elements;
-            return true;
-        }
-
-        // The generic collection targets published here are always closed to List<T>/HashSet<T> by
-        // TypeReferenceFactory.Close, both of which expose an IEnumerable<T> constructor.
-        var concreteType = collectionType.GetGenericTypeDefinition() == typeof(HashSet<>)
-            ? typeof(HashSet<>).MakeGenericType(elementType)
-            : typeof(List<>).MakeGenericType(elementType);
-        result = Activator.CreateInstance(concreteType, elements)!;
-        return true;
+        var contract = ConversionFor(targetType, input);
+        var element = value is JsonElement json ? json
+            : targetType.IsInstanceOfType(value) ? contract.Write(value, targetType)
+            : JsonValueConversion.SerializeToElement(value);
+        // Presence/admission policy stays with S-2. This boundary only changes typed conversion.
+        if (element.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null) return null;
+        return ConversionFor(targetType, input).Read(element, targetType, diagnostic => ReportConversion(diagnostic, input));
     }
 
     private static string DescribeAuthoredValue(object? value) =>
@@ -1624,6 +1570,6 @@ public sealed class RuntimeInputBindingCompiler(
             return jsonElement.ValueKind == JsonValueKind.String ? jsonElement.GetString() : jsonElement.GetRawText();
         }
 
-        return value is string text ? text : JsonSerializer.Serialize(value);
+        return value is string text ? text : JsonValueConversion.Serialize(value);
     }
 }

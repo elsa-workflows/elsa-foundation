@@ -1,0 +1,2067 @@
+{
+  "sourceHead": "872ce20531",
+  "qualifiedSource": "0167244 production boundary repairs with recorded candidate test patch",
+  "scope": "Independent per-key typed-boundary source review, followed by raw-default/form token repairs and 43 passing qualified boundary controls; snapshot mismatch was the only remaining control failure",
+  "additions": 372,
+  "removals": 2,
+  "changes": 35,
+  "repair": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField",
+  "looseMembers": [
+    "Elsa.Weaver.Api.WeaverSseJsonContext|Elsa.Weaver.Core.Models.WeaverStreamEvent.payload",
+    "Elsa.Weaver.Api.WeaverSseJsonContext|Elsa.Weaver.Core.Models.WeaverToolCallOutcome.result",
+    "Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Publishing.Api.Models.RuntimePreflightProblemDetails.diagnostics"
+  ],
+  "opaqueConverters": [
+    "Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ActivityLayoutRecordsPayload|Elsa.Activities.Design.Api.Commands.ActivityLayoutRecordsPayloadJsonConverter",
+    "Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ActivityNodePresentationPayload|Elsa.Activities.Design.Api.Commands.ActivityPresentationPayloadConverter",
+    "Elsa.Etl.Design.Api.EtlDesignJsonContext|Elsa.Etl.Core.EtlPipelineV2|Elsa.Etl.Design.Api.EtlPipelineV2JsonConverter",
+    "Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceDetailsView.outputs|System.Collections.Generic.IReadOnlyDictionary`2[System.String,Elsa.Workflows.Runtime.Api.Models.WorkflowOutputView]|Elsa.Workflows.Runtime.Api.Models.WorkflowOutputsJsonConverter"
+  ],
+  "pins": [
+    {
+      "key": "root|Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangeJsonContext|Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnDocumentAuthoringCapabilities",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.RestoreReusableActivityDefinition",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ValidateReusableActivityCandidate",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ValidateReusableActivityVersionCandidate",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Models.ActivityCandidateValidationView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Core.Models.ActivityProviderAuthoringCapabilities",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Decisions.Api.DecisionsJsonContext|Elsa.Decisions.Design.DecisionLifecycleRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Decisions.Api.DecisionsJsonContext|Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAntiforgeryResponse",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationFailureResponse",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationStartRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionAssessmentResponse",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionCatalogResponse",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionDetailResponse",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionError",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionTestRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionTestResponse",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedIdentityLinkPage",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedIdentityUsersResponse",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedLinkAttachRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedLinkAttachResponse",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedLinkRemoveRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedLinkRemoveResponse",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedRolePage",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedSessionPage",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedSessionRevokeRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedSessionRevokeResponse",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedUserPage",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionWrite",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionWriteResult",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalAuthenticationPreview",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Api.DashboardDatasetCatalog",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Api.DashboardQueryApiProblem",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Api.DashboardSavedQueryDrillInput",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Api.DashboardSavedQueryExecutionInput",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Object",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Api.Endpoints.Templates.ValidateCandidate.ValidateTemplateCandidate",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Api.Models.ValidateWorkflowCandidate",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Api.Models.WorkflowCandidateValidationView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Publishing.Api.Models.GetActivityVersionTestRunByIdempotencyKey",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Publishing.Api.Models.StartActivityVersionTestRun",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerActor",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerChangeResult",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerDeliveryView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPage`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerDeliveryView]",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPage`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerSubscriptionView]",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPage`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerTargetView]",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPage`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerTypeView]",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPage`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerView]",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPreview",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerProblem",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerSubscriptionView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerTargetView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Text.Json.JsonElement",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryBookmarkDetailsView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryBookmarkPageView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryEventDetailsView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryOccurrencePageView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryPageView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Requests.GetRuntimeHistory",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Requests.GetRuntimeHistoryBookmark",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Requests.GetRuntimeHistoryBookmarks",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Requests.GetRuntimeHistoryEvent",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Requests.GetRuntimeHistoryOccurrences",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.FormDefinitionRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.FormDraftRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.FormHistoryRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.FormPublishRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.FormRevisionRequest",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.UserTaskHistoryView",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFieldPresentation",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinition",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinitionPage",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "root|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDraft",
+      "before": null,
+      "after": "declared"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Api.Endpoints.BpmnHostingJsonContext|Elsa.Activities.Bpmn.Core.BpmnModelPublication",
+      "before": null,
+      "after": "1f7bb7fd73694844b1f1ac6a6ed77a0c311c3088711646289d4b5b5ba6e6c054"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Api.Endpoints.BpmnHostingJsonContext|Elsa.Activities.Bpmn.Core.BpmnPublishedModel",
+      "before": "ddd47a1a0b18277e412f195cf5c535399d169cf6ef7eadb6125e301d0fd43e4d",
+      "after": "e07c4a2edbe1d5dd522270d49f470be6ea36f844187f34c01008b6e7c9d41b09"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangeJsonContext|Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnDocumentAuthoringCapabilities",
+      "before": null,
+      "after": "8a75f360e023ddcc9d822f2d4a8098e1c722a92726af14b457589cd0be07eb46"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangeJsonContext|Elsa.Workflows.Design.Core.Models.AuthoredValueConversionMode",
+      "before": "b77de6b31820e3aab88b72dad7a3939c6b0923fde78ffe015037254c44991aea",
+      "after": "6cee4a41a340b3813540f6c09eafd4ce2d7add65540eb5dbafdb749af4f39c77"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangeJsonContext|Elsa.Workflows.Design.Core.Models.AuthoredValueConversionRequest",
+      "before": "9cd1fc36f0c1f216cdd2956bd32ef5e3aa61e4e7f1f54c4767be6a99d5498be3",
+      "after": "1c13b8f29e076129abe2a561346fb0b61328944d2460a24de242afec464c3a80"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Interchange.Endpoints.DirectPublication.BpmnDirectPublishingJsonContext|Elsa.Activities.Bpmn.Core.BpmnModelPublication",
+      "before": null,
+      "after": "1f7bb7fd73694844b1f1ac6a6ed77a0c311c3088711646289d4b5b5ba6e6c054"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Interchange.Endpoints.DirectPublication.BpmnDirectPublishingJsonContext|Elsa.Activities.Bpmn.Core.BpmnPublishedModel",
+      "before": "ddd47a1a0b18277e412f195cf5c535399d169cf6ef7eadb6125e301d0fd43e4d",
+      "after": "e07c4a2edbe1d5dd522270d49f470be6ea36f844187f34c01008b6e7c9d41b09"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Interchange.Endpoints.DirectPublication.BpmnDirectPublishingJsonContext|Elsa.Activities.Bpmn.Interchange.Endpoints.DirectPublication.PublishAuthoredBpmnRequest",
+      "before": "6400d4be8e9fdac7a5522c8b8dc60c7aa38bc89e1794f2ebcbb71ef8b0f9626d",
+      "after": "ed29ecc2cf34a70cf4ae27861288c9a6d98daa9e4384adc2a8862d88c7efc679"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Interchange.Endpoints.DirectPublication.BpmnDirectPublishingJsonContext|Elsa.Workflows.Publishing.Core.Models.PublicationAction",
+      "before": null,
+      "after": "4717985ba1d201bff3067aa04f90ff4a807d67c500f85b5dc1a98121881ac323"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Interchange.Endpoints.DirectPublication.BpmnDirectPublishingJsonContext|Elsa.Workflows.Publishing.Core.Models.PublicationRequestIntent",
+      "before": null,
+      "after": "caee8ba2746edda11a2a502302206c22179ba4fc00044e4c9225dea75e8aec4e"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Interchange.Endpoints.DirectPublication.BpmnDirectPublishingJsonContext|System.Int64",
+      "before": null,
+      "after": "d54d1f95616761c1db9650c8841b0bce2e4949d64ee266de9a743e2a04a8884d"
+    },
+    {
+      "key": "shape|Elsa.Activities.Bpmn.Interchange.Endpoints.DirectPublication.BpmnDirectPublishingJsonContext|System.Nullable`1[System.Int64]",
+      "before": null,
+      "after": "fd15efe369b6d2ad47d3ac07adcfd5e30968b1ef81a0a6e663b2a0189d929a5d"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ListReusableActivityDefinitions",
+      "before": "c0a030e2fa475a40b89b56b26a67b21fba4cf090b05ba29bf7fd5a37b86f4ad0",
+      "after": "8658d47b3a7192f832ab7ada48f7fc9601aeb72fbf2e73ff6dafc682ed775bab"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.RestoreReusableActivityDefinition",
+      "before": null,
+      "after": "b26941180f8e9a97211a3fd4f79f5532664c3f366f2ec7a8cb2c2b4ac0e617eb"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ValidateReusableActivityCandidate",
+      "before": null,
+      "after": "e3097f827875cbe26517f2a041e28fa264e258204b9742d981b2c4e452946675"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Commands.ValidateReusableActivityVersionCandidate",
+      "before": null,
+      "after": "8a5887f955a189080272581f8268a2f5ad4c4cf706b4b6dcabf3429016f9d95a"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Api.Models.ActivityCandidateValidationView",
+      "before": null,
+      "after": "c77de071775cdaaae3f80e1b6b523b5fb96d9ac8fbd50594353f83aa7c6713c5"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Core.Models.ActivityProviderAuthoringCapabilities",
+      "before": null,
+      "after": "82d9433f3cdd6a9b20b16f70a49390ad42fe6daec66adeadcfaf67f9ccf8622b"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Core.Models.ActivityProviderContractConstraints",
+      "before": null,
+      "after": "34097ae65f059c363058befe5acffe99d9b58b7254032cba6964061561b974e2"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Core.Models.ActivityProviderManifestSchemaCapabilities",
+      "before": null,
+      "after": "2b101c87eeac4598330263eb8d9354ba68c5f7e80d7a7b8ab38d8cae3d7af31f"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Core.Models.ActivityProviderManifestSource",
+      "before": null,
+      "after": "5ffce45849fc8486493446ac7409438e1c6f16c967282dfd2eff797579c2bc87"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Activities.Design.Core.Models.InputDefinition",
+      "before": "d2a77e7f26cad55b36060a4cd1eccfdea5ab23f1d576f782419f372de2acaca6",
+      "after": "0e2ef936b8770080663b098d679a80b6413017f540dbba91cd66273b37d81c76"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Expressions.Core.Models.ExpressionParameterBinding",
+      "before": null,
+      "after": "446c26423b961f4e75ee884657cb9e5d98ebfdf8a68cab3a6b19678aca3b3bcd"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Expressions.Core.Models.LiteralExpressionParameterBinding",
+      "before": null,
+      "after": "8429e8b63fccd783347880597afcb36a917f3b4fd3e5324e62656be2592663c7"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Expressions.Core.Models.VariableExpressionParameterBinding",
+      "before": null,
+      "after": "677f1d078c2f125e1a0007468ee27b14ffcdd2aff73d3f9780590b61de9bff60"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding",
+      "before": null,
+      "after": "12faf240d358120aee4f34dabd00bd31619321db36ff4bbe7479b373bfa4305d"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding",
+      "before": null,
+      "after": "4f282adee6e146c700d664602a9d8ae603e0b82435ffe3102a88663dbe4d0c5e"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Workflows.Design.Validations.Core.Models.ActivityBindingConversionPreview",
+      "before": null,
+      "after": "3dfed0bd872c8c61921d6bb20a3db3137fb0a02a6267e001091be87df9ab8e77"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionAnalysis",
+      "before": "413b951b4a5a00e2a47bb803762e60153ead65d89c624d04de8a502cab25af81",
+      "after": "f50913a8a24b4a4ec17c9e0866801fad0eeb7928670662243896bb84d32fe84d"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionQuery",
+      "before": "b22ee445be58743349df6c9601ef761b3ce548b83a7f212a3715eeec4b89e4da",
+      "after": "020dfb29d1945968d83a108adfbf44d0de09745f3ed1e5f17e5a661ef909e44f"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionSourceFacts",
+      "before": "5dc9351e701c8ad38e89ffdcb91eeccc6320e1c502c80ea77f75ecd0c683c5bd",
+      "after": "ff647bd261efb050cfcb2fd5407382c52695b109386d6c387496e5ef584b0e46"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Activities.Design.Core.Models.ActivityProviderManifestSchemaCapabilities]",
+      "before": null,
+      "after": "185b4051731bb62c4a7a8c18f031b9f178254c659b127d0437659c7f15d7ffd8"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|System.Collections.Generic.IReadOnlySet`1[Elsa.Activities.Design.Core.Models.ActivityProviderManifestSource]",
+      "before": null,
+      "after": "13ef6edb33ff6291f1a1a3c37c647087d1fbbf4309eacaa5101db99bb23f2359"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|System.Collections.Generic.IReadOnlySet`1[System.String]",
+      "before": null,
+      "after": "af15b1b70d0d4ef1ab55ae019d0ee97fa1bbcf74d25af878a82948ab1cab9f29"
+    },
+    {
+      "key": "shape|Elsa.Activities.Design.Api.ActivitiesDesignJsonContext|System.Nullable`1[System.Collections.Immutable.ImmutableArray`1[System.String]]",
+      "before": null,
+      "after": "48ec9647c8c49cd303e2dea5a0109e7bfea2dd70320f7f5c2307916807e43167"
+    },
+    {
+      "key": "shape|Elsa.Connections.Api.ConnectionsJsonContext|Elsa.Connections.Core.Models.ConnectionMetadata",
+      "before": "49ba5c7de6f5605fbbed82762a78e9f0e176690183d69493321b4b05d5b4934a",
+      "after": "fc7a3a0ce738056195b067d0ba5aafdf594e1d232a485ad6b7406bb8f95b552b"
+    },
+    {
+      "key": "shape|Elsa.Connections.Api.ConnectionsJsonContext|System.Int32",
+      "before": null,
+      "after": "e6c6cad705996ac1a052560a6032c8122d04d35a59da67443d5a3a5bf594f0a3"
+    },
+    {
+      "key": "shape|Elsa.Decisions.Api.DecisionsJsonContext|Elsa.Decisions.Api.DecisionProblem",
+      "before": "c68306368f64f0ca53683478709ad31ee357c2d970fb20760a4b1037b766512e",
+      "after": "f1b352439caf3a2114fd8ec986583094fdd8c9eb67385842ac5fe992a87865f2"
+    },
+    {
+      "key": "shape|Elsa.Decisions.Api.DecisionsJsonContext|Elsa.Decisions.Design.DecisionAssetView",
+      "before": "a015a0585c017aabd498dbafccefe6bbd801e808734eb4a215d7927fb0362cd4",
+      "after": "4c2459bf5555116c46c3fdebb129af76c0b613dbde627528a888e1fd7ca5e2f4"
+    },
+    {
+      "key": "shape|Elsa.Decisions.Api.DecisionsJsonContext|Elsa.Decisions.Design.DecisionLifecycleRequest",
+      "before": null,
+      "after": "b3abe0fb90ca5dd46c0d7cc49543b37367a3a8b3cae11e0852777c0121fb110c"
+    },
+    {
+      "key": "shape|Elsa.Decisions.Api.DecisionsJsonContext|Elsa.Decisions.Persistence.Core.DecisionWriteConfirmation",
+      "before": null,
+      "after": "af7010e1d60945ac039f44cfba99ffc6d87262a0bc81eb8ac543f2e066ba3967"
+    },
+    {
+      "key": "shape|Elsa.Decisions.Api.DecisionsJsonContext|System.Nullable`1[System.DateTimeOffset]",
+      "before": null,
+      "after": "037740618e4e35b9ff27f0d4b821025989d52e990da986d372fc9a99e0f6d796"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.Api.FoundationIdentityApiJsonContext|Elsa.Foundation.Identity.Api.Models.AccessTokenResponse",
+      "before": "a1332df8ad77c9523678c87c2235516461d97574cf1976500493848419eb54ef",
+      "after": "5e49624b0cf924eb5accb2476569a831205f32555ff75258e378343980116a8b"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.Api.FoundationIdentityApiJsonContext|Elsa.Foundation.Identity.Core.Authentication.AuthSession",
+      "before": "c43e8d5dfad489b899518f08a7f364cd2395d560f55a4e34fe9c64285844fdc3",
+      "after": "c54a540854d4a762967bcbe0591a72ff6cd6e77f42fd86534886405c963534b6"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.AspNetCoreIdentity.AspNetCoreIdentityJsonContext|Elsa.Foundation.Identity.Core.Authentication.AuthSession",
+      "before": "c43e8d5dfad489b899518f08a7f364cd2395d560f55a4e34fe9c64285844fdc3",
+      "after": "c54a540854d4a762967bcbe0591a72ff6cd6e77f42fd86534886405c963534b6"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.Core.Iam.UserStatus",
+      "before": null,
+      "after": "8bac3f884108e008ddca9c48cd93f4549b2648c9182aad133f10dc98f19e7c68"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.Core.Ownership.EffectiveProviderCapabilities",
+      "before": null,
+      "after": "44cb9312eb776b3978de7b05c6f3b253dca051011d7dd021ef7a309b95c07a0e"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.Core.Ownership.PermissionPropagationMode",
+      "before": null,
+      "after": "d511e73525dd37d14a5e879783dcc15e1f3c66db80294b24aa225e2f9fe9e188"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAntiforgeryResponse",
+      "before": null,
+      "after": "7a166fb2f01a4605ad92bf701877e657f7a9c297db197c95fdc12367886bfc8f"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationFailureResponse",
+      "before": null,
+      "after": "bbaf346dab2ef6638ad5c2a3f074f2a2e1536b5bade23ef473080b591bbd92ae"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationStartRequest",
+      "before": null,
+      "after": "cced26dc63830dc878a09909f741e747701826a666ca77d65e7fe733ef93135c"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionAssessmentResponse",
+      "before": null,
+      "after": "58fb65f2544d24e028ac3e032ffa660b88bbb1343dfddd52a797aa035163925c"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionCatalogResponse",
+      "before": null,
+      "after": "de371430abfc5f84235eeda6d12c8b87bf7e5167d975d447df226bfc290d2dcb"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionDetailResponse",
+      "before": null,
+      "after": "ebfb31bba2f620d3c3ed31e59e6834b2211147d677e7958ddbf1dcea5f395763"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionError",
+      "before": null,
+      "after": "22ee558fe9cfb921e0390f47eef611f32e010978cd937895e63d8d961d326e32"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionResponse",
+      "before": null,
+      "after": "2cf748f22a21956aa5b0a43ed86fa2393ea8c473aac900046a6feaf39c856fde"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionTestRequest",
+      "before": null,
+      "after": "49aa16b249330441cdf07f00f853976ffec2e49838ad5dcc5c4d2971f59754c0"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionTestResponse",
+      "before": null,
+      "after": "47161f5544443274cc9edba21708f44af76845bc497462329b03820ca26a026d"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedIdentityLinkPage",
+      "before": null,
+      "after": "0f1f61e0b6a35644f4e6ea5759a15acc47bed402b2908634e9cfafce938db269"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedIdentityLinkResponse",
+      "before": null,
+      "after": "a926c687275535be93ac20fb7788cc046528955390740ae8a8d3b77a079c2abb"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedIdentityUsersResponse",
+      "before": null,
+      "after": "0ca5ea96143862b965bb527e3b2258bdf35f09bf578933069df862a12b64fcbc"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedLinkAttachRequest",
+      "before": null,
+      "after": "aee7459b5069e245e9a0b1425421af34a5a7dbee5e01c6306e3656a21a69873c"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedLinkAttachResponse",
+      "before": null,
+      "after": "8a65136b8bfe3de5075350c371f8bf8c2eba67cb8580dd5209e0056b689a4b26"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedLinkConnectionChoice",
+      "before": null,
+      "after": "38cc003e808db27777584325c9013842af5543d9797cb25293d1f30447e0cd42"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedLinkRemoveRequest",
+      "before": null,
+      "after": "af92a43d691528ebf1d36d639161ec58338da717f80b75c31a8a9d2ec213d7f7"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedLinkRemoveResponse",
+      "before": null,
+      "after": "297d59640496f2bb90d5c18bad45f522fb28fabe03841e9d8ea103c4b4663ea4"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedRoleLookup",
+      "before": null,
+      "after": "67a8ef4f602fc602e34ce33da53b2dc43b4eeada6faaecf6c9c79476143b5331"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedRolePage",
+      "before": null,
+      "after": "e4773c2e78a4e9ba33f9e1b87d4a88c06ed5b8c23d722424dce80cecf075b3f8"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedSessionPage",
+      "before": null,
+      "after": "ba290889d72e7d7f148ef5692ce0190aafe3575529f0c606e43f7d435184d253"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedSessionResponse",
+      "before": null,
+      "after": "7aa4f3e6a88fa89616e7316d481bd8f9457192bb3c424f3942601f5a9a508246"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedSessionRevokeRequest",
+      "before": null,
+      "after": "b413e5b64274c49a67134c13cae888169c7b2adb409bf4aa1d8d50d3eb2ad7cd"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedSessionRevokeResponse",
+      "before": null,
+      "after": "18ab209bb68ca65fffefc96b9604b34f6ca0c1c5647374c00eae961a13cb4ac6"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedUserLookup",
+      "before": null,
+      "after": "b47d67bef52650fed8c31307816690fc388f0cd5a2d357181d4c9245f6313364"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedUserPage",
+      "before": null,
+      "after": "5499495ded5bb659756527883e9b4a94eb98e8bf19ecfc0d39488e0cb5541ecc"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.AdmissionPolicy",
+      "before": null,
+      "after": "e67ad524e7708ddc64257e4aa8b412840aa947af5ebcb9336afcc3a8630984a6"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionChange",
+      "before": null,
+      "after": "a24360d369df5e466ace529c4a02b0785a6216598f4bf607723609ba508ed307"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionReadinessFailure",
+      "before": null,
+      "after": "853c38a01717f7a41aaadb9e8fab8cbf4a5e8fbd5323673218e62c91775640a1"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionReadinessResult",
+      "before": null,
+      "after": "14e43855c3f7b47dd32f759943da657a3342e07f65f2ba43edad0729cdcf58e1"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionRecord",
+      "before": null,
+      "after": "aa5dd3c9f7702403409e293695c9b300db09b63f8e1105655962f1e4a9711fe8"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionSource",
+      "before": null,
+      "after": "2738607053b2cd6107a988647d424fbc48962975e069f017d19a037d3150aca6"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionWrite",
+      "before": null,
+      "after": "4ba448f53d468d064cd25bcb943e6140d2c723f7e77a47e64680f6639abdfff9"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ConnectionWriteResult",
+      "before": null,
+      "after": "1a591d92549276c2a1a17e3af4d365ed55abe991681d7b6bc48ca5c9456a358f"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalAdmissionFailure",
+      "before": null,
+      "after": "2095af136b74524c3b69613461cffca05ff046d9d9b49e5a26c4964ced941c62"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalAdmissionKind",
+      "before": null,
+      "after": "045481974a6050b26eec9fb0027ef960098b4f3695ce975e70703c50d92df914"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalAuthenticationPreview",
+      "before": null,
+      "after": "3dfa445ae332fa6aece86f3679d052b7e7668d14cf05feb77dae4f9c4d9cc0bf"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Foundation.Identity.ExternalAuthentication.Core.ExternalProtocolFailure",
+      "before": null,
+      "after": "4e234ff30c012acceeebd32e552d4cdee5c1efab1aa9107587cc9d318bbdbdaf"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|Elsa.Secrets.Core.Models.SecretReference",
+      "before": null,
+      "after": "ba0cb8b9fd867486746a11ba87e826dfd0a87d8774c857d590850e347acb389f"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Boolean",
+      "before": null,
+      "after": "0502888012eb3326422d846eb4fed922f6f098de5d716e19d7b65ca0dc37f4ab"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Collections.Generic.IReadOnlyDictionary`2[System.String,Elsa.Secrets.Core.Models.SecretReference]",
+      "before": null,
+      "after": "e0e4e5ee250ad74760ed763719cf1092921cca2e78327d4c5527578c0d5c4708"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Collections.Generic.IReadOnlyDictionary`2[System.String,System.String]",
+      "before": null,
+      "after": "b00884efd8c9e1b79b5b1d8d81383e26e703d741e768e94c9c45b7090bd77526"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedConnectionResponse]",
+      "before": null,
+      "after": "3ca90f1a0a2cb849c43aca8bc323cea36dba205f8371e8e0d23bc2b0bcb626ab"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedIdentityLinkResponse]",
+      "before": null,
+      "after": "99a54ba01b9d6cd9a253176f368248ef3d86a5b7e3ca642dcfb9a91aaa341f7f"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedLinkConnectionChoice]",
+      "before": null,
+      "after": "2207250f1ef28ed270239d31b163d5582b6fbc525a14c03145323c3ac839effc"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedRoleLookup]",
+      "before": null,
+      "after": "029e4ab9aa2773842477c373c9862f8d1b2e16c11a8f4809d98c28fa9e2f386f"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedSessionResponse]",
+      "before": null,
+      "after": "e075b2aeda4cfbdb6100ef3889a9098e6692553a40423149f41977904834eecf"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Foundation.Identity.ExternalAuthentication.Api.ManagedUserLookup]",
+      "before": null,
+      "after": "21670a976b6690067662e00f2a018056433003f093e2d89436a9f931f7375065"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Collections.Generic.IReadOnlyList`1[System.String]",
+      "before": null,
+      "after": "d91d03de9200c1009d9b8f3f02a64eeecc73a26744a46cb1e404e465009b30e5"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.DateTimeOffset",
+      "before": null,
+      "after": "33470a5fb0812b92673abe0c1bfdbdf56f95b4278fb2f7e73f2c221d52e0e0a5"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Int32",
+      "before": null,
+      "after": "e6c6cad705996ac1a052560a6032c8122d04d35a59da67443d5a3a5bf594f0a3"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Int64",
+      "before": null,
+      "after": "d54d1f95616761c1db9650c8841b0bce2e4949d64ee266de9a743e2a04a8884d"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.Nullable`1[System.DateTimeOffset]",
+      "before": null,
+      "after": "037740618e4e35b9ff27f0d4b821025989d52e990da986d372fc9a99e0f6d796"
+    },
+    {
+      "key": "shape|Elsa.Foundation.Identity.ExternalAuthentication.Api.ExternalAuthenticationApiJsonContext|System.String",
+      "before": null,
+      "after": "3b95e732ea3bb8d19b4275603123bb6be3bbc7d4aafc5b35838deecbc31aec2a"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Api.DashboardDatasetCatalog",
+      "before": null,
+      "after": "bfd854a624c429a57febe50bd5525cd08dd961cc8e149fcb4396c66ad1b1c670"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Api.DashboardQueryApiProblem",
+      "before": null,
+      "after": "3fc0fa3945ff7f6c042143009e71380d3b7c673220a1b0e06202dcfa6a7aa143"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Api.DashboardSavedQueryDrillInput",
+      "before": null,
+      "after": "2d752775b4573fd455c4ea5b42f30afcafbc96acbf75ad66cc6939c1423e3a76"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Api.DashboardSavedQueryExecutionInput",
+      "before": null,
+      "after": "5d26222428c3e64e8131b88178cb9ce72f1507cd7b3032eb394a00f871f8928b"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardComparison",
+      "before": null,
+      "after": "02a8ebd1f013334a51175af1c4362ef96f3617d527282409d5f3dc1dae5a9b7e"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardCoverage",
+      "before": null,
+      "after": "cbcf7f928edbce32ea1627dd4d35337e65dc36249d628ba143a86d12cd8b6ac8"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration",
+      "before": null,
+      "after": "ef129974bd3dc05564950dc2ca1cc1f8222bfabfdbbbbefa4c6429bf13947a13"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference",
+      "before": null,
+      "after": "50e8883a6bc14d540f26058b5c6d355d9fb487d21af795f8f0b4d15ab3f70cc7"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport",
+      "before": null,
+      "after": "986deb8e75a680aeb0a4e60b5ef6340a992dc18acbff6bc5c974828f464138b1"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor",
+      "before": null,
+      "after": "49e0e5eed223494522ec6f55d4073c7be5c0b32a90e7eb594936169eed382af8"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest",
+      "before": null,
+      "after": "d479ca7c6ae702bc497039453fa97b5b9db8af1e6381982461486dbda34d30da"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod",
+      "before": null,
+      "after": "9609888683468a907f9335798073a1b44aa1c9e9d1acb9513b30ad3b97261d39"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition",
+      "before": null,
+      "after": "37e5f18b556489f6fecec5018c6c598671fed3d3571f26c3f313c05938f7adbc"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition",
+      "before": null,
+      "after": "6a274a61b7eb0ef1c61e3d9c2bed736e6257efe777df04a99fd47b384278f995"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection",
+      "before": null,
+      "after": "3e51817495fb47eb1d55f28a4046fc9107cb64d8eb453a088c9d98c831cea09a"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition",
+      "before": null,
+      "after": "9e98cad77c90c9c3bbdc7ebd5fcbc61f426d6b316cb1e5a6158ec09d6473ac1d"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardPredicate",
+      "before": null,
+      "after": "10eb19581dc2527d62e2cba10436344ebdf79d877a148e14ae3fc7d2cd6fc79d"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition",
+      "before": null,
+      "after": "46441baa25ce7a091e44256419bcd8d4ee94c1324224d7b88fda3f38b2d7d50c"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem",
+      "before": null,
+      "after": "297487b9fc215dfce13314d96eea6b2aa80fddf81d43646b5d8cf7d072c2317f"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest",
+      "before": null,
+      "after": "b9077cbf47218e13ff3a693fb50de432ff1a6767daaa4f5693aee6401d9873ff"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult",
+      "before": null,
+      "after": "2e42204081db550bf9425ede8caf9fbb35dd356fd5dcb106e6159a9844fd0c18"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation",
+      "before": null,
+      "after": "14b3571447e769d6c0732960a7fbec5292f68c8af4971b4335a704a1481301bd"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition",
+      "before": null,
+      "after": "87ee764d7684c695911af94ca1a63986970b10c77dca1cd08d32bc0591c7feca"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardResultCell",
+      "before": null,
+      "after": "39861576d7a7e49dd34bf8c07efbdf3de84616c5913c8bd5f12a83139713a507"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn",
+      "before": null,
+      "after": "8775eba90862bbffae4afe579727e010cf3f601aa0b8399c6bc6ba15d425c14c"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardResultRow",
+      "before": null,
+      "after": "cc83d578b10f73c87d2ac6c03bd08dcf45efbe81e6857b23cd88429ea447b60d"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardSort",
+      "before": null,
+      "after": "02b0f54ceabda5c455eb592bd4a9de96800c53a95c5d159fec17a8a426f4fd9f"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange",
+      "before": null,
+      "after": "3774bb73942461620cece2d38337ace13474f1bf328dc4b40ae17db7f3334596"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardValue",
+      "before": null,
+      "after": "d27efb5aa1df6c211eda3b9d0c1d1aa2b1408fa25834bb36b0704c3c903ea9b3"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardVisualization",
+      "before": null,
+      "after": "19166bf7b11be08b7145a8d7fd0abaf61d923812fbc333fac28d5c6ef6604012"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Boolean",
+      "before": null,
+      "after": "0502888012eb3326422d846eb4fed922f6f098de5d716e19d7b65ca0dc37f4ab"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyDictionary`2[System.String,Elsa.Studio.Dashboard.Core.Models.DashboardResultCell]",
+      "before": null,
+      "after": "ef6480c044c12114951ce7f9816f43056ed87e0f05c11a7dc48c62294e74bcaa"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyDictionary`2[System.String,Elsa.Studio.Dashboard.Core.Models.DashboardValue]",
+      "before": null,
+      "after": "e266a55c5cc38e0bbef9221e0c4642a7cfd53a7e12e59d2b57c61bd286616150"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration]",
+      "before": null,
+      "after": "a9c75b51ae66ef6569e5f98def890bc1d36a5b4db8117720e771166638bd9876"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod]",
+      "before": null,
+      "after": "8c4dcf871f33978113ab85058f6d63b905ffdabfef1cd963141a32d32520d6ad"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition]",
+      "before": null,
+      "after": "cf306e7957056e610e1a8bec7553b219fee74b6a3f4ab22002c36f9b7e29626b"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition]",
+      "before": null,
+      "after": "81f1267b56aacc9be7638746c4b16657fd9b75fe35c10e8492df230db728ab0a"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection]",
+      "before": null,
+      "after": "3940eb5a7e954da64291af6687c95873f01467b4e381d8570a0620f773daea47"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition]",
+      "before": null,
+      "after": "bd42801e831c5012a1bb8276f95e3609cd1cfc2b923ac5069777c456563e4850"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardPredicate]",
+      "before": null,
+      "after": "7bae05b67f8a006e9a5eaa1fcff8aa91c9352ca611fb42594017436faae3a911"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem]",
+      "before": null,
+      "after": "9b475ad50b26328c28bf31e91613c8d36f24609044e389133088daa459378c5c"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition]",
+      "before": null,
+      "after": "83053b39d2976d712cd522df790216bc4bbdff0180b2e46316835ecea6d2b41b"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn]",
+      "before": null,
+      "after": "f51f381b832a2dc3f04f943d7dc30ff055132c9195355b9c66a02dc9cec6a6cf"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardResultRow]",
+      "before": null,
+      "after": "1ffa72c6cab193932d189993269a3150ef365fc3249645b750e69a0b929b4fb2"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardSort]",
+      "before": null,
+      "after": "1a25066a53199ce5d748609c1b173d3f53748680f094c1a7dbd3b53cf6fad385"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardValue]",
+      "before": null,
+      "after": "865ad2cfa5efd8ec9e93e1a49d30c6c9c8bfde1da8bcd4bf0707d1e7cedab21f"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Collections.Generic.IReadOnlyList`1[System.String]",
+      "before": null,
+      "after": "d91d03de9200c1009d9b8f3f02a64eeecc73a26744a46cb1e404e465009b30e5"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.DateTimeOffset",
+      "before": null,
+      "after": "33470a5fb0812b92673abe0c1bfdbdf56f95b4278fb2f7e73f2c221d52e0e0a5"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Int32",
+      "before": null,
+      "after": "e6c6cad705996ac1a052560a6032c8122d04d35a59da67443d5a3a5bf594f0a3"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.Nullable`1[System.DateTimeOffset]",
+      "before": null,
+      "after": "037740618e4e35b9ff27f0d4b821025989d52e990da986d372fc9a99e0f6d796"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardQueriesJsonContext|System.String",
+      "before": null,
+      "after": "3b95e732ea3bb8d19b4275603123bb6be3bbc7d4aafc5b35838deecbc31aec2a"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardComparison",
+      "before": null,
+      "after": "02a8ebd1f013334a51175af1c4362ef96f3617d527282409d5f3dc1dae5a9b7e"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference",
+      "before": null,
+      "after": "50e8883a6bc14d540f26058b5c6d355d9fb487d21af795f8f0b4d15ab3f70cc7"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection",
+      "before": null,
+      "after": "3e51817495fb47eb1d55f28a4046fc9107cb64d8eb453a088c9d98c831cea09a"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition",
+      "before": null,
+      "after": "9e98cad77c90c9c3bbdc7ebd5fcbc61f426d6b316cb1e5a6158ec09d6473ac1d"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardPredicate",
+      "before": null,
+      "after": "10eb19581dc2527d62e2cba10436344ebdf79d877a148e14ae3fc7d2cd6fc79d"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition",
+      "before": null,
+      "after": "46441baa25ce7a091e44256419bcd8d4ee94c1324224d7b88fda3f38b2d7d50c"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest",
+      "before": null,
+      "after": "b9077cbf47218e13ff3a693fb50de432ff1a6767daaa4f5693aee6401d9873ff"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardSort",
+      "before": null,
+      "after": "02b0f54ceabda5c455eb592bd4a9de96800c53a95c5d159fec17a8a426f4fd9f"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange",
+      "before": null,
+      "after": "3774bb73942461620cece2d38337ace13474f1bf328dc4b40ae17db7f3334596"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardValue",
+      "before": null,
+      "after": "d27efb5aa1df6c211eda3b9d0c1d1aa2b1408fa25834bb36b0704c3c903ea9b3"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Models.DashboardVisualization",
+      "before": null,
+      "after": "19166bf7b11be08b7145a8d7fd0abaf61d923812fbc333fac28d5c6ef6604012"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate",
+      "before": null,
+      "after": "3928b27102f88bde69c1988ccdef459ca7c5d3477bfc6b6b81d36fbcebdfb6e5"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage",
+      "before": null,
+      "after": "271d5d7560ce8bffff6b18c3e0ed0f3fafd5bb130563b1db656cf4b00d0ce763"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant",
+      "before": null,
+      "after": "d7cbeaae4dc2dcccd9fc1ce6854dfa7057e25cdf6f4289a9b195f5170d40a48e"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage",
+      "before": null,
+      "after": "d9230c38d65ef37c498cb3a050ad055752cef6bc91a029ff4065568196188d2a"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem",
+      "before": null,
+      "after": "4eca1298482b3a3e71203316004989bf6189de4f10f3d81e658de7fec89574c3"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage",
+      "before": null,
+      "after": "efeb6268562b0c5b7d5cdb9c8d1d703d4e2082d1515c87f322ece7bd340ebe56"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse",
+      "before": null,
+      "after": "d8bd75851e9ce775ccbad92e6714dcd148914077d0cf5d6debc86168cd85e6b7"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities",
+      "before": null,
+      "after": "ac5c1b789549ff04ca8cd3044039adf611afe70af5e39a5beff61b27af01f858"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput",
+      "before": null,
+      "after": "94f789b853413639a26ae8049ace141f1b9cf85f531072c7c418a4c3b6edd3e5"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage",
+      "before": null,
+      "after": "535ca02c449264b79f31031ec45a7c3ae2a3a19a4a619599b036978fccca458e"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView",
+      "before": null,
+      "after": "9c112d834f4dd8040779d7bea2d1be41409d27e6d4ca113be02951131d3f493a"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput",
+      "before": null,
+      "after": "982a2530a032b1d336006656389281ec412a2105f8dc18ca943e92f5ae6a473e"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|Elsa.Studio.Dashboard.Core.Resources.DashboardTileView",
+      "before": null,
+      "after": "fe93d52676d4e0aff930acc3ebcf3793fc2686017dd457c7b16fc6ec79aec938"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Boolean",
+      "before": null,
+      "after": "0502888012eb3326422d846eb4fed922f6f098de5d716e19d7b65ca0dc37f4ab"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyDictionary`2[System.String,Elsa.Studio.Dashboard.Core.Models.DashboardValue]",
+      "before": null,
+      "after": "e266a55c5cc38e0bbef9221e0c4642a7cfd53a7e12e59d2b57c61bd286616150"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection]",
+      "before": null,
+      "after": "3940eb5a7e954da64291af6687c95873f01467b4e381d8570a0620f773daea47"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition]",
+      "before": null,
+      "after": "bd42801e831c5012a1bb8276f95e3609cd1cfc2b923ac5069777c456563e4850"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardPredicate]",
+      "before": null,
+      "after": "7bae05b67f8a006e9a5eaa1fcff8aa91c9352ca611fb42594017436faae3a911"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardSort]",
+      "before": null,
+      "after": "1a25066a53199ce5d748609c1b173d3f53748680f094c1a7dbd3b53cf6fad385"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Models.DashboardValue]",
+      "before": null,
+      "after": "865ad2cfa5efd8ec9e93e1a49d30c6c9c8bfde1da8bcd4bf0707d1e7cedab21f"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate]",
+      "before": null,
+      "after": "c5dd9407e3f7de5a44d19a338c12a56b783e463c687f04f956107817d61b4589"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant]",
+      "before": null,
+      "after": "690fe4e693b083a97ae51b0503f2c78fa97645e3a124b05057b991a6c6f9e0b6"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem]",
+      "before": null,
+      "after": "4e7000f9a815845b692ca98ad74fc9b803d96753160548dfc654829e48551a28"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse]",
+      "before": null,
+      "after": "889467b9e0059ef29614d482f14de076863d752b06a6b746d293c9107adaeb54"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView]",
+      "before": null,
+      "after": "bce5efcd2c773f4209b7ba9ce249fabce0f83e079077d083881821974e6dd60a"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput]",
+      "before": null,
+      "after": "de877162be93f91a45b93a1d38b513274d8b55031855aa5fec3727f55902bc74"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Studio.Dashboard.Core.Resources.DashboardTileView]",
+      "before": null,
+      "after": "089f4db18abebffec646e5ffa165ba16955c048fdf73dcfa34ab9603d0b4490c"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Collections.Generic.IReadOnlyList`1[System.String]",
+      "before": null,
+      "after": "d91d03de9200c1009d9b8f3f02a64eeecc73a26744a46cb1e404e465009b30e5"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.DateTimeOffset",
+      "before": null,
+      "after": "33470a5fb0812b92673abe0c1bfdbdf56f95b4278fb2f7e73f2c221d52e0e0a5"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Int32",
+      "before": null,
+      "after": "e6c6cad705996ac1a052560a6032c8122d04d35a59da67443d5a3a5bf594f0a3"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Nullable`1[System.DateTimeOffset]",
+      "before": null,
+      "after": "037740618e4e35b9ff27f0d4b821025989d52e990da986d372fc9a99e0f6d796"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.Object",
+      "before": null,
+      "after": "07b2a20e111ec574d16541dffe0952584ff0f52ee63b5bb37c1d252c2937bf6f"
+    },
+    {
+      "key": "shape|Elsa.Studio.Dashboard.Api.DashboardResourcesJsonContext|System.String",
+      "before": null,
+      "after": "3b95e732ea3bb8d19b4275603123bb6be3bbc7d4aafc5b35838deecbc31aec2a"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Activities.Design.Core.Models.InputDefinition",
+      "before": "d2a77e7f26cad55b36060a4cd1eccfdea5ab23f1d576f782419f372de2acaca6",
+      "after": "0e2ef936b8770080663b098d679a80b6413017f540dbba91cd66273b37d81c76"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Api.Endpoints.Templates.ValidateCandidate.ValidateTemplateCandidate",
+      "before": null,
+      "after": "a789428cbaa6120789a6e3901702e5654687db1fb0f5d6b237892a2ae7361b61"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Api.Models.ValidateWorkflowCandidate",
+      "before": null,
+      "after": "dd4ad0b208807ca2fcb0326923bac887f56e58142e8262420085891a0f71349c"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Api.Models.WorkflowCandidateValidationView",
+      "before": null,
+      "after": "94a75856e53d86de680c315b9f0708c8d0d7f887d538e5080ca21fdb839c3afc"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Core.Models.AuthoredValueConversionMode",
+      "before": "93f70648d173a3cfc18b9c7d06644f4a04f3a3823fcc9c9c6037f14673e6c21e",
+      "after": "68102621f7f8af8c288e613b40c137db5a3e9611676d6ac9c2ebba98f804cfd5"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Core.Models.AuthoredValueConversionRequest",
+      "before": "dc75d1b7f20b4dec55e8df917fcbf9e7214db94a5f5dd236f9b374af21982ac7",
+      "after": "b9b8127a48db4d88cf9c982a34c9970b1d0419eeb5c940c0c37a97c8ad99e685"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Validations.Core.Models.ActivityBindingConversionPreview",
+      "before": null,
+      "after": "3dfed0bd872c8c61921d6bb20a3db3137fb0a02a6267e001091be87df9ab8e77"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionAnalysis",
+      "before": "413b951b4a5a00e2a47bb803762e60153ead65d89c624d04de8a502cab25af81",
+      "after": "f50913a8a24b4a4ec17c9e0866801fad0eeb7928670662243896bb84d32fe84d"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionQuery",
+      "before": "b22ee445be58743349df6c9601ef761b3ce548b83a7f212a3715eeec4b89e4da",
+      "after": "020dfb29d1945968d83a108adfbf44d0de09745f3ed1e5f17e5a661ef909e44f"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionSourceFacts",
+      "before": "5dc9351e701c8ad38e89ffdcb91eeccc6320e1c502c80ea77f75ecd0c683c5bd",
+      "after": "ff647bd261efb050cfcb2fd5407382c52695b109386d6c387496e5ef584b0e46"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext|System.Nullable`1[System.Collections.Immutable.ImmutableArray`1[System.String]]",
+      "before": null,
+      "after": "48ec9647c8c49cd303e2dea5a0109e7bfea2dd70320f7f5c2307916807e43167"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Activities.Design.Core.Models.InputDefinition",
+      "before": "d2a77e7f26cad55b36060a4cd1eccfdea5ab23f1d576f782419f372de2acaca6",
+      "after": "0e2ef936b8770080663b098d679a80b6413017f540dbba91cd66273b37d81c76"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Design.Core.Models.AuthoredValueConversionMode",
+      "before": "93f70648d173a3cfc18b9c7d06644f4a04f3a3823fcc9c9c6037f14673e6c21e",
+      "after": "68102621f7f8af8c288e613b40c137db5a3e9611676d6ac9c2ebba98f804cfd5"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Design.Core.Models.AuthoredValueConversionRequest",
+      "before": "dc75d1b7f20b4dec55e8df917fcbf9e7214db94a5f5dd236f9b374af21982ac7",
+      "after": "b9b8127a48db4d88cf9c982a34c9970b1d0419eeb5c940c0c37a97c8ad99e685"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
+      "before": "2b26d3be6e4f0988a1a56886fb6188845cdde4e855faaf6ec7f0951626d5c99e",
+      "after": "02fad1c3107ba3cfce7243f140c6e84aebe2c5134833f71b839a923045a395c2"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Publishing.Api.Models.GetActivityVersionTestRunByIdempotencyKey",
+      "before": null,
+      "after": "58c0a2b475256ceee1e28fbee40ac07711ec6e2a11f5814021306bf52ccc27c4"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Publishing.Api.Models.StartActivityVersionTestRun",
+      "before": null,
+      "after": "c4eb217c38543b293dd8d16d1f40cb4e4721b88bf6b131c7168dcfcbf3b62c0c"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Publishing.Api.Requests.UnpublishPublicationSlotAtRevisionRequest",
+      "before": null,
+      "after": "d3780df8b2b37855cf7954ea36287590ce23398073585bf5aad75cb5cddf2998"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext|Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput",
+      "before": "5e98ef3d73c1c103802027c07225c7560d52b4bbffddebe64b119e8072bdac7b",
+      "after": "cbe79cf1f6c352cb221d55e19d2ba17fae248ee0e0dfdc1db1b6849ac01f3e9a"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Primitives.Models.CollectionKind",
+      "before": null,
+      "after": "365922ca745f3a462b1afff90b8f231dca56dc1f44bd9473865464db747cf731"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Primitives.Models.TypeReference",
+      "before": null,
+      "after": "5e41388ab49c3228879f58857baa3ee8ab4dfce32e3f5591e8c2d7bfdac75a54"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerAction",
+      "before": null,
+      "after": "953af0113100ab20ded133d3eafcafd2610befe4ce93c478d1ef5a2e69ab086f"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerActor",
+      "before": null,
+      "after": "b46ef359c3575b1e99c17ad9a29131182c59d6e7ddde2f8fa1cb91bdeae5104a"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerChangeResult",
+      "before": null,
+      "after": "12992feef658816d3d9cb90d81c1d6fec6c7c5cd8f0c40adba348e78663bf6a0"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerConfigurationFieldView",
+      "before": null,
+      "after": "5adf13c8bab08cd40d1a36fe71a76a6a6e8edfe4392026ddb0dbccf977863748"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerConfigurationRedaction",
+      "before": null,
+      "after": "4216d3de9d4e08c65d37275e3d97ce450a12b12bbbdfaa54236d0934e172aa68"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerDeliveryView",
+      "before": null,
+      "after": "e8de2725b36960170715b2f9227361f8bc5a718166a07283d874c8ac0e0c17b7"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerExecutionReference",
+      "before": null,
+      "after": "d5af40213df945cd2c93a038497402912cb3aa9bfcf8892304dbfbb4a76d02ea"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerGrantView",
+      "before": null,
+      "after": "3fe5bd4a05b9bdf9b215fd612863da1658b87e63f5a886b62113f488d3966d3e"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerHttpView",
+      "before": null,
+      "after": "da7decfad0f8bb1363a07ab738434ec59eea6373b9830d2ab9d36953be7db777"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerImpact",
+      "before": null,
+      "after": "d6583529c6492ea3739b67fd11d65220617b033671684065cba7aadfe0ade99b"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPage`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerDeliveryView]",
+      "before": null,
+      "after": "956c46ed8818591293bc012ff310931d9fc61401fbca19280ba33927194978d0"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPage`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerSubscriptionView]",
+      "before": null,
+      "after": "5989cbb42466bc3bfd07f4911b705431249369d368eafd11df3e50b461c33624"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPage`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerTargetView]",
+      "before": null,
+      "after": "b3ada3d9f33e1163fc7f73c605ed14a86dd7f5fd6ce299b59eb2dd5acdde1538"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPage`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerTypeView]",
+      "before": null,
+      "after": "aec52113641c01d9f8feff9ef6b72a4aec9256dad02960fbd28b03b24584b669"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPage`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerView]",
+      "before": null,
+      "after": "9c2dd76a660ebf5b68ce7da954d554dc912cea9486d18ad4294ca19a78eda23f"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerPreview",
+      "before": null,
+      "after": "8373c4b0b946aafa36d133c67f2acaabf05a66feffb599ddc21b7a3a74065d0a"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerProblem",
+      "before": null,
+      "after": "4c40875b4ab74e462999665dc0bcdc59a6ace998695cd48674fc083a5b1c3241"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerRecipientView",
+      "before": null,
+      "after": "e3112fdcbc7900cfc8c7d8112396d3391973293fe424711499078267311f0b51"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerScheduleView",
+      "before": null,
+      "after": "8f99bae5feca4d63cbffff196b41ed3f13a7dcb747e85716e4cc1e6d531fa5b0"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerServing",
+      "before": null,
+      "after": "13a750d8326f3cfe8be02427a88e75b35440f42b127d7138e63462eb13dd3d95"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerSubscriptionView",
+      "before": null,
+      "after": "c723b686aa4b304a03bbeabd2aa09402903c6b5fff70470f167e5d54bc71b52c"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerTargetSelector",
+      "before": null,
+      "after": "72ac9e0752b5a691f14db60d310e7a0785b2b9c776e8f8d97544b10187a130e7"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerTargetView",
+      "before": null,
+      "after": "2c2829e034cf987dfef508788c498c7f90069ab1af0ad329df8179fc10413693"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerTransportView",
+      "before": null,
+      "after": "0cbd128d039e40c7aa698e0fc85dec243389cc2e3abb4db5a7cf36400c963bad"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerTypeView",
+      "before": null,
+      "after": "b8eab239bba60856756c7fa1183ff82d59917a8664128282e5296ad5ea9f4c2b"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerView",
+      "before": null,
+      "after": "b0cd1c5d4453374c2dbf76a38ea1823a98c50da7e991e560b548b0a7b2cccd78"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput",
+      "before": null,
+      "after": "cbe79cf1f6c352cb221d55e19d2ba17fae248ee0e0dfdc1db1b6849ac01f3e9a"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract",
+      "before": null,
+      "after": "aeefbe7a792ed078a9fe5c5fc36459eb201e3b5d53b6519225c3c203e0993fe0"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice",
+      "before": null,
+      "after": "78e2a5a967cfd74d28816ccafa7154a506e7e9a7d136f957c6dc8a235ca0e0bb"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding",
+      "before": null,
+      "after": "d6fa4307a70c6f24c58fbf7419b047bc9a209067c08480b51fce15f5cf139305"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementKind",
+      "before": null,
+      "after": "55ef7f2746913054b53c7f4bd23d43e49753a356894d650a2473fcfac408f298"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerManagementOrigin",
+      "before": null,
+      "after": "93afe812be57b20fcf8291fa25225ffe5eb0bb2dd3f68db8484ce924725b8bb7"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Boolean",
+      "before": null,
+      "after": "0502888012eb3326422d846eb4fed922f6f098de5d716e19d7b65ca0dc37f4ab"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyCollection`1[Elsa.Workflows.Runtime.Core.Models.WorkflowDeclaredInput]",
+      "before": null,
+      "after": "4e548bf12ac8b55eb6dc0a3c2a046c3c2291de0d953064b57277df51a2c80353"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyDictionary`2[System.String,System.String]",
+      "before": null,
+      "after": "98b3c6f9f542ecb4dfffd1b361c0bb5647b346352de185df8d60e770a50ecc52"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerAction]",
+      "before": null,
+      "after": "fba2a7480b20d36b4b1d9f064400312123826a0807e43ebf8c995f9272cb38c9"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerConfigurationFieldView]",
+      "before": null,
+      "after": "854b42de7dc05abb87a1aeb2facc43a32cadc1995036ee8583449ec72b47f89a"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerConfigurationRedaction]",
+      "before": null,
+      "after": "94dc17da51766a460b75be45c40c276ef9ff04451c2ff028b134fe2ee339c1a3"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerDeliveryView]",
+      "before": null,
+      "after": "587415a5ae4ab4f80d3768e03afb1f5edc7a6a9493eeef857d6f5a3e44f5712c"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerImpact]",
+      "before": null,
+      "after": "90e059db8fa4f02938d9942f30cf0075f11e8a38e17dfc4fed0317b7a15f28fa"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerRecipientView]",
+      "before": null,
+      "after": "f9907bf0169c18ba90eed209a6007958ee4e4d431d9bd2719169cf7fecc1a984"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerSubscriptionView]",
+      "before": null,
+      "after": "87846a672acb9bdbf0d6090ee9595e3c5b88c0ef7a370fa0b619e1e38527f642"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerTargetView]",
+      "before": null,
+      "after": "7d01793e7d7757f63cedd1ff813d35bceefbf769a73b83b673f6a092d6a7261b"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerTypeView]",
+      "before": null,
+      "after": "dba015d52857b05157d658c743951a4167cae8b08a394f747dad96306750609b"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.StandaloneTriggers.TriggerView]",
+      "before": null,
+      "after": "6503066339e1eba418b6e4522b0e18ff30afc843687f065f779d9fd71f9310b2"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFieldChoice]",
+      "before": null,
+      "after": "3eafc3a3a28cdc4969a88a3f81501cf05f61155dbcba39ded6196a282aa1e004"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerFinding]",
+      "before": null,
+      "after": "8e6eac77eedb478d5f01a8c772b04558379b4edcb81cf08ba696961a80d00cdd"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[System.String]",
+      "before": null,
+      "after": "03602c4a50974bff4084932374da522ba6b4adc4ed6b7b579c1a07db6290007d"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Collections.Generic.IReadOnlyList`1[System.Text.Json.JsonElement]",
+      "before": null,
+      "after": "7346928c63123957a2df21cf8d0610da1071658fa92cedc9c0371fcd67c7552b"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.DateTimeOffset",
+      "before": null,
+      "after": "33470a5fb0812b92673abe0c1bfdbdf56f95b4278fb2f7e73f2c221d52e0e0a5"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Int32",
+      "before": null,
+      "after": "e6c6cad705996ac1a052560a6032c8122d04d35a59da67443d5a3a5bf594f0a3"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Int64",
+      "before": null,
+      "after": "d54d1f95616761c1db9650c8841b0bce2e4949d64ee266de9a743e2a04a8884d"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Nullable`1[System.Boolean]",
+      "before": null,
+      "after": "b0f744f1bce74e163bcfd3ba086d5c19165b0d927e6ad2cdbe781a4010ef1d08"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Nullable`1[System.DateTimeOffset]",
+      "before": null,
+      "after": "037740618e4e35b9ff27f0d4b821025989d52e990da986d372fc9a99e0f6d796"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Nullable`1[System.Int32]",
+      "before": null,
+      "after": "61520fdef035edff4fe3636de4ca3a088674a02eda5dc9356500db298d1e0925"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Nullable`1[System.Int64]",
+      "before": null,
+      "after": "fd15efe369b6d2ad47d3ac07adcfd5e30968b1ef81a0a6e663b2a0189d929a5d"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Nullable`1[System.Text.Json.JsonElement]",
+      "before": null,
+      "after": "9b36f0063ccc67fccc4f6b3bd654ed8b341090db0ff70009dbb4aef6cdbfbedc"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.String",
+      "before": null,
+      "after": "3b95e732ea3bb8d19b4275603123bb6be3bbc7d4aafc5b35838deecbc31aec2a"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.StandaloneTriggers.StandaloneTriggersJsonContext|System.Text.Json.JsonElement",
+      "before": null,
+      "after": "90f6723f1a290fac4477263eae8c4cbf1a0fb4adf18ded0965fca13c967d837f"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryBookmarkDetailsView",
+      "before": null,
+      "after": "8095400a4d1c3c41f994e73f7aa197535e8e00ddd5576939cdd59cfa9e50e299"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryBookmarkPageView",
+      "before": null,
+      "after": "bfb672cea5e82d12712c653a7b15fc02ccc1f341ba9cdc3294b90eba8ebfcdc1"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryBookmarkView",
+      "before": null,
+      "after": "1edfe6e2621c9a924e5cd3e70a083f58ea9ac8f1cd88ce28095dda01e1cb3cb1"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryCoverageView",
+      "before": null,
+      "after": "6096f83253345237782f095e4cb0ca68540d31f4481d75fcd4ed8f40b9a8ca35"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryEventDetailsView",
+      "before": null,
+      "after": "b1b83d5507108912d57ed98386034ca02f31ef7965efb950af87fc3ff5d024e4"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryEventView",
+      "before": null,
+      "after": "ac5ea356a628733cb634813861d9d322142b927c05ec916fc891f2b2a2d88955"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryOccurrenceCoverageView",
+      "before": null,
+      "after": "4061a6b9ef66622fc1a6ae87fb7d04f8d8c1381551f9357ed911ce24afa80da0"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryOccurrencePageView",
+      "before": null,
+      "after": "cec84db6b57a4830ded1b61cebfa5d808a1f92c7d8b2615579e962ffa72f2233"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryOccurrenceView",
+      "before": null,
+      "after": "87ea7f329eb0022aae4ac129d4380c6d1f6b40160343097a7fb80026e16c61f5"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryPageView",
+      "before": null,
+      "after": "9f75085330f9ed5307dbb3e1be039b4501f78d1b5069a3d80b3f2a44b2d4ea3f"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.WorkflowExecutableDeclaredInputView",
+      "before": "e42d59e89e41f681ef8fabb30da112a419643861e9d97a772be202e2ee87cb32",
+      "after": "c87b6071712827d5b35d15917a70eeec58fe29e382e6262e9a23f8ec1103f478"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Models.WorkflowExecutableDetailsView",
+      "before": "981ea59338aae0c526c3af851b366ff605c935b0d3c09c1feb61ee26dae85798",
+      "after": "0be9be2b01b32e2c575c1625649a2e1bc684c52c32b7a635b6ecaac88c20b309"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Requests.GetRuntimeHistory",
+      "before": null,
+      "after": "c20c01cd09e98ebe21ec565dd0adacb7fb75a7e708ba7321de7845df46f5ea4f"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Requests.GetRuntimeHistoryBookmark",
+      "before": null,
+      "after": "7b946502989a7aca3f8d8faef635ac2c43b7dd0255b75a5f6e6601cad2233315"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Requests.GetRuntimeHistoryBookmarks",
+      "before": null,
+      "after": "70b3e7f4dade5cdf5254d6af12012cab74923747223d0415ff9eddb28b2b5761"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Requests.GetRuntimeHistoryEvent",
+      "before": null,
+      "after": "3a48374a5b6db09a476c6a928c0764e27c8a22c51fc9459e27143c9907ad3c4a"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.Requests.GetRuntimeHistoryOccurrences",
+      "before": null,
+      "after": "fd9fe9c737f4102e3471818793e27ed7a604a3e47c06611c683681f8709a3a0a"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.FormDefinitionRequest",
+      "before": null,
+      "after": "88ede90e3cf8850d36c4e72c34da730d6746ec9680ba197ed7a2943cea2b5ee9"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.FormDraftRequest",
+      "before": null,
+      "after": "1b2db28366d1f0e69f2cfe6683b9e3ccc1fb1c2a493bbcab73f81c3b01184bdd"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.FormHistoryRequest",
+      "before": null,
+      "after": "d2006afc53e4063bbe1e2391d27c56e635843b6261e608395371e0e548313076"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.FormPublishRequest",
+      "before": null,
+      "after": "a0155c8803c319fbca206e973794985b02c969d0e6f8491decbab99ff952afce"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.FormRevisionRequest",
+      "before": null,
+      "after": "a681431e40e03e399ece44f66339db0f67d7829bac83179f1e72d6889facc7fc"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.UserTaskHistoryView",
+      "before": null,
+      "after": "1bc385c20feec9d5f60d726822a8e7da0651e42be71306d23f942288cd05cc34"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Api.UserTasks.UserTaskView",
+      "before": "08649cb697d1dc37f87ef32b1071aefeeffc2fd4dfb456ac4a51f868a5017667",
+      "after": "e500d3ec6319f47d4890c11ce256e03ee9b65e9223a22c9c373ca1413a0ed36a"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryBookmarkStatus",
+      "before": null,
+      "after": "d1c0cfa8f35b294efa9881be9101ae9074ee6520fd76c7e68e19792e910fd4b5"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation",
+      "before": null,
+      "after": "3d101fe76ef8f6b6b0af6bdc974de8dd1f2a5c5fc08d84c5e6fd4ca16525aa4d"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEventCategory",
+      "before": null,
+      "after": "4b8e24d7327e0b0e46a901f2e2a8c47ab714b4c571b730eea7b1cf39cfe3c3bc"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.Models.ValueConversionMode",
+      "before": "11b45cd5d3d9b233f590782bf074cf82cdefaca51763d87eea9602c163d9daa9",
+      "after": "50dc263117694c5e4b619f3376744846e002cc627e8f8bada66cf61e65df963f"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.Models.ValueConversionOperation",
+      "before": "8773705607ccc4453f1b7968191691e2839085494ffb3a3d676d6ef753f3616d",
+      "after": "50ebdb97a94ec4f0945c104143956c9dd81134e79e6c5f31ca514d00df9caf6f"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.Models.ValueConversionPlan",
+      "before": "73eab891cc649c5ab9040fcc941dd99cdd35bc861470e77051a92bacb6a598cf",
+      "after": "3ddf221b1a8b6bc7f4195addd8fac67ad47d1d7470db12bd2a8c0756032319b1"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity",
+      "before": null,
+      "after": "b94667057eb389c4f24f4241eff949abf51c834f0255f388ecbe547d3fc317ce"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskField",
+      "before": "9fcc395adda572c7405f5360c185e5094a5f7227b39e6c0bf174e0c8f3ef514f",
+      "after": "fe0e3e346ed68b683025120c2a1434bfe4e99731f9b3facecf8e9d90146aeb20"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFieldPresentation",
+      "before": null,
+      "after": "5b6b6412f0dc49c407b42786400894c70809208217fa9467cb0f844bc164b25e"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskForm",
+      "before": "1b40ab651a65f8bed666eb65b14c85d3dc4ab09eaa4513e64faa1262c85bc822",
+      "after": "dc1766ef22d1580122298d0a5f6a42be62881177340645b6b764813d2dd076ea"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinition",
+      "before": null,
+      "after": "4164de6dd3705df89a4420082c961182f2eaf228ba262fd252fb36e71872400e"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinitionPage",
+      "before": null,
+      "after": "370042da14ffa125eca13c3f4e4c97136fbcbca0d2cbc7e24c7e5a26cf8168dc"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDraft",
+      "before": null,
+      "after": "b1dacf1a47f8cb8daa6be9fa3b1079cad6f36e087da172888e240234a54165a8"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory",
+      "before": "5464e96c2b8d21968037b3309792bddde6b87c65b7302d00629079c018f97ddd",
+      "after": null
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryBookmarkView]",
+      "before": null,
+      "after": "0a2d54e7a28a29045c63ffdcd65c78a78fbc0cdb05d8489ba8bb9d39a2c62761"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryEventView]",
+      "before": null,
+      "after": "b1030a53300c9ff7ad5f216cdc3cc56b88d5f6eb6b5821dae6ce8fe9b593e7a1"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.Models.RuntimeHistoryOccurrenceView]",
+      "before": null,
+      "after": "1513bc8967d35f832f2e1aafce92f3cc2a8c7f100b0703ddf7acbca28258bcb0"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Api.UserTasks.UserTaskHistoryView]",
+      "before": null,
+      "after": "de0f56e9d25ebb8606bfad5a5e1083f369fb50bbc5a222202ec66d3289a62b8d"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinition]",
+      "before": null,
+      "after": "7b22f9f6869e938fe4491897deb2f4a32fc7792afc2bcc08fe951148cb227f94"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|System.Collections.Generic.IReadOnlyList`1[Elsa.Workflows.Runtime.Core.UserTasks.UserTaskHistory]",
+      "before": "8058ba2e772ad72102dc0090879201374202ba343d75ca1df0b92d067a98cd3f",
+      "after": null
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|System.Nullable`1[Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryBookmarkStatus]",
+      "before": null,
+      "after": "1e69297efab6f9ee297f9c02c51f9926ca96c77534f5b406b011084a9ef23804"
+    },
+    {
+      "key": "shape|Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext|System.Nullable`1[Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEventCategory]",
+      "before": null,
+      "after": "90b25a8c1f1e320e971b7bb86c009fce170dd2d81cdbe7ee3f3e8a6d9db950fb"
+    }
+  ]
+}

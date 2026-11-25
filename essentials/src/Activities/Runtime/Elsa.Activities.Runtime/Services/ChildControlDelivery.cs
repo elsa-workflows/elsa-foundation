@@ -45,7 +45,7 @@ internal static class ChildControlDelivery
         if ((completionWorkItemId is not null) != incoming.Batch.IsTerminal)
             throw new InvalidOperationException("Terminal control must enter through its ordinary completed local call.");
         if (incoming.Batch.IsTerminal && (child.Status != ActivityExecutionStatus.Completed ||
-            !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(child.ChildControl), JsonSerializer.SerializeToElement(incoming))))
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(child.ChildControl, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(incoming, Elsa.Serialization.Core.JsonBaseline.Options))))
             throw new InvalidOperationException("Terminal control differs from the validated completed call projection.");
 
         var decision = ChildControlInboxEvaluation.Accept(child, incoming);
@@ -69,7 +69,7 @@ internal static class ChildControlDelivery
         if (decision.Ready[^1].Batch.IsTerminal)
         {
             if (child.Status != ActivityExecutionStatus.Completed || child.Completion is null ||
-                !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(child.ChildControl), JsonSerializer.SerializeToElement(decision.Ready[^1])))
+                !Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(child.ChildControl, Elsa.Serialization.Core.JsonBaseline.Options), JsonSerializer.SerializeToElement(decision.Ready[^1], Elsa.Serialization.Core.JsonBaseline.Options)))
                 throw new InvalidOperationException("A ready terminal barrier requires its exact committed ordinary leaf completion.");
             outcomes = child.Completion.OutcomeNames;
         }

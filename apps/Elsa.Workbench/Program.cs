@@ -103,6 +103,12 @@ var bootStopwatch = Stopwatch.StartNew();
 ConsoleLogStreamingSetup.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddElsaJsonResponseHeaders();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    Elsa.Serialization.Core.JsonBaseline.Configure(options.SerializerOptions);
+    Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options.SerializerOptions, apiMode: true);
+});
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
 // Environment overlay (e.g. shells.Production.json), layered on top of the dev/demo defaults in shells.json.
 // This keeps `git clone && dotnet run` (Development) working out of the box on ephemeral identity keys, committed

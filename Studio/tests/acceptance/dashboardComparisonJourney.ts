@@ -1,10 +1,13 @@
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { expectedStudioDate, selectStudioTimeZone } from "./studioDateAssertions";
+import { openQuestionSection } from "./questionNavigation";
 import type { QuestionDefinition, QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
 import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, observeNativeWeaverBoundary, registerDashboardCleanup, seedDashboardRuns, tag, type Capture, type Resource } from "./dashboardJourneySupport";
 
 /** Derive period membership from the independent runtime inspection API, never Dashboard results. */
 export async function dashboardComparisonJourney(page: Page, info: TestInfo, capture: Capture) {
   const backend = await dashboardBackend(page.request);
+  await selectStudioTimeZone(page, "Europe/Amsterdam");
   const boundary = observeNativeWeaverBoundary(page);
   const seeded = await seedDashboardRuns(backend, `comparison-${Date.now()}`);
   let saved: Resource | undefined;
@@ -71,6 +74,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     await source.getByRole("button", { name: "Add condition", exact: true }).click();
     await source.getByRole("combobox", { name: "Field", exact: true }).selectOption("definitionId");
     await source.getByLabel("Comparison value", { exact: true }).fill(seeded.definitionId);
+    await openQuestionSection(page, "query.time");
     await page.getByRole("combobox", { name: "Time field", exact: true }).selectOption("startedAt");
     await page.getByRole("combobox", { name: "Time range", exact: true }).selectOption("absolute");
     await page.getByLabel("Start time (UTC, inclusive)", { exact: true }).fill(periods.from);
@@ -79,13 +83,13 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     await page.getByRole("combobox", { name: "Compare with", exact: true }).selectOption("absolute");
     await page.getByLabel("Baseline from", { exact: true }).fill(periods.baselineFrom);
     await page.getByLabel("Baseline to", { exact: true }).fill(periods.baselineTo);
-    const having = page.getByRole("group", { name: "Result conditions", exact: true });
+    const having = await openQuestionSection(page, "query.having");
     await having.getByRole("button", { name: "Add condition", exact: true }).click();
     await having.getByRole("combobox", { name: "Result metric", exact: true }).selectOption("delta.total");
     await having.getByLabel("Comparison value", { exact: true }).fill(String(delta));
     const preview = async () => {
       const pending = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/dashboard-queries/preview"));
-      await page.getByRole("button", { name: "Preview question", exact: true }).click();
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
       const response = await pending; expect(response.ok()).toBe(true);
       const result = await response.json() as QueryResult;
       expect(result.outcome).toBe("succeeded"); expect(result.coverage?.status).toBe("unknown");
@@ -94,6 +98,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     const excluded = await preview(); expect(excluded.result.rows).toEqual([]);
     await capture(page, info, "comparison-excluded");
     await captureTarget("comparison-excluded-empty", page.getByRole("status").filter({ hasText: "No authorized records matched this question" }));
+    await openQuestionSection(page, "query.having");
     await having.getByLabel("Comparison value", { exact: true }).fill("0");
     const included = await preview();
     const check = (result: QueryResult) => {
@@ -101,6 +106,25 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
       expect(result.rows[0].values).toMatchObject({ definitionId: { value: seeded.definitionId }, total: { value: String(expectedCurrent.length) }, "baseline.total": { value: String(expectedBaseline.length) }, "delta.total": { value: String(delta) } });
     };
     check(included.result);
+    async function checkPeriodDates(zone: string) {
+      expect(included.result.periods, "Actual query period boundaries").toHaveLength(2);
+      for (const period of included.result.periods!) {
+        expect(period.timeZone).toBe("UTC");
+        const caption = page.locator(".named-preview > .named-result .named-result-provenance > p").filter({ hasText: new RegExp(`^${period.role}:`) });
+        for (const [index, instant] of [period.from, period.to].entries()) {
+          const matching = caption.locator("time").nth(index);
+          await expect(matching).toHaveAttribute("datetime", instant);
+          await expect(matching).toHaveText((await expectedStudioDate(page, instant, zone)).full);
+        }
+      }
+    }
+    await checkPeriodDates("Europe/Amsterdam");
+    await selectStudioTimeZone(page, "UTC");
+    await checkPeriodDates("UTC");
+    await expect(page.getByLabel("Time zone", { exact: true })).toHaveValue("UTC");
+    await expect(page.getByLabel("Start time (UTC, inclusive)", { exact: true })).toHaveValue(periods.from);
+    await expect(page.getByLabel("End time (UTC, exclusive)", { exact: true })).toHaveValue(periods.to);
+    await selectStudioTimeZone(page, "Europe/Amsterdam");
     await capture(page, info, "comparison-included");
     await captureValues("comparison-included");
     const saving = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/_elsa/studio/questions"));
@@ -108,9 +132,10 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     const savedResponse = await saving; expect(savedResponse.ok()).toBe(true); saved = await savedResponse.json() as Resource;
     expect(canonicalDashboardDefinition(saved.definition)).toEqual(canonicalDashboardDefinition(included.definition));
     await page.reload();
+    await openQuestionSection(page, "query.time");
     await expect(page.getByRole("combobox", { name: "Compare with", exact: true })).toHaveValue("absolute");
     const refresh = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/questions/${saved!.id}/execute`));
-    await page.getByRole("button", { name: "Refresh results", exact: true }).click();
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
     const refreshed = await refresh; expect(refreshed.ok()).toBe(true); check(await refreshed.json() as QueryResult);
     await capture(page, info, "comparison-saved-reopened");
     await captureValues("comparison-reopened");

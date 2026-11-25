@@ -10,7 +10,7 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 /// <summary>Records replay-stable parent resume responsibility in a waited child's terminal checkpoint.</summary>
 public sealed class WorkflowDispatchCompletionEnricher : IRuntimeCheckpointCommitEnricher
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly IWorkflowOutputSource _workflowOutputSource;
     private readonly IPostCommitOutboxLookupStore _outboxLookupStore;
     private readonly IIncidentStateStore? _incidentStateStore;

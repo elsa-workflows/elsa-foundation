@@ -36,7 +36,7 @@ internal static class SavedStimulusCheckpointAuthority
             state.Status != (firstFault ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Running) || state.StartedAt != state.CreatedAt)
             throw new InvalidDataException("The initial saved start changed its exact target identity, material or captured scope.");
         var envelope = SavedStimulusStartSeal.Read(source, state.WorkflowExecutionId);
-        var start = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var start = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         if (!origin.IsEquivalentTo(start.StimulusDeliveryOrigin) ||
             state.HistoryCaptureEnabledAtAdmission != start.HistoryCaptureEnabledAtAdmission ||
             !(start.HistoryCapturePolicy?.IsEquivalentTo(state.HistoryCapturePolicy) ?? state.HistoryCapturePolicy is null) ||
@@ -50,12 +50,12 @@ internal static class SavedStimulusCheckpointAuthority
             return;
         }
         var rootIntent = commit.PostCommitIntents.SingleOrDefault() ?? throw new InvalidDataException("A saved start requires exactly its root continuation.");
-        var root = rootIntent.Payload?.Deserialize<RuntimeSchedulerWorkItem>() ?? throw new InvalidDataException("The saved root continuation is invalid.");
+        var root = rootIntent.Payload?.Deserialize<RuntimeSchedulerWorkItem>(options: Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new InvalidDataException("The saved root continuation is invalid.");
         var original = new RuntimeSchedulerWorkItem(envelope.EnvelopeId, envelope.WorkflowExecutionId, envelope.Command.CommandId,
             envelope.Command.Kind, envelope.EnvelopeId, envelope.IdempotencyKey, envelope.EnqueuedAt, root.RecordedAt,
             envelope.Sequence, envelope.Command.Payload, envelope.Command.Metadata, envelope.Metadata);
         var expected = NativeIngressStartLineage.Build(original, start, material.RootActivity.ExecutableNodeId);
-        var payload = expected.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var payload = expected.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(options: Elsa.Serialization.Core.JsonBaseline.Options)!;
         var seeds = RuntimeWorkflowStateSeed.BuildSeedChanges(state.WorkflowExecutionId,
             start.Inputs.ToDictionary(pair => pair.Key, pair => (object?)pair.Value, StringComparer.Ordinal), commit.Checkpoint.OccurredAt,
             start.StimulusInput, start.TriggerNodeId, start.TriggerMetadata, start.CorrelationId);

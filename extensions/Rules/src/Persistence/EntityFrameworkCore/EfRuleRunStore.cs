@@ -245,7 +245,7 @@ internal sealed partial class EfRuleRunStore(IDbContextFactory<RulesDbContext> c
     {
         var bytes = RuleRecordCodec.InvocationBytes(invocation);
         var scope = RuleRecordCodec.ScopeBytes(invocation.Identity);
-        return new(RuleRecordCodec.Hash(scope), Convert.ToBase64String(scope), Encoding.UTF8.GetString(bytes), RuleRecordCodec.Hash(bytes));
+        return new(RuleRecordCodec.Hash(scope), Convert.ToBase64String(scope), Encoding.UTF8.GetString(bytes), RuleRecordCodec.JsonHash(bytes));
     }
 
     private static bool IsInvalidRecord(Exception error) => error is InvalidDataException or ArgumentException or JsonException or FormatException or OverflowException or KeyNotFoundException;

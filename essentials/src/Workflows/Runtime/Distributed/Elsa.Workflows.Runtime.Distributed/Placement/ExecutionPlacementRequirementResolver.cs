@@ -102,7 +102,7 @@ public sealed class ExecutionPlacementRequirementResolver
         if (start.Command.Payload is not { } payload)
             throw new InvalidOperationException("The start command carries no payload.");
 
-        return (payload.Deserialize<WorkflowExecutionStartCommandPayload>()
+        return (payload.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)
                 ?? throw new InvalidOperationException("The start command's payload resolved to null.")).PinnedExecutable;
     }
 }

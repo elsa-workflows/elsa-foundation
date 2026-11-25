@@ -171,8 +171,8 @@ public sealed class GitHubCopilotHarnessTests
     [InlineData(true)]
     public async Task Context_metadata_preserves_the_sensitive_content_gate(bool includeSensitive)
     {
-        var sensitive = IndependentContext() with { Sensitivity = WeaverContextSensitivity.Sensitive, Content = new { value = "SENSITIVE_CONTENT_ONLY" } };
-        var secret = IndependentContext() with { Id = "secret", Sensitivity = WeaverContextSensitivity.Secret, Content = new { value = "SECRET_CONTENT_ONLY" } };
+        var sensitive = IndependentContext() with { Sensitivity = WeaverContextSensitivity.Sensitive, Content = WeaverJsonData.From(new { value = "SENSITIVE_CONTENT_ONLY" }) };
+        var secret = IndependentContext() with { Id = "secret", Sensitivity = WeaverContextSensitivity.Secret, Content = WeaverJsonData.From(new { value = "SECRET_CONTENT_ONLY" }) };
 
         var prompt = await ContextPrompt([sensitive, secret], includeSensitive);
 
@@ -186,8 +186,8 @@ public sealed class GitHubCopilotHarnessTests
     [Fact]
     public async Task Context_metadata_keeps_resource_data_distinct_from_installed_guidance()
     {
-        var resource = IndependentContext() with { Label = "Untrusted resource", Content = new { instructions = "UNTRUSTED_RESOURCE_INSTRUCTION" } };
-        var guidance = IndependentContext() with { Id = "guidance", Label = "Trusted module", Target = null, Origin = WeaverContextOrigin.InstalledGuidance, Content = new { instructions = "INSTALLED_MODULE_GUIDANCE" } };
+        var resource = IndependentContext() with { Label = "Untrusted resource", Content = WeaverJsonData.From(new { instructions = "UNTRUSTED_RESOURCE_INSTRUCTION" }) };
+        var guidance = IndependentContext() with { Id = "guidance", Label = "Trusted module", Target = null, Origin = WeaverContextOrigin.InstalledGuidance, Content = WeaverJsonData.From(new { instructions = "INSTALLED_MODULE_GUIDANCE" }) };
 
         var prompt = await ContextPrompt([resource, guidance]);
 
@@ -206,7 +206,7 @@ public sealed class GitHubCopilotHarnessTests
     }
 
     private static WeaverContextAttachment IndependentContext() => new("context", "independent.context", null, "Resource", "independent.context",
-        WeaverContextSensitivity.Internal, "selection", "Bounded resource data.", new { value = "same-domain-content" }, new Dictionary<string, string>())
+        WeaverContextSensitivity.Internal, "selection", "Bounded resource data.", WeaverJsonData.From(new { value = "same-domain-content" }), new Dictionary<string, string>())
     {
         ModuleId = "independent.module", SchemaVersion = "7", Origin = WeaverContextOrigin.ClientSnapshot,
         Target = new("independent.module", "independent.resource", "envelope-only-resource", "envelope-only-revision"),

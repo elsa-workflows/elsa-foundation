@@ -38,7 +38,7 @@ public static class SecretsApi
         // surface stays on the group's raw seam; the operation names restore the historical
         // ElsaSecretsApiEndpointsSecrets* identities the owner published before the Minimal API
         // rewrite dropped endpoint names.
-        var api = endpoints.MapEndpointGroup(OwnerId, SecretsJsonContext.Default, jsonContentType: "application/json");
+        var api = endpoints.MapEndpointGroup(OwnerId, SecretsJsonContext.WireContext, jsonContentType: "application/json");
 
         api.MapUnboundOperation("GET", SecretsRoute, "SecretsList",
                 typeof(ListSecretsResponse), StatusCodes.Status200OK, null, HandleListAsync, containFailures: false)
@@ -384,12 +384,8 @@ public static class SecretsApi
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
-        var options = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
 
         // These options are shared by every request, so they are frozen up front. Left mutable,

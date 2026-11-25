@@ -30,11 +30,12 @@ namespace Elsa.Workflows.Design.Api;
 internal static class WorkflowsDesignJsonOptions
 {
     /// <summary>The owner context bound to the effective Workflows Design wire options.</summary>
-    internal static WorkflowsDesignJsonContext WireContext { get; } = new(Create());
+    internal static WorkflowsDesignJsonContext WireContext => WorkflowsDesignJsonContext.WireContext;
 
-    private static JsonSerializerOptions Create()
+    internal static JsonSerializerOptions Create()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         // The schema emits these authored enums as camel-case strings. Shared type-attributed
         // enums keep their own existing converters and response casing for current Studio clients.
         options.Converters.Add(new JsonStringEnumConverter<AuthoredWorkflowIntrinsicKind>(JsonNamingPolicy.CamelCase));
@@ -47,7 +48,7 @@ internal static class WorkflowsDesignJsonOptions
     }
 }
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(ListWorkflowFolders))]
 [JsonSerializable(typeof(GetWorkflowFolder))]
 [JsonSerializable(typeof(CreateWorkflowFolder))]
@@ -153,6 +154,10 @@ internal static class WorkflowsDesignJsonOptions
 [JsonSerializable(typeof(WorkflowDesignError))]
 internal partial class WorkflowsDesignJsonContext : JsonSerializerContext
 {
+    internal static WorkflowsDesignJsonContext WireContext { get; } = new(WorkflowsDesignJsonOptions.Create());
+
+
+
 }
 
 /// <summary>
@@ -164,11 +169,6 @@ internal sealed class WorkflowsDesignJsonTypeInfoResolver : IJsonTypeInfoResolve
 {
     public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
     {
-        // The generated context's explicit resolver implementation dispatches to
-        // its private Create_* factories with the caller's exact options. The
-        // context instance only supplies those generated factories; its own
-        // options are deliberately not used for the returned metadata.
-        return ((IJsonTypeInfoResolver)new WorkflowsDesignJsonContext(new JsonSerializerOptions(JsonSerializerDefaults.Web)))
-            .GetTypeInfo(type, options);
+        return Elsa.Serialization.Core.JsonModuleMetadata.Resolve(new WorkflowsDesignJsonContext(WorkflowsDesignJsonOptions.Create()), type, options, "Elsa.Workflows.Design");
     }
 }

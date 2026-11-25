@@ -14,7 +14,7 @@ namespace Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore;
 internal sealed class EfDashboardResourceStore<TContext>(TContext configuredContext, IServiceProvider services) : IDashboardResourceStore
     where TContext : DbContext
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public async ValueTask<DashboardResourceDocument?> FindAsync(string tenantId, string kind, string id, CancellationToken cancellationToken = default)
     {

@@ -27,7 +27,7 @@ public sealed partial class WorkflowExecutableCompilerTests
         var services = new ServiceCollection(); new JavaScriptFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
         var root = new ActivityNode("script", typeof(RunJavaScript).FullName!,
-            [new("script", new ArgumentValue(body, "Literal"), null, null, null, null)], bound
+            [new("script", ArgumentValue.FromClr(body, "Literal"), null, null, null, null)], bound
                 ? [new("result", new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "captured", declaringScopeId = "workflow" }), "Variable"), null, null, null, null)] : []);
         var compile = SecretBindingCompilerFixture.CompileAsync(root, [typeof(RunJavaScript)],
             variables: [new("captured", "captured", new("Any"), null, null)], includeDeclaredInputDefaults: true,
@@ -46,7 +46,7 @@ public sealed partial class WorkflowExecutableCompilerTests
     public async Task SetOutput_uses_the_declared_output_type_instead_of_the_authored_fallback(string alias, bool policy, bool refused, string syntax)
     {
         var root = new ActivityNode("set", "", [
-            new("name", new ArgumentValue("count", syntax), null, null, null, null),
+            new("name", ArgumentValue.FromClr("count", syntax), null, null, null, null),
             new("value", new ArgumentValue(JsonSerializer.SerializeToElement<object?>(null), "Literal"), null, null, null, null)], [])
             { Intrinsic = new(AuthoredWorkflowIntrinsicKind.SetOutput, new(alias == "String" ? "Int32" : "Any")) };
         var version = WorkflowVersion(root);

@@ -128,7 +128,7 @@ public sealed class DecisionDataSelectionTests
     private static ActivityDataSelectionDocument Document(string input) => new(
         "WorkflowDefinition", "decision-workflow", "candidate-1",
         new ActivityNode("evaluate", "decision-version", [new(input,
-            new ArgumentValue(new VariableReference("value"), "Variable"), null, null, null, null)], []),
+            ArgumentValue.FromClr(new VariableReference("value"), "Variable"), null, null, null, null)], []),
         [], [new VariableDefinition("value", "Value", new("String"), null, null)], []);
 
     private sealed class Catalog : IActivityDefinitionLookup
@@ -212,7 +212,7 @@ public sealed class DecisionDataSelectionTests
                         {
                             new ActivityNode("evaluate", Version.Id, [], []),
                             new ActivityNode("consumer", consumer.Id, [new("CustomerId",
-                                new ArgumentValue(new VariableReference("value"), "Variable"), null, null, null, null)], [])
+                                ArgumentValue.FromClr(new VariableReference("value"), "Variable"), null, null, null, null)], [])
                         },
                         variables = Array.Empty<VariableDefinition>()
                     }, new JsonSerializerOptions(JsonSerializerDefaults.Web)))),

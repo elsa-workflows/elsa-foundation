@@ -185,7 +185,7 @@ public static class WorkflowExecutableSourceReferenceComparer
             if (!StringComparer.Ordinal.Equals(leftRecord.ExecutableNodeId, rightRecord.ExecutableNodeId) ||
                 !StringComparer.Ordinal.Equals(leftRecord.InputKey, rightRecord.InputKey) ||
                 !StringComparer.Ordinal.Equals(leftRecord.ExpressionType, rightRecord.ExpressionType) ||
-                !JsonElement.DeepEquals(leftRecord.Value, rightRecord.Value) ||
+                !Elsa.Serialization.Core.JsonCanonicalForm.Equals(leftRecord.Value, rightRecord.Value) ||
                 leftRecord.IsSensitive != rightRecord.IsSensitive)
                 return false;
         }
@@ -215,5 +215,5 @@ public static class WorkflowExecutableSourceReferenceComparer
 
     private static bool SameJson(JsonElement? left, JsonElement? right) =>
         left.HasValue == right.HasValue &&
-        (!left.HasValue || JsonElement.DeepEquals(left.Value, right!.Value));
+        (!left.HasValue || Elsa.Serialization.Core.JsonCanonicalForm.Equals(left.Value, right!.Value));
 }

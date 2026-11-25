@@ -14,7 +14,7 @@ namespace Elsa.Activities.Design.Core.Services;
 /// </summary>
 public sealed class ActivityVersionDiffer : IActivityVersionDiffer
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter() }
     };
@@ -578,47 +578,20 @@ public sealed class ActivityVersionDiffer : IActivityVersionDiffer
     private static object UiSummary(IActivityContractValueMember member) =>
         new { member.UiHint, specificationsHash = HashElement(member.UiSpecifications) };
 
-    private static string DefaultHash(ActivityInputDefault value) => Hash($"{value.Syntax}\u001f{CanonicalJson(value.Value)}");
+    private static string DefaultHash(ActivityInputDefault value) => $"sha256-{Elsa.Serialization.Core.JsonHashInput.Hash(new { value.Syntax, value.Value })}";
 
     private static string? HashUi(string? hint, JsonElement? specifications) =>
-        hint is null && specifications is null ? null : Hash($"{hint}\u001f{(specifications is null ? null : CanonicalJson(specifications.Value))}");
+        hint is null && specifications is null ? null : $"sha256-{Elsa.Serialization.Core.JsonHashInput.Hash(new { hint, specifications })}";
 
-    private static string? HashElement(JsonElement? value) => value is null ? null : Hash(CanonicalJson(value.Value));
+    private static string? HashElement(JsonElement? value) => value is null ? null : $"sha256-{Elsa.Serialization.Core.JsonHashInput.Hash(value.Value)}";
 
     private static string Hash(string value) => $"sha256-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant()}";
 
-    private static JsonElement Element<T>(T value) => JsonSerializer.SerializeToElement(value, JsonOptions);
+    private static JsonElement Element<T>(T value) => Elsa.Serialization.Core.JsonHashInput.SerializeToElement(value);
 
     private static string CanonicalJson(JsonElement element)
     {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            WriteCanonical(writer, element);
-        return Encoding.UTF8.GetString(stream.ToArray());
-    }
-
-    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var property in element.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal))
-                {
-                    writer.WritePropertyName(property.Name);
-                    WriteCanonical(writer, property.Value);
-                }
-                writer.WriteEndObject();
-                break;
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in element.EnumerateArray()) WriteCanonical(writer, item);
-                writer.WriteEndArray();
-                break;
-            default:
-                element.WriteTo(writer);
-                break;
-        }
+        return Encoding.UTF8.GetString(Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(element));
     }
 
     private static string Kebab(string value) => string.Concat(value.Select((character, index) =>

@@ -190,7 +190,7 @@ public sealed class SecretsWorkflowHost : IAsyncDisposable
         var reference = new JsonObject { ["name"] = name };
         if (typeName is not null)
             reference["typeName"] = typeName;
-        return new ArgumentValue(JsonSerializer.SerializeToElement(reference), SecretExpressionTypes.Secret);
+        return ArgumentValue.FromClr(JsonSerializer.SerializeToElement(reference), SecretExpressionTypes.Secret);
     }
 
     /// <summary>

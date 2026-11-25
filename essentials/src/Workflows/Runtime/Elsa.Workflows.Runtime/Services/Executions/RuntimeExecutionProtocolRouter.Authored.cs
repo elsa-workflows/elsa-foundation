@@ -32,7 +32,7 @@ internal sealed partial class RuntimeExecutionProtocolRouter
         }
         var work = new RuntimeSchedulerWorkItem(RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(command.InputId),
             request.WorkflowExecutionId, command.InputId, WorkflowExecutionCommandKind.ExecuteModel, envelope, envelope,
-            request.RecordedAt, request.RecordedAt, payload: JsonSerializer.SerializeToElement(command, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            request.RecordedAt, request.RecordedAt, payload: JsonSerializer.SerializeToElement(command, new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options)));
         var selected = await selector.SelectAsync(work, cancellationToken);
         if (selected.Context.Material.IncarnationId != request.Material.IncarnationId ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(selected.Context.Material.Identity, request.Material.Identity))

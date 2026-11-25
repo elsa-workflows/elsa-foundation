@@ -68,11 +68,11 @@ public sealed class WorkflowVariablePublishTests(ITestOutputHelper output)
         Assert.Equal("5", Variable(run, "count"));
         Assert.Equal("true", Variable(run, "flag"));
         // Elsa 3 kept an Object variable's text unparsed.
-        Assert.Equal("\"{\\u0022a\\u0022:1}\"", Variable(run, "raw"));
+        Assert.Equal("\"{\\\"a\\\":1}\"", Variable(run, "raw"));
         Assert.Equal("""["x","y"]""", Variable(run, "names"));
         // Collections and dictionaries start as JSON, not text.
         Assert.Equal("""["a","b"]""", Variable(run, "list"));
-        Assert.Equal("[1,2]", Variable(run, "counts"));
+        Assert.Equal("[1, 2]", Variable(run, "counts")); // the authored text, kept as received (FR-007)
         // A type Elsa 4 does not know is an Object holding the JSON Elsa 3 deserialized.
         Assert.Equal("""{"id":1}""", Variable(run, "order"));
         Assert.Equal("""{"a":1}""", Variable(run, "dictionary"));

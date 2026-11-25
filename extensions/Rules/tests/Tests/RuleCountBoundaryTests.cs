@@ -68,7 +68,7 @@ public class RuleCountBoundaryTests
         var exact = RulesCodec.CreateArtifact(exactProgram);
         var json = Encoding.UTF8.GetString(exact.CanonicalBytes.Span);
         Assert.Equal(RuleLimits.MaxArtifactBytes, exact.CanonicalBytes.Length);
-        Assert.Contains("\\u0022", json); // The canonical default encoder escapes the embedded quote.
+        Assert.Contains("\\\"", json); // The shared relaxed encoder uses the JSON quote escape.
         Assert.Contains("\\\\", json); // Embedded backslash is JSON escaped.
         Assert.Contains("\\u0001", json); // Control characters are escaped as well.
 

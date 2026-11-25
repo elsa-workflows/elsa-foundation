@@ -276,7 +276,7 @@ public sealed partial class ActivityInputSnapshotCheckpointTests : IDisposable
                 identity,
                 "node-start",
                 "actexec-1",
-                RuntimeStartActivityCommandPayload.ScheduledActivityReason)),
+                RuntimeStartActivityCommandPayload.ScheduledActivityReason), Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: new Dictionary<string, string>(),
             envelopeMetadata: new Dictionary<string, string>());
 

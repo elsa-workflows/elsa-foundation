@@ -354,7 +354,7 @@ public static class CompositionCandidateBuilder
                     if ((existing is JsonArray or JsonObject) && value.ValueKind is not (JsonValueKind.Array or JsonValueKind.Object) || !SameType(TypeOf(existing), value.ValueKind))
                         throw Refuse("bridge-portable-unsafe", "An authored setting changed its JSON shape.");
                     var replacement = JsonNode.Parse(value.GetRawText());
-                    var changed = !JsonNode.DeepEquals(existing, replacement);
+                    var changed = !Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(existing, replacement);
                     obj[existingName] = replacement;
                     return changed;
                 }
@@ -371,7 +371,7 @@ public static class CompositionCandidateBuilder
                     if ((existing is JsonArray or JsonObject) && value.ValueKind is not (JsonValueKind.Array or JsonValueKind.Object) || !SameType(TypeOf(existing), value.ValueKind))
                         throw Refuse("bridge-portable-unsafe", "An authored setting changed its JSON shape.");
                     var replacement = JsonNode.Parse(value.GetRawText());
-                    var changed = !JsonNode.DeepEquals(existing, replacement);
+                    var changed = !Elsa.Serialization.Core.JsonCanonicalForm.EqualsNodes(existing, replacement);
                     array[arrayIndex] = replacement;
                     return changed;
                 }
@@ -600,7 +600,7 @@ public static class CompositionCandidateBuilder
     }
     private static bool SameType(JsonValueKind left, JsonValueKind right) =>
         left == right || (left is JsonValueKind.True or JsonValueKind.False) && (right is JsonValueKind.True or JsonValueKind.False);
-    private static byte[] Serialize(JsonObject root) => new UTF8Encoding(false).GetBytes(root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    private static byte[] Serialize(JsonObject root) => new UTF8Encoding(false).GetBytes(root.ToJsonString(new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true }));
     private static CompositionImportException Refuse(string code, string message) => new(code, message);
 
     private sealed record SettingPatch(string FeatureId, string Pointer, ImmutableArray<string> Segments, JsonElement Value, string ValueType, CshellsSourceLayer SourceLayer)

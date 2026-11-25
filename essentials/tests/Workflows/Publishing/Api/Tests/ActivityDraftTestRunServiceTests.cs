@@ -29,6 +29,67 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed partial class ActivityDraftTestRunServiceTests
 {
     [Fact]
+    public async Task Published_version_idempotency_compares_canonical_input_values()
+    {
+        var fixture = await CreateFixture(childTemplate: ValidChildTemplate(), includePublishedVersion: true, acceptDispatch: true);
+        var version = Assert.IsType<ActivityDefinitionVersionPublication>(fixture.PublishedVersion);
+        StartActivityVersionTestRun Request(JsonElement? value) => new(version.DefinitionVersionId, "version-json-contract",
+            new Dictionary<string, ActivityDraftTestRunInput> { ["probe"] = new("Present", value) });
+        var first = await fixture.Service.StartVersionAsync(Request(Json("{\"n\":9007199254740993.0,\"text\":\"\\u0061\",\"nil\":null}")));
+        var replay = await fixture.Service.StartVersionAsync(Request(Json("{\"nil\":null,\"text\":\"a\",\"n\":9007199254740993e0}")));
+        Assert.Equal(first.TestRunId, replay.TestRunId);
+        foreach (var changed in new JsonElement?[] { Json("{\"n\":9007199254740992,\"text\":\"a\",\"nil\":null}"),
+                     Json("{\"n\":9007199254740993,\"text\":\"a\"}"), Json("[1,2]"), Json("[2,1]"), Json("null"), null })
+        {
+            var refusal = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() => fixture.Service.StartVersionAsync(Request(changed)));
+            Assert.Equal("activity.test-run.idempotency-mismatch", refusal.ErrorCode);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_rejected_missing_input_receipt_cannot_replay_an_explicit_null(bool published)
+    {
+        var fixture = await CreateFixture(childTemplate: ValidChildTemplate(), includePublishedVersion: true, acceptDispatch: true);
+        var version = Assert.IsType<ActivityDefinitionVersionPublication>(fixture.PublishedVersion);
+        async Task<ActivityDraftTestRunView> Start(JsonElement? value)
+        {
+            var inputs = new Dictionary<string, ActivityDraftTestRunInput> { ["probe"] = new("Present", value) };
+            return published
+                ? await fixture.Service.StartVersionAsync(new(version.DefinitionVersionId, "presence-contract", inputs))
+                : await fixture.Service.StartAsync(fixture.Request with { Inputs = inputs });
+        }
+        var missing = await Start(null);
+        Assert.Equal("ValidationRejected", missing.Status);
+        var refusal = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() => Start(Json("null")));
+        Assert.Equal("activity.test-run.idempotency-mismatch", refusal.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Idempotency_compares_input_json_values_and_distinguishes_missing_null_and_exact_numbers()
+    {
+        var fixture = await CreateFixture();
+        StartActivityDraftTestRun Request(JsonElement? value) => fixture.Request with
+        {
+            Inputs = new Dictionary<string, ActivityDraftTestRunInput> { ["probe"] = new("Present", value) }
+        };
+        var first = await fixture.Service.StartAsync(Request(Json("{\"n\":100000000000000000000000000000000000001.0,\"text\":\"\\u0061\",\"nil\":null}")));
+        var replay = await fixture.Service.StartAsync(Request(Json("{\"nil\":null,\"text\":\"a\",\"n\":100000000000000000000000000000000000001}")));
+        Assert.Equal(first.TestRunId, replay.TestRunId);
+        foreach (var changed in new JsonElement?[]
+                 {
+                     Json("{\"n\":100000000000000000000000000000000000002,\"text\":\"a\",\"nil\":null}"),
+                     Json("{\"n\":100000000000000000000000000000000000001,\"text\":\"a\"}"),
+                     Json("null"), null
+                 })
+        {
+            var refusal = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() => fixture.Service.StartAsync(Request(changed)));
+            Assert.Equal("activity.test-run.idempotency-mismatch", refusal.ErrorCode);
+        }
+    }
+
+    [Fact]
     public async Task Missing_required_input_is_persisted_as_safe_actionable_pre_dispatch_rejection()
     {
         var fixture = await CreateFixture();

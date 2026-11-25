@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -13,8 +14,10 @@ namespace Elsa3.Mapping.Tests;
 
 /// <summary>
 /// Spec 264 (#3122): a converted variable has no starting value when Elsa 3 had none, and otherwise the value Elsa 3
-/// gave it, as a <c>Literal</c> publication accepts. A collection starts from a JSON array and a dictionary from a JSON
-/// object, never from comma-separated text. A value that cannot start as it did in Elsa 3 is refused with how to fix it.
+/// gave it, as a <c>Literal</c> publication accepts. A collection whose element type Elsa 4 knows starts from a JSON array
+/// and a dictionary from a JSON object; any other type Elsa 4 does not know, a resource aside, is Any and starts from a
+/// JSON object or array. Text is never split on commas. A value that cannot start as it did in Elsa 3 is refused with how
+/// to fix it.
 /// </summary>
 public sealed class Elsa3VariableStartingValueTests
 {
@@ -56,10 +59,10 @@ public sealed class Elsa3VariableStartingValueTests
         { "System.Net.HttpStatusCode, System.Net.Primitives", false, "OK", "System.Net.HttpStatusCode", CollectionKind.Single, "200" },
         // Elsa 3 kept an Object variable's text as it was, JSON or not: it becomes Any holding a JSON string with that text
         // (spec 1228 FR-019).
-        { "Object", false, """{"a":1}""", "Any", CollectionKind.Single, "\"{\\u0022a\\u0022:1}\"" },
+        { "Object", false, """{"a":1}""", "Any", CollectionKind.Single, "\"{\\\"a\\\":1}\"" },
         // Elsa 3 writes a list as List<T> and an array as T[]: a known element type keeps its type in a collection.
         { "List<String>", false, """["a","b"]""", "String", CollectionKind.List, """["a","b"]""" },
-        { "List<Int32>", false, "[1, 2]", "Int32", CollectionKind.List, "[1,2]" },
+        { "List<Int32>", false, "[1, 2]", "Int32", CollectionKind.List, "[1, 2]" },
         { "List<Object>", false, """[{"a":1}]""", "Any", CollectionKind.List, """[{"a":1}]""" },
         { "String[]", false, """["x"]""", "String", CollectionKind.Array, """["x"]""" },
         { "String", true, """["x","y"]""", "String", CollectionKind.Array, """["x","y"]""" },
@@ -73,6 +76,50 @@ public sealed class Elsa3VariableStartingValueTests
         { "ObjectDictionary[]", false, """[{"a":1}]""", "Any", CollectionKind.Single, """[{"a":1}]""" },
         { "Acme.Orders.Order, Acme", false, """{"id":1}""", "Any", CollectionKind.Single, """{"id":1}""" }
     };
+
+    [Theory]
+    [InlineData("{id}")]
+    [InlineData("[next]")]
+    [InlineData("[1]")]
+    public void String_backed_variable_defaults_are_not_parsed_as_documents(string text)
+    {
+        var registry = Registry();
+        registry.RegisterType(typeof(Uri), "System.Uri");
+        registry.RegisterType(typeof(StringBackedDefault), typeof(StringBackedDefault).FullName!);
+        foreach (var type in new[] { typeof(Uri), typeof(StringBackedDefault) })
+        {
+            var source = new Elsa3Variable { Id = "v", Name = "v", TypeName = type.FullName!, Value = text };
+            Assert.True(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out var variable, out var refusal), refusal?.Message);
+            Assert.Equal(text, variable.Default!.Value!.Value.GetString());
+        }
+    }
+
+    [Fact]
+    public void Structured_variable_defaults_still_parse_document_text_and_refuse_invalid_numbers()
+    {
+        var registry = Registry();
+        registry.RegisterType(typeof(StructuredDefault), typeof(StructuredDefault).FullName!);
+        var source = new Elsa3Variable { Id = "v", Name = "v", TypeName = typeof(StructuredDefault).FullName!, Value = "{\"Count\":5}" };
+        Assert.True(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out var variable, out var refusal), refusal?.Message);
+        Assert.Equal(5, variable.Default!.Value!.Value.GetProperty("count").GetInt32());
+        source.Value = "{\"count\":\"5\"}";
+        Assert.False(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out _, out _));
+        source.TypeName = "Int32";
+        foreach (var invalid in new[] { "5.0", "\"5\"", "[1]" })
+        {
+            source.Value = invalid;
+            Assert.False(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out _, out _));
+        }
+    }
+
+    private sealed class StructuredDefault { public int Count { get; set; } }
+    [JsonConverter(typeof(StringBackedDefaultConverter))]
+    private sealed record StringBackedDefault(string Text);
+    private sealed class StringBackedDefaultConverter : JsonConverter<StringBackedDefault>
+    {
+        public override StringBackedDefault Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => new(reader.GetString()!);
+        public override void Write(Utf8JsonWriter writer, StringBackedDefault value, JsonSerializerOptions options) => writer.WriteStringValue(value.Text);
+    }
 
     [Theory]
     [MemberData(nameof(Values))]
@@ -128,8 +175,8 @@ public sealed class Elsa3VariableStartingValueTests
     [Fact]
     public void A_custom_driver_with_the_same_type_name_is_not_the_Elsa_3_default()
     {
-        Assert.False(Elsa3VariableMapper.IsDefaultStorageDriver("Acme.WorkflowInstanceStorageDriver, Acme"));
-        Assert.True(Elsa3VariableMapper.IsDefaultStorageDriver("WorkflowInstanceStorageDriver"));
+        Assert.Equal(Elsa3StorageDriverCorrections.DriverKind.Custom, Elsa3StorageDriverCorrections.Classify("Acme.WorkflowInstanceStorageDriver, Acme"));
+        Assert.Equal(Elsa3StorageDriverCorrections.DriverKind.WorkflowInstance, Elsa3StorageDriverCorrections.Classify("WorkflowInstanceStorageDriver"));
     }
 
     public static TheoryData<string, string, string, string> Refusals => new()
@@ -146,9 +193,13 @@ public sealed class Elsa3VariableStartingValueTests
         { "FormFile[]", """[{"name":"a.txt"}]""", "a resource", "#3194" },
         { "ObjectDictionary", "a=1", "is not a JSON object", """for example {"key": "value"}""" },
         { "HttpHeaders", "Accept: text/plain", "is not a JSON object", """for example {"Accept": ["application/json"]}""" },
-        // A type Elsa 4 does not know runs as Object, which can only hold JSON as Elsa 3 had it.
-        { "System.DayOfWeek", "Monday", "is not known in Elsa 4, and the value is not JSON", "change the variable's type to Object" },
-        { "Acme.Orders.Order, Acme", "order-1", "is not known in Elsa 4, and the value is not JSON", "as a JSON object or array" }
+        // A type Elsa 4 does not know runs as Any, which can only hold a JSON object or array as Elsa 3 had it (spec 264 FR-004).
+        { "System.DayOfWeek", "Monday", "is not known in Elsa 4, and the value is not a JSON object or array", "change the variable's type to Object" },
+        { "Acme.Orders.Order, Acme", "order-1", "is not known in Elsa 4, and the value is not a JSON object or array", "as a JSON object or array" },
+        // A JSON scalar is not an object or array: Elsa 3 read it in a way the converter cannot know, so it is refused too.
+        { "Acme.Orders.Order, Acme", "42", "is not known in Elsa 4, and the value is not a JSON object or array", "as a JSON object or array" },
+        // A nested collection is Any as well, under the same rule, and its text is never split on commas.
+        { "List<List<String>>", "a, b", "is not known in Elsa 4, and the value is not a JSON object or array", "as a JSON object or array" }
     };
 
     [Theory]

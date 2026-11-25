@@ -19,7 +19,7 @@ public sealed class HttpResponseInstructionDelivery(
     IActivityExecutionStateStore activityExecutionStateStore,
     IEnumerable<IHttpContentFactory> contentFactories)
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly JsonWriterOptions BodyWriterOptions = new()
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping

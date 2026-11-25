@@ -114,7 +114,7 @@ public sealed partial class StimulusDeliveryStoreTests
         var wait = Assert.Single(accepted.Item.SubscriptionDelivery!.WaitDelivery!.Recipients);
         Assert.Equal("already-running", wait.Identity.WorkflowExecutionId);
         var seal = RuntimeIngressWaitCommand.CreateSeal(accepted.Item, wait);
-        var payload = RuntimeIngressWaitCommand.ReadEnvelope(seal).Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var payload = RuntimeIngressWaitCommand.ReadEnvelope(seal).Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         if (explicitType) Assert.Equal(type.Alias, payload.TriggerDelivery!.PayloadType.Alias);
         else Assert.Null(payload.TriggerDelivery);
         Assert.Equal(RuntimeIngressWaitPhase.Pending, Assert.Single(accepted.Item.SubscriptionDelivery.WaitDelivery.Progress).Phase);
@@ -152,6 +152,61 @@ public sealed partial class StimulusDeliveryStoreTests
         }
         Assert.NotNull(await harness.WaitBookmarks.FindAsync(bookmark.WorkflowExecutionId, bookmark.BookmarkId));
         Assert.Empty((await fixture.Queue.ListAsync(new("already-running"))).Items);
+    }
+
+    public static TheoryData<bool, string?, string?, bool> WaitSchemaEqualityCases
+    {
+        get
+        {
+            var cases = new TheoryData<bool, string?, string?, bool>();
+            foreach (var ef in new[] { false, true })
+            {
+                cases.Add(ef, "{\"amount\":1.0,\"name\":\"Ren\\u00e9\"}", " { \"name\":\"René\", \"amount\":1 } ", true);
+                cases.Add(ef, "{\"amount\":9007199254740993}", "{\"amount\":9007199254740992}", false);
+                cases.Add(ef, "{}", "{\"amount\":null}", false);
+                cases.Add(ef, "[1,2]", "[2,1]", false);
+                cases.Add(ef, null, "null", false);
+                cases.Add(ef, "null", null, false);
+                cases.Add(ef, "null", "null", true);
+                cases.Add(ef, null, null, true);
+            }
+            return cases;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(WaitSchemaEqualityCases))]
+    public async Task Typed_wait_admission_compares_schema_values_exactly_and_preserves_absence(bool ef, string? storedSchema, string? sourceSchema, bool equal)
+    {
+        static JsonElement? Schema(string? json)
+        {
+            if (json is null) return null;
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.Clone();
+        }
+        await using var harness = await Harness.Create(ef);
+        var fixture = await PrepareIngressAsync(harness);
+        await SaveIngressWaitAsync(harness, "wait");
+        var state = (await harness.WaitActivities.FindAsync("already-running", "wait-activity"))!;
+        var registration = Assert.Single(state.TriggerRegistrations!);
+        ValueTypeDescriptor Type(string? schema) => new(registration.PayloadType.Alias, registration.PayloadType.CollectionKind,
+            Schema(schema), registration.PayloadType.SchemaVersion, registration.PayloadType.Element);
+        await harness.WaitActivities.SaveAsync(state with { TriggerRegistrations = [new(registration.RegistrationId, registration.InvocationId,
+            registration.ResumeTargetKey, Type(storedSchema), registration.StimulusType, registration.StimulusHash,
+            registration.DeduplicationPolicy, registration.Metadata)] });
+        var persisted = Assert.Single((await harness.WaitActivities.FindAsync("already-running", "wait-activity"))!.TriggerRegistrations!);
+        Assert.Equal(storedSchema is not null, persisted.PayloadType.Schema.HasValue);
+        if (storedSchema is not null)
+            Assert.Equal(Schema(storedSchema)!.Value.GetRawText(), persisted.PayloadType.Schema!.Value.GetRawText());
+        var request = WithWaitCandidate(fixture.Request, new("http", "route", JsonSerializer.SerializeToElement(new { value = 42 }),
+            new Dictionary<string, string>(), Type(sourceSchema), "actual-source"));
+        if (equal)
+            Assert.Single((await fixture.Port.AdmitAsync(request)).Item.SubscriptionDelivery!.WaitDelivery!.Recipients);
+        else
+        {
+            Assert.Equal("wait-not-resumable", (await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.Port.AdmitAsync(request).AsTask())).Code);
+            Assert.Null(await harness.Lookup.FindDurableAsync(request.Candidate.OutboxItemId));
+        }
     }
 
     private static ActivityExecutionState DamageIngressWait(ActivityExecutionState state, RuntimeIngressWaitIdentity identity, string defect)
@@ -231,7 +286,7 @@ public sealed partial class StimulusDeliveryStoreTests
             new(identity.CommandId, candidate.PayloadType!, candidate.ProviderId!, Now, identity.IdempotencyKey));
         var work = new RuntimeSchedulerWorkItem(identity.EnvelopeId, identity.WorkflowExecutionId, identity.CommandId,
             WorkflowExecutionCommandKind.ResumeBookmark, identity.EnvelopeId, identity.IdempotencyKey, Now, Now,
-            payload: JsonSerializer.SerializeToElement(payload));
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options));
         var handler = new WorkflowResumeBookmarkSchedulerWorkHandler(runtime.Services.GetRequiredService<IServiceScopeFactory>(), harness.Clock);
         await handler.HandleAsync(work);
         Assert.Equal(JsonSerializer.Serialize(state), JsonSerializer.Serialize(await harness.WaitActivities.FindAsync(bookmark.WorkflowExecutionId, bookmark.ActivityExecutionId)));

@@ -258,7 +258,7 @@ public sealed class HttpEndpointMiddleware(
             context.Response.StatusCode = StatusCodes.Status409Conflict;
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsync(
-                JsonSerializer.Serialize(new { error = "ambiguous-endpoint" }),
+                JsonSerializer.Serialize(new { error = "ambiguous-endpoint" }, Elsa.Serialization.Core.JsonBaseline.Options),
                 context.RequestAborted);
             return;
         }
@@ -271,7 +271,7 @@ public sealed class HttpEndpointMiddleware(
             return;
         }
 
-        var input = JsonSerializer.SerializeToElement(requestModel);
+        var input = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(requestModel);
 
         // Sync mode: drain inline, then deliver any committed typed response instruction in this request.
         // The sink remains a compatibility marker for an already-started custom response; canonical
@@ -391,7 +391,7 @@ public sealed class HttpEndpointMiddleware(
         context.Response.StatusCode = StatusCodes.Status202Accepted;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsync(
-            JsonSerializer.Serialize(new { started = startedIds, resumed = resumedIds, response }),
+            JsonSerializer.Serialize(new { started = startedIds, resumed = resumedIds, response }, Elsa.Serialization.Core.JsonBaseline.Options),
             context.RequestAborted);
     }
 

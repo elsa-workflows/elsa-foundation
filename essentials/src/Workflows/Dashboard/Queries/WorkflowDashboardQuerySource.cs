@@ -32,7 +32,7 @@ internal sealed class WorkflowDashboardQuerySource(
     private const string SchemaRevision = "runs-v1";
     private const string OwnerId = "Elsa.Workflows.Dashboard.Queries";
     private static readonly byte[] SigningKey = RandomNumberGenerator.GetBytes(32);
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly string[] Equality = ["eq", "ne", "in", "notIn", "contains", "startsWith"];
     private static readonly string[] Ordered = ["eq", "ne", "gt", "gte", "lt", "lte", "in", "notIn", "isNull", "isNotNull"];
     private static readonly string[] RunKinds = ["publishedRun", "testRun", "backgroundWeaverRun", "unknown"];
@@ -412,7 +412,7 @@ internal sealed class WorkflowDashboardQuerySource(
     }
 
     private static string GroupKey(IReadOnlyList<string> keys, IReadOnlyDictionary<string, DashboardValue> values) =>
-        Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(keys.Select(key => new { key, values[key].Type, values[key].Literal }), Json))).ToLowerInvariant();
+        Elsa.Serialization.Core.JsonHashInput.Hash(keys.Select(key => new { key, values[key].Type, values[key].Literal }));
 
     private static DashboardResultCell Cell(DashboardValue value, string type, string nullReason) =>
         new(type, value.Literal, value.Type == "null" ? nullReason : null);

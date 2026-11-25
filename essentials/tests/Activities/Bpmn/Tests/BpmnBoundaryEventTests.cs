@@ -66,7 +66,7 @@ public sealed class BpmnBoundaryEventTests
         var timerBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.ExecutableNodeId == "node-timer");
 
         // The timer fires first: the interrupting boundary tears the host's Event child down and routes.
-        var resumed = await fixture.ResumeAsync(timerBookmark, JsonSerializer.SerializeToElement(new DurableTimerElapsed(timerBookmark.StimulusHash)));
+        var resumed = await fixture.ResumeAsync(timerBookmark, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(timerBookmark.StimulusHash)));
 
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         resumed.AssertWorkflowCompleted();

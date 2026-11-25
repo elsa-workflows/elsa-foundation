@@ -12,7 +12,7 @@ public sealed class EfBackgroundActivityWorkStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IBackgroundActivityWorkStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public async ValueTask<BackgroundActivityWorkItem?> FindAsync(
         string workflowExecutionId,

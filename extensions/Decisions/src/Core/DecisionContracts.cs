@@ -85,7 +85,7 @@ public sealed class DecisionEvaluation
         ContentHash = contentHash;
         ProfileId = profileId;
         SemanticsId = semanticsId;
-        Result = result.ValueKind == JsonValueKind.Undefined ? JsonSerializer.SerializeToElement<object?>(null) : result.Clone();
+        Result = result.ValueKind == JsonValueKind.Undefined ? JsonSerializer.SerializeToElement<object?>(null, options: Elsa.Serialization.Core.JsonBaseline.Options) : result.Clone();
         Trace = Array.AsReadOnly(trace.ToArray());
         Diagnostics = Array.AsReadOnly(diagnostics.ToArray());
         Operations = operations;

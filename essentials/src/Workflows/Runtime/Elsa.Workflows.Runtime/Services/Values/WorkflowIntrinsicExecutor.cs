@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -240,7 +241,7 @@ public sealed class WorkflowIntrinsicExecutor(
             var unitType = new ValueTypeDescriptor("Elsa.Activities.Runtime.Core.Models.ActivityUnit");
             result = ValueEnvelope.Inline(
                 unitType,
-                JsonSerializer.SerializeToElement(ActivityUnit.Value),
+                JsonSerializer.SerializeToElement(ActivityUnit.Value, Elsa.Serialization.Core.JsonBaseline.Options),
                 ValueProtectionPolicy.InstanceInline);
         }
         else
@@ -593,7 +594,7 @@ public sealed class WorkflowIntrinsicExecutor(
 
     private static ValueEnvelope UnitResult() => ValueEnvelope.Inline(
         new ValueTypeDescriptor("Elsa.Activities.Runtime.Core.Models.ActivityUnit"),
-        JsonSerializer.SerializeToElement(ActivityUnit.Value),
+        JsonSerializer.SerializeToElement(ActivityUnit.Value, Elsa.Serialization.Core.JsonBaseline.Options),
         ValueProtectionPolicy.InstanceInline);
 
     // An intrinsic reads its inputs itself and never reaches activation, the only place a secret is resolved, so a secret
@@ -678,14 +679,14 @@ public sealed class WorkflowIntrinsicExecutor(
         {
             ValuePresence.Present => value.InlineValue,
             ValuePresence.ExplicitNull =>
-                JsonSerializer.SerializeToElement<object?>(null),
+                JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options),
             _ => null
         };
         var state = new DurableValueState(
             durableValueId,
             workflowExecutionId,
             valueId,
-            new RuntimeValueTypeDescriptor("alias", value.Type.Alias, JsonSerializer.SerializeToElement(value.Type)),
+            new RuntimeValueTypeDescriptor("alias", value.Type.Alias, JsonSerializer.SerializeToElement(value.Type, Elsa.Serialization.Core.JsonBaseline.Options)),
             value.Policy.Lifecycle,
             storage,
             inline,
@@ -759,7 +760,7 @@ public sealed class WorkflowIntrinsicExecutor(
                 : ValueEnvelope.Inline(binding.TargetType, evaluated.Value, evaluated.EffectivePolicy);
             envelope = NormalizeTargetNull(binding, envelope, executable.ValuePolicies, warnings, targetLabel);
             if (validateAssignmentPayload)
-                ValidateAssignmentPayload(binding, envelope, intrinsicState.Execution.ExecutableNodeId);
+                ValidateAssignmentPayload(binding, envelope, intrinsicState.Execution.ExecutableNodeId, warnings);
             return await ApplyStorageAsync(
                 workflowState.WorkflowExecutionId,
                 intrinsicState.InvocationId,
@@ -831,10 +832,12 @@ public sealed class WorkflowIntrinsicExecutor(
         }
         var combined = binding.ConversionPlan is null
             ? conversionSource.Retype(binding.TargetType)
-            : _valueConversionExecutor.Convert(conversionSource, binding.ConversionPlan);
+            : _valueConversionExecutor.Convert(conversionSource, binding.ConversionPlan,
+                // Assignment admission below validates the same target and owns its recorded diagnostics.
+                validateAssignmentPayload ? null : diagnostic => ReportJsonConversion(diagnostic, binding.InputName, conversionSource.Policy, warnings));
         combined = NormalizeTargetNull(binding, combined, executable.ValuePolicies, warnings, targetLabel);
         if (validateAssignmentPayload)
-            ValidateAssignmentPayload(binding, combined, intrinsicState.Execution.ExecutableNodeId);
+            ValidateAssignmentPayload(binding, combined, intrinsicState.Execution.ExecutableNodeId, warnings);
         return await ApplyStorageAsync(
             workflowState.WorkflowExecutionId,
             intrinsicState.InvocationId,
@@ -881,8 +884,9 @@ public sealed class WorkflowIntrinsicExecutor(
                 var member = ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, selected.Value, combinedPolicy);
                 try
                 {
-                    value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : _valueConversionExecutor.Convert(member, binding.ConversionPlan);
-                    ValidateAssignmentPayload(binding, value, nodeId);
+                    // The mandatory assignment fit below records the target's diagnostics once.
+                    value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : _valueConversionExecutor.Convert(member, binding.ConversionPlan, report: null);
+                    ValidateAssignmentPayload(binding, value, nodeId, context.Warnings);
                 }
                 catch (Exception exception) when (RuntimeReadSelectionException.IsFitFailure(exception))
                 {
@@ -903,7 +907,15 @@ public sealed class WorkflowIntrinsicExecutor(
             source.ExternalReference?.StorageProfile);
     }
 
-    private void ValidateAssignmentPayload(RuntimeInputBinding binding, ValueEnvelope value, string nodeId)
+    private static void ReportJsonConversion(Elsa.Serialization.Core.JsonConversionDiagnostic diagnostic, string input,
+        ValueProtectionPolicy policy, IExecutionWarningSink? warnings)
+    {
+        var warning = ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{input}");
+        var protect = policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode) || !string.IsNullOrWhiteSpace(policy.RetentionPolicy);
+        warnings?.Report(protect ? warning.ProtectedForm! : warning);
+    }
+
+    private void ValidateAssignmentPayload(RuntimeInputBinding binding, ValueEnvelope value, string nodeId, IExecutionWarningSink? warnings)
     {
         if (value.Presence != ValuePresence.Present || value.Policy.RequiresEncryption ||
             value.Type is { CollectionKind: CollectionKind.Single } && TypeAliasConvention.IsAny(value.Type.Alias))
@@ -919,6 +931,10 @@ public sealed class WorkflowIntrinsicExecutor(
         if (!validation.IsValid)
             throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' on node '{nodeId}' does not match '{binding.TargetType.Alias}': " +
                 string.Join(" ", validation.Findings.Select(finding => finding.Message)));
+        var protect = value.Policy.IsSensitive || value.Policy.RequiresEncryption ||
+                      !string.IsNullOrWhiteSpace(value.Policy.RedactionMode) || !string.IsNullOrWhiteSpace(value.Policy.RetentionPolicy);
+        foreach (var warning in validation.Warnings)
+            warnings?.Report(protect ? warning.ProtectedForm ?? warning : warning);
     }
 
     private ValueEnvelope NormalizeTargetNull(RuntimeInputBinding binding, ValueEnvelope value,
@@ -1098,7 +1114,7 @@ public sealed class WorkflowIntrinsicExecutor(
         StringComparer.Ordinal.Equals(left.Alias, right.Alias) &&
         left.CollectionKind == right.CollectionKind &&
         left.SchemaVersion == right.SchemaVersion &&
-        StringComparer.Ordinal.Equals(left.Schema?.GetRawText(), right.Schema?.GetRawText());
+        Elsa.Serialization.Core.JsonCanonicalForm.Equals(left.Schema, right.Schema);
 
     private static RuntimeSchedulerWorkItem NewCompletionWorkItem(
         RuntimeSchedulerWorkItem startWorkItem,
@@ -1125,7 +1141,7 @@ public sealed class WorkflowIntrinsicExecutor(
             occurredAt,
             occurredAt,
             startWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            JsonSerializer.SerializeToElement(payload),
+            JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             startWorkItem.CommandMetadata,
             startWorkItem.EnvelopeMetadata);
     }

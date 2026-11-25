@@ -23,7 +23,7 @@ public static class WorkflowsRuntimeApi
 
         var api = endpoints.MapEndpointGroup(
             OwnerId,
-            WorkflowsRuntimeJsonContext.Default,
+            WorkflowsRuntimeJsonContext.WireContext,
             jsonContentType: "application/json; charset=utf-8");
 
         // Endpoint classes are scanned from this module's own assembly: each declares its route,

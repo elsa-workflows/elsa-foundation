@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Services;
 using Elsa3.Mapping.Tests.Support;
 using Elsa3.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa3.Mapping.Tests.Elsa3BuiltInConversionTests;
 
@@ -322,25 +324,403 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Contains($"'{named}'", diagnostic.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task An_unknown_host_function_keeps_the_generic_refusal()
+    /// <summary>
+    /// An unmatched function keeps VF-IMP-005, with guidance to register it under a namespace prefix (#5664), whether the call
+    /// reaches the generic refusal (it has arguments) or the generated-accessor lookup (a get… call without arguments).
+    /// </summary>
+    [Theory]
+    [InlineData("getConfiguration('Key')", "getConfiguration")]
+    [InlineData("getCustomer()", "getCustomer")]
+    public async Task An_unmatched_host_function_keeps_the_refusal_with_the_naming_route(string expression, string name)
     {
-        var result = await ConvertTextAsync("getConfiguration('Key')");
+        var result = await ConvertTextAsync(expression);
 
-        Assert.Contains(result.Diagnostics, diagnostic =>
-            diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
-            diagnostic.Message.Contains("unknown or unapproved host function 'getConfiguration'", StringComparison.Ordinal));
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains($"unknown or unapproved host function '{name}'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains($"'acme.{name}'", diagnostic.Guidance, StringComparison.Ordinal);
+        Assert.Contains($"'<prefix>.{name}'", diagnostic.Guidance, StringComparison.Ordinal);
+        Assert.DoesNotContain("deterministic", diagnostic.Guidance, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---- #5664: an Elsa 3 custom function rebuilt as a prefixed Elsa 4 host function ----
+
+    private static readonly JavaScriptHostFunctionDeclaration LookupCustomer =
+        new("acme.lookupCustomer", _ => JsonSerializer.SerializeToElement(new { name = "Ada" }));
+
+    [Fact]
+    public async Task A_matched_global_is_rewritten_to_its_prefixed_host_function_and_runs()
+    {
+        var result = await ConvertTextAsync("lookupCustomer('c-1').name", [LookupCustomer]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var converted = ReadExpression(result);
+        Assert.Equal("acme.lookupCustomer('c-1').name", converted.Source);
+        var value = await PortableJavaScript.EvaluateAsync(converted, configure: services => services.AddSingleton(LookupCustomer));
+        Assert.Equal("Ada", value.GetString());
+    }
+
+    [Fact]
+    public async Task A_matched_global_call_converts_its_arguments()
+    {
+        var lookup = new JavaScriptHostFunctionDeclaration("acme.lookup", call => call.Arguments[0]);
+
+        var result = await ConvertTextAsync("lookup(getVariable('Key'))", [lookup], new Elsa3Variable { Id = "v", Name = "Key", TypeName = "String" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("acme.lookup(variables.Key)", ReadExpression(result).Source);
+    }
+
+    /// <summary>
+    /// A host function receives its arguments as JSON, so passing a variable to one cannot change it: a reusable workflow's
+    /// script that does converts, as with a built-in.
+    /// </summary>
+    [Fact]
+    public async Task A_reusable_script_passing_a_variable_to_a_matched_global_converts()
+    {
+        var lookup = new JavaScriptHostFunctionDeclaration("acme.lookup", call => call.Arguments[0]);
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("return lookup(getVariable('Order'));"))));
+
+        var result = await ConversionServices.ConvertAsync(
+            RealActivityCatalog.Create(),
+            ConversionServices.Definition(root, variables: [new Elsa3Variable { Id = "order-id", Name = "Order", TypeName = "Object" }]),
+            isReusable: true,
+            configure: services => services.AddSingleton(lookup));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    /// <summary>
+    /// A claimed converted name stays native, so a reusable script's write through it is still found: String runs the
+    /// argument's toString, which changes the variable.
+    /// </summary>
+    [Fact]
+    public async Task A_reusable_script_writing_through_a_converted_name_a_host_function_carries_is_refused()
+    {
+        var claim = new JavaScriptHostFunctionDeclaration("acme.String", _ => default);
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script",
+            Literal("const o = getVariable('Order'); String({ toString() { o.Status = 'Paid'; return ''; } }); return 1;"))));
+
+        var result = await ConversionServices.ConvertAsync(
+            RealActivityCatalog.Create(),
+            ConversionServices.Definition(root, variables: [new Elsa3Variable { Id = "order-id", Name = "Order", TypeName = "Object" }]),
+            isReusable: true,
+            configure: services => services.AddSingleton(claim));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+    }
+
+    /// <summary>A host function does not take over a name the converter converts itself.</summary>
+    [Fact]
+    public async Task A_host_function_named_like_a_converted_name_keeps_the_conversion()
+    {
+        JavaScriptHostFunctionDeclaration[] claims =
+        [
+            new("acme.toJson", _ => default),
+            new("acme.newGuid", _ => default),
+        ];
+
+        var result = await ConvertTextAsync("toJson({ a: 1 }) + newGuid()", claims);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("JSON.stringify({ a: 1 }) + newGuid()", ReadExpression(result).Source);
+    }
+
+    /// <summary>
+    /// A standard JavaScript global, or an Elsa 3 built-in the converter converts itself, is never matched: a host function
+    /// that happens to carry the name neither takes the call nor turns a reference into a replaced-function refusal.
+    /// </summary>
+    [Theory]
+    [InlineData("url.encodeURIComponent", "encodeURIComponent('a b')")]
+    [InlineData("acme.isNaN", "isNaN(1)")]
+    [InlineData("acme.isNullOrEmpty", "['a', ''].filter(isNullOrEmpty)")]
+    [InlineData("acme.getWorkflowInstanceId", "[getWorkflowInstanceId][0]")]
+    [InlineData("acme.variables", "Object.keys(variables).length")]
+    [InlineData("acme.hasOwnProperty", "hasOwnProperty('x')")]
+    [InlineData("acme.__proto__", "__proto__ === Object.prototype")]
+    [InlineData("acme.target", "(() => { function F() { return new.target ? 1 : 0; } return F(); })()")]
+    public async Task A_host_function_named_like_a_native_or_converted_global_is_not_matched(string hostFunction, string expression)
+    {
+        var withHostFunction = await ConvertTextAsync(expression, [new JavaScriptHostFunctionDeclaration(hostFunction, _ => default)]);
+        var without = await ConvertTextAsync(expression);
+
+        Assert.Equal(without.Succeeded, withHostFunction.Succeeded);
+        Assert.Equal(
+            without.Diagnostics.Select(diagnostic => diagnostic.Code).Order(StringComparer.Ordinal),
+            withHostFunction.Diagnostics.Select(diagnostic => diagnostic.Code).Order(StringComparer.Ordinal));
+        if (withHostFunction.Succeeded)
+            Assert.Equal(ReadExpression(without).Source, ReadExpression(withHostFunction).Source);
+    }
+
+    /// <summary>
+    /// A refused Elsa 3 built-in a host function may take over names the registration route; one it may not, such as
+    /// the instance-name reader, does not.
+    /// </summary>
+    [Theory]
+    [InlineData("getLastResult()", "getLastResult", true)]
+    [InlineData("bytesToString(x)", "bytesToString", true)]
+    [InlineData("getWorkflowInstanceName()", "getWorkflowInstanceName", false)]
+    public async Task A_refused_elsa3_built_in_names_the_registration_route_only_when_it_can_be_matched(string expression, string name, bool matchable)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Message.Contains($"'{name}'", StringComparison.Ordinal));
+        Assert.Equal(matchable, diagnostic.Guidance?.Contains($"'<prefix>.{name}'", StringComparison.Ordinal) == true);
+    }
+
+    /// <summary>A refused call whose name is also a variable's generated accessor gets no advice to register a host function.</summary>
+    [Fact]
+    public async Task A_refused_call_that_is_also_a_generated_accessor_gets_no_registration_guidance()
+    {
+        var result = await ConvertTextAsync("getConfig('Key')", new Elsa3Variable { Id = "v", Name = "Config", TypeName = "String" });
+
+        Assert.False(result.Succeeded);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Guidance?.Contains("register a host function", StringComparison.Ordinal) == true);
+    }
+
+    /// <summary>A refused call to a name no host function can take over gets no advice to register one.</summary>
+    [Theory]
+    [InlineData("encodeURIComponent('a b')")]
+    [InlineData("Guid()")]
+    public async Task A_refused_unmatchable_global_gets_no_registration_guidance(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Guidance?.Contains("register a host function", StringComparison.Ordinal) == true);
+    }
+
+    /// <summary>
+    /// An Elsa 3 built-in the converter refuses (spec 247) is matched like a custom function: a host that rebuilt it under a
+    /// namespace gets the call rewritten instead of the refusal.
+    /// </summary>
+    [Fact]
+    public async Task A_host_function_named_like_a_refused_elsa3_built_in_takes_the_call()
+    {
+        var configuration = new JavaScriptHostFunctionDeclaration("acme.getConfig", _ => default);
+
+        var result = await ConvertTextAsync("getConfig('Key')", [configuration]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("acme.getConfig('Key')", ReadExpression(result).Source);
+    }
+
+    /// <summary>A matched Elsa 3 built-in that is also a variable's generated accessor is ambiguous, as a custom function is.</summary>
+    [Theory]
+    [InlineData("acme.getConfig", "getConfig()", "Config")]
+    [InlineData("acme.getLastResult", "getLastResult()", "LastResult")]
+    public async Task A_matched_elsa3_built_in_that_is_also_a_generated_accessor_is_ambiguous(string hostFunction, string expression, string variable)
+    {
+        var result = await ConvertTextAsync(expression, [new JavaScriptHostFunctionDeclaration(hostFunction, _ => default)],
+            new Elsa3Variable { Id = "v", Name = variable, TypeName = "String" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+    }
+
+    /// <summary>Only the whole name after the prefix matches; a host function with another member name leaves the refusal.</summary>
+    [Fact]
+    public async Task A_host_function_with_another_member_name_does_not_match()
+    {
+        var lookup = new JavaScriptHostFunctionDeclaration("acme.lookup", _ => default);
+
+        var result = await ConvertTextAsync("lookupCustomer('c-1')", [lookup]);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
+            diagnostic.Message.Contains("'lookupCustomer'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_global_two_namespaces_carry_is_ambiguous()
+    {
+        var other = new JavaScriptHostFunctionDeclaration("other.lookupCustomer", _ => default);
+
+        var result = await ConvertTextAsync("lookupCustomer()", [LookupCustomer, other]);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+        Assert.Contains("'acme.lookupCustomer', 'other.lookupCustomer'", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_matched_global_that_is_also_a_generated_accessor_is_ambiguous()
+    {
+        var getCustomer = new JavaScriptHostFunctionDeclaration("acme.getCustomer", _ => default);
+
+        var result = await ConvertTextAsync("getCustomer()", [getCustomer], new Elsa3Variable { Id = "v", Name = "Customer", TypeName = "String" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+    }
+
+    /// <summary>
+    /// Elsa 3 generated <c>get{Name}</c> for a workflow input too (verbatim name; in a reusable run the input is declared as a
+    /// variable). Converted, the accessor reads the input, so a host function of that member name is ambiguous either way.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_matched_global_that_is_also_an_input_accessor_is_ambiguous(bool isReusable)
+    {
+        var getCustomInput = new JavaScriptHostFunctionDeclaration("acme.getCustomInput", _ => default);
+        var definition = ConversionServices.Definition(
+            Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("return getCustomInput();")))));
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "CustomInput", Type = "Object" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: isReusable,
+            configure: services => services.AddSingleton(getCustomInput));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference &&
+            diagnostic.Message.Contains("'getCustomInput'", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Elsa 3 generated no setter for a workflow input, so a host function named set{Input} takes the call in a standalone
+    /// workflow. In a reusable run Elsa 3 declared the input as a variable with a setter, so the name is ambiguous there.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task A_matched_setter_named_after_an_input_clashes_only_where_elsa3_generated_one(bool isReusable, bool converts)
+    {
+        var setCustomInput = new JavaScriptHostFunctionDeclaration("acme.setCustomInput", _ => default);
+        var definition = ConversionServices.Definition(
+            Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("return setCustomInput(1);")))));
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "CustomInput", Type = "Object" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: isReusable,
+            configure: services => services.AddSingleton(setCustomInput));
+
+        Assert.Equal(converts, result.Succeeded);
+        if (converts)
+            Assert.Contains("acme.setCustomInput(1)", Text(Input(Node(result.Value!.State, "node"), "script")), StringComparison.Ordinal);
+        else
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+    }
+
+    /// <summary>Two variables whose generated accessor is the same name: Elsa 3 generated it, so the clash stands.</summary>
+    [Fact]
+    public async Task A_matched_global_that_is_also_an_ambiguous_generated_accessor_is_ambiguous()
+    {
+        var getCustomer = new JavaScriptHostFunctionDeclaration("acme.getCustomer", _ => default);
+
+        var result = await ConvertTextAsync("getCustomer()", [getCustomer],
+            new Elsa3Variable { Id = "v1", Name = "customer", TypeName = "String" },
+            new Elsa3Variable { Id = "v2", Name = "Customer", TypeName = "String" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference &&
+            diagnostic.Message.Contains("replaced Elsa 3 function", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_script_declaring_the_namespace_root_is_refused()
+    {
+        var result = await ConvertTextAsync("const acme = 1; return lookupCustomer();", [LookupCustomer]);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+        Assert.Contains("'acme'", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_function_the_script_declares_itself_is_not_rewritten()
+    {
+        var result = await ConvertTextAsync("function lookupCustomer() { return 1; } return lookupCustomer();", [LookupCustomer]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain("acme", ReadExpression(result).Source, StringComparison.Ordinal);
+    }
+
+    // ---- #5691: a replaced global used other than in a direct call ----
+
+    /// <summary>
+    /// Only a direct call is rewritten, so an alias, a callback, a stored function, a shorthand property, a typeof test or
+    /// a construction is refused once per name, with guidance to call the function directly.
+    /// </summary>
+    [Theory]
+    [InlineData("(() => { const find = lookupCustomer; return find('c-1'); })()")]
+    [InlineData("['c-1'].map(lookupCustomer)")]
+    [InlineData("(() => { const helpers = {}; helpers.find = lookupCustomer; return helpers.find('c-1'); })()")]
+    [InlineData("({ lookupCustomer }).lookupCustomer('c-1')")]
+    [InlineData("typeof lookupCustomer")]
+    [InlineData("new lookupCustomer('c-1')")]
+    [InlineData("lookupCustomer('c-1') && [lookupCustomer, lookupCustomer]")]
+    public async Task A_matched_global_used_other_than_in_a_direct_call_is_refused(string expression)
+    {
+        var result = await ConvertTextAsync(expression, [LookupCustomer]);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.ReplacedFunctionReference, diagnostic.Code);
+        Assert.Contains("'lookupCustomer' as a value", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("'acme.lookupCustomer'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("lookupCustomer(item)", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    /// <summary>A property name, a member name or a script's own binding is not a reference to the replaced global.</summary>
+    [Theory]
+    [InlineData("({ lookupCustomer: 1 }).lookupCustomer")]
+    [InlineData("(() => { const lookupCustomer = id => id; return ['c-1'].map(lookupCustomer); })()")]
+    [InlineData("['c-1'].map(id => lookupCustomer(id).name)")]
+    public async Task A_name_that_is_not_a_reference_to_the_matched_global_converts(string expression)
+    {
+        var result = await ConvertTextAsync(expression, [LookupCustomer]);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    /// <summary>Without a host function of that member name the name is not a replaced global, so no reference diagnostic is reported.</summary>
+    [Fact]
+    public async Task An_unmatched_global_used_as_a_value_gets_no_replaced_reference_diagnostic()
+    {
+        var result = await ConvertTextAsync("['c-1'].map(lookupCustomer)");
+
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ReplacedFunctionReference);
+    }
+
+    /// <summary>A write to the name, directly or through a destructuring target, is an undeclared write, not a reference.</summary>
+    [Theory]
+    [InlineData("(() => { lookupCustomer = null; return 1; })()")]
+    [InlineData("(() => { lookupCustomer++; return 1; })()")]
+    [InlineData("(() => { [lookupCustomer] = [1]; return 1; })()")]
+    [InlineData("(() => { ({ lookupCustomer } = { lookupCustomer: 1 }); return 1; })()")]
+    [InlineData("(() => { ({ a: [lookupCustomer = 2] } = { a: [] }); return 1; })()")]
+    [InlineData("(() => { [...lookupCustomer] = [1]; return 1; })()")]
+    [InlineData("(() => { for ([lookupCustomer] of [[1]]) {} return 1; })()")]
+    public async Task A_write_to_a_matched_global_is_an_undeclared_write(string expression)
+    {
+        var result = await ConvertTextAsync(expression, [LookupCustomer]);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.UnsupportedShape, diagnostic.Code);
     }
 
     private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertTextAsync(string expression, params Elsa3Variable[] variables) =>
+        ConvertTextAsync(expression, [], variables);
+
+    private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertTextAsync(
+        string expression,
+        IReadOnlyList<JavaScriptHostFunctionDeclaration> hostFunctions,
+        params Elsa3Variable[] variables) =>
         ConversionServices.ConvertAsync(
             RealActivityCatalog.Create(),
-            ConversionServices.Definition(Sequence("root", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", expression)))), variables: variables));
+            ConversionServices.Definition(Sequence("root", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", expression)))), variables: variables),
+            configure: services =>
+            {
+                foreach (var hostFunction in hostFunctions)
+                    services.AddSingleton(hostFunction);
+            });
 
     private static ExpressionDefinition ReadExpression(Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition> result)
     {
         var argument = Input(Node(result.Value!.State, "node"), "text");
         return (argument.Value.Value is JsonElement element ? element : JsonSerializer.SerializeToElement(argument.Value.Value))
-            .Deserialize<ExpressionDefinition>()!;
+            .Deserialize<ExpressionDefinition>(Elsa.Serialization.Core.JsonBaseline.Options)!;
     }
 }

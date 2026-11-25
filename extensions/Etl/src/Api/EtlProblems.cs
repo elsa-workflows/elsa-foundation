@@ -10,7 +10,7 @@ internal sealed class EtlProblemWriter : IEndpointProblemWriter
 {
     public Task WriteAsync(HttpContext context, EndpointProblem problem) => WriteAsync(context, problem.StatusCode, "etl.request-invalid");
     internal static Task WriteAsync(HttpContext context, int status, string code) =>
-        Results.Json(new EtlProblem(status, code), EtlProblemJsonContext.Default.EtlProblem, statusCode: status).ExecuteAsync(context);
+        Results.Json(new EtlProblem(status, code), EtlProblemJsonContext.WireContext.EtlProblem, statusCode: status).ExecuteAsync(context);
 }
 
 internal sealed class EtlFaultRenderer : IEndpointFaultRenderer

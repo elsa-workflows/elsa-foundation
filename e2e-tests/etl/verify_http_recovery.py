@@ -115,7 +115,38 @@ def physical_business_error_boundary(connection,phase,checked,origin,mode,techni
             raise ValueError('The actual interpreter lost its exact matched or unmatched business-error disposition.')
 
 
-def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=False,embedded=False,parent_settlement_owed=False,final_refusal=None):
+def protected_worker_schema(version, content, expected):
+    # The family gate can write 2.1 even for a worker without ingress. Historical
+    # captures pin 2.0; a new capture must explicitly pin its actual writer format.
+    if expected not in ('2.0.0', '2.1.0') or version != expected:
+        return False
+    if version == '2.1.0':
+        return True
+    protected = {'ingressorigin', 'stimulusdeliveryorigin'}
+    origins = [value for name, value in content.items() if name.lower() == 'modelworkorigin']
+    return (not any(name.lower() in protected for name in content)
+            and isinstance(content.get('modelWorkOrigin'), dict)
+            and not any(name.lower() == 'ingressorigin' for origin in origins if isinstance(origin, dict) for name in origin))
+
+
+def protected_product_inventory(products, source, direct, version):
+    if version not in (1, 2) or version == 2 and not direct:
+        return False
+    names = {'Elsa.Workbench.dll', 'Elsa.Etl.Core.dll', 'Elsa.Etl.Runtime.dll', 'Elsa.Etl.Workflows.Runtime.dll',
+             'Elsa.Etl.Persistence.EntityFrameworkCore.dll', 'Elsa.Etl.Runtime.Api.dll'}
+    if direct:
+        names |= {'Elsa.Activities.Bpmn.Core.dll', 'Elsa.Activities.Bpmn.dll', 'Elsa.Activities.Bpmn.Api.dll',
+                  'Elsa.Workflows.Runtime.Core.dll', 'Elsa.Workflows.Runtime.dll', 'Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll'}
+    if version == 2:
+        names |= {'Elsa.Serialization.Core.dll', 'Elsa.Activities.Runtime.Core.dll'}
+    rows = products.get('actualProductVersions', [])
+    return (products.get('sourceCommit') == source and products.get('metadataOnly') is True
+            and len(rows) == len(names) and {row.get('name') for row in rows} == names
+            and all(row.get('productVersion', '').endswith('+' + source)
+                    and re.fullmatch('[0-9a-f]{64}', row.get('sha256', '')) is not None for row in rows))
+
+
+def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=False,embedded=False,parent_settlement_owed=False,final_refusal=None,worker_schema='2.0.0'):
     observed=checked[phase];model=observed["model"]
     row=connection.execute("SELECT Lifecycle,Revision,ContentJson FROM elsa_runtime_model_execution WHERE ExecutionId=?",(key(model["executionId"]),)).fetchone()
     stored=json.loads(row[2]) if row else None
@@ -123,7 +154,7 @@ def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=Fa
             stored["terminalResult"]!=model["terminalResult"] or stored["executable"]!=encoded_tree(model["executable"]) or stored["materialIncarnationId"]!=key(model["materialIncarnationId"])):
         raise ValueError("The physical model state differs from its checked reader.")
     worker=connection.execute("SELECT SchemaVersion,ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId=?",(key(origin["workerExecutionId"]),)).fetchone()
-    if worker is None or worker[0]!="2.0.0" or json.loads(worker[1])["modelWorkOrigin"]!=encoded_tree(origin) or connection.execute("SELECT COUNT(*) FROM elsa_runtime_workflow_execution_state").fetchone()[0]!=(2 if embedded else 1):
+    if worker is None or not protected_worker_schema(worker[0],json.loads(worker[1]),worker_schema) or json.loads(worker[1])["modelWorkOrigin"]!=encoded_tree(origin) or connection.execute("SELECT COUNT(*) FROM elsa_runtime_workflow_execution_state").fetchone()[0]!=(2 if embedded else 1):
         raise ValueError("The physical worker lost its protected exact model origin.")
     materials=[json.loads(row[0]).get("material") for row in connection.execute("SELECT ContentJson FROM elsa_runtime_workflow_executable")]
     material,=[item for item in materials if item is not None and item["identity"]==encoded_tree(model["executable"])]
@@ -197,7 +228,7 @@ def physical_model_cancellation(connection,read,checked,origin,result):
         raise ValueError("The model settled before actual downstream cancellation delivery.")
 
 
-def pending_cancellation(read,root,process,bridge,model_cancel):
+def pending_cancellation(read,root,process,bridge,model_cancel,worker_schema='2.0.0'):
     checked,origin,result=bridge;pending=read('pending.json');observed=read('pending-checked.json');model=observed['model'];worker=observed['worker']
     stage='model-command' if model_cancel else 'native-terminal';before=read('before.json')
     if (process.get('pendingCancellationStage')!=stage or process.get('pendingPredecessorExitCode')!=-9 or process.get('sweepIntervalsSeconds')!=[.2,300,.2,.2] or
@@ -257,7 +288,7 @@ def pending_cancellation(read,root,process,bridge,model_cancel):
                     row,=connection.execute('SELECT ContentJson FROM elsa_runtime_model_execution').fetchall();actual=json.loads(row[0])
                     if actual['payload']!=model['payload'] or actual['revision']!=model['revision'] or actual['terminalResult']!=model['terminalResult'] or actual['executable']!=encoded_tree(model['executable']):raise ValueError('The physical pending model differs from its durable cancellation decision.')
                     row,=connection.execute('SELECT SchemaVersion,ContentJson FROM elsa_runtime_workflow_execution_state').fetchall();actual=json.loads(row[1])
-                    if row[0]!='2.0.0' or actual['modelWorkOrigin']!=encoded_tree(origin) or actual['status']!=expected_worker or actual['pinnedExecutable']!=encoded_tree(origin['workerExecutable']):raise ValueError('The physical pending worker differs from its true terminal state or exact origin.')
+                    if not protected_worker_schema(row[0],actual,worker_schema) or actual['modelWorkOrigin']!=encoded_tree(origin) or actual['status']!=expected_worker or actual['pinnedExecutable']!=encoded_tree(origin['workerExecutable']):raise ValueError('The physical pending worker differs from its true terminal state or exact origin.')
                     if connection.execute('SELECT COUNT(*) FROM elsa_runtime_bookmark_state').fetchone()[0]!=int(model_cancel):raise ValueError('The physical pending cancellation lost or retained an unexpected native wait.')
                     rows=[json.loads(x[0]) for x in connection.execute('SELECT ContentJson FROM elsa_runtime_post_commit_outbox')]
                     if len(rows)!=len(sources):raise ValueError('The physical pending cancellation lost a delivery obligation.')
@@ -283,7 +314,7 @@ def pending_cancellation(read,root,process,bridge,model_cancel):
 
 
 
-def consumed_before_ack(read,root,process,bridge,model_cancel):
+def consumed_before_ack(read,root,process,bridge,model_cancel,worker_schema='2.0.0'):
     checked,origin,result=bridge;observed=read('consumed-checked.json');view=read('consumed.json');sdk=read('sdk-consume.json')
     model=observed['model'];worker=observed['worker'];receipt,=[x for x in observed['inputs'] if x['inputKind']=='native-result']
     native,=[s for s in observed['sources'] if s['intent']['kind']=='Elsa.Bpmn.NativeWorkResult.v1']
@@ -324,7 +355,7 @@ def consumed_before_ack(read,root,process,bridge,model_cancel):
             with closing(sqlite3.connect(database.as_uri()+'?mode=ro&immutable=1',uri=True)) as connection:
                 if connection.execute('PRAGMA integrity_check').fetchall()!=[('ok',)]:raise ValueError('A consumed-before-ACK store failed integrity.')
                 if store=='elsa':
-                    physical_model_bridge(connection,'consumed',observed_bridge,origin,result,model_cancel=model_cancel)
+                    physical_model_bridge(connection,'consumed',observed_bridge,origin,result,model_cancel=model_cancel,worker_schema=worker_schema)
                     if connection.execute('SELECT COUNT(*) FROM elsa_runtime_bookmark_state').fetchone()[0]:raise ValueError('The consumed cancellation recreated a native wait.')
                     rows=[json.loads(x[0]) for x in connection.execute('SELECT ContentJson FROM elsa_runtime_post_commit_outbox')]
                     if len(rows)!=len(observed['sources']):raise ValueError('The physical pre-ACK store lost a retained delivery source.')
@@ -514,7 +545,7 @@ def direct_embedded_trace_comparison(root,manifest):
     return result,compared
 
 
-def pending_embedded_parent_return(read,root,process,bridge):
+def pending_embedded_parent_return(read,root,process,bridge,worker_schema='2.0.0'):
     checked,origin,native_result=bridge
     pending=read('parent-pending-checked-model.json');embedding=read('parent-pending-checked-embedding.json');sdk=read('sdk-consume.json')
     model=pending['model'];last=checked['finished'];after=read('finished-checked-embedding.json')
@@ -567,7 +598,7 @@ def pending_embedded_parent_return(read,root,process,bridge):
             with closing(sqlite3.connect(database.as_uri()+'?mode=ro&immutable=1',uri=True)) as c:
                 if c.execute('PRAGMA integrity_check').fetchall()!=[('ok',)]:raise ValueError('An actual parent-pending store failed integrity.')
                 if store=='elsa':
-                    physical_model_bridge(c,'parentPending',observations,origin,native_result,model_cancel=True,embedded=True,parent_settlement_owed=True)
+                    physical_model_bridge(c,'parentPending',observations,origin,native_result,model_cancel=True,embedded=True,parent_settlement_owed=True,worker_schema=worker_schema)
                     row=c.execute('SELECT Status,ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId=?',(key(parent_id),)).fetchone()
                     if row is None or row[0]!=5 or json.loads(row[1])['pinnedExecutable']!=encoded_tree(embedding['nativeParent']['pinnedExecutable']):raise ValueError('The physical pending native parent lost its cancellation or pin.')
                     rows=[json.loads(r[0]) for r in c.execute('SELECT ContentJson FROM elsa_runtime_model_input')]
@@ -589,7 +620,7 @@ def pending_embedded_parent_return(read,root,process,bridge):
 
 
 
-def successful_embedded_parent_return(read,root,process,bridge):
+def successful_embedded_parent_return(read,root,process,bridge,worker_schema='2.0.0'):
     checked,origin,native_result=bridge;stage=process['successfulParentResultCrashStage'];settled=stage=='settled';consumed=stage!='pending'
     pending=read('parent-pending-checked-model.json');embedding=read('parent-pending-checked-embedding.json');sdk=read('sdk-consume.json')
     before=read('before-checked-embedding.json');after=read('finished-checked-embedding.json');model=pending['model'];last=checked['finished']
@@ -660,7 +691,7 @@ def successful_embedded_parent_return(read,root,process,bridge):
             with closing(sqlite3.connect(database.as_uri()+'?mode=ro&immutable=1',uri=True)) as c:
                 if c.execute('PRAGMA integrity_check').fetchall()!=[('ok',)]:raise ValueError('An actual successful-parent store failed integrity.')
                 if store=='elsa':
-                    physical_model_bridge(c,'parentPending',observations,origin,native_result,embedded=True,parent_settlement_owed=not settled)
+                    physical_model_bridge(c,'parentPending',observations,origin,native_result,embedded=True,parent_settlement_owed=not settled,worker_schema=worker_schema)
                     row=c.execute('SELECT Status,ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId=?',(key(parent_id),)).fetchone()
                     if row is None or row[0]!=embedding['nativeParent']['status'] or json.loads(row[1])['pinnedExecutable']!=encoded_tree(embedding['nativeParent']['pinnedExecutable']):raise ValueError('The physical successful parent lost its actual pin or consumption state.')
                     for activity in embedding['activities']:
@@ -826,6 +857,8 @@ def verify(path):
     direct=embedded or counterpart or cancelling or business or technical or manifest.get("kind")=="actual-direct-bpmn-native-etl-recovery"
     if manifest.get("schemaVersion")!=1 or manifest.get("kind") not in ("actual-native-etl-recovery-reference","actual-direct-bpmn-native-etl-recovery","actual-direct-bpmn-native-etl-success-counterpart","actual-direct-bpmn-native-etl-pipeline-cancellation","actual-direct-bpmn-native-etl-worker-cancellation","actual-direct-bpmn-native-etl-model-cancellation","actual-native-runbpmn-etl-http-recovery","actual-native-runbpmn-etl-pipeline-cancellation","actual-native-runbpmn-etl-parent-cancellation","actual-direct-bpmn-native-etl-business-error","actual-native-runbpmn-etl-business-error","actual-direct-bpmn-native-etl-technical-fault","actual-native-runbpmn-etl-technical-fault"):raise ValueError("Unknown ETL recovery reference evidence.")
     source=manifest["sourceRevision"];assets=manifest["assets"]
+    worker_schema=manifest.get('workflowStateSchemaVersion','2.0.0')
+    if worker_schema not in ('2.0.0','2.1.0'):raise ValueError('Unknown protected worker capture format.')
     stage=manifest.get('pendingCancellationStage');pending_crash=stage is not None;post_ack=manifest.get('postConsumptionPreAck') is True
     if post_ack and not pending_crash:raise ValueError('A consumed-before-ACK case requires its actual pending cancellation source.')
     if pending_crash and stage!=('model-command' if model_cancel else 'native-terminal' if worker_cancel else None):raise ValueError('Unknown pending cancellation stage.')
@@ -860,7 +893,7 @@ def verify(path):
         if (business or technical) and process.get('resumptionSweepIntervalSeconds')!=.2:raise ValueError('The actual error recovery lost its declared production resumption configuration.')
         if (process["sourceRevision"]!=source or process["parent"]!=parent or process["businessError"] is not business_error or process["predecessorExitCode"]!=-9 or
                 [item["role"] for item in process["processes"]]!=(["http-fixture","workbench","workbench","consumption-sdk","workbench","workbench"] if post_ack or parent_pending or success_parent is not None else ["http-fixture"]+["workbench"]*(4 if pending_crash else 3)) or len({item["processId"] for item in process["processes"]})!=(6 if post_ack or parent_pending or success_parent is not None else 5 if pending_crash else 4)):raise ValueError("The actual ETL reference lacks its distinct process-loss/restart provenance.")
-        if products["sourceCommit"]!=source or products["metadataOnly"] is not True or len(products["actualProductVersions"])!=(12 if direct else 6) or any(not item["productVersion"].endswith("+"+source) for item in products["actualProductVersions"]):raise ValueError("The actual Workbench and ETL products differ from their declared source.")
+        if not protected_product_inventory(products,source,direct,manifest.get('productInventoryVersion',1)):raise ValueError("The actual Workbench and ETL products differ from their declared source.")
         before=read("before.json");finished=read("finished.json");recovered=read("recovered.json")
         before_wire=read("before-wire.json");wire=read("finished-wire.json")
         if technical:
@@ -888,10 +921,10 @@ def verify(path):
                     checked['before']['model']['payload']['formatVersion']!=7 or checked['finished']['model']['payload']['formatVersion']!=7):
                 raise ValueError('The actual final semantic fault lost its retained incident, terminal retry refusal or original failure state.')
         if embedded:embedded_etl_parent(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,parent_cancel)
-        if success_parent is not None:successful_embedded_parent_return(read,q.evidence_file(root,case+'/process.json').parent,process,bridge)
-        if parent_pending:pending_embedded_parent_return(read,q.evidence_file(root,case+'/process.json').parent,process,bridge)
-        if pending_crash:pending_cancellation(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,model_cancel)
-        if post_ack:consumed_before_ack(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,model_cancel)
+        if success_parent is not None:successful_embedded_parent_return(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,worker_schema)
+        if parent_pending:pending_embedded_parent_return(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,worker_schema)
+        if pending_crash:pending_cancellation(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,model_cancel,worker_schema)
+        if post_ack:consumed_before_ack(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,model_cancel,worker_schema)
         if finished!=read("retained.json") or wire!=read("retained-wire.json"):raise ValueError("The terminal native/ETL views or physical effects changed after another process.")
         identity=process["workflowExecutionId"];run_id=process["runId"];selection=process["selection"]
         old={node(item):item for item in before["native"]["activities"]};current={node(item):item for item in finished["native"]["activities"]}
@@ -952,7 +985,7 @@ def verify(path):
                         if store=="elsa":
                             if post_ack and phase=='finished' and connection.execute('SELECT COUNT(*) FROM elsa_runtime_scheduler_work_item').fetchone()[0]:
                                 raise ValueError('The recovered pre-ACK journey retained native/model scheduler work.')
-                            if bridge is not None:physical_model_bridge(connection,phase,*bridge,model_cancel=model_cancel or parent_cancel,embedded=embedded,final_refusal=final_refusal)
+                            if bridge is not None:physical_model_bridge(connection,phase,*bridge,model_cancel=model_cancel or parent_cancel,embedded=embedded,final_refusal=final_refusal,worker_schema=worker_schema)
                             if business or technical:physical_business_error_boundary(connection,phase,bridge[0],bridge[1],boundary,technical,explicit_final)
                             if model_cancel and phase=="finished":physical_model_cancellation(connection,read,*bridge)
                             if technical and phase=='finished':

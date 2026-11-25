@@ -36,7 +36,7 @@ public static class FoundationIdentityApi
         // The published operation ids predate the naming scheme, the tag is the literal "Identity",
         // the public entry points document no auth responses, and the flows own challenges,
         // sign-outs, and bare failure statuses — so the surface stays on the group's raw seam.
-        var api = endpoints.MapEndpointGroup(owner, FoundationIdentityApiJsonContext.Default, tag: "Identity");
+        var api = endpoints.MapEndpointGroup(owner, FoundationIdentityApiJsonContext.WireContext, tag: "Identity");
 
         api.MapUnboundOperation("GET", Route("bootstrap"), "Bootstrap",
                 typeof(IdentityBootstrapResponse), StatusCodes.Status200OK, null, HandleBootstrapAsync,
@@ -90,7 +90,7 @@ public static class FoundationIdentityApi
             providers.Select(x => new IdentityProviderResponse(
                 x.Id, x.Kind, x.DisplayName, x.IsDefault, x.Enabled, x.Challenge)).ToList());
 
-        await Results.Json(response, FoundationIdentityApiJsonContext.Default.IdentityBootstrapResponse).ExecuteAsync(context);
+        await Results.Json(response, FoundationIdentityApiJsonContext.WireContext.IdentityBootstrapResponse).ExecuteAsync(context);
     }
 
     private static async Task HandleCapabilitiesAsync(HttpContext context)
@@ -117,14 +117,14 @@ public static class FoundationIdentityApi
                 x.Category,
                 x.Description)).ToList());
 
-        await Results.Json(response, FoundationIdentityApiJsonContext.Default.IdentityCapabilitiesResponse).ExecuteAsync(context);
+        await Results.Json(response, FoundationIdentityApiJsonContext.WireContext.IdentityCapabilitiesResponse).ExecuteAsync(context);
     }
 
     private static async Task HandleSessionAsync(HttpContext context)
     {
         var session = await context.RequestServices.GetRequiredService<IAuthSessionService>()
             .GetAsync(context.User, context.RequestAborted);
-        await Results.Json(session, FoundationIdentityApiJsonContext.Default.AuthSession).ExecuteAsync(context);
+        await Results.Json(session, FoundationIdentityApiJsonContext.WireContext.AuthSession).ExecuteAsync(context);
     }
 
     private static async Task HandleTokenAsync(HttpContext context)
@@ -174,7 +174,7 @@ public static class FoundationIdentityApi
                 { CanonicalUserId = tokenSubject.UserId, Provider = tokenSubject.Provider, SubjectIssuer = tokenSubject.Issuer, SessionId = sessionIds.SingleOrDefault()?.Value },
                 context.RequestAborted);
 
-        await Results.Json(new AccessTokenResponse(result.AccessToken, result.ExpiresAt, result.RefreshToken), FoundationIdentityApiJsonContext.Default.AccessTokenResponse).ExecuteAsync(context);
+        await Results.Json(new AccessTokenResponse(result.AccessToken, result.ExpiresAt, result.RefreshToken), FoundationIdentityApiJsonContext.WireContext.AccessTokenResponse).ExecuteAsync(context);
     }
 
     private static async Task<bool> IsFirstPartyBearerAsync(HttpContext context)
@@ -355,7 +355,7 @@ public static class FoundationIdentityApi
     {
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.Pragma = "no-cache";
-        var (request, malformed) = await ReadJsonAsync(context, FoundationIdentityApiJsonContext.Default.RefreshTokenRequest);
+        var (request, malformed) = await ReadJsonAsync(context, FoundationIdentityApiJsonContext.WireContext.RefreshTokenRequest);
         if (malformed)
             return;
 
@@ -377,7 +377,7 @@ public static class FoundationIdentityApi
             return;
         }
 
-        await Results.Json(result, FoundationIdentityApiJsonContext.Default.TokenRefreshResult).ExecuteAsync(context);
+        await Results.Json(result, FoundationIdentityApiJsonContext.WireContext.TokenRefreshResult).ExecuteAsync(context);
     }
 
     private static async Task<(T? Value, bool Malformed)> ReadJsonAsync<T>(HttpContext context, JsonTypeInfo<T> typeInfo) where T : class

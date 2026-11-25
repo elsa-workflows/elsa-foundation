@@ -35,7 +35,7 @@ internal static class SchedulerWorkItems
             requiresPayloadMessage: $"{commandLabel} scheduler work item requires a {payloadDescription}.",
             resolvedToNullMessage: $"{commandLabel} scheduler work item payload resolved to null.",
             invalidPayloadMessage: $"{commandLabel} scheduler work item payload is not a valid {payloadDescription}.",
-            deserialize: deserialize ?? (static (_, payload) => payload.Deserialize<T>()),
+            deserialize: deserialize ?? (static (_, payload) => payload.Deserialize<T>(Elsa.Serialization.Core.JsonBaseline.Options)),
             isPayloadValidationException: exception => IsPayloadValidationException(exception, validationParamNames));
 
     /// <summary>
@@ -97,7 +97,7 @@ internal static class SchedulerWorkItems
             enqueuedAt: now,
             recordedAt: now,
             sequence: sourceWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            payload: JsonSerializer.SerializeToElement(payload),
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: WithSchedulingMetadata(commandMetadata ?? sourceWorkItem.CommandMetadata, completedState),
             envelopeMetadata: sourceWorkItem.EnvelopeMetadata);
     }
@@ -188,7 +188,7 @@ internal static class SchedulerWorkItems
                 enqueuedAt: now,
                 recordedAt: now,
                 sequence: sourceWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
-                payload: JsonSerializer.SerializeToElement(payload),
+                payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
                 commandMetadata: childCommandMetadata,
                 envelopeMetadata: sourceWorkItem.EnvelopeMetadata,
                 executionScopeId: payload.SchedulingProvenance.ExecutionScopeId);

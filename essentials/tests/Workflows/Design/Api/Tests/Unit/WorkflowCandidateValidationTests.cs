@@ -42,13 +42,14 @@ public sealed class WorkflowCandidateValidationTests
     public async Task Acknowledged_state_can_use_the_editors_equivalent_object_json_text_without_a_false_stale_verdict()
     {
         var host = new Host();
-        host.Store.Draft.State = new([], new("node", "inline-version", [new("Expression", new ArgumentValue(42, "Object"), null, null, null, null, null)], []), [], [], null);
+        host.Store.Draft.State = new([], new("node", "inline-version", [new("Expression", ArgumentValue.FromClr(42, "Object"), null, null, null, null, null)], []), [], [], null);
         var saved = host.Store.Draft.State;
         var request = host.Request();
         var baseline = request.Baseline;
+        using var editorNumber = System.Text.Json.JsonDocument.Parse("42.0");
         var editorState = baseline.State with
         {
-            RootActivity = baseline.State.RootActivity! with { Inputs = [new("Expression", new ArgumentValue("42", "Object"), null, null, null, null, null)] }
+            RootActivity = baseline.State.RootActivity! with { Inputs = [new("Expression", new ArgumentValue(editorNumber.RootElement, "Object"), null, null, null, null, null)] }
         };
         request = request with { Baseline = baseline with { State = editorState }, Candidate = new(new(), [], []) };
         Assert.Equal("validated", (await host.Endpoint.HandleAsync(request, default)).State);

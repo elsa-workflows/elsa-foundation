@@ -11,4 +11,6 @@
     <ProjectReference Include="..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+  </ItemGroup>
 </Project>

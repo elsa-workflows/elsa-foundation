@@ -446,7 +446,7 @@ public abstract partial class EtlRuntimeStoreContract
         var position = Assert.IsType<EtlConnectorFilePosition>(lease.Position);
         return ConnectorBatch(admission, prepared, lease,
             new EtlConnectorFileBatchRange(position.NextOrdinal, checked(position.NextOrdinal + recordCount)),
-            inputBytes: 11, inputHash: EtlRuntimeRecordCodec.HashText($"output-test-input-{lease.PartitionOrdinal}"));
+            inputBytes: 11, inputHash: Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes($"output-test-input-{lease.PartitionOrdinal}")));
     }
 
     private protected static EtlConnectorBatchOutput CreateOutput(EtlConnectorRunAdmission admission,
@@ -455,9 +455,9 @@ public abstract partial class EtlRuntimeStoreContract
         EtlConnectorKind errorKind = EtlConnectorKind.Jsonl)
     {
         var main = accepted == 0 ? null : OutputRoute(admission, batch, EtlOutputRoute.Main,
-            EtlConnectorKind.Http, $"{suffix}-main", EtlRuntimeRecordCodec.HashText($"{suffix}-main"), mainBytes, accepted);
+            EtlConnectorKind.Http, $"{suffix}-main", Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes($"{suffix}-main")), mainBytes, accepted);
         var errors = rejected == 0 ? null : OutputRoute(admission, batch, EtlOutputRoute.Error,
-            errorKind, $"{suffix}-errors", EtlRuntimeRecordCodec.HashText($"{suffix}-errors"), errorBytes, rejected);
+            errorKind, $"{suffix}-errors", Elsa.Serialization.Core.JsonHashInput.HashFramed(System.Text.Encoding.UTF8.GetBytes($"{suffix}-errors")), errorBytes, rejected);
         return new(accepted, rejected, filtered, main, errors);
     }
 
@@ -479,7 +479,7 @@ public abstract partial class EtlRuntimeStoreContract
     private protected static string CorruptHash(string hash) => (hash[0] == 'a' ? "b" : "a") + hash[1..];
 
     private protected static string OutputMetadataDigest(string json) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
+        Elsa.Serialization.Core.JsonHashInput.HashJson(json);
 
     private protected async Task<(long Limit, long Baseline, int PlanBytes)> MeasureOutputMetadataBoundaryAsync()
     {

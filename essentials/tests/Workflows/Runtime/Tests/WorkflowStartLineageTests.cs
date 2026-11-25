@@ -109,7 +109,7 @@ public sealed class WorkflowStartLineageTests
             "artifact-1",
             runKind: WorkflowRunKind.TestRun);
         var restoredStart = JsonSerializer.Deserialize<WorkflowExecutionStartCommandPayload>(
-            JsonSerializer.Serialize(legacyStart),
+            JsonSerializer.Serialize(legacyStart, Elsa.Serialization.Core.JsonBaseline.Options),
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.Null(restoredStart!.TestScope);
 
@@ -120,7 +120,7 @@ public sealed class WorkflowStartLineageTests
             RuntimeCheckpointCommandPayload.WorkflowStartReason,
             runKind: WorkflowRunKind.TestRun);
         var restoredCheckpoint = JsonSerializer.Deserialize<RuntimeCheckpointCommandPayload>(
-            JsonSerializer.Serialize(legacyCheckpoint),
+            JsonSerializer.Serialize(legacyCheckpoint, Elsa.Serialization.Core.JsonBaseline.Options),
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.Null(restoredCheckpoint!.TestScope);
     }
@@ -202,7 +202,7 @@ public sealed class WorkflowStartLineageTests
 
         var activation = Assert.Single(actorProvider.Activations);
         var envelope = Assert.Single(actorProvider.Actor.Envelopes);
-        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("partition-1", activation.Partition.Value);
         Assert.Equal("partition-1", envelope.Partition.Value);
         Assert.Equal("parent-1", payload.ParentWorkflowExecutionId);
@@ -267,7 +267,7 @@ public sealed class WorkflowStartLineageTests
 
         await startHandler.HandleAsync(NewStartWorkItem(payload));
         var checkpointWork = Assert.Single(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("child-1")));
-        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(7, checkpointPayload.DispatchNestingDepth);
         Assert.Equal(WorkflowRunKind.TestRun, checkpointPayload.RunKind);
         AssertScopeEqual(testScope, checkpointPayload.TestScope);
@@ -316,7 +316,7 @@ public sealed class WorkflowStartLineageTests
             enqueuedAt: Now,
             recordedAt: Now,
             sequence: 1,
-            payload: JsonSerializer.SerializeToElement(payload));
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options));
 
     private static WorkflowExecutable NewExecutable() =>
         new(

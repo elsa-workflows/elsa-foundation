@@ -38,7 +38,7 @@ public sealed class ToolingEntryPoint
     private const string SqliteMigrationLockStaleAfterField = "SqliteMigrationLockStaleAfter";
 
     /// <summary>Serialized the way the frozen tooling contract reads it: camelCase, and no null for a field a command would refuse.</summary>
-    private static readonly JsonSerializerOptions RequestJson = new()
+    private static readonly JsonSerializerOptions RequestJson = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull

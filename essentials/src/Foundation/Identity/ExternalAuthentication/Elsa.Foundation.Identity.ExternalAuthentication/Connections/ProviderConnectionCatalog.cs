@@ -11,6 +11,17 @@ namespace Elsa.Foundation.Identity.ExternalAuthentication.Connections;
 /// <summary>One bounded catalog in the existing global provider store, with an isolated explicit access scope.</summary>
 internal sealed class ProviderConnectionCatalog(IServiceScopeFactory scopes) : IConnectionCatalogStore
 {
+    // This protected owner metadata retains its established CLR member names. Carried JSON
+    // still uses the shared baseline; no tolerant reader or workflow conversion policy is added.
+    private static readonly JsonSerializerOptions RetainedJson = CreateRetainedJson();
+    private static JsonSerializerOptions CreateRetainedJson()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.PropertyNamingPolicy = null;
+        options.MakeReadOnly();
+        return options;
+    }
+
     private const string Provider = "external-authentication";
     private const string Kind = "external-connections/v1";
     private const string CatalogSetting = "catalog";
@@ -38,7 +49,7 @@ internal sealed class ProviderConnectionCatalog(IServiceScopeFactory scopes) : I
             throw new InvalidOperationException("The stored external connection catalog is invalid or unsupported.");
         try
         {
-            var records = JsonSerializer.Deserialize<ConnectionRecord[]>(json)
+            var records = JsonSerializer.Deserialize<ConnectionRecord[]>(json, options: RetainedJson)
                 ?? throw new InvalidOperationException("The stored external connection catalog is missing.");
             ConnectionSelection.Validate(records);
             return new ConnectionCatalog(records, found.Revision);
@@ -65,7 +76,7 @@ internal sealed class ProviderConnectionCatalog(IServiceScopeFactory scopes) : I
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ConnectionSelection.Validate(catalog.Records);
-        var json = JsonSerializer.Serialize(catalog.Records);
+        var json = JsonSerializer.Serialize(catalog.Records, options: RetainedJson);
         if (json.Length > MaximumCharacters)
             throw new InvalidOperationException("The external connection catalog exceeds its storage bound.");
         var configuration = new ProviderConfigurationRecord(Provider, null, Kind,

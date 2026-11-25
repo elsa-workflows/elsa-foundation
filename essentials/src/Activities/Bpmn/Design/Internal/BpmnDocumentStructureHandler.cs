@@ -37,7 +37,7 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
     {
         "structure", "documentXml", "processId", "activities", "bindings", "scopeHeaders"
     };
-    internal static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    internal static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNameCaseInsensitive = false,
         // The document/binding extension dictionaries preserve future metadata. Unknown typed

@@ -92,13 +92,13 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTriggerDeduplicationPolicy.IdempotencyKey, registrations[1].DeduplicationPolicy);
 
         var bookmarkItems = write.Commit.PostCommitIntents
-            .Select(intent => intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!)
+            .Select(intent => intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!)
             .ToArray();
         Assert.Equal(2, bookmarkItems.Length);
         Assert.Equal(2, write.Commit.StateChanges.PostCommitOutbox.Count);
         Assert.All(bookmarkItems, item => Assert.Equal(WorkflowExecutionCommandKind.CreateBookmark, item.CommandKind));
-        Assert.Equal("actexec-1:attempt:1:trigger:1", bookmarkItems[0].Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>()!.BookmarkId);
-        Assert.Equal("actexec-1:attempt:1:trigger:2", bookmarkItems[1].Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>()!.BookmarkId);
+        Assert.Equal("actexec-1:attempt:1:trigger:1", bookmarkItems[0].Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.BookmarkId);
+        Assert.Equal("actexec-1:attempt:1:trigger:2", bookmarkItems[1].Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.BookmarkId);
         Assert.Empty(state.BookmarkIds);
 
         var persisted = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");

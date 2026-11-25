@@ -66,7 +66,7 @@ internal sealed partial class Elsa3ActivityNormalizer
         foreach (var property in source.EnumerateObject())
             if (!property.NameEquals("memoryReference"))
                 input[property.Name] = property.Value;
-        return JsonSerializer.SerializeToElement(input);
+        return JsonSerializer.SerializeToElement(input, options: Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     private static bool ApplySourceCorrection(Elsa3RewriteContext context, Elsa3MemberRule rule, string property,

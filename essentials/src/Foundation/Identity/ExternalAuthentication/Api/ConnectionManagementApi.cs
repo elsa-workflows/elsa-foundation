@@ -29,7 +29,7 @@ public static partial class ExternalAuthenticationApi
 
     private static void MapManagement(IEndpointRouteBuilder endpoints)
     {
-        var api = endpoints.MapEndpointGroup(typeof(ExternalAuthenticationApiFeature).Assembly.GetName().Name!, ExternalAuthenticationApiJsonContext.Default, tag: "Identity");
+        var api = endpoints.MapEndpointGroup(typeof(ExternalAuthenticationApiFeature).Assembly.GetName().Name!, ExternalAuthenticationApiJsonContext.WireContext, tag: "Identity");
         Map("GET", "", "List", typeof(ManagedConnectionCatalogResponse), ListConnections, DefaultIdentityPermissionKeys.IdentityProvidersRead);
         Map("GET", "/{id}", "Detail", typeof(ManagedConnectionDetailResponse), ConnectionDetail, DefaultIdentityPermissionKeys.IdentityProvidersRead);
         Map("POST", "/assess", "Assess", typeof(ManagedConnectionAssessmentResponse), context => ChangeConnection(context, false), DefaultIdentityPermissionKeys.IdentityProvidersManage, typeof(ConnectionWrite));
@@ -51,7 +51,7 @@ public static partial class ExternalAuthenticationApi
     {
         if (!await CurrentPermission(context, DefaultIdentityPermissionKeys.IdentityProvidersRead)) return;
         var registry = await context.RequestServices.GetRequiredService<IConnectionRegistry>().ReadAsync(context.RequestAborted);
-        await ManagementJson(context, await CatalogResponse(context, registry), ExternalAuthenticationApiJsonContext.Default.ManagedConnectionCatalogResponse);
+        await ManagementJson(context, await CatalogResponse(context, registry), ExternalAuthenticationApiJsonContext.WireContext.ManagedConnectionCatalogResponse);
     }
 
     private static async Task ConnectionDetail(HttpContext context)
@@ -62,13 +62,13 @@ public static partial class ExternalAuthenticationApi
         if (view is null) { await ManagementFailure(context, "connection-not-found", 404); return; }
         var readiness = await context.RequestServices.GetRequiredService<IConnectionReadiness>().AssessAsync(view.Record, context.RequestAborted);
         await ManagementJson(context, new ManagedConnectionDetailResponse(registry.Revision, Projection(context, view) with { Readiness = readiness }),
-            ExternalAuthenticationApiJsonContext.Default.ManagedConnectionDetailResponse);
+            ExternalAuthenticationApiJsonContext.WireContext.ManagedConnectionDetailResponse);
     }
 
     private static async Task ChangeConnection(HttpContext context, bool apply)
     {
         if (!await CurrentPermission(context, DefaultIdentityPermissionKeys.IdentityProvidersManage) || !await ManagementPost(context)) return;
-        var request = await context.Request.ReadFromJsonAsync(ExternalAuthenticationApiJsonContext.Default.ConnectionWrite, context.RequestAborted);
+        var request = await context.Request.ReadFromJsonAsync(ExternalAuthenticationApiJsonContext.WireContext.ConnectionWrite, context.RequestAborted);
         if (request?.Record is null || !Enum.IsDefined(request.Change) || request.Record.Admission?.DefaultRoleIds is null ||
             request.Record.Admission.DefaultRoleIds.Count > 256 || request.Record.Admission.DefaultRoleIds.Any(id => string.IsNullOrWhiteSpace(id) || id.Length > 400) ||
             (request.Change is ConnectionChange.Create or ConnectionChange.CreateOverride or ConnectionChange.Update or ConnectionChange.PromoteOverride) && !Editable(request.Record))
@@ -88,14 +88,14 @@ public static partial class ExternalAuthenticationApi
             await SecurityNotification(context, "connection." + request.Change.ToString().ToLowerInvariant(),
                 result.Saved ? AuthEventOutcome.Success : AuthEventOutcome.Denied, "external-connections", result.Saved ? "saved" : "refused",
                 category: AuthEventCategory.IdentityChange);
-            await ManagementJson(context, result, ExternalAuthenticationApiJsonContext.Default.ConnectionWriteResult, result.Saved ? 200 : FailureStatus(result.Failure));
+            await ManagementJson(context, result, ExternalAuthenticationApiJsonContext.WireContext.ConnectionWriteResult, result.Saved ? 200 : FailureStatus(result.Failure));
         }
         else
         {
             var assessed = await writer.AssessAsync(request, context.User, context.RequestAborted);
             await ManagementJson(context, new ManagedConnectionAssessmentResponse(assessed.CanApply, assessed.Failure,
                 assessed.Proposed is null ? null : await CatalogResponse(context, assessed.Proposed)),
-                ExternalAuthenticationApiJsonContext.Default.ManagedConnectionAssessmentResponse, assessed.CanApply ? 200 : FailureStatus(assessed.Failure));
+                ExternalAuthenticationApiJsonContext.WireContext.ManagedConnectionAssessmentResponse, assessed.CanApply ? 200 : FailureStatus(assessed.Failure));
         }
     }
 
@@ -111,7 +111,7 @@ public static partial class ExternalAuthenticationApi
 
     private static async Task TestSavedConnection(HttpContext context, CancellationToken token)
     {
-        var request = await context.Request.ReadFromJsonAsync(ExternalAuthenticationApiJsonContext.Default.ManagedConnectionTestRequest, token);
+        var request = await context.Request.ReadFromJsonAsync(ExternalAuthenticationApiJsonContext.WireContext.ManagedConnectionTestRequest, token);
         if (request is null || string.IsNullOrWhiteSpace(request.ConnectionRecordId) || request.ConnectionRecordId.Length > 128)
         { await ManagementFailure(context, "invalid-request", 400); return; }
         var registry = context.RequestServices.GetRequiredService<IConnectionRegistry>();
@@ -132,7 +132,7 @@ public static partial class ExternalAuthenticationApi
             context.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow(), readiness, failure,
             before.Revision != after.Revision || current?.MaterialRevision != view.MaterialRevision);
         // Never serialize the protocol check: its issuer/credential binding is private recovery evidence.
-        await ManagementJson(context, result, ExternalAuthenticationApiJsonContext.Default.ManagedConnectionTestResponse);
+        await ManagementJson(context, result, ExternalAuthenticationApiJsonContext.WireContext.ManagedConnectionTestResponse);
     }
 
     private static async Task LookupUsers(HttpContext context)
@@ -147,7 +147,7 @@ public static partial class ExternalAuthenticationApi
         if (store is null) { await ManagementFailure(context, "lookup-unavailable", 503); return; }
         var result = await store.ListPageAsync(Tenant(context), page, search.FirstOrDefault(), context.RequestAborted);
         await ManagementJson(context, new ManagedUserPage(result.Items.Select(user => new ManagedUserLookup(user.Id, user.UserName, user.DisplayName, user.Status)).ToArray(), result.TotalCount),
-            ExternalAuthenticationApiJsonContext.Default.ManagedUserPage);
+            ExternalAuthenticationApiJsonContext.WireContext.ManagedUserPage);
     }
 
     private static async Task LookupRoles(HttpContext context)
@@ -162,7 +162,7 @@ public static partial class ExternalAuthenticationApi
         var result = await store.ListPageAsync(Tenant(context), page, context.RequestAborted);
         var roles = new List<ManagedRoleLookup>();
         foreach (var role in result.Items) roles.Add(new(role.Id, role.Name, await RolePermitted(context, scope.ServiceProvider, role)));
-        await ManagementJson(context, new ManagedRolePage(roles, result.TotalCount), ExternalAuthenticationApiJsonContext.Default.ManagedRolePage);
+        await ManagementJson(context, new ManagedRolePage(roles, result.TotalCount), ExternalAuthenticationApiJsonContext.WireContext.ManagedRolePage);
     }
 
     private static async Task<bool> DelegateRoles(HttpContext context, ConnectionChange change, ConnectionRecord record)
@@ -275,5 +275,5 @@ public static partial class ExternalAuthenticationApi
     };
     private static Task ManagementJson<T>(HttpContext context, T response, JsonTypeInfo<T> type, int status = 200) => Results.Json(response, type, statusCode: status).ExecuteAsync(context);
     private static Task ManagementFailure(HttpContext context, string failure, int status) => ManagementJson(context,
-        new ManagedConnectionError(failure), ExternalAuthenticationApiJsonContext.Default.ManagedConnectionError, status);
+        new ManagedConnectionError(failure), ExternalAuthenticationApiJsonContext.WireContext.ManagedConnectionError, status);
 }

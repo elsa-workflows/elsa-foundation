@@ -301,6 +301,60 @@ public sealed class RuntimeRecoveryScannerTests
     }
 
     [Fact]
+    public void RecoveryContinuationCodec_JsonDomainPinsCanonicalSignatureAndRetainsWireBytes()
+    {
+        var codec = RecoveryCodec("shared-recovery-signing-key-32-bytes");
+        var original = " { \"text\":\"\\u0061\", \"n\":1 } "u8.ToArray();
+        var token = codec.EncodeJson("recovery-page", original);
+        var equivalent = codec.EncodeJson("recovery-page", "{\"n\":1.0,\"text\":\"a\"}"u8);
+        var signature = token.Split('.')[2].Replace('-', '+').Replace('_', '/');
+        signature += "=";
+        Assert.True(Convert.ToHexStringLower(Convert.FromBase64String(signature)) ==
+            "55130a76397da201b75815dfb6446e0e908ef20ca2fe8403209c61ceab3dae0f",
+            "First-stable hash freeze: changing this signature requires an explicit identity/migration decision.");
+        Assert.Equal(token.Split('.')[2], equivalent.Split('.')[2]);
+        Assert.Equal(original, codec.DecodeJson("recovery-page", token));
+        using var document = System.Text.Json.JsonDocument.Parse(codec.DecodeJson("recovery-page", token));
+        Assert.Equal(1, document.RootElement.GetProperty("n").GetInt32());
+        Assert.Throws<ArgumentException>(() => codec.Decode("recovery-page", token));
+        Assert.Throws<ArgumentException>(() => codec.DecodeJson("different-page", token));
+        Assert.Throws<ArgumentException>(() => codec.DecodeJson("recovery-page", codec.Encode("recovery-page", original)));
+        Assert.Throws<ArgumentException>(() => RecoveryCodec("different-recovery-signing-key-32-bytes")
+            .DecodeJson("recovery-page", token));
+
+        // A binary caller may choose any purpose and payload. Prefix substitution must never let its
+        // signature enter the JSON domain, including a canonical payload and the JSON purpose prefix.
+        var binary = codec.Encode("json:recovery-page", "{\"n\":1e0,\"text\":\"a\"}"u8).Split('.');
+        binary[0] = "recovery-page";
+        Assert.Throws<ArgumentException>(() => codec.DecodeJson("recovery-page", string.Join('.', binary)));
+    }
+
+    [Theory]
+    [InlineData("{}", "{\"x\":null}")]
+    [InlineData("[1,2]", "[2,1]")]
+    [InlineData("9007199254740992", "9007199254740993")]
+    public void RecoveryContinuationCodec_JsonSignatureRejectsChangedValues(string before, string after)
+    {
+        var codec = RecoveryCodec("shared-recovery-signing-key-32-bytes");
+        var token = codec.EncodeJson("recovery-page", System.Text.Encoding.UTF8.GetBytes(before));
+        var changed = codec.EncodeJson("recovery-page", System.Text.Encoding.UTF8.GetBytes(after));
+        var parts = token.Split('.');
+        parts[1] = changed.Split('.')[1];
+        Assert.NotEqual(token.Split('.')[2], changed.Split('.')[2]);
+        Assert.Throws<ArgumentException>(() => codec.DecodeJson("recovery-page", string.Join('.', parts)));
+    }
+
+    [Theory]
+    [InlineData("{invalid")]
+    [InlineData("\"\\uD800\"")]
+    public void RecoveryContinuationCodec_JsonDecodeKeepsMalformedInputInTheOwnerError(string invalid)
+    {
+        var codec = RecoveryCodec("shared-recovery-signing-key-32-bytes");
+        var token = codec.Encode("recovery-page", System.Text.Encoding.UTF8.GetBytes(invalid));
+        Assert.Throws<ArgumentException>(() => codec.DecodeJson("recovery-page", token));
+    }
+
+    [Fact]
     public void RecoveryContinuationCodec_RefusesAnEphemeralKeyWhenDurablePagingIsRequired()
     {
         Assert.Throws<InvalidOperationException>(() => new HmacRuntimeRecoveryContinuationCodec(

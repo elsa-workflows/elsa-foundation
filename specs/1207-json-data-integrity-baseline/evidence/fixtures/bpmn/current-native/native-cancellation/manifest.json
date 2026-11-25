@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-direct-bpmn-native-etl-worker-cancellation",
+  "sourceRevision": "39260424a786fab0fe4b47dc7f8ae35af4696367",
+  "assets": [
+    {
+      "path": "native-cancel/before-checked-model.json",
+      "sha256": "d6265f46705d6a19f440c822bb34f82ee67c181239aa3ffa9d0874f1874cd744"
+    },
+    {
+      "path": "native-cancel/before-elsa.sqlite.gz",
+      "sha256": "b4adadab4ec3a0132f5f6e11fa17955a98bf0b84da3fb624e26be0f8662e766a"
+    },
+    {
+      "path": "native-cancel/before-etl-design.sqlite.gz",
+      "sha256": "b923efa2dedafed3410337e0ec5cf8dc8b98ecdbd23a66d36b930a0ac8da3ae0"
+    },
+    {
+      "path": "native-cancel/before-etl-runtime.sqlite.gz",
+      "sha256": "9784d334487462e3db0a5abd03ad228033ffadb910c9efae6c7983157a1f2785"
+    },
+    {
+      "path": "native-cancel/before-wire.json",
+      "sha256": "644d56dc9259a6c7fb297d99bbe2306b0ee4345b548e4286c59ff2d55c71e55e"
+    },
+    {
+      "path": "native-cancel/before.json",
+      "sha256": "dc8176f89e727bf998268a43e7db860524a4d98f1b63f7ca202340c5fc0af7d2"
+    },
+    {
+      "path": "native-cancel/finished-checked-model.json",
+      "sha256": "a71a863b95ea3bbbfb9dfb4226de1ee6a1ec0fcb9c3ebccdc56b146cd61a9fde"
+    },
+    {
+      "path": "native-cancel/finished-elsa.sqlite.gz",
+      "sha256": "d995ce4fb01b34763696a2cf19737da8ce409ca4a78c45e4439d2214155d439d"
+    },
+    {
+      "path": "native-cancel/finished-etl-design.sqlite.gz",
+      "sha256": "fad609180d8c4f64447303bc015c4e2dab9938ae20c92d0e9cd44f68f1ebf699"
+    },
+    {
+      "path": "native-cancel/finished-etl-runtime.sqlite.gz",
+      "sha256": "4b21afce67af3088e0dbe04f9bbeb15335d282156480746514b2ac2a73a41d5a"
+    },
+    {
+      "path": "native-cancel/finished-wire.json",
+      "sha256": "644d56dc9259a6c7fb297d99bbe2306b0ee4345b548e4286c59ff2d55c71e55e"
+    },
+    {
+      "path": "native-cancel/finished.json",
+      "sha256": "15eb77b56657fa04cac9114f705c73a13db07c58f5deaa52c111b4f45c0a7c33"
+    },
+    {
+      "path": "native-cancel/native-cancel-response.json",
+      "sha256": "a886aa160fcc64798f12254bef1f2680c4c31da2775d09eff4bcf0e2f6172a69"
+    },
+    {
+      "path": "native-cancel/pending-checked.json",
+      "sha256": "584fe3ad93061e2884609d9ea62832518bebe270a3c726b0c36f4b0296884628"
+    },
+    {
+      "path": "native-cancel/pending-elsa.sqlite.gz",
+      "sha256": "c5218d8c33458e2bf89a4265a51b969c6008231b48a62e35909db105751b71dc"
+    },
+    {
+      "path": "native-cancel/pending-etl-design.sqlite.gz",
+      "sha256": "2ec06e45ea35038e056866cc9a8bbdf90139a873b42b745cb776366bb0af7115"
+    },
+    {
+      "path": "native-cancel/pending-etl-runtime.sqlite.gz",
+      "sha256": "d97166a965acc87c90fd7376b0167da5b72ababd58581d529ff3ec2420d48752"
+    },
+    {
+      "path": "native-cancel/pending-wire.json",
+      "sha256": "644d56dc9259a6c7fb297d99bbe2306b0ee4345b548e4286c59ff2d55c71e55e"
+    },
+    {
+      "path": "native-cancel/pending.json",
+      "sha256": "c0f6bbe35e60ea65d34d64b4889c2438687dc1927e1e2aee2c9974001435007f"
+    },
+    {
+      "path": "native-cancel/process.json",
+      "sha256": "a16f15fd83fbf9146e70d7fc3e5bd79b747f80bc70580cc657abe53e2a67408f"
+    },
+    {
+      "path": "native-cancel/recovered.json",
+      "sha256": "dc8176f89e727bf998268a43e7db860524a4d98f1b63f7ca202340c5fc0af7d2"
+    },
+    {
+      "path": "native-cancel/retained-checked-model.json",
+      "sha256": "a71a863b95ea3bbbfb9dfb4226de1ee6a1ec0fcb9c3ebccdc56b146cd61a9fde"
+    },
+    {
+      "path": "native-cancel/retained-wire.json",
+      "sha256": "644d56dc9259a6c7fb297d99bbe2306b0ee4345b548e4286c59ff2d55c71e55e"
+    },
+    {
+      "path": "native-cancel/retained.json",
+      "sha256": "15eb77b56657fa04cac9114f705c73a13db07c58f5deaa52c111b4f45c0a7c33"
+    },
+    {
+      "path": "native-cancel/safe-errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  ],
+  "pendingCancellationStage": "native-terminal",
+  "workflowStateSchemaVersion": "2.1.0",
+  "productInventoryVersion": 2
+}

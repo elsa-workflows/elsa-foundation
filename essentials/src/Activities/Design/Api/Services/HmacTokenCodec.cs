@@ -14,13 +14,13 @@ public sealed class ActivityTokenSigningOptions
 }
 
 /// <summary>
-/// The signed token format those codecs share: <c>base64url(JSON state) "." base64url(HMAC-SHA256(key, JSON state))</c>.
-/// Clients hold tokens across requests, so the format and the signature input are a wire contract and must not
-/// change. Each codec keeps its own state validation and its own invalid-token exception.
+/// The signed token format those codecs share: <c>base64url(JSON state) "." base64url(HMAC-SHA256(key, canonical JSON state))</c>.
+/// After the approved pre-stable migration, the format and signature input freeze with Elsa 4's first stable
+/// release. Each codec keeps its own state validation and its own invalid-token exception.
 /// </summary>
 internal sealed class HmacTokenCodec<TState> where TState : class
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly byte[] _key;
 
     public HmacTokenCodec(string? signingKey, string tokenName)
@@ -33,7 +33,7 @@ internal sealed class HmacTokenCodec<TState> where TState : class
     public string Encode(TState state)
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(state, JsonOptions);
-        return $"{Base64Url(payload)}.{Base64Url(HMACSHA256.HashData(_key, payload))}";
+        return $"{Base64Url(payload)}.{Base64Url(Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(payload, _key))}";
     }
 
     /// <summary>
@@ -48,11 +48,11 @@ internal sealed class HmacTokenCodec<TState> where TState : class
                 return null;
             var payload = FromBase64Url(payloadPart);
             var signature = FromBase64Url(signaturePart);
-            return CryptographicOperations.FixedTimeEquals(signature, HMACSHA256.HashData(_key, payload))
+            return CryptographicOperations.FixedTimeEquals(signature, Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(payload, _key))
                 ? JsonSerializer.Deserialize<TState>(payload, JsonOptions)
                 : null;
         }
-        catch (Exception exception) when (exception is FormatException or JsonException)
+        catch (Exception exception) when (exception is FormatException or JsonException or InvalidOperationException)
         {
             return null;
         }

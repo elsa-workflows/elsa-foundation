@@ -20,6 +20,32 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 
 public sealed partial class StandaloneTriggerManagementTests
 {
+    [Fact]
+    public async Task Mapped_subscription_response_carries_the_raw_summary_with_baseline_member_names()
+    {
+        var fixture = HttpPreviewFixture(null);
+        var builder = WebApplication.CreateBuilder(); builder.WebHost.UseTestServer();
+        builder.Services.AddAuthentication("StandaloneRequest")
+            .AddScheme<AuthenticationSchemeOptions, StandaloneAuthenticationHandler>("StandaloneRequest", _ => { });
+        builder.Services.AddFoundationIdentityAbstractions(options =>
+            options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "StandaloneRequest" });
+        builder.Services.AddAuthorization(); builder.Services.AddSingleton(fixture.Management);
+        builder.Services.AddSingleton<ITriggerRequestAccess>(fixture.Access);
+        new StandaloneTriggersApiFeature().ConfigureServices(builder.Services);
+        await using var app = builder.Build(); app.UseAuthentication(); app.UseAuthorization(); StandaloneTriggersApi.Map(app);
+        await app.StartAsync(); using var client = app.GetTestClient();
+        using var response = await client.GetAsync("/runtime/standalone-trigger-subscriptions?triggerId=trigger-a");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var summary = body.GetProperty("items")[0].GetProperty("triggerSummary");
+        Assert.Equal("HTTP", summary.GetProperty("name").GetString());
+        Assert.Equal("AsyncFanOut", summary.GetProperty("http").GetProperty("mode").GetString());
+        var owned = Assert.Single((await fixture.Management.SubscriptionsAsync(new(TriggerId: "trigger-a"), default)).Items).TriggerSummary!.Value;
+        Assert.Equal(owned.GetRawText(), summary.GetRawText());
+        Assert.DoesNotContain("/orders", summary.GetRawText());
+        Assert.Equal(0, fixture.Store.Writes);
+    }
+
     [Theory]
     [InlineData("\"1\"")] [InlineData("{}")] [InlineData("9223372036854775808")]
     public async Task Mapped_API_returns_400_for_malformed_revision_before_any_write(string revision)
