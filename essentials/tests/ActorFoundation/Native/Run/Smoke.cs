@@ -66,6 +66,7 @@ public static class Smoke
         await HttpRouteChecks.RunAsync(Check);
         await HttpTemplateChecks.RunAsync(Check);
         await PortChecks.RunAsync(Check);
+        CatalogChecks.Run(Check);
         await GraphChecks.RunAsync(Check);
         await ScriptChecks.RunAsync(Check);
         var registry = Reference.Registry();
