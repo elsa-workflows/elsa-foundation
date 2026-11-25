@@ -51,7 +51,6 @@ public sealed class EventPublisherSmokeTests
             services.AddScoped<IDraftValidator, StartActivityValidator>();
             // ExecuteValidations walks the tree for malformed argument lists before any validator runs.
             services.AddSingleton<IActivityStructureService>(new Elsa.Workflows.Design.Core.Services.DefaultActivityStructureService([]));
-            services.AddScoped<Elsa.Workflows.Design.Validations.Internal.ActivityTreeWalker>();
         });
 
         var publisher = provider.GetRequiredService<IInlineEventPublisher>();

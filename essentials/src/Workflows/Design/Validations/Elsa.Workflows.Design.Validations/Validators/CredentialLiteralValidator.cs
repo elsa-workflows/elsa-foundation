@@ -55,7 +55,8 @@ public sealed class CredentialLiteralValidator(
     {
         foreach (var input in version?.Inputs ?? [])
         {
-            var state = node.Inputs.FirstOrDefault(candidate =>
+            // A missing list is refused by the validation gate (Graph/MalformedArgumentList), not here.
+            var state = node.Inputs?.FirstOrDefault(candidate =>
                 StringComparer.Ordinal.Equals(candidate.ReferenceKey, input.ReferenceKey));
             if (state is null)
                 continue;

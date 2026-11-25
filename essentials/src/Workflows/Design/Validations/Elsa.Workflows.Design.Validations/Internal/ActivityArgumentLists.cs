@@ -1,3 +1,4 @@
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Models;
 
@@ -12,6 +13,13 @@ internal static class ActivityArgumentLists
     public const string MalformedType = "Graph/MalformedArgumentList";
 
     public static bool AreMissing(ActivityNode node) => node.Inputs is null || node.Outputs is null;
+
+    /// <summary>
+    /// The refusals for every node under <paramref name="root"/>, at any depth: some validators walk the whole tree, so
+    /// the check does too.
+    /// </summary>
+    public static IReadOnlyList<ValidationError> Refusals(ActivityNode? root, IActivityStructureService structures) =>
+        new ActivityTreeWalker(structures).Walk(root, int.MaxValue).SelectMany(Refusals).ToArray();
 
     public static IEnumerable<ValidationError> Refusals(ActivityNode node)
     {

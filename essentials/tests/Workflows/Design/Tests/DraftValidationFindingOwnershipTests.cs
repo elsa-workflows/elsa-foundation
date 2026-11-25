@@ -41,12 +41,15 @@ public sealed class DraftValidationFindingOwnershipTests
 
     /// <summary>
     /// A node with no arguments carries an empty list. A draft whose node omits its <c>inputs</c> list, or carries
-    /// <c>"outputs": null</c>, is refused at that node, by the validation gate and by data selection, instead of throwing.
+    /// <c>"outputs": null</c>, is refused at that node, by the validation gate, data selection and the rename planner,
+    /// instead of throwing.
     /// </summary>
     [Fact]
     public async Task Draft_validation_refuses_a_missing_or_null_argument_list_instead_of_throwing()
     {
-        var catalog = new StubActivityCatalog().Add("test", []).Add("sequence");
+        var secret = new Elsa.Activities.Design.Core.Models.InputDefinition("secret", "Secret", new("String"), null, "Secret", null, false)
+            { IsCredential = true };
+        var catalog = new StubActivityCatalog().Add("test", [secret]).Add("sequence");
         using var root = ActivityDataSelectionTestSupport.Provider(catalog);
         using var scope = root.CreateScope();
         var state = System.Text.Json.JsonSerializer.Deserialize<WorkflowDefinitionState>("""
@@ -61,6 +64,14 @@ public sealed class DraftValidationFindingOwnershipTests
         Assert.Equal(["child/outputs", "root/inputs"],
             validating.Errors.Where(error => error.Type == "Graph/MalformedArgumentList").Select(error => error.Path).Order(StringComparer.Ordinal));
         Assert.DoesNotContain(validating.Errors, error => error.Type != "Graph/MalformedArgumentList");
+
+        // Credential admission runs before the gate on writes; it leaves the refusal to the gate instead of throwing.
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<ICredentialLiteralValidator>().Validate(state, CancellationToken.None));
+
+        // The rename planner reads posted state without the gate and refuses it as a bad request.
+        var refused = await Assert.ThrowsAsync<ArgumentException>(() => scope.ServiceProvider.GetRequiredService<IScriptVariableRenamePlanner>()
+            .PlanAsync(state, "root", "variable", "renamed").AsTask());
+        Assert.StartsWith("root/inputs", refused.Message, StringComparison.Ordinal);
 
         // Data selection reads the same draft state directly and refuses it the same way.
         var analysis = await scope.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>()

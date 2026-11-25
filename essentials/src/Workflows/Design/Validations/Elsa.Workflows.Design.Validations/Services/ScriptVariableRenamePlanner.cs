@@ -4,6 +4,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Validations.Internal;
 
 namespace Elsa.Workflows.Design.Validations.Services;
 
@@ -41,6 +42,8 @@ public sealed class ScriptVariableRenamePlanner(ScriptVariableReadResolver resol
 
         var visibility = new ScopedVariableResolver(structures).Resolve(state.Variables, state.RootActivity, MaxDepth, includeIterationScopes: true);
         var nodes = Walk(state.RootActivity).ToArray();
+        if (ActivityArgumentLists.Refusals(state.RootActivity, structures) is [var malformed, ..])
+            throw new ArgumentException($"{malformed.Path}: {malformed.Message}");
         var renamed = FindDeclaration(state, nodes, scopeId, referenceKey)
             ?? throw new ArgumentException($"No variable '{referenceKey}' is declared by scope '{scopeId}'.");
         var oldName = renamed.Name;

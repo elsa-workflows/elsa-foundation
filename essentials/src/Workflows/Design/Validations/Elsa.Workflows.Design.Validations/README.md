@@ -79,7 +79,9 @@ All of the following implement `IDraftValidator` and are registered via DI
 (`services.AddScoped<IDraftValidator, X>()`). Each **returns** its `ValidationError` set from
 `Validate(...)`; the single `ExecuteValidations : IEventHandler<DraftValidating>` handler
 (registered here) resolves `IEnumerable<IDraftValidator>`, runs each, and adds every returned
-error to `event.Errors`. The publishing command reads `event.Errors` back after dispatch and
+error to `event.Errors`. Before any validator runs it walks the tree: a node whose `inputs` or
+`outputs` list is missing or null is refused with `{NodeId}/inputs` or `{NodeId}/outputs` ·
+`Graph/MalformedArgumentList`, and no validator runs. The publishing command reads `event.Errors` back after dispatch and
 surfaces them on `DraftValidated` / uses them as the promotion gate; the errors are not
 persisted.
 
