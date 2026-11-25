@@ -510,7 +510,8 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
                 "--environment", "Development",
                 "--urls", "http://127.0.0.1:0",
                 "--Nuplane:Setup:StateFilePath", Path.Join(_directory, ".nuplane", "store-state.json"),
-                // The Foundation.Host maps and composes its module-management operations only when this is on; Workbench always does.
+                // Foundation.Host maps and composes its module-management operations only when this is on. Essentials always composes them
+                // and maps the API only when this is on. Workbench always does both.
                 "--Elsa:ModuleManagement:Enabled", "true",
                 "--Elsa:ModuleManagement:ApiKey", "guard-test-key"
             ];
