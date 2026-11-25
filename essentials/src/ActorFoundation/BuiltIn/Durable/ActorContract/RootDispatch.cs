@@ -259,13 +259,17 @@ internal sealed partial class ActorAdapter
         var settlesJobs = terminated && rootTimedJobSettlement && previous is { Jobs: not null } &&
             outcome.Row is { Jobs: null, Cascade: null, Children: null } &&
             outcome.FoundationCascade is { Entries.Children.IsEmpty: true, Entries.Jobs.IsEmpty: false, Input: null } && outcome.Sent.Count == 0;
+        // A profile whose state family ends Faulted roots (timed-job settlement) commits a model's Faulted end, as the
+        // in-memory reference does: its held callers are answered with that end (Worker.Release).
+        var faulted = rootTimedJobSettlement && !outcome.OpensPark && outcome.Row is { Status: Durable.InstanceStatus.Faulted };
         if (outcome.Row is not { } next ||
-            next.Status is not (Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished) && !timedFault && !terminated ||
+            next.Status is not (Durable.InstanceStatus.Running or Durable.InstanceStatus.Finished) && !timedFault && !terminated && !faulted ||
             !((rootTimedJobIssuance || rootTimedJobSettlement) && Durable.RootJobTicket.StartsTimedPair(outcome.Sent, next.Id, next.Model)) &&
                 outcome.Sent.Any(m => !SupportedSend(m, next)) ||
             outcome.Held.Count != 0 || (issueSelf is null && outcome.Cancelled.Count != 0) ||
             outcome.Subscribed.Count != 0 || outcome.Unsubscribed.Count != 0 || outcome.Replied.Count != 0 ||
-            outcome.Emitted.Count != 0 && (!rootHeldReplies || !outcome.Consumed.Exists(delivery => delivery.ReplyRoute is not null)) ||
+            // Emitted output is live: the owner releases it to the callers it holds for the root, whichever turn consumed
+            // their delivery, and drops it when it holds none (Worker.Release), as the in-memory reference does.
             outcome.FoundationCascade is not null && !settlesJobs || outcome.InMemory)
             throw new NotSupportedException("This provider supports checkpoint, journal and terminal cleanup for ordinary roots.");
         if (outcome.Cancelled.Count > 0) outcome.FoundationSelfRecalls = outcome.Cancelled.ToHashSet();

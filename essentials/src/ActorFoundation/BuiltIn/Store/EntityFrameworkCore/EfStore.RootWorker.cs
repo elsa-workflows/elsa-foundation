@@ -419,7 +419,8 @@ public sealed partial class EfStore
         if (recalls is not null && (RootSelfIssuer is null || turn.Expected is null ||
             recalls.Any(key => key.Scope != -1 || !root.Owns(key)) ||
             turn.Consumed.Any(recalls.Contains) || turn.Sent.Any(m => recalls.Contains(m.InboxKey)))) throw RootShape();
-        var timedFault = RootTimedJobSettlementEnabled && turn.Expected is not null && row.Status == InstanceStatus.Faulted;
+        // A family that ends Faulted roots (timed-job settlement) commits a Faulted end from any turn, the first included.
+        var timedFault = RootTimedJobSettlementEnabled && row.Status == InstanceStatus.Faulted;
         var terminated = turn.FoundationRootOperator is { Kind: Kinds.Terminate } && row.Status == InstanceStatus.Cancelled;
         if (row.Id != root.Actor ||
             row.Creation != 1 || !RootJobsEnabled && row.NextJobGeneration is not (null or 0) || row.StartIntent != root.Fingerprint || row.Revision != checked((turn.Expected ?? 0) + 1) ||
@@ -462,7 +463,7 @@ public sealed partial class EfStore
         {
             if (turn.Journal is null || turn.Consumed is not [var key] || key != new InboxKey("root:" + root.Actor) ||
                 turn.Done.Count != 0 || row.Suspended || change is null ||
-                row.Status == InstanceStatus.Finished && (turn.Sent.Count != 0 || row.Jobs is not null)) throw RootShape();
+                row.Status is InstanceStatus.Finished or InstanceStatus.Faulted && (turn.Sent.Count != 0 || row.Jobs is not null)) throw RootShape();
             var creator = await new PostgresRootAdmission(create, TimeSpan.Zero).ReadPendingCreatorAsync(root.Tenant, root.Reference, cancellationToken);
             if (creator is null) return null;
             if (row.Model != creator.Start!.Model || row.Definition != creator.Start.Definition || row.History != creator.Start.History) throw RootShape();

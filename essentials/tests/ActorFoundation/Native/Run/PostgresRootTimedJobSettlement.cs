@@ -160,7 +160,9 @@ internal static class PostgresRootTimedJobSettlement
         await using var third = await Take(thirdStore, Third);
         var applyingFence = third.Fences.Single();
         Check(applyingFence.Epoch > settling.Epoch, "Result application must start with a cold take.");
-        if (unhandled || !timeoutWins)
+        // A Faulted end over an applied result commits on a family that ends Faulted roots, whatever the result was, as the
+        // in-memory reference ends a model's fault: only a Park over a recorded timeout stays refused here.
+        if (unhandled)
         {
             var waiting = (await thirdStore.LoadAsync([before.Id], stop)).Single();
             var recorded = RootJobTicket.RecordedResult(before.Id, selected.Key, resultRow.JobGeneration, resultRow.Payload!);
@@ -172,9 +174,7 @@ internal static class PostgresRootTimedJobSettlement
             try
             {
                 await Commit(thirdStore, applyingFence, unsupported);
-                throw new InvalidOperationException(unhandled
-                    ? "The fixed-root writer accepted a Park over a recorded timeout."
-                    : "The fixed-root writer accepted a fault over a successful result.");
+                throw new InvalidOperationException("The fixed-root writer accepted a Park over a recorded timeout.");
             }
             catch (NotSupportedException) { }
             Check((await Rows(before.Id)).Single().Id == resultRow.Id &&
