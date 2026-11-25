@@ -194,7 +194,8 @@ and the folder settings. `FeatureCompositionTests` already proves each feature c
   creates the folder, so the host creates `data/` at startup when it is missing. `data/` is git-ignored, and so is
   the `nuplane.lock.json` that `AddFoundationNuplane` may write to the content root (the root `.gitignore` already
   ignores it for the Workbench and the Studio hosts).
-  `Migrate:Policy` is `AutoMigrate`. In development mode the OpenIddict store is in memory (main,
+  The migration policy (`Elsa:Persistence:EntityFramework:Migrate:Policy`) is left at its default,
+  `AutoMigrate`. In development mode the OpenIddict store is in memory (main,
   `OpenIddictVendorStoreRegistration`), so no identity database file is configured.
 - **Identity.**
   - The identity features run in development mode with the Workbench's seeded development administrator (FR-006).

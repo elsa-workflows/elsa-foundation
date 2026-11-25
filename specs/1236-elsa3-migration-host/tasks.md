@@ -68,7 +68,8 @@ short worktree path (MSB3030).
   theory of `HostOwnedServicesAreSharedWithShellsTests` passes; if it doesn't, configure one empty
   directory feed under the git-ignored `data/` folder, still with no shared assemblies, and say so in the PR.
 - [ ] T006 Write `appsettings.json` and the settings in `shells.json` (R-6):
-  - `ConnectionStrings:Elsa` set to `Data Source=data/elsa.db`, with `Migrate:Policy` `AutoMigrate`;
+  - `ConnectionStrings:Elsa` set to `Data Source=data/elsa.db`, with the migration policy left at its default `AutoMigrate`
+    (`Elsa:Persistence:EntityFramework:Migrate:Policy` unset);
   - development identity with the seeded administrator (the OpenIddict store is in memory in development mode);
   - the development-only demo keys R-6 lists (runtime recovery continuation and hierarchy cursor signing keys, the
     workflow alteration payload protection keys);
