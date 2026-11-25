@@ -222,41 +222,89 @@ internal static class HostT12Checks
         BalanceEvery = TimeSpan.FromMilliseconds(20), Window = TimeSpan.FromMilliseconds(100), PollInterval = TimeSpan.FromMilliseconds(20)
     };
 
-    // A worker-per-scope host (a store without owned sets): a release while the scope's pass is under way skips it.
+    // A worker-per-scope host (a store without owned sets): a release skips a scope whose pass is under way, also one
+    // whose pass began while an earlier scope of the same release awaited the store.
     private static async Task PassingReleaseAsync()
     {
-        var store = new InMemoryStore(1, static () => 1_701_000_000_000);
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var host = new CountingStore(store, static () => { }, beforeCommit: async batch =>
-        {
-            if (!batch.Turns.Any(turn => turn.Journal?.Contains("blue/held", StringComparison.Ordinal) == true)) return;
-            entered.TrySetResult();
-            await finish.Task;
-        }) { OwnedSets = false };
+        const int partitions = 2;
+        var store = new InMemoryStore(partitions, static () => 1_701_000_000_000);
+        Hold? pass = null, release = null;
+        var host = new CountingStore(store, static () => { },
+            beforeCommit: async batch =>
+            {
+                if (Volatile.Read(ref pass) is { } held && batch.Turns.Any(turn => turn.Journal?.Contains(held.Marker, StringComparison.Ordinal) == true))
+                    await held.EnterAsync();
+            },
+            afterRelease: async () => { if (Interlocked.Exchange(ref release, null) is { } held) await held.EnterAsync(); })
+            { OwnedSets = false };
         var probe = new Probe(static _ => { });
         var ingress = new InMemoryIngress(store, new Requests("t12-pass"), "solo");
-        var blue = ContractScopes.Bind("blue");
-        await using var node = new RuntimeNode("solo", store, 1, Loop);
-        await node.StartAsync(DurableHost.ForNode("solo", host, new ActorAdapter(store, probe), 1,
-            new WorkerOptions { Partitions = 1, Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.Zero, Monotonic = static () => 0 }));
+        await using var node = new RuntimeNode("solo", store, partitions, Loop);
+        await node.StartAsync(DurableHost.ForNode("solo", host, new ActorAdapter(store, probe), partitions,
+            new WorkerOptions { Partitions = partitions, Lease = TimeSpan.FromSeconds(10), Horizon = TimeSpan.Zero, Monotonic = static () => 0 }));
         var admin = new HostOwnershipAdministration(node, static () => true);
-        var spec = new Contract.StartSpec(probe.Type, "t12", "blue/start", History: Contract.History.Full);
-        var actor = (await ingress.SendAsync(blue, new Contract.Target.Key("root", spec), "start", Contract.Kinds.Start)).Actor!.Value;
-        await WaitFor(() => State() is ["blue/start"], "the worker-per-scope node committed the start");
-        Check((await ingress.SendAsync(blue, new Contract.Target.Ref(actor), "held", "input", "blue/held")).Outcome == Contract.AdmissionOutcome.Accepted,
-            "the worker-per-scope node received an input for a held pass");
-        await entered.Task.WaitAsync(Timeout);
-        var during = admin.ReleaseAsync([0]).AsTask();
-        var returned = await Task.WhenAny(during, Task.Delay(TimeSpan.FromSeconds(2))) == during;
-        Check(returned && during.Result is { Authorized: true, Released: [] } && node.Runtime.Owns(0),
-            "a release during the held pass skipped the passing partition");
-        finish.TrySetResult();
-        await WaitFor(() => store.Messages.Values.Single(row => row.Message.Kind == "input") is { Done: true, Attempts: 0 } &&
-            State() is ["blue/start", "blue/held"], "the held pass committed its input once");
-        Check((await admin.ReleaseAsync([0])).Released is [0] && node.Errors == 0, "the next release gave the partition up, with no fault");
+        var blue = await Root(ContractScopes.Bind("blue"), 0);
+        var green = await Root(ContractScopes.Bind("green"), 1);
+        await WaitFor(() => State(blue) is ["blue/start"] && State(green) is ["green/start"], "the worker-per-scope node committed both starts");
 
-        List<string>? State() => store.ReadFoundationActor("blue", actor.Id).Actor?.Row is { } row ? Json.Read<List<string>>(row.State) : null;
+        // One partition: a release during its held pass skips it.
+        pass = new("blue/held");
+        await Send(blue, "blue/held");
+        await pass.Entered.Task.WaitAsync(Timeout);
+        Check(await Within(admin.ReleaseAsync([0]).AsTask()) is { Authorized: true, Released: [] } && node.Runtime.Owns(0),
+            "a release during the held pass skipped the passing partition");
+        pass.Finish.TrySetResult();
+        await WaitFor(() => Done(blue) && State(blue) is ["blue/start", "blue/held"], "the held pass committed its input once");
+        Check((await admin.ReleaseAsync([0])).Released is [0], "the next release gave the partition up");
+        await WaitFor(() => node.Runtime.Owns(0), "the node took partition 0 again");
+
+        // Two partitions: while partition 0's give-up awaits the store, a pass starts on partition 1, which is then skipped.
+        var storeCall = new Hold("");
+        release = storeCall;     // the hook takes it once: partition 0's give-up
+        pass = new("green/held");
+        var releasing = admin.ReleaseAsync([0, 1]).AsTask();
+        await storeCall.Entered.Task.WaitAsync(Timeout);
+        await Send(green, "green/held");
+        await pass.Entered.Task.WaitAsync(Timeout);
+        storeCall.Finish.TrySetResult();
+        Check(await Within(releasing) is { Released: [0] } && node.Runtime.Owns(1),
+            "the release gave up partition 0 and skipped partition 1, whose pass began meanwhile");
+        pass.Finish.TrySetResult();
+        await WaitFor(() => Done(green) && State(green) is ["green/start", "green/held"], "partition 1's pass committed its input once");
+        Check(node.Errors == 0, "the worker-per-scope node recorded no fault");
+
+        async Task<Contract.ActorRef> Root(Contract.BoundScope scope, int partition)
+        {
+            var key = Enumerable.Range(0, 16).Select(i => "root-" + i)
+                .First(candidate => InstanceRef.Spread(scope.Tenant + "_" + candidate, partitions) == partition);
+            var spec = new Contract.StartSpec(probe.Type, "t12", scope.Tenant + "/start", History: Contract.History.Full);
+            return (await ingress.SendAsync(scope, new Contract.Target.Key(key, spec), "start", Contract.Kinds.Start)).Actor!.Value;
+        }
+        async Task Send(Contract.ActorRef actor, string payload) =>
+            Check((await ingress.SendAsync(Tenant(actor), new Contract.Target.Ref(actor), "held", "input", payload)).Outcome ==
+                Contract.AdmissionOutcome.Accepted, "the worker-per-scope node received " + payload);
+        Contract.BoundScope Tenant(Contract.ActorRef actor) => ContractScopes.Bind(actor == blue ? "blue" : "green");
+        bool Done(Contract.ActorRef actor) => store.Messages.Values.Single(row => row.Message.Kind == "input" && row.Tenant == Tenant(actor).Tenant)
+            is { Done: true, Attempts: 0 };
+        List<string>? State(Contract.ActorRef actor) =>
+            store.ReadFoundationActor(Tenant(actor).Tenant, actor.Id).Actor?.Row is { } row ? Json.Read<List<string>>(row.State) : null;
+    }
+
+    // A call that must return while the test still holds a store call or a commit; a hang counts as a failure.
+    private static async Task<T?> Within<T>(Task<T> call) where T : class =>
+        await Task.WhenAny(call, Task.Delay(TimeSpan.FromSeconds(2))) == call ? await call : null;
+
+    private sealed class Hold(string marker)
+    {
+        public string Marker => marker;
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Finish { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task EnterAsync()
+        {
+            Entered.TrySetResult();
+            return Finish.Task;
+        }
     }
 
     private sealed record Row(InboxKey Key, string? Tenant, Message Message, long Seq, bool Done, bool Held, long Seen, long Trial, int Attempts);
