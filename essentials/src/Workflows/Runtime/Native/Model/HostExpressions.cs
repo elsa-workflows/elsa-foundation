@@ -18,7 +18,7 @@ public interface INativeExpressions
     INativeExpressionSession Open(CancellationToken cancellationToken);
 }
 
-public interface INativeExpressionSession : IDisposable
+public interface INativeExpressionSession : IAsyncDisposable
 {
     /// <summary>
     /// The expression's value. The parameters are resolved, and the variables are those visible where the node runs, by
@@ -61,10 +61,11 @@ internal sealed partial class Burst
         }
     }
 
-    private void CloseExpressions()
+    private async ValueTask CloseExpressionsAsync()
     {
-        _expressions?.Dispose();
+        if (_expressions is not { } session) return;
         _expressions = null;
+        await session.DisposeAsync();
     }
 
     /// <summary>Runs work that evaluates bindings and faults <paramref name="frame"/> when a host expression in it does not evaluate.</summary>

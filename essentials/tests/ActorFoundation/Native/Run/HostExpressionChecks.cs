@@ -40,7 +40,11 @@ internal static class HostExpressionChecks
                     var other => throw new ArgumentException($"no program '{other}'"),
                 };
 
-            public void Dispose() => owner.Closed++;
+            public ValueTask DisposeAsync()
+            {
+                owner.Closed++;
+                return ValueTask.CompletedTask;
+            }
 
             private static double Number(JsonNode? node) => double.Parse(node!.ToJsonString(), System.Globalization.CultureInfo.InvariantCulture);
         }

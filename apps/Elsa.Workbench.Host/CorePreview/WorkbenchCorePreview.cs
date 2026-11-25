@@ -1,9 +1,12 @@
+using CShells.Lifecycle;
 using Elsa.ActorFoundation.Hosting;
+using Elsa.Workbench.Readiness;
 using Kernel.EntityFramework;
 using Kernel.Foundation.Postgres;
 using Kernel.Native;
 using Kernel.Native.Preview;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using WorkflowActor = Kernel.WorkflowActor.WorkflowActor;
 
 namespace Elsa.Workbench.CorePreview;
@@ -44,14 +47,25 @@ internal static class WorkbenchCorePreview
         var javaScript = new Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions();
         configuration.GetSection("Elsa:CorePreview:JavaScript").Bind(javaScript);
         var scripts = new JintNativeScripts(Elsa.Expressions.JavaScript.Jint.Services.JintScriptEvaluators.Create(javaScript));
-        var model = new NativeExecutionModel(workflows, new NativeExecutionOptions
-        {
-            Scripts = scripts,
-            Http = new NativeHttpOptions { Client = NativeHttpOptions.CreateClient() },
-        });
-        var actor = new WorkflowActor([model]);
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
-        services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node, actor, Environment.FailFast));
+        services.AddHostedService(provider =>
+        {
+            // Host expressions (JavaScript, Liquid) run on the default shell's portable evaluator, in a scope of that shell.
+            var shells = provider.GetRequiredService<IShellRegistry>();
+            var shellName = provider.GetRequiredService<IOptions<ShellReadinessOptions>>().Value.DefaultShellName;
+            var expressions = new PortableNativeExpressions(() =>
+            {
+                var scope = (shells.GetActive(shellName) ?? throw new InvalidOperationException($"The shell '{shellName}' is not active.")).BeginScope();
+                return (scope.ServiceProvider, scope);
+            });
+            var model = new NativeExecutionModel(workflows, new NativeExecutionOptions
+            {
+                Scripts = scripts,
+                Http = new NativeHttpOptions { Client = NativeHttpOptions.CreateClient() },
+                Expressions = expressions,
+            });
+            return new PostgresPreviewHostedService(Open, node, new WorkflowActor([model]), Environment.FailFast);
+        });
         if (configuration["Elsa:CorePreview:ReadsTenant"] is { } readsTenant)
             services.AddSingleton(new WorkbenchCorePreviewReads(Open, EmbeddedTenant.Bind(readsTenant)));
 

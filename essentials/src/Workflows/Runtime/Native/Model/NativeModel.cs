@@ -152,7 +152,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
     public async ValueTask RunAsync()
     {
         try { await RunTurnAsync(); }
-        finally { CloseExpressions(); }
+        finally { await CloseExpressionsAsync(); }
     }
 
     private async ValueTask RunTurnAsync()
