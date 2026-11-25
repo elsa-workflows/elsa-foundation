@@ -20,8 +20,9 @@ internal sealed record Elsa3VariableNotice(string Message, string Guidance);
 /// Maps an Elsa 3 variable declaration to an Elsa 4 <see cref="VariableDefinition"/> (spec 264). Elsa 3 stored a
 /// starting value as text and converted it to the variable's type when the workflow started; the converter does that
 /// conversion here and carries the result as a <c>Literal</c>, as Elsa 4's own authoring does. No Elsa 3 value means no
-/// starting value. A collection's starting value is always a JSON array and a dictionary's a JSON object: text is never
-/// split on commas.
+/// starting value. A collection whose element type Elsa 4 knows starts from a JSON array and a dictionary from a JSON
+/// object; any other type Elsa 4 does not know, a resource aside (refused, #3194), starts from a JSON object or array.
+/// Text is never split on commas.
 /// </summary>
 internal static class Elsa3VariableMapper
 {
@@ -75,27 +76,6 @@ internal static class Elsa3VariableMapper
             : throw new InvalidOperationException(refusal!.Message);
 
     /// <summary>
-    /// Whether <paramref name="storageDriverTypeName"/> is Elsa 3's default storage driver, which kept the value with the
-    /// workflow instance: Elsa 4's default, so no storage driver. Elsa 4 cannot resolve the Elsa 3 type, and would read its
-    /// fallback alias as an external storage profile it refuses.
-    /// </summary>
-    internal static bool IsDefaultStorageDriver(string storageDriverTypeName)
-    {
-        var typeName = storageDriverTypeName.Split(',')[0].Trim();
-        return typeName is "Elsa.Workflows.WorkflowInstanceStorageDriver" or "WorkflowInstanceStorageDriver";
-    }
-
-    /// <summary>
-    /// The Elsa 4 storage driver key for an Elsa 3 storage driver (#5683): <c>null</c> for none or Elsa 3's default,
-    /// otherwise the Elsa 3 driver type's full name without its assembly, as in <c>Acme.BlobStorageDriver</c>. A driver
-    /// ported to Elsa 4 takes that name as its <c>DriverKey</c>, so the key matches without a mapping.
-    /// </summary>
-    internal static string? StorageDriverKey(string? storageDriverTypeName) =>
-        string.IsNullOrWhiteSpace(storageDriverTypeName) || IsDefaultStorageDriver(storageDriverTypeName)
-            ? null
-            : storageDriverTypeName.Split(',')[0].Trim();
-
-    /// <summary>
     /// The info a variable whose Elsa 3 type Elsa 4 does not register gets (#5666): it converts as Any, and keeps its type
     /// once an Elsa 4 feature registers the type. <c>null</c> for a type Elsa 4 knows, and for a shape that is Any
     /// whatever is registered (a nested collection, a collection of dictionaries).
@@ -113,7 +93,7 @@ internal static class Elsa3VariableMapper
             "The converter looks the Elsa 3 name up in Elsa 4's type registry, as an alias or as the full name of a registered type, and otherwise loads it as an assembly-qualified CLR name.");
     }
 
-    /// <summary>Maps <paramref name="source"/>, or returns <c>false</c> with the refusal when it cannot be converted: a resource type, a storage driver other than Elsa 3's default, or a starting value that cannot start as it did in Elsa 3.</summary>
+    /// <summary>Maps <paramref name="source"/>, or returns <c>false</c> with the refusal when it cannot be converted: a resource type, or a starting value that cannot start as it did in Elsa 3.</summary>
     public static bool TryMap(
         IWellKnownTypeRegistry wellKnownTypeRegistry,
         IObjectConverter objectConverter,
@@ -124,7 +104,8 @@ internal static class Elsa3VariableMapper
     {
         var typeName = string.IsNullOrWhiteSpace(source.TypeName) ? Elsa3ObjectTypeName : source.TypeName.Trim();
         var shape = Resolve(wellKnownTypeRegistry, typeName, source.IsArray);
-        // Elsa 3's default storage driver kept the value with the workflow instance, as Elsa 4 does without a storage driver.
+        // Every Elsa 3 storage driver converts to Elsa 4's default storage (elsa.json); the normalizer reports a Memory or
+        // custom driver as a correction (Elsa3StorageDriverCorrections).
         variable = new VariableDefinition(source.Id, source.Name, shape.Type, StorageDriverType: null, Default: null);
         refusal = null;
 
@@ -135,17 +116,6 @@ internal static class Elsa3VariableMapper
             refusal = new(
                 $"Variable '{source.Name}' has the type '{typeName}', a resource (a file, a stream or raw bytes) Elsa 4 cannot hold yet, so it cannot be converted.",
                 "Elsa 4 has no counterpart for resource variables yet; they are tracked in #3194. Remove the variable from the Elsa 3 workflow, or convert this workflow once Elsa 4 supports it.");
-            return false;
-        }
-
-        // Any other storage driver kept the value outside the instance. Elsa 4 cannot store a variable outside the instance
-        // yet (publication refuses it with VF-ACT-005), so it is refused here, where the migrator sees it (#5666).
-        if (!string.IsNullOrWhiteSpace(source.StorageDriverTypeName) && !IsDefaultStorageDriver(source.StorageDriverTypeName))
-        {
-            refusal = new(
-                $"Variable '{source.Name}' uses the Elsa 3 storage driver '{source.StorageDriverTypeName.Trim()}'. Elsa 4 cannot store a variable outside the workflow instance yet, so it cannot be converted.",
-                "In the Elsa 3 workflow, set the variable's storage back to the default (the workflow instance), then convert again.",
-                Elsa3ImportDiagnosticCodes.VariableStorageDriverUnmapped);
             return false;
         }
 
@@ -229,7 +199,7 @@ internal static class Elsa3VariableMapper
                 if (TryParse(value, JsonValueKind.Object, out json) || TryParse(value, JsonValueKind.Array, out json))
                     return true;
                 refusal = new(
-                    $"Variable '{source.Name}' has the starting value '{Echo(value)}', but its type '{typeName}' is not known in Elsa 4, and the value is not JSON, so it cannot start as it did in Elsa 3.",
+                    $"Variable '{source.Name}' has the starting value '{Echo(value)}', but its type '{typeName}' is not known in Elsa 4, and the value is not a JSON object or array, so it cannot start as it did in Elsa 3.",
                     "In the Elsa 3 workflow, write the starting value as a JSON object or array, change the variable's type to Object to keep the value as text, or remove the starting value.");
                 return false;
         }

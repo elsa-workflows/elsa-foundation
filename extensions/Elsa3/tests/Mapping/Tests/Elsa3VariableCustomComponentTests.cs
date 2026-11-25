@@ -12,15 +12,12 @@ using static Elsa3.Mapping.Tests.Elsa3BuiltInConversionTests;
 namespace Elsa3.Mapping.Tests;
 
 /// <summary>
-/// #5666: a variable whose Elsa 3 type or storage driver is a custom component Elsa 4 does not register gets a diagnostic
-/// code, so a migrator can see it. An unregistered type converts as Any with an info; a storage driver other than Elsa 3's
-/// default is refused, since Elsa 4 cannot store a variable outside the instance yet. Registered types and the default
-/// driver convert as before, without a diagnostic.
+/// #5666: a variable whose Elsa 3 type is a custom component Elsa 4 does not register gets a diagnostic code, so a
+/// migrator can see it: it converts as Any with an info. Registered types convert as before, without a diagnostic.
+/// Storage drivers are covered by <see cref="Elsa3StorageDriverCorrectionTests"/>.
 /// </summary>
 public sealed class Elsa3VariableCustomComponentTests
 {
-    private const string DefaultDriver = "Elsa.Workflows.WorkflowInstanceStorageDriver, Elsa.Workflows.Core";
-    private const string CustomDriver = "Acme.BlobStorageDriver, Acme";
     private static readonly IObjectConverter ObjectConverter = SerializationServices.ObjectConverter();
 
     [Fact]
@@ -53,6 +50,34 @@ public sealed class Elsa3VariableCustomComponentTests
         var info = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.VariableTypeUnregistered);
         Assert.Equal(Elsa3MigrationDiagnosticSeverity.Info, info.Severity);
         Assert.Contains("Variable 'local'", info.Message);
+    }
+
+    [Fact]
+    public async Task An_unregistered_type_with_a_JSON_starting_value_starts_as_that_JSON_with_the_info()
+    {
+        var result = await ConvertAsync(new Elsa3Variable { Id = "order", Name = "order", TypeName = "Acme.Orders.OrderDto, Acme.Orders", Value = """{"id":1}""" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var variable = Assert.Single(result.Value!.State.Variables);
+        Assert.Equal(new TypeReference("Any"), variable.Type);
+        Assert.Equal("""{"id":1}""", Assert.IsType<System.Text.Json.JsonElement>(variable.Default!.Value).GetRawText());
+        var info = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.VariableTypeUnregistered);
+        Assert.Equal(Elsa3MigrationDiagnosticSeverity.Info, info.Severity);
+    }
+
+    /// <summary>Spec 264 FR-004's example: the info is reported and the starting value that is not JSON is refused.</summary>
+    [Fact]
+    public async Task An_unregistered_type_with_a_starting_value_that_is_not_JSON_reports_the_info_and_is_refused()
+    {
+        var result = await ConvertAsync(new Elsa3Variable { Id = "order", Name = "order", TypeName = "Acme.Orders.OrderDto, Acme.Orders", Value = "order-1" });
+
+        Assert.False(result.Succeeded);
+        var info = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.VariableTypeUnregistered);
+        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3MigrationDiagnosticSeverity.Info, info.Severity);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.VariableValueUnconvertible, refusal.Code);
+        Assert.Equal("$.variables[0]", refusal.Path);
+        Assert.Contains("is not known in Elsa 4, and the value is not a JSON object or array", refusal.Message);
     }
 
     /// <summary>A collection names its unregistered element; a nesting Elsa 4 cannot express is Any whatever is registered, so it gets no info.</summary>
@@ -113,59 +138,6 @@ public sealed class Elsa3VariableCustomComponentTests
         Assert.Equal(new TypeReference("acme.orders.OrderDto"), variable.Type);
     }
 
-    [Fact]
-    public async Task A_variable_on_the_default_storage_driver_converts_as_before()
-    {
-        var result = await ConvertAsync(new Elsa3Variable { Id = "v", Name = "v", TypeName = "String", StorageDriverTypeName = DefaultDriver });
-
-        Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Null(Assert.Single(result.Value!.State.Variables).StorageDriverType);
-        Assert.DoesNotContain(result.Diagnostics, diagnostic =>
-            diagnostic.Code is Elsa3ImportDiagnosticCodes.VariableStorageDriverUnmapped or Elsa3ImportDiagnosticCodes.VariableTypeUnregistered);
-    }
-
-    [Fact]
-    public async Task A_workflow_variable_on_an_unregistered_storage_driver_is_refused_with_guidance()
-    {
-        var result = await ConvertAsync(new Elsa3Variable { Id = "blob", Name = "blob", TypeName = "String", StorageDriverTypeName = CustomDriver });
-
-        Assert.False(result.Succeeded);
-        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
-        Assert.Equal(Elsa3ImportDiagnosticCodes.VariableStorageDriverUnmapped, refusal.Code);
-        Assert.Equal("$.variables[0]", refusal.Path);
-        Assert.Equal("blob", refusal.Metadata["VariableName"]);
-        Assert.Contains("Variable 'blob'", refusal.Message);
-        Assert.Contains($"'{CustomDriver}'", refusal.Message);
-        Assert.Contains("cannot store a variable outside the workflow instance yet", refusal.Message);
-        Assert.Contains("default (the workflow instance)", refusal.Guidance);
-    }
-
-    [Fact]
-    public async Task A_container_variable_on_an_unregistered_storage_driver_is_refused()
-    {
-        var root = Sequence("root", Activity("write", "Elsa.WriteLine", ("text", Literal("hi"))));
-        root.AdditionalProperties["variables"] = System.Text.Json.JsonSerializer.SerializeToElement(new[] { new { id = "local", name = "local", typeName = "String", storageDriverTypeName = CustomDriver } });
-
-        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
-
-        Assert.False(result.Succeeded);
-        var refusal = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
-        Assert.Equal(Elsa3ImportDiagnosticCodes.VariableStorageDriverUnmapped, refusal.Code);
-        Assert.Contains("Variable 'local'", refusal.Message);
-    }
-
-    /// <summary>Registering the driver's type does not help: Elsa 4 publication refuses every variable storage driver that stores the value outside the instance (VF-ACT-005), and an Elsa 3 driver name never becomes the built-in one.</summary>
-    [Fact]
-    public void A_storage_driver_registered_in_Elsa_4_is_refused_too()
-    {
-        var registry = ConversionServices.TypeRegistry();
-        registry.RegisterType(typeof(BlobStorageDriver), "acme.blobStorageDriver");
-        var source = new Elsa3Variable { Id = "v", Name = "v", TypeName = "String", StorageDriverTypeName = typeof(BlobStorageDriver).AssemblyQualifiedName };
-
-        Assert.False(Elsa3VariableMapper.TryMap(registry, ObjectConverter, source, out _, out var refusal));
-        Assert.Equal(Elsa3ImportDiagnosticCodes.VariableStorageDriverUnmapped, refusal!.Code);
-    }
-
     private static Task<Elsa3MigrationResult<Elsa3ConvertedDefinition>> ConvertAsync(params Elsa3Variable[] variables) =>
         ConversionServices.ConvertAsync(
             RealActivityCatalog.Create(),
@@ -176,5 +148,4 @@ public sealed class Elsa3VariableCustomComponentTests
         public int Id { get; set; }
     }
 
-    private sealed class BlobStorageDriver;
 }
