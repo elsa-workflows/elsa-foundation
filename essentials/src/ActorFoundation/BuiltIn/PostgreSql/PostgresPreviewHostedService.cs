@@ -19,6 +19,12 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     private void Fault(Exception fault)
     {
         if (!_logged.TryAdd(fault, fault)) return;
+        if (fault is AggregateException aggregate)
+        {
+            // The node has logged an aggregate's inner exceptions already: log only those that are not, never the aggregate.
+            foreach (var inner in aggregate.InnerExceptions) Fault(inner);
+            return;
+        }
         // The phase the node was in: a loop error on a running node is no stop fault.
         var phase = Volatile.Read(ref _shutdown) is null ? "running" : "stopping";
         var repeats = fault.Data["SuppressedRepeats"] is long suppressed ? suppressed : 0;
