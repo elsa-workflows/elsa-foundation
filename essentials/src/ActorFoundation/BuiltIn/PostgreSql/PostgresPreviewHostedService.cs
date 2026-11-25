@@ -12,15 +12,18 @@ namespace Kernel.Foundation.Postgres;
 public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor,
     Action<string> endProcess, LoopOptions? options = null, ILogger<PostgresPreviewHostedService>? logger = null) : IHostedService, IAsyncDisposable
 {
-    private readonly HashSet<Exception> _logged = new(ReferenceEqualityComparer.Instance);
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Exception, object> _logged = [];     // weak: no exception is kept alive
     private Exception? _shutdownFault;
 
     // One Error entry per fault, whether the node recorded it or the shutdown around it raised it.
     private void Fault(Exception fault)
     {
-        lock (_logged)
-            if (!_logged.Add(fault)) return;
-        logger?.LogError(fault, "The PostgreSQL preview node {Node} recorded a stop fault.", node);
+        if (!_logged.TryAdd(fault, fault)) return;
+        // The phase the node was in: a loop error on a running node is no stop fault.
+        var phase = Volatile.Read(ref _shutdown) is null ? "running" : "stopping";
+        var repeats = fault.Data["SuppressedRepeats"] is long suppressed ? suppressed : 0;
+        logger?.LogError(fault, "The PostgreSQL preview node {Node} recorded an error while {Phase} ({Repeats} earlier repeats not logged).",
+            node, phase, repeats);
     }
 
     private readonly Action<string> _endProcess = endProcess ?? throw new ArgumentNullException(nameof(endProcess));
@@ -63,11 +66,11 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         // It throws its own outcome: the stop's fault (also recorded on the node, LastError) or the deadline's cancellation.
-        var shutdown = RequestStop(cancellationToken);
+        var shutdown = RequestStop(cancellationToken, out var started);
         try { await shutdown.WaitAsync(cancellationToken).ConfigureAwait(false); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            DeadlineKilled("application shutdown", shutdown);
+            if (started) DeadlineKilled("application shutdown");     // a stop that joined another's stop kills nothing
             await EscalateUnlessStoppedAsync(shutdown, "The PostgreSQL preview node did not stop within the application shutdown deadline.");
             throw;
         }
@@ -75,10 +78,12 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
 
     private int _killWarned;
 
-    // A deadline that fired before the stop finished killed the drain (the kill may have ended it since). That is no
-    // fault (LastError stays as it is), but the operator is told once that ownership is left to run out by its lease.
-    private void DeadlineKilled(string deadline, Task shutdown)
+    // A deadline of this call that fired before the stop finished killed the drain (the kill may have ended it since),
+    // while the node held ownership: its startup had completed. That is no fault (LastError stays as it is), but the
+    // operator is told once that ownership is left to run out by its lease.
+    private void DeadlineKilled(string deadline)
     {
+        if (Volatile.Read(ref _startup) is not { IsCompletedSuccessfully: true }) return;
         if (Interlocked.Exchange(ref _killWarned, 1) == 1) return;
         logger?.LogWarning("The {Deadline} deadline killed the drain of PostgreSQL preview node {Node}: its ownership is left to run out by lease expiry.",
             deadline, node);
@@ -108,21 +113,23 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     {
         using var deadline = new CancellationTokenSource(_disposeDeadline);
         using var kill = deadline.Token.Register(static state => ((CancellationTokenSource)state!).Cancel(), _killNode);
-        var shutdown = RequestStop(deadline.Token);
+        var shutdown = RequestStop(deadline.Token, out _);
         try { await shutdown.WaitAsync(deadline.Token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
-            DeadlineKilled("dispose", shutdown);
+            DeadlineKilled("dispose");     // the dispose deadline kills the stop whoever started it
             await EscalateUnlessStoppedAsync(shutdown, "The PostgreSQL preview node did not stop within its dispose deadline.");
         }
         catch (Exception) { }     // recorded and logged when the shutdown faulted (see RequestStop)
     }
 
-    private Task RequestStop(CancellationToken deadline)
+    private Task RequestStop(CancellationToken deadline, out bool started)
     {
+        started = false;
         lock (_lifecycle)
         {
             if (_shutdown is not null) return _shutdown;
+            started = true;
             if (_startup is { IsCanceled: false, IsFaulted: false } startup)
             {
                 _shutdown = Task.Run(() => StopNodeAsync(startup, deadline));
