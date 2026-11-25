@@ -10,8 +10,9 @@ public sealed partial class EfStore
     private async Task<PreparedRoot?> PrepareRootParkedRefusalAsync(WorkerRoot root, TurnCommit turn, CancellationToken token)
     {
         var command = turn.FoundationRootOperator!;
+        // A clearing's own control is never refused: consuming it would strand the clearing, so its refusal fails closed.
         string[] reasons = command.Operator?.RootParkMark is null ? ["parked"]
-            : command is { Kind: Kinds.Terminate, Operator.RootParkFacts: not null } ? ["selection", "outstanding", "clearing"] : [];
+            : command is { Kind: Kinds.Terminate, Operator: { RootParkFacts: not null, RootParkClear: false } } ? ["selection", "outstanding", "clearing"] : [];
         // The refusal keeps the Suspended flag: a Park on a suspended root keeps it, as the in-memory reference does.
         if (turn.Row is not { Status: InstanceStatus.Faulted, Retired: false, FoundationDispatchHeader: { Terminal: null } header } row ||
             turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
@@ -195,7 +196,7 @@ public sealed partial class EfStore
                 AND ("FoundationParkClearing" IS NULL OR "Status" = 2 AND "FoundationParkAt" IS NOT NULL AND "FoundationParkCleared" > 0));
             """, token);
 
-    private sealed record LockedParkedRoot(long At, string Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
+    private sealed record LockedParkedRoot(long At, string Fault, byte[] StateDigest, byte[] HeaderDigest, int StateVersion, bool Clearing);
 
     private sealed record RootParkedRefusal(WorkerRoot Root, long Expected, Message Command, bool Suspended)
         : QualifiedRootCheckpoint(checked(Expected + 1))
@@ -205,7 +206,8 @@ public sealed partial class EfStore
             if (!db.UsesRootParkedOperators) return false;
             var locked = await db.Database.SqlQuery<LockedParkedRoot>($"""
                 SELECT i."FoundationParkAt" AS "At", i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
-                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion"
+                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion",
+                    i."FoundationParkClearing" IS NOT NULL AS "Clearing"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
@@ -216,10 +218,10 @@ public sealed partial class EfStore
                 FOR UPDATE OF i
                 """).ToListAsync(token);
             if (locked is not [var prior]) return false;
-            // Without Park arrivals the parked root withholds its ordinary inputs, so the settled prefix is its operator rows.
-            // The envelope comparison binds a held command's exact reply address.
+            // Without Park arrivals, or while its Park is being cleared, the parked root withholds its ordinary inputs, so the
+            // settled prefix is its operator rows. The envelope comparison binds a held command's exact reply address.
             if (!await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
-                    suspended: !db.UsesRootParkArrivals, token)) return false;
+                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token)) return false;
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "Revision" = {JournalRevision}, "FoundationWriteRevision" = {JournalRevision}
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
@@ -250,7 +252,8 @@ public sealed partial class EfStore
             if (!db.UsesRootParkedOperators) return false;
             var locked = await db.Database.SqlQuery<LockedParkedRoot>($"""
                 SELECT i."FoundationParkAt" AS "At", i."Fault", sha256(convert_to(i."State", 'UTF8')) AS "StateDigest",
-                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion"
+                    sha256(convert_to(i."FoundationHeader", 'UTF8')) AS "HeaderDigest", i."StateVersion",
+                    i."FoundationParkClearing" IS NOT NULL AS "Clearing"
                 FROM "Instances" i JOIN "FoundationRootBirths" b
                     ON b."Actor" = i."Id" AND b."Partition" = i."Partition" AND b."Creation" = 1
                     AND b."Tenant" = i."FoundationTenant" AND b."Reference" = i."FoundationReference"
@@ -264,12 +267,13 @@ public sealed partial class EfStore
                 FOR UPDATE OF i
                 """).ToListAsync(token);
             if (locked is not [var prior]) return false;
-            var kept = await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token);
+            // Nothing is kept while a clearing is open, so a page reads and locks only its rows and one more; Open reads them all.
+            var kept = await ReadKeptAsync(db, Root.Actor, Root.Partition, true, token, Clearing is null ? int.MaxValue : InMemoryStore.ParkPageLimit + 1);
             var page = kept.Take(PageLength(kept)).ToArray();
             // While a clearing is open the root receives only operator rows, so the settled prefix is its operator rows.
             if (KeptSetDigest(kept) != KeptDigest || page.Length != Count || Ends != (page.Length == kept.Count) ||
                 !await SettleRootInputsAsync(db, Root.Reference, new(Root.Actor, 1), [Command.InboxKey], [Command], null,
-                    suspended: !db.UsesRootParkArrivals || Clearing is not null, token)) return false;
+                    suspended: !db.UsesRootParkArrivals || prior.Clearing, token)) return false;
             var window = Command.Operator!.RootParkWindow!.Value;
             var cleared = page.Select(row => row.Id).ToArray();
             if (await db.Database.ExecuteSqlInterpolatedAsync($"""

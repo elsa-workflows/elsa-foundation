@@ -435,7 +435,8 @@ internal sealed partial class PostgresRootAdmission
             : kind == Kinds.Terminate && parkedTerminate && header.Park is not null
                 ? header.Park is not { Revision: > 0, At: > 0 } || header.Window is not >= 0 || thenDelete || retentionDelete ||
                     header.Clear is false || header.Clear == true && (held || header.ExplicitZeroDue || due != 0)
-            : header.Park is not null || header.Window is not null) || header.Clear is not null && kind != Kinds.Terminate ||
+            : header.Park is not null || header.Window is not null) ||
+            header.Clear is not null && (kind != Kinds.Terminate || header.Park is null || !parkedTerminate) ||
             thenDelete && (!terminateThenDelete || kind != Kinds.Terminate) ||
             retentionDelete && (!retentionDeletes || kind != Kinds.Delete || held) ||
             header.ExplicitZeroDue && due != 0 || !MatchesDirectOccurrence(reference, header.Operation, occurrence[OperatorOccurrencePrefix.Length..], retentionDelete))

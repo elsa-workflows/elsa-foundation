@@ -77,13 +77,14 @@ public sealed partial class EfStore
         return count;
     }
 
-    private static Task<List<KeptRow>> ReadKeptAsync(KernelDb db, string actor, int partition, bool lockRows, CancellationToken token) =>
+    private static Task<List<KeptRow>> ReadKeptAsync(KernelDb db, string actor, int partition, bool lockRows, CancellationToken token,
+        int limit = int.MaxValue) =>
         db.Database.SqlQueryRaw<KeptRow>($"""
             SELECT k."Id", k."FoundationKeptBy" AS "KeptBy", {KeptDigest} AS "Digest",
                 {KeptEnvelopeDigest} AS "Envelope", {KeptBytes} AS "Bytes"
             FROM "Messages" k WHERE k."Target" = {"{0}"} AND k."Partition" = {"{1}"}
                 AND k."InboxScope" = -4 AND k."EventMatch" IS NULL AND k."Done" AND k."FoundationKeptBy" IS NOT NULL
-            ORDER BY k."Seq", k."Id" COLLATE "C" {(lockRows ? "FOR UPDATE" : "")}
+            ORDER BY k."Seq", k."Id" COLLATE "C" {(limit < int.MaxValue ? $"LIMIT {limit}" : "")} {(lockRows ? "FOR UPDATE" : "")}
             """, actor, partition).ToListAsync(token);
 
     // Each field is framed by its UTF-8 length, so no id can run into the next row.
@@ -124,7 +125,9 @@ public sealed partial class EfStore
                     {clearing} FROM "Instances"
                 WHERE "Id" = {"{0}"} AND "Partition" = {"{1}"} AND NOT "Retired"
                 """, message.Target.Id, message.Target.Partition).SingleOrDefaultAsync(token);
-            var kept = await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token);
+            // A clearing's control reads only the next page and one more row: nothing is kept while a clearing is open.
+            var kept = await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token,
+                command.RootParkClear ? InMemoryStore.ParkPageLimit + 1 : int.MaxValue);
             // A page restores at most 170 rows and 4 MiB of stored rows, and always has room for its first restored row.
             // A recover charges only restored (Arrived) rows, since the cleared fault input is never restored. A Terminate
             // clears every kept row, so it charges them all.
