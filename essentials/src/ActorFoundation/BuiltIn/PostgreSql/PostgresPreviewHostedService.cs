@@ -50,8 +50,9 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
     }
 
     /// <summary>
-    /// The last error recorded, if any: a fault of the shutdown outside the node first, then the node's own (its loops'
-    /// errors and its stop's fault), whoever waited for it. Every stop fault is also logged once at Error.
+    /// The last error recorded, if any: a fault of the shutdown first, then the node's own (its loops' errors and its stop's
+    /// fault), whoever waited for it. Every stop fault is also logged once at Error. Once the shutdown has faulted, a fault
+    /// the node records later (after a kill) is logged but not shown here.
     /// </summary>
     public Exception? LastError => Volatile.Read(ref _shutdownFault) ?? (Volatile.Read(ref _startup) is { IsCompletedSuccessfully: true } started
         ? started.Result.LastError
@@ -66,10 +67,25 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         try { await shutdown.WaitAsync(cancellationToken).ConfigureAwait(false); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            DeadlineKilled("application shutdown", shutdown);
             await EscalateUnlessStoppedAsync(shutdown, "The PostgreSQL preview node did not stop within the application shutdown deadline.");
             throw;
         }
     }
+
+    private int _killWarned;
+
+    // A deadline that fired before the stop finished killed the drain (the kill may have ended it since). That is no
+    // fault (LastError stays as it is), but the operator is told once that ownership is left to run out by its lease.
+    private void DeadlineKilled(string deadline, Task shutdown)
+    {
+        if (Interlocked.Exchange(ref _killWarned, 1) == 1) return;
+        logger?.LogWarning("The {Deadline} deadline killed the drain of PostgreSQL preview node {Node}: its ownership is left to run out by lease expiry.",
+            deadline, node);
+    }
+
+    /// <summary>Runs in the shutdown after the node's stop; for witnesses of a shutdown fault raised outside the node.</summary>
+    internal Action? AfterNodeStop { get; init; }
 
     /// <summary>The grace the deadline's kill gets to end the stop before the process policy runs.</summary>
     public static readonly TimeSpan KillGrace = TimeSpan.FromSeconds(2);
@@ -96,6 +112,7 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         try { await shutdown.WaitAsync(deadline.Token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
+            DeadlineKilled("dispose", shutdown);
             await EscalateUnlessStoppedAsync(shutdown, "The PostgreSQL preview node did not stop within its dispose deadline.");
         }
         catch (Exception) { }     // recorded and logged when the shutdown faulted (see RequestStop)
@@ -138,6 +155,7 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
                 // The caller's deadline and a dispose deadline both end the drain as a kill.
                 using var stop = CancellationTokenSource.CreateLinkedTokenSource(deadline, _killNode.Token);
                 if (startup.IsCompletedSuccessfully) await startup.Result.StopAsync(stop.Token);
+                AfterNodeStop?.Invoke();
             }
         }
         finally { _cancelStartup.Dispose(); }
