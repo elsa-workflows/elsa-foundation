@@ -42,14 +42,18 @@
   Create `Cli/Elsa3.Migration.Cli.csproj`, a console project (`IsPackable` `false`, no `RunWorkingDirectory`) that
   references the tooling and `apps/Elsa.Migration.Host/Elsa.Migration.Host.csproj`, and writes the host's project folder
   and its own project folder into `AssemblyMetadataAttribute`s at build time (R-5). The tooling does not reference the
-  host. Create `MTests/Tests/Elsa3.Migration.Tests.csproj` (xunit); it references the CLI project, so the host's
+  host. Set `IsPackable` `false` on `Elsa3.Migration.Tooling` too: it ships only with the CLI and is never a package,
+  so `FeatureCompositionTests` does not require the architecture tests to load it, and its `Elsa3MigrationImportRun`
+  feature never composes next to `Elsa3JsonReconciliation` there (both would apply the publishing authorization
+  decoration). Create `MTests/Tests/Elsa3.Migration.Tests.csproj` (xunit); it references the CLI project, so the host's
   features come into its `deps.json` for `WithHostAssemblies()`, and the T003 fixture feature project.
   Add all three to the solution, regenerate the solution filters and `dependency-map.json`, and check the CI tier
   placement (§E7). Add the guard entries of R-7: the CLI in `EfCoreDependencyGuardTests.AllowedEfConsumers` with a
   reviewed package array and an arm in `ReviewedEfPackages`, a reviewed closure for the tooling next to
   `Adr0073Elsa3ImportEf`, and one for the test project (the host's closure plus SQLite); and the CLI as a build-only
   reference in `Elsa.Architecture.Tests.csproj`. Confirm that `ArchitectureGuardTests`, `ExtensionBoundaryTests`,
-  `Elsa3MigrationBoundaryTests` and 1236's host closure test stay green without other entries.
+  `Elsa3MigrationBoundaryTests`, `FeatureCompositionTests` and 1236's host closure test stay green without other
+  entries.
 - [ ] T002 [P] Build the fixture export in `MTests/Fixtures/export/`, with:
   - clean definitions;
   - an unmapped custom activity used by three definitions;

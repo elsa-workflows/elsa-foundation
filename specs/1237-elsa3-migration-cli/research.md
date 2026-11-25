@@ -335,7 +335,9 @@ loads no packages, so the test migration would have run on another closure than 
   section is updated in this unit.
 
 **Decision**: the implementing PR adds the EF admissions and the build-only reference above, regenerates the solution
-filters and `dependency-map.json`, and places the test project in `tools/ci/test-tiers.json`. No other guard changes.
+filters and `dependency-map.json`, and places the test project in `tools/ci/test-tiers.json`. The tooling library is `IsPackable=false` like the CLI: it
+ships only with the CLI, so `FeatureCompositionTests`' packable-library rule does not ask the architecture tests to
+load it, and its shell feature never composes next to `Elsa3JsonReconciliation` there. No other guard changes.
 
 ## R-8 Exporting migrated content
 
