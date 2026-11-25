@@ -118,7 +118,15 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     /// after the host's off-turn work has ended and before the first scope is given up. Its host stops renewing there.
     /// A call that joins a shutdown already under way waits for it and does not call its own <paramref name="beforeRelease"/>.
     /// </summary>
-    public ValueTask StopAsync(CancellationToken cancellationToken, Func<Task>? beforeRelease)
+    public ValueTask StopAsync(CancellationToken cancellationToken, Func<Task>? beforeRelease) =>
+        StopAsync(cancellationToken, beforeRelease, drainLost: null);
+
+    /// <summary>
+    /// As <see cref="StopAsync(CancellationToken, Func{Task})"/>; <paramref name="drainLost"/> is told at once of a fence the
+    /// host's drain lost before the deadline, which the stop reports only after its release: a later kill, or a fault
+    /// before the release, would end the stop without it.
+    /// </summary>
+    internal ValueTask StopAsync(CancellationToken cancellationToken, Func<Task>? beforeRelease, Action<ScopeOwnershipLostException>? drainLost)
     {
         if (cancellationToken.IsCancellationRequested) return default;
         IScopeHostRun? hostRun;
@@ -135,7 +143,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
             _stopping = stopped.Task;
             _stopJoined = joined.Task;
         }
-        _ = StopRunAsync(hostRun, beforeRelease, stopped, joined, cancellationToken);
+        _ = StopRunAsync(hostRun, beforeRelease, drainLost, stopped, joined, cancellationToken);
         return AwaitOwnStopAsync(stopped.Task, cancellationToken);
     }
 
@@ -152,8 +160,8 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
     }
 
-    private async Task StopRunAsync(IScopeHostRun? hostRun, Func<Task>? beforeRelease, TaskCompletionSource stopped,
-        TaskCompletionSource joined, CancellationToken cancellationToken)
+    private async Task StopRunAsync(IScopeHostRun? hostRun, Func<Task>? beforeRelease, Action<ScopeOwnershipLostException>? drainLost,
+        TaskCompletionSource stopped, TaskCompletionSource joined, CancellationToken cancellationToken)
     {
         // The first caller sets the stop deadline. Other callers can give up their own wait.
         // What is not given up yet runs out by its lease, as after a crash.
@@ -174,7 +182,14 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
                 // A drain that lost a fence still ends its jobs first. Release what is still held, then report the loss.
                 // A loss that arrives with the deadline is the deadline's: the run is abandoned, as on any cancellation.
                 try { await operation.WaitAsync(cancellationToken); }
-                catch (ScopeOwnershipLostException error) when (!cancellationToken.IsCancellationRequested) { drainFailure = error; }
+                catch (ScopeOwnershipLostException error) when (!cancellationToken.IsCancellationRequested)
+                {
+                    drainFailure = error;
+                    // Judged before the deadline: told now, since a kill in the release or a fault before it ends the stop
+                    // without it. A loss that arrives with the deadline stays the deadline's (below).
+                    try { drainLost?.Invoke(error); }
+                    catch (Exception) { }     // a failing report must not end the stop
+                }
                 catch (ScopeOwnershipLostException) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
             }
             if (beforeRelease is not null)
