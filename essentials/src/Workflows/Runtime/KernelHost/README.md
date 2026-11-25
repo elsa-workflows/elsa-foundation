@@ -16,7 +16,7 @@ the Native model's definitions.
   - the `HttpRoutes` and `NativeSchedules` built over the serving set;
   - `ServedWorkflow`, which a host passes as `NativeExecutionOptions.ServedWorkflow` so that a Dispatch reaches the
     version its definition serves.
-- `IKernelScheduleHost` is how the coordinator reaches the schedule actors. `ScheduleActorHost` implements it on the
+- `IScheduleActors` is how the coordinator reaches the schedule actors. `IngressScheduleActors` implements it on the
   host's ingress.
 - `KernelTriggerBindingExtractor` reports no old-core triggers, so the publication preflight checks only the slot.
 
@@ -53,5 +53,19 @@ Each is refused with the node and input named, and the refusal says what to chan
   it reaches the one slot that does. When several other slots do, it reaches none, and the child starts the id itself.
 - When a host starts, `ServeActiveSlotsAsync` finds the definitions with activations from the live activation source
   references, and their slots from the slot authority. It serves each active slot as `EnsureServingAsync` does.
+- A definition serves one scheduled channel in release 1. Its schedule actors are keyed by definition and trigger, so a
+  second slot that would schedule the same trigger is refused at the serving check, and the refusal says to publish
+  the scheduled definition to one channel.
+- After each committed activation, deactivation and repair, the coordinator tells the trigger observers, so that Studio's
+  workflow library refreshes. A kernel host's composition (slice 7) leaves out the old core's HTTP route-table observer.
+- A deactivation stops the schedules of what the slot serves, also when this host does not serve it (after a restart):
+  it maps the slot's executable again to find them.
+- A republish that drops or renames a Timer or Cron stops the old schedule after the new version serves. If the process
+  stops between the switch and that stop, or a revert fails, the old schedule actor keeps firing on the old version,
+  and a restart serves only the new version's schedules. Stopping a definition's stray schedules needs a read of its
+  schedule actors by key, which comes later.
+- The publish preview shows no route or schedule conflicts on a kernel host, because the kernel trigger extractor
+  reports no triggers. A conflict surfaces as a failed publish (`trigger_conflict`). Showing it in the preview is later
+  work.
 - A deactivation stands even when a schedule cannot be stopped. The failure is in its diagnostic and its log, and an
   operator stops the schedule actor.

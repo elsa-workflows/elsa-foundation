@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Runtime.KernelHost;
 /// schedule (<see cref="SetAsync"/>, <see cref="StopAsync"/>) and the run each occurrence starts (<see cref="RegisterRunAsync"/>).
 /// A failure throws, which fails the step that called it.
 /// </summary>
-public interface IKernelScheduleHost
+public interface IScheduleActors
 {
     /// <summary>Registers the run each occurrence starts on the trigger's start key; null removes it.</summary>
     ValueTask RegisterRunAsync(string startKey, Models.WorkflowStart? run, CancellationToken cancellationToken = default);
@@ -22,7 +22,7 @@ public interface IKernelScheduleHost
 }
 
 /// <summary>The schedule actors on the host's ingress, in one bound scope (<see cref="ScheduleActor"/>).</summary>
-public sealed class ScheduleActorHost(IIngress ingress, BoundScope scope, ICronCalendar? calendar = null) : IKernelScheduleHost
+public sealed class IngressScheduleActors(IIngress ingress, BoundScope scope, ICronCalendar? calendar = null) : IScheduleActors
 {
     public ValueTask RegisterRunAsync(string startKey, Models.WorkflowStart? run, CancellationToken cancellationToken = default) =>
         ScheduleActor.RegisterRunAsync(ingress, scope, startKey, run, cancellationToken);

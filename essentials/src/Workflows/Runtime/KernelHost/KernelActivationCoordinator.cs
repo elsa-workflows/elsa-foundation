@@ -25,7 +25,10 @@ namespace Elsa.Workflows.Runtime.KernelHost;
 /// <item>Serve: the workflow joins the registry, the routes are rebuilt, and each schedule's run is pointed at it and its
 /// schedule set at the slot's revision. A failure reverts the switch.</item>
 /// </list>
-/// Activations run one at a time on a host, so that each one checks against the serving set it changes.
+/// After each committed activation, deactivation and repair it tells the <see cref="IWorkflowTriggerIndexObserver"/>s, as
+/// the old core does, so that Studio's workflow library refreshes; a failure after an activation or a deactivation reverts
+/// it. A kernel host composes the observers it needs and leaves out the old core's HTTP route table.
+/// Activations run one at a time on a host, also across coordinators that share its <see cref="KernelServing"/>.
 /// </summary>
 public sealed class KernelActivationCoordinator(
     IWorkflowActivationAuthority authority,
@@ -35,10 +38,11 @@ public sealed class KernelActivationCoordinator(
     IWorkflowExecutableStore executableStore,
     IWorkflowTriggerBindingStore triggerBindingStore,
     KernelServing serving,
-    IKernelScheduleHost schedules,
+    IScheduleActors schedules,
     TimeProvider timeProvider,
     IRecurringTriggerScheduleStore? recurringScheduleStore = null,
     ActivationChannelOptions? channels = null,
+    IEnumerable<IWorkflowTriggerIndexObserver>? triggerObservers = null,
     ILogger<KernelActivationCoordinator>? logger = null) : IWorkflowActivationCoordinator
 {
     public const string ReplacedRetireReason = "activation-replaced";
@@ -46,7 +50,7 @@ public sealed class KernelActivationCoordinator(
 
     private const int MaximumDiagnosticLength = 512;
     private readonly ActivationChannelOptions _channels = channels ?? new();
-    private readonly SemaphoreSlim _turn = new(1, 1);
+    private readonly IReadOnlyCollection<IWorkflowTriggerIndexObserver> _observers = triggerObservers?.ToArray() ?? [];
 
     public async ValueTask<WorkflowActivationResult> ActivateAsync(WorkflowActivationCommand command, CancellationToken cancellationToken = default)
     {
@@ -62,9 +66,7 @@ public sealed class KernelActivationCoordinator(
             throw new ArgumentException(
                 $"The supplied source reference points at artifact '{command.Reference.ArtifactId}' but the executable is '{identity.ArtifactId}'.", nameof(command));
 
-        await _turn.WaitAsync(cancellationToken);
-        try { return await ActivateCoreAsync(command, cancellationToken); }
-        finally { _turn.Release(); }
+        return await serving.RunAsync(() => ActivateCoreAsync(command, cancellationToken), cancellationToken);
     }
 
     private async ValueTask<WorkflowActivationResult> ActivateCoreAsync(WorkflowActivationCommand command, CancellationToken cancellationToken)
@@ -195,14 +197,23 @@ public sealed class KernelActivationCoordinator(
             return refused;
         }
 
-        // 4. Serve. The activation stands from here on, so a cancellation does not stop the serving it needs.
+        // 4. Serve, then tell the trigger observers (Studio's workflow library among them). The activation stands from here
+        // on, so a cancellation does not stop the serving it needs; a failure of either reverts it.
         try
         {
             await ServeAsync(plan, transition.Slot.Revision, CancellationToken.None);
         }
         catch (Exception exception)
         {
-            return await RevertAsync(command, reference, plan, transition, exception);
+            return await RevertAsync(command, reference, plan, transition, exception, WorkflowActivationStep.ProjectionActivation);
+        }
+        try
+        {
+            await NotifyObserversAsync(definitionId, command.Executable.Identity.ArtifactId, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            return await RevertAsync(command, reference, plan, transition, exception, WorkflowActivationStep.TriggerObserverNotification);
         }
 
         return new(true, WorkflowActivationOutcome.Activated, transition.Slot, reference, transition.ReplacedActivationId);
@@ -215,15 +226,19 @@ public sealed class KernelActivationCoordinator(
     /// the workflow it serves has its run pointed at it and its schedule set at <paramref name="revision"/>, and each schedule
     /// only the workflow it replaces had is stopped and its run removed, in that order.
     /// </summary>
-    private async ValueTask ServeAsync(KernelServingPlan plan, long revision, CancellationToken cancellationToken)
+    /// <param name="replaced">
+    /// The workflow whose schedules the slot served before, when this host may not serve it (a deactivation after a restart);
+    /// otherwise what the slot serves on this host.
+    /// </param>
+    private async ValueTask ServeAsync(KernelServingPlan plan, long revision, CancellationToken cancellationToken, Workflow? replaced = null)
     {
         var state = plan.State;
         if (plan.Served is { } served)
             // The slot's revision is known only once the switch commits.
             state = state with { Slots = new Dictionary<string, KernelServedSlot>(state.Slots, StringComparer.Ordinal) { [plan.SlotId] = served with { Revision = revision } } };
-        var before = serving.Find(plan.SlotId) is { } current ? SchedulesOf(serving.Schedules, current.Workflow) : [];
+        var before = (replaced ?? serving.Find(plan.SlotId)?.Workflow) is { } previous ? serving.SchedulesOf(previous) : [];
         serving.Apply(plan with { State = state });
-        var after = plan.Served is { } now ? SchedulesOf(state.Schedules, now.Workflow) : [];
+        var after = plan.Served is { } now ? [.. state.Schedules.All.Where(schedule => schedule.Workflow == now.Workflow.Id)] : Array.Empty<NativeSchedule>();
         foreach (var schedule in after)
         {
             await schedules.RegisterRunAsync(schedule.StartKey, schedule.Start(), cancellationToken);
@@ -237,9 +252,6 @@ public sealed class KernelActivationCoordinator(
         }
     }
 
-    private static NativeSchedule[] SchedulesOf(NativeSchedules table, Workflow workflow) =>
-        [.. table.All.Where(schedule => schedule.Workflow == workflow.Id)];
-
     private static RecurringSchedule Recurring(NativeSchedule schedule) =>
         new(schedule.Kind == NativeSchedule.Cron ? RecurringSchedule.Cron : RecurringSchedule.Interval, schedule.Value);
 
@@ -248,7 +260,7 @@ public sealed class KernelActivationCoordinator(
     /// where it left it, and the serving state and schedules return to what the slot serves then.
     /// </summary>
     private async ValueTask<WorkflowActivationResult> RevertAsync(WorkflowActivationCommand command, WorkflowExecutableSourceReference reference,
-        KernelServingPlan plan, WorkflowActivationTransition transition, Exception failure)
+        KernelServingPlan plan, WorkflowActivationTransition transition, Exception failure, WorkflowActivationStep failedStep)
     {
         var definitionId = command.Executable.Identity.DefinitionId;
         logger?.LogWarning(failure, "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} could not be served; reverting",
@@ -264,14 +276,18 @@ public sealed class KernelActivationCoordinator(
         });
         var slot = await CurrentSlotAsync(definitionId, command.SlotName);
         if (reverted)
+        {
             await CaptureAsync(failures, "Serving compensation", async () =>
             {
                 await ServeAsync(serving.Plan(plan.SlotId, plan.Previous), slot.Revision, CancellationToken.None);
             });
+            await CaptureAsync(failures, "Observer compensation", () =>
+                NotifyObserversAsync(definitionId, plan.Previous?.Workflow.Id ?? command.Executable.Identity.ArtifactId, CancellationToken.None));
+        }
 
         var compensationFailure = failures.Count == 0 ? null : string.Join(" ", failures);
         return new(false, WorkflowActivationOutcome.Failed, slot, ReplacedActivationId: transition.ReplacedActivationId,
-            Diagnostic: Truncate(Join(SafeMessage(failure), compensationFailure)), FailedStep: WorkflowActivationStep.ProjectionActivation,
+            Diagnostic: Truncate(Join(SafeMessage(failure), compensationFailure)), FailedStep: failedStep,
             CompensationDiagnostic: compensationFailure);
     }
 
@@ -285,9 +301,7 @@ public sealed class KernelActivationCoordinator(
         ArgumentException.ThrowIfNullOrWhiteSpace(command.SlotName);
         ArgumentOutOfRangeException.ThrowIfNegative(command.ExpectedRevision);
 
-        await _turn.WaitAsync(cancellationToken);
-        try { return await DeactivateCoreAsync(command, cancellationToken); }
-        finally { _turn.Release(); }
+        return await serving.RunAsync(() => DeactivateCoreAsync(command, cancellationToken), cancellationToken);
     }
 
     private async ValueTask<WorkflowActivationResult> DeactivateCoreAsync(WorkflowDeactivationCommand command, CancellationToken cancellationToken)
@@ -296,6 +310,9 @@ public sealed class KernelActivationCoordinator(
         var slot = await authority.FindAsync(definitionId, command.SlotName, cancellationToken);
         if (slot?.ActiveActivationId is not { } activationId)
             return new(true, WorkflowActivationOutcome.AlreadyInactive, slot ?? EmptySlot(definitionId, command.SlotName));
+
+        // What the slot serves, whether or not this host serves it (after a restart it may not), so its schedules are stopped.
+        var served = await ServedOrMappedAsync(slot, activationId, command.Executable, cancellationToken);
 
         WorkflowActivationTransition transition;
         IReadOnlyCollection<string> others = [];
@@ -321,7 +338,7 @@ public sealed class KernelActivationCoordinator(
         string? servingFailure = null;
         try
         {
-            await ServeAsync(serving.Plan(slot.SlotId, null), transition.Slot.Revision, CancellationToken.None);
+            await ServeAsync(serving.Plan(slot.SlotId, null), transition.Slot.Revision, CancellationToken.None, served?.Workflow);
         }
         catch (Exception exception)
         {
@@ -329,9 +346,80 @@ public sealed class KernelActivationCoordinator(
             logger?.LogError(exception, "Definition {DefinitionId} slot {SlotName} is deactivated, but its schedules could not all be stopped", definitionId, command.SlotName);
         }
 
+        try
+        {
+            await NotifyObserversAsync(definitionId, served?.Workflow.Id ?? command.Executable.Identity.ArtifactId, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            return await FailDeactivationAsync(command, slot, served, transition, exception);
+        }
+
         await RetireReferencesAsync(slot, others);
         return new(true, WorkflowActivationOutcome.Deactivated, transition.Slot, ReplacedActivationId: activationId,
             Diagnostic: servingFailure, CompensationDiagnostic: servingFailure);
+    }
+
+    /// <summary>
+    /// A trigger observer failed after the deactivation committed, which fails it, as on the old core: the activation is
+    /// prepared again and switched back on at the revision the deactivation produced, so a writer that moved the slot since
+    /// keeps it, and it serves again.
+    /// </summary>
+    private async ValueTask<WorkflowActivationResult> FailDeactivationAsync(WorkflowDeactivationCommand command, WorkflowActivationSlot slot,
+        KernelServedSlot? served, WorkflowActivationTransition transition, Exception failure)
+    {
+        var definitionId = slot.WorkflowDefinitionId;
+        var activationId = slot.ActiveActivationId!;
+        logger?.LogWarning(failure, "Deactivation of activation {ActivationId} of definition {DefinitionId} slot {SlotName} failed at its trigger observers; compensating",
+            activationId, definitionId, slot.SlotName);
+        var failures = new List<string>();
+        WorkflowActivationTransition? restored = null;
+        await CaptureAsync(failures, "Projection preparation", () => PrepareProjectionsAsync(activationId, CancellationToken.None));
+        await CaptureAsync(failures, "Authority compensation", async () =>
+        {
+            restored = await activationSwitch.TryActivateAsync(new WorkflowActivationSlotRequest(definitionId, slot.SlotName, activationId, command.Source,
+                transition.Slot.Revision, timeProvider.GetUtcNow()), CancellationToken.None);
+            if (!restored.Succeeded)
+                throw new InvalidOperationException($"The deactivation slot transition could not be restored: {restored.Diagnostic}");
+        });
+        if (restored is { Succeeded: true } && served is not null)
+        {
+            await CaptureAsync(failures, "Serving compensation", () =>
+                ServeAsync(serving.Plan(slot.SlotId, served), restored.Slot.Revision, CancellationToken.None));
+            await CaptureAsync(failures, "Observer compensation", () => NotifyObserversAsync(definitionId, served.Workflow.Id, CancellationToken.None));
+        }
+
+        var compensationFailure = failures.Count == 0 ? null : string.Join(" ", failures);
+        return new(false, WorkflowActivationOutcome.Failed, await CurrentSlotAsync(definitionId, slot.SlotName), ReplacedActivationId: activationId,
+            Diagnostic: Truncate(Join(SafeMessage(failure), compensationFailure)), FailedStep: WorkflowActivationStep.TriggerObserverNotification,
+            CompensationDiagnostic: compensationFailure);
+    }
+
+    /// <summary>
+    /// What <paramref name="slot"/>'s activation serves: this host's serving entry when it serves it, else its executable
+    /// mapped again (the activation's reference names it; <paramref name="fallback"/> when it cannot be read). Null when it
+    /// does not map, since then it never served here.
+    /// </summary>
+    private async ValueTask<KernelServedSlot?> ServedOrMappedAsync(WorkflowActivationSlot slot, string activationId, WorkflowExecutable fallback,
+        CancellationToken cancellationToken)
+    {
+        if (serving.Find(slot.SlotId) is { } served && served.ActivationId == activationId) return served;
+        var executable = fallback;
+        try
+        {
+            if (await sourceReferenceStore.FindAsync(WorkflowActivationReferenceIdentity.Create(activationId), cancellationToken) is { } reference &&
+                await executableStore.FindAsync(reference.ArtifactId, cancellationToken) is { } stored)
+                executable = stored;
+        }
+        catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
+        {
+            logger?.LogWarning(exception, "The executable of activation {ActivationId} could not be read; the deactivation's own is used", activationId);
+        }
+        try
+        {
+            return new(slot.SlotId, slot.WorkflowDefinitionId, slot.SlotName, activationId, NativeExecutableMapper.Map(executable), slot.Revision);
+        }
+        catch (NativeMappingRefusedException) { return null; }
     }
 
     private async ValueTask<IReadOnlyCollection<string>> ListOtherServingActivationsAsync(string slotId, string activationId, CancellationToken cancellationToken)
@@ -349,16 +437,14 @@ public sealed class KernelActivationCoordinator(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowDefinitionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(slotName);
-        await _turn.WaitAsync(cancellationToken);
-        try
+        return await serving.RunAsync(async () =>
         {
             var slot = await authority.FindAsync(workflowDefinitionId, slotName, cancellationToken);
             if (slot?.ActiveActivationId is null)
                 return new(true, WorkflowActivationOutcome.AlreadyInactive, slot ?? EmptySlot(workflowDefinitionId, slotName));
             var (current, unserved) = await CheckServingAsync(slot, cancellationToken);
             return unserved ?? new(true, current.ActiveActivationId is null ? WorkflowActivationOutcome.AlreadyInactive : WorkflowActivationOutcome.AlreadyActive, current);
-        }
-        finally { _turn.Release(); }
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -394,6 +480,7 @@ public sealed class KernelActivationCoordinator(
     private async ValueTask<(WorkflowActivationSlot Slot, WorkflowActivationResult? Unserved)> CheckServingAsync(WorkflowActivationSlot slot, CancellationToken cancellationToken)
     {
         var activationId = slot.ActiveActivationId!;
+        var repaired = false;
         try
         {
             for (var repairs = 0; ; repairs++)
@@ -412,13 +499,17 @@ public sealed class KernelActivationCoordinator(
                 {
                     logger?.LogWarning("Activation {ActivationId} of definition {DefinitionId} slot {SlotName} did not serve everywhere and was repaired",
                         activationId, current.WorkflowDefinitionId, current.SlotName);
+                    repaired = true;
                     break;
                 }
             }
 
             // 6. Ensure this host serves it.
             if (serving.Find(slot.SlotId) is { } served && served.ActivationId == activationId && serving.Registry.Contains(served.Workflow.Id))
+            {
+                if (repaired) await NotifyServingAsync(slot, served.Workflow.Id);
                 return (slot, null);
+            }
             var reference = await sourceReferenceStore.FindAsync(WorkflowActivationReferenceIdentity.Create(activationId), cancellationToken)
                             ?? throw new InvalidOperationException($"Activation '{activationId}' has no source reference to name its artifact.");
             var executable = await executableStore.FindAsync(reference.ArtifactId, cancellationToken)
@@ -438,6 +529,7 @@ public sealed class KernelActivationCoordinator(
             await ServeAsync(plan, slot.Revision, cancellationToken);
             logger?.LogInformation("Activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves on this host again",
                 activationId, slot.WorkflowDefinitionId, slot.SlotName);
+            if (repaired) await NotifyServingAsync(slot, workflow.Id);
             return (slot, null);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
@@ -445,6 +537,28 @@ public sealed class KernelActivationCoordinator(
             logger?.LogError(exception, "Whether activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves could not be checked or repaired",
                 activationId, slot.WorkflowDefinitionId, slot.SlotName);
             return (slot, NotServingFailure(slot, $"whether it serves could not be checked or repaired: {SafeMessage(exception)}"));
+        }
+    }
+
+    /// <summary>
+    /// Tells the trigger observers that the definition's serving changed, as the old core does after each committed
+    /// activation, deactivation and repair: with no bindings, since a kernel host serves no old-core triggers, and a refresh
+    /// required, which Studio's workflow library acts on.
+    /// </summary>
+    private async ValueTask NotifyObserversAsync(string definitionId, string artifactId, CancellationToken cancellationToken)
+    {
+        foreach (var observer in _observers)
+            await observer.OnTriggersIndexedAsync(new WorkflowTriggerIndexSnapshot(artifactId, []) { RequiresProjectionRefresh = true, DefinitionId = definitionId },
+                cancellationToken);
+    }
+
+    /// <summary>A repaired slot serves already, so an observer that cannot be told is logged; the observers converge on their own.</summary>
+    private async ValueTask NotifyServingAsync(WorkflowActivationSlot slot, string artifactId)
+    {
+        try { await NotifyObserversAsync(slot.WorkflowDefinitionId, artifactId, CancellationToken.None); }
+        catch (Exception exception)
+        {
+            logger?.LogWarning(exception, "Definition {DefinitionId} slot {SlotName} serves, but its trigger observers could not be told", slot.WorkflowDefinitionId, slot.SlotName);
         }
     }
 
@@ -567,6 +681,7 @@ public sealed class KernelActivationCoordinator(
             try
             {
                 await ServeAsync(plan, slot.Revision, CancellationToken.None);
+                await NotifyServingAsync(slot, plan.Served!.Workflow.Id);
                 return new(true, WorkflowActivationOutcome.Activated, slot, await FindLiveReferenceAsync(slot, CancellationToken.None) ?? reference);
             }
             catch (Exception exception)

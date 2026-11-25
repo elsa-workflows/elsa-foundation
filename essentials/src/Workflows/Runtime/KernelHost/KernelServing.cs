@@ -18,7 +18,8 @@ public sealed record KernelServedSlot(string SlotId, string DefinitionId, string
 /// <item><see cref="Routes"/> and <see cref="Schedules"/>: the route table and the recurring start triggers of the serving
 /// set, rebuilt whenever it changes.</item>
 /// </list>
-/// The kernel coordinator changes it, one activation at a time; turns and the HTTP edge read it.
+/// Coordinators change it one at a time, also when several shells each compose one over it (<see cref="RunAsync{T}"/>):
+/// each checks its change against the serving set it changes. Turns and the HTTP edge read it.
 /// </summary>
 public sealed class KernelServing
 {
@@ -27,6 +28,7 @@ public sealed class KernelServing
 
     private readonly Func<string, string?>? _cronError;
     private readonly Lock _lock = new();
+    private readonly SemaphoreSlim _turn = new(1, 1);
     private ServingState _state;
 
     /// <param name="cronError">The host's check of a cron expression (<see cref="NativeSchedules"/>): null when it reads.</param>
@@ -54,6 +56,27 @@ public sealed class KernelServing
     {
         var serving = _state.Slots.Values.Where(slot => slot.DefinitionId == definition).ToArray();
         return (serving.FirstOrDefault(slot => slot.SlotName == DefaultSlotName) ?? (serving.Length == 1 ? serving[0] : null))?.Workflow.Id;
+    }
+
+    /// <summary>Runs one coordinator's change to what serves: its check, its slot move and its serving, while no other runs.</summary>
+    internal async ValueTask<T> RunAsync<T>(Func<ValueTask<T>> change, CancellationToken cancellationToken)
+    {
+        await _turn.WaitAsync(cancellationToken);
+        try { return await change(); }
+        finally { _turn.Release(); }
+    }
+
+    /// <summary>
+    /// The recurring start triggers <paramref name="workflow"/> serves: read off the serving set's table when it serves, else
+    /// off a table built over it alone (a slot this host does not serve, as after a restart). One whose triggers the model
+    /// refuses has none.
+    /// </summary>
+    internal NativeSchedule[] SchedulesOf(Workflow workflow)
+    {
+        var served = _state.Schedules.All.Where(schedule => schedule.Workflow == workflow.Id).ToArray();
+        if (served.Length > 0 || _state.Slots.Values.Any(slot => slot.Workflow.Id == workflow.Id)) return served;
+        try { return [.. new NativeSchedules(new WorkflowRegistry().Add(workflow), _cronError).All]; }
+        catch (ArgumentException) { return []; }
     }
 
     /// <summary>

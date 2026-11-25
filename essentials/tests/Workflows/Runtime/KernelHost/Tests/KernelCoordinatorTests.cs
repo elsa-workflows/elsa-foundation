@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Runtime.KernelHost.Tests;
 /// </summary>
 public sealed class KernelCoordinatorTests
 {
-    private sealed class RecordingSchedules : IKernelScheduleHost
+    private sealed class RecordingSchedules : IScheduleActors
     {
         public List<string> Calls { get; } = [];
         public Dictionary<string, Models.WorkflowStart?> Runs { get; } = new(StringComparer.Ordinal);
@@ -52,6 +52,41 @@ public sealed class KernelCoordinatorTests
         }
     }
 
+    /// <summary>A trigger observer, as Studio's workflow library is one: it records each refresh, and can fail.</summary>
+    private sealed class RecordingObserver : IWorkflowTriggerIndexObserver
+    {
+        public List<string> Refreshes { get; } = [];
+        public bool Fail { get; set; }
+
+        public ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
+        {
+            if (Fail) throw new InvalidOperationException("The workflow library is unavailable.");
+            Refreshes.Add($"{snapshot.DefinitionId} {snapshot.ArtifactId} {snapshot.RequiresProjectionRefresh} {snapshot.Bindings.Count}");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>A switch that holds an activation's slot move until it is released, so another can start meanwhile.</summary>
+    private sealed class GatedSwitch(IWorkflowActivationSwitch inner) : IWorkflowActivationSwitch
+    {
+        public readonly TaskCompletionSource Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
+        {
+            Entered.TrySetResult();
+            await Release.Task;
+            return await inner.TryActivateAsync(request, cancellationToken);
+        }
+
+        public ValueTask<bool> TryRevertAsync(WorkflowActivationRevert revert, CancellationToken cancellationToken = default) => inner.TryRevertAsync(revert, cancellationToken);
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(WorkflowDeactivationSlotRequest request, IReadOnlyCollection<string> alsoServing,
+            CancellationToken cancellationToken = default) => inner.TryDeactivateAsync(request, alsoServing, cancellationToken);
+        public ValueTask<bool> TryDiscardAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default) => inner.TryDiscardAsync(reference, cancellationToken);
+        public ValueTask<bool> TryRepairAsync(WorkflowActivationSlot slot, IReadOnlyCollection<string> alsoServing, CancellationToken cancellationToken = default) =>
+            inner.TryRepairAsync(slot, alsoServing, cancellationToken);
+    }
+
     /// <summary>One host's stores, and a coordinator over them; <see cref="Restart"/> keeps the stores and starts a new host.</summary>
     private sealed class Host
     {
@@ -65,6 +100,7 @@ public sealed class KernelCoordinatorTests
         public KernelServing Serving = null!;
         public RecordingSchedules Schedules = null!;
         public KernelActivationCoordinator Coordinator = null!;
+        public RecordingObserver Observer = null!;
         private readonly ActivationChannelOptions? _channels;
 
         public Host(ActivationChannelOptions? channels = null)
@@ -79,23 +115,29 @@ public sealed class KernelCoordinatorTests
         {
             Serving = new KernelServing(expression => expression == "0 * * * * *" ? null : "not a cron expression this host reads");
             Schedules = new RecordingSchedules();
-            Coordinator = new KernelActivationCoordinator(Authority, Switch, References,
-                new WorkflowExecutableRootWriteLeaseManager(Executables, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock),
-                Executables, Bindings, Serving, Schedules, Clock, RecurringSchedules, _channels);
+            Observer = new RecordingObserver();
+            Coordinator = NewCoordinator(Switch);
         }
 
-        public async Task<WorkflowActivationResult> ActivateAsync(WorkflowExecutable executable, string activationId, string slot = "default")
+        /// <summary>Another coordinator over these stores and this host's serving state, as a second shell composes one.</summary>
+        public KernelActivationCoordinator NewCoordinator(IWorkflowActivationSwitch activationSwitch) =>
+            new(Authority, activationSwitch, References,
+                new WorkflowExecutableRootWriteLeaseManager(Executables, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock),
+                Executables, Bindings, Serving, Schedules, Clock, RecurringSchedules, _channels, [Observer]);
+
+        public async Task<WorkflowActivationResult> ActivateAsync(WorkflowExecutable executable, string activationId, string slot = KernelServing.DefaultSlotName,
+            KernelActivationCoordinator? coordinator = null)
         {
             await Executables.SaveAsync(executable);
             var current = await Authority.FindAsync(executable.Identity.DefinitionId, slot);
             var identity = executable.Identity;
             var reference = new WorkflowExecutableSourceReference("candidate", identity.ArtifactId, "definition", identity.DefinitionId, "1",
                 identity.DefinitionId, identity.DefinitionVersionId, identity.ArtifactVersion, Clock.GetUtcNow(), Clock.GetUtcNow(), WorkflowExecutableReferenceScope.Published);
-            return await Coordinator.ActivateAsync(new WorkflowActivationCommand(executable, reference, slot, activationId, WorkflowActivationSource.Publishing,
+            return await (coordinator ?? Coordinator).ActivateAsync(new WorkflowActivationCommand(executable, reference, slot, activationId, WorkflowActivationSource.Publishing,
                 current?.Revision ?? 0));
         }
 
-        public async Task<WorkflowActivationResult> DeactivateAsync(WorkflowExecutable executable, string slot = "default")
+        public async Task<WorkflowActivationResult> DeactivateAsync(WorkflowExecutable executable, string slot = KernelServing.DefaultSlotName)
         {
             var current = await Authority.FindAsync(executable.Identity.DefinitionId, slot);
             return await Coordinator.DeactivateAsync(new WorkflowDeactivationCommand(executable, slot, WorkflowActivationSource.Publishing, current?.Revision ?? 0));
@@ -190,7 +232,8 @@ public sealed class KernelCoordinatorTests
         var clash = await host.ActivateAsync(ExecutableOf("copy@1", "copy", HttpWorkflow("orders", "copy")), "copy-1");
 
         Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.ServingCheck), (clash.Outcome, clash.FailedStep));
-        Assert.Contains("POST /orders", clash.Diagnostic, StringComparison.Ordinal);
+        Assert.StartsWith("Definitions 'copy' and 'orders' both start on POST /orders", clash.Diagnostic, StringComparison.Ordinal);
+        Assert.DoesNotContain("@1", clash.Diagnostic, StringComparison.Ordinal);
         Assert.Null(await host.ReferenceAsync("copy-1"));
         Assert.True(host.Serving.Routes.TryStart("POST", "orders", out var route) && route == ("orders@1", "in"));
     }
@@ -224,7 +267,7 @@ public sealed class KernelCoordinatorTests
     [Fact]
     public async Task A_channel_the_shell_does_not_declare_is_refused()
     {
-        var host = new Host(new ActivationChannelOptions { AllowAdHocChannels = false, Channels = [new() { Name = "default" }] });
+        var host = new Host(new ActivationChannelOptions { AllowAdHocChannels = false, Channels = [new() { Name = KernelServing.DefaultSlotName }] });
 
         var preview = await host.ActivateAsync(Orders("orders@1"), "orders-1", slot: "preview");
 
@@ -286,7 +329,7 @@ public sealed class KernelCoordinatorTests
 
         host.Restart();
         Assert.False(host.Serving.Registry.Contains("orders@1"));
-        var orders = await host.Coordinator.EnsureServingAsync("orders", "default");
+        var orders = await host.Coordinator.EnsureServingAsync("orders", KernelServing.DefaultSlotName);
         var all = await host.Coordinator.ServeActiveSlotsAsync();
 
         Assert.Equal(WorkflowActivationOutcome.AlreadyActive, orders.Outcome);
@@ -299,7 +342,7 @@ public sealed class KernelCoordinatorTests
             host.Schedules.Calls);
         // Serving again writes nothing more.
         host.Schedules.Calls.Clear();
-        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, (await host.Coordinator.EnsureServingAsync("ticks", "default")).Outcome);
+        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, (await host.Coordinator.EnsureServingAsync("ticks", KernelServing.DefaultSlotName)).Outcome);
         Assert.Empty(host.Schedules.Calls);
     }
 
@@ -328,6 +371,96 @@ public sealed class KernelCoordinatorTests
         Assert.Null(host.Serving.ServedWorkflow("unknown"));
         var options = new Native.NativeExecutionOptions { ServedWorkflow = host.Serving.ServedWorkflow };
         Assert.Equal("orders@2", options.ServedWorkflow!("orders"));
+    }
+
+    [Fact]
+    public async Task Two_coordinators_over_one_serving_state_each_keep_the_others_slot()
+    {
+        var host = new Host();
+        var gated = new GatedSwitch(host.Switch);
+        var first = host.NewCoordinator(gated);
+
+        var ticks = host.ActivateAsync(Ticks("ticks@1"), "ticks-1", coordinator: first);
+        await gated.Entered.Task;
+        var orders = host.ActivateAsync(Orders("orders@1"), "orders-1");
+        await Task.Delay(50);
+        // The second waits for the first, which planned its change against the serving set it changes.
+        Assert.False(orders.IsCompleted);
+        gated.Release.SetResult();
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, (await ticks).Outcome);
+        Assert.Equal(WorkflowActivationOutcome.Activated, (await orders).Outcome);
+        Assert.Equal(["orders", "ticks"], host.Serving.Slots.Select(slot => slot.DefinitionId).Order());
+        Assert.True(host.Serving.Routes.TryStart("POST", "orders", out _));
+        Assert.Single(host.Serving.Schedules.All);
+    }
+
+    [Fact]
+    public async Task A_deactivation_after_a_restart_stops_the_schedule_the_slot_serves()
+    {
+        var host = new Host();
+        await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
+        host.Restart();
+
+        var result = await host.DeactivateAsync(Ticks("ticks@1"));
+
+        Assert.Equal(WorkflowActivationOutcome.Deactivated, result.Outcome);
+        Assert.Equal([$"stop schedule:ticks:tick {result.Slot.Revision}", "unregister schedule-start:ticks:tick"], host.Schedules.Calls);
+    }
+
+    [Fact]
+    public async Task The_trigger_observers_refresh_after_each_activation_and_deactivation()
+    {
+        var host = new Host();
+
+        await host.ActivateAsync(Orders("orders@1"), "orders-1");
+        await host.ActivateAsync(Orders("orders@2"), "orders-2");
+        await host.DeactivateAsync(Orders("orders@2"));
+
+        Assert.Equal(["orders orders@1 True 0", "orders orders@2 True 0", "orders orders@2 True 0"], host.Observer.Refreshes);
+    }
+
+    [Fact]
+    public async Task An_observer_failure_after_an_activation_reverts_it()
+    {
+        var host = new Host();
+        await host.ActivateAsync(Orders("orders@1"), "orders-1");
+        host.Observer.Fail = true;
+
+        var failed = await host.ActivateAsync(Orders("orders@2"), "orders-2");
+
+        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.TriggerObserverNotification), (failed.Outcome, failed.FailedStep));
+        Assert.Equal("orders-1", failed.Slot.ActiveActivationId);
+        Assert.True(host.Serving.Routes.TryStart("POST", "orders", out var route) && route == ("orders@1", "in"));
+        Assert.Equal("orders@1", host.Serving.ServedWorkflow("orders"));
+    }
+
+    [Fact]
+    public async Task An_observer_failure_after_a_deactivation_switches_it_back_on()
+    {
+        var host = new Host();
+        await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
+        host.Observer.Fail = true;
+
+        var failed = await host.DeactivateAsync(Ticks("ticks@1"));
+
+        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.TriggerObserverNotification), (failed.Outcome, failed.FailedStep));
+        Assert.Equal("ticks-1", failed.Slot.ActiveActivationId);
+        Assert.Equal("ticks@1", host.Serving.ServedWorkflow("ticks"));
+        Assert.Equal("ticks@1", host.Schedules.Runs["schedule-start:ticks:tick"]!.Workflow);
+    }
+
+    [Fact]
+    public async Task A_definition_serves_one_scheduled_channel()
+    {
+        var host = new Host();
+        await host.ActivateAsync(Ticks("ticks@1"), "ticks-1");
+
+        var second = await host.ActivateAsync(Ticks("ticks@2", "PT5M"), "ticks-preview", slot: "preview");
+
+        Assert.Equal((WorkflowActivationOutcome.Failed, WorkflowActivationStep.ServingCheck), (second.Outcome, second.FailedStep));
+        Assert.Contains("Definition 'ticks'", second.Diagnostic, StringComparison.Ordinal);
+        Assert.Contains("publish the scheduled definition to one channel", second.Diagnostic, StringComparison.Ordinal);
     }
 
     [Fact]
