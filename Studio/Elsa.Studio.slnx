@@ -8,6 +8,7 @@
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/apps/">
+    <Project Path="src/apps/Elsa.Studio.Foundation.Host/Elsa.Studio.Foundation.Host.csproj" />
     <Project Path="src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj" />
   </Folder>
   <Folder Name="/src/essentials/">
@@ -19,6 +20,7 @@
     <Project Path="src/essentials/Elsa.Studio.Hosting/Elsa.Studio.Hosting.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Hosting.Themes/Elsa.Studio.Hosting.Themes.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Hosting.Nuplane/Elsa.Studio.Hosting.Nuplane.csproj" />
+    <Project Path="src/essentials/Elsa.Studio.Hosting.Distribution/Elsa.Studio.Hosting.Distribution.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj" />
     <Project Path="src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj" />
   </Folder>
