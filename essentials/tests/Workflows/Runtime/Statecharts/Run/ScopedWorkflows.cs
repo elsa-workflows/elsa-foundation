@@ -60,7 +60,7 @@ internal sealed class ScopedWorkflows(string mode, bool nested, bool reverse)
         var def = new StructuralDefinition([
             new("root", NodeKind.Root, Initial: "Review"),
             new("Review", NodeKind.Compound, "root", "A", "parent-entry", "parent-exit", D(("label", "parent"), ("p", 0))),
-            new("A", NodeKind.Atomic, "Review", Entry: "a-entry", Exit: "a-exit", Defaults: D(("label", "child"), ("a", 0), ("CurrentItem", 42))),
+            new("A", NodeKind.Atomic, "Review", Entry: "a-entry", Exit: "a-exit", Defaults: D(("label", "child"), ("a", 0), ("currentItem", 42))),
             new("B", NodeKind.Atomic, "Review", Entry: "b-entry", Defaults: D(("label", "sibling"))),
             new("Done", NodeKind.Final, "root", Entry: "final-entry", Defaults: D(("label", "final")))],
             [new("comment", 0, "A", null, VisitMode.Internal, "comment", "comment"),
@@ -72,7 +72,7 @@ internal sealed class ScopedWorkflows(string mode, bool nested, bool reverse)
             Wf.Sequence("parent-entry", Wf.Set("parent-change", "p", 11), Wf.Set("parent-label", "label", "parent-entered"), Wf.Event("parent-wait", "parent")),
             Wf.Sequence("parent-exit", Wf.Set("exit-parent-read", "exit-parent", Binding.Var("label")), Wf.Event("parent-exit-wait", "parent-exit")),
             Wf.Sequence("a-entry", Wf.Set("a-label", "entry-label", Binding.Var("label")), Wf.Set("a-parent", "entry-parent", Binding.Var("p")),
-                Wf.ForEach("iteration", Binding.Literal(new[] { 7 }), Wf.Set("iteration-read", "iteration-value", Binding.Var("CurrentItem"))),
+                Wf.ForEach("iteration", Binding.Literal(new[] { 7 }), Wf.Set("iteration-read", "iteration-value", Binding.Var("currentItem"))),
                 Wf.Set("a-default-read", "entry-default", Binding.Var("a")), Wf.Node<ScopedEcho>("a-change", ("Value", Binding.Literal(7))).Capture("a"), Inc("count-entry", "count"), Wf.Event("a-wait", "a")),
             Wf.Sequence("a-exit", Inc("a-exit-change", "a"), Wf.Event("a-exit-wait", "a-exit")),
             Wf.Sequence("comment", Inc("comment-inc", "a"), Wf.Event("comment-wait", "comment")),
@@ -147,8 +147,8 @@ internal sealed class ScopedWorkflows(string mode, bool nested, bool reverse)
             new("r", NodeKind.Root, Initial: "End"), new("End", NodeKind.Final, "r", Entry: "inner-entry", Defaults: D(("label", "inner")))], [], D(("own", 5))))))
             .With(Wf.Sequence("inner-entry", Wf.Set("inner-label-read", "inner-label", Binding.Var("label")), Wf.Set("inner-own-read", "inner-own", Binding.Var("own")),
                 Wf.Set("inner-outer-read", "inner-outer", Binding.Var("p")), Wf.Set("inner-global-read", "inner-global", Binding.Var("outer")),
-                Wf.ForEach("inner-loop", Binding.Literal(new[] { 8 }), Wf.Set("inner-loop-read", "inner-item", Binding.Var("CurrentItem"))), Wf.Event("inner-wait", "inner")));
-        Start(new([new("r", NodeKind.Root, Initial: "A"), new("A", NodeKind.Atomic, "r", Entry: "outer-entry", Defaults: D(("label", "outer"), ("p", 12), ("CurrentItem", 42)))], []),
+                Wf.ForEach("inner-loop", Binding.Literal(new[] { 8 }), Wf.Set("inner-loop-read", "inner-item", Binding.Var("currentItem"))), Wf.Event("inner-wait", "inner")));
+        Start(new([new("r", NodeKind.Root, Initial: "A"), new("A", NodeKind.Atomic, "r", Entry: "outer-entry", Defaults: D(("label", "outer"), ("p", 12), ("currentItem", 42)))], []),
             Wf.Sequence("outer-entry", inner, Wf.Set("after-inner-read", "after-inner", Binding.Var("label"))));
         Check(Observation("inner-label") == "inner" && Observation("inner-own") == "5" && Observation("inner-outer") == "12" && Observation("inner-global") == "99" && Observation("inner-item") == "8",
             "V9: nested machine or ordinary iteration broke lexical shadow/fallback");

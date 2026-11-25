@@ -160,6 +160,10 @@ workflow's variables. Container-scoped variables are refused until the mapper sl
 - **Conversions.** A binding's conversion plan is applied by the mapper when it is identity or numeric widening; any
   other plan refuses the binding, because Native has no conversions and its hydrator throws on a type mismatch.
 - **Captures and input.** Output captures become `Node.Captures`, and the input contract becomes the run's input.
+- **Dispatch.** A Dispatch Workflow names a definition, and the Native child start takes a workflow id. The mapper keeps
+  the definition id as given. When the child starts, the Native model asks the host's
+  `NativeExecutionOptions.ServedWorkflow` for the artifact that serves the definition, and starts the id itself when
+  the host has none.
 
 ## Expressions (decision 2)
 

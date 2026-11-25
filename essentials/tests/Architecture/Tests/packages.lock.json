@@ -3056,6 +3056,14 @@
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
+      "elsa.workflows.runtime.kernelhost": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Native.Model": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.native.activities": {
         "type": "Project",
         "dependencies": {

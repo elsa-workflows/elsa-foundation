@@ -291,8 +291,8 @@ public sealed record ForState
 /// </summary>
 public sealed class For : CompositeActivity
 {
-    /// <summary>The variable each pass declares: the old core's <c>index</c>, named as the Native ForEach names its own.</summary>
-    public const string IndexVariable = "Index";
+    /// <summary>The variable each pass declares: the old core's <c>index</c>, named as on the old core, as the Native ForEach names its own (currentItem, currentIndex).</summary>
+    public const string IndexVariable = "index";
 
     [Input] public int Start { get; set; }
     [Input] public int End { get; set; }
@@ -426,7 +426,7 @@ public sealed record ForEachState
     public int Index { get; set; }
 }
 
-/// <summary>Each pass runs the body in an iteration scope that declares CurrentItem and CurrentIndex.</summary>
+/// <summary>Each pass runs the body in an iteration scope that declares currentItem and currentIndex.</summary>
 [InterventionParent(2)]
 public sealed class ForEach : CompositeActivity, IInterventionParent
 {
@@ -434,16 +434,16 @@ public sealed class ForEach : CompositeActivity, IInterventionParent
     {
         var progress = Values.To<ForEachState>(state) ?? throw new InvalidOperationException("Missing iteration retry obligation.");
         if (progress.Items is null || progress.Index < 0 || progress.Index >= progress.Items.Count || child.Tag is not null || definition.Children.Count != 1 || definition.Children[0].Id != child.Node ||
-            child.Scope is not { Count: 2 } || !child.Scope.TryGetValue("CurrentIndex", out var index) || index is not JsonValue value || !value.TryGetValue<int>(out var current) || current != progress.Index ||
-            !child.Scope.TryGetValue("CurrentItem", out var item) || !JsonNode.DeepEquals(item, progress.Items[progress.Index]))
+            child.Scope is not { Count: 2 } || !child.Scope.TryGetValue("currentIndex", out var index) || index is not JsonValue value || !value.TryGetValue<int>(out var current) || current != progress.Index ||
+            !child.Scope.TryGetValue("currentItem", out var item) || !JsonNode.DeepEquals(item, progress.Items[progress.Index]))
             throw new InvalidOperationException("Invalid iteration retry obligation.");
         return state?.DeepClone(); // only ordinary successful completion advances Index
     }
     [Input] public JsonArray? Items { get; set; }
 
-    /// <summary>The body's iteration is its committed scope's CurrentIndex (round 5 C).</summary>
+    /// <summary>The body's iteration is its committed scope's currentIndex (round 5 C).</summary>
     protected internal override string? IterationOf(JsonNode? state, string? childTag, IReadOnlyDictionary<string, JsonNode?>? childScope, string? childLexicalScope) =>
-        childScope is not null && childScope.TryGetValue("CurrentIndex", out var index) && index is JsonValue v && v.TryGetValue<int>(out var i) ? i.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
+        childScope is not null && childScope.TryGetValue("currentIndex", out var index) && index is JsonValue v && v.TryGetValue<int>(out var i) ? i.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
 
     protected internal override void Execute(CompositeContext context)
     {
@@ -474,8 +474,8 @@ public sealed class ForEach : CompositeActivity, IInterventionParent
         }
         context.Schedule(context.Children[0], scope: new Dictionary<string, JsonNode?>
         {
-            ["CurrentItem"] = state.Items[state.Index]?.DeepClone(),
-            ["CurrentIndex"] = state.Index,
+            ["currentItem"] = state.Items[state.Index]?.DeepClone(),
+            ["currentIndex"] = state.Index,
         });
     }
 }
@@ -829,10 +829,12 @@ public sealed class HttpEndpoint : StatefulActivity<HttpRequest, HttpWaitState, 
     [Input] public string Method { get; set; } = "POST";
     /// <summary>The route's opt-out of the release rule: its caller is answered when the turn ends, not after its commit.</summary>
     [Input] public bool RespondBeforeCommit { get; set; }
+    /// <summary>Whether a request on its route starts a run where one begins; false, it only waits (<see cref="NativeStartTriggers"/>).</summary>
+    [Input] public bool CanStartWorkflow { get; set; } = true;
 
     protected override ValueTask<Transition> ExecuteAsync(StartContext<HttpRequest> context)
     {
-        if (context.TryGetTrigger(out var request)) return new(Complete(request));
+        if (CanStartWorkflow && context.TryGetTrigger(out var request)) return new(Complete(request));
         // Without route values bound the path is a literal route, as before templates: an expression may compute it,
         // braces and all (HttpRoutes refuses a literal template with parameters and no RouteValues bound). Bound values that
         // came out null on a template fault here rather than wait on a key no request reaches.

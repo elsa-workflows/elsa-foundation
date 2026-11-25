@@ -15,7 +15,7 @@ public static class Smoke
                 Set("s1", "x", 1),
                 WriteLine("w1", Expr("'x is ' + x")),
                 If("if1", Expr("x == 1"), Set("then", "y", "one"), Set("else", "y", "other")),
-                ForEach("each", Expr("[1, 2, 3]"), Set("add", "sum", Expr("sum + CurrentItem"))),
+                ForEach("each", Expr("[1, 2, 3]"), Set("add", "sum", Expr("sum + currentItem"))),
                 While("loop", Expr("i < 3"), Set("inc", "i", Expr("i + 1"))),
                 Parallel("par", null,
                     Sequence("b1", Delay("d1", 100), Set("a", "a", 1)),

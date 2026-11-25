@@ -69,6 +69,15 @@ public class NativeExecutionOptions
     public INativeScripts? Scripts { get; init; }
     /// <summary>The host's evaluator for host expressions (JavaScript, Liquid); without it such a binding faults its activation.</summary>
     public INativeExpressions? Expressions { get; init; }
+
+    /// <summary>
+    /// The workflow a Dispatch Workflow starts, by the id it names. A designer's Dispatch names a definition, and a publishing
+    /// host serves each definition as one artifact at a time, so the host resolves the definition to the workflow id it serves
+    /// now; null when the id names no served definition. Consulted when the child starts; without it, or when it returns
+    /// null, the child starts the workflow the id names. It is read inside the turn, so a turn that runs again after a lost
+    /// commit may start a version published in between.
+    /// </summary>
+    public Func<string, string?>? ServedWorkflow { get; init; }
 }
 
 // ---- the state: live frames, scheduled work, waits, variables, results ---------------------------------------------
@@ -523,12 +532,15 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                     { Due = turn.SavesWaitRecipes ? dueAt : null };
                 break;
             case ChildTrigger c:
-                var child = turn.StartChild(frame.Id, c.Workflow, c.Mode, c.Input as JsonObject);
+                var child = turn.StartChild(frame.Id, Served(c.Workflow), c.Mode, c.Input as JsonObject);
                 _s.Waits[id] = child;
                 turn.Record($"s:{frame.Id}:{child.Key}");
                 break;
         }
     }
+
+    // A Dispatch names a definition or a workflow; the host says which workflow serves a definition (NativeExecutionOptions.ServedWorkflow).
+    private string Served(string workflow) => options.ServedWorkflow?.Invoke(workflow) ?? workflow;
 
     private void Unregister(string id, WaitEntry wait, bool cancel)
     {
@@ -553,7 +565,7 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
             case DispatchEffect d:
             {
                 // A detached start (friction F-N5, fixed in the merge): no parent, and minted here, so no read.
-                var child = turn.StartDetached(d.Workflow, d.Mode, d.Input as JsonObject);
+                var child = turn.StartDetached(Served(d.Workflow), d.Mode, d.Input as JsonObject);
                 turn.Record($"d:{frame.Id}:{child.Id}");
                 break;
             }

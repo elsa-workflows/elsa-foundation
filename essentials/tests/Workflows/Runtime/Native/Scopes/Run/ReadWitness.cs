@@ -25,7 +25,7 @@ internal static class ReadWitness
                     Wf.Set("local" + prefix, "activityLocal" + prefix, Binding.Var("counter")),
                     Wf.Set("outer" + prefix, "activityOuter" + prefix, Binding.Var("outerOnly")),
                     Wf.Set("borrow" + prefix, "activityBorrow" + prefix, Binding.Var("borrowedOnly")),
-                    Wf.Set("item" + prefix, "activityItem" + prefix, Binding.Var("CurrentItem")),
+                    Wf.Set("item" + prefix, "activityItem" + prefix, Binding.Var("currentItem")),
                     Wf.Set("global" + prefix, "activityGlobal" + prefix, Binding.Var("workflowOnly")),
                     Wf.Node<ReadValue>("value" + prefix, ("Value", Binding.Literal(new JsonObject { ["n"] = 23 }))),
                     Wf.Event("wait" + prefix, "read-" + prefix)));
@@ -147,8 +147,8 @@ internal sealed class ReadProbe : CompositeActivity, ISignalledComposite
         Read(Binding.Result("value" + Prefix))!["n"] = 99;
         if (Read(Binding.Result("value" + Prefix, "n"))?.ToString() != "23") throw new InvalidOperationException("RS5: result read leaked a JSON alias");
         var result = new JsonObject { ["Local"] = Read(Binding.Var("counter")), ["Outer"] = Read(Binding.Var("outerOnly")),
-            ["Borrow"] = Read(Binding.Var("borrowedOnly")), ["Item"] = Read(Binding.Var("CurrentItem")), ["Global"] = Read(Binding.Var("workflowOnly")),
-            ["Result"] = Read(Binding.Result("value" + Prefix, "n")), ["Expression"] = Read(Binding.Expr("counter + outerOnly + borrowedOnly + CurrentItem + workflowOnly")) };
+            ["Borrow"] = Read(Binding.Var("borrowedOnly")), ["Item"] = Read(Binding.Var("currentItem")), ["Global"] = Read(Binding.Var("workflowOnly")),
+            ["Result"] = Read(Binding.Result("value" + Prefix, "n")), ["Expression"] = Read(Binding.Expr("counter + outerOnly + borrowedOnly + currentItem + workflowOnly")) };
         context.ReleaseLexicalScope(state.Inner); context.ReleaseLexicalScope(state.Outer); context.Complete(result: result);
     }
 }

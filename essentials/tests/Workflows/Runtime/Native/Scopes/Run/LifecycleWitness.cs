@@ -36,10 +36,10 @@ internal sealed class LifecycleWitness(string mode, bool nested, bool reverse, b
                 Wf.Set(region + "-increment", "counter", Binding.Expr("counter + 1")),
                 Wf.Set(region + "-parent", "total", Binding.Expr("total + 1")),
                 Wf.ForEach(region + "-loop", Binding.Literal(new[] { 7 }), Wf.Sequence(region + "-body",
-                    Wf.Set(region + "-shadow-before", region + "-shadow-before", Binding.Var("CurrentItem")),
-                    Wf.Set(region + "-shadow-change", "CurrentItem", 8),
-                    Wf.Set(region + "-shadow-after", region + "-shadow-after", Binding.Var("CurrentItem")))),
-                Wf.Set(region + "-outside-loop", region + "-outside-loop", Binding.Var("CurrentItem")),
+                    Wf.Set(region + "-shadow-before", region + "-shadow-before", Binding.Var("currentItem")),
+                    Wf.Set(region + "-shadow-change", "currentItem", 8),
+                    Wf.Set(region + "-shadow-after", region + "-shadow-after", Binding.Var("currentItem")))),
+                Wf.Set(region + "-outside-loop", region + "-outside-loop", Binding.Var("currentItem")),
                 Wf.Set(region + "-payload", region + "-payload", Binding.Expr("payload.v")),
                 Wf.Event(region + "-entry-wait", "entry-" + region)));
             children.Add(Wf.Sequence("action-" + region, Wf.Event(region + "-action-wait", "action-" + region),
@@ -119,7 +119,7 @@ internal sealed class ScopeStages : CompositeActivity, ISignalledComposite
 {
     public ScopeStages() { }
     internal sealed record State(string Parent, Dictionary<string, string> Scopes, string Phase, Dictionary<string, string> Pending);
-    private static Dictionary<string, JsonNode?> Defaults() => new(StringComparer.Ordinal) { ["counter"] = Values.From(0), ["CurrentItem"] = Values.From(99), ["payload"] = new JsonObject { ["v"] = 1 } };
+    private static Dictionary<string, JsonNode?> Defaults() => new(StringComparer.Ordinal) { ["counter"] = Values.From(0), ["currentItem"] = Values.From(99), ["payload"] = new JsonObject { ["v"] = 1 } };
     protected internal override void Execute(CompositeContext context)
     {
         var parent = context.CreateLexicalScope(new Dictionary<string, JsonNode?> { ["total"] = Values.From(10) });

@@ -280,9 +280,11 @@ public sealed record EventWaitState(string EventName);
 public sealed class Event : StatefulActivity<EventResult, EventWaitState, JsonNode?>
 {
     [Input] public string EventName { get; set; } = "";
+    /// <summary>Whether a published event starts a run where one begins; false, it only waits (NativeStartTriggers).</summary>
+    [Input] public bool CanStartWorkflow { get; set; } = true;
 
     protected override ValueTask<Transition> ExecuteAsync(StartContext<JsonNode?> context) =>
-        new(context.TryGetTrigger(out var payload)
+        new(CanStartWorkflow && context.TryGetTrigger(out var payload)
             ? Complete(new EventResult(EventName, payload))
             : Suspend(new EventWaitState(EventName), new EventTrigger(EventName)));
 

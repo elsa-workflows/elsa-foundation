@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace Kernel.Native.Run;
 
 /// <summary>Which published workflows a request on a route starts: the start routes of <see cref="HttpRoutes"/>.</summary>
@@ -8,7 +10,46 @@ internal static class HttpRouteChecks
         Console.WriteLine("http routes");
         Table(check);
         Conflicts(check);
+        await StartTriggersAsync(check);
         await FlowchartStartAsync(check);
+    }
+
+    private static Node NoStart(Node trigger) => Bind(trigger, false);
+    private static Node Starts(Node trigger) => Bind(trigger, true);
+
+    private static Node Bind(Node trigger, bool canStart)
+    {
+        trigger.Inputs[NativeStartTriggers.Input] = canStart;
+        return trigger;
+    }
+
+    // Owner decision of 25 November: an HttpEndpoint or Event whose CanStartWorkflow is false only waits, also where a run begins.
+    private static async Task StartTriggersAsync(Action<bool, string> check)
+    {
+        var registry = new WorkflowRegistry()
+            .Add(Wf.Workflow("endpoint-waits", Wf.Sequence("main", NoStart(Wf.HttpEndpoint("in", "waits")), Wf.Respond("out", "ok"))))
+            .Add(Wf.Workflow("endpoint-starts", Wf.Sequence("main", Starts(Wf.HttpEndpoint("in", "starts")), Wf.Respond("out", "ok"))))
+            .Add(Wf.Workflow("event-waits", Wf.Sequence("main", NoStart(Wf.Event("in", "paid")), Wf.Set("after", "output", "ran"))))
+            .Add(Wf.Workflow("event-starts", Wf.Sequence("main", Wf.Event("in", "paid"), Wf.Set("after", "output", "ran"))));
+        var routes = new HttpRoutes(registry);
+        check(!routes.TryStart("POST", "waits", out _) && routes.Routes.Single(r => r.Workflow == "endpoint-waits") is { Start: false, Node: "in" } &&
+              routes.TryStart("POST", "starts", out var starts) && starts == ("endpoint-starts", "in"),
+            "a start-position HttpEndpoint with CanStartWorkflow false is a wait route, not a start route; true still starts");
+        check(!NativeStartTriggers.StartEvents(registry.Get("event-waits")).Any() &&
+              NativeStartTriggers.StartEvents(registry.Get("event-starts")).Select(n => n.Id).SequenceEqual(["in"]),
+            "a start-position Event with CanStartWorkflow false is no event start; unbound, it is one");
+
+        var owner = new Owner("starts", 0, new InMemoryStore(1, () => Environment.TickCount64), registry, new Network());
+        await using var worker = owner.Worker;
+        await owner.StartAsync();
+        foreach (var id in new[] { "event-waits", "event-starts" })
+            owner.Worker.Post(new Message($"{id}#start", InstanceRef.In(0, id), Kinds.Start,
+                Start: NativeModel.Spec(id, Modes.Balanced, triggerNode: "in", trigger: JsonValue.Create("payload"))), fresh: true);
+        await owner.PumpAsync(until: () => owner.Status("0/event-starts") is InstanceStatus.Finished);
+        await owner.PumpAsync();
+        check(owner.Status("0/event-waits") is InstanceStatus.Running && owner.State("0/event-waits")?.Variables.GetValueOrDefault("output") is null &&
+              owner.Status("0/event-starts") is InstanceStatus.Finished && owner.State("0/event-starts")?.Variables["output"]?.GetValue<string>() == "ran",
+            "an Event with CanStartWorkflow false takes no start delivered to it and waits for its event; one that may start runs on");
     }
 
     private static void Table(Action<bool, string> check)
