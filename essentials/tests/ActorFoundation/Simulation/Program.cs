@@ -176,6 +176,8 @@ if (args.Contains("--public-http-edge-check"))
         return 1;
     }
 }
+if (args.Contains("--native-http-send-check"))
+    return await NativeHttpEdgeChecks.RunSendAsync();
 if (args.Contains("--public-http-remote-check"))
 {
     try { return await NativeHttpEdgeChecks.RunRemoteAsync(flaws); }

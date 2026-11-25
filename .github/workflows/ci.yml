@@ -2280,6 +2280,54 @@ jobs:
           done
           if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
 
+      # The S2 and S3 composition guards (#4229): each lane on its own new database; a failed lane fails the step at the end.
+      - name: Root state family, all lanes
+        if: ${{ !cancelled() }}
+        env:
+          PG_PORT: ${{ job.services.postgres.ports[5432] }}
+          PG_ID: ${{ job.services.postgres.id }}
+        run: |
+          failed=()
+          for writer in owned ef; do
+            for fence in checked in-batch; do
+              db="state_family_${writer}_${fence//-/_}"
+              echo "::group::$writer $fence"
+              docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
+              export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
+              if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" pg-root-state-family "$writer" "$fence"; then
+                echo "::error::Root state family failed: $writer $fence"
+                failed+=("$writer $fence")
+              fi
+              echo "::endgroup::"
+            done
+          done
+          if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
+
+      # S4 adds the composed install guard beside the S2 composition guard.
+      - name: Root composition and composed install, all lanes
+        if: ${{ !cancelled() }}
+        env:
+          PG_PORT: ${{ job.services.postgres.ports[5432] }}
+          PG_ID: ${{ job.services.postgres.id }}
+        run: |
+          failed=()
+          for check in composition composed-install; do
+            for writer in owned ef; do
+              for fence in checked in-batch; do
+                db="${check//-/_}_${writer}_${fence//-/_}"
+                echo "::group::$check $writer $fence"
+                docker exec "$PG_ID" psql -U postgres -qc "CREATE DATABASE $db"
+                export KERNEL_PREVIEW_POSTGRES="Host=localhost;Port=$PG_PORT;Username=postgres;Password=$PG_PASSWORD;Database=$db;SSL Mode=Disable;GSS Encryption Mode=Disable"
+                if ! dotnet "../../essentials/tests/ActorFoundation/Native/Run/$BIN/Kernel.Native.Run.dll" "pg-root-$check" "$writer" "$fence"; then
+                  echo "::error::Root $check failed: $writer $fence"
+                  failed+=("$check $writer $fence")
+                fi
+                echo "::endgroup::"
+              done
+            done
+          done
+          if [ ${#failed[@]} -ne 0 ]; then printf 'failed: %s\n' "${failed[@]}"; exit 1; fi
+
   nightly-kernel-mysql:
     name: Kernel prototype nightly, MySQL provider
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.suite == 'kernel-nightly' }}

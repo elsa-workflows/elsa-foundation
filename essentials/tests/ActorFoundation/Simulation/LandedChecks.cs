@@ -1,6 +1,7 @@
 using Kernel.Native;
 using Kernel.Sim.Native;
 using static Kernel.Native.Wf;
+using static Kernel.Native.TestWf;
 
 namespace Kernel.Sim;
 
@@ -36,7 +37,7 @@ public static class LandedChecks
         var world = new World(new Config(1, 1, Flaw.None, Native: true)) { Auto = true };
         var actor = world.Of(0, 0);
         var target = InstanceRef.In(0, "late2");
-        var workflow = Workflow("landed-late2", Sequence("root", Http("h1", "https://partner.example/first", "a"), Event("e", "late2-go"), Http("h2", "https://partner.example/second", "b")));
+        var workflow = Workflow("landed-late2", Sequence("root", Post("h1", "https://partner.example/first", "a"), Event("e", "late2-go"), Post("h2", "https://partner.example/second", "b")));
         NativeWorkflows.Registry.Add(workflow);
         try
         {
@@ -99,7 +100,7 @@ public static class LandedChecks
         var world = new World(new Config(1, 1, Flaw.None, Native: true)) { Auto = true };
         var actor = world.Of(0, 0);
         var target = InstanceRef.In(0, "late");
-        var workflow = Workflow("landed-late", Sequence("root", Http("h1", "https://partner.example/first", "a"), Event("e", "late-go"), Http("h2", "https://partner.example/second", "b")));
+        var workflow = Workflow("landed-late", Sequence("root", Post("h1", "https://partner.example/first", "a"), Event("e", "late-go"), Post("h2", "https://partner.example/second", "b")));
         NativeWorkflows.Registry.Add(workflow);
         try
         {

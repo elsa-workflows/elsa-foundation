@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -95,7 +96,16 @@ public sealed partial class EfStore
                 WHERE "InboxScope" = {occurrence} AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND NOT "Done";
                 DELETE FROM "Journal" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" > 0;
                 """, token);
-            return await db.Database.ExecuteSqlInterpolatedAsync($"""
+            // A composed set may carry workflow history. The checkpoint update above holds the lock that a history install
+            // needs, so the table either exists now or appears only after this commit, when no history row can name the root.
+            var history = db.SupportsRootWorkflowHistory && await db.Database.SqlQueryRaw<bool>("""
+                SELECT to_regclass('"FoundationWorkflowHistory"') IS NOT NULL AS "Value"
+                """).SingleAsync(token);
+            if (history)
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    DELETE FROM "FoundationWorkflowHistory" WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference}
+                    """, token);
+            FormattableString marker = $"""
                 INSERT INTO "Journal" ("Instance", "Partition", "Position", "Revision", "Entries")
                 SELECT {Root.Actor}, {Root.Partition}, {Position}, -1, '["delete"]'
                 WHERE EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
@@ -104,11 +114,17 @@ public sealed partial class EfStore
                     AND "Retired" AND "Status" = {(int)status} AND "State" = 'null'
                     AND "FoundationHeader" IS NULL AND "FoundationStateWire" IS NULL
                     AND "FoundationTerminalRevision" = {terminalRevision} AND "FoundationTerminalAt" = {terminalAt})
-                    AND NOT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference})
+                    AND NOT EXISTS (SELECT 1 FROM "FoundationActorList" WHERE "Tenant" = {Root.Tenant} AND "Reference" = {Root.Reference})/*history-residue*/
                     AND NOT EXISTS (SELECT 1 FROM "Journal" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                     AND NOT EXISTS (SELECT 1 FROM "Messages" WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                         AND (NOT "Done" OR "Payload" IS NOT NULL OR "Start" IS NOT NULL OR "ReplyTo" IS NOT NULL))
-                """, token) == 1;
+                """;
+            // The residue check that guards the deletion marker covers the history row too.
+            if (history)
+                marker = FormattableStringFactory.Create(marker.Format.Replace("/*history-residue*/", $$"""
+                    AND NOT EXISTS (SELECT 1 FROM "FoundationWorkflowHistory" WHERE "Tenant" = {{{marker.ArgumentCount}}} AND "Reference" = {{{marker.ArgumentCount + 1}}})
+                    """, StringComparison.Ordinal), [.. marker.GetArguments(), Root.Tenant, Root.Reference]);
+            return await db.Database.ExecuteSqlInterpolatedAsync(marker, token) == 1;
         }
     }
 
