@@ -48,6 +48,12 @@ internal static class PostgresRootParkedOperatorChecks
         var stop = timeout.Token;
         await using var db = Open();
         Check(await PostgresFixtureDatabase.IsEmptyAsync(db, stop), "the parked-operator fixture uses an empty PostgreSQL database");
+        // The ingress turns the owner's refusal into the caller's error; a held caller of a parked root reads "parked".
+        Check(PostgresRootIngress.RefusalError("Parked") == "parked" && PostgresRootIngress.RefusalError("Protected") == "protected" &&
+                PostgresRootIngress.RefusalError("ProtectionUnavailable") == "protection unavailable" &&
+                PostgresRootIngress.RefusalError("StaleSelection") == "stale selection" &&
+                PostgresRootIngress.RefusalError("TargetMismatch") == "target" && PostgresRootIngress.RefusalError("Ended") == "missing",
+            "the ingress reports a held command refused on a parked root as \"parked\"");
         Check(RootProfiles.MissingPrerequisites(capabilities) == RootCapabilities.None && db.UsesRootParkedOperators &&
                 !db.UsesRootParkArrivals && db.UsesRootTerminalSelection && db.UsesRootOperatorReplies && db.UsesRootTerminateThenDelete,
             "the closed composed set carries Park opening and inspection with the format 17 operator chain");
