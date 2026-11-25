@@ -1020,21 +1020,22 @@ internal static class PostgresRootParkedOperatorChecks
             await set.RetiredAsync(kept);
 
             // Protected at the last page of a clearing: the held caller is answered "started" at Open only, and the arrivals
-            // admitted during the clearing settle after the end on the root that ended Faulted, with no stand-down.
+            // admitted during the clearing settle after the end on the root that ended Faulted, with no stand-down. The Park
+            // keeps 170 arrivals and the fault input: a Delete charges both kinds, so 171 rows take two pages.
             set.Probe.Protects.Add(keptLarge.Id);
-            var keptLargePark = await ParkLargeAsync(keptLarge, "f");
+            var keptLargePark = await ParkLargeAsync(keptLarge, "f", copied: 169);
             var parkKeptLarge = await set.ParkSelectionAsync(keptLarge, 2);
             during["del-kept-large"] = (keptLarge, parkKeptLarge, ["del-kept-during-1", "del-kept-during-2"]);
             Check(await set.OperateAsync(keptLarge, "del-kept-large", Contract.Kinds.Delete, parkKeptLarge, reply: true),
-                "a held Delete is admitted for the protected Park of 402 kept rows");
+                "a held Delete is admitted for the protected Park of 171 kept rows");
             var keptOwner = set.Owner;
             await set.DriveAsync(keptLarge, image => image is { TerminalRevision: not null });
             await set.SettledInputsAsync(keptLarge);
-            await set.DiscardedAsync(keptLarge, "del-kept-large", cleared: 402);
+            await set.DiscardedAsync(keptLarge, "del-kept-large", cleared: 171);
             var keptInputs = await set.InputsAsync(keptLarge);
             Check(Outcomes(await set.Cold.ReadJournalOfAsync(0, keptLargePark.Actor.Id, 0, stop)) is
                         ["""{"Outcome":"clearing","Operation":"del-kept-large","Cleared":170}""",
-                         """{"Outcome":"protected","Disposition":"discarded","Operation":"del-kept-large","Cleared":402}"""] &&
+                         """{"Outcome":"protected","Disposition":"discarded","Operation":"del-kept-large","Cleared":171}"""] &&
                     ReferenceEquals(set.Owner, keptOwner) && !set.StoodDown && keptInputs.All(row => row.Done && row.KeptBy is null) &&
                     keptInputs.Count(row => during["del-kept-large"].Arrivals.Any(op => row.Id.Contains("/" + FoundationRootCreator.OperationDigest(op) + "/"))) == 2 &&
                     !set.Probe.Saw(keptLarge, "ordinary"),
@@ -1099,14 +1100,14 @@ internal static class PostgresRootParkedOperatorChecks
             Check(!keptRetired, "the parked retirement still Faulted is refused for a root with a kept row");
             return;
 
-            // Parks the root on a failing input and keeps 401 arrivals beside it: 402 kept rows.
-            async Task<EfStore.RootImage> ParkLargeAsync(Contract.ActorRef root, string prefix)
+            // Parks the root on a failing input and keeps arrivals beside it: one, then the given number of raw copies.
+            async Task<EfStore.RootImage> ParkLargeAsync(Contract.ActorRef root, string prefix, int copied = 400)
             {
                 Check(await set.SendAsync(root, prefix + "-fail", "fail"), $"the Delete set admits a failing input for the {prefix} Park");
                 var park = await set.DriveAsync(root, image => image is { Revision: 2, Status: InstanceStatus.Faulted });
                 Check(await set.SendAsync(root, prefix + "-copy", "ordinary"), $"the Delete set admits an arrival to copy for the {prefix} Park");
                 await set.SettledInputsAsync(root);
-                var copies = Enumerable.Range(1, 400).Select(n => $"{root.Id}/{FoundationRootCreator.OperationDigest($"{prefix}{n:D3}")}/{Guid.NewGuid():N}").ToArray();
+                var copies = Enumerable.Range(1, copied).Select(n => $"{root.Id}/{FoundationRootCreator.OperationDigest($"{prefix}{n:D3}")}/{Guid.NewGuid():N}").ToArray();
                 await using var write = OpenDelete();
                 Check(await write.Database.ExecuteSqlInterpolatedAsync($$"""
                     INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Start", "Payload", "Due", "KeepUntil",
@@ -1114,7 +1115,7 @@ internal static class PostgresRootParkedOperatorChecks
                     SELECT m."InboxScope", d.id, m."Partition", m."Target", m."Kind", m."Start", '{}', m."Due", m."KeepUntil", true, 0, 0, 0, 0, 1
                     FROM "Messages" m, unnest({{copies}}::text[]) WITH ORDINALITY d(id, n)
                     WHERE m."Target" = {{park.Actor.Id}} AND m."FoundationKeptBy" = 1 ORDER BY d.n
-                    """, stop) == 400, $"raw SQL keeps 400 more arrivals for the {prefix} Park");
+                    """, stop) == copied, $"raw SQL keeps {copied} more arrivals for the {prefix} Park");
                 return park;
             }
 
