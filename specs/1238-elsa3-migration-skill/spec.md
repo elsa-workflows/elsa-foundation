@@ -184,8 +184,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   that component.
 - A case marked *redesign* applies: the skill does not write workaround code; it records the redesign in the plan and
   the user decides.
-- A case marked *interview* applies (case 17): the skill asks the user's objective per variable, input or output,
-  records the answer and the chosen Elsa 4 feature or the link to the user's own plan, and writes no workaround code.
+- A case marked *interview* applies (case 17): the skill asks the user's objective once per driver type, covering every
+  variable, input and output the report flags for that driver, records the answer and the chosen Elsa 4 feature or the link to the user's own plan, and writes no workaround code.
 
 ## Requirements *(mandatory)*
 
@@ -280,7 +280,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   | 13 | Cancellation and faults | The cancellation token; fault and cancel transitions; no per-activity cancel callback | port |
   | 14 | JavaScript functions | A JavaScript host function declaration `prefix.<Elsa 3 global name>`, effect-free, JSON in and out, registered so the converter maps the Elsa 3 global to it under the converter's matching rule, which the catalog states; the converter rewrites direct calls only and refuses other references, so those become direct calls in the Elsa 3 definition first | port; redesign as an activity when the function has effects |
   | 15 | Liquid filters and other expression additions | Liquid filters: none, filter registration is closed to modules. A new expression syntax: the public expression descriptor and portable expression handler extension points | redesign (Liquid filters: a JavaScript host function or an activity); a new syntax is named with its extension points but carries no example |
-  | 16 | Variable type registration | A variable type descriptor provider registering the type under a dotted alias. The converter matches the Elsa 3 type name only to an Elsa 4 alias or to the full name of a registered type, which the catalog states; Elsa 4 module aliases are dotted, so a bare Elsa 3 alias such as `Invoice` matches nothing: the user changes the variable's type in the Elsa 3 definition to the Elsa 4 alias, or keeps the variable untyped and drops the component | port |
+  | 16 | Variable type registration | A variable type descriptor provider registering the type under a dotted alias. The converter matches the Elsa 3 type name to an Elsa 4 alias or to the full name of a registered type, and otherwise loads it as an assembly-qualified CLR name, which the catalog states; Elsa 4 module aliases are dotted, so a bare Elsa 3 alias such as `Invoice` matches nothing: the user changes the variable's type in the Elsa 3 definition to the Elsa 4 alias, or keeps the variable untyped and drops the component | port |
   | 17 | Storage drivers | None per variable: the converter stores every value in the default durable storage, and Elsa 3's default drivers need nothing. A variable, input or output on the memory driver or on a custom driver converts with a Reconsider finding. Each driver type starts one interview, following the repository's Elsa 3 storage-driver migration guide: why was this driver chosen? A secret: Elsa 4 secret references. Bulky data: fetch, use and drop it inside one activity, or keep only a reference. Another store, such as blob storage: not possible per variable today, so the user writes their own plan or spec, and the migration plan links it. No particular reason: the default storage is fine | interview |
   | 18 | Feature registration | An Elsa 4 shell feature in the user's own project, which the migration host references and lists in its local settings; activities are discovered from the feature's assembly | port |
   | 19 | Tests | xunit tests that build an activity execution context and call the activity directly | port |
@@ -334,8 +334,8 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   port of one custom activity on a synthetic export in one sitting, without asking for help.
 - **SC-002**: Two sessions of two different AI assistants, given the same synthetic export and source, produce plans
   with the same components, target names and applicable cases.
-- **SC-003**: All 19 catalog cases carry a verdict and before and after examples; every *port* example matches its
-  sample region and the sample's tests pass.
+- **SC-003**: All 19 catalog cases carry a verdict and a "before" example; every *port* part carries an "after"
+  example that matches its sample region, and the sample's tests pass.
 - **SC-004**: The skill folder contains zero diagnostic code literals and zero references to one AI vendor; the
   check enforces the Elsa 3 conversion and value-flow code prefixes, and review covers the rest.
 - **SC-005**: A session started halfway resumes from the plan without repeating a finished step.

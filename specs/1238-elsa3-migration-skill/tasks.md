@@ -37,12 +37,13 @@ after the prefix). T018's case 17 follows the storage-driver migration guide in 
 
 ## Phase 2: Foundational — sample and check (blocks US3)
 
-Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T008, T013 and T014 also register in
-`AcmeFeature`, so they run one after another after T004, and the case 18 region is final only after T014. All live in `Sample/Elsa3.Migration.Sample/` and
+Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T008, T009, T013 and T014 also register in
+`AcmeFeature` and extend T004's registration test, so they run one after another after T004, and the case 18 region
+is final only after T014. All live in `Sample/Elsa3.Migration.Sample/` and
 `Sample/Tests/`; tasks touching different files are [P].
 
 - [ ] T004 Feature registration (case 18): `AcmeFeature` as a `[ShellFeature]` `IShellFeature`; a test that the
-  feature registers the services the other cases need.
+  feature registers its services, which each later registering task extends.
 - [ ] T005 [P] Base class, type name, inputs, outputs, completion (cases 1–5): `Acme.SendInvoice` with a result record,
   `[ActivityInput]` with default, UI hint and `[Required]`, `[Output]`, `ActivityTransition.Complete`; a second
   activity whose name cannot match, with `[ReplacesActivityType("Acme.Legacy.Notify")]`. Tests: result and default.
@@ -51,7 +52,8 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T
   a `[ResumeTarget]`; tests for suspend and resume.
 - [ ] T008 Trigger (case 9): `Acme.InvoiceReceived` trigger activity and its trigger stimulus provider registered
   in `AcmeFeature`; tests for trigger delivery and stimulus description.
-- [ ] T009 [P] Services (case 10): an activity taking `IInvoiceClient` by constructor; test with a fake.
+- [ ] T009 Services (case 10): an activity taking `IInvoiceClient` by constructor, with `IInvoiceClient` registered in
+  `AcmeFeature`; test with a fake.
 - [ ] T010 [P] Variables and workflow state (case 11, port part): `VariableReference<decimal>` read and write through
   `context.Variables`; an `[AccessesUndeclaredVariables]` read by name; an `[AccessesWorkflowState]` activity setting an output; tests with fake step variables and
   workflow state.
@@ -99,7 +101,7 @@ Each task adds one marked region `// catalog:case-NN begin/end` and its tests. T
   and [data-model.md](data-model.md), with one example row per table using `Acme` names; the accepted-refusal example uses the placeholder `<code>`.
 - [ ] T021 [US1] Write `skill/SKILL.md`: front matter per [contracts/adapters.md](contracts/adapters.md); then, in
   order, the privacy statement (FR-005, FR-006: what reaches the AI provider; ask before each new raw definition or
-  source file, naming the file and the JSON path), what the skill does and does not do (FR-021), "read the plan first" (FR-007), asking for and recording the clone's path and commit when the plan has none (FR-004),
+  source file, naming the file and the JSON path), what the skill does and does not do (FR-021), "read the plan first" (FR-007), asking for and recording the clone's path and commit when the plan has none (FR-004), the `.agents/skills/` copy instruction ([contracts/adapters.md](contracts/adapters.md)),
   the prerequisite check and the `dotnet run` invocation copied from spec 1237's command-line contract (FR-022), the four stages (FR-008–FR-012, R-6 searches, the report fields of
   [contracts/report-consumption.md](contracts/report-consumption.md)), the version check (R-4), the handoff
   (FR-020), and the edge cases of the spec as plain rules. No diagnostic code literal; read code, message and

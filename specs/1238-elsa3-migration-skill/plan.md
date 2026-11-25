@@ -40,7 +40,7 @@ customer material (the sample is synthetic, `Acme`); no Elsa 3 reference in any 
 publishes or deploys.
 
 **Scale/Scope**: 3 skill files, 2 adapter files, 19 catalog cases (16 with a *port* part, 1 *interview*), 2 projects, 1 check,
-3 edited docs (README, Elsa 3 mapping README, `AGENTS.md`).
+4 edited docs (README, Elsa 3 mapping README, `AGENTS.md`, `docs/skills/catalog.md`).
 
 ## Constitution Check
 
