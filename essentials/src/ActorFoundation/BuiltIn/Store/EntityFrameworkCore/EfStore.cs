@@ -929,7 +929,8 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 if (root != bindings.ForInput(message.InboxKey)) throw RootShape();
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)
                 {
-                    ReplyTenant = message.Start is null && message.ReplyTo is not null ? root.Tenant : null
+                    // A held start's caller is the root's tenant's, as a held direct input's is.
+                    ReplyTenant = message.ReplyTo is not null ? root.Tenant : null
                 };
             }
             if (key.Match is null &&

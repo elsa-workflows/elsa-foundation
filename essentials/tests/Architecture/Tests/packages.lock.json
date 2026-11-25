@@ -3059,6 +3059,7 @@
       "elsa.workflows.runtime.kernelhost": {
         "type": "Project",
         "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Native.Model": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )"

@@ -30,7 +30,7 @@ dotnet run --project apps/Elsa.Essentials.Host --launch-profile https
 
 It listens on `https://localhost:7262` and `http://localhost:5262`. Development runs on SQLite (`elsa-essentials.db`), ephemeral identity keys, demo-only runtime keys and a seeded `admin` / `Password123!` user. Production (`ASPNETCORE_ENVIRONMENT=Production`) blanks those values. You must then supply the keys and the initial admin password as secrets, and apply migrations before the host starts (`Elsa:Persistence:EntityFramework:Migrate:Policy` is `Validate`).
 
-`/health/live` and `/health/ready` are the probes. Point Studio at the host and add its origin to `Cors:AllowedOrigins`.
+`/health/live` and `/health/ready` are the probes. Point Studio at the host and add its origin to `Cors:AllowedOrigins`. The paired Studio app, [`Studio/src/apps/Elsa.Studio.Essentials.Host`](../../Studio/src/apps/Elsa.Studio.Essentials.Host/README.md), compiles in the Studio modules this host serves, and its development origins (`https://localhost:7028`, `http://localhost:5087`) are already in `Cors:AllowedOrigins` and in the sign-in `AllowedReturnUrlOrigins`.
 
 ## Running it in Docker
 

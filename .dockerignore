@@ -56,7 +56,7 @@ apps/Elsa.Essentials.Host/packages/
 apps/Elsa.Workbench.Host/extension-builder/
 # GitHubCopilotAgent working directory (config.json is regenerated / supplied via mount)
 apps/Elsa.Workbench.Host/.elsa/
-Studio/src/apps/Elsa.Studio.Web/packages/
+Studio/src/apps/Elsa.Studio.Workbench.Host/packages/
 Studio/.git/
 Studio/.github/
 Studio/.specify/

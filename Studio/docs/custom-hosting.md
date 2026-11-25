@@ -2,7 +2,9 @@
 
 This page is for **package consumers** who compose their own host from NuGet packages. To run the Studio source in this repository against a source-built Workbench, use [Run Studio from source](contributing/studio-source-quickstart.md).
 
-Use `Elsa.Studio.Hosting` for the common server pipeline and the prebuilt standard browser. Your application chooses its modules and configuration. It does not copy the private infrastructure from `Elsa.Studio.Web` or build the standard frontend.
+Use `Elsa.Studio.Hosting` for the common server pipeline and the prebuilt standard browser. Your application chooses its modules and configuration. It does not copy the private infrastructure from `Elsa.Studio.Workbench.Host` or build the standard frontend.
+
+To start from the composition the shipped Studio apps use (Hosting, backend profiles, Nuplane administration and the Theme Store in one call), reference `Elsa.Studio.Hosting.Distribution` and follow its [README](../src/essentials/Elsa.Studio.Hosting.Distribution/README.md). [`Elsa.Studio.Foundation.Host`](../src/apps/Elsa.Studio.Foundation.Host/README.md) is the smallest app built that way. The rest of this page composes the packages one by one.
 
 The [small runnable sample](../../tools/studio/PackageHost.Sample/) selects Dashboard. Its [Program.cs](../../tools/studio/PackageHost.Sample/Program.cs) is the complete composition root:
 
@@ -28,14 +30,14 @@ That C# is the whole composition root. The sample still needs the downloaded `Cu
 | Package | When to use it |
 | --- | --- |
 | `Elsa.Studio.Hosting` | Common hosting, selected-shell activation, runtime configuration, authorization/bridge, discovery and standard browser assets. Api/Core arrive transitively. |
-| `Elsa.Studio.Dashboard` | The sample's Home module. Select other existing Studio module packages deliberately. |
+| `Elsa.Studio.Dashboard` | The sample's example module: saved questions and dashboards. Home itself comes from `Elsa.Studio.Hosting`. Select other existing Studio module packages deliberately. |
 | `Elsa.Studio.Hosting.Themes` | Optional Theme Store, directory sources, picker and management capabilities. Independent of Nuplane. |
 | `Elsa.Studio.Hosting.Nuplane` | Optional package/feature administration using the shared CShells/Nuplane adapter and native store protection. Independent of themes. |
 | `Elsa.Studio.FeatureManagement` | Optional in-box management UI for package/feature administration (shell feature ID `FeatureManagement`). Pair with the Nuplane server addon when you want that UI. |
 | `Elsa.Studio.ConsoleStream` | Optional console capture and streaming. Its host services and hub belong in the application root. |
 | `Elsa.Studio.Api` / `Elsa.Studio.Core` | Public policy and module-author contracts when writing a module. Core remains lightweight; it is not a host infrastructure bucket. |
 
-The reference distribution's [module assembly list](../src/apps/Elsa.Studio.Web/StudioFeatureAssemblies.cs) is an example of application-owned selection, not a required class to copy. The [accepted contract and class disposition](../../docs/reports/studio-hosting-contract.md) explain where the former Web classes went.
+The reference distribution's [module assembly list](../src/apps/Elsa.Studio.Workbench.Host/StudioFeatureAssemblies.cs) is an example of application-owned selection, not a required class to copy. The [accepted contract and class disposition](../../docs/reports/studio-hosting-contract.md) explain where the former Web classes went.
 
 ## Run the sample outside the repository
 
@@ -123,7 +125,7 @@ Use the typed `StudioThemeSourceMode` and existing `Themes` configuration descri
 
 ### Package and feature administration
 
-Reference `Elsa.Studio.Hosting.Nuplane` at the same candidate version and import `Elsa.Studio.Hosting.Nuplane`. Retain the `studio` registration result as described above, call `studio.AddElsaStudioNuplane()` before `Build`, and call `app.MapElsaStudioNuplane()` after `MapElsaStudio`. The server addon and optional management UI modules are separate package/feature choices. For the in-box management UI, reference `Elsa.Studio.FeatureManagement`, pass its public feature assembly (see the reference host's [StudioFeatureAssemblies.cs](../src/apps/Elsa.Studio.Web/StudioFeatureAssemblies.cs)), and enable shell feature ID `FeatureManagement`; enable only the UI modules you actually want.
+Reference `Elsa.Studio.Hosting.Nuplane` at the same candidate version and import `Elsa.Studio.Hosting.Nuplane`. Retain the `studio` registration result as described above, call `studio.AddElsaStudioNuplane()` before `Build`, and call `app.MapElsaStudioNuplane()` after `MapElsaStudio`. The server addon and optional management UI modules are separate package/feature choices. For the in-box management UI, reference `Elsa.Studio.FeatureManagement`, pass its public feature assembly (see the reference host's [StudioFeatureAssemblies.cs](../src/apps/Elsa.Studio.Workbench.Host/StudioFeatureAssemblies.cs)), and enable shell feature ID `FeatureManagement`; enable only the UI modules you actually want.
 
 The addon loads `nuplane-management.json` by default. With no resolving directory feed it registers a `packages` fallback without a watcher; uploads trigger reconciliation, while direct file copies need manual or explicitly configured reconciliation. Select an effective directory feed deliberately when several exist. Feed and file choices are frozen for the process. The existing public Nuplane builder callback configures trusted feeds/loading/store ownership; the addon does not introduce another membership protocol.
 
@@ -137,7 +139,7 @@ Workbench Server's pre-existing read-only administration is a separate profile. 
 
 ### Console Stream
 
-Keep the capture hook, host service registration and hub/HTTP mapping in the application root. A live connection must outlast disposable shell generations. If selected, register the existing Console Stream public feature assembly and use its public host extensions, as the [thin reference Program](../src/apps/Elsa.Studio.Web/Program.cs) does. Its early hook runs before creating the builder; its services register before `Build`; mapping uses `StudioBridgeAuthorization.PolicyName`. Configure only the explicit trusted `ConsoleStreamStudioServiceCollectionExtensions.HubPath` for query tokens. Do not add another shell-owned streaming server or allow arbitrary query-token paths.
+Keep the capture hook, host service registration and hub/HTTP mapping in the application root. A live connection must outlast disposable shell generations. If selected, register the existing Console Stream public feature assembly and use its public host extensions, as the [thin reference Program](../src/apps/Elsa.Studio.Workbench.Host/Program.cs) does. Its early hook runs before creating the builder; its services register before `Build`; mapping uses `StudioBridgeAuthorization.PolicyName`. Configure only the explicit trusted `ConsoleStreamStudioServiceCollectionExtensions.HubPath` for query tokens. Do not add another shell-owned streaming server or allow arbitrary query-token paths.
 
 ## Custom frontend and custom modules
 

@@ -503,7 +503,9 @@ apps/Elsa.Workbench/shells.Development.json
 # Nuplane lock file the Workbench generates on startup (ADR 0079, Generate mode)
 apps/Elsa.Workbench.Host/nuplane.lock.json
 apps/Elsa.Workbench/nuplane.lock.json
-Studio/src/apps/Elsa.Studio.Web/nuplane.lock.json
+Studio/src/apps/Elsa.Studio.Workbench.Host/nuplane.lock.json
+Studio/src/apps/Elsa.Studio.Foundation.Host/nuplane.lock.json
+Studio/src/apps/Elsa.Studio.Essentials.Host/nuplane.lock.json
 **/.nuplane/
 
 # Speckit active-feature pointer: per-checkout working state written by speckit-specify, never shared.

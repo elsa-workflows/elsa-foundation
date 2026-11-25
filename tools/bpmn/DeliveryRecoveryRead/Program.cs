@@ -286,7 +286,7 @@ try
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
         var names = args[0] == "--inspect-studio-products"
-            ? new[] { "Elsa.Studio.Web.dll", "Elsa.Studio.Hosting.dll", "Elsa.Studio.Core.dll", "Elsa.Studio.Workflows.dll" }
+            ? new[] { "Elsa.Studio.Workbench.Host.dll", "Elsa.Studio.Hosting.dll", "Elsa.Studio.Core.dll", "Elsa.Studio.Workflows.dll" }
             : args[0] == "--inspect-native-bpmn-products"
             ? new[] { "Elsa.Workbench.Host.dll", "Elsa.Activities.Bpmn.Core.dll", "Elsa.Activities.Bpmn.dll", "Elsa.Activities.Bpmn.Api.dll",
                 "Elsa.Workflows.Runtime.Core.dll", "Elsa.Workflows.Runtime.dll", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",

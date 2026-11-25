@@ -1,7 +1,7 @@
 # Examples
 
 Standalone host apps that consume the published Studio npm packages **outside**
-`Elsa.Studio.Web`. They exist to prove two things: (a) the packages work as ordinary npm
+`Elsa.Studio.Workbench.Host`. They exist to prove two things: (a) the packages work as ordinary npm
 dependencies, and (b) the host's framework and language do not matter.
 
 | Example | Stack | Shows |

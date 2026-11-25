@@ -2762,6 +2762,7 @@
           "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Http": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.JavaScript": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.KernelHost": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Native.Model": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Reconciliation": "[4.0.0-dev, )",
@@ -3133,6 +3134,15 @@
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+        }
+      },
+      "elsa.workflows.runtime.kernelhost": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Native.Model": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.WorkflowActor": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.native.activities": {

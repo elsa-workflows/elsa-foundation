@@ -8,11 +8,13 @@ import { register as registerExternalAuthentication } from "../../../../../../..
 import { register as registerUserTasks } from "../../../../../../../extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/module";
 
 import { register as registerDashboard } from "../../../../Elsa.Studio.Dashboard/Client/src/module";
+import { registerHome } from "../app/home/registerHome";
 
 describe("registered integration navigation", () => {
-  it("keeps Home first and saved analytics discoverable in Operate", () => {
+  it("keeps the shell's Home first and saved analytics discoverable in Operate", () => {
     const api = createStudioRegistry({ hostVersion: "1", sdkVersion: "1", ...createEndpointContext("https://studio.example") });
     registerDashboard(api);
+    registerHome(api);
     const visible = filterAccessibleNavigation(api.navigation.list());
     expect(getTopLevelNavigationItemsByPlacement(visible, "main").map(item => item.path)).toEqual(["/dashboard"]);
     const analytics = getTopLevelNavigationItemsByPlacement(visible, "operate");

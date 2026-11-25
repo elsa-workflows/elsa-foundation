@@ -17,7 +17,7 @@ import dts from "vite-plugin-dts";
  * externalized as peers so the consumer supplies its own single React copy. There are no other runtime
  * dependencies to bundle or declare.
  *
- * `entryRoot` is the `Elsa.Studio.Web` directory — the common ancestor spanning both `StudioSdk/src`
+ * `entryRoot` is the `Elsa.Studio.Hosting` directory — the common ancestor spanning both `StudioSdk/src`
  * (this package's entry) and `Client/src/sdk` + `Client/src/auth` (the re-exported source) — so
  * `rollupTypes` can walk the type graph across both trees and emit a single flattened `index.d.ts`.
  *

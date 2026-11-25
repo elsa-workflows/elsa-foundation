@@ -7,7 +7,7 @@ Build the actual products from a clean committed source, including the existing 
 ```sh
 dotnet build apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj -p:RestoreLockedMode=true
 (cd Studio && pnpm install --frozen-lockfile && pnpm build)
-dotnet build Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj
+dotnet build Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj
 dotnet build tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj
 python3 tools/blocks/run_owned_prototype.py --output /tmp/elsa-blocks-owned-proof
 ```

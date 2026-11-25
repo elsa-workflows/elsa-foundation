@@ -75,6 +75,17 @@ def _verify_pinned_layout(root: Path, inventory: dict) -> None:
         for item in manifest["projects"]
         if item.get("product") == "studio"
     ]
+    # A project renamed after consolidation keeps its frozen manifest row under the old path and identity.
+    renamed = {item["renamed_from"]: item for item in inventory["packable_projects"] + inventory["non_packable_projects"]
+               if "renamed_from" in item}
+    stale = sorted(set(renamed) - {path for path, _ in projected})
+    if stale:
+        raise ValueError(f"Renamed Studio projects are missing from the pinned layout manifest: {stale}.")
+    for path, (package_id, _) in projected:
+        if path in renamed and package_id != Path(path).stem:
+            raise ValueError(f"Renamed Studio project {path} has frozen identity {package_id!r}, expected {Path(path).stem!r}.")
+    projected = [(renamed[path]["project"], (renamed[path]["id"], identity[1])) if path in renamed else (path, identity)
+                 for path, identity in projected]
     actual = dict(projected)
     if len(actual) != len(projected):
         raise ValueError("Duplicate projected Studio project paths in the pinned layout manifest.")
@@ -447,6 +458,17 @@ def _pinned_layout_self_test(root: Path, inventory: dict) -> None:
         unexpected = json.loads(json.dumps(manifest))
         unexpected["projects"][studio_index]["target"] += ".unexpected"
         verify(unexpected, "Pinned Studio project identity mismatch")
+        for renamed in [item for item in inventory["packable_projects"] + inventory["non_packable_projects"] if "renamed_from" in item]:
+            def renamed_row(document: dict) -> dict:
+                return next(item for item in document["projects"]
+                            if item.get("product") == "studio" and _normalize_layout_target(item["target"]) == renamed["renamed_from"])
+            moved = json.loads(json.dumps(manifest))
+            renamed_row(moved)["target"] += ".moved"
+            verify(moved, "missing from the pinned layout manifest")
+            for value in ["Unexpected.Package.Identity", None]:
+                relabelled = json.loads(json.dumps(manifest))
+                renamed_row(relabelled)["package_id"] = value
+                verify(relabelled, "has frozen identity")
         collision = json.loads(json.dumps(manifest))
         alias = dict(collision["projects"][studio_index])
         alias["target"] = _normalize_layout_target(alias["target"])

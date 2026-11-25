@@ -145,7 +145,7 @@ def run(output, skip_build=False):
     receipt = {"sourceSha": sha, "dirty": bool(dirty), "status": "failed", "stage": "build"}
     try:
         backend_project = ROOT / "apps/Elsa.Workbench.Host/Elsa.Workbench.Host.csproj"
-        studio_project = ROOT / "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj"
+        studio_project = ROOT / "Studio/src/apps/Elsa.Studio.Workbench.Host/Elsa.Studio.Workbench.Host.csproj"
         if not skip_build:
             command(["dotnet", "build", str(backend_project), "-p:RestoreLockedMode=true", "-v:q", "-nologo", "-m:1", "/nr:false"],
                     output / "backend-build.log")
@@ -172,7 +172,7 @@ def run(output, skip_build=False):
                 pass
             seed_operator(backend)
             with host(backend, "Elsa.Workbench.Host.dll", backend_url, "/health/ready", output / "backend.log", env):
-                with host(studio, "Elsa.Studio.Web.dll", studio_url, "/studio-runtime.js", output / "studio.log",
+                with host(studio, "Elsa.Studio.Workbench.Host.dll", studio_url, "/studio-runtime.js", output / "studio.log",
                           dict(env, Studio__BackendBaseUrl=backend_url)):
                     receipt["stage"] = "journeys"
                     browser_env = dict(os.environ, ELSA_BPMN_SETTLEMENT_LIVE="1", ELSA_STUDIO_URL=studio_url,

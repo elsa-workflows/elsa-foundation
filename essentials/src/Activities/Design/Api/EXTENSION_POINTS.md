@@ -116,8 +116,9 @@ attributes/converters or install Runtime aliases to discover fields.
 the shipped implementation *(cross-domain — CLR reconciliation)*. It binds exact metadata assets (declared-type
 shapes, which are advisory, identify assemblies by module version id instead of file hashes) and
 the unchanged activity-value profile independently of old catalog hashes, includes typed `$result`
-without named Output rows, describes a single declared input/variable type's members as advisory
-`Declared` shapes, and reports every other declared type as profile-unbound. Shared
+without named Output rows, describes a declared input/variable type's members, or a List, Array, HashSet or Dictionary of
+one (members on the item or map value), as advisory `Declared` shapes, and reports every other
+declared type, and any selected path below a collection, as profile-unbound. Shared
 Workflows Design analysis consumes these facts in API and endpoint-free hosts.
 
 ### Mandatory shared draft analysis
