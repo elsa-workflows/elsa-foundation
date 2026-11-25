@@ -2,7 +2,6 @@ using System.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Diagnostics;
 
 namespace Elsa.Activities.Http.IntegrationTests;
 
