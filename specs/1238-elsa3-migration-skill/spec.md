@@ -160,7 +160,7 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   skill, instead of guessing.
 - The tool refuses to run (bad input, a feature it cannot compose) and writes no report: the skill shows the
   tool's reason, records it in the plan and stops until the user fixes the input.
-- A component the report names is not found in the source the user gave: the plan records it as not found, and the
+- A custom component the report names is not found in the source the user gave: the plan records it as not found, and the
   skill asks for more source or records the user's decision to redesign or drop the definitions that use it.
 - A component exists in the source but no definition uses it: it is not migrated (inventory comes only from the
   report).
@@ -232,7 +232,10 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   component to its implementation by a focused search (research R-6): an activity by its Elsa 3 type name (namespace
   and class, or what its activity attribute sets), a JavaScript function by its global name, a variable type by its
   alias, or by the type name before the comma when the export holds an assembly-qualified name, a storage driver by
-  its type name. It records the source location, or "not found", in the plan.
+  its type name. It records the source location, or "not found", in the plan. A component that is an Elsa 3
+  built-in (the memory storage driver, or a built-in JavaScript function such as a configuration reader that a host
+  function may take over) is not searched for: the plan records it as "Elsa 3 built-in". A storage-driver row is
+  answered by the case 17 interview, not by a port.
 - **FR-010**: **Prepare.** For each component the skill MUST record in the plan its Elsa 4 target name, the Elsa 4
   feature and project it belongs to, the porting cases that apply, the tests to port, and its status; then port it
   by following the applicable catalog cases. The JavaScript prefix choice is a recorded step: the user picks one or
@@ -312,8 +315,10 @@ copy the skill folder into a workspace's `.agents/skills/` and see the agent fin
   read, says that installing it as an AI skill is optional, and lists what the migration does not cover (FR-021).
 - **FR-020**: The skill MUST end with the handoff, as text only: the user keeps their feature projects in any
   repository and stores the migrated workflows anywhere. For now, the user runs the result on the migration host
-  (`apps/Elsa.Migration.Host`) from the same clone and commit, with their feature projects referenced, its workflows-folder
-  setting pointing at `migrated/workflows/` and its activities-file setting at `migrated/activities/activities.json`. This local setup is a temporary development setup, not
+  (`apps/Elsa.Migration.Host`) from the same clone and commit, with their feature projects referenced and its two settings, which default to the host's
+  own sample folder, overridden in its local settings or environment variables with absolute paths under the output
+  folder the plan records: the workflows folder at `<output>/migrated/workflows` and the activities file at
+  `<output>/migrated/activities/activities.json`. This local setup is a temporary development setup, not
   the production go-live: that comes with an Elsa 3 migration app profile once Elsa 4's distribution channels are
   decided, and the handoff is updated then. The skill performs no publishing or deployment step.
 - **FR-021**: The skill and the README section MUST state what is out of scope: live workflow instances, running
