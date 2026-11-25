@@ -46,7 +46,8 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
 - [ ] T002 [P] Build the fixture export in `MTests/Fixtures/export/`, with:
   - clean definitions;
   - an unmapped custom activity used by three definitions;
-  - an undeclared JavaScript function, a matchable refused Elsa 3 built-in (`getConfig()`), and an unmatchable call;
+  - an undeclared JavaScript function, called in one definition and only passed as a value in another
+    (`items.map(lookupCustomer)`), a matchable refused Elsa 3 built-in (`getConfig()`), and an unmatchable call;
   - a definition with no published version;
   - an unregistered variable type, a variable on a custom storage driver, and one on the Elsa 3 memory driver;
   - a reusable definition with two users;
@@ -85,11 +86,11 @@ T032 also waits on the engine gap of spec Q2, for its composite case only.
   component diagnostic: unmapped activity types, undeclared and replaced-function references, unregistered variable
   types and custom storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. Where
   `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` already carries `ComponentName`, leave it; test that the inventory
-  lists both the custom driver and the memory driver as storage-driver components. Give every call the
+  lists both the custom driver and the memory driver as storage-driver components. Give every call, and every read of an undeclared global used as a value, that the
   converter reports as matchable (`CanBeMatched`: an undeclared custom global or a refused built-in a host function may
   take over) a `javascript-function` component code of its own, separate from the forbidden-capability code, which
   unmatchable calls and forbidden capabilities keep. Update the mapping README and the affected converter tests, and
-  test the three fixture calls. The report builder reads `componentName` only from that metadata.
+  test the fixture calls and the value-only reference. The report builder reads `componentName` only from that metadata.
 - [ ] T005 Extract `Elsa3ImportRun` from `Elsa3FolderImportTask` in
   `extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Services/`. It returns the plan items, the skips with
   their cause and code, the publication outcomes and the publish diagnostics. Move the registration of its collaborators

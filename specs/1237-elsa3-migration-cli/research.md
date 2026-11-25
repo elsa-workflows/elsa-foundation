@@ -80,7 +80,9 @@ instead of returning a result, and it is registered only by `Elsa3JsonReconcilia
   forbidden-capability code with refused capabilities (`Elsa3ExpressionRewriter.cs`). The converter's member-name matching
   decides per name whether a host function may take it over (`CanBeMatched`): an undeclared custom global and some
   refused Elsa 3 built-ins can be, names on its never-matched list or names that clash with a generated accessor
-  cannot. FR-016a adds `ComponentName` metadata, and gives every matchable call a component code of its own;
+  cannot. A read of an undeclared global used only as a value gets no diagnostic today (the non-call
+  diagnostic needs a registered host function), so it would convert silently and fail at run time. FR-016a adds
+  `ComponentName` metadata, and gives every matchable call and value read a component code of its own;
   unmatchable calls and forbidden capabilities keep the forbidden-capability code.
 - Guidance strings are constant literals, while some messages interpolate. One example is the strict-mode parse
   message, which embeds the parser's error description, and that description can quote script text

@@ -52,7 +52,9 @@ which definitions convert, which custom components they use, and what I must fix
 
 - clean definitions;
 - definitions using unmapped custom activities;
-- an undeclared JavaScript function;
+- an undeclared JavaScript function, called in one definition and only passed as a value in another;
+- a matchable refused Elsa 3 built-in (`getConfig()`) and an unmatchable call;
+- a definition with no published version;
 - an unregistered variable type, a custom storage driver and the Elsa 3 memory driver;
 - a reusable workflow;
 - a definition whose reusable dependency is refused.
@@ -180,7 +182,9 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - C# and Python expressions are refused with the existing value-flow code and its guidance.
 - A script refers to an Elsa 3 global that a registered prefixed host function carries as its member name without calling it (assigns it, passes it as a callback). The
   converter rewrites only direct calls, so it reports such a reference with a diagnostic of its own (see
-  *Dependencies and boundaries*). The CLI scans no scripts itself.
+  *Dependencies and boundaries*). A matchable undeclared global that is only used as a value, with no host function
+  registered yet, is reported with the same `javascript-function` component code as a matchable call, so the
+  inventory lists it. The CLI scans no scripts itself.
 - A converted reusable activity always depends on other activity versions, because its body is made of catalog
   activities. While the engine's source reconciliation refuses such content, the report marks every reusable, every
   reusable's wrapper workflow and every workflow that uses one with `needsCompositeSourceSupport` (see *Dependencies and
@@ -291,8 +295,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
   `ELS3-BEHAVIOUR-MEMORY-STORAGE-PERSISTED`, also Reconsider and also a `storage-driver` component, whose
   `ComponentName` is the trimmed Elsa 3 memory driver type: the user chose it in Elsa 3, and the migration has to
   decide what replaces it. An Elsa 4 publication error that carries
-  no structured metadata is never used to name a component. A JavaScript call the converter reports as
-  matchable (a registered prefixed host function may take the name over: an undeclared custom global, or a refused
+  no structured metadata is never used to name a component. A JavaScript call, or a read of an undeclared global used as a
+  value, that the converter reports as matchable (a registered prefixed host function may take the name over: an undeclared custom global, or a refused
   Elsa 3 built-in such as `getConfig`) gets a `javascript-function` component code of its own, with `ComponentName`.
   Calls the converter reports as unmatchable, and forbidden capabilities, keep the forbidden-capability code and are not
   components.
@@ -431,8 +435,9 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **Converter diagnostic for non-call references.** A global that a host function carries, referenced without a call, is
   not rewritten, and it fails at run time. The converter refuses it as `ELS3-REPLACED-FUNCTION-REFERENCE` (Q11), and
   this specification adds its entry to the code table.
-- **Component metadata in the converter** (FR-016a): `ComponentName` metadata on component diagnostics, and a code of
-  its own for a call of an undeclared JavaScript function. This specification makes that converter change (T004b).
+- **Component metadata in the converter** (FR-016a): `ComponentName` metadata on component diagnostics, and a
+  component code of its own for every call or value reference the converter reports as matchable (an undeclared custom
+  global or a refused built-in a host function may take over). This specification makes that converter change (T004b).
 - **ADR 0076 amendment** (Q4): the worker may reach one further named frozen entry point per command group, each a
   compatibility surface. Such a group may, by default, reconcile local directory feeds into a private, run-scoped
   install root. Until the amendment is agreed, this specification stays provisional.
