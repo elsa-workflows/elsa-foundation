@@ -90,7 +90,12 @@ internal static class StepVariableCommit
     {
         ArgumentNullException.ThrowIfNull(rowCommit);
         if (rowCommit.SessionWrites is { } applied)
-            return applied.Failure is { } failure ? throw failure : applied;
+        {
+            // The failure of the first application, with its original stack trace.
+            if (applied.Failure is { } failure)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(failure);
+            return applied;
+        }
 
         var intents = session?.Intents.Where(intent => intent.ClosedScopeBoundaryId is not null).ToArray() ?? [];
         if (intents.Length == 0)

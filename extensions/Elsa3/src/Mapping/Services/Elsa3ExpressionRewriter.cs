@@ -2016,10 +2016,22 @@ public sealed class Elsa3ExpressionRewriter(
         {
             var resolution = resolve(new Elsa3AmbientReference(kind, name));
             // Spec 1241 FR-011: Elsa 3 held a reusable workflow's inputs as local variables a script could set; in Elsa 4
-            // they are the activity's inputs, which a script reads and never writes.
-            if (IsReusable && (resolution.Binding is WorkflowRequestExpressionParameterBinding ||
-                               !resolution.Succeeded && kind == Elsa3AmbientReferenceKind.Variable &&
-                               resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.WorkflowRequest, name)).Succeeded))
+            // they are the activity's inputs, which a script reads and never writes. A literal setVariable name also names
+            // an input when the variable lookup finds nothing, or finds a variable that an input shares the name of.
+            var namesInput = IsReusable && kind == Elsa3AmbientReferenceKind.Variable &&
+                             (resolution.Succeeded || resolution.Issue?.Code == Elsa3ImportDiagnosticCodes.DanglingReference) &&
+                             resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.WorkflowRequest, name)).Succeeded;
+            if (namesInput && resolution.Succeeded)
+            {
+                // As set{Name} is for that name (VF-IMP-002): Elsa 3 declared the input as a variable too.
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                    $"JavaScript calls '{calleeName}' for '{name}', which names both a variable and an input of this reusable workflow; Elsa 3 declared the input as a variable too.",
+                    $"Rename the variable or the input '{name}' in the Elsa 3 workflow before import."));
+                return;
+            }
+
+            if (IsReusable && (resolution.Binding is WorkflowRequestExpressionParameterBinding || namesInput))
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
                     Elsa3ImportDiagnosticCodes.ForbiddenCapability,
