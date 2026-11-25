@@ -814,6 +814,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Diagnostics.OpenTelemetry.Workflows",
+          "path": "essentials/src/Diagnostics/OpenTelemetry/Workflows/Elsa.Diagnostics.OpenTelemetry.Workflows.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Diagnostics.StructuredLogs",
           "path": "essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj"
         },
@@ -5294,6 +5299,120 @@
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Logging.Abstractions",
           "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "ValenceWorks.MinimalEndpoints",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "path": "essentials/src/Diagnostics/OpenTelemetry/Workflows/Elsa.Diagnostics.OpenTelemetry.Workflows.csproj",
+      "name": "Elsa.Diagnostics.OpenTelemetry.Workflows",
+      "kind": "source",
+      "domain": "Elsa.Diagnostics",
+      "sub_domain": "OpenTelemetry.Workflows",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Diagnostics.OpenTelemetry.Workflows",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Diagnostics.OpenTelemetry.Core",
+          "path": "essentials/src/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Diagnostics.OpenTelemetry",
+          "path": "essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks.Core",
+          "path": "essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime",
+          "path": "essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.AspNetCore",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Cronos",
+          "version": "0.13.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
         },
         {
           "type": "pinned-transitive",
@@ -16521,6 +16640,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Diagnostics.OpenTelemetry.Workflows",
+          "path": "essentials/src/Diagnostics/OpenTelemetry/Workflows/Elsa.Diagnostics.OpenTelemetry.Workflows.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Diagnostics.StructuredLogs.Core",
           "path": "essentials/src/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj"
         },
@@ -18253,6 +18377,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Essentials.Host",
+          "path": "apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.Host",
           "path": "apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj"
         },
@@ -19102,6 +19231,11 @@
           "type": "internal",
           "id": "Elsa.Diagnostics.OpenTelemetry",
           "path": "essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Diagnostics.OpenTelemetry.Workflows",
+          "path": "essentials/src/Diagnostics/OpenTelemetry/Workflows/Elsa.Diagnostics.OpenTelemetry.Workflows.csproj"
         },
         {
           "type": "internal",
@@ -20725,6 +20859,11 @@
       "package_id": null,
       "line": null,
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Essentials.Host",
+          "path": "apps/Elsa.Essentials.Host/Elsa.Essentials.Host.csproj"
+        },
         {
           "type": "internal",
           "id": "Elsa.Foundation.Host",
