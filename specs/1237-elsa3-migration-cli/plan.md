@@ -23,7 +23,7 @@ addition list. It is a thin entry over a new tooling library, `Elsa3.Migration.T
 **Language/Version**: C# / .NET 10.
 
 **Primary Dependencies**: System.CommandLine; the migration host's two public wiring methods (configuration layers
-and root services, including CShells with `WithHostAssemblies()`), added by 1236's implementation; the
+and root services, including CShells with `WithHostAssemblies()`), extracted from its `CreateBuilder` by T004a; the
 Elsa 3 converter, import and reconciliation projects; JSON workflow and activity reconciliation; EF Core SQLite; the
 migration host project (specification 1236).
 
@@ -62,7 +62,7 @@ migration host project (specification 1236).
 | §E2.2 Runtime takes no Design reference | PASS | No runtime project changes. The CLI is a composition root, as a host is. |
 | §2.2 project paths follow the domain tree | PASS | `Elsa3.Migration.Cli` and `Elsa3.Migration.Tooling` derive their paths from their names under the `Elsa3` extension bucket; no `ExpectedProjectPath` entry is needed (R-7). |
 | Framework gate §2.20 "Only admitted projects resolve EF Core packages"; ADR 0073 | PASS | The CLI is admitted in `EfCoreDependencyGuardTests` as a composition root with a reviewed package array; the tooling and the migration test project get reviewed closures next to `Adr0073Elsa3ImportEf` (R-7, T001). |
-| ADR 0080 internal by default | PASS | The shared import run stays internal (`InternalsVisibleTo` for the tooling assembly), and so does the CLI's test seam. The only public additions are the two writer contracts beside their reader contracts and the startup-only member on `ITaskManager`. |
+| ADR 0080 internal by default | PASS | The shared import run stays internal (`InternalsVisibleTo` for the tooling assembly), and so does the CLI's test seam. The only public additions are the two writer contracts beside their reader contracts, the startup-only member on `ITaskManager` with the Tasks `StartupTasksOnly` setting, the tooling's `Elsa3MigrationImportRun` feature, and the migration host's two extracted wiring methods (T004a). |
 | §2.24.2 sanctioned patterns | PASS | R-10. There is no new seam and no dry-run abstraction: the real pipeline runs on a disposable store. |
 | §2.21.1 refactoring keeps behaviour | PASS | Extracting `Elsa3ImportRun` keeps the startup task's log lines and skip behaviour, and the existing reconciliation integration tests cover it. |
 | §2.23 risk-based tests | PASS | Risk sits in redaction, determinism, the bucket rule, code-table completeness, the single-database rule and the composition parity with the host. Each has a test (tasks). |
@@ -81,7 +81,7 @@ migration host project (specification 1236).
 | P-3 | Shared pipeline | R-2: `Elsa3ImportRun`, extracted from `Elsa3FolderImportTask`. |
 | P-4 | Code table | R-3: `Elsa3MigrationCodeTable` in the tooling project, which references every project that holds code constants, with a completeness test in the migration tests. It also holds the fixed texts for codes the converter does not own. |
 | P-5 | Database | R-4: one named in-memory shared-cache database, held open for the run. |
-| P-6 | Composition | R-5: a generic host that is never started, in the Development environment, calling the migration host's `MigrationHost.AddHostConfiguration` and `MigrationHost.AddHostServices` (a dependency on 1236's implementation), so the CLI copies none of the host's wiring. `inventory` leaves out the host's local sources, `assess` includes them; the addition list comes last, from the CLI project folder. Both folders are fixed at build time and passed in by the CLI; the tooling does not reference the host. Then only the run overrides: in-memory SQLite, empty reconciliation inputs in a temporary folder outside `--out`, Data Protection off disk, and no task initializer; startup tasks run alone through a new startup-only `ITaskManager` member; no background or recurring task or hosted service starts. Rejected: replicating the host wiring, and building a `WebApplication` through `MigrationHost.CreateBuilder`. |
+| P-6 | Composition | R-5: an empty generic host (`Host.CreateEmptyApplicationBuilder`, host folder as content root, Development) that is never started. In order: the migration host's `MigrationHost.AddHostConfiguration` (extracted by T004a) through a key filter for the reconciliation path keys; the addition list from the CLI project folder; the run-override layer (in-memory SQLite, empty reconciliation inputs in a temporary folder outside `--out`, the Tasks `StartupTasksOnly` setting); `MigrationHost.AddHostServices`; then Data Protection replaced with an ephemeral key ring. The tooling's shell feature `Elsa3MigrationImportRun` registers the import run inside the shell. No background or recurring task or hosted service starts. Rejected: replicating the host wiring, and building a `WebApplication` through `MigrationHost.CreateBuilder`. |
 | P-7 | The engineer's features | R-6: project references on the migration host; nothing is loaded at run time. |
 | P-8 | Architecture guards | R-7: EF admissions for the CLI, the tooling and the test project, and the CLI as a build-only reference of the architecture tests; no path, extension-boundary or Elsa 3 boundary entry. |
 | P-9 | Migrated export | R-8: writers next to the readers, reading back from the design stores. |
@@ -111,7 +111,12 @@ specs/1237-elsa3-migration-cli/
 ```text
 essentials/src/Tasks/
 ├── Core/ITaskManager.cs                        # + startup-only member
-└── Elsa.Tasks/Services/TaskManager.cs          # implements it, keeping the dependency order
+├── Elsa.Tasks/TasksFeature.cs                  # + StartupTasksOnly setting
+├── Elsa.Tasks/Services/RunShellTasksInitializer.cs  # reads it
+└── Elsa.Tasks/Services/TaskManager.cs          # implements the member, keeping the dependency order
+
+apps/Elsa.Migration.Host/
+└── MigrationHost.cs                            # + AddHostConfiguration, AddHostServices, extracted from CreateBuilder (T004a)
 
 essentials/src/Workflows/Design/Reconciliation/Json/
 ├── Contracts/IJsonWorkflowCatalogWriter.cs     # + writer contract
@@ -133,6 +138,7 @@ extensions/Elsa3/src/Migration/Cli/             # Elsa3.Migration.Cli (console; 
 
 extensions/Elsa3/src/Migration/Tooling/         # Elsa3.Migration.Tooling
 ├── Elsa3MigrationRun.cs                        # the pipeline the CLI calls
+├── Elsa3MigrationImportRunFeature.cs           # shell feature: registers the import run inside the shell
 ├── Elsa3MigrationCodeTable.cs                  # code → remedy, component kind, fixed text
 ├── MigrationComposition.cs
 ├── ExportInputReader.cs

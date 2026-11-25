@@ -147,8 +147,10 @@ composition until disposal (FR-009). The guid never reaches the report (FR-022).
 The host's committed settings put its SQLite file under `data/`, and in development mode its OpenIddict store is in
 memory (1236 R-6), so the run leaves the store as the host wires it. The run replaces `ConnectionStrings:Elsa` and
 every per-feature persistence connection setting with the in-memory database. The host's root services include its
-Data Protection key store (`AddConfiguredDataProtection`, 1236 R-2); after the host's wiring the run replaces it with
-an ephemeral key ring. Nothing reaches a disk (FR-010).
+Data Protection (`AddConfiguredDataProtection`, 1236 R-2): without the EF key store enabled, it keeps keys where
+ASP.NET Core keeps them by default, on disk. After `AddHostServices` the run replaces it at root with an ephemeral key
+ring. The connection strings are not replaced after the fact: they are set in the run-override configuration layer
+before `AddHostServices` runs (R-5). Nothing reaches a disk (FR-010).
 
 ## R-5 Composition without a web host
 
@@ -173,6 +175,16 @@ an ephemeral key ring. Nothing reaches a disk (FR-010).
 - `JsonWorkflowReconciliationFeature` refuses unless exactly one of `FilePath`, `Files` and `FolderPath` is set, and
   `JsonActivityReconciliationFeature` refuses unless exactly one of `FilePath` and `Files` is set. A `FilePath` names a
   file that must exist.
+  The workflow feature also reads `AdditionalSources`, each another source with the same rule; the activity feature has
+  no `AdditionalSources` and no `FolderPath`. `Files` is a collection, stored as `Files:0:*` keys, and `GetChildren`
+  merges children across providers, so a higher configuration layer cannot remove a key a lower one sets.
+- `Elsa3StartupPublishingAuthorization` decorates `IActivityPublishingAuthorizationContext`, which a shell feature
+  registers (`WorkflowsPublishingApi`), so `Elsa3ImportRunRegistration.Add` must run inside the shell.
+  `RunShellTasksInitializer` is internal and registered inside the shell by `TasksFeature`, and CShells has no hook for
+  adding shell services from the root.
+- `Host.CreateApplicationBuilder()` adds environment variables, the command line, the entry assembly's user secrets,
+  `appsettings*.json` from the current directory and `DOTNET_ENVIRONMENT`. `AddConfiguredDataProtection` and
+  `AddConfiguredClusterMembership` read configuration when they are called.
 
 Facts that shape the run:
 
@@ -186,8 +198,9 @@ Facts that shape the run:
   `ITaskManager.StartExecutingRegisteredTasks`, runs the startup tasks, then the background tasks, then the recurring
   tasks (`TaskManager.cs`).
 
-**Decision**: the CLI composes through the host's own wiring. Specification 1236's implementation exposes two public
-static methods, which the host's `Program.cs` and the CLI both call (spec *Dependencies and boundaries*):
+**Decision**: the CLI composes through the host's own wiring. T004a extracts two public static methods from the
+host's `CreateBuilder`, leaving the host's behaviour unchanged; the host's `Program.cs` and the CLI both call them
+(spec *Dependencies and boundaries*):
 
 - `MigrationHost.AddHostConfiguration`: the host's configuration layers in 1236 R-3's order, for a given host folder
   and environment, taking the host assembly for `AddUserSecrets`, with a switch that leaves out the local sources
@@ -195,19 +208,41 @@ static methods, which the host's `Program.cs` and the CLI both call (spec *Depen
 - `MigrationHost.AddHostServices`: the host's root service registration, including CShells with
   `WithHostAssemblies()`, without the web pipeline.
 
-The tooling builds a generic host that is never started, in the Development environment, and calls both:
+The tooling builds an empty generic host (`Host.CreateEmptyApplicationBuilder`, so no default source leaks in), with
+`ContentRootPath` set to the host folder and `EnvironmentName` set to Development. It is never started. In order:
+
+1. `AddHostConfiguration` adds the host's layers into a separate configuration, which the run adds to the builder's
+   configuration through a key filter. The filter drops `Files`, `FilePath` and `AdditionalSources` under the JSON
+   workflow reconciliation feature and `Files` under the JSON activity reconciliation feature, at any depth.
+2. The Elsa 3 addition list.
+3. The run-override layer: every persistence connection string set to the run's database (R-4), the two
+   reconciliation inputs (`FolderPath` and `FilePath`, below), and the Tasks feature's startup-tasks-only setting.
+4. `AddHostServices`, which reads the configuration built so far.
+5. Data Protection replaced at root with an ephemeral key ring.
+
+The layers of step 1 are:
 
 - `inventory`: local sources left out, so the configuration is the host's `appsettings*.json`, `shells.json` and
   `shells.Development.json`, the host's committed composition.
 - `assess`: local sources included (`shells.Local.json`, the host's user secrets and environment variables), in the
   host's order. The CLI passes no command-line arguments, so its own command line is not a configuration source.
-- Then, for both, the Elsa 3 addition list, `elsa3-migration.features.json`, read after the host composition. It only
-  adds feature entries, so a local source cannot remove an Elsa 3 addition.
+
+The addition list of step 2, `elsa3-migration.features.json`, only adds feature entries, so a local source cannot
+remove an Elsa 3 addition.
 
 Configuration is read from the host project folder, never from the CLI's output folder, and the CLI has no settings
-file of its own. After the host's wiring the tooling applies only its run overrides: the in-memory SQLite connection
-(R-4), the reconciliation inputs (below), Data Protection kept off disk (R-4) and the skipped
-`RunShellTasksInitializer`. Then it activates the shell. No web server starts.
+file of its own. Then the tooling activates the shell. No web server starts.
+
+The shell-level parts are a feature of the tooling's own, `Elsa3MigrationImportRun`, in the addition list. It
+`DependsOn` `WorkflowsPublishingApi`, `Elsa3ImportActivitiesPublishing` and `Tasks`, and its `ConfigureServices` calls
+`Elsa3ImportRunRegistration.Add`, so the import run and its publishing authorization decoration are registered in the
+shell, after the context they decorate. Startup tasks only is a supported Tasks setting, `StartupTasksOnly` on the
+`Tasks` feature (default `false`): `RunShellTasksInitializer` reads it and, when it is set, runs only the startup
+tasks, in dependency order, through the startup-only `ITaskManager` member, and starts no background or recurring task.
+The run sets it in its override layer. Nothing removes or skips an internal type.
+
+`AddHostServices` creates no folders; the host creates `data/` at startup, outside it. So the run creates nothing under
+`apps/Elsa.Migration.Host`.
 
 The tooling does not reference the host. The CLI does, and passes into the tooling the host assembly, the host project
 folder and the CLI project folder; the two folders are written by the CLI's project file into
@@ -223,17 +258,16 @@ and names the feature, as the host does at startup (1236 FR-005). A feature that
 refuses the same way and names the feature, or the setting key when the failure names one; the exception message is
 not copied, because it may quote a value.
 
-It runs every shell initializer except `RunShellTasksInitializer`, and runs the startup tasks alone, in their
-dependency order, through a new startup-only member on `ITaskManager`. That is a small essentials change. It resolves
-services from the shell's provider. Background hosted services, background tasks and recurring tasks never start, so
+All shell initializers run. The startup-only `ITaskManager` member and the `StartupTasksOnly` setting are a small
+essentials change. The tooling resolves services from the shell's provider. Background hosted services, background tasks and recurring tasks never start, so
 there is no trigger runtime, scheduler or recurring work. The Elsa 3 folder import feature is not composed. The host's
 JSON workflow and activity reconciliation features are composed, as the host composes them, but the run points them
 at an empty `workflows/` folder (`FolderPath`) and an activities file holding `[]` (`FilePath`), in a run-scoped
-temporary folder outside `--out` that it deletes at the end, and removes the sibling path keys (`FilePath` and `Files`
-for workflows, `Files` for activities), because each feature refuses more than one. Their relative defaults would
+temporary folder outside `--out` that it deletes at the end. The key filter of step 1 drops the other path keys and
+`AdditionalSources`, because each feature refuses more than one path and an additional source would load content. Their relative defaults would
 otherwise resolve against the engineer's current directory, where the host refuses a missing folder; an engineer who
 pointed them at a previous `migrated/` folder would load it into the run next to the import; and a local source that
-sets `Files` would make the run refuse. `--out` and its staging folder are created only after the shell has been
+sets `Files` or `AdditionalSources` would make the run refuse or load more. `--out` and its staging folder are created only after the shell has been
 composed, so a `composition-failed` refusal leaves `--out` untouched (FR-005).
 
 The host's committed development keys apply, so the run needs no generated settings. **Rejected**: generating run-only
@@ -241,9 +275,14 @@ values for required secret settings. That answered the essentials engine image, 
 host commits development keys, so the problem does not exist.
 
 **Rejected**: calling the host's `MigrationHost.CreateBuilder` and building a `WebApplication`. It brings in the web
-pipeline and reads the process's command line, and the CLI must start no web server. T015 instead checks that the
-CLI's root service descriptors include every descriptor `MigrationHost.AddHostServices` adds, minus the documented
-overrides.
+pipeline and reads the process's command line, and the CLI must start no web server.
+
+T015 checks parity: it compares, as multisets, the descriptors of a collection where only `AddHostServices` ran with
+the CLI's root collection, keyed by (ServiceType, ServiceKey, Lifetime, ImplementationType, or the marker `factory` or
+`instance`). Excluded are the Data Protection descriptors the ephemeral key ring replaces (`IDataProtectionProvider`,
+`IKeyManager`, `IConfigureOptions<KeyManagementOptions>`, and the `IHostedService` of `DataProtectionStartupCheck`).
+The connection and the task mode get their own assertions: every EF feature resolves the run's connection string, and
+the shell starts no background or recurring task.
 
 ## R-6 The engineer's own features
 

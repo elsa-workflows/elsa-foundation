@@ -6,7 +6,7 @@
 **Prerequisites before implementation starts**:
 
 - this specification is approved;
-- the migration host of specification 1236 exists on the initiative branch;
+- the migration host of specification 1236 exists on the initiative branch, implemented;
 - the converter's member-name matching of Elsa 3 globals to prefixed host functions, and its storage-driver change
   (the two `ELS3-BEHAVIOUR-*-STORAGE-*` codes with `StorageDriverType` and `ComponentName`), are on the initiative
   branch (done: PRs #5703 and #5709);
@@ -95,6 +95,12 @@
   Models, Mapping, Import (`ReusableActivityImportDiagnosticCodes`) and Reconciliation, and fails on any code without
   an entry or without a remedy, whatever its severity. It reflects over the tooling's own code class too. It also greps the Elsa 3 sources for `"ELS3-`, `"VF-IMP-` and `"ELS3-REUSABLE-`
   string literals outside the constant classes, and fails on any (FR-016, FR-019).
+- [ ] T004a Extract `MigrationHost.AddHostConfiguration` and `MigrationHost.AddHostServices` from the migration host's
+  `CreateBuilder` (`apps/Elsa.Migration.Host/`), as spec *Dependencies and boundaries* describes. The host keeps
+  calling them, and 1236's host tests stay green unchanged. `AddHostConfiguration` takes the host folder, the
+  environment, the host assembly (for `AddUserSecrets`) and a switch that leaves out the local sources.
+  `AddHostServices` registers the root services, CShells with `WithHostAssemblies()` included, without the web
+  pipeline, and creates no folders; the host creates `data/` at startup, outside it.
 - [ ] T004b Make the converter carry component names as data (FR-016a). Add a `ComponentName` metadata key to every
   component diagnostic: unmapped activity types, undeclared-function references, unregistered variable
   types and custom storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. Where
@@ -128,38 +134,44 @@
   exit 2, the refusal reason and sentence of [contracts/cli.md](contracts/cli.md). Test the request validation.
 - [ ] T009a Add a startup-only member to `ITaskManager` (`essentials/src/Tasks/Core/ITaskManager.cs`), implemented in
   `essentials/src/Tasks/Elsa.Tasks/Services/TaskManager.cs`. It runs the registered
-  startup tasks in their dependency order (`TopologicalTaskSorter`) and starts no background or recurring task. Test
-  the order, and test that no `IBackgroundTask` or recurring task starts (R-5).
+  startup tasks in their dependency order (`TopologicalTaskSorter`) and starts no background or recurring task. Add a
+  supported `StartupTasksOnly` setting to the `Tasks` feature (default `false`), which `RunShellTasksInitializer`
+  reads: when it is set, the initializer calls the startup-only member instead of `StartExecutingRegisteredTasks`.
+  Document the setting in the Tasks README. Test the order, the default, and that with the setting no
+  `IBackgroundTask` or recurring task starts (R-5).
 - [ ] T009 Add `Tooling/MigrationComposition.cs` (R-4, R-5). It takes the host assembly, the host project folder and
-  the CLI project folder from the CLI, builds a generic host that is never started, in the Development environment,
-  and calls the migration host's `MigrationHost.AddHostConfiguration` and `MigrationHost.AddHostServices` (spec
-  *Dependencies and boundaries*); it copies none of the host's wiring. Configuration comes from the host project
-  folder, never from the CLI's output folder:
-  - `inventory`: local sources left out (the host's `appsettings*.json`, `shells.json` and `shells.Development.json`);
-  - `assess`: local sources included (`shells.Local.json`, the host's user secrets and environment variables), with no
-    command-line arguments;
-  - then, for both, `elsa3-migration.features.json` from the CLI project folder.
+  the CLI project folder from the CLI, builds an empty generic host (`Host.CreateEmptyApplicationBuilder`) that is
+  never started, with `ContentRootPath` set to the host folder and `EnvironmentName` set to Development, and uses the
+  T004a methods; it copies none of the host's wiring. Configuration comes from the host project folder, never from the
+  CLI's output folder, in this order:
+  1. `MigrationHost.AddHostConfiguration`, read through a key filter that drops `Files`, `FilePath` and
+     `AdditionalSources` under JSON workflow reconciliation and `Files` under JSON activity reconciliation.
+     `inventory` leaves out the local sources (the host's `appsettings*.json`, `shells.json` and
+     `shells.Development.json` remain); `assess` includes them (`shells.Local.json`, the host's user secrets and
+     environment variables), with no command-line arguments;
+  2. `elsa3-migration.features.json` from the CLI project folder;
+  3. the run-override layer: every persistence connection string set to SQLite on
+     `file:elsa3-migration-<guid>;Mode=Memory;Cache=Shared`, the migrate policy set to apply, JSON workflow
+     reconciliation's `FolderPath` at an empty `workflows/` folder and JSON activity reconciliation's `FilePath` at an
+     activities file holding `[]`, both in a run-scoped temporary folder outside `--out` that it deletes on every
+     path, and the `Tasks` feature's `StartupTasksOnly` (T009a).
 
-  Then it applies its run overrides only. It points the host's JSON workflow reconciliation at an empty `workflows/`
-  folder (`FolderPath`) and JSON activity reconciliation at an activities file holding `[]` (`FilePath`), both in a
-  run-scoped temporary folder outside `--out` that it deletes on every path, and removes the sibling path keys
-  (`FilePath` and `Files` for workflows, `Files` for activities). It replaces the Data Protection key store with an
-  ephemeral key ring. It creates `--out` and its staging folder only after the shell has been composed. It runs every
-  shell initializer except `RunShellTasksInitializer`, runs the startup
-  tasks through the T009a member, starts no background hosted service, and registers the import run through
-  `Elsa3ImportRunRegistration.Add` without the reconciliation feature. It sets every enabled EF feature to SQLite on
-  `file:elsa3-migration-<guid>;Mode=Memory;Cache=Shared`, sets the migrate policy to apply, keeps one connection open,
-  and disposes everything on every path. Tests:
+  Then it calls `MigrationHost.AddHostServices`, and replaces Data Protection at root with an ephemeral key ring. It
+  creates `--out` and its staging folder only after the shell has been composed. All shell initializers run; the
+  T013 feature registers the import run inside the shell. No background hosted service starts. It keeps one
+  connection open, and disposes everything on every path. Tests:
   - two EF modules commit in one shared transaction without `EfSharedTransactionTargetMismatchException`;
   - after composition, the schema exists and the activity catalog holds the host's activities;
   - no background hosted service, `IBackgroundTask` or recurring task starts;
   - `inventory` ignores a `shells.Local.json`, a user secret and an environment variable that `assess` applies;
-  - a local source that sets `Files` on either reconciliation feature does not make the run refuse;
+  - a local source that sets `Files`, or `AdditionalSources` on the workflow feature, neither loads anything into the
+    run nor makes it refuse;
+  - no environment variable, current-directory `appsettings.json` or `DOTNET_ENVIRONMENT` reaches `inventory`;
   - a `composition-failed` refusal leaves a missing `--out` missing and an existing one untouched;
   - an addition-list feature and a T003 feature both resolve;
   - the host's sample workflow does not load into the run;
   - the tests use a temporary host folder through the internal seam;
-  - no file appears outside a temporary `--out`.
+  - no file appears outside a temporary `--out`, and no `data/` folder appears under the host project folder.
 
   (FR-008 to FR-010, SC-003.)
 - [ ] T011 Add `Cli/Program.cs`, with:
@@ -173,13 +185,20 @@
 
 ## Phase 3: User Story 3 - Same composition as the migration host (P1)
 
-- [ ] T013 [US3] Add `Cli/elsa3-migration.features.json`, the Elsa 3 addition list in the CShells feature shape of
-  the host's `shells.json`: `Elsa3Mapping`, the collection import for reusables, the import's EF ledger and the
-  publishing bridge. It is read from the CLI project folder only, never copied to the output. It only adds feature
-  entries.
-- [ ] T015 [US3] Add the composition parity test: the CLI's root service descriptors include every descriptor
-  `MigrationHost.AddHostServices` adds, minus the documented overrides (persistence connection, Data Protection key
-  store, the skipped `RunShellTasksInitializer`); `inventory`'s enabled features equal the host's committed
+- [ ] T013 [US3] Add `Tooling/Elsa3MigrationImportRunFeature.cs`, the shell feature `Elsa3MigrationImportRun`. It
+  `DependsOn` `WorkflowsPublishingApi`, `Elsa3ImportActivitiesPublishing` and `Tasks`, and its `ConfigureServices`
+  calls `Elsa3ImportRunRegistration.Add` (R-5). Add `Cli/elsa3-migration.features.json`, the Elsa 3 addition list in
+  the CShells feature shape of the host's `shells.json`: `Elsa3Mapping`, the collection import for reusables, the
+  import's EF ledger, the publishing bridge and `Elsa3MigrationImportRun`. It is read from the CLI project folder only,
+  never copied to the output. It only adds feature entries. Test that the feature registers the import run and the
+  publishing authorization decoration in the shell.
+- [ ] T015 [US3] Add the composition parity test (R-5): the descriptors of a collection where only
+  `MigrationHost.AddHostServices` ran, compared as a multiset with the CLI's root collection, keyed by (ServiceType,
+  ServiceKey, Lifetime, ImplementationType, or the marker `factory` or `instance`), excluding the Data Protection
+  descriptors the ephemeral key ring replaces (`IDataProtectionProvider`, `IKeyManager`,
+  `IConfigureOptions<KeyManagementOptions>`, and the `IHostedService` of `DataProtectionStartupCheck`); every EF
+  feature resolves the run's connection string; the shell starts no background or recurring task; `inventory`'s
+  enabled features equal the host's committed
   composition plus the addition list and their dependencies; `assess` adds a feature listed in a local source; a
   listed feature that no project provides refuses with `composition-failed` and names it; and the migration host's
   closure contains no assembly whose name contains `Elsa3`.
@@ -320,7 +339,8 @@
 - [ ] T034 Add the smoke test (SC-003). From a clean build, run
   `dotnet run --project extensions/Elsa3/src/Migration/Cli -- workflows inventory` with the fixture export and a
   relative `--out`. Expect exit 1, the printed path and the same `report.json` as the in-process run, after
-  `tool.version` is normalized. Nothing may remain outside the output folder.
+  `tool.version` is normalized. Nothing may remain outside the output folder, and no `data/` folder appears under
+  `apps/Elsa.Migration.Host`.
 - [ ] T035 [P] Write `Tooling/README.md`, covering the commands, how to add a feature project to the migration host for
   `assess`, the database rule and redaction. Link it from `extensions/Elsa3/src/Mapping/README.md` and from the
   migration host's README.

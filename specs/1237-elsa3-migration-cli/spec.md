@@ -123,7 +123,8 @@ the host's composition. Inspect the host's dependency closure.
 
 1. **Given** the migration host's committed `shells.json`, **When** `inventory` composes, **Then** its features are the
    host's committed composition plus the Elsa 3 addition list: the converter (`Elsa3Mapping`), the collection import
-   for reusables, the import's EF ledger and the publishing bridge, with their dependencies. Local sources
+   for reusables, the import's EF ledger, the publishing bridge and the tooling's own run feature, with their
+   dependencies. Local sources
    (`shells.Local.json`, user secrets, environment variables) are not read.
 2. **Given** a local source that lists an extra feature, **When** `assess` composes, **Then** the extra feature is
    composed too, and the configuration is layered in the host's order.
@@ -230,7 +231,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **FR-006**: The CLI project MUST reference the migration host project, `apps/Elsa.Migration.Host` (specification
   1236), so every feature the host composes, and every feature project the engineer has added to the host, is in the
   CLI's build. It MUST also reference the Elsa 3 projects of the addition list: the converter (`Elsa3Mapping`), the
-  collection import for reusables, the import's EF ledger and the publishing bridge. The engineer adds a feature
+  collection import for reusables, the import's EF ledger, the publishing bridge and the tooling, whose own shell
+  feature, `Elsa3MigrationImportRun`, registers the shared import run inside the shell. The engineer adds a feature
   project once, to the host. The reference goes from the CLI to the host only, so the host still carries no Elsa 3
   assembly (specification 1236 FR-003). The CLI therefore carries the ASP.NET Core shared framework, because the
   host's features need it, but it starts no web host.
@@ -243,7 +245,8 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 - **FR-008**: The CLI MUST compose through the migration host's own wiring, not a copy of it. It calls the host's two
   public methods (see *Dependencies and boundaries*): one adds the host's configuration layers, the other the host's
   root services, including CShells with `WithHostAssemblies()`, so features are discovered over the CLI's own build as
-  the host discovers them. It calls both on a generic host that starts no web server, and composes one shell:
+  the host discovers them. It calls both on an empty generic host (no default configuration sources), with the host
+  folder as content root and the Development environment, that starts no web server, and composes one shell:
   - `inventory` composes the host's committed composition only: `appsettings*.json`, `shells.json` and
     `shells.Development.json` from the host project folder, plus the Elsa 3 addition list. It ignores the engineer's
     local sources;
@@ -255,16 +258,21 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 
   The CLI runs in the Development environment, the only one specification 1236 supports, so the host's committed
   development keys apply. The host project folder and the addition list's folder (the CLI project folder) are fixed
-  when the CLI is built; there is no option to point elsewhere, and tests use an internal seam. After the host's
-  wiring, the CLI applies only its run overrides: the in-memory database (FR-009), the reconciliation inputs below,
-  Data Protection kept off disk, and the skipped task initializer. The shell's initializers and its startup tasks run, so the EF schema and
-  the activity catalog exist. No web host, HTTP endpoint, background hosted service, background task or recurring task
-  starts, so there is no trigger runtime, scheduler or workflow execution. The Elsa 3 folder import is not composed.
+  when the CLI is built; there is no option to point elsewhere, and tests use an internal seam. The order is: the
+  host's configuration layers, then the addition list, then the CLI's own run-override layer (the in-memory database
+  of FR-009, the reconciliation inputs below, and the Tasks setting that runs startup tasks only), and only then the
+  host's root services, which read configuration when they are registered. After them, the CLI replaces only Data
+  Protection, with an ephemeral key ring. The shell's initializers run; with the startup-tasks-only setting, the
+  Tasks feature's initializer runs the startup tasks alone, so the EF schema and the activity catalog exist. No web
+  host, HTTP endpoint, background hosted service, background task or recurring task starts, so there is no trigger
+  runtime, scheduler or workflow execution. The Elsa 3 folder import is not composed.
   The host's JSON workflow and activity reconciliation stay composed, but the run points them at an empty workflows
-  folder and an activities file holding `[]`, in a run-scoped temporary folder outside `--out`, and removes their
-  sibling path keys (`FilePath`, `Files`, `FolderPath`), because each feature refuses more than one. So neither the
-  host's sample nor a `migrated/` folder the engineer configured loads into the run, and no local source can make the
-  run refuse through them. `--out` and its staging folder are created only after the shell has been composed.
+  folder and an activities file holding `[]`, in a run-scoped temporary folder outside `--out`. Configuration layers
+  cannot remove keys, so the run reads the host's configuration through a filter that drops their other path keys
+  (`Files` and `FilePath` for workflows, `Files` for activities) and the workflow feature's `AdditionalSources`. So
+  neither the host's sample nor a `migrated/` folder the engineer configured loads into the run, and no local source
+  can make the run refuse through them. `--out` and its staging folder are created only after the shell has been
+  composed. The run creates nothing under the host project folder.
 - **FR-009**: Every EF module MUST use the same in-memory SQLite database, named uniquely per run. The run holds that
   database open for its whole duration and disposes it at the end, so every module sees the same data and the
   shared-transaction single-target rule holds. The host's persistence connection setting MUST be replaced for the run,
@@ -448,16 +456,16 @@ setting value carries a sentinel string. Search `report.json` and `report.html` 
 
 - **Elsa 3 migration host** (specification 1236): its project, `shells.json` and configuration order; the CLI
   references it. The host composes JSON workflow and JSON activity reconciliation, so `migrated/` loads there.
-- **Two public wiring methods on the migration host** (an addition to specification 1236's implementation, in its
-  `Program.cs` wiring). The host's `Program.cs` and the CLI both call them:
+- **Two public wiring methods on the migration host.** 1237 adds them to the host (task T004a), as an extraction from
+  `CreateBuilder` that leaves the host's behaviour unchanged. The host's `Program.cs` and the CLI both call them:
   - `MigrationHost.AddHostConfiguration`: adds the host's configuration layers in 1236 R-3's order for a given host
     folder and environment, taking the host assembly for `AddUserSecrets`, with a switch that leaves out the engineer's
     local sources (`shells.Local.json`, user secrets, environment variables, command line);
   - `MigrationHost.AddHostServices`: the host's root service registration (1236 R-2), including the CShells
-    `WithHostAssemblies()` setup, without the web pipeline.
+    `WithHostAssemblies()` setup, without the web pipeline. It creates no folders: the host creates `data/` at
+    startup, outside this method.
 
-  The names are the CLI's proposal; the 1236 implementer may choose others. Until they exist, the CLI cannot compose
-  (research R-5).
+  It needs the migration host of specification 1236 implemented on the initiative branch.
 - **The migration host is temporary** (1236 Q12). #5800's app profiles replace it, and its cleanup removes
   `apps/Elsa.Migration.Host`. The CLI's closure and configuration follow the host, so that cleanup must move the CLI's
   reference and the two wiring calls to whatever replaces the host. The CLI is temporary in the same way.
