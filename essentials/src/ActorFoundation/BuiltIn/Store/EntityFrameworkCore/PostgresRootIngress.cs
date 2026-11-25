@@ -267,6 +267,7 @@ internal sealed class PostgresRootIngress(PostgresRootAdmission admission, strin
         "StaleSelection" => "stale selection",
         "TargetMismatch" => "target",
         "Parked" => "parked",
+        "ParkPageLimit" => "park page limit",
         _ => "missing"
     };
 }

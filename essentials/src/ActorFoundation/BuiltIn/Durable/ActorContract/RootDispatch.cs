@@ -78,25 +78,48 @@ internal sealed partial class ActorAdapter
         };
     }
 
-    // S5a: a composed Park set delivers an operator command to a parked root. Until S5b ends the root here, the command is
-    // consumed and refused with a journalled reason at the next revision, and the Park and checkpoint stay as they are.
-    // A Park keeps the row's Suspended flag (ActorAdapter.Park), so a root parked while suspended is refused the same way
-    // and stays suspended. A held command admitted before the Park opened is refused the same way, and its caller is
-    // answered with the "Parked" refusal once the checkpoint lands.
+    // S5a: a composed Park set delivers an operator command to a parked root. A Park keeps the row's Suspended flag
+    // (ActorAdapter.Park), so a root parked while suspended is reached the same way. S5b: a Terminate that names the
+    // root's Park ends it in one fenced commit when its kept rows fit one page, as the in-memory drain's Complete does:
+    // Cancelled and no longer suspended, journalled "terminated" with the rows it cleared, and a held caller answered once.
+    // Any other command is consumed and refused with a journalled reason at the next revision, and the Park and checkpoint
+    // stay as they are: "parked" for one that names no Park (admitted before the Park opened), "selection" for a stale
+    // Park, "page" for a Park larger than one page. A held caller of a refused command is answered with the refusal.
     private Durable.TurnOutcome? RefuseOnParkedRoot(Durable.TurnInput input)
     {
         if (roots is not { RefusesParkedOperators: true } || input.Row is not
-            { Status: Durable.InstanceStatus.Faulted, Retired: false, Creation: 1, FoundationDispatchHeader.Terminal: null } row ||
+            { Status: Durable.InstanceStatus.Faulted, Retired: false, Creation: 1, FoundationDispatchHeader: { Terminal: null } header } row ||
             input.Taken is not [{ Durable: true, Message: var control } refused] ||
             !IsRootControl(control) || control.Target.Id != row.Id) return null;
         var revision = checked(row.Revision + 1);
+        var (mark, facts) = (control.Operator!.RootParkMark, control.Operator.RootParkFacts);
+        var reason = control.Kind != Durable.Kinds.Terminate || mark is null || facts is null ? "parked"
+            : facts.Mark != mark ? "selection" : !facts.FitsPage ? "page" : null;
+        if (reason is null)
+        {
+            var ended = row with
+            {
+                Status = Durable.InstanceStatus.Cancelled, Suspended = false, Revision = revision,
+                FoundationDispatchHeader = header with { RefreshTerminal = roots.RequiresCommittedTerminal }
+            };
+            var terminated = new Durable.TurnOutcome(input.Actor)
+            {
+                Expected = row.Revision, Row = ended, Revision = revision, Status = ended.Status, Consumed = [refused], Unsubscribe = true,
+                Journal = Durable.Json.Write(new { Outcome = "terminated", Operation = control.Id, Cleared = facts!.Arrived + facts.Consumed })
+            };
+            terminated.ReplyTo(refused, "terminated");
+            return terminated;
+        }
         var outcome = new Durable.TurnOutcome(input.Actor)
         {
             Expected = row.Revision, Row = row with { Revision = revision }, Revision = revision, Status = row.Status, Consumed = [refused],
-            Journal = Durable.Json.Write(new { Outcome = "refused", Operation = control.Id, Reason = "parked" })
+            Journal = Durable.Json.Write(new { Outcome = "refused", Operation = control.Id, Reason = reason })
         };
         if (control.ReplyTo is not null)
-            outcome.ReplyTo(refused, new Durable.CreationResult(input.Actor, "Parked", control.TargetCreation, row.Creation), creationRefusal: true);
+            outcome.ReplyTo(refused, new Durable.CreationResult(input.Actor, reason switch
+            {
+                "selection" => "StaleSelection", "page" => "ParkPageLimit", _ => "Parked"
+            }, control.TargetCreation, row.Creation), creationRefusal: true);
         return outcome;
     }
 
