@@ -197,7 +197,26 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
     }
 
     internal async Task<Receipt> AdmitAsync(string tenant, string operation, StartSpec spec, long? due = null,
-        TimeSpan? keepFor = null, CancellationToken cancellationToken = default)
+        TimeSpan? keepFor = null, CancellationToken cancellationToken = default) =>
+        (await AdmitCoreAsync(tenant, operation, spec, due, keepFor, null, cancellationToken))!;
+
+    /// <summary>
+    /// A root start that holds its caller, on a profile with held replies (<see cref="RootCapabilities.ReplyProtocol"/>): the
+    /// creator carries the request's reply route, and the owner answers the caller on the start as it answers one on a direct
+    /// input. A repeat of the operation returns the root that operation started, as a start does, and attaches this caller
+    /// to nothing. Null when the request's deadline has passed by database time: nothing is admitted.
+    /// </summary>
+    internal Task<Receipt?> AdmitRootRequestAsync(string tenant, string operation, StartSpec spec, string node, Request request,
+        bool early, CancellationToken cancellationToken, TimeSpan? keepFor = null)
+    {
+        if (request.Tenant != tenant || request.Done || string.IsNullOrWhiteSpace(node) || node.Length > 256 ||
+            node.Contains('|') || node.Contains('\0') || DurableKeyJson.HasUnpairedSurrogate(node))
+            throw new ArgumentException("A held root start needs an open request of its tenant and an issued reply node.", nameof(request));
+        return AdmitCoreAsync(tenant, operation, spec, null, keepFor, new(request.ReplyAddress(node, early), request.Deadline), cancellationToken);
+    }
+
+    private async Task<Receipt?> AdmitCoreAsync(string tenant, string operation, StartSpec spec, long? due,
+        TimeSpan? keepFor, DirectReply? reply, CancellationToken cancellationToken)
     {
         if (!FoundationMetadataLimits.IsOutsideMessageId(operation) || spec is { Parent: not null } or { Creation: not null } ||
             spec.ParentCreation != 0 || !FoundationMetadataLimits.FitsName(spec.Model))
@@ -213,6 +232,18 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, cancellationToken);
         if (db.RequiresPinnedRootNamespace)
             await PinRootNamespaceAsync(db, cancellationToken);
+        if (reply is not null)
+        {
+            if (!db.UsesRootReplyProtocol) throw new NotSupportedException("This profile does not hold requests.");
+            await EfStore.RequireStoreVersionsAsync(db, cancellationToken);
+            if (!await db.Database.SqlQuery<bool>($"""
+                SELECT ({reply.Deadline} > floor(extract(epoch from clock_timestamp()) * 1000)::bigint) AS "Value"
+                """).SingleAsync(cancellationToken))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return null;
+            }
+        }
         var issuer = await ReadIssuerAsync(db, cancellationToken);
         var actor = InstanceRef.In(InstanceRef.Spread(name, issuer.Partitions), name);
         var reference = FoundationRootCreator.ReferenceFor(issuer.Key, tenant, new(actor.Id, 1));
@@ -222,7 +253,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 new object[] { tenant, digest, reference, windowMs, false }, cancellationToken) == 0)
             return await Replay();
 
-        var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, null);
+        var creator = FoundationRootCreator.Create(actor, operation, digest, spec, due, reply?.Address);
         var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload)!;
         // Raw PostgreSQL text avoids JSON expansion for large quoted or international inputs. Only a
         // value that PostgreSQL text cannot represent travels in the reversible JSON envelope.
@@ -231,7 +262,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
         var storedSpec = escaped ? creator.Start! : creator.Start! with { Input = null };
         var header = CreatorPrefix + DurableKeyJson.Write(new StoredRoot(creator.Id, storedSpec, escaped, due == 0));
         const int contentLimit = 16 * 1024 * 1024 - 24 * 1024;
-        var fits = Encoding.UTF8.GetByteCount(header) + (payload is null ? 0 : Encoding.UTF8.GetByteCount(payload)) <= contentLimit;
+        var fits = Encoding.UTF8.GetByteCount(header) + (payload is null ? 0 : Encoding.UTF8.GetByteCount(payload)) +
+            (reply is null ? 0 : Encoding.UTF8.GetByteCount(reply.Address)) <= contentLimit;
 
         // A live receipt wins even when the replay's encoded envelope is too large. When no receipt
         // wins, this transaction rolls back the claim if its creator cannot be stored.
@@ -249,8 +281,8 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 FROM accepted WHERE {9}
                 RETURNING "Actor", "Partition", "Creator"
             ), creator AS (
-                INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Payload","Start","Done","Seen","Attempts","Trial","JobGeneration")
-                SELECT birth."Creator", 0, birth."Actor", birth."Partition", {10}, {11}, {12}, {13}, false, 0, 0, 0, 0
+                INSERT INTO "Messages" ("Id","InboxScope","Target","Partition","Kind","Due","Payload","Start","Done","Seen","Attempts","Trial","JobGeneration","ReplyTo")
+                SELECT birth."Creator", 0, birth."Actor", birth."Partition", {10}, {11}, {12}, {13}, false, 0, 0, 0, 0, {14}
                 FROM birth
                 RETURNING "Id"
             )
@@ -258,7 +290,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
             """;
         var write = (await db.Database.SqlQueryRaw<StartWrite>(command, tenant, digest, reference, windowMs, claimFirst,
             actor.Id, actor.Partition, creator.InboxKey.Id, fingerprint, fits, creator.Kind, creator.Due ?? 0,
-            (fits ? payload : null)!, fits ? header : "").ToListAsync(cancellationToken)).Single();
+            (fits ? payload : null)!, fits ? header : "", (reply?.Address)!).ToListAsync(cancellationToken)).Single();
         if (!write.Claimed) return await Replay();
         if (!fits) throw new MetadataLimitExceeded(nameof(spec), contentLimit);
         if (!write.Enqueued)
