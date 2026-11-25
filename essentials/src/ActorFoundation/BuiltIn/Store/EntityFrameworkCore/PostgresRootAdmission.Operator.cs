@@ -154,9 +154,9 @@ internal sealed partial class PostgresRootAdmission
             }
             if (!deletion && park is null)
                 selectedStatus = selected ? selectedStatus : await AdmissionStatusAsync(db, address, tenant, reference, token);
-            // S5b: a composed Park set admits a Terminate for a parked root, held or not, only with the selection of its Park.
-            // A running selection, and Terminate and delete, are refused there; a command admitted before the Park opened is
-            // refused by the owner, which answers a held caller.
+            // S5b: a composed Park set admits a Terminate, or a Terminate and delete, for a parked root, held or not, only with the
+            // selection of its Park. A running selection is refused there; a command admitted before the Park opened is refused
+            // by the owner, which answers a held caller.
             var parked = selectedStatus == InstanceStatus.Faulted && db.UsesRootParkedOperators && kind == Kinds.Terminate &&
                 await LocksParkedRootAsync(db, address, tenant, reference, token);
             var eligible = deletion ? exactTerminal : park is not null ? exactPark

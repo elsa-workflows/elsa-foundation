@@ -228,7 +228,7 @@ public sealed partial class EfStore
                 ? """OR NEW."Entries" LIKE '{{"Outcome":"recovered",%' OR NEW."Entries" LIKE '{{"Outcome":"refused",%'"""
                 : db.UsesRootParkedOperators ? """OR NEW."Entries" LIKE '{{"Outcome":"refused",%' /*root-parked-terminated-journal*/""" : "", StringComparison.Ordinal)
             // S5b: a Terminate that names the Park ends a parked root in one commit, journalled "terminated" at its revision.
-            .Replace("/*root-parked-terminated-journal*/", db.UsesRootParkedOperators ? ParkedTerminatedJournal : "", StringComparison.Ordinal)
+            .Replace("/*root-parked-terminated-journal*/", db.UsesRootParkedOperators ? ParkedTerminatedJournal(db) : "", StringComparison.Ordinal)
             .Replace("/*root-parked-terminate*/", db.UsesRootParkedOperators ? ParkedTerminateCheckpoint(db) : "false", StringComparison.Ordinal)
             // S5b-3a: a Terminate-then-delete retires a parked root, Cancelled with its terminal mark and its Park cleared.
             .Replace("/*root-parked-retirement*/", db.UsesRootParkedOperators && db.UsesRootTerminateThenDelete ? ParkedRetirementCheckpoint : "false",

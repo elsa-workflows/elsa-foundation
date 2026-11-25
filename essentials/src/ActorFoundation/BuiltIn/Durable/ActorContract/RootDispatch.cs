@@ -98,7 +98,8 @@ internal sealed partial class ActorAdapter
         var (mark, facts, clear) = (control.Operator!.RootParkMark, control.Operator.RootParkFacts, control.Operator.RootParkClear);
         var reason = control.Kind != Durable.Kinds.Terminate || mark is null || facts is null ? "parked"
             : clear ? facts.Clearing != control.Id || facts.Mark != mark ? "selection" : null
-            : facts.Clearing is not null ? "clearing" : facts.Mark != mark ? "selection" : facts.Outstanding ? "outstanding" : null;
+            : facts.Clearing is not null ? "clearing" : facts.Mark != mark ? "selection"
+            : facts.Outstanding || control.Operator.RootThenDelete && facts.Residue ? "outstanding" : null;
         if (reason is null && !facts!.FitsPage)
         {
             var page = new Durable.TurnOutcome(input.Actor)
@@ -152,6 +153,14 @@ internal sealed partial class ActorAdapter
             }, control.TargetCreation, row.Creation), creationRefusal: true);
         return outcome;
     }
+
+    // S5b-3a: a command that names a Park the root no longer has, because the root ended before it ran, is refused as a
+    // stale selection and its held caller answered once. An ended root takes no journal entry; the command settles there.
+    private Durable.TurnOutcome? RefuseStaleParkCommand(Durable.TurnInput input) =>
+        roots is { RefusesParkedOperators: true } &&
+        input.Row is { Status: not Durable.InstanceStatus.Running, Retired: false, Creation: 1, FoundationDispatchHeader.Terminal: not null } row &&
+        input.Taken is [{ Durable: true, Message: { Operator.RootParkMark: not null } control }] && IsRootControl(control) && control.Target.Id == row.Id
+            ? Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection") : null;
 
     private bool RestoresNothing(Durable.InstanceRow row)
     {

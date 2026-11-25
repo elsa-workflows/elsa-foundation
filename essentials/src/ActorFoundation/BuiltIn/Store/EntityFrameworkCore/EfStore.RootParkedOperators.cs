@@ -50,7 +50,8 @@ public sealed partial class EfStore
             turn.Expected is not { } expected || turn.Done is not [var key] || key != command.InboxKey || !root.Owns(key) ||
             !PostgresRootAdmission.IsOperatorOccurrence(key) || command.Target.Id != root.Actor || command.TargetCreation != 1 ||
             command is not { Kind: Kinds.Terminate, Operator: { RootParkMark: { } mark, RootParkWindow: >= 0, RootParkFacts: { } facts } } ||
-            (command.ReplyTo is not null) != command.Operator.RootHeldReply || facts.Mark != mark || facts.Outstanding && !command.Operator.RootParkClear ||
+            (command.ReplyTo is not null) != command.Operator.RootHeldReply || facts.Mark != mark ||
+            (facts.Outstanding || command.Operator.RootThenDelete && facts.Residue) && !command.Operator.RootParkClear ||
             facts.Clearing != (command.Operator.RootParkClear ? command.Id : null) || command.Operator.RootParkClear && command.ReplyTo is not null)
             throw RootShape();
         var ends = facts.FitsPage;
@@ -144,7 +145,7 @@ public sealed partial class EfStore
 
     // The retirement of a parked root by its Terminate-then-delete carries the C# retirement lock's conditions itself (#5746):
     // no jobs, children, parent, custom handles or subscriptions, no pending row but a direct occurrence, and nothing kept.
-    private const string ParkedRetirementCheckpoint = """
+    private static readonly string ParkedRetirementCheckpoint = """
         (OLD."Status" = 2 AND OLD."FoundationParkAt" IS NOT NULL AND OLD."FoundationTerminalRevision" IS NULL
             AND NEW."Status" = 3 AND NEW."FoundationTerminalRevision" = NEW."Revision" AND NEW."FoundationTerminalAt" IS NOT NULL
             AND NEW."FoundationParkAt" IS NULL AND NEW."FoundationParkRevision" IS NULL
@@ -152,15 +153,16 @@ public sealed partial class EfStore
             /*retire-handles*/ AND OLD."CustomHandles" IS NULL
             /*retire-subscriptions*/ AND NOT EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = NEW."Id")
             /*retire-pending*/ AND NOT EXISTS (SELECT 1 FROM "Messages" m WHERE m."Target" = NEW."Id" AND m."Partition" = NEW."Partition"
-                AND NOT m."Done" AND (m."InboxScope" <> -4 OR m."KeepUntil" IS NULL OR m."EventMatch" IS NOT NULL))
+                AND /*pending-residue*/)
             /*retire-kept*/ AND NOT EXISTS (SELECT 1 FROM "Messages" k WHERE k."Target" = NEW."Id" AND k."Partition" = NEW."Partition"
                 AND k."FoundationKeptBy" IS NOT NULL))
-        """;
+        """.Replace("/*pending-residue*/", PendingResidue, StringComparison.Ordinal);
 
     // The journal trigger admits a "terminated" entry on the parked root at its next revision.
-    private const string ParkedTerminatedJournal = """
-        OR NEW."Entries" LIKE '{{"Outcome":"terminated",%' OR NEW."Entries" LIKE '{{"Outcome":"clearing",%' OR NEW."Entries" LIKE '{{"Outcome":"protected",%'
-        """;
+    // A protected entry (a Terminate-then-delete terminated and kept) needs a set with Terminate-then-delete.
+    private static string ParkedTerminatedJournal(KernelDb db) => """
+        OR NEW."Entries" LIKE '{{"Outcome":"terminated",%' OR NEW."Entries" LIKE '{{"Outcome":"clearing",%'
+        """ + (db.UsesRootTerminateThenDelete ? """ OR NEW."Entries" LIKE '{{"Outcome":"protected",%' """ : "");
 
     // A composed set's refused entry pins the whole row but its revision, as format 22's refused-row rule does, at any status.
     // Each column of the set's Instances table is compared; the Park revision and the state wire exist only with their capability.

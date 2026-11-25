@@ -182,7 +182,7 @@ public sealed partial class EfStore
         {
             // A Terminate-then-delete that names the parked root's Park, whose kept rows fit this commit.
             if (!termination || !db.UsesRootParkedOperators || command.Operator is not { RootParkMark: { } mark, RootParkWindow: >= 0 } ||
-                facts.Mark != mark || facts.Outstanding || !facts.FitsPage || facts.Clearing != (command.Operator.RootParkClear ? command.Id : null) ||
+                facts.Mark != mark || facts.Outstanding || facts.Residue && !command.Operator.RootParkClear || !facts.FitsPage || facts.Clearing != (command.Operator.RootParkClear ? command.Id : null) ||
                 command.Operator.RootParkClear && command.ReplyTo is not null)
                 throw RootShape();
             if (current is not { Status: InstanceStatus.Faulted, TerminalRevision: null, TerminalAt: null } || current.Revision != turn.Expected)
