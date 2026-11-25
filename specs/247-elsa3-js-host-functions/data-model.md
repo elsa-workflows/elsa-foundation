@@ -51,7 +51,8 @@ globals), is checked before this lookup and converts to that function; if the ac
 the result is `VF-IMP-002`.
 
 A `set{N}(value)` call resolves separately: Elsa 3 generated setters for variables only (in a reusable run, for the inputs
-it declared as variables too). A standalone input `N` has no setter: the call is refused as a read-only input, and a
+it declared as variables too). A standalone input `N` has no setter: the call is refused as a read-only input (unless a registered host function has the
+member name `set{N}`, which then takes the call), and a
 variable `N` next to an input `N` is the one `set{N}` writes (#5703).
 
 ### `Elsa3JavaScriptNames` (new, internal static)
