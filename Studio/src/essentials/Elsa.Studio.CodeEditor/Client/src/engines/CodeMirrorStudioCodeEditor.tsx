@@ -182,7 +182,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     // Signature help is selection-driven. Re-dispatch the current selection when a delayed
     // authoring context replaces the initial local-only providers so the visible document can
     // immediately acquire the newly available signature.
-    view.dispatch({ selection: view.state.selection, scrollIntoView: view.hasFocus });
+    view.dispatch({ selection: view.state.selection });
   }, [props.completionProvider, props.completions, props.hoverProvider, props.signatureProvider]);
 
   return (
