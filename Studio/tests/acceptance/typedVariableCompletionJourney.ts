@@ -172,11 +172,20 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   await complete(expandedSource);
   await expectConnectionMembers();
+  // A long line scrolls inside the editor; the dialog's own header and controls stay in place.
+  const sideways = await expanded.evaluate(dialog => [dialog, ...dialog.querySelectorAll("*")]
+    .filter(node => node.scrollLeft > 0 && !node.classList.contains("cm-scroller"))
+    .map(node => `${node.tagName.toLowerCase()}.${[...node.classList].join(".")} scrollLeft=${node.scrollLeft}`));
+  expect(sideways, "Only the editor scrolls sideways").toEqual([]);
   await capture(page, info, "typed-expanded-completion");
   await page.keyboard.press("Escape");
   await expect(list()).toHaveCount(0);
 
-  // The Activity Data chooser keeps offering the typed variable as a whole value with no declared members.
+  // The Activity Data chooser offers the typed variable as a whole value: choosing it inserts the variable, no members.
+  await page.keyboard.insertText(" + ");
+  const beforeInsert = `${expandedSource} + `;
+  await expect.poll(source).toBe(beforeInsert);
+  await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
   await expanded.getByRole("button", { name: "Insert data", exact: true }).press("Enter");
   const chooser = page.getByRole("dialog", { name: "Choose data for Text", exact: true });
   const variables = chooser.getByRole("listbox", { name: "Variables", exact: true });
@@ -185,10 +194,18 @@ export async function typedVariableCompletionJourney(page: Page, info: TestInfo,
   await expect(variables.getByRole("option", { name: "plain Object", exact: true })).toBeVisible();
   await capture(page, info, "chooser-typed-variable");
   await variable.press("Enter");
-  // Declared members are advisory for expression completion only; the chooser lists none for the variable.
-  await expect(chooser.getByRole("listbox", { name: "Members", exact: true }).getByRole("option")).toHaveCount(0);
-  await capture(page, info, "chooser-typed-variable-whole");
-  for (let attempt = 0; attempt < 3 && await chooser.count(); attempt++) await page.keyboard.press("Escape");
   await expect(chooser).toHaveCount(0);
-  await expect.poll(source).toBe(expandedSource);
+  await expect(large).toBeFocused();
+  type Stored = { source: string; parameters: Record<string, { kind: string; variableKey?: string }> };
+  const inserted = async () => {
+    const value = (await s.stored(created))?.value;
+    if (typeof value === "string") return null;
+    const definition = value as Stored;
+    const alias = Object.entries(definition.parameters ?? {}).find(([, parameter]) => parameter.kind === "Variable" && parameter.variableKey === "conn")?.[0];
+    return alias && definition.source === `${beforeInsert}args.${alias}` ? alias : null;
+  };
+  await expect.poll(inserted, { message: "The whole conn variable is inserted and saved as a parameter" }).not.toBeNull();
+  await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });
+  await expect(large).toHaveText(`${beforeInsert}args.${await inserted()}`);
+  await capture(page, info, "chooser-typed-variable-whole");
 }
