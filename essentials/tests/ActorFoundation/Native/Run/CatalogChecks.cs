@@ -12,7 +12,10 @@ internal static class CatalogChecks
         check(supported.Values.Distinct().Count() == 26 && supported.Values.All(t => typeof(ActivityBase).IsAssignableFrom(t)) &&
               supported.All(p => p.Key.EndsWith("." + p.Value.Name, StringComparison.Ordinal)),
             "each runs on its own Native activity type, named as the designer's");
-        check(NativeActivityCatalog.Resolve("Elsa.Activities.Switch.Activities.Switch", "sw") == typeof(Switch), "a supported activity resolves to its Native type");
+        check(NativeActivityCatalog.Resolve("Elsa.Activities.Switch.Activities.Switch", "sw") == typeof(Switch) &&
+              NativeActivityCatalog.Resolve("Elsa.HttpEndpoint", "in") == typeof(HttpEndpoint) && NativeActivityCatalog.Resolve("Elsa.Timer", "t") == typeof(Timer) &&
+              Refusal("Elsa.CreateUserTask", "task") is { Hidden: true },
+            "a supported activity resolves to its Native type, by its catalog key or the declared key a published node carries");
         var hidden = Refusal("Elsa.Activities.Compensation.Activities.CompensationScope", "scope");
         var unknown = Refusal("Elsa.Activities.Missing.Activities.LaterInstalled", "later");
         check(hidden is { Hidden: true, Node: "scope" } && hidden.Message.Contains("'scope'", StringComparison.Ordinal) &&

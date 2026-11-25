@@ -15,14 +15,20 @@ public sealed class NativeActivityUnsupportedException(string node, string activ
 /// <summary>
 /// The release 1 activity list (owner decision of 24 November, card 3 B): each designer activity the kernel runs, by its
 /// catalog type key (the old core's CLR type name), to the Native type that runs it, and the eight it leaves out. A kernel
-/// host hides those eight in Studio's toolbox with an availability set (<see cref="KernelUnsupportedSet"/>):
+/// host hides those eight in Studio's toolbox with an availability set (<see cref="KernelUnsupportedSet"/>), configured in
+/// code from this list so that it is kept once:
 /// <code>
-/// "Elsa": { "Activities": { "Availability": {
-///   "Sets": { "kernel-unsupported": [ ...NativeActivityCatalog.Unsupported ] },
-///   "Exclude": { "Sets": [ "kernel-unsupported" ] } } } }
+/// services.Configure&lt;ActivityAvailabilityOptions&gt;(options =&gt;
+/// {
+///     options.Sets[NativeActivityCatalog.KernelUnsupportedSet] = [.. NativeActivityCatalog.Unsupported];
+///     options.Exclude.Sets = [.. options.Exclude.Sets, NativeActivityCatalog.KernelUnsupportedSet];
+/// });
 /// </code>
-/// and the kernel refuses a definition that holds one (<see cref="Resolve"/>), since availability decides only what can be
-/// added (ADR 0026), and an imported or older definition can still hold a hidden activity.
+/// and the mapping onto the kernel refuses a definition that holds one (<see cref="Resolve"/>), since availability decides
+/// only what can be added (ADR 0026), and an imported or older definition can still hold a hidden activity. A published node
+/// may carry an activity's declared type key (<c>Elsa.HttpEndpoint</c>) where the catalog has its CLR name; both resolve.
+/// The engine intrinsics (Set Variable and the others) are placed as intrinsic nodes, not catalog activities, and are
+/// mapped outside this list.
 /// </summary>
 public static class NativeActivityCatalog
 {
@@ -59,6 +65,19 @@ public static class NativeActivityCatalog
         ["Elsa.Activities.Scheduling.Activities.Cron"] = typeof(Cron),
     };
 
+    // The declared type keys (an activity's ActivityType constant) a published node carries for these activities.
+    private static readonly Dictionary<string, string> Declared = new(StringComparer.Ordinal)
+    {
+        ["Elsa.Timer"] = "Elsa.Activities.Scheduling.Activities.Timer",
+        ["Elsa.Cron"] = "Elsa.Activities.Scheduling.Activities.Cron",
+        ["Elsa.Event"] = "Elsa.Activities.Primitives.Activities.Event",
+        ["Elsa.PublishEvent"] = "Elsa.Activities.Primitives.Activities.PublishEvent",
+        ["Elsa.HttpEndpoint"] = "Elsa.Activities.Http.Activities.HttpEndpoint",
+        ["Elsa.DispatchWorkflow"] = "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
+        ["Elsa.RunJavaScript"] = "Elsa.Activities.Scripting.Activities.RunJavaScript",
+        ["Elsa.CreateUserTask"] = "Elsa.Activities.Primitives.Activities.CreateUserTask",
+    };
+
     /// <summary>The eight the kernel leaves out of release 1: compensation, BPMN, user tasks and console input.</summary>
     public static IReadOnlyList<string> Unsupported { get; } =
     [
@@ -75,7 +94,10 @@ public static class NativeActivityCatalog
     /// <summary>The designer activities the kernel runs, by catalog type key, to their Native types.</summary>
     public static IReadOnlyDictionary<string, Type> Supported => Runs;
 
-    /// <summary>The Native type that runs a designer activity; a hidden or unknown one is refused, naming the node.</summary>
-    public static Type Resolve(string activityType, string node) =>
-        Runs.TryGetValue(activityType, out var type) ? type : throw new NativeActivityUnsupportedException(node, activityType, Unsupported.Contains(activityType, StringComparer.Ordinal));
+    /// <summary>The Native type that runs a designer activity, by its catalog or declared type key; a hidden or unknown one is refused, naming the node.</summary>
+    public static Type Resolve(string activityType, string node)
+    {
+        var key = Declared.GetValueOrDefault(activityType) ?? activityType;
+        return Runs.TryGetValue(key, out var type) ? type : throw new NativeActivityUnsupportedException(node, activityType, Unsupported.Contains(key, StringComparer.Ordinal));
+    }
 }
