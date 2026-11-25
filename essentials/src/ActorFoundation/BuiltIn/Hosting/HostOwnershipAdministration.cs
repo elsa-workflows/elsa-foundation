@@ -36,7 +36,9 @@ public sealed class HostOwnershipAdministration(RuntimeNode node, Func<bool> aut
         var stop = _node.StopAsync(deadline.Token).AsTask();
         _ = stop.ContinueWith(static (_, source) => ((CancellationTokenSource)source!).Dispose(), deadline,
             CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-        await stop.WaitAsync(cancellationToken);
+        // A joined stop's own deadline ends only this wait; the stop it joined drains on.
+        try { await stop.WaitAsync(cancellationToken); }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested) { }
         return true;
     }
 }

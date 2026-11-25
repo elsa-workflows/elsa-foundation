@@ -75,6 +75,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         _beforeRelease = beforeRelease;
         _heartbeatsExit = CancellationTokenSource.CreateLinkedTokenSource(_kill.Token);
         _options = options ?? new LoopOptions();
+        ValidDisposeDeadline(_options.DisposeDeadline);     // fail fast: a refused deadline would leave dispose unable to stop
         _runtime = new PartitionRuntime(node, membership, partitions, _options.Window, wake);
         _due = new long[partitions];
         _oldestWaiting = new long?[partitions];
@@ -186,8 +187,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// Finish the pass under way, end admitted off-turn work, then give every scope up: whoever takes them next finds no death.
     /// The call that starts the stop sets its deadline: when <paramref name="cancellationToken"/> cancels, the stop becomes
     /// a kill, also during the release, and what is still owned runs out by its lease. A stop that joins a stop under way
-    /// waits for it; its token ends only its own wait and never shortens the deadline the first caller set. Only
-    /// <see cref="KillAsync"/> and <see cref="DisposeAsync"/> (at <see cref="LoopOptions.DisposeDeadline"/>) end it sooner.
+    /// waits for it; its token ends only its own wait, with a cancellation, and never shortens the deadline the first
+    /// caller set. Only <see cref="KillAsync"/> and <see cref="DisposeAsync"/> (at <see cref="LoopOptions.DisposeDeadline"/>)
+    /// end it sooner. It throws the stop's fault; the fault is also recorded (<see cref="LastError"/>).
     /// </summary>
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
@@ -198,46 +200,28 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         {
             first = _halted is null;
             if (first) deadline = cancellationToken.Register(_kill.Cancel);
-            halted = _halted ??= HaltOnceAsync();
+            halted = _halted ??= StartHalt();
         }
-        Interlocked.Increment(ref _stopWaiters);
-        try
-        {
-            using (deadline) await ObserveAsync(halted, first ? CancellationToken.None : cancellationToken, quietIfReported: false);
-        }
-        finally { Interlocked.Decrement(ref _stopWaiters); }
+        // Its own outcome: the stop's fault, or a joined caller's own cancellation. A fault is recorded either way.
+        using (deadline) await halted.WaitAsync(first ? CancellationToken.None : cancellationToken);
     }
-
-    private int _stopWaiters;     // stops and kills waiting for the outcome: a dispose beside them leaves the report to them
-
-    // A stop's outcome is reported to every stop or kill that waits for it. A dispose reports a failure only when no
-    // stop, kill or other dispose has received it before it, and no stop or kill is waiting for it beside it.
-    private async Task ObserveAsync(Task halted, CancellationToken wait, bool quietIfReported)
-    {
-        try { await halted.WaitAsync(wait); }
-        catch (OperationCanceledException) when (wait.IsCancellationRequested) { }
-        catch (Exception) when (((Interlocked.Exchange(ref _outcomeSeen, 1) == 1) | Volatile.Read(ref _stopWaiters) > 0) & quietIfReported) { }
-    }
-
-    private int _outcomeSeen;
 
     /// <summary>
     /// A crash: the loop stops (a pass under way stops at a turn boundary, before its commit) and nothing more is given
     /// up, also when a stop is under way: a kill during a stop ends its release. A stop or dispose after a kill does
     /// nothing. Background jobs already under way run on, as in a process that lives on after it was declared dead;
-    /// their results are dropped with the worker's memory.
+    /// their results are dropped with the worker's memory. It throws the stop's fault, if any; the fault is also recorded.
     /// </summary>
     public async ValueTask KillAsync()
     {
         _kill.Cancel();
-        Interlocked.Increment(ref _stopWaiters);
-        try { await ObserveAsync(HaltAsync(), CancellationToken.None, quietIfReported: false); }
-        finally { Interlocked.Decrement(ref _stopWaiters); }
+        await HaltAsync();
     }
 
     /// <summary>
     /// A stop bounded by <see cref="LoopOptions.DisposeDeadline"/>: at the deadline it becomes a kill, whoever started the
-    /// stop, and what is still owned runs out by its lease. It does not rethrow a failure a stop, kill or dispose received.
+    /// stop, and what is still owned runs out by its lease. It never throws the stop's fault, which is recorded
+    /// (<see cref="LastError"/>) whoever waits for it; nor does it wait past the deadline plus <see cref="DisposeGrace"/>.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
@@ -247,19 +231,20 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         using var bound = new CancellationTokenSource(WithGrace(_options.DisposeDeadline, DisposeGrace));
         var halted = HaltAsync();
         using (deadline.Token.Register(_kill.Cancel))
-            await ObserveAsync(halted, bound.Token, quietIfReported: true);
-        if (halted.IsCompleted) return;
-        // The dispose returns with the stop still running: say so, and record the stop's fault if it ends with one.
-        RecordError(new TimeoutException($"The dispose returned {DisposeGrace.TotalSeconds:0.#} s after its deadline while the killed stop had not ended."));
-        _ = halted.ContinueWith(static (stopped, node) => ((RuntimeNode)node!).RecordError(stopped.Exception!.InnerException ?? stopped.Exception),
-            this, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            try { await halted.WaitAsync(bound.Token); }
+            catch (Exception) { }     // a fault is recorded by the halt itself; the bound's cancellation is noted below
+        if (!halted.IsCompleted)
+            RecordError(new TimeoutException($"The dispose returned {DisposeGrace.TotalSeconds:0.#} s after its deadline while the killed stop had not ended."));
     }
 
-    /// <summary>A deadline plus a grace; an infinite deadline stays infinite.</summary>
+    /// <summary>A deadline plus a grace; an infinite deadline stays infinite. Deadlines are validated when the node is made.</summary>
     internal static TimeSpan WithGrace(TimeSpan deadline, TimeSpan grace) =>
-        deadline == Timeout.InfiniteTimeSpan ? Timeout.InfiniteTimeSpan
-        : deadline < TimeSpan.Zero ? throw new ArgumentOutOfRangeException(nameof(deadline), "A deadline is positive or infinite.")
-        : deadline + grace;
+        deadline == Timeout.InfiniteTimeSpan ? Timeout.InfiniteTimeSpan : deadline + grace;
+
+    /// <summary>A dispose deadline is positive or infinite; anything else is refused when the node or its host is made.</summary>
+    public static TimeSpan ValidDisposeDeadline(TimeSpan deadline) =>
+        deadline > TimeSpan.Zero || deadline == Timeout.InfiniteTimeSpan ? deadline
+        : throw new ArgumentOutOfRangeException(nameof(deadline), deadline, "LoopOptions.DisposeDeadline must be positive or infinite.");
 
     /// <summary>How long a dispose waits past its deadline for the killed stop to end before it returns.</summary>
     public static readonly TimeSpan DisposeGrace = TimeSpan.FromSeconds(2);
@@ -267,8 +252,22 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// <summary>The first stop or kill leaves the loop and, unless killed, gives every scope up; every caller waits for it.</summary>
     private Task HaltAsync()
     {
-        lock (_halting) return _halted ??= HaltOnceAsync();
+        lock (_halting) return _halted ??= StartHalt();
     }
+
+    // The halt records its own fault, exactly once, whoever waits for it and whether anyone does.
+    private Task StartHalt()
+    {
+        var halted = HaltOnceAsync();
+        _ = halted.ContinueWith(static (stopped, node) => ((RuntimeNode)node!).RecordError(stopped.Exception!.InnerException ?? stopped.Exception),
+            this, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return halted;
+    }
+
+    // A drain or release that the kill stopped waiting for may still fault: record it when it does.
+    private void RecordLater(Task work) =>
+        _ = work.ContinueWith(static (ended, node) => ((RuntimeNode)node!).RecordError(ended.Exception!.InnerException ?? ended.Exception),
+            this, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 
     private async Task HaltOnceAsync()     // A1: the watchdog guards the last pass and the releases, so it ends after them
     {
@@ -289,8 +288,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
             if (_loop is not null) await _loop;
             if (_beforeRelease is { } drain && !_kill.IsCancellationRequested)
             {
-                try { await OnNode(() => drain(_kill.Token)).WaitAsync(_kill.Token); }
-                catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
+                var draining = OnNode(() => drain(_kill.Token));
+                try { await draining.WaitAsync(_kill.Token); }
+                catch (OperationCanceledException) when (_kill.IsCancellationRequested) { RecordLater(draining); }
                 catch (Exception error) { drainError = error; }
             }
 
@@ -307,8 +307,9 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                         ExceptionDispatchInfo.Throw(drainError!);
                     }
                     : StopHeartbeatsAsync;
-                try { await OnNode(() => _runtime.StopAsync(_kill.Token, beforeRelease).AsTask()).WaitAsync(_kill.Token); }
-                catch (OperationCanceledException) when (_kill.IsCancellationRequested) { }
+                var stopping = OnNode(() => _runtime.StopAsync(_kill.Token, beforeRelease).AsTask());
+                try { await stopping.WaitAsync(_kill.Token); }
+                catch (OperationCanceledException) when (_kill.IsCancellationRequested) { RecordLater(stopping); }
                 catch (Exception abandoned) when (abandon && ReferenceEquals(abandoned, drainError)) { }
                 // A fence lost in both drains is one loss.
                 catch (ScopeOwnershipLostException) when (drainError is ScopeOwnershipLostException) { ExceptionDispatchInfo.Throw(drainError); }
