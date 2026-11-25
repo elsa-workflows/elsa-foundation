@@ -159,16 +159,19 @@ internal sealed class ClrActivitySerializedShapeSource(
         if (admitted.Length != 1 || descriptors.Length != 1)
             return Answer(Unknown(null, ownerContractIdentity, "activity.shape.type-not-admitted"));
         // Type admission is not serialization authority: request seeding and other writers can store
-        // JSON with other member names. A single declared type is therefore described as Declared, an
-        // advisory shape for authoring help that validation treats as unknown. Every other case keeps
-        // the unbound answer.
+        // JSON with other member names. A declared type, or a collection or map of one, is therefore
+        // described as Declared, an advisory shape for authoring help that validation treats as unknown.
+        // A selected path below a collection, and every other case, keeps the unbound answer.
         var unbound = Unknown(memberPath.IsEmpty ? declaredType : null, ownerContractIdentity, "activity.shape.serialization-profile-unbound");
-        if (declaredType.CollectionKind != CollectionKind.Single)
+        var collection = declaredType.CollectionKind != CollectionKind.Single;
+        if (collection && !memberPath.IsEmpty)
             return Answer(unbound);
         try
         {
-            var shape = new ClrSerializedShapeReader(ownerContractIdentity, limits, cancellationToken, hashAssets: false).Read(descriptors[0].ClrType, declaredType, memberPath);
-            return Answer(shape.State is ActivitySerializedShapeState.Known or ActivitySerializedShapeState.Truncated
+            var clrType = TypeReferenceFactory.Close(descriptors[0].ClrType, declaredType.CollectionKind);
+            var shape = new ClrSerializedShapeReader(ownerContractIdentity, limits, cancellationToken, hashAssets: false).Read(clrType, declaredType, memberPath);
+            var described = collection ? shape.Element ?? shape.MapValue : shape;
+            return Answer(Describable(shape) && described is not null && Describable(described)
                 ? AsDeclared(shape) with { ReasonCode = "activity.shape.declared-type" }
                 : unbound);
         }
@@ -177,6 +180,9 @@ internal sealed class ClrActivitySerializedShapeSource(
             return Answer(unbound);
         }
     }
+
+    private static bool Describable(ActivitySerializedShape shape) =>
+        shape.State is ActivitySerializedShapeState.Known or ActivitySerializedShapeState.Truncated;
 
     // Every proven node of a declared-type tree becomes Declared, so no member below the root reads as proven.
     private static ActivitySerializedShape AsDeclared(ActivitySerializedShape shape) => shape with

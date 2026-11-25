@@ -33,6 +33,7 @@ internal static class Compiled
         public const string WriteLine = "Elsa.Activities.Primitives.Activities.WriteLine";
         public const string Event = "Elsa.Activities.Primitives.Activities.Event";
         public const string Delay = "Elsa.Activities.Scheduling.Activities.Delay";
+        public const string Timer = "Elsa.Timer";
         public const string Dispatch = "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow";
         public const string HttpEndpoint = "Elsa.HttpEndpoint";
         public const string SendHttpRequest = "Elsa.Activities.Http.Activities.SendHttpRequest";
@@ -42,7 +43,10 @@ internal static class Compiled
     }
 
     public static WorkflowExecutable Executable(ExecutableNode root, params RuntimeVariableDeclaration[] variables) =>
-        new(new WorkflowExecutableIdentity(ArtifactId, DefinitionId, "orders-v3", "3", "sha256:test"), root,
+        ExecutableOf(ArtifactId, DefinitionId, root, variables);
+
+    public static WorkflowExecutable ExecutableOf(string artifactId, string definitionId, ExecutableNode root, params RuntimeVariableDeclaration[] variables) =>
+        new(new WorkflowExecutableIdentity(artifactId, definitionId, $"{definitionId}-version", "1", $"sha256:{artifactId}"), root,
             new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UnixEpoch, new Dictionary<string, string>(),
             inputContract: null, dependencies: null, runtimeRequirements: null, storageDriverRequirements: null,
             new IncidentStrategyReference("Fault", "1"), workflowVariables: variables);
