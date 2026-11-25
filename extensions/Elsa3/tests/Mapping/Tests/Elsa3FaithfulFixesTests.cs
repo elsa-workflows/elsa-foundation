@@ -200,6 +200,19 @@ public sealed class Elsa3FaithfulFixesTests
     }
 
     [Fact]
+    public async Task A_literal_response_header_map_converts_without_the_value_array_warning()
+    {
+        var respond = Activity("respond", "Elsa.WriteHttpResponse",
+            ("content", Literal("ok")),
+            ("responseHeaders", Literal("""{"X-Demo":"elsa3"}""", "HttpHeaders")));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", respond)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.HttpHeaderValueArray);
+    }
+
+    [Fact]
     public async Task An_Elsa3_response_header_literal_that_is_not_a_map_is_refused()
     {
         var respond = Activity("respond", "Elsa.WriteHttpResponse",

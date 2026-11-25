@@ -117,6 +117,12 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>SendHttpRequest outcomes: Done no longer co-fires, and non-2xx goes to Failed.</summary>
     public const string HttpOutcomeSingle = "ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE";
 
+    /// <summary>
+    /// WriteHttpResponse.ResponseHeaders bound to an expression or a captured value: Elsa 3 accepted a single string per
+    /// header, Elsa 4 needs an array of values per header (#5790); Elsa 4 fix tracked in #5803.
+    /// </summary>
+    public const string HttpHeaderValueArray = "ELS3-BEHAVIOUR-HTTP-HEADER-VALUE-ARRAY";
+
     /// <summary>SendHttpRequest: Elsa 4 does not validate the Authorization header.</summary>
     public const string AuthHeaderUnvalidated = "ELS3-BEHAVIOUR-AUTH-HEADER-UNVALIDATED";
 

@@ -973,7 +973,17 @@ internal sealed partial class Elsa3ActivityNormalizer(
     private static JsonElement? CheckHttpResponseHeaders(Elsa3RewriteContext context, string propertyName, JsonElement value)
     {
         if (!Elsa3TypedValues.TryGetLiteral(value, out var literal))
+        {
+            // A header map the conversion cannot read: Elsa 4 does not turn a single string per header into an array,
+            // as Elsa 3's HttpHeaders converter did (#5790).
+            if (Elsa3TypedValues.IsBound(value))
+                context.Warning(HttpHeaderValueArray,
+                    $"Input '{propertyName}' is not a literal header map, so the conversion cannot check its values. Elsa 3 accepted a single string per header, such as {{\"X-Header\": \"value\"}}; " +
+                    "Elsa 4 needs an array of values per header and sends no response when a header holds a single string.",
+                    "Return each header value as an array, such as {\"X-Header\": [\"value\"]}. If the expression already does, nothing needs to change.",
+                    propertyName);
             return value;
+        }
         if (Elsa3TypedValues.IsEmptyLiteral(literal))
             return null;
         if (TryMultiValueHeaders(literal, out var headers))
