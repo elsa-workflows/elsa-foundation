@@ -150,7 +150,7 @@ export function GenericObjectExpandedEditor({ descriptor, value, disabled = fals
   const [draft, setDraft] = useState(() => readDraft(context.activity, descriptor.name) ?? formatJsonEditorValue(value, rawJson, wireJson));
   const [diagnostic, setDiagnostic] = useState<StudioCodeDiagnostic | null>(() => diagnoseJson(draft, uri, rawJson));
   const emittedKey = useRef<string | null>(null);
-  const invalidRawDraft = useRef<string | null>(null);
+  const invalidRawDraft = useRef<string | null>(rawJson ? readDraft(context.activity, descriptor.name) : null);
   const previousKey = useRef(externalKey);
   const document: StudioCodeDocument = { uri, language: "json", value: draft };
 

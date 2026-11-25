@@ -227,6 +227,20 @@ it("keeps malformed stored Object JSON editable and does not replace a contribut
   expect(customPanel.textContent).toContain("Custom JSON editor");
 });
 
+it("retains a restored invalid JSON draft when another property changes", () => {
+  const descriptor = input("Arguments", { referenceKey: "arguments", typeName: "System.Text.Json.JsonElement", isWrapped: true });
+  const node = activity({ arguments: { typeName: descriptor.typeName, expression: { type: "Object", value: "{}" } } });
+  const first = renderPanel([descriptor], { activity: node, editors: builtInPropertyEditors });
+  changeTextArea(first.querySelector<HTMLTextAreaElement>("textarea[aria-label='Arguments JSON value']")!, '{"unfinished":');
+  unmountActivePanel();
+  const reopened = renderPanel([descriptor], { activity: node, editors: builtInPropertyEditors });
+  const editor = reopened.querySelector<HTMLTextAreaElement>("textarea[aria-label='Arguments JSON value']")!;
+  expect(editor.value).toBe('{"unfinished":');
+  flushSync(() => replaceActivity({ ...node, other: "changed" }));
+  expect(editor.value).toBe('{"unfinished":');
+  expect(reopened.querySelector("[role='status']")?.textContent).toContain("Invalid JSON");
+});
+
 it("focuses the input targeted by validation navigation", async () => {
   const container = renderPanel([input("Text", { referenceKey: "Text", isWrapped: false })], {
     focusInputKey: "Text",
