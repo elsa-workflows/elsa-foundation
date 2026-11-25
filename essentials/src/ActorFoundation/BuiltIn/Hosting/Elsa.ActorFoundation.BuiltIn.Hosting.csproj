@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Kernel.Sim" />     <!-- test-only witness hooks, such as LoopOptions.ErrorReportClock -->
+    <InternalsVisibleTo Include="Kernel.Foundation.Postgres" />     <!-- the hosted node reports its drains' retried store errors (RecordLoopError) -->
   </ItemGroup>
 </Project>
