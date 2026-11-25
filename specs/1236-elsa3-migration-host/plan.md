@@ -116,15 +116,16 @@ essentials/tests/Migration/Host/Tests/
 
 essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs   # host admission (R-9)
 essentials/tests/Architecture/Tests/ArchitectureGuardTests.cs      # host path entries (R-1)
-essentials/tests/Modularity/Tests/HostOwnedServicesAreSharedWithShellsTests.cs # + the host, FoundationNuplaneHosts (R-2)
+essentials/tests/Modularity/Tests/HostOwnedServicesAreSharedWithShellsTests.cs # + the host in every host list (R-2)
+essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj      # + project reference to the host (R-2)
 tools/ci/test-tiers.json                                            # + the test project
 Elsa.Server.slnx, solution filters, dependency map                  # + the two projects (regenerated)
 extensions/Elsa3/tests/JTest/ledger/runs.md                         # migration-host run rows (after S-15 merges)
 ```
 
 **Structure Decision**: one thin host over existing features, in `apps/` with the other hosts. Nothing in
-`essentials/src` changes. Outside the two new projects, only the guard tests named above and the generated solution and
-map files change.
+`essentials/src` changes. Outside the two new projects, only the guard tests and the test project file named above, and
+the generated solution, lock and map files change.
 
 ## Complexity Tracking
 

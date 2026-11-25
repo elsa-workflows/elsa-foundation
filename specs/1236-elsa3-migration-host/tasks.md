@@ -57,7 +57,9 @@ short worktree path (MSB3030).
   - the Studio CORS policy;
   - `AddEfSchemaReadability`, `AddConfiguredClusterMembership`, `AddWorkflowRuntimeRunnabilityReport` and the
     shell-activation attention contributor (R-2);
-  - the host added to `HostOwnedServicesAreSharedWithShellsTests` and its `FoundationNuplaneHosts` list, with an
+  - the host added to every host list of `HostOwnedServicesAreSharedWithShellsTests` (`Hosts`,
+    `FoundationNuplaneHosts` and each theory's `[InlineData]` host set), with a project reference from
+    `essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj` (lock file updated), and an
     `appsettings.Development.json` beside `appsettings.json`;
   - creating `data/` when missing, and logging the absolute workflows folder, activities file and data paths.
 
@@ -66,6 +68,7 @@ short worktree path (MSB3030).
   - the `Elsa` resource at `data/elsa.db`, with `Migrate:Policy` `AutoMigrate`;
   - development identity with the seeded administrator (the OpenIddict store is in memory in development mode);
   - `AllowedReturnUrlOrigins` and CORS for the Studio host's local address (the Studio host's own fixed URL);
+  - `WorkflowsRuntimeCheckpointPersistence` with `Mode` `Durable`, as the S-15 run sets it (R-10);
   - the two reconciliation features with `SourceId` `elsa3-migration`, `PublishOnReconcile` `true`, and the sample
     folder paths.
 
@@ -119,8 +122,10 @@ another folder, starts; `/health/ready` returns 200; and the sample trigger answ
   Then convert the S-15 acceptance definitions with `inventory`, with the approved adjusted copies in place of their
   originals (FR-013).
 - [ ] T012 [US2] Start the host from that head with an empty `data/` folder and the `inventory` output as its migrated
-  folder. Run `jtest run` with the S-15 Elsa 4 templates and `environments/elsa4.json`, with `ELSA_API_BASE_URL` set to the
-  host's fixed URL and the admin variables to the development administrator. Record the run in `extensions/Elsa3/tests/JTest/ledger/runs.md` in the ledger's existing columns
+  folder. Set capture through `PUT runtime/workflows/diagnostics/settings` as the S-15 README does. Run `jtest run` with
+  the S-15 Elsa 4 templates and `environments/elsa4.json`, with its variables set as R-10 lists
+  (`ELSA_API_BASE_URL`, `ELSA_EXECUTOR_BASE_URL` to `<host URL>/workflows`, the admin variables, `CORRELATION_ID`,
+  `DATE_NOW_ISO_STRING`). Record the run in `extensions/Elsa3/tests/JTest/ledger/runs.md` in the ledger's existing columns
   (data-model.md, FR-015).
 - [ ] T013 [US2] For each suite that passes on the Workbench and fails on the host, find the cause and route it as
   FR-014 says. Add a missing feature or setting to the composition with its reason, then rerun from T012. Keep every

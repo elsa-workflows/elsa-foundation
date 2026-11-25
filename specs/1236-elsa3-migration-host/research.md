@@ -53,11 +53,14 @@ acceptance set and templates from the merged S-15, or from the head current at t
     `Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore` (`AddOpenIddictEntityFrameworkCoreStore`, R-7);
   - a CORS policy for the repository's Studio host (R-8);
   - `AddEfSchemaReadability`, `AddConfiguredClusterMembership` and `AddWorkflowRuntimeRunnabilityReport`, and the
-    shell-activation attention contributor (`ShellActivationAttentionContributor`, from `Elsa.Attention.Core`), as
+    shell-activation attention contributor (`ShellActivationAttentionContributor` in `Elsa.Foundation.Hosting`, implementing `IAttentionContributor` from
+    `Elsa.Attention.Core`), as
     main's essentials host registers them.
 
-  These are required, not optional: the host joins `HostOwnedServicesAreSharedWithShellsTests` and its
-  `FoundationNuplaneHosts` list, whose theories compare `ShellActivationTracker`, an `IAttentionContributor`, the
+  These are required, not optional: the host joins `HostOwnedServicesAreSharedWithShellsTests` (its `Hosts` and
+  `FoundationNuplaneHosts` lists and the separate `[InlineData]` host sets of the runner, key ring, startup validation
+  and Nuplane observer order theories; the test loads each host by `Assembly.Load`, so `Elsa.Modularity.Tests.csproj`
+  gains a project reference to the host and its lock file updates), whose theories compare `ShellActivationTracker`, an `IAttentionContributor`, the
   durable cluster membership arm, `IClusterMembership`, `IEfSchemaFleet` and the EF data protection key repository
   and migrator between host and shells. That test copies `appsettings.json` and `appsettings.Development.json` from
   `apps/<host>/`, so the host has both files.
@@ -238,12 +241,17 @@ The host references no EF vendor package directly, so `OpenIddictPersistenceArch
 ## R-10 Acceptance run
 
 - **Decision.** Use the S-15 Elsa 4 templates and environment unchanged, except base URL and credentials (the
-  development administrator from R-6). The S-15 environment file `environments/elsa4.json` already reads the base URL
-  and credentials from `${ELSA_API_BASE_URL}`, `${ADMIN_USERNAME}` and `${ADMIN_PASSWORD}`, so the run reuses it with
-  the host's fixed URL (R-2) and the development administrator; the Notes column records those values (no secret). The run record is a row in the S-15 ledger,
+  development administrator from R-6). The S-15 environment file `environments/elsa4.json` reads its values from
+  variables, so the run reuses it and sets them as the S-15 README does: `ELSA_API_BASE_URL` to the host's fixed URL
+  (R-2), `ELSA_EXECUTOR_BASE_URL` to `<host URL>/workflows` (most suites call their HTTP trigger through it),
+  `ADMIN_USERNAME` and `ADMIN_PASSWORD` to the development administrator, and `CORRELATION_ID` and
+  `DATE_NOW_ISO_STRING` as the README sets them. The Notes column records both URLs and the user name (no secret). The run record is a row in the S-15 ledger,
   `extensions/Elsa3/tests/JTest/ledger/runs.md`, in its existing columns: Engine `Elsa 4`; Source names the migration
   host, the CLI version that wrote `migrated/`, and whether spec 1207 is implemented; Notes names the Workbench run it is
-  compared with. Both runs on one head then sit side by side, and spec 1235's ledger format doesn't change. Capture is set through the diagnostics settings API after start, as in S-15.
+  compared with. Both runs on one head then sit side by side, and spec 1235's ledger format doesn't change. Capture is set through the diagnostics settings API (`PUT runtime/workflows/diagnostics/settings`) after start, as
+  in S-15. The S-15 run's checkpoint persistence in `Durable` mode is part of the host's `shells.json`
+  (`WorkflowsRuntimeCheckpointPersistence` `Mode` `Durable`, reason "S-15 run configuration"), so the run needs no
+  extra environment variable for it.
 - **Before the CLI exists**, the sample workflow (R-6) checks the host (FR-011).
 - **Ordering.** The final acceptance task waits for the CLI's `inventory` command and S-15's Elsa 4 run on the same
   head.
