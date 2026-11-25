@@ -157,7 +157,7 @@ internal sealed partial class PostgresRootAdmission(Func<KernelDb> create, TimeS
                 ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS "FoundationKeptBy" smallint /*kept-by-check*/
                 """.Replace("/*kept-by-check*/", EfStore.KeptByCheck, StringComparison.Ordinal)
                 .Replace("/*kept-reasons*/", EfStore.KeptReasons(db), StringComparison.Ordinal), cancellationToken);
-        if (db.UsesRootParkArrivals)
+        if (db.RecordsRootParkRevision)
             await EfStore.InstallRootParkArrivalReasonAsync(db, cancellationToken);
         if (db.UsesRootParkRecovery)
             await EfStore.InstallRootParkRecoveryAsync(db, cancellationToken);

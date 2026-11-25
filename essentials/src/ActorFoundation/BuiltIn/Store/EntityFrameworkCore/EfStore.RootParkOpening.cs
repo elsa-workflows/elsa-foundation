@@ -67,6 +67,14 @@ public sealed partial class EfStore
         };
     }
 
+    // Whether a Park keep marks pending Park commands unseen, and so whether their Park facts let the owner forget a
+    // copy read ahead of the keep. Composed parked-operator sets only: shipped formats keep their behaviour, where a stale
+    // Recover fails its commit and the next owner reads it again.
+    internal static bool RereadsParkFacts(KernelDb db) => db.UsesRootParkedOperators;
+
+    // A stored operator header that names a Park.
+    private const string ParkSelectedOperator = "%\"Park\":{%";
+
     private sealed record LockedParkCheckpoint(long At, long? ParkAt, long? OpenRevision, byte[] StateDigest, byte[] HeaderDigest, int StateVersion);
 
     private sealed record RootParkOpening(WorkerRoot Root, long Expected, bool Opening, ParkKeepReason Reason, string EncodedFault,
@@ -91,11 +99,11 @@ public sealed partial class EfStore
                     AND i."FoundationTenant" = {Root.Tenant} AND i."FoundationReference" = {Root.Reference}
                 FOR UPDATE OF i
                 """;
-            var openRevisionColumn = db.UsesRootParkArrivals ? """i."FoundationParkRevision" """ : "NULL::bigint";
+            var openRevisionColumn = db.RecordsRootParkRevision ? """i."FoundationParkRevision" """ : "NULL::bigint";
             var locked = await db.Database.SqlQuery<LockedParkCheckpoint>(FormattableStringFactory.Create(
                 read.Format.Replace("/*open-revision*/", openRevisionColumn, StringComparison.Ordinal), read.GetArguments()))
                 .ToListAsync(cancellationToken);
-            if (locked is not [var prior] || db.UsesRootParkArrivals &&
+            if (locked is not [var prior] || db.RecordsRootParkRevision &&
                 (Opening ? prior.OpenRevision is not null : prior.OpenRevision is not > 0 || prior.OpenRevision > Expected)) return false;
 
             var parkAt = prior.ParkAt ?? prior.At;
@@ -106,7 +114,7 @@ public sealed partial class EfStore
                     /*open-revision*/
                 WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition} AND "Revision" = {Expected}
                 """;
-            if (db.UsesRootParkArrivals)
+            if (db.RecordsRootParkRevision)
                 write = FormattableStringFactory.Create(
                     write.Format.Replace("/*open-revision*/", $$""", "FoundationParkRevision" = {{{write.ArgumentCount}}}""", StringComparison.Ordinal),
                     [.. write.GetArguments(), openRevision]);
@@ -135,6 +143,15 @@ public sealed partial class EfStore
                 WHERE "Id" = ANY({Returned}) AND "Id" LIKE 'operator/%' AND "Target" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
                 """, cancellationToken) != Returned.Length) return false;
+            // S5b: a keep, of either reason, changes the kept set, so a pending command that carries Park facts (a Recover
+            // or a Terminate that names a Park) is read again with fresh ones. The owner forgets the copy it read ahead of
+            // this keep only where its facts say so, by the same predicate.
+            if (RereadsParkFacts(db))
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE "Messages" SET "Seen" = 0, "Trial" = 0
+                    WHERE "Target" = {Root.Actor} AND "Partition" = {Root.Partition} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
+                        AND "EventMatch" IS NULL AND NOT "Done" AND "Id" LIKE 'operator/%' AND "Start" LIKE {ParkSelectedOperator}
+                    """, cancellationToken);
             if (Reason == ParkKeepReason.Consumed)
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     DELETE FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition}
@@ -167,7 +184,7 @@ public sealed partial class EfStore
                 AND NOT EXISTS (SELECT 1 FROM "Subscriptions" WHERE "Instance" = {Root.Actor} AND "Partition" = {Root.Partition})
                 AS "Value"
                 """).SingleAsync(cancellationToken);
-            if (db.UsesRootParkArrivals && !await db.Database.SqlQuery<bool>($"""
+            if (db.RecordsRootParkRevision && !await db.Database.SqlQuery<bool>($"""
                 SELECT EXISTS (SELECT 1 FROM "Instances" WHERE "Id" = {Root.Actor} AND "Partition" = {Root.Partition}
                     AND "Revision" = {JournalRevision} AND "FoundationParkRevision" = {openRevision}) AS "Value"
                 """).SingleAsync(cancellationToken)) return false;
