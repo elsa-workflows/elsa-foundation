@@ -442,7 +442,10 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                         ExceptionDispatchInfo.Throw(drainError!);
                     }
                     : StopHeartbeatsAsync;
-                var stopping = OnNode(() => _runtime.StopAsync(_kill.Token, beforeRelease).AsTask());
+                // A fence the job drain lost before the kill is recorded when it is judged; one the turn drain lost too is
+                // the same loss, recorded already.
+                Action<ScopeOwnershipLostException>? drainLost = drainError is ScopeOwnershipLostException ? null : RecordFault;
+                var stopping = OnNode(() => _runtime.StopAsync(_kill.Token, beforeRelease, drainLost).AsTask());
                 if (_options.BeforeStopWait is { } beforeStopWait) await beforeStopWait(stopping);
                 try { await stopping.WaitAsync(_kill.Token); }
                 catch (OperationCanceledException) when (_kill.IsCancellationRequested) { RecordLater(stopping); }
