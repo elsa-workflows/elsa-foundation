@@ -195,6 +195,9 @@ public sealed class SourceOwnedProviderPublicationPassTests : IAsyncLifetime
     [InlineData("publication")]
     [InlineData("layout")]
     [InlineData("source-reference")]
+    [InlineData("edge-tenant")]
+    [InlineData("edge-owner")]
+    [InlineData("edge-owner-template")]
     public async Task Mixed_source_commit_ownership_is_refused_before_runtime_or_design_writes(string participant)
     {
         await using var scope = OpenScope(TestAccess.Scoped("tenant-A"));
@@ -215,12 +218,30 @@ public sealed class SourceOwnedProviderPublicationPassTests : IAsyncLifetime
             case "publication": commit.Publication.TenantId = null; break;
             case "layout": commit.Layout.TenantId = null; break;
             case "source-reference": commit = commit with { SourceReference = commit.SourceReference with { TenantId = null } }; break;
+            case "edge-tenant": commit = commit with { DirectDependencies = [Edge(commit.Publication, tenantId: null)] }; break;
+            case "edge-owner": commit = commit with { DirectDependencies = [Edge(commit.Publication, ownerVersionId: "another-version")] }; break;
+            case "edge-owner-template": commit = commit with { DirectDependencies = [Edge(commit.Publication, ownerTemplateHash: "sha256:another")] }; break;
         }
 
         await Assert.ThrowsAsync<ArgumentException>(() => scope.SourceCommand.ExecuteAsync(commit));
 
         await AssertNoPublicationWritesAsync(scope);
     }
+
+    private static ActivityDependencyEdge Edge(
+        ActivityDefinitionVersionPublication owner,
+        string? tenantId = "tenant-A",
+        string? ownerVersionId = null,
+        string? ownerTemplateHash = null) => new()
+    {
+        Id = "edge-1",
+        TenantId = tenantId,
+        OwnerVersionId = ownerVersionId ?? owner.DefinitionVersionId,
+        OwnerTemplateHash = ownerTemplateHash ?? owner.TemplateHash,
+        DependencyVersionId = "dependency-version",
+        DependencyTemplateHash = "sha256:dependency",
+        OccurrenceId = "occurrence-1"
+    };
 
     private ActivityPublicationScope OpenScope(IPersistenceAccessContextAccessor access) => new(
         PublishingNativeProvider.Sqlite.Publishing(publishing.ConnectionString, []),

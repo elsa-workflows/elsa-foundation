@@ -59,5 +59,11 @@ public sealed class EfSourceActivityPublicationCommand : ICommitSourceActivityPu
             !StringComparer.Ordinal.Equals(commit.Publication.SourceReferenceId, commit.SourceReference.SourceReferenceId) ||
             !StringComparer.Ordinal.Equals(commit.SourceReference.ArtifactId, commit.ExecutableTemplate.TemplateId))
             throw new ArgumentException("Source activity publication identities do not align.", nameof(commit));
+
+        if (commit.DirectDependencies.Any(edge =>
+                !StringComparer.Ordinal.Equals(edge.TenantId, tenantId) ||
+                !StringComparer.Ordinal.Equals(edge.OwnerVersionId, commit.Publication.DefinitionVersionId) ||
+                !StringComparer.Ordinal.Equals(edge.OwnerTemplateHash, commit.Publication.TemplateHash)))
+            throw new ArgumentException("Source activity publication dependency edges do not belong to the publication.", nameof(commit));
     }
 }
