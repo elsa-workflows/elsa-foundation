@@ -142,7 +142,12 @@ internal interface IExitBoundary
     void OnExit(CompositeContext context, string outcome);
 }
 
-public sealed record GraphState(string Scope);
+/// <summary>A GraphActivity's frame: its body's scope, and the outputs a Set Output in its body assigned.</summary>
+public sealed record GraphState(string Scope)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, JsonNode?>? Assigned { get; init; }
+}
 
 /// <summary>
 /// The old core's GraphActivity, a placed reusable activity: its body (its one child) runs in a scope that declares its
@@ -158,6 +163,7 @@ public sealed class GraphActivity : CompositeActivity, IExitBoundary
     public const string OutcomeUnmappedFaultCode = "activity.graph.outcome-unmapped";
     public const string InputRequiredFaultCode = "activity.graph.input-required";
     public const string CompleteOutsideFaultCode = "activity.graph.complete.outside";
+    public const string OutputRequiredFaultCode = "activity.graph.output-required";
 
     protected internal override void Execute(CompositeContext context)
     {
@@ -210,9 +216,19 @@ public sealed class GraphActivity : CompositeActivity, IExitBoundary
         JsonObject? outputs = null;
         if (graph.Outputs.Count != 0)
         {
-            var scope = context.ReadState<GraphState>()!.Scope;
+            var state = context.ReadState<GraphState>()!;
             outputs = [];
-            foreach (var output in graph.Outputs) outputs[output.Name] = context.EvaluateInScope(output.Value, scope, closed: true);
+            // An output is its mapping read in the boundary's scope, or what a Set Output in the body assigned it.
+            foreach (var output in graph.Outputs)
+            {
+                if (output.Value is { } mapping) outputs[output.Name] = context.EvaluateInScope(mapping, state.Scope, closed: true);
+                else if (state.Assigned?.TryGetValue(output.Name, out var assigned) == true) outputs[output.Name] = assigned?.DeepClone();
+                else if (output.Required)
+                {
+                    context.Fault(new ActivityFault(OutputRequiredFaultCode, $"Required output '{output.Name}' of GraphActivity '{context.Node.Id}' was neither assigned nor mapped."));
+                    return;
+                }
+            }
         }
         context.Complete(outcome, outputs);
     }
@@ -236,6 +252,15 @@ public sealed class GraphActivity : CompositeActivity, IExitBoundary
         // An input bound under a name the boundary does not declare is a mistake, as the old core refuses unknown input keys.
         if (node.Inputs.Keys.FirstOrDefault(key => !graph.Inputs.Any(i => string.Equals(i.Name, key, StringComparison.OrdinalIgnoreCase))) is { } unknown)
             throw new InvalidOperationException($"GraphActivity '{node.Id}' in '{workflow}' binds '{unknown}', which it does not declare as an input.");
+    }
+
+    /// <summary>A Set Output names a literal output; inside a GraphActivity's body, one the boundary declares and maps no binding to.</summary>
+    internal static void ValidateOutput(Node setOutput, Node? boundary, string workflow)
+    {
+        if (!(setOutput.Inputs.GetValueOrDefault("Name") is LiteralBinding { Value: JsonValue literal } && literal.TryGetValue<string>(out var name) && !string.IsNullOrEmpty(name)))
+            throw new InvalidOperationException($"Set Output '{setOutput.Id}' in '{workflow}' needs a literal output name.");
+        if (boundary is not null && boundary.Graph?.Outputs.FirstOrDefault(o => o.Name == name) is not { Value: null })
+            throw new InvalidOperationException($"Set Output '{setOutput.Id}' in '{workflow}' names '{name}', which GraphActivity '{boundary.Id}' does not declare as an output to assign.");
     }
 
     /// <summary>A Complete needs an enclosing GraphActivity, and a literal outcome must be one that boundary declares.</summary>
