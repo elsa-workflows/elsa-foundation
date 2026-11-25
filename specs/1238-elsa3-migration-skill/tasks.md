@@ -11,8 +11,8 @@ and the check's `--self-test`. The skill text itself is verified by the walkthro
 beyond xunit.
 
 **Dependencies outside this spec**: T013 and case 14 follow the converter's global-matching rule (same member name
-after the prefix). T018's case 17 follows the storage-driver migration guide in `docs/migration/`. T021 takes the tool's command line from spec 1237 and the migration host's settings from spec 1236. T020, T021 and T029–T031 need spec 1237 implemented (its `inventory` and `assess` commands and
-`report.json`). Everything else can start once this spec is approved.
+after the prefix). T018's case 17 follows the storage-driver migration guide in `docs/migration/`. T021 takes the tool's command line from spec 1237 and the migration host's settings from spec 1236. T020 and T021 follow spec 1237's report schema and command-line contract, both merged. T029–T031 need spec 1237
+implemented (its `inventory` and `assess` commands). Everything else can start once this spec is approved.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -46,7 +46,7 @@ is final only after T014. All live in `Sample/Elsa3.Migration.Sample/` and
   feature registers its services, which each later registering task extends.
 - [ ] T005 [P] Base class, type name, inputs, outputs, completion (cases 1–5): `Acme.SendInvoice` with a result record,
   `[ActivityInput]` with default, UI hint and `[Required]`, `[Output]`, `ActivityTransition.Complete`; a second
-  activity whose name cannot match, with `[ReplacesActivityType("Acme.Legacy.Notify")]`. Tests: result and default.
+  activity whose Elsa 3 name cannot be a C# namespace and class, with `[ReplacesActivityType("Acme.Legacy.Notify-v2")]`. Tests: result and default.
 - [ ] T006 [P] Outcomes (case 6): `Acme.Approve` with `[ActivityOutcome]`s; tests for each outcome.
 - [ ] T007 [P] Bookmarks (case 8, port part): `Acme.WaitForPayment` as a stateful activity that suspends and resumes on
   a `[ResumeTarget]`; tests for suspend and resume.
@@ -151,7 +151,7 @@ is final only after T014. All live in `Sample/Elsa3.Migration.Sample/` and
 ## Dependencies
 
 - Phase 1 → Phase 2 → US3 (T018 needs the regions).
-- US1 (T020, T021) needs spec 1237's report schema agreed; US4 edits the same file as T021 (sequence them).
+- US1 (T020, T021) follows spec 1237's merged report schema and command-line contract; US4 edits the same file as T021 (sequence them).
 - US2 needs `SKILL.md` to exist (link target). US5 and US6 are independent of the rest.
 - Phase 9 needs spec 1237 implemented and everything above.
 

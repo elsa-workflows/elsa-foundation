@@ -100,8 +100,9 @@ result does not depend on which AI or which person did the work.
    **Then** the Elsa 4 activity takes the service as a constructor parameter.
 2. **Given** an Elsa 3 composite that schedules child activities, **When** the user looks up case 7, **Then** the
    catalog says it cannot be ported as an activity and names the alternatives before any code is written.
-3. **Given** an Elsa 3 activity whose JSON type name differs from its namespace and class name, **When** the user
-   follows case 2, **Then** the Elsa 4 activity carries the replaced-type marker naming the Elsa 3 type.
+3. **Given** an Elsa 3 activity whose type name cannot be a C# namespace and class (for example it holds a hyphen),
+   **When** the user follows case 2, **Then** the Elsa 4 activity carries the replaced-type marker naming the Elsa 3
+   type; any other Elsa 3 type name is matched by naming the Elsa 4 namespace and class after it.
 
 ### User Story 4 - Know what reaches the AI provider (Priority: P2)
 
