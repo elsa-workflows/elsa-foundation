@@ -1,7 +1,7 @@
-# Specification Quality Checklist: Elsa essentials images
+# Specification Quality Checklist: Elsa 3 migration host
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-11-24
+**Created**: 2026-11-24 (rescoped 2026-11-25)
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -31,7 +31,9 @@
 
 ## Notes
 
-- The spec names images, Docker, SQLite, Nuplane and JTest. These are the product surface this feature delivers
-  (published images, the existing acceptance corpus), not implementation choices, so they stay.
-- Q1 (new hosts) was answered by Joey; Q2 (definitions via the CLI's `migrated/`) was the recommendation after Joey
+- The spec names ASP.NET Core, SQLite, Nuplane and JTest. Its audience builds the host from source, and the
+  acceptance corpus already exists, so these are the product surface, not implementation choices.
+- 2026-11-25 rescope (Joey): a migration-specific host built from source, with no images. The GA composition story
+  moved to #5800.
+- Q1 (a new host) was answered by Joey. Q2 (definitions via the CLI's `migrated/`) was the recommendation after Joey
   gave no preference.
