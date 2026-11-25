@@ -24,7 +24,7 @@ shows each new test failing without the change.
   landed
 - [x] T002 Confirm that the shared-baseline pattern passed the framework §2.24.3 gate with ADR 0091 and is listed in
   §2.24.2 (`.specify/memory/constitution-framework.md`). If not, stop and raise it
-- [ ] T003 List every hash or fingerprint whose input is JSON (research R-1 and R-14, then a search for every
+- [x] T003 List every hash or fingerprint whose input is JSON (research R-1 and R-14, then a search for every
   `SHA256`, `IncrementalHash` and `XxHash` call fed by serialized JSON) as the T023 checklist, with the fixtures and
   goldens that pin each one
 
@@ -51,7 +51,7 @@ shows each new test failing without the change.
   and host resolvers checked for describing owned types only, with no overlap. Add the FR-011 check: no member of an
   API, store or message contract that carries data is a dictionary, `ExpandoObject`, `object` or POCO; data members
   are `JsonElement` or `JsonNode`
-- [ ] T007 Add the "Baseline deviations" register to `docs/serialization.md`, with the ADR 0091 decision 7 rows except its
+- [x] T007 Add the "Baseline deviations" register to `docs/serialization.md`, with the ADR 0091 decision 7 rows except its
   hash-inputs row, and one row for `JsonHashInput`'s option set, the only register entry for hashes (Q11, FR-019, FR-021). Generate `Baselines/json-optionless-calls.txt` from
   today's option-less calls, excluding the value-path sites of research R-10 (Q3, FR-002a)
 - [x] T008 Add `JsonCanonicalForm` in `Serialization/Core/` (FR-021a): move the canonical writer out of
@@ -164,7 +164,7 @@ shows each new test failing without the change.
   reads a row in today's format with the same meaning, and today's reader options read a new row with the same
   meaning; if they fail, regenerate the migrations and golden fixtures in place (no upcaster, no family-version bump,
   no run-time check). Document the rule of FR-023 in `docs/serialization.md` next to the Distributed gate (Q7)
-- [ ] T022 [US2] Add the round-trip tests of US2 scenarios 1, 2, 4 and 5 through every FR-008 store (the workflow
+- [x] T022 [US2] Add the round-trip tests of US2 scenarios 1, 2, 4 and 5 through every FR-008 store (the workflow
   design store, the activities design store, the runtime store, Git files and exports), plus scenario 3 (suspend,
   restart, resume) on SQLite and PostgreSQL
 
@@ -180,7 +180,7 @@ shows each new test failing without the change.
   one value digest the same;
   delete `EfDesignSupport.LegacyFingerprint` and the V1 verification path of `WorkflowExecutableHasher.MatchesHash`
   (FR-021, Q11)
-- [ ] T023a [US4] Add a golden test per hash (fixed input → pinned value), covering every variant the canonical form
+- [x] T023a [US4] Add a golden test per hash (fixed input → pinned value), covering every variant the canonical form
   absorbs (escaping, whitespace, member order, number notation) and every one it keeps apart (missing versus `null`,
   array order, a different number). Each golden's failure message states the first-stable freeze rule of FR-021. Add
   the guard rule: any hash call whose input is serialized JSON and does not go through `JsonHashInput` fails the
@@ -203,7 +203,7 @@ shows each new test failing without the change.
 - [x] T025 [US4] Git: the exporter (`GitWorkflowExporter.cs` L153) indents with a writer that writes `JsonElement`
   raw; `GitCanonicalJson.HashFile` is `JsonHashInput` over the parsed file. Add a round trip (write files, read them
   back, compare hashes) that also asserts the data text in the file (FR-022, Q5)
-- [ ] T026 [US4] Regenerate in place every fixture, golden and stored executable (seeds, sample stores: republished
+- [x] T026 [US4] Regenerate in place every fixture, golden and stored executable (seeds, sample stores: republished
   or reset) whose hash moved, with nothing verifying an old value (for example
   `Essentials/tests/Workflows/Fixtures/legacy-set-v1.json`, `WorkflowExecutableCompilerGoldenTests`, the response-replay
   manifests), list them in the PR, and test that equal inputs with other escaping, whitespace, member order or number
@@ -229,7 +229,7 @@ shows each new test failing without the change.
 
 ## Phase 9: User Story 7 - Deviations are visible (P3)
 
-- [ ] T030 [US7] Run the guard over the migrated tree. For every remaining construction, either derive it from the
+- [x] T030 [US7] Run the guard over the migrated tree. For every remaining construction, either derive it from the
   baseline or add a register row (the R-10 counts are the checklist). Option-less calls on Elsa's own contracts
   stay on the legacy list; no workflow-data path does
 - [x] T031 [US7] Add tests for US7 scenario 3: a resolver describing a type its module does not own, and two
@@ -252,7 +252,7 @@ shows each new test failing without the change.
 
 ## Phase 11: Polish
 
-- [ ] T034 [P] Update `docs/serialization.md`: the baseline and the data rule; the canonical form; the default
+- [x] T034 [P] Update `docs/serialization.md`: the baseline and the data rule; the canonical form; the default
   conversion contract and `[JsonConversion]`; "camelCase, case-insensitive on read" → exact reads; the "HTTP boundary"
   exception without FastEndpoints (FR-024); a *Hash inputs* section with `JsonHashInput` and the first-stable freeze
   rule (FR-021); replace the `DefaultActivityDefinitionHasher` exception with the hash input, and make the
@@ -263,8 +263,10 @@ shows each new test failing without the change.
 - [x] T035 [P] Delete `Essentials/apps/Elsa.Workbench/Constants/JsonSerializerOptionsCache.cs` (unused, research R-11)
 - [x] T036 [P] Add *baseline* and *baseline deviation* to the glossary, and update `EXTENSION_POINTS.md` if the
   baseline is listed as a contract
-- [ ] T037 Run quickstart.md by hand and record the result in the PR
-- [ ] T038 Set the spec's **Status** to Implemented in the implementation PR
+- [x] T037 Run quickstart.md by hand and record the result in the PR
+  *The backend quickstart ran at `520f08a66a` and `5a1fdeb558` (Git export). Its real-source DictionaryKeyPolicy
+  mutation step was not run; the source guard's DictionaryKeyPolicy unit cases and the final census cover that rule.*
+- [x] T038 Set the spec's **Status** to Implemented in the implementation PR
 
 ## Dependencies
 
