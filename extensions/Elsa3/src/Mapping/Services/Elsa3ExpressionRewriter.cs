@@ -1570,6 +1570,17 @@ public sealed class Elsa3ExpressionRewriter(
                 var setterResolution = TryGetAccessorName(callee.Name, "set", out var setter)
                     ? resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedSetter, setter))
                     : null;
+                // Where no variable write converts (an input expression, a reusable script), a generated setter is refused as
+                // a write whether or not it resolves to one variable.
+                if (setterResolution is { Succeeded: true } or { NoSource: false } && !ConvertsVariableWrites)
+                {
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                        $"JavaScript calls generated setter '{callee.Name}', which mutates workflow state.",
+                        Mode == Elsa3JavaScriptMode.Script ? ReusableVariableWriteGuidance : VariableWriteGuidance));
+                    return;
+                }
+
                 if (setterResolution is { Succeeded: true })
                 {
                     if (!ConvertsVariableWrites)
@@ -1602,7 +1613,7 @@ public sealed class Elsa3ExpressionRewriter(
                 }
 
                 // Workflow inputs are read-only: Elsa 3 generated get{Input} but no set{Input}, so the call ran no setter.
-                if (setterResolution is { NoSource: true } &&
+                if (setterResolution is { NoSource: true } && !NeverMatchedGlobals.Contains(callee.Name) &&
                     resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, setter)) is
                         { Succeeded: true, Binding: WorkflowRequestExpressionParameterBinding })
                 {

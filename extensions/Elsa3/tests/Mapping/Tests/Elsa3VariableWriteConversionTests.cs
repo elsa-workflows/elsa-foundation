@@ -100,6 +100,35 @@ public sealed class Elsa3VariableWriteConversionTests
         Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Message.Contains("read-only", StringComparison.Ordinal));
     }
 
+    /// <summary>In an input expression any generated setter is a write, refused as such even when it is ambiguous.</summary>
+    [Fact]
+    public async Task An_ambiguous_setter_in_an_input_expression_is_refused_as_a_write()
+    {
+        var definition = ConversionServices.Definition(
+            Sequence("root", Activity("node", "Elsa.WriteLine", ("text", Expression("JavaScript", "setStatus(1)")))),
+            variables:
+            [
+                new Elsa3Variable { Id = "v1", Name = "status", TypeName = "String" },
+                new Elsa3Variable { Id = "v2", Name = "Status", TypeName = "String" },
+            ]);
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, diagnostic.Code);
+        Assert.Contains("mutates workflow state", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>An input named Outcome has no setter, so setOutcome is still Elsa 3's built-in, not a read-only input.</summary>
+    [Fact]
+    public async Task SetOutcome_next_to_an_input_named_outcome_is_not_a_read_only_input()
+    {
+        var result = await ConvertWithInputAsync("setOutcome('Done');\nreturn 1;", "Outcome");
+
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Message.Contains("read-only", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task A_setter_named_after_a_workflow_input_is_refused_as_read_only()
     {
