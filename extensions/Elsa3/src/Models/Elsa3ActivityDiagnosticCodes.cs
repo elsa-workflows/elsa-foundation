@@ -124,12 +124,6 @@ public static class Elsa3ActivityDiagnosticCodes
     public const string HttpOutcomeSingle = "ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE";
 
     /// <summary>
-    /// WriteHttpResponse.ResponseHeaders bound to an expression or a captured value: Elsa 3 accepted a single string per
-    /// header, Elsa 4 needs an array of values per header (#5790); Elsa 4 fix tracked in #5803.
-    /// </summary>
-    public const string HttpHeaderValueArray = "ELS3-BEHAVIOUR-HTTP-HEADER-VALUE-ARRAY";
-
-    /// <summary>
     /// DispatchWorkflow/ExecuteWorkflow input map bound to an expression or a captured value: Elsa 3 ignored names the
     /// target did not declare and matched names case-insensitively; Elsa 4 refuses both at run time (#5808).
     /// </summary>

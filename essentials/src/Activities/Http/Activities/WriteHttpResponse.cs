@@ -1,5 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Http.Models;
+using Elsa.Activities.Http.Serialization;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
@@ -38,8 +40,11 @@ public sealed class WriteHttpResponse : Activity<HttpResponseInstruction>
     [ActivityInput(Key = nameof(ContentType))]
     public string? ContentType { get; set; }
 
-    /// <summary>Response headers to return, keyed by header name.</summary>
+    /// <summary>
+    /// Response headers to return, keyed by header name. Each value is an array of strings or, as in Elsa 3, one string.
+    /// </summary>
     [ActivityInput(Key = nameof(Headers))]
+    [JsonConverter(typeof(HttpHeaderValuesJsonConverter))]
     public IDictionary<string, string[]>? Headers { get; set; }
 
     protected override ValueTask<ActivityTransition<HttpResponseInstruction>> ExecuteAsync(
