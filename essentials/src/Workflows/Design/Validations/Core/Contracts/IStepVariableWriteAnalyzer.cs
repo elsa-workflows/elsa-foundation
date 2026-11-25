@@ -9,8 +9,7 @@ namespace Elsa.Workflows.Design.Validations.Core.Contracts;
 /// draft: a reusable (graph) activity's body (spec 1241 FR-009). It finds what workflow draft validation finds: variable
 /// references that are unbound, undeclared, not a variable or of another type; a step write that overlaps the node's own
 /// capture; a script body's literal write to a name it cannot write, and its write by a computed name. It also returns
-/// the step writers the
-/// concurrent-write rule counts (<see cref="IUnorderedVariableWriteAnalyzer"/>).
+/// the step writers the concurrent-write rule counts (<see cref="IUnorderedVariableWriteAnalyzer"/>).
 /// </summary>
 /// <remarks>
 /// A single-implementation replacement contract, registered scoped by the workflow design validations feature (it reads the

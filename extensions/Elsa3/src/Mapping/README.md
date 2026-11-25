@@ -442,5 +442,5 @@ Literal empty/whitespace identities refuse import with `ELS3-STATE-IDENTITY-NORM
 once-evaluated generic `requireExactIdentity` guard and runtime `VF-STATE-005`; native identity setters retain their normal
 whitespace-to-null contract. Use explicit null or a nonblank string. Input-expression writes, helper aliases, root
 collisions, spread/wrong arity, `setInput` and `setResult` remain refused. Closed reusable graph writes remain outside this
-capability ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023),
-[#4805](https://github.com/elsa-workflows/elsa-foundation/issues/4805)); this does not deliver reusable caller-output mapping.
+capability ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023)); this does not deliver reusable
+caller-output mapping. A reusable body's script does set its own variables (spec 1241).

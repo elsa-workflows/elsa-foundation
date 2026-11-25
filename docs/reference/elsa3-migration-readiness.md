@@ -194,6 +194,6 @@ runs the same import, so every check on this page applies, and it also publishes
 Spec 1234 adds the three direct workflow-state body setters and pending correlation/name getters documented in the
 [converter's supported body contract](../../Extensions/Elsa3/src/Mapping/README.md#workflow-state-in-supported-script-bodies-spec-1234).
 This narrows the historical setter-refusal inventory for supported inline bodies only. Input-expression writes,
-`setInput`/`setResult`, structural/background sessions, and the broader graph/reusable acceptance tracked by
-[#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023) and
-[#4805](https://github.com/elsa-workflows/elsa-foundation/issues/4805) remain excluded.
+`setInput`/`setResult`, structural/background sessions, and running-workflow state in a reusable body, tracked by
+[#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023), remain excluded. A reusable body's script sets its
+own variables (spec 1241).
