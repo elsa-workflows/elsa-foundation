@@ -69,6 +69,29 @@ public sealed partial class GraphActivityProviderTests
     }
 
     [Fact]
+    public async Task An_undeclared_reference_gets_one_error_not_two()
+    {
+        // The body-reference check already refuses a reference to a variable the body does not declare; the step-write
+        // check's finding for the same input is not repeated. A finding it alone makes (another type) is kept.
+        var root = Parallel.Replace(
+            "\"nodeId\": \"first\", \"activityVersionId\": \"activity-ver-step\", \"inputs\": []",
+            "\"nodeId\": \"first\", \"activityVersionId\": \"activity-ver-step\", \"inputs\": [{ \"referenceKey\": \"Balance\", \"value\": { \"expressionType\": \"Variable\", \"value\": { \"referenceKey\": \"missing\", \"declaringScopeId\": \"workflow\" } } }]",
+            StringComparison.Ordinal);
+        Assert.NotEqual(Parallel, root);
+        var analyzer = new StubStepWriteAnalyzer(StepVariableWriteFacts.None,
+        [
+            new ValidationError("first/inputs/Balance", StepVariableWriteRules.VariableReference, "Input 'Balance' of node 'first' is bound to variable 'missing', which is not declared."),
+            new ValidationError("second/inputs/Balance", StepVariableWriteRules.VariableReference, "Input 'Balance' of node 'second' reads and writes a Decimal, but variable 'RunningTotal' is a Int64.")
+        ]);
+
+        var draft = await StepWriteProvider(analyzer).ValidateAsync(TotalManifest(root), TotalContract());
+
+        Assert.Single(draft, x => x.Code == "activity.graph.body-variable-unknown");
+        var reference = Assert.Single(draft, x => x.Code == "activity.graph.variable-reference");
+        Assert.Equal("second/inputs/Balance", reference.Metadata["validationPath"]);
+    }
+
+    [Fact]
     public async Task Without_an_analyzer_the_body_is_checked_for_captures_only()
     {
         var draft = await WriteOrderProvider.ValidateAsync(TotalManifest(Parallel), TotalContract());

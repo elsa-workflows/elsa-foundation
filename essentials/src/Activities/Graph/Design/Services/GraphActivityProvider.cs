@@ -1834,6 +1834,16 @@ public sealed class GraphActivityProvider(
 
         var pointers = nodes.GroupBy(x => x.NodeId, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.First().JsonPointer, StringComparer.Ordinal);
         var stepWrites = await AnalyzeStepWritesAsync(graph, root, cancellationToken);
+        // A reference to a variable the body does not declare, or to a scope that is not around the node, is already
+        // refused by the body-reference check for that input; one mistake gets one error.
+        bool IsReportedByBodyReferences(ValidationError finding, string nodeId) =>
+            finding.Type == StepVariableWriteRules.VariableReference &&
+            finding.Path.Split('/') is [_, "inputs", var inputKey] &&
+            pointers.GetValueOrDefault(nodeId) is { } nodePointer &&
+            diagnostics.Any(diagnostic =>
+                diagnostic.Code is GraphBodyReferenceValidator.VariableUnknown or GraphBodyReferenceValidator.VariableScopeInvisible &&
+                StringComparer.Ordinal.Equals(diagnostic.Location?.ReferenceKey, inputKey) &&
+                diagnostic.Location?.JsonPointer?.StartsWith($"{nodePointer}/inputs/", StringComparison.Ordinal) == true);
         foreach (var finding in stepWrites.Findings)
         {
             var nodeId = finding.Path.Split('/')[0];
@@ -1846,7 +1856,7 @@ public sealed class GraphActivityProvider(
                 // the body refuses them (ActivityTemplatePlacer, VF-STATE-002).
                 _ => (null, ActivityDiagnosticSeverity.Warning)
             };
-            if (code is null)
+            if (code is null || IsReportedByBodyReferences(finding, nodeId))
                 continue;
             diagnostics.Add(new ActivityDiagnostic(
                 code,
