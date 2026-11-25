@@ -108,6 +108,12 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>Two properties bind one input, or one property matches two inputs.</summary>
     public const string DuplicateInputBinding = "ELS3-ACTIVITY-DUPLICATE-INPUT-BINDING";
 
+    /// <summary>
+    /// A literal DispatchWorkflow/ExecuteWorkflow input map passes a name the target workflow does not declare: Elsa 3
+    /// ignored it, Elsa 4 refuses it (#5808).
+    /// </summary>
+    public const string DispatchInputUndeclared = "ELS3-ACTIVITY-DISPATCH-INPUT-UNDECLARED";
+
     /// <summary>HttpEndpoint.ParsedContent: Elsa 4 does not parse form posts, and text becomes a string.</summary>
     public const string FormPostNotParsed = "ELS3-BEHAVIOUR-FORM-POST-NOT-PARSED";
 
@@ -116,6 +122,12 @@ public static class Elsa3ActivityDiagnosticCodes
 
     /// <summary>SendHttpRequest outcomes: Done no longer co-fires, and non-2xx goes to Failed.</summary>
     public const string HttpOutcomeSingle = "ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE";
+
+    /// <summary>
+    /// DispatchWorkflow/ExecuteWorkflow input map bound to an expression or a captured value: Elsa 3 ignored names the
+    /// target did not declare and matched names case-insensitively; Elsa 4 refuses both at run time (#5808).
+    /// </summary>
+    public const string DispatchInputNames = "ELS3-BEHAVIOUR-DISPATCH-INPUT-NAMES";
 
     /// <summary>SendHttpRequest: Elsa 4 does not validate the Authorization header.</summary>
     public const string AuthHeaderUnvalidated = "ELS3-BEHAVIOUR-AUTH-HEADER-UNVALIDATED";

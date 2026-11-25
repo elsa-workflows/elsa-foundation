@@ -34,12 +34,13 @@ internal static class ConversionServices
         Elsa3WorkflowDefinition definition,
         bool isReusable = false,
         Elsa3MappingFeature? feature = null,
-        Action<IServiceCollection>? configure = null)
+        Action<IServiceCollection>? configure = null,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? dispatchTargetInputs = null)
     {
         await using var provider = Create(catalog, feature, configure);
         await using var scope = provider.CreateAsyncScope();
         var converter = scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>();
-        return await converter.ConvertAsync(new Elsa3ConversionRequest(definition, isReusable));
+        return await converter.ConvertAsync(new Elsa3ConversionRequest(definition, isReusable, dispatchTargetInputs: dispatchTargetInputs));
     }
 
     /// <summary>The JavaScript feature's .NET-usage analysis, as a host composes it.</summary>
