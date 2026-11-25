@@ -86,7 +86,7 @@ public sealed class ScheduleActor(ICronCalendar? cron = null) : IActorType
     /// <summary>
     /// Creates the trigger's schedule actor, or applies <paramref name="revision"/> to it (a publication of the definition,
     /// say): a repeat of one revision is a duplicate, an older one changes nothing, and a newer one replaces the schedule.
-    /// One revision means one schedule: a revision sent again with another schedule is a duplicate and keeps the first. A
+    /// One revision means one schedule: a revision sent again with another schedule is refused or ignored, and the first is kept. A
     /// schedule that does not read is refused; a cron expression is read with <paramref name="calendar"/> when one is given.
     /// </summary>
     /// <remarks>To unpublish, stop the schedule before removing its run's registration, so no occurrence is published without one.</remarks>
