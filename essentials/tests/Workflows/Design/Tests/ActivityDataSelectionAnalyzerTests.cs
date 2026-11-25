@@ -230,23 +230,6 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.Equal(ActivityChildResultAvailability.Definite, source.Availability);
     }
 
-    /// <summary>
-    /// A provider body may omit a node's <c>inputs</c> or <c>outputs</c> list. Validation and compilation read that as
-    /// an empty list, so data selection does too, for the root and for a nested node, instead of throwing.
-    /// </summary>
-    [Fact]
-    public async Task A_node_that_omits_its_input_and_output_lists_is_analyzed_as_having_none()
-    {
-        using var provider = Provider();
-        var root = Sequence(Node("producer") with { Inputs = null!, Outputs = null! }, Node("consumer") with { Inputs = null!, Outputs = null! })
-            with { Inputs = null!, Outputs = null! };
-
-        var browsed = await Analyzer(provider).AnalyzeAsync(Document(root), new("consumer", "CustomerId"));
-        Assert.Empty(browsed.Findings);
-        Assert.Contains(browsed.Sources, source => source.Id == "activity:producer:$result");
-        Assert.Empty((await Analyzer(provider).AnalyzeAsync(Document(root))).Findings);
-    }
-
     [Theory]
     [InlineData("direct")]
     [InlineData("typed")]

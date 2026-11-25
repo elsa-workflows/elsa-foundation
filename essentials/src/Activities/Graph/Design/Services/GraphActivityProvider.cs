@@ -425,6 +425,8 @@ public sealed class GraphActivityProvider(
 
         if (node is null)
             return [];
+        // MalformedArguments refuses a missing or null argument list; reading it as empty here only keeps the walk going.
+        node = node with { Inputs = node.Inputs ?? [], Outputs = node.Outputs ?? [] };
 
         var projection = activityStructureService.ProjectInputs(node);
         var consumedUnused = projection.ConsumedInputKeys.Except(projection.Inputs.Where(input => input.Definition is null).Select(input => input.ReferenceKey), StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
@@ -556,7 +558,7 @@ public sealed class GraphActivityProvider(
                 {
                     diagnostics.Add(Diagnostic(
                         ArgumentMalformedCode,
-                        $"A graph node's '{propertyName}' must be a list of arguments, each with a non-empty 'referenceKey' and, when bound, an expression 'value' object.",
+                        $"A graph node's '{propertyName}' must be a list of arguments ([] when it has none), each with a non-empty 'referenceKey' and, when bound, an expression 'value' object.",
                         subject,
                         $"{candidate.JsonPointer}{pointer}"));
                 }
@@ -1303,6 +1305,9 @@ public sealed class GraphActivityProvider(
         {
             if (string.IsNullOrWhiteSpace(item.Node.NodeId) || string.IsNullOrWhiteSpace(item.Node.ActivityVersionId))
                 continue;
+            // MalformedArguments refuses a missing or null argument list; every later read sees an empty list instead of failing.
+            if (item.Node.Inputs is null || item.Node.Outputs is null)
+                item.Node = item.Node with { Inputs = item.Node.Inputs ?? [], Outputs = item.Node.Outputs ?? [] };
             var pointer = pointers.GetValueOrDefault(item.Node.NodeId, "/rootActivity");
             var element = FindNodeElement(root, item.Node.NodeId) ?? root;
             var memberUsage = PublicMemberUsage(element)
@@ -1511,16 +1516,19 @@ public sealed class GraphActivityProvider(
         return node is not null;
     }
 
-    // The relative pointer of each argument the activity node reader cannot read, or that has no reference key.
+    // The relative pointer of a missing or null argument list, or of each argument the activity node reader cannot
+    // read or that has no reference key. A node with no arguments carries an empty list.
     private static IEnumerable<string> MalformedArguments(JsonElement node, string propertyName)
     {
-        if (!TryGetPropertyIgnoreCase(node, propertyName, out var property) ||
-            property.Value.ValueKind == JsonValueKind.Null)
+        if (!TryGetPropertyIgnoreCase(node, propertyName, out var property))
+        {
+            yield return $"/{propertyName}";
             yield break;
+        }
 
         var name = EscapePointer(property.Name);
         var arguments = property.Value;
-        if (arguments.ValueKind != JsonValueKind.Array)
+        if (arguments.ValueKind != JsonValueKind.Array) // null included
         {
             yield return $"/{name}";
             yield break;
