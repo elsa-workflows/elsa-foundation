@@ -510,6 +510,20 @@ public sealed class Elsa3VariableWriteConversionTests
         Assert.Contains("initialize it from input", diagnostic.Guidance, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task A_reusable_setter_named_like_both_an_input_and_a_variable_is_ambiguous()
+    {
+        // Elsa 3 declared a reusable workflow's inputs as variables too, so set{Name} names two variables there.
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("setAmount(5); return 1;"))));
+        var definition = ConversionServices.Definition(root, variables: [new Elsa3Variable { Id = "amount-id", Name = "Amount", TypeName = "Int32" }]);
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Amount", Type = "Int32" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Elsa3ImportDiagnosticCodes.AmbiguousReference, Assert.Single(result.Diagnostics, item => item.IsError).Code);
+    }
+
     [Theory]
     [InlineData("setOutput('Result', 1); return 1;")]
     [InlineData("setCorrelationId('c'); return 1;")]

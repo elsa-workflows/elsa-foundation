@@ -52,7 +52,8 @@ differently.
 | Outcomes: each Complete names one or several literal outcomes, not `done` (several become the Elsa 4 Complete's `outcomes` list, spec 1208) | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 | End only in the workflow's root flowchart | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 
-What this means today: a reusable workflow imports as a reusable activity when its body sets no values and signals its
+What this means today: a reusable workflow imports as a reusable activity when its body uses none of the intrinsics above
+(its scripts may set its own variables, spec 1241) and signals its
 result through **outcomes**. Its body reads its own inputs, its variables and other activities' results, and captures
 outputs into its own variables, as in Elsa 3 (spec 265, [#3027](https://github.com/elsa-workflows/elsa-foundation/issues/3027);
 reading an input is proven end to end). It may wait in its body: a Delay, a mid-flow Event and a mid-flow HTTP

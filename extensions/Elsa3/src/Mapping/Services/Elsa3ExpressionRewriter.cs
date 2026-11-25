@@ -1904,8 +1904,8 @@ public sealed class Elsa3ExpressionRewriter(
         /// <summary>
         /// Elsa 3's <c>setVariable(name, value)</c>. In a Run JavaScript body a literal name of a declared variable becomes a
         /// whole assignment, <c>variables.name = value</c> (spec 1231 FR-032, Q6), and a computed name becomes
-        /// <c>variables[name] = value</c> (FR-033 as amended). Refused with guidance (FR-033): an undeclared variable, an
-        /// input expression (which only reads) and a reusable workflow's script.
+        /// <c>variables[name] = value</c> (FR-033 as amended). Refused with guidance (FR-033): an undeclared variable and an
+        /// input expression (which only reads); in a reusable workflow, a write to one of its inputs (spec 1241).
         /// </summary>
         private void ConvertWorkflowState(CallExpression call, Identifier callee)
         {
