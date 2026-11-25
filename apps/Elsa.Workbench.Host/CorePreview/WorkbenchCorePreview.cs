@@ -38,7 +38,9 @@ internal static class WorkbenchCorePreview
                 workflows.Add(DirectApprovalWorkflow.BuildWithTimedTakeover(releaseFile));
             }
         }
-        var model = new NativeExecutionModel(workflows);
+        // The host's engines for the activities that need one: RunJavaScript runs on the old core's isolated Jint evaluator.
+        var scripts = new JintNativeScripts(Elsa.Expressions.JavaScript.Jint.Services.JintScriptEvaluators.Create(new Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions()));
+        var model = new NativeExecutionModel(workflows, new NativeExecutionOptions { Scripts = scripts });
         var actor = new WorkflowActor([model]);
         var node = $"workbench-core-preview-{Environment.ProcessId}-{Guid.NewGuid():N}";
         services.AddHostedService(_ => new PostgresPreviewHostedService(Open, node, actor, Environment.FailFast));
