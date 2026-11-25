@@ -1,74 +1,14 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using CShells.Features;
-using CShells.Lifecycle;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
-using Elsa.Tasks.Core;
-using Elsa.Workflows.Runtime.Diagnostics;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Microsoft.Extensions.Logging;
 
-namespace Elsa.Workbench;
-
-/// <summary>
-/// Host-local composition seam that bridges the workflow engine's self-instrumentation into the OpenTelemetry
-/// ingestion domain so Studio's timing view is populated on a self-contained demo server.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The two telemetry surfaces are independent by design (see <c>docs/reference/engine-telemetry.md</c>): the engine
-/// <b>emits</b> <see cref="ActivitySource"/> spans on <see cref="WorkflowEngineTelemetry.ActivitySourceName"/>, while
-/// <c>DiagnosticsOpenTelemetry</c> is a <b>backend</b> that only receives OTLP telemetry pushed by other processes. With
-/// neither an OpenTelemetry SDK exporter nor a listener wired up, nothing subscribes the engine source and nothing lands
-/// in the ingestion store, so <c>POST /diagnostics/opentelemetry/traces/search</c> stays empty even after workflow runs.
-/// </para>
-/// <para>
-/// This feature closes that gap the way the docs prescribe — "a host wires ... a bare listener to the source name" —
-/// without adding an OpenTelemetry SDK or an HTTP loopback exporter (which would fight the dev TLS cert). It attaches an
-/// in-process <see cref="ActivityListener"/> that samples the engine source and, when the outermost drain span of a
-/// trace completes, folds its span tree into an <see cref="OpenTelemetryBatch"/> and feeds it to <see cref="IOpenTelemetryIngestor"/> — the same
-/// contract the OTLP/HTTP receiver uses — so the batch flows through redaction, the store, and the live feed unchanged.
-/// </para>
-/// </remarks>
-[ShellFeature(
-    name: "DiagnosticsOpenTelemetryEngineBridge",
-    DisplayName = "Diagnostics: OpenTelemetry Engine Bridge",
-    Description = "Forwards the workflow engine's ActivitySource spans into the OpenTelemetry ingestion store so the timing view is populated in a self-contained host.",
-    DependsOn = new object[] { "DiagnosticsOpenTelemetry", "WorkflowsRuntimeTracing" })]
-// Must be public: CShells feature discovery scans exported types only, so an internal feature class never
-// enters the runtime feature catalog and is silently dropped from every shell that requests it.
-public sealed class OpenTelemetryEngineTracingBridgeFeature : IShellFeature
-{
-    public void ConfigureServices(IServiceCollection services)
-    {
-        services.AddSingleton<OpenTelemetryEngineTracingBridge>();
-        services.AddScoped<IStartupTask, StartEngineTracingBridgeStartupTask>();
-        services.AddShellTerminator<StopEngineTracingBridgeTerminator>(LifecyclePhase.Default, 0);
-    }
-}
-
-/// <summary>Attaches the bridge listener once the shell has started.</summary>
-internal sealed class StartEngineTracingBridgeStartupTask(OpenTelemetryEngineTracingBridge bridge) : IStartupTask
-{
-    public Task ExecuteAsync(CancellationToken cancellationToken)
-    {
-        bridge.Start();
-        return Task.CompletedTask;
-    }
-}
-
-/// <summary>Detaches the bridge listener on graceful shutdown.</summary>
-internal sealed class StopEngineTracingBridgeTerminator(OpenTelemetryEngineTracingBridge bridge) : IShellTerminator
-{
-    public Task TerminateAsync(CancellationToken cancellationToken = default)
-    {
-        bridge.Stop();
-        return Task.CompletedTask;
-    }
-}
+namespace Elsa.Diagnostics.OpenTelemetry.Workflows;
 
 /// <summary>Tuning knobs for the bridge's pending-trace buffer; defaults are production values, overridden in tests.</summary>
-internal sealed class OpenTelemetryEngineTracingBridgeOptions
+internal sealed class EngineTracingBridgeOptions
 {
     /// <summary>Minimum interval between opportunistic sweeps of the pending-trace table.</summary>
     public long SweepIntervalMs { get; init; } = 30_000;
@@ -92,14 +32,14 @@ internal sealed class OpenTelemetryEngineTracingBridgeOptions
 /// <summary>
 /// Subscribes the engine <see cref="ActivitySource"/> and forwards completed span trees to the OpenTelemetry ingestor.
 /// </summary>
-internal sealed class OpenTelemetryEngineTracingBridge
+internal sealed class EngineTracingBridge
 {
     // Mirrors the OTLP parser's resource shape (resource id == service name when no instance id is present).
     private const string ServiceName = "elsa-workflow-engine";
 
     private readonly IOpenTelemetryIngestor _ingestor;
-    private readonly ILogger<OpenTelemetryEngineTracingBridge> _logger;
-    private readonly OpenTelemetryEngineTracingBridgeOptions _options;
+    private readonly ILogger<EngineTracingBridge> _logger;
+    private readonly EngineTracingBridgeOptions _options;
     private readonly Func<long> _ticks;
 
     // Spans complete child-first and the OUTERMOST drain span last, so a trace's spans are buffered under its trace id
@@ -120,14 +60,14 @@ internal sealed class OpenTelemetryEngineTracingBridge
     private ActivityListener? _listener;
     private int _started;
 
-    public OpenTelemetryEngineTracingBridge(
+    public EngineTracingBridge(
         IOpenTelemetryIngestor ingestor,
-        ILogger<OpenTelemetryEngineTracingBridge> logger,
-        OpenTelemetryEngineTracingBridgeOptions? options = null)
+        ILogger<EngineTracingBridge> logger,
+        EngineTracingBridgeOptions? options = null)
     {
         _ingestor = ingestor;
         _logger = logger;
-        _options = options ?? new OpenTelemetryEngineTracingBridgeOptions();
+        _options = options ?? new EngineTracingBridgeOptions();
         _ticks = _options.TickSource;
     }
 
@@ -142,6 +82,9 @@ internal sealed class OpenTelemetryEngineTracingBridge
         // must retry against a fresh table entry instead of mutating a snapshot that already left the table.
         public bool Closed;
     }
+
+    /// <summary>Whether the listener is attached to the engine source.</summary>
+    internal bool IsAttached => Volatile.Read(ref _listener) is not null;
 
     public void Start()
     {

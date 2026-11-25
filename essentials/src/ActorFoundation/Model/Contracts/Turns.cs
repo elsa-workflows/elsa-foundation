@@ -26,5 +26,12 @@ public interface ITurn
     string Publish(string key, string? payload, TimeSpan keepFor);
     void Record(object entry);
     void Rebind(string definition);
+
+    /// <summary>
+    /// Sets one of the instance's own labels, or removes it with null: metadata reads filter on labels (ActorQuery.Labels),
+    /// such as a correlation id or a display name. The host holds them within its budget and refuses one past it, one of
+    /// its own names, or a name or value longer than the foundation allows (ArgumentException).
+    /// </summary>
+    void SetLabel(string name, string? value);
     void SetStatus(ActorStatus status, string? subStatus = null, object? output = null);
 }

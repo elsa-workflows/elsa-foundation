@@ -56,7 +56,7 @@ internal sealed class WorkbenchCorePreviewReads(Func<KernelDb> open, BoundScope 
         catch (ArgumentException error) when (error.ParamName == "from") { return Results.BadRequest("The continuation is invalid for this list."); }
 
         return Results.Ok(new Snapshot(page.Items.Select(view => new Row(view.Header.Ref.Id, view.Header.Status.ToString(),
-            view.Header.Labels.GetValueOrDefault("definition"), view.Header.Labels.GetValueOrDefault("version"), view.Header.EndedAt)).ToArray(),
+            view.Header.Labels.GetValueOrDefault("definition"), StateVersion(view.Header.TypeData), view.Header.EndedAt)).ToArray(),
             page.Next?.Value, page.AsOf));
     }
 
@@ -83,4 +83,11 @@ internal sealed class WorkbenchCorePreviewReads(Func<KernelDb> open, BoundScope 
 
     private sealed record Row(string Ref, string Status, string? Definition, string? Version, long? EndedAt);
     private sealed record Snapshot(IReadOnlyList<Row> Items, string? Next, long AsOf);
+
+    // The workflow actor keeps an instance's state version in its type data, not in a label.
+    private static string? StateVersion(string typeData)
+    {
+        try { return System.Text.Json.Nodes.JsonNode.Parse(typeData)?["Version"]?.ToJsonString(); }
+        catch (System.Text.Json.JsonException) { return null; }
+    }
 }

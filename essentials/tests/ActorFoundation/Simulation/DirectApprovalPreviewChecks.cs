@@ -30,7 +30,7 @@ internal static class DirectApprovalPreviewChecks
             .Single(entry => entry.StartsWith(DirectApprovalWorkflow.WaitEntry, StringComparison.Ordinal));
         var frame = wait[DirectApprovalWorkflow.WaitEntry.Length..];
         check(writes.Count == 1 && writes[0] is { Expected: null, Row.Revision: 1, Row.StateVersion: 1, Row.Status: InstanceStatus.Running } &&
-            writes[0].Consumed.Count == 1 && writes[0].FoundationHeader?.Labels.GetValueOrDefault("version") == "14" &&
+            writes[0].Consumed.Count == 1 && writes[0].FoundationHeader?.TypeData.Contains("\"Version\":14", StringComparison.Ordinal) == true &&
             writes[0].FoundationHeader?.Labels.GetValueOrDefault("definition") == DirectApprovalWorkflow.Definition,
             "public Native start consumes its exact creator and commits the open frame, workflow header and journal");
         check(frame.Length > 0 && journal.Items.All(entry => entry.Revision == 1) && store.Subscriptions.Count == 0,

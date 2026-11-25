@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Kernel.Foundation.Contracts;
 
 namespace Kernel.Native;
@@ -72,7 +73,14 @@ public sealed class ExternalAttribute : Attribute;
 
 public enum TransitionKind { Complete, Suspend, Fault, Cancel }
 
-public sealed record ActivityFault(string Code, string Message);
+public sealed record ActivityFault(string Code, string Message)
+{
+    /// <summary>The classification an authored <c>Fault</c> gives the fault, as the old core records it; null otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Category { get; init; }
+
+    /// <summary>The family an authored <c>Fault</c> names for the fault, as the old core records it; null otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? FaultType { get; init; }
+}
 
 /// <summary>What a suspended activity waits for. The model turns each into a kernel registration.</summary>
 public abstract record Trigger;
@@ -86,6 +94,13 @@ public abstract record Effect;
 public sealed record PublishEffect(string Event, JsonNode? Payload) : Effect;             // the kernel's publish
 public sealed record DispatchEffect(string Workflow, JsonNode? Input, string Mode) : Effect; // a detached start
 public sealed record EmitEffect(string Channel, JsonNode? Item) : Effect;                 // live, not durable: the kernel's Emit
+
+/// <summary>
+/// The exit a graph <c>Complete</c> sends: the model completes the leaf without telling its parent, and its nearest
+/// enclosing GraphActivity takes the exit, ending the rest of its body. Only a completion carries it; nothing between the
+/// leaf and the boundary sees it.
+/// </summary>
+public sealed record ExitEffect(string Outcome) : Effect;
 
 /// <summary>
 /// An effect on the outside world that is not replay-safe, performed by the host (round 5 C). <see cref="Key"/> is the
@@ -156,6 +171,21 @@ public class ActivityContext
 
     /// <summary>The host's outbound HTTP, for an activity that runs as a background job; null where the host composes none.</summary>
     public NativeHttpOptions? Http { get; internal init; }
+
+    /// <summary>The host's script engine, for <see cref="RunJavaScript"/>; null where the host composes none.</summary>
+    public INativeScripts? Scripts { get; internal init; }
+}
+
+/// <summary>
+/// The host's script engine for <see cref="RunJavaScript"/>: it runs a program that sees only its frozen <c>args</c> and
+/// returns the program's value as JSON. The host bounds its time, statements and recursion, as the old core's evaluator
+/// does, and it reads no workflow state, so a run inside the turn is safe to repeat. While the token is cancelled, any
+/// exception it throws abandons the turn (an engine's own cancellation exception included); otherwise an exception
+/// faults the activity. A number in the value keeps its JSON text, which names an outcome.
+/// </summary>
+public interface INativeScripts
+{
+    ValueTask<JsonNode?> EvaluateAsync(string script, JsonObject arguments, CancellationToken cancellationToken);
 }
 
 /// <summary>

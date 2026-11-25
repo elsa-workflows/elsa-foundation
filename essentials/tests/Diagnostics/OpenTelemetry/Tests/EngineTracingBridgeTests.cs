@@ -4,21 +4,21 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Providers.InMemory;
 using Elsa.Diagnostics.OpenTelemetry.Services;
-using Elsa.Workbench;
+using Elsa.Diagnostics.OpenTelemetry.Workflows;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
-namespace Elsa.Modularity.Tests;
+namespace Elsa.Diagnostics.OpenTelemetry.Tests;
 
 /// <summary>
-/// Behavior of the host-local engine tracing bridge (lives in Elsa.Workbench, hence this project — the only test assembly
-/// with internals access): per-cycle batches for multi-cycle synchronous drains that merge into one store summary, and
-/// sweep-publication (not dropping) of drainless engine spans such as the coalescing quiescence flush commit.
+/// Behavior of the engine tracing bridge: per-cycle batches for multi-cycle synchronous drains that merge into one store
+/// summary, and sweep-publication (not dropping) of drainless engine spans such as the coalescing quiescence flush commit.
 /// </summary>
-public sealed class OpenTelemetryEngineTracingBridgeTests : IDisposable
+public sealed class EngineTracingBridgeTests : IDisposable
 {
     private readonly List<OpenTelemetryBatch> _ingested = [];
     private readonly InMemoryOpenTelemetryStore _store;
@@ -27,9 +27,9 @@ public sealed class OpenTelemetryEngineTracingBridgeTests : IDisposable
     private readonly ActivitySource _hostSource = new("Test.Host.Request");
     private readonly ActivityListener _hostListener;
     private long _ticks;
-    private OpenTelemetryEngineTracingBridge? _bridge;
+    private EngineTracingBridge? _bridge;
 
-    public OpenTelemetryEngineTracingBridgeTests()
+    public EngineTracingBridgeTests()
     {
         var options = Microsoft.Extensions.Options.Options.Create(new OpenTelemetryDiagnosticsOptions());
         _store = new InMemoryOpenTelemetryStore(options, new OpenTelemetrySourceRegistry(options));
@@ -44,12 +44,12 @@ public sealed class OpenTelemetryEngineTracingBridgeTests : IDisposable
         ActivitySource.AddActivityListener(_hostListener);
     }
 
-    private OpenTelemetryEngineTracingBridge StartBridge()
+    private EngineTracingBridge StartBridge()
     {
-        _bridge = new OpenTelemetryEngineTracingBridge(
+        _bridge = new EngineTracingBridge(
             new CapturingIngestor(_ingested, _store),
-            NullLogger<OpenTelemetryEngineTracingBridge>.Instance,
-            new OpenTelemetryEngineTracingBridgeOptions { TickSource = () => Volatile.Read(ref _ticks) });
+            NullLogger<EngineTracingBridge>.Instance,
+            new EngineTracingBridgeOptions { TickSource = () => Volatile.Read(ref _ticks) });
         _bridge.Start();
         return _bridge;
     }

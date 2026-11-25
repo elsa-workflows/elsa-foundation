@@ -63,6 +63,71 @@ public static class Wf
     public static Node Parallel(string id, int? threshold, params Node[] branches) =>
         (threshold is { } t ? Node<Parallel>(id, ("Threshold", t)) : Node<Parallel>(id)).With(branches);
 
+    public static Node Switch(string id, Binding? value, params (SwitchCase Case, Node? Branch)[] cases) => Switch(id, value, null, cases);
+
+    public static Node Switch(string id, Binding? value, Node? @default, params (SwitchCase Case, Node? Branch)[] cases)
+    {
+        var node = value is null ? Node<Switch>(id) : Node<Switch>(id, ("Value", value));
+        foreach (var (@case, branch) in cases)
+        {
+            node.Cases.Add(@case);
+            if (branch is not null) node.Children.Add(branch.In(Native.Switch.CaseSlot(@case.Label)));
+        }
+        if (@default is not null) node.Children.Add(@default.In(Native.Switch.DefaultSlot));
+        return node;
+    }
+
+    public static SwitchCase Case(string label, Binding? condition = null) => new(label, condition);
+
+    public static Node For(string id, Binding start, Binding end, Node body, Binding? step = null, bool endInclusive = false)
+    {
+        var node = Node<For>(id, ("Start", start), ("End", end), ("EndInclusive", endInclusive));
+        if (step is not null) node.Inputs["Step"] = step;
+        return node.With(body);
+    }
+
+    public static Node Do(string id, Binding condition, Node body) => Node<Do>(id, ("Condition", condition)).With(body);
+    public static Node Break(string id) => Node<Break>(id);
+    public static Node WriteLines(string id, Binding lines) => Node<WriteLines>(id, ("Lines", lines));
+
+    public static Node Fault(string id, Binding? code = null, Binding? message = null, Binding? category = null, Binding? faultType = null)
+    {
+        var node = Node<Fault>(id);
+        if (code is not null) node.Inputs["Code"] = code;
+        if (message is not null) node.Inputs["Message"] = message;
+        if (category is not null) node.Inputs["Category"] = category;
+        if (faultType is not null) node.Inputs["FaultType"] = faultType;
+        return node;
+    }
+
+    /// <summary>A GraphActivity with its body, its declaration and its inputs bound by name.</summary>
+    public static Node GraphActivity(string id, GraphBoundary graph, Node body, params (string Input, Binding Value)[] inputs)
+    {
+        var node = Node<GraphActivity>(id, inputs).With(body);
+        node.Graph = graph;
+        return node;
+    }
+
+    public static Node Complete(string id, Binding outcome) => Node<Complete>(id, ("Outcome", outcome));
+
+    public static Node Inline(string id, Binding expression) => Node<Inline>(id, ("Expression", expression));
+
+    public static Node RunJavaScript(string id, Binding script, Binding? arguments = null, Binding? possibleOutcomes = null)
+    {
+        var node = Node<RunJavaScript>(id, ("Script", script));
+        if (arguments is not null) node.Inputs["Arguments"] = arguments;
+        if (possibleOutcomes is not null) node.Inputs["PossibleOutcomes"] = possibleOutcomes;
+        return node;
+    }
+
+    public static Node Timer(string id, string interval) => Node<Timer>(id, ("Interval", interval));
+    public static Node Cron(string id, string expression) => Node<Cron>(id, ("Expression", expression));
+
+    public static Node SetOutput(string id, string name, Binding value) => Node<SetOutput>(id, ("Name", name), ("Value", value));
+    public static Node SetCorrelationId(string id, Binding value) => Node<SetCorrelationId>(id, ("Value", value));
+    public static Node SetInstanceName(string id, Binding value) => Node<SetInstanceName>(id, ("Value", value));
+    public static Node Finish(string id, string outcome) => Node<Finish>(id, ("Outcome", outcome));
+
     public static Node ForEach(string id, Binding items, Node body) => Node<ForEach>(id, ("Items", items)).With(body);
     public static Node While(string id, Binding condition, Node body) => Node<While>(id, ("Condition", condition)).With(body);
 
