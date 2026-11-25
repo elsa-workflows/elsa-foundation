@@ -8,7 +8,9 @@ namespace Kernel.Foundation.Postgres;
 
 /// <summary>Runs one PostgreSQL Core Preview node for the lifetime of its application host.</summary>
 /// <param name="logger">Each fault the node or this service records about its stop is logged once, at Error: a lost
-/// fence or a drain fault, a dispose that returned at its bound, a fault after a kill, and a fault of the shutdown itself.</param>
+/// fence or a drain fault, a dispose that returned at its bound, and a fault of the shutdown itself. Once a deadline has
+/// killed the drain, an error recorded later (by an operation the kill interrupted, possibly after the stop returned) is
+/// logged at Warning, beside the kill's own Warning.</param>
 /// <param name="requests">The held callers the node answers, on a store with held replies (<see cref="PostgresPreviewHosting.StartAsync"/>).</param>
 public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string node, IActorType actor,
     Action<string> endProcess, LoopOptions? options = null, ILogger<PostgresPreviewHostedService>? logger = null,
@@ -16,6 +18,7 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
 {
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Exception, object> _logged = [];     // weak: no exception is kept alive
     private Exception? _shutdownFault;
+    private int _drainKilled;     // 1 once a deadline killed the node's stop: later errors are logged at Warning
 
     // One Error entry per fault, whether the node recorded it or the shutdown around it raised it.
     private void Fault(Exception fault) => Log(fault, again: false);
@@ -36,8 +39,14 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
         // The phase the node was in: a loop error on a running node is no stop fault.
         var phase = Volatile.Read(ref _shutdown) is null ? "running" : "stopping";
         var repeats = fault.Data?["SuppressedRepeats"] is long suppressed ? suppressed : 0;
-        logger?.LogError(fault, "The PostgreSQL preview node {Node} recorded an error while {Phase} ({Repeats} earlier repeats not logged).",
-            node, phase, repeats);
+        // After the deadline killed the drain, what the kill interrupted may end with an error the kill caused (its store
+        // torn down, say): a Warning beside the kill's own, still with the error, which LastError keeps too.
+        if (Volatile.Read(ref _drainKilled) == 1)
+            logger?.LogWarning(fault, "The PostgreSQL preview node {Node} recorded an error after the deadline killed its drain ({Repeats} earlier repeats not logged).",
+                node, repeats);
+        else
+            logger?.LogError(fault, "The PostgreSQL preview node {Node} recorded an error while {Phase} ({Repeats} earlier repeats not logged).",
+                node, phase, repeats);
     }
 
     private readonly Action<string> _endProcess = endProcess ?? throw new ArgumentNullException(nameof(endProcess));
@@ -183,7 +192,13 @@ public sealed class PostgresPreviewHostedService(Func<KernelDb> create, string n
                 await ((Task)startup).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
                 // The caller's deadline and a dispose deadline both end the drain as a kill.
                 using var stop = CancellationTokenSource.CreateLinkedTokenSource(deadline, _killNode.Token);
-                if (startup.IsCompletedSuccessfully) await startup.Result.StopAsync(stop.Token);
+                if (startup.IsCompletedSuccessfully)
+                {
+                    var stopping = startup.Result.StopAsync(stop.Token);
+                    // Registered after the node's own kill registration, so it runs before it (callbacks run last first).
+                    using (stop.Token.Register(static state => Volatile.Write(ref ((PostgresPreviewHostedService)state!)._drainKilled, 1), this))
+                        await stopping;
+                }
                 AfterNodeStop?.Invoke();
             }
         }

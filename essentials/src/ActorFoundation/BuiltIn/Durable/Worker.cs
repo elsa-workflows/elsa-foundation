@@ -93,7 +93,7 @@ public sealed record WorkerOptions
     internal Action? AfterJobPublication { get; init; }
     /// <summary>A store error a drain round retried (transient, unknown or an expired commit window), for the host to
     /// report: a drain that keeps failing so and then runs into its deadline shows its cause. It runs inline and must not block.</summary>
-    public Action<StoreException>? OnDrainStoreError { get; init; }
+    internal Action<StoreException>? OnDrainStoreError { get; init; }
     /// <summary>Called at the start of each drain round, outside its retry; for fault witnesses.</summary>
     internal Action? BeforeDrainRound { get; init; }
     /// <summary>Called where a drain round judges the heartbeat answer, inside its retry; for transient-error witnesses.</summary>
@@ -1121,11 +1121,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 // K1b: a guard expiry during the drain made them pending: they move only through their counting retake.
                 lock (_turnSync) held = [.. held.Where(f => !_pending.ContainsKey(f.Partition))];
                 if (held.Count > 1 && !cancellationToken.IsCancellationRequested)
-                    try
-                    {
-                        await _store.ReleaseAsync(held, cancellationToken);
-                        _freed?.AddRange(held.Select(f => f.Partition));
-                    }
+                    try { await _store.ReleaseAsync(held, cancellationToken); }     // the epoch guard may make it a no-op: not counted as freed
                     catch (Exception) { /* then the leases run out instead */ }
                 return;
             }
@@ -1281,7 +1277,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
-    private List<int>? _freed;     // during LoseAsync: the partitions its store releases freed
+    // During LoseAsync: the partitions its store releases freed. Hand-overs do not overlap: the host's release and a pass
+    // (an answer's stand-down) take the host's turn (DurableHost), and the stop's drain rounds start only once the node
+    // has joined its releases and passes. A nested LoseAsync keeps its own list and restores the outer one.
+    private List<int>? _freed;
 
     private async Task HandOverAsync(IReadOnlyCollection<int> partitions, CancellationToken cancellationToken)
     {
@@ -1346,13 +1345,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         // A drain refused down to a reset with no retake holds nothing: give up what was captured, as ReleaseAsync does.
         // The store's epoch guard makes it a no-op for a row that moved or was taken again since.
-        if (leaving.Count == 0) leaving = captured;
+        var guarded = leaving.Count == 0;     // then the release may be a no-op by the epoch guard: not counted as freed
+        if (guarded) leaving = captured;
         lock (_turnSync) leaving = [.. leaving.Where(f => !_pending.ContainsKey(f.Partition))];      // K1b: a guard expiry made them pending
         try
         {
             if (leaving.Count == 1) await _store.ReleaseAsync(leaving[0].Partition, leaving[0].Epoch, cancellationToken);
             else if (leaving.Count > 1) await _store.ReleaseAsync(leaving, cancellationToken);
-            _freed?.AddRange(leaving.Select(f => f.Partition));
+            if (!guarded) _freed?.AddRange(leaving.Select(f => f.Partition));
         }
         catch (Exception) { /* then the leases run out instead */ }
         if (kept.Count > 0) await RetakeAsync(kept, cancellationToken);

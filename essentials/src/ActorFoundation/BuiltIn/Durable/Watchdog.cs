@@ -49,6 +49,12 @@ public sealed class Watchdog
         var entry = new Call(what, _monotonic(), close);
         lock (_calls) _calls.Add(entry);
         try { return await call(close.Token); }
+        // The link is this watchdog's own: a cancellation of its caller reached the call through it, so it is reported on
+        // the caller's token, and the caller can tell its own cancellation by token (RuntimeNode tells a kill so).
+        catch (OperationCanceledException error) when (cancellationToken.IsCancellationRequested && error.CancellationToken != cancellationToken)
+        {
+            throw new OperationCanceledException(error.Message, error, cancellationToken);
+        }
         finally
         {
             lock (_calls) _calls.Remove(entry);
