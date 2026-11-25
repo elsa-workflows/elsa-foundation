@@ -123,6 +123,11 @@ public static class Wf
     public static Node Timer(string id, string interval) => Node<Timer>(id, ("Interval", interval));
     public static Node Cron(string id, string expression) => Node<Cron>(id, ("Expression", expression));
 
+    public static Node SetOutput(string id, string name, Binding value) => Node<SetOutput>(id, ("Name", name), ("Value", value));
+    public static Node SetCorrelationId(string id, Binding value) => Node<SetCorrelationId>(id, ("Value", value));
+    public static Node SetInstanceName(string id, Binding value) => Node<SetInstanceName>(id, ("Value", value));
+    public static Node Finish(string id, string outcome) => Node<Finish>(id, ("Outcome", outcome));
+
     public static Node ForEach(string id, Binding items, Node body) => Node<ForEach>(id, ("Items", items)).With(body);
     public static Node While(string id, Binding condition, Node body) => Node<While>(id, ("Condition", condition)).With(body);
 

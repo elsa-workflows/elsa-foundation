@@ -5,7 +5,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Tasks.Core;
-using Elsa.Workflows.Runtime.Diagnostics;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Workflows;

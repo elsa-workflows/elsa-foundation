@@ -46,3 +46,7 @@ This feature implements a contributor contract from another domain:
 
 It connects two domains that stay independent of each other: the workflow runtime emits spans and the OpenTelemetry
 ingestion domain receives telemetry. Folding the bridge into either side would make one reference the other.
+
+On the runtime side the package references only the contracts package `Elsa.Workflows.Runtime.Core`, for the source,
+span and tag names in `WorkflowEngineTelemetry`. It does not bring the runtime implementation along: the host supplies
+`Elsa.Workflows.Runtime`, which provides the `WorkflowsRuntimeTracing` feature.

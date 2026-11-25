@@ -63,7 +63,7 @@ public sealed partial class EfStore
 
     private sealed record KeptRow(string Id, short KeptBy, string Digest, string Envelope, long Bytes);
 
-    private sealed record ParkMarkRow(long? At, long? Revision);
+    private sealed record ParkMarkRow(long? At, long? Revision, bool Outstanding);
 
     private static Task<List<KeptRow>> ReadKeptAsync(KernelDb db, string actor, int partition, bool lockRows, CancellationToken token) =>
         db.Database.SqlQueryRaw<KeptRow>($"""
@@ -92,7 +92,9 @@ public sealed partial class EfStore
     // A recover is decided on the Park facts read with it, and the bind refuses the commit when the kept set has changed since.
     private async Task<Polled> WithRootParkFactsAsync(KernelDb db, Polled polled, CancellationToken token)
     {
-        if (!db.UsesRootParkRecovery || !polled.Messages.Any(item => item.Message.Operator?.RootParkMark is not null)) return polled;
+        // S5b: a Terminate that names a parked root's Park reads the same facts in a parked-operator set.
+        if (!db.UsesRootParkRecovery && !db.UsesRootParkedOperators ||
+            !polled.Messages.Any(item => item.Message.Operator?.RootParkMark is not null)) return polled;
         var messages = new List<Stored>(polled.Messages.Count);
         foreach (var item in polled.Messages)
         {
@@ -102,18 +104,21 @@ public sealed partial class EfStore
                 continue;
             }
             var park = await db.Database.SqlQuery<ParkMarkRow>($"""
-                SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision" FROM "Instances"
+                SELECT "FoundationParkAt" AS "At", "FoundationParkRevision" AS "Revision",
+                    "Jobs" IS NOT NULL OR "Children" IS NOT NULL OR "CustomHandles" IS NOT NULL
+                        OR EXISTS (SELECT 1 FROM "Subscriptions" s WHERE s."Instance" = "Instances"."Id") AS "Outstanding" FROM "Instances"
                 WHERE "Id" = {message.Target.Id} AND "Partition" = {message.Target.Partition} AND NOT "Retired"
                 """).SingleOrDefaultAsync(token);
             var kept = await ReadKeptAsync(db, message.Target.Id, message.Target.Partition, false, token);
             // A page restores at most 170 rows and 4 MiB of stored rows, and always has room for its first restored row.
-            // Only restored (Arrived) rows are charged; the cleared fault input is never restored.
-            var restored = kept.Where(row => row.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
-            var fits = restored.Length <= InMemoryStore.ParkPageLimit &&
-                (restored.Length <= 1 || restored.Sum(row => row.Bytes) <= ParkRecoveryCredit.LimitBytes);
+            // A recover charges only restored (Arrived) rows, since the cleared fault input is never restored. A Terminate
+            // clears every kept row, so it charges them all.
+            var charged = message.Kind == Kinds.Terminate ? kept.ToArray() : kept.Where(row => row.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
+            var fits = charged.Length <= InMemoryStore.ParkPageLimit &&
+                (charged.Length <= 1 || charged.Sum(row => row.Bytes) <= ParkRecoveryCredit.LimitBytes);
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
-                restored.Length, kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
-                fits, KeptSetDigest(kept));
+                kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived), kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
+                fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Rereads = RereadsParkFacts(db) };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }
         return polled with { Messages = messages };

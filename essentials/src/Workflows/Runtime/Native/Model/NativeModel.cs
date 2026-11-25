@@ -309,6 +309,8 @@ internal sealed partial class Burst(WorkflowRegistry registry, NativeExecutionOp
                 Assign(frame, set.Name, set.Value);
                 Complete(frame, "Done", null);
                 break;
+            case var other when Intrinsic(frame, other):
+                break;
             case CompositeActivity composite:
                 _s.Frames[frame.Id] = frame;
                 composite.Execute(new CompositeContext(this, frame, node));

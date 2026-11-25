@@ -1464,6 +1464,28 @@ Elsa.Workflows.Runtime.Core.Diagnostics.RuntimeSchedulerDispatchDiagnostics.Reco
 Elsa.Workflows.Runtime.Core.Diagnostics.RuntimeSchedulerDispatchDiagnostics.RecordInlineCascadeDispatch() -> void
 Elsa.Workflows.Runtime.Core.Diagnostics.RuntimeSchedulerDispatchDiagnostics.Reset() -> void
 Elsa.Workflows.Runtime.Core.Diagnostics.RuntimeSchedulerDispatchDiagnostics.RuntimeSchedulerDispatchDiagnostics() -> void
+Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.ActivityExecuteSpanName = "elsa.runtime.activity.execute" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.ActivitySourceName = "Elsa.Workflows.Runtime" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CheckpointCommitSpanName = "elsa.runtime.checkpoint.commit" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CheckpointIdTag = "elsa.checkpoint.id" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CheckpointMandatoryTag = "elsa.checkpoint.mandatory" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CheckpointPersistenceDecisionTag = "elsa.checkpoint.persistence_decision" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CheckpointPostCommitIntentsTag = "elsa.checkpoint.post_commit_intents" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.CommandKindTag = "elsa.command.kind" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DispatchSpanName = "elsa.runtime.dispatch" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DrainItemsProcessedTag = "elsa.drain.items_processed" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DrainMaxWorkItemsTag = "elsa.drain.max_work_items" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DrainOutermostTag = "elsa.drain.outermost" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DrainSpanName = "elsa.runtime.drain" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.DrainStopReasonTag = "elsa.drain.stop_reason" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.HandlerNameTag = "elsa.handler.name" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.OutcomeCompleted = "completed" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.OutcomeFaulted = "faulted" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.OutcomeTag = "elsa.outcome" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.PoisonFenceFallbackTag = "elsa.poison.fence_fallback" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.WorkItemIdTag = "elsa.work_item.id" -> string!
+const Elsa.Workflows.Runtime.Core.Diagnostics.WorkflowEngineTelemetry.WorkflowExecutionIdTag = "elsa.workflow.execution_id" -> string!
 Elsa.Workflows.Runtime.Core.Exceptions.BackgroundActivityWorkConflictException
 Elsa.Workflows.Runtime.Core.Exceptions.BackgroundActivityWorkConflictException.BackgroundActivityWorkConflictException(string! workflowExecutionId, string! workId, string! reason) -> void
 Elsa.Workflows.Runtime.Core.Exceptions.BackgroundActivityWorkConflictException.WorkId.get -> string!

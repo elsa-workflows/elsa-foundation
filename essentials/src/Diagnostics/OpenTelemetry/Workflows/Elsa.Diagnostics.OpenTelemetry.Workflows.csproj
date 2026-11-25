@@ -4,7 +4,7 @@
     <Description>
       Forwards the workflow engine's ActivitySource spans into the OpenTelemetry ingestion store, so Studio's timing view
       is populated in a host that runs no OpenTelemetry SDK exporter. It is a bridge project: it references the
-      OpenTelemetry ingestion domain and the workflow runtime, and neither of those references the other or this.
+      OpenTelemetry ingestion domain and the workflow runtime contracts, and neither of those references the other or this.
     </Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
@@ -25,9 +25,9 @@
     <ProjectReference Include="..\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <!-- The DiagnosticsOpenTelemetry feature this feature depends on, so a feed install brings it along. -->
     <ProjectReference Include="..\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
-    <!-- WorkflowEngineTelemetry's source and span names, and the WorkflowsRuntimeTracing feature this feature depends on. -->
-    <ProjectReference Include="..\..\..\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <!-- WorkflowEngineTelemetry's source, span and tag names. -->
+    <ProjectReference Include="..\..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
 </Project>
