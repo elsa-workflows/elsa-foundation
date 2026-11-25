@@ -346,13 +346,16 @@ public sealed class Elsa3ActivityMapCoverageTests
             .ToHashSet(StringComparer.Ordinal);
         // The terminal-placement rewrite raises the first two for reusable workflows (plan D-6, D-7); graph conversion
         // raises the third for connections Elsa 3 never follows (spec 239 G-7); the member pass raises the fourth for a null
-        // member bound by name (#3293).
+        // member bound by name (#3293); the header and dispatch input contracts raise the last two for a map they cannot
+        // read (#5790, #5808).
         string[] raisedByRewrites =
         [
             Elsa3ActivityDiagnosticCodes.OutcomeUndeclared,
             Elsa3ActivityDiagnosticCodes.OutcomeUnreached,
             Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved,
-            Elsa3ActivityDiagnosticCodes.NullTakesElsa4Default
+            Elsa3ActivityDiagnosticCodes.NullTakesElsa4Default,
+            Elsa3ActivityDiagnosticCodes.HttpHeaderValueArray,
+            Elsa3ActivityDiagnosticCodes.DispatchInputNames
         ];
 
         Assert.All(declared, code => Assert.Contains(code, codes));

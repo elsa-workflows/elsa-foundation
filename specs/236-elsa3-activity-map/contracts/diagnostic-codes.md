@@ -29,6 +29,7 @@ skips and reports by code, so a code is never renamed or reused. Each diagnostic
 | `GraphConversionPending` | `ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING` | **Retired** 2026-10-19 (spec 247): never raised. Spec 239 converts Flowchart, FlowFork, FlowJoin and Start (its codes: [spec 239 contract](../../239-elsa3-flowchart-connections/contracts/diagnostic-codes.md)), and spec 247 removed the map target that raised it. Kept, never reused | FR-001, FR-006 |
 | `NestingTooDeep` | `ELS3-ACTIVITY-NESTING-TOO-DEEP` | deeper than `MaxNestingDepth` (formerly `ArgumentException`) | FR-012 |
 | `DuplicateInputBinding` | `ELS3-ACTIVITY-DUPLICATE-INPUT-BINDING` | two properties bind one input, or one property matches two (formerly `ArgumentException`) | FR-012 |
+| `DispatchInputUndeclared` | `ELS3-ACTIVITY-DISPATCH-INPUT-UNDECLARED` | a literal DispatchWorkflow/ExecuteWorkflow input map passes a name the target workflow in the same import does not declare: Elsa 3 ignored it, Elsa 4 refuses it. A key in another letter case is spelled as declared (`ELS3-LITERAL-KEY-REWRITTEN`, info) (#5808) | - |
 
 ## Warnings: the item converts (W)
 
@@ -38,6 +39,7 @@ skips and reports by code, so a code is never renamed or reused. Each diagnostic
 | `RequestSizeNoOutcome` | `ELS3-BEHAVIOUR-REQUEST-SIZE-NO-OUTCOME` | HttpEndpoint.RequestSizeLimit |
 | `HttpOutcomeSingle` | `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE` | SendHttpRequest outcomes (Done no longer co-fires; non-2xx → Failed). Narrowed by spec 1208 (S-3), 2026-11: only "without expected codes, a non-2xx response goes to Failed"; with codes, `Done` maps onto every code and the unmatched status code |
 | `HttpHeaderValueArray` | `ELS3-BEHAVIOUR-HTTP-HEADER-VALUE-ARRAY` | WriteHttpResponse.ResponseHeaders bound to an expression or captured value: Elsa 4 needs an array per header, Elsa 3 also accepted a single string (#5790) |
+| `DispatchInputNames` | `ELS3-BEHAVIOUR-DISPATCH-INPUT-NAMES` | DispatchWorkflow/ExecuteWorkflow input map bound to an expression or captured value: Elsa 4 refuses at run time a name the target does not declare or spells in another letter case; Elsa 3 ignored the first and matched the second (#5808) |
 | `AuthHeaderUnvalidated` | `ELS3-BEHAVIOUR-AUTH-HEADER-UNVALIDATED` | SendHttpRequest.DisableAuthorizationHeaderValidation absent or false |
 | `WhilePersistedCondition` | `ELS3-BEHAVIOUR-WHILE-PERSISTED-CONDITION` | While.Condition |
 | `ForZeroStepFaults` | `ELS3-BEHAVIOUR-FOR-ZERO-STEP-FAULTS` | For.Step |
