@@ -140,6 +140,21 @@ public sealed class Elsa3FaithfulFixesTests
         Assert.Equal(MemberType("WriteHttpResponse", "Headers"), ResultType(Input(Node(state, "respond"), "Headers")));
     }
 
+    // #5803: Elsa 4 reads a single string per header at run time, so such a script converts as it is, with no warning.
+    [Fact]
+    public async Task A_single_string_response_headers_script_converts_without_a_behaviour_warning()
+    {
+        var respond = Activity("respond", "Elsa.WriteHttpResponse",
+            ("content", Literal("ok")),
+            ("responseHeaders", Expression("JavaScript", "return { 'X-Demo': 'elsa3' };", "HttpHeaders")));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", respond)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code.StartsWith("ELS3-BEHAVIOUR-", StringComparison.Ordinal));
+        Assert.Contains("'X-Demo': 'elsa3'", Source(Input(Node(result.Value!.State, "respond"), "Headers")));
+    }
+
     [Fact]
     public async Task A_response_headers_script_declared_as_a_string_is_still_refused()
     {
@@ -202,7 +217,7 @@ public sealed class Elsa3FaithfulFixesTests
     [Theory]
     [InlineData("Literal")]
     [InlineData("Object")]
-    public async Task A_static_response_header_map_converts_to_value_arrays_without_the_warning(string expressionType)
+    public async Task A_static_response_header_map_converts_to_value_arrays(string expressionType)
     {
         var respond = Activity("respond", "Elsa.WriteHttpResponse",
             ("content", Literal("ok")),
@@ -211,12 +226,11 @@ public sealed class Elsa3FaithfulFixesTests
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", respond)));
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.HttpHeaderValueArray);
         Assert.Equal("""{"X-Demo":["elsa3"]}""", Text(Input(Node(result.Value!.State, "respond"), "Headers")));
     }
 
     [Fact]
-    public async Task An_empty_Object_response_header_map_is_left_unbound_without_the_warning()
+    public async Task An_empty_Object_response_header_map_is_left_unbound()
     {
         var respond = Activity("respond", "Elsa.WriteHttpResponse",
             ("content", Literal("ok")),
@@ -225,7 +239,6 @@ public sealed class Elsa3FaithfulFixesTests
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", respond)));
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.HttpHeaderValueArray);
         Assert.DoesNotContain(Node(result.Value!.State, "respond").Inputs, input => input.ReferenceKey == "Headers");
     }
 

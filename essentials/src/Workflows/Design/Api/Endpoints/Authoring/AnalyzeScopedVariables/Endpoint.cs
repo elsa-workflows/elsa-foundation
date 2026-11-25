@@ -8,6 +8,7 @@ using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Validations.Core;
 using MinimalEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Authoring.AnalyzeScopedVariables;
@@ -16,6 +17,7 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Authoring.AnalyzeScopedVariables;
 [RequirePermission(WorkflowDesignPermissions.Read)]
 public sealed class Endpoint(
     ScopedVariableAuthoringContract authoring,
+    IActivityStructureService structures,
     IScriptBodyWriteAnalyzer? scriptWrites = null,
     IActivityDefinitionLookup? catalog = null)
     : ApiEndpoint<AnalyzeScopedVariablesRequest, ScopedVariableAnalysisResponse>
@@ -35,6 +37,9 @@ public sealed class Endpoint(
             throw new ArgumentException("The selected activity node id cannot be empty.");
 
         var state = request.State.ToState();
+        // Before anything reads the tree: iteration scopes read a loop's inputs, so a missing list would throw unnamed.
+        if (ActivityArgumentLists.Refusals(state.RootActivity, structures) is [var malformed, ..])
+            throw new ArgumentException(ActivityArgumentLists.Describe(malformed));
         // Spec 1231 FR-036: a script activity's may-write set comes from its body, resolved as publication pins it.
         var writes = request.NodeId is { } nodeId && scriptWrites is not null && catalog is not null
             ? await scriptWrites.AnalyzeAsync(state, nodeId, ScriptInputKeyAsync, cancellationToken)

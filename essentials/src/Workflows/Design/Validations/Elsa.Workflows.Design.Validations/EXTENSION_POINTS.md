@@ -68,7 +68,10 @@ The optional scoped Publishing implementation resolves a selected whole activity
   may write, resolved as publication pins them, or that it may write every visible variable (a computed or opaque
   write); null for a node without a literal script body (spec 1231 FR-019, FR-020a, FR-036).
 - **Consumer:** the Design API endpoint `POST design/workflows/scoped-variables/analyze`, which returns it as
-  `scriptWrites` for the selected node; Studio shows it as the node's may-write set.
+  `scriptWrites` for the selected node; Studio shows it as the node's may-write set. Before it resolves any scope or
+  calls the analyzer, the endpoint refuses a posted state with a node whose `inputs` or `outputs` list is missing or
+  null, at any depth, with a 400 whose message is `{NodeId}/inputs|outputs: Graph/MalformedArgumentList: ...`
+  (iteration scopes read a loop's inputs, so the list would otherwise throw unnamed).
 - **Override when:** a host's Studio should show a different may-write set for script nodes, for example one from
   another script language's analysis. It changes only that display: publication and draft validation resolve the
   may-write set from `ScriptVariableReadResolver` and `ScriptVariableReadPlan.MayWrite()` themselves, so a replacement
@@ -173,6 +176,7 @@ Every `IEvent` type in `Elsa.Workflows.Design.Validations.Core` has a `### <Even
 
 Not extension points: nothing here can be registered, replaced or contributed.
 
+- `ActivityArgumentLists` *(Core, `Elsa.Workflows.Design.Validations.Core`)*: the one rule for a node whose `inputs` or `outputs` list is missing or null. `Refusals(root, structures)` walks the whole tree and returns one `Graph/MalformedArgumentList` `ValidationError` per such list at `{NodeId}/inputs` or `{NodeId}/outputs`; `Describe` renders one as the bad-request message `{path}: {message}`. Every reader of draft state that did not pass the gate refuses through it before reading the lists: the draft validation gate, credential admission, data selection, the rename planner, the scoped-variable analysis endpoint and the workflow draft test runs (Publishing API). It holds the rule; nothing can replace it.
 - `WorkflowStateAdmission` *(Core, `Elsa.Workflows.Design.Validations.Core`)*: a static helper over `ICredentialLiteralValidator`, like `DraftValidationGate`. `Task AdmitAsync(this ICredentialLiteralValidator validator, WorkflowDefinitionState state, CancellationToken cancellationToken)` throws `CredentialLiteralRefusedException` when the validator returns a finding; a caller calls it before its write, so a refused state is not stored. It holds no rule of its own.
 - `CredentialLiteralRefusedException` *(Core, `Elsa.Workflows.Design.Validations.Core.Exceptions`)*: an `ArgumentException` carrying `Findings`; its message joins the findings' messages. The Design API maps it to 400 with `errors` keyed by each finding's path; publication reports it as a compile error (400); the Elsa 3 import answers 400 with the messages in `detail`. Admission also throws it, with one `Graph/MalformedArgumentList` finding per list, for a state whose node has a missing or null argument list.
 - `MultipleCredentialLiteralValidatorsException` *(Core, `Elsa.Workflows.Design.Validations.Core.Exceptions`)*: the startup diagnostic for a host that composes more than one `ICredentialLiteralValidator`. It fails shell activation and names every registration in `Implementations` (implementation type, registered instance's type, or "a factory registration").

@@ -818,6 +818,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
     {
         if (rule.Contract == Elsa3ValueContract.HttpResponseHeaders)
             return CheckHttpResponseHeaders(context, propertyName, value);
+        if (rule.Contract == Elsa3ValueContract.DispatchInputs)
+            return CheckDispatchInputs(context, rule, propertyName, value);
         if (CheckFocusedContract(context, rule, propertyName, value, out var focused))
             return focused;
         if (!Elsa3TypedValues.IsBound(value))
@@ -968,24 +970,14 @@ internal sealed partial class Elsa3ActivityNormalizer(
     /// <summary>
     /// Elsa 3 writes <c>{}</c> on save and sends no extra headers; Elsa 4 sends none when <c>Headers</c> is unbound, and
     /// cannot read the text <c>{}</c> as its header dictionary. A literal map is bound as an object, which publication
-    /// reads into the dictionary, and so is a static Object expression map. Any other expression is carried as it is, with
-    /// a warning that Elsa 4 needs an array per header (#5790).
+    /// reads into the dictionary, and so is a static Object expression map. Any other expression is carried as it is: Elsa 4
+    /// reads a single string or an array per header at run time, as Elsa 3 did (#5803).
     /// </summary>
     private static JsonElement? CheckHttpResponseHeaders(Elsa3RewriteContext context, string propertyName, JsonElement value)
     {
         // An Object expression is a static JSON map, read like a literal one.
         if (!Elsa3TypedValues.TryGetLiteral(value, out var literal) && !TryGetObjectExpression(value, out literal))
-        {
-            // A header map the conversion cannot read: Elsa 4 does not turn a single string per header into an array,
-            // as Elsa 3's HttpHeaders converter did (#5790).
-            if (Elsa3TypedValues.IsBound(value))
-                context.Warning(HttpHeaderValueArray,
-                    $"Input '{propertyName}' is not a literal header map, so the conversion cannot check its values. Elsa 3 accepted a single string per header, such as {{\"X-Header\": \"value\"}}; " +
-                    "Elsa 4 needs an array of values per header and sends no response when a header holds a single string.",
-                    "Return each header value as an array, such as {\"X-Header\": [\"value\"]}. If the expression already does, nothing needs to change.",
-                    propertyName);
             return value;
-        }
         if (Elsa3TypedValues.IsEmptyLiteral(literal))
             return null;
         if (TryMultiValueHeaders(literal, out var headers))

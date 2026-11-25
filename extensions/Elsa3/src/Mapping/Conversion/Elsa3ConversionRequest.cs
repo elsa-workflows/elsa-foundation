@@ -10,13 +10,15 @@ public sealed record Elsa3ConversionRequest
         Elsa3WorkflowDefinition definition,
         bool isReusable = false,
         IReadOnlyDictionary<string, Elsa3ActivityExactReplacement>? replacements = null,
-        IReadOnlyDictionary<string, string>? diagnosticMetadata = null)
+        IReadOnlyDictionary<string, string>? diagnosticMetadata = null,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? dispatchTargetInputs = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         Definition = definition;
         IsReusable = isReusable;
         Replacements = replacements ?? new Dictionary<string, Elsa3ActivityExactReplacement>(StringComparer.Ordinal);
         DiagnosticMetadata = diagnosticMetadata ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        DispatchTargetInputs = dispatchTargetInputs ?? new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
     }
 
     /// <summary>The Elsa 3 definition. The converter clones it and never mutates it.</summary>
@@ -30,4 +32,10 @@ public sealed record Elsa3ConversionRequest
 
     /// <summary>Metadata copied onto every diagnostic (input kind, source name, plan item, …).</summary>
     public IReadOnlyDictionary<string, string> DiagnosticMetadata { get; }
+
+    /// <summary>
+    /// The input names each workflow this import publishes declares, keyed by Elsa 3 definition id: the newest selected
+    /// version, which a dispatch to it pins once published (#5808). A dispatch target missing here is not checked here.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> DispatchTargetInputs { get; }
 }

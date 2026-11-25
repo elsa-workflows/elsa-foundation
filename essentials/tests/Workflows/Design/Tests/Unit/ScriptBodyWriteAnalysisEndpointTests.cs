@@ -78,7 +78,7 @@ public sealed class ScriptBodyWriteAnalysisEndpointTests : IDisposable
             null);
         var resolver = new ScopedVariableResolver(_structures);
         var analyzer = new ScriptBodyWriteAnalyzer(new ScriptVariableReadResolver(_provider.GetServices<IScriptVariableReadAnalyzer>()), _structures);
-        var endpoint = new AnalyzeEndpoint(new ScopedVariableAuthoringContract(resolver, new ScopedVariablePicker(resolver)), analyzer, _catalog);
+        var endpoint = new AnalyzeEndpoint(new ScopedVariableAuthoringContract(resolver, new ScopedVariablePicker(resolver)), _structures, analyzer, _catalog);
         return await endpoint.HandleAsync(new AnalyzeScopedVariablesRequest(state.ToStateView(), "script"), CancellationToken.None);
     }
 }
