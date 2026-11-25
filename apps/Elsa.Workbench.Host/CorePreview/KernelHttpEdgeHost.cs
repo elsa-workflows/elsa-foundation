@@ -34,6 +34,7 @@ internal sealed class KernelHttpEdgeHost(KernelServing serving, Func<KernelDb> o
     internal const long DefaultMaxRequestBodyBytes = 1024 * 1024;
 
     private readonly SemaphoreSlim _opening = new(1, 1);
+    private readonly TaskCompletionSource _installed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private PostgresPreviewFoundation? _foundation;
 
     internal string BasePath { get; } = basePath;
@@ -113,10 +114,17 @@ internal sealed class KernelHttpEdgeHost(KernelServing serving, Func<KernelDb> o
         return KernelHttpEdge.Answer(reply);
     }
 
-    /// <summary>The foundation the edge requests through, opened once when first needed; the kernel's run reads use it too.</summary>
+    /// <summary>The store is installed (<see cref="PostgresPreviewHosting.InstallShippedAsync"/>): the foundation may open.</summary>
+    internal void StoreInstalled() => _installed.TrySetResult();
+
+    /// <summary>
+    /// The foundation the edge requests through, opened once when first needed; the kernel's run reads use it too. A request
+    /// that comes while the host still installs its store waits for the install, so it is not refused by a store not yet there.
+    /// </summary>
     internal async ValueTask<PostgresPreviewFoundation> FoundationAsync(CancellationToken token)
     {
         if (Volatile.Read(ref _foundation) is { } opened) return opened;
+        await _installed.Task.WaitAsync(token);
         await _opening.WaitAsync(token);
         try
         {

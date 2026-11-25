@@ -5,7 +5,9 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.KernelHost;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Incidents;
 using Kernel.Foundation.Contracts;
 
 namespace Elsa.Workflows.Runtime.KernelApi;
@@ -17,14 +19,12 @@ namespace Elsa.Workflows.Runtime.KernelApi;
 /// in-memory store, so filters, paging cursors and per-run authorization behave as they do on the old core.
 /// </summary>
 /// <remarks>
-/// Preview limit: the read is whole, once per request. A kernel list query that pages in the store comes later.
+/// Preview limit: the read is whole, once per request. A kernel list query that pages in the store comes later (K14).
 /// </remarks>
 internal sealed class KernelWorkflowInstanceListService(
     KernelRuns runs,
     IWorkflowExecutableStore executables,
     IPersistenceAccessContextAccessor access,
-    IActivityExecutionStateStore activityExecutionStateStore,
-    IIncidentStateStore incidentStateStore,
     IActivityInspectionContextAsync authorization) : IWorkflowInstanceListService
 {
     public async Task<WorkflowInstanceListView> ListAsync(ListWorkflowInstances request, CancellationToken cancellationToken)
@@ -42,7 +42,9 @@ internal sealed class KernelWorkflowInstanceListService(
                 await store.SaveAsync(KernelRunStates.From(view, run, identity, runs.Tenant.Tenant), cancellationToken);
             }
         }
-        return await new WorkflowInstanceListService(store, activityExecutionStateStore, incidentStateStore, authorization)
+        // The old core's activity and incident stores hold nothing for a kernel run: empty ones in memory answer its counts
+        // (0) without a database round trip per row.
+        return await new WorkflowInstanceListService(store, new InMemoryActivityExecutionStateStore(), new InMemoryIncidentStateStore(), authorization)
             .ListAsync(request, cancellationToken);
     }
 

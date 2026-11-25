@@ -7,6 +7,9 @@ namespace Elsa.Workflows.Runtime.KernelApi;
 /// <summary>A kernel run as the runtime API's reads see a workflow execution.</summary>
 internal static class KernelRunStates
 {
+    /// <summary>The start of a run whose start is unknown.</summary>
+    internal static readonly DateTimeOffset UnknownStart = DateTimeOffset.UnixEpoch;
+
     /// <summary>
     /// The execution state of a kernel run: its actor reference as the execution id; the executable it pins, from the
     /// executable store when it holds the artifact (an artifact identity of the run's workflow and definition otherwise);
@@ -16,10 +19,13 @@ internal static class KernelRunStates
     {
         var header = view.Header;
         DateTimeOffset? ended = header.EndedAt is { } at ? DateTimeOffset.FromUnixTimeMilliseconds(at) : null;
-        var created = run.StartedAt ?? ended ?? DateTimeOffset.FromUnixTimeMilliseconds(view.AsOf);
+        // A run whose header holds no start (one started before the actor kept it) has an unknown start: the epoch, which
+        // is stable across reads, so the run keeps its place in pages and windows.
+        var created = run.StartedAt ?? UnknownStart;
         return new WorkflowExecutionState(
             header.Ref.Id,
-            identity ?? new WorkflowExecutableIdentity(run.Workflow, run.Definition, run.Workflow, "", ""),
+            // An artifact the store does not hold has no version or hash to show.
+            identity ?? new WorkflowExecutableIdentity(run.Workflow, run.Definition, "", "", ""),
             Status(header.Status, run.Suspended),
             run.SubStatus,
             created,

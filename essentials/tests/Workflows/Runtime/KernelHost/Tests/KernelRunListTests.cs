@@ -178,6 +178,19 @@ public sealed class KernelRunListTests
     }
 
     [Fact]
+    public async Task A_run_without_a_kept_start_has_a_stable_unknown_start_and_an_unheld_artifact_no_version()
+    {
+        using var shell = Shell(new Reads(Run("run-old", ActorStatus.Running, "gone@3", "gone", startedAt: null)), HostTenant);
+
+        var first = Assert.Single((await ListAsync(shell, new ListWorkflowInstances(null, null, null, 25))).Items);
+        var again = Assert.Single((await ListAsync(shell, new ListWorkflowInstances(null, null, null, 25))).Items);
+
+        Assert.Equal((DateTimeOffset.UnixEpoch, (DateTimeOffset?)null), (first.CreatedAt, first.StartedAt));
+        Assert.Equal(first.CreatedAt, again.CreatedAt);
+        Assert.Equal(("gone@3", "gone", "", "", ""), (first.ArtifactId, first.DefinitionId, first.DefinitionVersionId, first.ArtifactVersion, first.ArtifactHash));
+    }
+
+    [Fact]
     public void The_feature_needs_the_hosts_kernel_runs_and_refuses_another_list()
     {
         var bare = new ServiceCollection();

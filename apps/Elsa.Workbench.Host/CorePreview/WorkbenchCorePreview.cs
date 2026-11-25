@@ -218,6 +218,7 @@ internal static class WorkbenchCorePreview
                     // The release profile installs its format in an empty database and starts on one already installed; any
                     // other database is refused with what to do, and the process ends before its node starts.
                     if (publications) await PostgresPreviewHosting.InstallShippedAsync(options, token);
+                    edge?.StoreInstalled();
                     await shells.GetOrActivateAsync(shellName, token);
                     if (edge is not null) await RequireEdgeBasePathAsync(shells, shellName, edge);
                 }, Environment.FailFast,
