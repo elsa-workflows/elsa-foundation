@@ -48,6 +48,8 @@ public sealed class BpmnDocumentDraftSaveTests
         new ActivitiesBpmnDesignFeature().ConfigureServices(services);
         new EventsFeature().ConfigureServices(services);
         services.AddEventHandler<DraftValidating, ExecuteValidations>();
+        // ExecuteValidations walks the tree for malformed argument lists before any validator runs.
+        services.AddScoped<Elsa.Workflows.Design.Core.Contracts.IActivityStructureService, Elsa.Workflows.Design.Core.Services.DefaultActivityStructureService>();
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         var inline = scope.ServiceProvider.GetRequiredService<IInlineEventPublisher>();

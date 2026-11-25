@@ -8,6 +8,8 @@ namespace Elsa.Workflows.Design.Validations.Core.Exceptions;
 /// <see cref="WorkflowStateAdmission.AdmitAsync"/> before its caller writes, so nothing is stored, by the Elsa 3
 /// collection import before it commits, with every refused binding of the apply, and by publication before an input is
 /// compiled. It carries one finding per refused binding; neither the findings nor the message carry the bound value.
+/// Admission also throws it for a state it cannot judge because a node's argument list is missing, carrying one
+/// <c>Graph/MalformedArgumentList</c> finding per such list.
 /// </summary>
 /// <remarks>
 /// It is an <see cref="ArgumentException"/>, because the refused content is the caller's: publication reports it as one
@@ -26,7 +28,7 @@ public sealed class CredentialLiteralRefusedException : ArgumentException
         Findings = findings;
     }
 
-    /// <summary>One finding per refused binding, each keyed by the input's path.</summary>
+    /// <summary>One finding per refused binding, each keyed by the input's path, or one per missing argument list.</summary>
     public IReadOnlyList<ValidationError> Findings { get; }
 
     private static string Describe(IReadOnlyList<ValidationError> findings)
