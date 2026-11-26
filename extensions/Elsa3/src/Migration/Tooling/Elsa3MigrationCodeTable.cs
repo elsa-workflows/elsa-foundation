@@ -96,6 +96,9 @@ internal static class Elsa3MigrationCodeTable
         [Elsa3ActivityDiagnosticCodes.OutcomeUnreached] = Patch,
         [Elsa3ActivityDiagnosticCodes.HttpResponseJsonVariant] = Patch,
         [Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved] = Patch,
+        // The null-policy record the converter adds to every definition: routine, so a definition can still go smoothly.
+        [Elsa3ActivityDiagnosticCodes.NullPolicies] = new(PatchDefinition, Routine: true),
+        [Elsa3ActivityDiagnosticCodes.InputDefaultRequired] = Patch,
 
         // Mapping: Elsa3ImportDiagnosticCodes (VF-IMP-*, ELS3-*).
         [Elsa3ImportDiagnosticCodes.DanglingReference] = Patch,
@@ -123,6 +126,8 @@ internal static class Elsa3MigrationCodeTable
         [Elsa3ImportDiagnosticCodes.CustomStorageDriverReplaced] = new(BuildComponent, StorageDriver),
         // A host function already provides the name, so nothing is left to build (spec Q11).
         [Elsa3ImportDiagnosticCodes.ReplacedFunctionReference] = Patch,
+        // A call or value read a registered prefixed host function may take over (FR-016a).
+        [Elsa3ImportDiagnosticCodes.HostFunctionMissing] = new(BuildComponent, JavaScriptFunction),
 
         // Import: ReusableActivityImportDiagnosticCodes (ELS3-REUSABLE-*).
         [ReusableActivityImportDiagnosticCodes.DuplicateSourceVersion] = Patch,

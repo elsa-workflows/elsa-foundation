@@ -194,7 +194,7 @@ public sealed class ReportBuilderTests
         Assert.Equal("This input file is not valid JSON.", report.InputFindings.Single().Finding.Message);
     }
 
-    internal const string RoutineCode = "ROUTINE-PLACEHOLDER";
+    internal const string RoutineCode = Elsa3ActivityDiagnosticCodes.NullPolicies;
 
     internal static CollectedFinding Finding(
         string code,

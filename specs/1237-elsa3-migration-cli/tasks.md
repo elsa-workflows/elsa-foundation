@@ -93,7 +93,7 @@
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T004 Add `Tooling/Elsa3MigrationCodeTable.cs`. It maps each code to a remedy, a component kind, a routine mark
+- [x] T004 Add `Tooling/Elsa3MigrationCodeTable.cs`. It maps each code to a remedy, a component kind, a routine mark
   and, for codes the converter does not own, a fixed text, with `patch-definition` and a default text for unlisted
   Elsa 4 codes. Give it an entry for every code the converter, the import and reconciliation emit, including the codes
   of the converter diagnostic units (among them `ELS3-REPLACED-FUNCTION-REFERENCE`, remedy `patch-definition`, no component kind: it is
@@ -118,7 +118,7 @@
   1236's other host tests stay green unchanged.
   `AddHostServices` registers the root services, CShells with `WithHostAssemblies()` included, without the web
   pipeline, and creates no folders; the host creates `data/` at startup, outside it.
-- [ ] T004b Make the converter carry component names as data (FR-016a). Add a `ComponentName` metadata key to every
+- [x] T004b Make the converter carry component names as data (FR-016a). Add a `ComponentName` metadata key to every
   component diagnostic: unmapped activity types, undeclared-function references, unregistered variable
   types and custom storage drivers. That includes giving `Elsa3ExpressionRewriteIssue` metadata. Where
   `ELS3-BEHAVIOUR-CUSTOM-STORAGE-DRIVER-REPLACED` already carries `ComponentName`, leave it; test that both storage-driver
@@ -143,11 +143,11 @@
   feature calls. Make the startup task call the run and log as before, and add
   `InternalsVisibleTo("Elsa3.Migration.Tooling")`. The existing reconciliation integration tests must
   stay green unchanged (§2.21.1, FR-013).
-- [ ] T006 [P] Add `IJsonWorkflowCatalogWriter` and `JsonWorkflowCatalogWriter` in
+- [x] T006 [P] Add `IJsonWorkflowCatalogWriter` and `JsonWorkflowCatalogWriter` in
   `essentials/src/Workflows/Design/Reconciliation/Json/`, with a round-trip test against `JsonWorkflowCatalogReader`.
   Update the project's README, and create its `EXTENSION_POINTS.md`, which it does not have yet (R-8), with a row for
   it in the root `EXTENSION_POINTS.md` under the Workflows design family (`CatalogLinkGuardTests`).
-- [ ] T007 [P] Add `IJsonActivityCatalogWriter` and `JsonActivityCatalogWriter` in
+- [x] T007 [P] Add `IJsonActivityCatalogWriter` and `JsonActivityCatalogWriter` in
   `essentials/src/Activities/Design/Reconciliation/Json/`, with a round-trip test against `JsonActivityCatalogReader`.
   Update the project's README and `EXTENSION_POINTS.md` (R-8).
 - [ ] T008 Add `Tooling/Elsa3MigrationRun.cs`, the pipeline the CLI calls in-process. It takes the command, the export
@@ -273,7 +273,7 @@
   item, a credential-literal refusal at apply (exit 1, a report, no message text, no definition bucketed
   `convert-as-is`), and `--all-versions` with three
   versions (only the newest published and exported).
-- [ ] T019 [US1] Add `Tooling/ReportBuilder.cs`. It provides:
+- [x] T019 [US1] Add `Tooling/ReportBuilder.cs`. It provides:
   - categories (FR-015);
   - remedies and component kinds from the code table (FR-016);
   - buckets and blocked-by (FR-017);
@@ -344,7 +344,7 @@
 
 ## Phase 7: User Story 5 - Redacted, versioned report (P2)
 
-- [ ] T028 [US5] Make every message and guidance from the converter, the import and reconciliation free of input text
+- [x] T028 [US5] Make every message and guidance from the converter, the import and reconciliation free of input text
   (FR-019). Start with the strict-mode parse message and the `VF-IMP-012` message (the .NET-usage analyzer's message,
   passed through, which quotes the call), and the Switch case-condition messages of
   `Elsa3SwitchValueSynthesisRewrite` (the literal reason, which quotes the literal, and the parse reason, which passes
@@ -372,10 +372,10 @@
   message so that it names the cause without quoting input, and add no workaround (FR-026).
 - [ ] T029 [US5] Add the sentinel test (after T031, which renders `report.html`): the fixture run's `report.json` and `report.html` contain no `SENTINEL-1237`,
   including from the conversion-stage `VF-IMP-012` refusal of the .NET-member call (SC-005).
-- [ ] T030 [US5] Add the schema test: every report the tests produce validates against
+- [x] T030 [US5] Add the schema test: every report the tests produce validates against
   [contracts/report.schema.json](contracts/report.schema.json). Copy the schema into `Tooling/` as an embedded resource,
   and add a test that keeps it identical to the contract file (FR-020).
-- [ ] T031 [US5] Add `Tooling/ReportHtml.cs` and the embedded `report.html` template. The page inlines `report.json`, serialized from the JSON baseline (ADR 0091), and `ReportHtml` itself rewrites
+- [x] T031 [US5] Add `Tooling/ReportHtml.cs` and the embedded `report.html` template. The page inlines `report.json`, serialized from the JSON baseline (ADR 0091), and `ReportHtml` itself rewrites
   `<`, `>` and `&` in it as JSON `\u` escapes, never as HTML entities, independent of the serializer's encoder,
   renders every section grouped by bucket and category, and works offline (FR-021). Test that the page's parsed JSON equals
   `report.json`, that the page contains no external URL, and that a `</script>` inside a name cannot break it.
