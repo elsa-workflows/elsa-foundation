@@ -34,7 +34,8 @@ public sealed partial class EfStore
     // retirement marker's residue check reads.
     private sealed record ParkedRetirement(FoundationParkMark Mark, string KeptDigest, string? Clearing, long Cleared, int Count);
 
-    private sealed record RootRetirement(WorkerRoot Root, RootImage Current, Message Command, long Position = 0, ParkedRetirement? Park = null)
+    private sealed record RootRetirement(WorkerRoot Root, RootImage Current, Message Command, long Position = 0, ParkedRetirement? Park = null,
+        bool WithheldInputs = false)
         : QualifiedRootCheckpoint(-1)
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken token)
@@ -44,6 +45,8 @@ public sealed partial class EfStore
             if (!db.UsesRootRetirement || Position <= 0 || running && !db.UsesRootTerminateThenDelete ||
                 Command.Operator?.RetentionDelete == true && !db.UsesRootRetention)
                 return false;
+            if (db.UsesSqliteRootRuntime)
+                return Park is null && await BindSqliteRootRetirementAsync(db, this, token);
 
             var occurrence = InboxKey.FoundationOccurrenceScope;
             var rows = await db.Database.SqlQuery<long>($"""
@@ -230,6 +233,7 @@ public sealed partial class EfStore
         if (marker != CreationProtocol.Retire(ended))
             throw RootShape();
 
-        return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal), new RootRetirement(root, current, command));
+        return new(new TurnCommit(root.Actor, null, null, [], [], [], [], [], turn.Journal), new RootRetirement(root, current, command,
+            WithheldInputs: !postgres && current.Status == InstanceStatus.Running && AuthoredSqliteWithholding(root, current)));
     }
 }

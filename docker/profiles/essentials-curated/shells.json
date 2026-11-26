@@ -1,0 +1,193 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "Primitives": {},
+          "Serialization": {},
+          "Mediator": {},
+          "MemoryCache": {},
+          "Events": {},
+          "Tasks": {},
+          "FileSystemDistributedLocking": {},
+          "Expressions": {},
+          "ExpressionsApi": {},
+          "ApiCapabilities": {},
+          "ModularityApi": {},
+          "ModularityAttention": {},
+          "AttentionApi": {},
+          "Http": {},
+          "JavaScriptExpressions": {
+            "TypeDescriptors": [
+              {
+                "TypeFullName": "System.DateTime"
+              },
+              {
+                "TypeFullName": "System.DateTimeOffset"
+              },
+              {
+                "TypeFullName": "System.TimeSpan"
+              },
+              {
+                "TypeFullName": "System.Guid"
+              },
+              {
+                "TypeFullName": "System.Random"
+              },
+              {
+                "TypeFullName": "System.Object"
+              },
+              {
+                "TypeFullName": "System.Text.Json.Nodes.JsonNode, System.Text.Json"
+              },
+              {
+                "TypeFullName": "System.String"
+              },
+              {
+                "TypeFullName": "System.Boolean"
+              },
+              {
+                "TypeFullName": "System.Int16"
+              },
+              {
+                "TypeFullName": "System.Int32"
+              },
+              {
+                "TypeFullName": "System.Int64"
+              },
+              {
+                "TypeFullName": "System.Decimal"
+              },
+              {
+                "TypeFullName": "System.Single"
+              },
+              {
+                "TypeFullName": "System.Double"
+              },
+              {
+                "TypeFullName": "System.Byte[]"
+              },
+              {
+                "TypeFullName": "System.IO.Stream"
+              },
+              {
+                "TypeFullName": "System.DateOnly"
+              },
+              {
+                "TypeFullName": "System.TimeOnly"
+              },
+              {
+                "TypeFullName": "System.Collections.Generic.IDictionary`2[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Object, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"
+              }
+            ]
+          },
+          "JavaScriptJintEngine": {},
+          "JavaScriptActivities": {},
+          "JavaScriptWorkflowsDesign": {},
+          "JavaScriptEndpoints": {},
+          "HttpJavaScript": {},
+          "Liquid": {},
+          "ActivitiesPrimitives": {},
+          "ActivitiesSequence": {},
+          "ActivitiesFlowchart": {},
+          "ActivitiesControlFlow": {},
+          "ActivitiesHttp": {},
+          "ActivitiesScheduling": {},
+          "ActivitiesDispatchWorkflowRuntime": {},
+          "ActivitiesDispatchWorkflowDesign": {},
+          "ActivitiesRuntime": {},
+          "ActivitiesGraphRuntime": {},
+          "ActivitiesGraphDesign": {},
+          "ActivitiesDesignApi": {},
+          "ActivitiesDesignEntityFrameworkCore": {},
+          "ActivitiesDesignReconciliation": {},
+          "ClrActivityReconciliation": {
+            "Options": {
+              "FolderPath": "/app/profile-activities"
+            }
+          },
+          "WorkflowsDesignApi": {},
+          "WorkflowsDesignEntityFrameworkCore": {},
+          "WorkflowDesignValidations": {},
+          "WorkflowsPublishing": {},
+          "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingEntityFrameworkCore": {},
+          "WorkflowsRuntimeEntityFrameworkCore": {
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256,
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
+            "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key"
+          },
+          "WorkflowsRuntimeDistributed": {},
+          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeApi": {
+            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
+            "WorkflowAlterationPayloadProtectionKeys": {
+              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
+          "WorkflowsRuntimeResumption": {},
+          "WorkflowsRuntimeScheduling": {},
+          "WorkflowsRuntimeRecurringTriggers": {},
+          "WorkflowsRuntimeHttp": {},
+          "WorkflowsRuntimeCheckpointPersistence": {
+            "Mode": "Balanced",
+            "MaxActivitiesPerCommit": 50
+          },
+          "WorkflowsRuntimeHistory": {},
+          "WorkflowsRuntimeTriggers": {},
+          "WorkflowsRuntimeAttention": {},
+          "StandaloneTriggersApi": {},
+          "StandaloneHttpTriggerAuthoring": {},
+          "StandaloneEventTriggerAuthoring": {},
+          "StandaloneScheduleTriggerAuthoring": {},
+          "StandaloneScheduleTriggers": {},
+          "WorkflowsDashboard": {},
+          "WorkflowsDashboardEntityFrameworkCore": {},
+          "Secrets": {
+            "EncryptionKey": "development-demo-only-secrets-encryption-key"
+          },
+          "SecretsApi": {},
+          "SecretsWorkflows": {},
+          "SecretsEntityFrameworkCore": {},
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityApi": {},
+          "FoundationIdentityAspNetCoreIdentity": {
+            "IsDefault": true,
+            "AllowedReturnUrlOrigins": [
+              "https://localhost:7030",
+              "http://localhost:5089",
+              "https://localhost:7028",
+              "http://localhost:5087"
+            ]
+          },
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+            "IsDevelopmentOrDemo": true,
+            "SeedAdminUserName": "admin",
+            "SeedAdminPassword": "Password123!",
+            "SeedAdminEmail": "admin@elsa.local",
+            "SeedAdminRoleName": "administrator"
+          },
+          "IdentityIamEntityFrameworkCore": {},
+          "IdentityProviderConfigurationEntityFrameworkCore": {},
+          "FoundationIdentityOidc": {
+            "IsDefault": false
+          },
+          "FoundationIdentityOpenIddict": {
+            "IsDevelopmentOrDemo": true
+          },
+          "StudioPreferences": {},
+          "StudioPreferencesApi": {},
+          "StudioPreferencesEntityFrameworkCore": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

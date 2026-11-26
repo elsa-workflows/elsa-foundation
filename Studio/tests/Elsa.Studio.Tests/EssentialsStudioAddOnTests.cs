@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -17,18 +18,26 @@ namespace Elsa.Studio.Tests;
 /// because the module admin API otherwise asks the backend to validate a signed-in session and no backend runs here. The ETL
 /// screens themselves stay capability-gated in the browser on <c>elsa.api.etl-*</c>; this test stops at the Studio host.
 /// </remarks>
-public sealed class EssentialsStudioAddOnTests(EssentialsStudioAddOnTests.Host host) : IClassFixture<EssentialsStudioAddOnTests.Host>
+public sealed class EssentialsStudioAddOnTests : IAsyncLifetime
 {
     private const string ModuleId = "Elsa.Studio.Etl";
     private const string FeatureId = "EtlStudio";
+    private const string ModuleDirectory = "studio/modules/etl";
     private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
+    private readonly Host host = new();
 
-    [Fact]
-    public async Task An_add_on_installed_from_the_feed_loads_into_the_running_essentials_studio()
+    public Task InitializeAsync() => host.InitializeAsync();
+    public Task DisposeAsync() => host.DisposeAsync();
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task An_add_on_installed_from_the_feed_loads_into_the_running_essentials_studio(bool hasEntryStyles)
     {
         var processId = host.ProcessId;
         Assert.DoesNotContain(ModuleId, await ModuleIdsAsync());
-        var package = Pack();
+        var package = Pack(host.ScratchDirectory);
+        var expectedStyles = ReadStyles(package, hasEntryStyles);
 
         // The Modules page: upload the package into the app's directory feed, which schedules a reconcile.
         using (var form = new MultipartFormDataContent())
@@ -59,11 +68,14 @@ public sealed class EssentialsStudioAddOnTests(EssentialsStudioAddOnTests.Host h
 
         // The module is listed, with its client entry and stylesheet resolved from the installed package's own static assets.
         var module = await UntilAsync(ModulesAsync, value => ModuleOf(value) is not null, $"{ModuleId} never appeared in /_elsa/studio/modules");
-        var entry = ModuleOf(module)!["entry"]!.GetValue<string>();
-        Assert.StartsWith($"/_content/{ModuleId}/studio/modules/etl/module.js", entry);
-        var styles = ModuleOf(module)!["styles"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray();
-        Assert.NotEmpty(styles);
-        Assert.All(styles, style => Assert.StartsWith($"/_content/{ModuleId}/studio/modules/etl/", style));
+        var moduleInfo = ModuleOf(module)!;
+        var assetRoot = $"/_content/{ModuleId}/{ModuleDirectory}";
+        var version = moduleInfo["version"]!.GetValue<string>();
+        var entry = moduleInfo["entry"]!.GetValue<string>();
+        Assert.Equal($"{assetRoot}/module.js?v={version}", entry);
+        var styles = moduleInfo["styles"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray();
+        Assert.Equal(hasEntryStyles, (bool?)moduleInfo["stylesHaveContentHashes"] ?? false);
+        Assert.Equal(expectedStyles.Select(file => $"{assetRoot}/{file}" + (hasEntryStyles ? "" : $"?v={version}")), styles);
 
         await AssertServedAsync(entry, "text/javascript");
         foreach (var style in styles)
@@ -71,6 +83,24 @@ public sealed class EssentialsStudioAddOnTests(EssentialsStudioAddOnTests.Host h
 
         Assert.Equal(processId, host.ProcessId);
         Assert.False(File.Exists(Path.Join(host.OutputDirectory, ModuleId + ".dll")));
+    }
+
+    private static string[] ReadStyles(string package, bool hasEntryStyles)
+    {
+        using var archive = ZipFile.Open(package, hasEntryStyles ? ZipArchiveMode.Read : ZipArchiveMode.Update);
+        var contract = archive.GetEntry($"staticwebassets/{ModuleDirectory}/entry-styles.json");
+        Assert.NotNull(contract);
+        if (!hasEntryStyles)
+        {
+            contract.Delete();
+            return ["module.css"];
+        }
+
+        using var stream = contract.Open();
+        var styles = JsonNode.Parse(stream)!["styles"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray();
+        Assert.NotEmpty(styles);
+        Assert.All(styles, style => Assert.Matches(@"^module-[A-Za-z0-9_-]+\.css$", style));
+        return styles;
     }
 
     private async Task AssertServedAsync(string asset, string mediaType)
@@ -94,11 +124,11 @@ public sealed class EssentialsStudioAddOnTests(EssentialsStudioAddOnTests.Host h
     /// The ETL Studio module's own <c>.nupkg</c>, packed from its existing build (the test project's build builds it) into a
     /// directory of this test's own, so nothing is written beside the project.
     /// </summary>
-    private string Pack()
+    internal static string Pack(string scratchDirectory)
     {
         var project = Path.Join(StudioAppProcess.StudioRoot, "..", "extensions", "Etl", "studio", ModuleId, ModuleId + ".csproj");
-        var output = Path.Join(host.ScratchDirectory, "feed");
-        var nuspec = Path.Join(host.ScratchDirectory, "nuspec");
+        var output = Path.Join(scratchDirectory, "feed");
+        var nuspec = Path.Join(scratchDirectory, "nuspec");
         var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
             ["pack", Path.GetFullPath(project), "-c", StudioAppProcess.Configuration, "--no-build", "--no-restore", "-nologo", "-v", "q",
                 "-o", output, "-p:NuspecOutputPath=" + nuspec + Path.DirectorySeparatorChar])
@@ -188,6 +218,6 @@ public sealed class EssentialsStudioAddOnTests(EssentialsStudioAddOnTests.Host h
         }
     }
 
-    /// <summary>The Essentials Studio app with Studio auth off, started once for the class with an empty feed.</summary>
+    /// <summary>The Essentials Studio app with Studio auth off and an empty feed for each run.</summary>
     public sealed class Host() : StudioAppProcess("Elsa.Studio.Essentials.Host", new Dictionary<string, string> { ["Studio__Auth__Enabled"] = "false" });
 }

@@ -2088,6 +2088,10 @@ jobs:
           $NAT sqlite-root-held-replies in-batch
           $NAT sqlite-root-terminate checked
           $NAT sqlite-root-terminate in-batch
+          $NAT sqlite-root-retirement checked
+          $NAT sqlite-root-retirement in-batch
+          $NAT sqlite-root-held-operators checked
+          $NAT sqlite-root-held-operators in-batch
 
       - name: Graph engine corpus
         run: dotnet test ../../essentials/tests/Workflows/Runtime/Graph/Tests -c Release --no-build

@@ -10,7 +10,7 @@ import {
   temporarilySetTabFocusMode,
   toggleTabFocusMode
 } from "@codemirror/commands";
-import { bracketMatching, HighlightStyle, foldGutter, indentOnInput, syntaxHighlighting, syntaxTree } from "@codemirror/language";
+import { bracketMatching, ensureSyntaxTree, HighlightStyle, foldGutter, indentOnInput, syntaxHighlighting, syntaxTree } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { Compartment, EditorState, Prec, Transaction } from "@codemirror/state";
 import { EditorView, type ViewUpdate, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, type KeyBinding } from "@codemirror/view";
@@ -56,6 +56,7 @@ interface CodeMirrorRuntime {
   props: StudioCodeEditorEngineProps;
   lastEmittedValue?: string;
   explicitCompletion?: boolean;
+  recentJavaScriptInput?: boolean;
   tabEscapeArmed?: boolean;
 }
 
@@ -119,6 +120,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       controllerRef.current = undefined;
       markCodeEditorReady(root instanceof HTMLElement ? root : container, false);
       entry.runtime.explicitCompletion = false;
+      entry.runtime.recentJavaScriptInput = false;
       entry.runtime.tabEscapeArmed = false;
       entry.state = view.state;
       setStudioCodeEditorSessionEntry(props.session, props.document.uri, entry);
@@ -190,6 +192,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     view.dispatch({ selection: view.state.selection });
     // Replay the shortcut after invalidating old suggestions and requests.
     if (wasExplicit && wasCompleting) startExplicitCompletion(view, runtime);
+    else replayTypedMemberCompletion(view, runtime);
     // A reclaimed compact view starts at the left edge; a field the author scrolled sideways keeps its position.
     if (view.hasFocus && view.scrollDOM.scrollLeft === 0) keepCaretInEditorView(view);
   }, [props.completionProvider, props.completions, props.hoverProvider, props.signatureProvider]);
@@ -317,6 +320,7 @@ function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorS
   // setState does not notify update listeners. An adopted owner state ends the previous local emission.
   entry.runtime.lastEmittedValue = undefined;
   entry.runtime.explicitCompletion = false;
+  entry.runtime.recentJavaScriptInput = false;
   return EditorState.create({
       doc: props.document.value,
       selection: restoredSelection(props, entry),
@@ -347,6 +351,7 @@ function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorS
             abortCodeMirrorCompletionRequests(view);
             clearCodeMirrorCompletionMessage(view);
             entry.runtime.explicitCompletion = false;
+            entry.runtime.recentJavaScriptInput = false;
             entry.runtime.tabEscapeArmed = false;
             entry.runtime.props.onBlur?.();
             return false;
@@ -435,7 +440,10 @@ function editabilityExtensions(readOnly: boolean, ariaLabel: string) {
 function startExplicitCompletion(view: EditorView, runtime: CodeMirrorRuntime): boolean {
   clearCodeMirrorCompletionMessage(view);
   const started = startCompletion(view);
-  if (started) runtime.explicitCompletion = true;
+  if (started) {
+    runtime.explicitCompletion = true;
+    runtime.recentJavaScriptInput = false;
+  }
   return started;
 }
 
@@ -466,6 +474,7 @@ function editorKeymap(runtime: CodeMirrorRuntime): KeyBinding[] {
     {
       key: "Escape",
       run: view => {
+        runtime.recentJavaScriptInput = false;
         if (dismissCodeMirrorIntelligence(view)) return true;
         runtime.tabEscapeArmed = true;
         return temporarilySetTabFocusMode(view);
@@ -493,6 +502,12 @@ function handleUpdate(update: ViewUpdate, entry: CodeMirrorSessionEntry) {
   entry.state = update.state;
   const { runtime } = entry;
   if (update.docChanged || !completionStatus(update.state)) runtime.explicitCompletion = false;
+  if (update.docChanged) {
+    runtime.recentJavaScriptInput = runtime.props.document.language === "javascript" &&
+      update.transactions.some(transaction => transaction.isUserEvent("input.type"));
+  } else if (!update.state.selection.eq(update.startState.selection)) {
+    runtime.recentJavaScriptInput = false;
+  }
   const ownerChanged = update.startState.field(ownerHistoryValue, false) !== update.state.field(ownerHistoryValue, false);
   if (!update.docChanged && !ownerChanged) return;
   entry.revision++;
@@ -516,6 +531,16 @@ function handleUpdate(update: ViewUpdate, entry: CodeMirrorSessionEntry) {
   }
 }
 
+function replayTypedMemberCompletion(view: EditorView, runtime: CodeMirrorRuntime) {
+  if (!runtime.recentJavaScriptInput || runtime.props.readOnly) return;
+  const { empty, head } = view.state.selection.main;
+  if (!empty) return;
+  const node = ensureSyntaxTree(view.state, head, 10)?.resolveInner(head, -1);
+  const dot = node?.name === "PropertyName" ? node.prevSibling : node;
+  // CodeMirror treats this transaction as implicit completion and the document stays unchanged.
+  if (dot?.name === "." && dot.parent?.name === "MemberExpression") view.dispatch({ userEvent: "input.type" });
+}
+
 function requestExpansion(runtime: CodeMirrorRuntime) {
   runtime.props.onExpand?.();
   return true;
@@ -526,6 +551,7 @@ async function loadLanguageSupport(view: EditorView, language: string, entry: Co
   try {
     view.dispatch({ effects: entry.language.reconfigure(extensions) });
     applyDiagnostics(view, entry.runtime.props.diagnostics);
+    replayTypedMemberCompletion(view, entry.runtime);
   } catch {
     // The component was unmounted while the optional language chunk was loading.
   }

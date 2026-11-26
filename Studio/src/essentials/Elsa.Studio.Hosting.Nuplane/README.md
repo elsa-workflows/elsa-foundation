@@ -49,9 +49,12 @@ app.Run();
 The addon loads `nuplane-management.json` by default, relative to the content root. Options bind
 `Studio:Hosting:Nuplane`; the callback can override `ManagementFile` and `DirectoryFeedName`. The optional
 second callback uses the existing NuplaneBuilder for trusted store/loading configuration. Configure feeds
-before this composition call: their registration is frozen for the process. Select a directory feed explicitly
-when more than one resolves packages. With none, the addon registers a `packages` fallback without a filesystem
-watcher; uploads trigger reconciliation, while direct copies require manual or configured periodic reconciliation.
+before this composition call: their registration is frozen for the process. Select an upload directory feed explicitly
+when several are available. Studio excludes directories declared with `Directory.Role=Cache` from upload selection
+and returns a conflict when management requests try to edit or remove those feed entries. The addon registers a
+`packages` fallback without a filesystem watcher when no eligible directory is configured. Configure a separate
+upload feed if a cache already uses `packages`. Uploads trigger reconciliation. Direct copies require manual or
+configured periodic reconciliation.
 Root-owned Nuplane services and the shared CShells adapter handle discovery and active-generation replacement.
 
 Only an exclusively owned standard JSON source is writable. Custom/overlaid shell or management sources stay
