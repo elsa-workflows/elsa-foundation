@@ -67,6 +67,7 @@ override Elsa.Serialization.Core.Options.ObjectConverterOptions.ToString() -> st
 static Elsa.Serialization.Core.Options.ObjectConverterOptions.operator !=(Elsa.Serialization.Core.Options.ObjectConverterOptions? left, Elsa.Serialization.Core.Options.ObjectConverterOptions? right) -> bool
 static Elsa.Serialization.Core.Options.ObjectConverterOptions.operator ==(Elsa.Serialization.Core.Options.ObjectConverterOptions? left, Elsa.Serialization.Core.Options.ObjectConverterOptions? right) -> bool
 static Elsa.Serialization.Core.PayloadCatalogFile.ReadArray<TModel>(string! path, Elsa.Serialization.Core.IPayloadSerializer! serializer, System.Func<string!, string!, System.Exception?, System.Exception!>! exceptionFactory) -> TModel[]!
+static Elsa.Serialization.Core.PayloadCatalogFile.WriteArray<TModel>(string! path, System.Collections.Generic.IReadOnlyList<TModel>! models, Elsa.Serialization.Core.IPayloadSerializer! serializer) -> void
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.<Clone>$() -> Elsa.Serialization.Core.Options.ObjectConverterOptions!
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.EqualityContract.get -> System.Type!
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.Equals(Elsa.Serialization.Core.Options.ObjectConverterOptions? other) -> bool
