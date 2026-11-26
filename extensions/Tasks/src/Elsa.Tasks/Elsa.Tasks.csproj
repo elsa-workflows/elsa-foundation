@@ -20,7 +20,7 @@
 	</ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Elsa.Tasks.Tests" />
+    <InternalsVisibleTo Include="Elsa.Tasks.Execution.Tests" />
   </ItemGroup>
 
 </Project>

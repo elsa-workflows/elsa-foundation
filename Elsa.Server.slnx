@@ -481,7 +481,7 @@
     <Project Path="server/essentials/src/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj" />
     <Project Path="server/essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
   </Folder>
-  <Folder Name="/extensions/Attention/src/Api/">
+  <Folder Name="/extensions/Attention/src/">
     <Project Path="extensions/Attention/src/Api/Elsa.Attention.Api.csproj" />
   </Folder>
   <Folder Name="/extensions/Tasks/src/">
@@ -841,8 +841,8 @@
   <Folder Name="/extensions/Attention/tests/Api/">
     <Project Path="extensions/Attention/tests/Api/Tests/Elsa.Attention.Api.Tests.csproj" />
   </Folder>
-  <Folder Name="/extensions/Tasks/tests/">
-    <Project Path="extensions/Tasks/tests/Tests/Elsa.Tasks.Tests.csproj" />
+  <Folder Name="/extensions/Tasks/tests/Execution/">
+    <Project Path="extensions/Tasks/tests/Execution/Tests/Elsa.Tasks.Execution.Tests.csproj" />
   </Folder>
   <Folder Name="/extensions/Secrets/tests/">
     <Project Path="extensions/Secrets/tests/Tests/Elsa.Secrets.Tests.csproj" />
@@ -888,6 +888,7 @@
   </Folder>
   <Folder Name="/server/essentials/tests/Tasks/">
     <Project Path="server/essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj" />
+    <Project Path="server/essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj" />
   </Folder>
   <Folder Name="/server/essentials/tests/Workbench/">
     <Project Path="server/essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj" />
