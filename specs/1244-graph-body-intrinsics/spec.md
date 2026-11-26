@@ -202,7 +202,8 @@ Correlate; publish.
 
 - **FR-001**: Graph draft validation and compilation MUST accept a Set intrinsic that targets a variable declared by the
   graph, addressed inside the body as scope `workflow` (or Studio's legacy `activity-graph`), in addition to today's
-  native-container targets inside the body. The converter emits `workflow` for every Set it makes.
+  native-container targets inside the body. The converter addresses the reusable workflow's own variables as scope `workflow`, and a
+  container-declared variable by its container's node id (as today).
 - **FR-002**: Graph draft validation MUST keep refusing a Set whose target is outside the nearest body, undeclared,
   or declared more than once. The `activity.graph.set-local-target-invalid` message and its
   reference-doc descriptor MUST name the graph's own variables as valid targets.
