@@ -29,7 +29,7 @@ public static partial class SqliteEmbeddedHosting
         return StartCoreAsync(databasePath, node, _ => actor, rootType: null, endProcess, options, fenceInBatch, cancellationToken, onFault, null);
     }
 
-    /// <summary>Starts an Embedded node on the shipped format for root turns and timed jobs.</summary>
+    /// <summary>Starts an Embedded node on the shipped format with root turns, timed jobs and optional held replies.</summary>
     internal static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
         CancellationToken cancellationToken = default, Action<Exception>? onFault = null, SqliteDirectRequests? requests = null)
