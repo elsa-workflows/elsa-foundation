@@ -14,12 +14,12 @@ material and source-reference stores. Runtime-only hosts enable `ActivitiesBpmn`
 
 ## Cross-domain contributions
 
-- Workflows Design [`IActivityStructureHandler`](../../../../essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md#iactivitystructurehandler-core--elsaworkflowsdesigncore):
+- Workflows Design [`IActivityStructureHandler`](../../../../server/essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md#iactivitystructurehandler-core--elsaworkflowsdesigncore):
   the singleton `BpmnStructureHandler` retains schema 1 projection/lowering. The singleton
   `BpmnDocumentStructureHandler` and `BpmnDocumentScopeViewHandler` provide the retention/query contract below.
 - Workflows Design Validations `IDraftValidator`: scoped `BpmnScopeViewSourceValidator` rejects physical
   derived views; `BpmnDocumentAdmissionValidator` reports the interim execution-closed diagnostic.
-- Workflows Publishing [`IExecutableCompilationSource`](../../../../essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md#iexecutablecompilationsource):
+- Workflows Publishing [`IExecutableCompilationSource`](../../../../server/essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md#iexecutablecompilationsource):
   the scoped `BpmnEmbeddingPinSource` validates exact live tenant-matched model material and contributes its immutable metadata/dependency pin.
 
 ## Complete-document retention
@@ -38,7 +38,7 @@ only owned native configuration and headers into that owner, refuses foreign sna
 composes sibling edits. Native Sequence bodies keep their own child slots. Independent standard
 processes remain outside the selected process's lexical tree and have separate query views.
 
-The separate [ownership projection](../../../../essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md#iactivitystructurehandler-core--elsaworkflowsdesigncore)
+The separate [ownership projection](../../../../server/essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md#iactivitystructurehandler-core--elsaworkflowsdesigncore)
 exposes all physical native roots and compact-header node IDs for presentation retention, including
 independent processes. EF metadata pruning uses that projection without exposing those processes to
 selected-process lexical queries. Removed physical ownership still prunes its presentation records.

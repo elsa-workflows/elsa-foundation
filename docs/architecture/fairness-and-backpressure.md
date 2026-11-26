@@ -36,7 +36,7 @@ Built, in `prototypes/kernel-model` at main `433c79341`, with the rows K1 change
 | A node holds its fair share of partitions, by node count, moving the fewest | `PartitionRuntime.BalanceAsync`, `Balancer.Plan` | Balances partitions, not load. A node's set may be scattered. |
 | A poison trial stops every other turn in the process | `TrialGate`, FINDINGS F11 | A deliberate, rare fairness cost. Under one worker per node it holds back every partition of the set (K1 slice 5b). |
 | The ETL spike keeps at most 8 children outstanding per coordinator | `models/Etl/EtlModel.cs`, [ETL.md](../../prototypes/kernel-model/models/Etl/ETL.md) | The one credit protocol on the kernel; measured locally, below. |
-| A Native invocation inbox with a capacity: input above `Capacity` or `ReceiptCapacity` is answered `Full` or `ReceiptFull` | [InvocationInbox.cs](../../essentials/src/Workflows/Runtime/Native/Model/InvocationInbox.cs), `models/Admission.Run` (its `IgnoreCapacity` control) | A bounded inbox inside one instance's state, in layer 3, that refuses by reply. M0 research, not the production contract. |
+| A Native invocation inbox with a capacity: input above `Capacity` or `ReceiptCapacity` is answered `Full` or `ReceiptFull` | [InvocationInbox.cs](../../server/essentials/src/Workflows/Runtime/Native/Model/InvocationInbox.cs), `models/Admission.Run` (its `IgnoreCapacity` control) | A bounded inbox inside one instance's state, in layer 3, that refuses by reply. M0 research, not the production contract. |
 
 Not built in the prototype's layers 1 and 2: a tenant field (the prototype's `InstanceRow` and `Message` have none),
 admission at ingress, a bound on a virtual partition's inbox, a pass budget, a pressure signal or a cap on sends per

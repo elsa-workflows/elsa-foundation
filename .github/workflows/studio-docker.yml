@@ -145,7 +145,7 @@ jobs:
             tools/ci/verify-studio-assets.py tools/ci/studio_profile_release.py \
             "$STUDIO_IMAGE_VALIDATORS/"
           mkdir -p "$STUDIO_IMAGE_VALIDATORS/profile"
-          cp Studio/docker/profiles/essentials/{prepare.py,smoke.py,release.hcl} "$STUDIO_IMAGE_VALIDATORS/profile/"
+          cp studio/docker/profiles/essentials/{prepare.py,smoke.py,release.hcl} "$STUDIO_IMAGE_VALIDATORS/profile/"
           echo "STUDIO_IMAGE_VALIDATORS=$STUDIO_IMAGE_VALIDATORS" >> "$GITHUB_ENV"
 
       - name: Resolve the flavor's image and Dockerfile
@@ -232,10 +232,30 @@ jobs:
           ref: ${{ steps.ci_source.outputs.source_sha || steps.source.outputs.sha }}
           persist-credentials: false
 
+      - name: Resolve Studio paths at the verified source commit
+        id: layout
+        env:
+          FLAVOR_DOCKERFILE: ${{ steps.flavor.outputs.dockerfile }}
+        run: |
+          set -euo pipefail
+          if git cat-file -e HEAD:studio/package.json 2>/dev/null; then
+            studio_root=studio
+          elif git cat-file -e HEAD:Studio/package.json; then
+            studio_root=Studio
+          else
+            echo "::error::The verified source commit has no supported Studio product root."
+            exit 1
+          fi
+          dockerfile="$studio_root/${FLAVOR_DOCKERFILE#studio/}"
+          git cat-file -e "HEAD:$dockerfile"
+          echo "root=$studio_root" >> "$GITHUB_OUTPUT"
+          echo "dockerfile=$dockerfile" >> "$GITHUB_OUTPUT"
+          echo "STUDIO_ROOT=$studio_root" >> "$GITHUB_ENV"
+
       - name: Require the Essentials profile at the verified source
         if: matrix.flavor == 'essentials'
         run: |
-          profile="$GITHUB_WORKSPACE/Studio/docker/profiles/essentials"
+          profile="$GITHUB_WORKSPACE/$STUDIO_ROOT/docker/profiles/essentials"
           if [[ ! -f "$profile/Dockerfile" || ! -f "$profile/packages.txt" || ! -d "$profile/settings" ]]; then
             echo "::error::Verified source $(git rev-parse HEAD) predates the source-owned Studio Essentials profile. Select a Studio Packages run from a commit that includes the profile Dockerfile, package list and settings."
             exit 1
@@ -258,7 +278,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: elsa-foundation-studio-nuget-packages
-          path: Studio/packages/nuget
+          path: ${{ steps.layout.outputs.root }}/packages/nuget
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ steps.source.outputs.run_id }}
@@ -272,6 +292,7 @@ jobs:
           EXPECTED_RUN_NUMBER: ${{ steps.source.outputs.run_number }}
           EXPECTED_HEAD_BRANCH: ${{ steps.source.outputs.head_branch }}
           EXPECTED_SHA: ${{ steps.source.outputs.sha }}
+          STUDIO_ROOT: ${{ steps.layout.outputs.root }}
           PUBLISH_IMAGE: ${{ inputs.publish }}
           PREVIEW_IMAGE_TAG: ${{ inputs.preview_image_tag }}
           PUBLISHING_ENABLED: ${{ vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING }}
@@ -289,7 +310,7 @@ jobs:
           from studio_docker_publish import read_repository_preview_floor, require_preview_above_floor
           from verify_studio_nuget_packages import verify_packages
 
-          artifact = Path("Studio/packages/nuget")
+          artifact = Path(os.environ["STUDIO_ROOT"]) / "packages/nuget"
           manifest_path = artifact / "studio-package-build.json"
           if not manifest_path.is_file():
               raise SystemExit("Studio package provenance manifest is missing from the selected artifact.")
@@ -359,22 +380,22 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          package_json_file: Studio/package.json
+          package_json_file: ${{ steps.layout.outputs.root }}/package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: Studio/pnpm-lock.yaml
+          cache-dependency-path: ${{ steps.layout.outputs.root }}/pnpm-lock.yaml
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
-        working-directory: Studio
+        working-directory: ${{ steps.layout.outputs.root }}
 
       - name: Build frontend assets
         run: pnpm build
-        working-directory: Studio
+        working-directory: ${{ steps.layout.outputs.root }}
 
       - name: Verify Studio frontend assets
         run: python3 tools/ci/verify-studio-assets.py
@@ -385,7 +406,7 @@ jobs:
           STUDIO_VERSION: ${{ steps.manifest.outputs.studio_version }}
         run: >-
           python3 "$STUDIO_IMAGE_VALIDATORS/verify_studio_nuget_packages.py"
-          --packages Studio/packages/nuget --version "$STUDIO_VERSION"
+          --packages "$STUDIO_ROOT/packages/nuget" --version "$STUDIO_VERSION"
 
       - name: Set up .NET for source-built Essentials packages
         if: matrix.flavor == 'essentials' && github.event_name == 'workflow_run'
@@ -403,7 +424,7 @@ jobs:
           set -euo pipefail
           root="$RUNNER_TEMP/studio-profile-release"
           profile="$STUDIO_IMAGE_VALIDATORS/profile"
-          packages="$GITHUB_WORKSPACE/Studio/packages/nuget"
+          packages="$GITHUB_WORKSPACE/$STUDIO_ROOT/packages/nuget"
           mkdir -p "$root/evidence"
           if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
             packages="$root/packages"
@@ -439,7 +460,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ steps.flavor.outputs.dockerfile }}
+          file: ${{ steps.layout.outputs.dockerfile }}
           platforms: ${{ (github.event_name == 'workflow_run' || inputs.publish == true) && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
           tags: ${{ steps.image.outputs.tags }}

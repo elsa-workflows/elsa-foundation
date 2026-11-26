@@ -95,7 +95,7 @@ refreshed catalog:
 
 The `/_elsa/module-management` upload and reconcile endpoints answer `"RequiresReload": true` for the same reason: the
 package is reconciled and loaded and the catalog refreshed, but no shell has switched yet. The host-level
-`IShellReloader` is `NullShellReloader` (`essentials/src/Modularity/Api/ModuleManagement/ModuleManagementApiServiceCollectionExtensions.cs`, registered by `AddElsaModuleManagement`), a no-op that
+`IShellReloader` is `NullShellReloader` (`server/essentials/src/Modularity/Api/ModuleManagement/ModuleManagementApiServiceCollectionExtensions.cs`, registered by `AddElsaModuleManagement`), a no-op that
 reports zero shells reloaded. The one exception is a shell that enables the `ModularityApi` feature: it replaces
 `NullShellReloader` inside that shell with a reloader that does reload it, so a feature change applied through that
 shell's module API also refreshes the feature catalog and rebuilds that one shell. That is a side effect of applying
@@ -103,7 +103,7 @@ feature configuration, not a response to reconciliation.
 
 After an in-place upgrade, the previous release of a package-loaded activity stays loaded, and a reloaded shell registers
 the class of the release it composes under the activity's alias; see
-[Activity versions after an in-place upgrade](../../Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/README.md#activity-versions-after-an-in-place-upgrade)
+[Activity versions after an in-place upgrade](../../server/essentials/src/Activities/Runtime/Elsa.Activities.Runtime/README.md#activity-versions-after-an-in-place-upgrade)
 for what that means for a workflow pinned to an earlier version.
 ## Reconciling on demand
 

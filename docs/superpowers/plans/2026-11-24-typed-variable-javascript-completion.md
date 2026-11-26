@@ -38,12 +38,12 @@
 ### Task 1: Describe a declared type's members as `Declared`
 
 **Files:**
-- Modify: `essentials/src/Activities/Design/Core/Models/ActivitySerializedShape.cs` (enum `ActivitySerializedShapeState`)
-- Modify: `essentials/src/Activities/Design/Core/PublicAPI.Unshipped.txt`
-- Modify: `essentials/src/Activities/Design/Core/Contracts/IActivitySerializedShapeSource.cs` (doc comment of `DescribeDeclaredTypeAsync`)
-- Modify: `essentials/src/Activities/Design/Reconciliation/Clr/Services/ClrActivitySerializedShapeSource.cs` (`DescribeDeclaredTypeAsync`)
-- Modify: `essentials/src/Activities/Design/Api/EXTENSION_POINTS.md` and `essentials/src/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md` where they describe declared-type behavior (use the `elsa-extension-point-catalog` skill)
-- Test: `essentials/tests/Activities/Design/Tests/Unit/ActivitySerializedShapeSourceTests.cs`
+- Modify: `server/essentials/src/Activities/Design/Core/Models/ActivitySerializedShape.cs` (enum `ActivitySerializedShapeState`)
+- Modify: `server/essentials/src/Activities/Design/Core/PublicAPI.Unshipped.txt`
+- Modify: `server/essentials/src/Activities/Design/Core/Contracts/IActivitySerializedShapeSource.cs` (doc comment of `DescribeDeclaredTypeAsync`)
+- Modify: `server/essentials/src/Activities/Design/Reconciliation/Clr/Services/ClrActivitySerializedShapeSource.cs` (`DescribeDeclaredTypeAsync`)
+- Modify: `server/essentials/src/Activities/Design/Api/EXTENSION_POINTS.md` and `server/essentials/src/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md` where they describe declared-type behavior (use the `elsa-extension-point-catalog` skill)
+- Test: `server/essentials/tests/Activities/Design/Tests/Unit/ActivitySerializedShapeSourceTests.cs`
 
 **Interfaces:**
 - Produces: `ActivitySerializedShapeState.Declared` (value 4). `DescribeDeclaredTypeAsync` returns, for an admitted single-descriptor `CollectionKind.Single` type whose reader result is `Known` or `Truncated`, that reader result `with { State = Declared, ReasonCode = "activity.shape.declared-type" }`, `ProfileRevision == ActivityValueJsonProfile.Revision`, `SourceContractRevision == ownerContractIdentity`.
@@ -108,7 +108,7 @@ public async Task Declared_recursive_and_scalar_types_stay_bounded_and_member_fr
 
 - [ ] **Step 2: Run the tests and confirm they fail**
 
-Run: `dotnet test essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj --filter "FullyQualifiedName~ActivitySerializedShapeSourceTests"`
+Run: `dotnet test server/essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj --filter "FullyQualifiedName~ActivitySerializedShapeSourceTests"`
 Expected: the three new tests FAIL (`Declared` does not exist yet, then state is `Unknown`).
 
 - [ ] **Step 3: Add `Declared = 4` to `ActivitySerializedShapeState` and its `PublicAPI.Unshipped.txt` line**
@@ -121,23 +121,23 @@ After the existing admission check, for `declaredType.CollectionKind == Collecti
 
 - [ ] **Step 5: Run the tests and confirm they pass**
 
-Run: `dotnet test essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj`
+Run: `dotnet test server/essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj`
 Expected: all PASS, including `Default_headless_projection_has_API_byte_parity...` and `API_and_endpoint_free_hosts_share_the_same_type_facts...`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git -c core.fsmonitor=false add essentials/src/Activities/Design essentials/tests/Activities/Design
+git -c core.fsmonitor=false add server/essentials/src/Activities/Design server/essentials/tests/Activities/Design
 git -c core.fsmonitor=false commit -m "Describe a declared variable type's members as a Declared shape (#5676)"
 ```
 
 ### Task 2: Keep validation and the Activity Data picker unchanged
 
 **Files:**
-- Modify: `essentials/src/Workflows/Design/Api/Services/ActivityDataContextService.cs` (the `analysis` returned by `ResolveAsync`)
-- Check, change only if a test fails: `essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Services/ActivityDataSelectionAnalyzer.cs`
-- Test: `essentials/tests/Workflows/Design/Tests/ActivityDataSelectionAnalyzerTests.MemberReads.cs`
-- Test: `essentials/tests/Workflows/Design/Api/Tests/Unit/ActivityDataContextEndpointTests.cs`
+- Modify: `server/essentials/src/Workflows/Design/Api/Services/ActivityDataContextService.cs` (the `analysis` returned by `ResolveAsync`)
+- Check, change only if a test fails: `server/essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Services/ActivityDataSelectionAnalyzer.cs`
+- Test: `server/essentials/tests/Workflows/Design/Tests/ActivityDataSelectionAnalyzerTests.MemberReads.cs`
+- Test: `server/essentials/tests/Workflows/Design/Api/Tests/Unit/ActivityDataContextEndpointTests.cs`
 
 **Interfaces:**
 - Consumes: `ActivitySerializedShapeState.Declared` and the task 1 answer shapes.
@@ -174,7 +174,7 @@ Use the property names the existing models expose (`Reads`, `IsKnown`, the sourc
 
 - [ ] **Step 2: Run them and confirm the picker test fails**
 
-Run: `dotnet test essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj --filter "FullyQualifiedName~MemberReads"` and `dotnet test essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --filter "FullyQualifiedName~ActivityDataContextEndpointTests"`
+Run: `dotnet test server/essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj --filter "FullyQualifiedName~MemberReads"` and `dotnet test server/essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --filter "FullyQualifiedName~ActivityDataContextEndpointTests"`
 Expected: the analyzer test PASSES already (the analyzer only trusts `Known`/`Truncated`); the picker test FAILS with state `Declared`. If the analyzer test fails, fix the analyzer so `Declared` behaves exactly like `Unknown`.
 
 - [ ] **Step 3: Implement `WithoutDeclaredMembers` and apply it to the `analysis` in `ResolveAsync`'s success response**
@@ -183,22 +183,22 @@ The context revision is computed before this rewrite and stays as is.
 
 - [ ] **Step 4: Run both test projects and confirm they pass**
 
-Run: `dotnet test essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj` and `dotnet test essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj`
+Run: `dotnet test server/essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj` and `dotnet test server/essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj`
 Expected: all PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -c core.fsmonitor=false add essentials/src/Workflows/Design essentials/tests/Workflows/Design
+git -c core.fsmonitor=false add server/essentials/src/Workflows/Design server/essentials/tests/Workflows/Design
 git -c core.fsmonitor=false commit -m "Keep the Activity Data picker and validation unchanged for declared shapes (#5676)"
 ```
 
 ### Task 3: Label declared members in the expression authoring context
 
 **Files:**
-- Modify: `essentials/src/Workflows/Design/Api/Services/PersistedExpressionAuthoringContextSource.cs` (`ToShape`)
-- Test: `essentials/tests/Workflows/Design/Api/Tests/Unit/PersistedExpressionAuthoringContextSourceTests.cs`
-- Test: `essentials/tests/Expressions/Tests/ExpressionToolingProviderContractTests.cs`
+- Modify: `server/essentials/src/Workflows/Design/Api/Services/PersistedExpressionAuthoringContextSource.cs` (`ToShape`)
+- Test: `server/essentials/tests/Workflows/Design/Api/Tests/Unit/PersistedExpressionAuthoringContextSourceTests.cs`
+- Test: `server/essentials/tests/Expressions/Tests/ExpressionToolingProviderContractTests.cs`
 
 **Interfaces:**
 - Consumes: `ActivitySerializedShapeState.Declared`.
@@ -242,7 +242,7 @@ Also assert in the authoring test that a `Declared` scalar variable (alias `Stri
 
 - [ ] **Step 2: Run them and confirm the authoring test fails**
 
-Run: `dotnet test essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --filter "FullyQualifiedName~PersistedExpressionAuthoringContextSourceTests"` and `dotnet test essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj --filter "FullyQualifiedName~ExpressionToolingProviderContractTests"`
+Run: `dotnet test server/essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --filter "FullyQualifiedName~PersistedExpressionAuthoringContextSourceTests"` and `dotnet test server/essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj --filter "FullyQualifiedName~ExpressionToolingProviderContractTests"`
 Expected: the authoring test FAILS (kind `Unknown`, lazy children, no label). The provider test is a pinning test and may pass already.
 
 - [ ] **Step 3: Implement the `ToShape` change**
@@ -255,7 +255,7 @@ Expected: all PASS.
 - [ ] **Step 5: Commit, open the PR and review**
 
 ```bash
-git -c core.fsmonitor=false add essentials/src/Workflows/Design essentials/tests
+git -c core.fsmonitor=false add server/essentials/src/Workflows/Design server/essentials/tests
 git -c core.fsmonitor=false commit -m "Label declared variable members in the expression authoring context (#5676)"
 ```
 
@@ -264,8 +264,8 @@ Push, open a draft PR closing #5676, then follow the `elsa-auto-review-merge` sk
 ### Task 4: Prove typed-variable completion in Studio (#5677)
 
 **Files:**
-- Test: `Studio/src/essentials/Elsa.Studio.CodeEditor/Client/src/__tests__/toolingProjection.test.ts`
-- Modify only if the test fails: `Studio/src/essentials/Elsa.Studio.CodeEditor/Client/src/toolingProjection.ts` (`toDirectCompletion`)
+- Test: `studio/src/essentials/Elsa.Studio.CodeEditor/Client/src/__tests__/toolingProjection.test.ts`
+- Modify only if the test fails: `studio/src/essentials/Elsa.Studio.CodeEditor/Client/src/toolingProjection.ts` (`toDirectCompletion`)
 
 **Interfaces:**
 - Consumes: provider completion items with `label`, `detail` (member type display name) and `documentation` (the label), as produced after task 3.
@@ -288,7 +288,7 @@ Also assert that a provider returning no items for an unknown-shape variable yie
 
 - [ ] **Step 2: Run it**
 
-Run: `pnpm --dir Studio/src/essentials/Elsa.Studio.CodeEditor/Client test -- toolingProjection`
+Run: `pnpm --dir studio/src/essentials/Elsa.Studio.CodeEditor/Client test -- toolingProjection`
 Expected: PASS (this pins existing pass-through). If it fails, fix `toDirectCompletion` and rerun.
 
 - [ ] **Step 3: Prove it in a normally composed host**
@@ -298,7 +298,7 @@ Build Workbench and Studio from the branch (after task 1–3's PR is on `main`).
 - [ ] **Step 4: Commit, open the PR and review**
 
 ```bash
-git -c core.fsmonitor=false add Studio/src/essentials/Elsa.Studio.CodeEditor/Client/src
+git -c core.fsmonitor=false add studio/src/essentials/Elsa.Studio.CodeEditor/Client/src
 git -c core.fsmonitor=false commit -m "Pin typed-variable member completion in the Studio editor (#5677)"
 ```
 

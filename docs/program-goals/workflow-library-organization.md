@@ -48,5 +48,5 @@ The separately authorized availability follow-up [#3595](https://github.com/elsa
 belongs to Elsa 4 Simplification (#2559); it does not reactivate this completed program.
 Its [specification](../../specs/1182-workflow-organization-controls/spec.md) adds the default-enabled
 `WorkflowsDesignApi.WorkflowOrganizationEnabled` setting. See the
-[API configuration and retention contract](../../Essentials/src/Workflows/Design/Api/README.md#optional-workflow-organization)
+[API configuration and retention contract](../../server/essentials/src/Workflows/Design/Api/README.md#optional-workflow-organization)
 for administration, shell configuration, capability refresh and saved-data behavior.

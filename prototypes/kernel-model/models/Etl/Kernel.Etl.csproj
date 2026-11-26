@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><RootNamespace>Kernel.Etl</RootNamespace></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../../../essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../../../server/essentials/tests/ActorFoundation/Legacy/Workflows/Elsa.ActorFoundation.Legacy.Workflows.csproj" /></ItemGroup>
 </Project>

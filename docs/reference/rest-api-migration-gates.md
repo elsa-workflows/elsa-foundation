@@ -31,8 +31,8 @@ The collectible harness compiles an isolated endpoint type with Roslyn, loads it
 ## Verification
 
 ```bash
-dotnet test Essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj --no-restore
-dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-restore
+dotnet test server/essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj --no-restore
+dotnet test server/essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj --no-restore
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check   # committed solution filters
 ```
 

@@ -1,5 +1,5 @@
 import { mergeConfig } from "vite";
-import { defineModuleConfig } from "../../../../../Studio/vite.module.base";
+import { defineModuleConfig } from "../../../../../studio/vite.module.base";
 
 export default mergeConfig(
   defineModuleConfig({

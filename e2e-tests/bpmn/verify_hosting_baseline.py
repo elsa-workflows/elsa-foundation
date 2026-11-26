@@ -95,7 +95,7 @@ def verify(path: Path, reader: Path) -> dict:
                 frozen['closedSnapshotSha256'] != assets[studio['designStore']]['databaseSha256'] or
                 run['instance']['status'] != 'Completed' or run['instance']['artifactId'] != studio['artifactId'] or
                 exported['definitionId'] != studio['definitionId'] or not exported.get('layout')):
-            raise ValueError('Actual Studio/frozen-authoring baseline is incomplete.')
+            raise ValueError('Actual studio/frozen-authoring baseline is incomplete.')
         for mapping in manifest['writerMap']:
             if not mapping['writers'] or not mapping['captures'] or any(name not in assets for name in mapping['captures']):
                 raise ValueError('A writer has no retained source-bound capture.')

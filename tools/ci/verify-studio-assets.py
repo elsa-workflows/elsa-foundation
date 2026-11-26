@@ -11,18 +11,18 @@ from pathlib import Path
 
 
 EXPECTED_ASSETS = (
-    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/index.html",
-    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/assets/index.js",
-    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/assets/index.css",
-    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react.js",
-    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-dom.js",
-    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-dom-client.js",
-    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-query.js",
-    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/lucide-react.js",
-    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/studio-ui.js",
-    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/sdk/index.js",
+    "studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/index.html",
+    "studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/assets/index.js",
+    "studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/assets/index.css",
+    "studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react.js",
+    "studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-dom.js",
+    "studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-dom-client.js",
+    "studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-query.js",
+    "studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/lucide-react.js",
+    "studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/studio-ui.js",
+    "studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/sdk/index.js",
     "extensions/Dashboard/studio/Elsa.Studio.Dashboard/wwwroot/studio/modules/dashboard/module.js",
-    "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module.js",
+    "studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module.js",
     "extensions/Agent/studio/Elsa.Studio.Agent/wwwroot/studio/modules/agent/module.js",
     "extensions/Attention/studio/Elsa.Studio.Attention/wwwroot/studio/modules/attention/module.js",
     "extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/wwwroot/studio/modules/console-stream/module.js",
@@ -46,8 +46,13 @@ EXPECTED_ASSETS += tuple(path.rsplit("/", 1)[0] + "/entry-styles.json"
                          for path in EXPECTED_ASSETS if path.endswith("/module.js"))
 
 
-def verify_entry_styles(root: Path) -> None:
-    for path in EXPECTED_ASSETS:
+def expected_assets(studio_root: str) -> tuple[str, ...]:
+    return tuple(studio_root + path[len("studio"):] if path.startswith("studio/") else path
+                 for path in EXPECTED_ASSETS)
+
+
+def verify_entry_styles(root: Path, studio_root: str = "studio") -> None:
+    for path in expected_assets(studio_root):
         if not path.endswith("/entry-styles.json"):
             continue
         contract = root / path

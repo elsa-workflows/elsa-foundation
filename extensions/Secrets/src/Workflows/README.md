@@ -55,7 +55,7 @@ This feature implements a replacement contract from another domain:
   workflow activity's secret reference over the Secrets module's `ISecretValueResolver`. Called by `ActivityActivator`,
   through `ActivitySecretInputResolver`, in `Elsa.Activities.Runtime`.
   - Known impl: `SecretValueRuntimeResolver`.
-  - Catalog: [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../../../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md)
+  - Catalog: [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../../../../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md)
 
 ## Why a separate project
 

@@ -1,5 +1,5 @@
 # .dockerignore (repo root) — applies to Docker builds that use the repository
-# root as context (e.g. apps/Elsa.Workbench.Host/Dockerfile and the Studio app Dockerfiles).
+# root as context (e.g. server/apps/Elsa.Workbench.Host/Dockerfile and the Studio app Dockerfiles).
 #
 # Goal: send only what `dotnet restore`/`publish` needs. Keep repo-root build
 # config (*.props, *.targets, NuGet.config, *.slnx) and the product source trees with
@@ -24,8 +24,8 @@
 **/*.DotSettings*
 
 # --- Repo areas not needed to build the server host -------------------------
-essentials/tests/
-Studio/tests/
+server/essentials/tests/
+studio/tests/
 **/node_modules/
 # Optional-module tests (#1815). extensions/<Name>/src is build input and stays; its sibling
 # tests/ is not, and unlike the top-level tests/ tree it is not covered by the rule above.
@@ -50,22 +50,22 @@ tools/
 **/*.sqlite-wal
 # Nuplane reconciliation state and directory-feed contents
 **/.nuplane/
-apps/Elsa.Workbench.Host/packages/
-apps/Elsa.Essentials.Host/packages/
+server/apps/Elsa.Workbench.Host/packages/
+server/apps/Elsa.Essentials.Host/packages/
 # Extension Builder runtime workspace (lowercase; source lives in extensions/ExtensionBuilder/)
-apps/Elsa.Workbench.Host/extension-builder/
+server/apps/Elsa.Workbench.Host/extension-builder/
 # GitHubCopilotAgent working directory (config.json is regenerated / supplied via mount)
-apps/Elsa.Workbench.Host/.elsa/
-Studio/src/apps/Elsa.Studio.Workbench.Host/packages/
-Studio/src/apps/Elsa.Studio.Essentials.Host/packages/
-Studio/src/apps/Elsa.Studio.Foundation.Host/packages/
-Studio/.git/
-Studio/.github/
-Studio/.specify/
-Studio/.claude/
-Studio/specs/
-Studio/docs/
-Studio/artifacts/
+server/apps/Elsa.Workbench.Host/.elsa/
+studio/src/apps/Elsa.Studio.Workbench.Host/packages/
+studio/src/apps/Elsa.Studio.Essentials.Host/packages/
+studio/src/apps/Elsa.Studio.Foundation.Host/packages/
+studio/.git/
+studio/.github/
+studio/.specify/
+studio/.claude/
+studio/specs/
+studio/docs/
+studio/artifacts/
 
 # --- Docker / compose assets ------------------------------------------------
 docker/

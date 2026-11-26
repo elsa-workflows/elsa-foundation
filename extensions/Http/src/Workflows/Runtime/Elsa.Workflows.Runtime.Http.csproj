@@ -12,10 +12,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\Elsa.Http.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
-    <ProjectReference Include="..\..\..\..\..\essentials\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\essentials\src\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
-    <ProjectReference Include="..\..\..\..\..\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\server\essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\server\essentials\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\server\essentials\src\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
+    <ProjectReference Include="..\..\..\..\..\server\essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
 </Project>

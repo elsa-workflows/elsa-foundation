@@ -20,8 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Elsa.Http\Elsa.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\tests\Testing\Elsa.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\..\server\essentials\tests\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
 </Project>

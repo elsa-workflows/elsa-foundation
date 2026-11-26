@@ -2,7 +2,7 @@
 
 User goal: starting in Decisions, create a reusable approval policy, enter table rules, save and validate it, save boundary cases, catch a deliberate threshold regression, publish, reload its immutable version and reuse it from a workflow. Import/export preserves the original decision document.
 
-Reference: Connections and Workflow Definitions collection structure, using [public module UI](../../../../Studio/docs/module-ui.md). The editor uses native labeled controls and a table with persistent row/column headers. Editing a cell patches its XML node; the module never regenerates an imported document from a reduced model.
+Reference: Connections and Workflow Definitions collection structure, using [public module UI](../../../../studio/docs/module-ui.md). The editor uses native labeled controls and a table with persistent row/column headers. Editing a cell patches its XML node; the module never regenerates an imported document from a reduced model.
 
 Observable states: empty/populated/no search results; loading/failed/unavailable/denied; create cancellation; editable draft and read-only version; missing source access; invalid and unsupported imports; located validation errors; clean/dirty/saving/conflicted draft; saved and failed cases; exact candidate test result after later edits; protected history with unavailable details; publish/reload/clone; keyboard focus and dirty navigation; workspace tab names (Decisions for the list, New decision, the decision's name with Draft or Version N, Decision when it cannot be loaded); 320px layout and light/dark.
 

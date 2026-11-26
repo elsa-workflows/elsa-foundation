@@ -34,7 +34,7 @@ SDK/UI, shared styles and navigation/workspace/dialog contracts. Draft, cancella
 backend-switch behavior remain explicit acceptance boundaries. Module styles use the public token contract.
 
 After execution is authorized, run the affected component/SDK/type/declaration/frontend/Studio .NET gates,
-then inspect current-source composed Studio/backend journeys across module, permission, ownership, source,
+then inspect current-source composed studio/backend journeys across module, permission, ownership, source,
 loading/error, theme and narrow-layout states. Retain downloadable exact-head visual evidence and independent
 UX acceptance under [Studio UX acceptance](../../../../docs/contributing/studio-ux-acceptance.md).
 

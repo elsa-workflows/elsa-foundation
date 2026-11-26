@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import test from "node:test";
 import { setImmediate } from "node:timers/promises";
-import { createActivityDataResponseCollector } from "../../Studio/tests/acceptance/activityDataResponseCollector.mjs";
+import { createActivityDataResponseCollector } from "../../studio/tests/acceptance/activityDataResponseCollector.mjs";
 
 const endpoint = "http://localhost:51947/elsa/api/design/workflows/activity-data/context";
 const packet = { definitionId: "owned", documentRevision: "before", nodeId: "consumer", inputKey: "text" };

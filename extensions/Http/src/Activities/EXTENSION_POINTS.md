@@ -32,10 +32,10 @@ Outbound logging (not an extension point): `ActivitiesHttpFeature` calls `Remove
 
 ## Cross-references
 
-- Standalone HTTP source metadata, exclusive reservation planning, producer-bound intake and transport observations: [feature README](StandaloneTriggers/README.md). Public source/store/model contracts are owned by the [Runtime domain catalog](../../../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#standalone-trigger-authoring-and-source-boundaries); the feature's presence does not establish composed acceptance.
-- Test Run trigger and wait drivers (`ITestRunTriggerDriver`, `ITestRunWaitDriver`), including the authenticated Studio action contract: [`Elsa.Workflows.Runtime` extension points](../../../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#workflow-test-run-trigger-and-wait-drivers).
+- Standalone HTTP source metadata, exclusive reservation planning, producer-bound intake and transport observations: [feature README](StandaloneTriggers/README.md). Public source/store/model contracts are owned by the [Runtime domain catalog](../../../../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#standalone-trigger-authoring-and-source-boundaries); the feature's presence does not establish composed acceptance.
+- Test Run trigger and wait drivers (`ITestRunTriggerDriver`, `ITestRunWaitDriver`), including the authenticated Studio action contract: [`Elsa.Workflows.Runtime` extension points](../../../../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#workflow-test-run-trigger-and-wait-drivers).
 - HTTP endpoint behaviour contracts (route resolution, authorization, fault mapping) + the route-table freshness seams: [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](../Workflows/Runtime/EXTENSION_POINTS.md).
-- Dispatch-options passthrough (`IWorkflowStartDispatcher`/`IBookmarkResumeDispatcher`/`IStimulusRouter`): [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../../../../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
+- Dispatch-options passthrough (`IWorkflowStartDispatcher`/`IBookmarkResumeDispatcher`/`IStimulusRouter`): [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../../../../server/essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 - HTTP content factories / downloadable content: [`Elsa.Http/EXTENSION_POINTS.md`](../Elsa.Http/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../../../EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.2 + §2.22.1.

@@ -95,7 +95,7 @@ Sequencing: M0 establishment #3883, M1 Flowchart/Sequence proof #3884, M2 review
 then small picker/binding, expression/editing and integrated qualification slices. Reuse feature #3094 and
 preserve its compensation relationship and independently deliverable whole-output scope; #2310 retains text
 expression-authoring ownership. Run beside active programs, preserve consolidation's priority one, coordinate
-shared Studio/runtime paths and reactivate no unrelated work. Keep one integration lane; parallel workers use
+shared studio/runtime paths and reactivate no unrelated work. Keep one integration lane; parallel workers use
 separate leaves/worktrees only after their shared contracts are committed. Basic data selection is language-neutral;
 authorized test-run examples follow the metadata-first core journey as a separately scheduled increment.
 Accepted ADR 0045 causal semantics remain; this does not settle draft activity-reference/coercion proposals or
@@ -133,8 +133,8 @@ is the first priority now, without waiting until 21 November or for whole peer p
 [Website and documentation #2495](https://github.com/elsa-workflows/elsa-foundation/issues/2495#issuecomment-6111314757)
 is reactivated in parallel, with Elsa 4 source in Foundation at `website/docs/` and native GitBook sync.
 These are named exceptions to D0's parking and the two-program cap; the remaining decisions in this ADR
-continue to apply. The consolidation target is `Essentials/` (src/tests/apps),
-`Extensions/<capability>/` (src/optional studio/tests) and `Studio/` (shell/shared UI/tests/tooling),
+continue to apply. The consolidation target is `server/essentials/` (src/tests/apps),
+`Extensions/<capability>/` (src/optional studio/tests) and `studio/` (shell/shared UI/tests/tooling),
 with shared docs/tools/workflows at the root. This direction does not rename package or API identities.
 The [11 October preservation checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2510#issuecomment-6113334884)
 admits isolated source moves, imports and consolidation validation against captured copies under #2510.
@@ -202,7 +202,7 @@ as your stated goal.” The program uses a native Program/Epic/Feature/Task hier
 [Project 67](https://github.com/orgs/elsa-workflows/projects/67), with one implementation leaf at a time.
 Sequencing: establish the durable plan and prove a composed-host prototype, then deliver equivalent
 authoring, BPMN extraction, reusable promotion and integrated qualification. Run beside active programs,
-displace none, preserve consolidation's priority one, coordinate shared Studio/runtime paths and
+displace none, preserve consolidation's priority one, coordinate shared studio/runtime paths and
 reactivate no parked backlog. Reuse existing activity-owned composite semantics; this is not a new
 execution-model program. The authorization includes scoped implementation, normal PR/review/merge
 delivery and resulting-main verification; releases and deployment are excluded. Establishment or
@@ -288,7 +288,7 @@ with explicit inputs/outputs and optional conversation continuity, Microsoft Age
 Foundry-inspired authoring, then instructed: "make a complete end to end plan, including research spikes,
 designs, architecture and implementation, then turn that into a Program, then deliver that end to end".
 Sequencing: M0 executable research, M1 reviewed product/architecture design, M2 catalog/publication,
-M3 specialist execution, M4 native/BPMN integration, M5 Studio/evaluations, M6 tools/knowledge/bounded teams,
+M3 specialist execution, M4 native/BPMN integration, M5 studio/evaluations, M6 tools/knowledge/bounded teams,
 then M7 integrated qualification. Run beside the active programs, displace none, preserve consolidation's
 first priority and reactivate no parked backlog. Existing #2892/#2912 retains production collaboration
 and recovery ownership; consume or deliver shared work through that owning hierarchy and its claims.
@@ -421,7 +421,7 @@ unit, ratification, phase-owned) does not appear in product docs or type names.
 ([#2591](https://github.com/elsa-workflows/elsa-foundation/issues/2591)). The old names are banned by a real Roslyn
 analyzer, not an architecture test. Every production project references it, and the lock-file churn that brings is
 accepted. A term is banned domain by domain, as each domain is realigned, not across the repository at once. Not a
-decision, but a description of the result: the analyzer is `Elsa.Architecture.Analyzers`, kept in `Essentials/build/`
+decision, but a description of the result: the analyzer is `Elsa.Architecture.Analyzers`, kept in `server/essentials/build/`
 outside the module roots because it is build tooling, not a domain. It reports a retired term in a type name, public or
 internal (`ELSANAME001`), and in a namespace (`ELSANAME002`), naming the replacement, and a term list it cannot parse
 is itself an error (`ELSANAME003`). A domain activates its terms with a section for its folder in the root

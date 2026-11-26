@@ -12,7 +12,7 @@ costs and what each means, on SQLite and PostgreSQL, with a seeded model of the 
 
 What was run, and where the code is:
 
-- `../../essentials/src/ActorFoundation/BuiltIn/Runtime/VirtualPartitions.cs`: addressing and placement (`VirtualPartitions.Of`, the same hash as
+- `../../server/essentials/src/ActorFoundation/BuiltIn/Runtime/VirtualPartitions.cs`: addressing and placement (`VirtualPartitions.Of`, the same hash as
   today's `InstanceRef.Spread`; `VpRange`; `RangeMap` with split, merge, fair ranges and two rebalance strategies).
   `sim --placement-check` is its witness. When this round ran, nothing in the kernel used it. Since K1 (the sections
   below) the kernel hosts 1,024 virtual partitions, and a node's one worker owns a set of them.
