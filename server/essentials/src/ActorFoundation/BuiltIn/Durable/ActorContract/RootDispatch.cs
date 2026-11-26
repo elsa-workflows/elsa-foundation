@@ -191,6 +191,7 @@ internal sealed partial class ActorAdapter
             return deleted;
         }
         var unavailable = protection != "Protected";
+        var facts = command.Message.Operator!.RootParkFacts!;
         return new Durable.TurnOutcome(input.Actor)
         {
             Expected = row.Revision, Row = row with
@@ -200,7 +201,9 @@ internal sealed partial class ActorAdapter
                     : row.FoundationDispatchHeader! with { RefreshTerminal = roots!.RequiresCommittedTerminal }
             },
             Revision = revision, Status = row.Status, Consumed = [command], Unsubscribe = !unavailable,
-            Journal = unavailable ? Durable.Json.Write(new { Outcome = "refused", Operation = command.Message.Id, Reason = "unavailable" })
+            Journal = unavailable
+                ? facts.StopsForUnreadableProtection ? Durable.FoundationRootParkFacts.ProtectionStopped(command.Message.Id, facts.Cleared)
+                    : Durable.FoundationRootParkFacts.ProtectionRefusal(command.Message.Id)
                 : Durable.Json.Write(new { Outcome = "protected", Disposition = "discarded", Operation = command.Message.Id, Cleared = cleared })
         };
     }

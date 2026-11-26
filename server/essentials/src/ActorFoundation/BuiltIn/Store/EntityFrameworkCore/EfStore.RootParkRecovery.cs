@@ -144,10 +144,12 @@ public sealed partial class EfStore
             var charged = message.Kind is Kinds.Terminate or Kinds.Delete ? kept.ToArray() : kept.Where(row => row.KeptBy == (short)ParkKeepReason.Arrived).ToArray();
             var page = PageLength(charged);
             var fits = page == charged.Length;
+            var refusals = fits && command.RootParkClear && message.Kind == Kinds.Delete && park?.Clearing == message.Id
+                ? await ReadParkProtectionRefusalsAsync(db, message.Target.Id, message.Target.Partition, message.Id, long.MaxValue, token) : 0;
             var facts = new FoundationRootParkFacts(park is { At: { } at, Revision: { } revision } ? new(revision, at) : null,
                 kept.Count(row => row.KeptBy == (short)ParkKeepReason.Arrived), kept.Count(row => row.KeptBy == (short)ParkKeepReason.Consumed),
                 fits, KeptSetDigest(kept)) { Outstanding = park?.Outstanding ?? false, Residue = park?.Residue ?? false, Rereads = RereadsParkFacts(db), Clearing = park?.Clearing, Cleared = park?.Cleared ?? 0, Page = page,
-                    ClearsInPages = db.UsesSqliteRootRuntime || ClearsParkInPages(db) };
+                    ClearsInPages = db.UsesSqliteRootRuntime || ClearsParkInPages(db), ProtectionRefusals = refusals };
             messages.Add(item with { Message = message with { Operator = command with { RootParkFacts = facts } } });
         }
         return polled with { Messages = messages };
