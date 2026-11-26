@@ -26,24 +26,24 @@ public static partial class SqliteEmbeddedHosting
         CancellationToken cancellationToken = default, Action<Exception>? onFault = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
-        return StartCoreAsync(databasePath, node, _ => actor, shipped: false, endProcess, options, fenceInBatch, cancellationToken, onFault);
+        return StartCoreAsync(databasePath, node, _ => actor, rootType: null, endProcess, options, fenceInBatch, cancellationToken, onFault, null);
     }
 
     /// <summary>Starts an Embedded node on the shipped format for root turns and timed jobs.</summary>
     internal static Task<RuntimeNode> StartFoundationAsync(string databasePath, string node, Contract.IActorType actor,
         Action<string> endProcess, LoopOptions? options = null, bool fenceInBatch = true,
-        CancellationToken cancellationToken = default, Action<Exception>? onFault = null)
+        CancellationToken cancellationToken = default, Action<Exception>? onFault = null, SqliteDirectRequests? requests = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         RequireFoundationActorType(actor.Type);
         return StartCoreAsync(databasePath, node, store => new ActorAdapter(new EfStore.RootHeaders(store.BindSqliteWorkerNode()), actor,
-                rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync),
-            shipped: true, endProcess, options, fenceInBatch, cancellationToken, onFault);
+                rootJobHandle: store.RootJobHandle, rootTimedJobClock: store.ReadRootTimedJobPublicationTimeAsync, rootHeldReplies: true),
+            actor.Type, endProcess, options, fenceInBatch, cancellationToken, onFault, requests);
     }
 
     private static async Task<RuntimeNode> StartCoreAsync(string databasePath, string node, Func<EfStore, IActorType> createActor,
-        bool shipped, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
-        Action<Exception>? onFault)
+        string? rootType, Action<string> endProcess, LoopOptions? options, bool fenceInBatch, CancellationToken cancellationToken,
+        Action<Exception>? onFault, SqliteDirectRequests? requests)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(node);
@@ -59,6 +59,8 @@ public static partial class SqliteEmbeddedHosting
         var file = AcquireFile(databasePath, forRuntime: true);
         try
         {
+            if (rootType is not null) requests?.RequireBinding(file.Path, rootType, node);
+            var shipped = rootType is not null;
             KernelDb Open() => shipped ? KernelDb.ForSqliteRootRuntime(file.Options, file.AdmissionDefinitions) : new(file.Options);
 
             int partitions;
@@ -93,7 +95,8 @@ public static partial class SqliteEmbeddedHosting
             var workers = new WorkerOptions
             {
                 Partitions = partitions,
-                OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error)
+                OnDrainStoreError = error => Volatile.Read(ref reporter)?.RecordLoopError(error),
+                Transport = requests
             };
             var host = DurableHost.ForNode(node, watched, createActor(store), partitions, workers);
             var runtime = new RuntimeNode(node, watched, partitions, options, beside: watchdog.RunAsync,

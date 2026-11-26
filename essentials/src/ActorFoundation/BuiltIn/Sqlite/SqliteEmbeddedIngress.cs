@@ -7,8 +7,16 @@ namespace Kernel.Foundation.Sqlite;
 public static partial class SqliteEmbeddedHosting
 {
     /// <summary>Opens durable starts and ordinary sends to exact references on an installed SQLite shipped store.</summary>
-    public static async Task<Contract.IIngress> OpenFoundationAsync(string databasePath, string actorType,
-        TimeSpan? deduplicationWindow = null, CancellationToken cancellationToken = default)
+    public static Task<Contract.IIngress> OpenFoundationAsync(string databasePath, string actorType,
+        TimeSpan? deduplicationWindow = null, CancellationToken cancellationToken = default) =>
+        OpenFoundationCoreAsync(databasePath, actorType, null, deduplicationWindow, cancellationToken);
+
+    internal static Task<Contract.IIngress> OpenFoundationWithRequestsAsync(string databasePath, string actorType, SqliteDirectRequests requests,
+        CancellationToken cancellationToken = default) =>
+        OpenFoundationCoreAsync(databasePath, actorType, requests, requests.DeduplicationWindow, cancellationToken);
+
+    private static async Task<Contract.IIngress> OpenFoundationCoreAsync(string databasePath, string actorType, SqliteDirectRequests? requests,
+        TimeSpan? deduplicationWindow, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         RequireFoundationActorType(actorType);
@@ -17,9 +25,10 @@ public static partial class SqliteEmbeddedHosting
         cancellationToken.ThrowIfCancellationRequested();
 
         using var file = AcquireFile(databasePath);
+        requests?.RequireBinding(file.Path, actorType);
         var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
         await admission.VerifyAsync(cancellationToken);
-        return new Ingress(file.Path, actorType, window);
+        return new Ingress(file.Path, actorType, window, requests);
     }
 
     private static void RequireFoundationActorType(string actorType)
@@ -29,7 +38,7 @@ public static partial class SqliteEmbeddedHosting
             throw new ArgumentException("Invalid SQLite root actor type.", nameof(actorType));
     }
 
-    private sealed class Ingress(string path, string actorType, TimeSpan window) : Contract.IIngress
+    private sealed class Ingress(string path, string actorType, TimeSpan window, SqliteDirectRequests? requests) : Contract.IIngress
     {
         public async ValueTask<Contract.Admission> SendAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind,
             string? payload = null, Contract.AddOptions? options = null, CancellationToken cancellationToken = default)
@@ -68,7 +77,8 @@ public static partial class SqliteEmbeddedHosting
 
         public ValueTask<Contract.Reply> RequestAsync(Contract.BoundScope scope, Contract.Target target, string id, string kind, string? payload,
             Contract.AddOptions? add, Contract.RequestOptions request, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("SQLite root ingress supports starts and ordinary sends.");
+            requests is not null ? requests.RequestAsync(scope, target, id, kind, payload, add, request, cancellationToken)
+                : throw new NotSupportedException("SQLite held requests require the Embedded owner's reply edge.");
 
         public ValueTask SetStartAsync(Contract.BoundScope scope, string key, string wait, Contract.StartSpec? spec,
             CancellationToken cancellationToken = default) =>
