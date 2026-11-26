@@ -1027,6 +1027,34 @@ internal static class PostgresRootParkedOperatorChecks
             finally { set.Probe.ReleaseCohort.TrySetResult(); }
             await set.DriveAsync(offerable, row => row is { Revision: 6, Status: InstanceStatus.Running });
             set.Answered("older-control", "StaleSelection");
+            await ProbeWideIdleOwnerAsync();
+
+            async Task ProbeWideIdleOwnerAsync()
+            {
+                await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA wide_idle_cohort", stop);
+                var wideSettings = new NpgsqlConnectionStringBuilder(connection) { SearchPath = "wide_idle_cohort" }.ConnectionString;
+                var commands = new RaceHook(wideSettings);
+                var wideOptions = new DbContextOptionsBuilder<KernelDb>().UseNpgsql(wideSettings).AddInterceptors(commands).Options;
+                KernelDb OpenWide() => KernelDb.ForUnshippedComposition(wideOptions, protocol, capabilities);
+                await using (var context = OpenWide()) await context.GetService<IRelationalDatabaseCreator>().CreateTablesAsync(stop);
+                var owner = new EfStore(OpenWide, postgres: true, fenceInBatch: inBatch) { CommitSql = CommitSql.Owned };
+                const int count = 1_024;
+                await owner.CreateAsync(count);
+                await new PostgresRootAdmission(OpenWide, TimeSpan.FromHours(1)).InstallAsync(stop);
+                await owner.EnableRootJobsAsync(stop);
+                owner.BindWorkerNode(set.Probe.Withholds);
+                var fences = (await owner.TakeAsync(Enumerable.Range(0, count).ToArray(), "wide-idle", FixtureLease, stop)).Taken;
+                try
+                {
+                    var before = commands.CohortReads;
+                    for (var pass = 0; pass < 2; pass++)
+                        Check((await owner.PollAsync(fences, TimeSpan.Zero, 1, stop)).Messages.Count == 0,
+                            "the default-sized idle owner returns an empty page");
+                    Check(fences.Count == count && commands.CohortReads - before == 2,
+                        "each poll samples all 1,024 owned partitions in one cohort query");
+                }
+                finally { await owner.ReleaseAsync(fences, stop); }
+            }
 
             async Task<Contract.ActorRef> StartInPartitionAsync(string prefix)
             {
@@ -3065,6 +3093,7 @@ internal static class PostgresRootParkedOperatorChecks
         // Commands of the set that a trigger refused: a commit lock refuses before any write, so it adds none.
         internal int TriggerRefusals => Volatile.Read(ref _refused);
         internal bool ObserveCohortPlan { get; set; }
+        internal int CohortReads { get; private set; }
         internal List<string> CohortPlan { get; } = [];
 
         public override Task CommandFailedAsync(DbCommand command, CommandErrorEventData eventData, CancellationToken cancellationToken = default)
@@ -3076,9 +3105,11 @@ internal static class PostgresRootParkedOperatorChecks
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
             InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (ObserveCohortPlan && command is NpgsqlCommand cohort &&
+            if (command is NpgsqlCommand cohort &&
                 cohort.CommandText.Contains("/* root-cohort-waiting */", StringComparison.Ordinal))
             {
+                CohortReads++;
+                if (!ObserveCohortPlan) return result;
                 ObserveCohortPlan = false;
                 var planOptions = new NpgsqlConnectionStringBuilder(connection) { Options = "-c enable_seqscan=off" };
                 await using var source = new NpgsqlConnection(planOptions.ConnectionString);

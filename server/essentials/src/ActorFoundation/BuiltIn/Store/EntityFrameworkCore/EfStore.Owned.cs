@@ -417,15 +417,8 @@ public sealed partial class EfStore
         object[] args = [];
         if (SamplesAuthoredCohortWithholding(db))
         {
-            var actors = new List<string>();
-            var revisions = new List<long>();
-            foreach (var fence in owned)
-            {
-                var (keys, checkpoints) = await ReadWithheldCohortsAsync(db, fence.Partition, fence.Epoch, limit, cancellationToken);
-                actors.AddRange(keys);
-                revisions.AddRange(checkpoints);
-            }
-            args = [actors.ToArray(), revisions.ToArray()];
+            var (actors, revisions) = await ReadWithheldCohortsAsync(db, owned, limit, cancellationToken);
+            args = [actors, revisions];
         }
         var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, poll.Replace(single, set, StringComparison.Ordinal),
             0, 0, (long)horizon.TotalMilliseconds, limit, "{0}", "{1}");
