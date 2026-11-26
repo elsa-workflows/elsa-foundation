@@ -41,7 +41,8 @@ the design side), and converter rules.
   - Each child keeps "one dispatch per activity execution" (spec 096 FR-012).
   - Per-item iteration ids and scopes follow ADR 0028, and BPMN multi-instance already schedules one node per
     iteration.
-  - No node is synthesized, so no new pattern.
+  - The runtime and designer synthesize no node. Only the converter generates the `Dispatch` child, with its
+    existing child-adding mechanism (§3), so there is no new pattern.
   - All-at-once dispatch (the alternative in Q4) would drop the bound on outstanding children and needs a
     decision-register entry or an ADR amendment first. The rejected option B would have needed an ADR.
 
@@ -65,6 +66,8 @@ the design side), and converter rules.
   - **`ProjectIterationVariables`** returns `currentItem` and `currentIndex`, typed as `LoopStructureHandler` types
     them. `ScopedVariableResolver` adds them to the descendants' scope only then. Without it, publish refuses every
     `variables.currentItem` read.
+  - **`CompletesAfterItsChildren`** returns true, as `LoopStructureHandler` does, so spec 266's unordered-write
+    analysis does not report false findings around the bulk node.
   - **`RelateChildren`** answers `Unordered` for every pair, including a child paired with itself. `Dispatch` and both
     slots run concurrently across passes. If's "never overlap" facts would feed spec 266's concurrency checks false
     ordering.
@@ -112,33 +115,54 @@ the design side), and converter rules.
 
 - **Map entry**: `Elsa3BuiltInActivityMap.Entries.cs` replaces `NoCounterpart("BulkDispatchWorkflows")` with a
   `Catalog` entry targeting the CLR key `Elsa.Activities.DispatchWorkflow.Runtime.Activities.BulkDispatchWorkflows`.
-  - **Bulk-entry members**: `Items` (`Carry`, `NullUnbound`, a non-null literal refused, FR-014) and
+  - **Bulk-entry members**: `Items` (`Carry`, `NullUnbound`, FR-014) and
     `ChildCompleted`/`ChildFaulted` as `Port` members mapped to the slots. Every dispatch member is `Structure` (R7) on
     the bulk entry: `WorkflowDefinitionId`, `Input`, `DefaultItemInputKey`, `CorrelationIdFunction`,
     `WaitForCompletion`, `StartNewTrace` and `ChannelName`. The coverage test requires targeted keys to be inputs of
     the entry's own type, and the bulk node has only `Items`.
   - **Behaviour warning**: `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` is an entry-level behaviour warning (spec FR-020).
   - **One rewrite**: `Elsa3NodeRewriteKind.BulkDispatchChild` (the entry takes exactly one) builds the `Dispatch`
-    child, an Elsa 4 `DispatchWorkflow` with id `{elsa3NodeId}.dispatch`, marked `SynthesizedFrom` the bulk node, as
-    `Elsa3HttpTriggerResponseModeRewrite` does.
+    child, an Elsa 4 `DispatchWorkflow` with id `{elsa3NodeId}.dispatch`.
+    - The child is a ready-made plan registered in `plan.Nodes`, so `VisitAsync` skips it (`Elsa3ActivityNormalizer`).
+      Its type is resolved with `Elsa3ActivityResolver.ResolveCatalogTypeKeyAsync`, and its properties are already
+      keyed for Elsa 4.
+    - It uses the bulk node's `JsonPath`, and it maps its source names back for diagnostics:
+      `CorrelationId` → `CorrelationIdFunction`, `Inputs` → `Input`. This is not the `SynthesizedFrom` mechanism, which
+      only intrinsics consume.
+    - The children the rewrite adds reach the lowerer, because the inventory is built after normalization.
     - It sets every member explicitly: `WorkflowDefinitionId` (literal only), `Inputs` (the per-item script),
       `CorrelationId`, `WaitForCompletion` (missing → true, null or valueless → false, case-insensitive literal,
       otherwise carried), and `CancelChildOnParentCancellation` false.
-    - It refuses a bound `StartNewTrace` or `ChannelName`.
+    - It refuses a bound `StartNewTrace` or `ChannelName`. The normalizer's `CheckRemoved` is private and those members
+      are `Structure` on the bulk entry, so the rewrite repeats that check.
+    - It refuses any non-null literal `Items` with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` (FR-014). No existing value
+      contract refuses literals; if spec 1243 adds one for FR-017, use it instead.
+    - It records the wait classification (missing, literal true, literal false, expression) in a plan field on the
+      bulk node, for the outcome step.
     - The child is not normalized through the Elsa 3 `DispatchWorkflow` entry, so neither that entry's
       `WaitForCompletion` rule (Carry, NullUnbound) nor its `DispatchInputNames` warning applies.
-    - Diagnostics are reported against the bulk node's Elsa 3 properties and paths.
   - **Surface fixture**: `elsa3-activity-surface.json` gets the two ports (kind `port`).
-- **Item read**: the rewrite registers `get{DefaultItemInputKey}` and `args.<camelKey>` as ambient names for the
-  correlation function. `Elsa3ValueFlowLowerer` resolves them to `VariableExpressionParameterBinding(bulkNodeId,
-  "currentItem")`, except where a workflow input or variable of that name wins (`ResolveGeneratedAccessor` order),
-  as in Elsa 3.
+- **Item read**: there is no ambient-name registry today, so the converter gains one plan field and two code changes.
+  - **Plan field**: on `Elsa3ConversionPlan`, mapping each generated `Dispatch` child to its bulk node id and item key.
+  - **`Elsa3ValueFlowLowerer`**: the field is passed into `AccessorScope`, and `ResolveGeneratedAccessor` resolves
+    `get{key}` to `VariableExpressionParameterBinding(bulkNodeId, "currentItem")` for that child. A workflow input or
+    variable of that name still wins, as in Elsa 3.
+  - **`Elsa3ExpressionRewriter`**: it currently refuses every Elsa 3 `args` read (ForbiddenCapability). It must accept
+    `args.<camelKey>` in that child's correlation function and route it to the same resolution. Elsa 3 exposed `args`
+    there.
+- **Shadowing**: `AncestorScopeNames` (`Elsa3DefinitionConverter`) adds loop names only for the keys in
+  `Elsa3LoopVariableReferencesRewrite.CurrentValueVariables` (For, ForEach). Add the bulk key with `currentItem` and
+  `currentIndex`, so the existing FR-031 shadow refusal also fires for a workflow variable named `currentItem` read
+  inside `Dispatch` or a slot.
 - **Inputs script**: the declared names appear as literals. Item members are reached via
   `Object.entries`/`filter`/`Object.fromEntries`, never `item[name]` (VF-STATE-002). The static `Input` follows the
   #5808 rules (literal or Object) or is embedded (JavaScript). A target outside the import is refused
   (`…-TARGET-UNKNOWN`).
 - **Outcomes** (spec FR-017): in `Elsa3FlowchartGraphBuilder.DropDeadEdges`, before `MapPorts` and `CheckJoins`. The
-  node rewrite cannot see connections.
+  node rewrite cannot see connections. The step reads the wait classification from the plan field the rewrite
+  recorded, because `WaitForCompletion` is a consumed `Structure` member by then.
+- **Branches with a literal-false wait** (spec FR-018): the rewrite does not add the slots as children. It raises
+  `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED` for each dropped branch.
 - **Child-result reads** (spec FR-019): resolved to `…-CHILD-RESULT-READ` in name resolution for nodes inside the
   converted slots, before the generic missing-name failures.
 - **Codes**: 3 errors and 2 warnings in `extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`.
@@ -195,6 +219,9 @@ extensions/Elsa3/src/Mapping/
 ├── ActivityMap/Rewrites/Elsa3BulkDispatchChildRewrite.cs (new)
 ├── Conversion/Elsa3FlowchartGraphBuilder.cs             (outcome step)
 ├── Services/Elsa3ValueFlowLowerer.cs                    (item read, child-result reads)
+├── Services/Elsa3ExpressionRewriter.cs                  (args.<key> in the correlation function)
+├── Conversion/Elsa3DefinitionConverter.cs               (bulk key in AncestorScopeNames)
+├── Models/Elsa3ConversionPlan.cs                        (bulk child → item key field)
 └── README.md
 extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs (5 codes)
 ```

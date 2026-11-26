@@ -107,7 +107,8 @@ matching slot for each child that ends, and completes with `Done`.
 - Each item's dispatch is a separate, ordinary `DispatchWorkflow` execution, so the dispatch identity scheme, specs
   096–104 and every dispatch service apply unchanged, pinning included.
 - The `Dispatch` node is authored, so its per-item `Inputs` and `CorrelationId` read `currentItem` as descendants of
-  the bulk node. No node is synthesized; synthesizing one would be a new pattern.
+  the bulk node. The Elsa 4 runtime and designer never synthesize a node; only the converter generates the `Dispatch`
+  child when it converts an Elsa 3 definition (FR-011).
 - Authors get one activity for "start this workflow per item". The converter maps the Elsa 3 node to it one to one.
 - The runtime already schedules one node several times under distinct iteration ids: BPMN multi-instance loops do it
   (`BpmnProcessRuntime`). The activity adds the scheduling policy and the counting. Spec 1243 shares those pieces
@@ -173,7 +174,9 @@ correlation id and reach `Finished`.
 **Acceptance Scenarios**:
 
 1. **Given** the `Dispatch` node does not wait, **When** the activity runs, **Then** each pass ends with `Dispatched`,
-   the activity completes with `Done` without waiting for any child, and no slot runs.
+   the activity completes with `Done` without waiting for any child, and no slot runs. The one exception is a pass
+   whose `Dispatch` execution faults itself before dispatching; it runs `ChildFaulted` when that slot is present
+   (FR-008).
 2. **Given** the parent instance is cancelled after the activity completed, **When** children are still running,
    **Then** the children are not cancelled. A child is cancelled only through `CancelChildOnParentCancellation`, which
    applies while the activity is still waiting, exactly as for `DispatchWorkflow`.
@@ -295,8 +298,11 @@ and on-completed-callbacks suites pass.
 - **FR-011**: The Elsa 3 activity map entry MUST change from `NoCounterpart` to a catalog entry for Elsa 4
   `BulkDispatchWorkflows`, with every Elsa 3 member classified once.
   - The converter emits the bulk node with `Items` and the slots.
-  - It also emits a `DispatchWorkflow` node in `Dispatch`, with id `{elsa3NodeId}.dispatch`. FR-012 to FR-016 set
-    that node's members; the existing `DispatchMembers` rules apply to it directly.
+  - It also generates a `DispatchWorkflow` node in `Dispatch`, with id `{elsa3NodeId}.dispatch`, whose members FR-012
+    to FR-016 set.
+  - The node is built by the converter's rewrite, not normalized through the Elsa 3 `DispatchWorkflow` entry. So the
+    `DispatchMembers` rules are mirrored explicitly in that rewrite, not applied directly. Where FR-013 differs
+    (`WaitForCompletion` missing → true), the rewrite follows FR-013.
   - `ChildCompleted` and `ChildFaulted` are added to the Elsa 3 surface fixture as ports and mapped to the slots.
   - Converted branch activities keep their Elsa 3 ids.
 - **FR-012**: `WorkflowDefinitionId`, `CancelChildOnParentCancellation`, `StartNewTrace` and `ChannelName` follow the
@@ -356,6 +362,9 @@ and on-completed-callbacks suites pass.
   - Elsa 3 never ran the branches without waiting. With a literal-false wait the converter drops them with
     `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. With an expression wait, a pass whose `Dispatch` did not wait ends with
     `Dispatched`, so no branch runs (FR-006).
+  - Exception to both: a `Dispatch` execution that faults itself before dispatching (nesting depth, an undeclared
+    input) runs `ChildFaulted` whatever the wait (FR-008). Elsa 3 faulted the whole activity in that case. The branch
+    is the author's one place to see every child that did not start or complete.
 - **FR-019**: Refusals:
 
 | Elsa 3 use | Result |

@@ -13,7 +13,7 @@ converter) needs the activity in the catalog.
   and window constants and the `Done` outcome in `essentials/src/Activities/DispatchWorkflow/Runtime/Activities/`
   (FR-001–FR-003, FR-009).
 - [ ] T003 [US1] Add the structure handler: the three slots, `ProjectIterationVariables` for `currentItem` and
-  `currentIndex`, and `Unordered` for every child pair. Add the `BulkDispatch/DispatchSlot` draft validator, with a
+  `currentIndex`, `CompletesAfterItsChildren` true, and `Unordered` for every child pair. Add the `BulkDispatch/DispatchSlot` draft validator, with a
   Validations.Core reference (FR-003, plan §1). Register both in the DispatchWorkflow features. `DispatchPinSource` is
   not changed.
 - [ ] T004 [US1] [US2] Scheduling and completion:
@@ -33,9 +33,14 @@ converter) needs the activity in the catalog.
   - `Items` (FR-014) and the two ports on the bulk entry, added to the surface fixture as ports;
   - every dispatch member as `Structure`;
   - `ELS3-BEHAVIOUR-BULK-DISPATCH-CAPPED` as the entry's behaviour warning (FR-011, FR-020). Add that code here.
-- [ ] T009 [US3] The one rewrite, `BulkDispatchChild`, builds the `{elsa3NodeId}.dispatch` child marked
-  `SynthesizedFrom`, with every member set explicitly (FR-012, FR-013, FR-015, FR-016, plan §3). Add item-read
-  resolution in `Elsa3ValueFlowLowerer`. Add `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` and
+- [ ] T009 [US3] The one rewrite, `BulkDispatchChild`, builds the `{elsa3NodeId}.dispatch` child as a ready-made plan,
+  with every member set explicitly and the source names mapped back (FR-012, FR-013, FR-015, FR-016, plan §3). It also:
+  - refuses a non-null literal `Items` (FR-014);
+  - drops the branches on a literal-false wait (FR-018);
+  - records the wait classification in the plan field.
+
+  Add the plan field for the item key, the item-read resolution in `Elsa3ValueFlowLowerer`, the `args.<key>`
+  acceptance in `Elsa3ExpressionRewriter`, and the bulk key in `AncestorScopeNames` (plan §3). Add `ELS3-ACTIVITY-BULK-DISPATCH-TARGET-UNKNOWN` and
   `ELS3-BEHAVIOUR-BULK-DISPATCH-ITEM-INPUTS` here.
 - [ ] T010 [US3] Outcome step in `Elsa3FlowchartGraphBuilder` (FR-017). Add `ELS3-ACTIVITY-BULK-DISPATCH-OUTCOME-ROUTE`
   here.
