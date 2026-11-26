@@ -11,9 +11,7 @@ public static partial class SqliteEmbeddedHosting
         TimeSpan? deduplicationWindow = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
-        ArgumentException.ThrowIfNullOrWhiteSpace(actorType);
-        if (!FoundationMetadataLimits.FitsName(actorType))
-            throw new ArgumentException("Invalid SQLite root actor type.", nameof(actorType));
+        RequireFoundationActorType(actorType);
         var window = deduplicationWindow ?? TimeSpan.FromHours(1);
         ArgumentOutOfRangeException.ThrowIfLessThan(window, TimeSpan.Zero);
         cancellationToken.ThrowIfCancellationRequested();
@@ -22,6 +20,13 @@ public static partial class SqliteEmbeddedHosting
         var admission = new SqliteRootAdmission(() => KernelDb.ForSqliteRootShipped(file.Options), window, file.AdmissionDefinitions);
         await admission.VerifyAsync(cancellationToken);
         return new Ingress(file.Path, actorType, window);
+    }
+
+    private static void RequireFoundationActorType(string actorType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorType);
+        if (!FoundationMetadataLimits.FitsName(actorType))
+            throw new ArgumentException("Invalid SQLite root actor type.", nameof(actorType));
     }
 
     private sealed class Ingress(string path, string actorType, TimeSpan window) : Contract.IIngress
