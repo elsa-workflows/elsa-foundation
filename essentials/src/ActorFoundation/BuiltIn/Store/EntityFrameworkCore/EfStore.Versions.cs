@@ -360,7 +360,7 @@ internal static class StoreDefinitionsRevision
     private const int Sqlite = 2;
     private const int LegacyPostgreSqlRevision = 1;
     private const int PostgreSqlRevision = 1;
-    private const int SqliteRevision = 1;
+    private const int SqliteRevision = 2;
 
     internal static StoreVersionEntity? Seed(KernelDb db)
     {

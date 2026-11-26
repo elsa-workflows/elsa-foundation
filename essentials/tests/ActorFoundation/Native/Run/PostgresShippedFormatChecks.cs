@@ -57,6 +57,7 @@ internal static class PostgresShippedFormatChecks
         await store.InstallPreviewRootSchemaAsync(stop);
         await store.InstallPreviewRootSchemaAsync(stop);
         Require(true, "the shipped schema and its workflow history install, and install again over themselves");
+        await CheckGuardBodyParityAsync(Open, stop);
         await CheckDefinitionRevisionAsync(Open, store, stop);
         await RefusalsAsync(connection, options, stop);
 
@@ -221,6 +222,21 @@ internal static class PostgresShippedFormatChecks
                 SELECT count(*)::integer AS "Value" FROM "FoundationWorkflowHistory" WHERE "Tenant" = {scope.Tenant} AND "Reference" = {root.Id}
                 """).SingleAsync(stop);
         }
+    }
+
+    // PostgreSQL 16 and 17 reported these same function-body bytes before the renderer was shared with SQLite.
+    private static async Task CheckGuardBodyParityAsync(Func<KernelDb> open, CancellationToken token)
+    {
+        await using var db = open();
+        var bodies = await db.Database.SqlQueryRaw<string>("""
+            SELECT md5(p.prosrc) AS "Value"
+            FROM pg_catalog.pg_proc p
+            WHERE p.pronamespace = pg_catalog.current_schema()::regnamespace
+                AND p.proname IN ('kernel_require_root_checkpoint_writer', 'kernel_require_root_journal_revision')
+            ORDER BY p.proname
+            """).ToListAsync(token);
+        Require(bodies is ["75c81a5014d62f9c35319e65b9e0c975", "b8adb6d016ff58efc1a496a316309a74"],
+            "the shipped PostgreSQL checkpoint and journal function bodies retain their published bytes");
     }
 
     private static async Task CheckDefinitionRevisionAsync(Func<KernelDb> open, EfStore store, CancellationToken token)

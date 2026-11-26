@@ -39,7 +39,7 @@ internal static class SqliteShippedInstallChecks
                 INSERT INTO "FoundationRootBirths" ("Reference", "Tenant", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
                 VALUES ('tenant-test', {invalidTenant}, 'tenant-test', 0, 1, 'creator', 'fingerprint')
                 """, token), "SQLite refuses an embedded NUL in a tenant name", CheckConstraint);
-            await CheckRetirementAndGenerationAsync(db, token);
+            await CheckGuardsAsync(db, token);
             var staged = new EfStore(() => New(), postgres: false);
             var ordinary = new EfStore(() => new KernelDb(Options()), postgres: false);
             (string Name, Func<EfStore, Task> Run)[] operations =
@@ -122,9 +122,9 @@ internal static class SqliteShippedInstallChecks
         finally { folder.Delete(recursive: true); }
     }
 
-    private static async Task CheckRetirementAndGenerationAsync(KernelDb db, CancellationToken token)
+    private static async Task CheckGuardsAsync(KernelDb db, CancellationToken token)
     {
-        await SeedAsync("direct", InstanceStatus.Running);
+        await SeedAsync("direct", InstanceStatus.Running, qualified: false);
         await SeedAsync("atomic", InstanceStatus.Running);
         await SeedAsync("parked", InstanceStatus.Faulted);
         await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
@@ -152,7 +152,8 @@ internal static class SqliteShippedInstallChecks
                 """, token), "an atomic retirement requires its terminal mark");
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE "Instances" SET "Retired" = 1, "Status" = {(int)InstanceStatus.Cancelled}, "Revision" = 2,
-                    "FoundationWriteRevision" = 2, "FoundationTerminalRevision" = 2, "FoundationTerminalAt" = 100
+                    "FoundationWriteRevision" = 2, "FoundationTerminalRevision" = 2, "FoundationTerminalAt" = 100,
+                    "FoundationHeader" = NULL, "FoundationParkAt" = NULL, "FoundationParkRevision" = NULL
                 WHERE "Id" = {id}
                 """, token);
             await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -162,7 +163,38 @@ internal static class SqliteShippedInstallChecks
         Require(await db.Instances.CountAsync(instance => instance.Retired, token) == 2,
             "the physical guard accepts qualified running and parked atomic retirements");
 
-        async Task SeedAsync(string id, InstanceStatus status)
+        await SeedAsync("checkpoint", InstanceStatus.Running);
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "State" = '[]' WHERE "Id" = 'checkpoint'
+            """, token), "the checkpoint guard refuses an update without a qualified revision");
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            DELETE FROM "Instances" WHERE "Id" = 'checkpoint'
+            """, token), "the checkpoint guard refuses physical deletion of a qualified root");
+        await RefusedAsync<SqliteException>(() => JournalAsync("checkpoint", revision: 4, "[]"),
+            "the journal guard requires the next running checkpoint revision");
+        await JournalAsync("checkpoint", revision: 2, "[]");
+        Require(await db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2, "State" = '[]' WHERE "Id" = 'checkpoint'
+            """, token) == 1, "the checkpoint and journal guards accept a qualified running revision");
+
+        await SeedAsync("refusal", InstanceStatus.Faulted);
+        await RefusedAsync<SqliteException>(() => JournalAsync("refusal", revision: 2, """{"Outcome":"REFUSED","Reason":"parked"}"""),
+            "the journal guard compares outcome prefixes using ordinal case");
+        await JournalAsync("refusal", revision: 2, """{"Outcome":"refused","Reason":"parked"}""");
+        await RefusedAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2, "Model" = 'different' WHERE "Id" = 'refusal'
+            """, token), "a parked refusal keeps the checkpoint columns beside its new revision");
+        Require(await db.Database.ExecuteSqlRawAsync("""
+            UPDATE "Instances" SET "Revision" = 2, "FoundationWriteRevision" = 2 WHERE "Id" = 'refusal'
+            """, token) == 1, "the checkpoint guard accepts a journalled refusal on the unchanged parked root");
+
+        Task<int> JournalAsync(string id, long revision, string entries) =>
+            db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Journal" ("Partition", "Position", "Instance", "Revision", "Entries")
+                VALUES (0, (SELECT coalesce(max("Position"), 0) + 1 FROM "Journal"), {id}, {revision}, {entries})
+                """, token);
+
+        async Task SeedAsync(string id, InstanceStatus status, bool qualified = true)
         {
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "FoundationRootBirths" ("Reference", "Tenant", "Actor", "Partition", "Creation", "Creator", "Fingerprint")
@@ -174,9 +206,13 @@ internal static class SqliteShippedInstallChecks
                 Status = status, Revision = 1, NextJobGeneration = 1
             });
             await db.SaveChangesAsync(token);
+            if (!qualified) return;
             var parkedAt = status == InstanceStatus.Faulted ? (long?)100 : null;
+            var parkRevision = parkedAt.HasValue ? (long?)1 : null;
+            const string header = "{}";
             await db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "Instances" SET "FoundationReference" = {id}, "FoundationParkAt" = {parkedAt} WHERE "Id" = {id}
+                UPDATE "Instances" SET "FoundationReference" = {id}, "FoundationTenant" = 'tenant', "FoundationHeader" = {header},
+                    "FoundationParkAt" = {parkedAt}, "FoundationParkRevision" = {parkRevision} WHERE "Id" = {id}
                 """, token);
         }
     }
