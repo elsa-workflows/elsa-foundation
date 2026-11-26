@@ -120,6 +120,11 @@ public sealed class Requests
 
     public IReadOnlyCollection<Request> All { get { lock (_gate) return _open.Values.ToArray(); } }
 
+    internal bool HasRegistration(string registration)
+    {
+        lock (_gate) return _open.ContainsKey(registration);
+    }
+
     public Request Open(string id, long deadline) => Open(id, deadline, false);
 
     internal Request OpenBound(string id, long deadline, string tenant, object? ambient) => Open(id, deadline, true, tenant, ambient);

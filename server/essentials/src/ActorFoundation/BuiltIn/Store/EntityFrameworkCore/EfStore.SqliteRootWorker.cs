@@ -24,7 +24,7 @@ public sealed partial class EfStore
 
     // The discovered birth join already limits creators to their exact tenant/reference envelope.
     private static readonly string SqliteRootPollFilter = $"""
-        AND m."EventMatch" IS NULL AND m."ReplyTo" IS NULL AND (m."InboxScope" = 0 OR (
+        AND m."EventMatch" IS NULL AND (m."InboxScope" = 0 OR (
             (m."InboxScope" = {RootTimedJobScope} OR
                 m."InboxScope" = {InboxKey.FoundationOccurrenceScope} AND m."Id" NOT GLOB 'operator/*') AND EXISTS (
                 SELECT 1 FROM "Instances" i
@@ -48,7 +48,15 @@ public sealed partial class EfStore
         await using var db = create();
         await RequireSqliteOperationalFormatAsync(db, token);
         var row = await ReadSqliteCreatorAsync(db, tenant, reference, fingerprint: null, token);
-        return row is null ? null : PostgresRootAdmission.DecodeCreator(row);
+        return row is null ? null : DecodeSqliteCreator(row);
+    }
+
+    private static Message DecodeSqliteCreator(MessageEntity row)
+    {
+        if (row.ReplyTo is not null && (row.Due != 0 ||
+            ReplyTo.Parse(row.ReplyTo) is not { Node.Length: > 0, Request.Length: > 0, Deadline: > 0 }))
+            throw new StoreException(Failure.Definite, "Invalid SQLite held creator reply route.");
+        return PostgresRootAdmission.DecodeCreator(row);
     }
 
     private static Task<MessageEntity?> ReadSqliteCreatorAsync(KernelDb db, string tenant, string reference, string? fingerprint,
@@ -60,7 +68,7 @@ public sealed partial class EfStore
                 ON b."Creator" = m."Id" AND b."Actor" = m."Target" AND b."Partition" = m."Partition"
             WHERE b."Tenant" = {tenant} AND b."Reference" = {reference} AND b."Creation" = 1
                 AND m."InboxScope" = 0 AND NOT m."Done" AND m."KeepUntil" IS NULL
-                AND m."EventMatch" IS NULL AND m."ReplyTo" IS NULL
+                AND m."EventMatch" IS NULL
                 AND ({fingerprint} IS NULL OR b."Fingerprint" = {fingerprint} AND m."Due" <= /*sqlite-root-clock*/)
             """;
         return db.Messages.FromSqlInterpolated(UseSqliteRootClock(sql)).AsNoTracking().SingleOrDefaultAsync(token);
@@ -72,7 +80,7 @@ public sealed partial class EfStore
         var fingerprint = CreationProtocol.Fingerprint(creator.Start, creator.Kind, creator.Payload);
         if (fingerprint is null) return false;
         var pending = await ReadSqliteCreatorAsync(db, checkpoint.Tenant, checkpoint.Reference, fingerprint, token);
-        if (pending is null || !checkpoint.MatchesCreator(PostgresRootAdmission.DecodeCreator(pending))) return false;
+        if (pending is null || !checkpoint.MatchesCreator(DecodeSqliteCreator(pending))) return false;
         if (await db.Database.ExecuteSqlInterpolatedAsync($"""
             DELETE FROM "Messages" WHERE "Id" = {pending.Id} AND "InboxScope" = 0
                 AND "Target" = {pending.Target} AND "Partition" = {pending.Partition} AND NOT "Done"
@@ -161,11 +169,11 @@ public sealed partial class EfStore
         FormattableString ready = $"""
             SELECT * FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
                 AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
-                AND "ReplyTo" IS NULL AND "Due" <= /*sqlite-root-clock*/ AND "Id" NOT GLOB 'operator/*'
+                AND "Due" <= /*sqlite-root-clock*/ AND "Id" NOT GLOB 'operator/*'
             ORDER BY "Seq" LIMIT {expected.Count}
             """;
         var rows = await db.Messages.FromSqlInterpolated(UseSqliteRootClock(ready)).AsNoTracking().ToListAsync(token);
-        var messages = rows.Select(row => PostgresRootAdmission.DecodeDirect(row, reference)).ToArray();
+        var messages = rows.Select(row => PostgresRootAdmission.DecodeDirect(row, reference, db.UsesRootReplyProtocol)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(message => message.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
         var ids = Json.Write(expected.Select(key => key.Id).ToArray());
@@ -173,7 +181,7 @@ public sealed partial class EfStore
             UPDATE "Messages" SET "Done" = 1, "Payload" = NULL, "Start" = NULL, "ReplyTo" = NULL
             WHERE "Target" = {actor.Id} AND "Partition" = {home} AND "InboxScope" = {InboxKey.FoundationOccurrenceScope}
                 AND "Id" IN (SELECT value FROM json_each({ids})) AND "EventMatch" IS NULL AND "KeepUntil" IS NOT NULL
-                AND NOT "Done" AND "ReplyTo" IS NULL
+                AND NOT "Done"
             """, token) == expected.Count;
     }
 
