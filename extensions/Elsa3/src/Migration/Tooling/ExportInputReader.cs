@@ -157,25 +157,39 @@ internal static class ExportInputReader
 
     private static IReadOnlyList<(string File, byte[] Content)> ReadFolder(string root, string? excludedFolder)
     {
-        // Only a folder strictly inside the export is left out; --out at or above the export root excludes nothing.
+        // A folder strictly inside the export is left out. An output folder that is the export root leaves out only the
+        // files a run writes there; one above the root excludes nothing.
         var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         var rootPrefix = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
         var excluded = excludedFolder is null ? null : Path.TrimEndingDirectorySeparator(Path.GetFullPath(excludedFolder)) + Path.DirectorySeparatorChar;
+        var outputIsRoot = excluded is not null && string.Equals(excluded, rootPrefix, comparison);
         if (excluded is not null && (excluded.Length <= rootPrefix.Length || !excluded.StartsWith(rootPrefix, comparison)))
             excluded = null;
         return Directory.EnumerateFiles(root, "*.json", JsonFiles)
             .Where(path => excluded is null || !Path.GetFullPath(path).StartsWith(excluded, comparison))
             .Select(path => (File: Path.GetRelativePath(root, path).Replace('\\', '/'), Path: path))
+            .Where(file => !IsPlatformSidecar(file.File) && !(outputIsRoot && IsRunOutput(file.File, comparison)))
             .OrderBy(file => file.File, StringComparer.Ordinal)
             .Select(file => (file.File, File.ReadAllBytes(file.Path)))
             .ToArray();
     }
 
+    /// <summary>macOS archive metadata: <c>__MACOSX/</c> entries and <c>._name</c> resource-fork sidecars, never definitions.</summary>
+    private static bool IsPlatformSidecar(string relativePath) =>
+        relativePath.StartsWith("__MACOSX/", StringComparison.Ordinal)
+        || relativePath.Split('/')[^1].StartsWith("._", StringComparison.Ordinal);
+
+    /// <summary>What a run writes into its output folder: report.json, migrated/ and its staging folder.</summary>
+    private static bool IsRunOutput(string relativePath, StringComparison comparison) =>
+        string.Equals(relativePath, "report.json", comparison)
+        || relativePath.StartsWith("migrated/", comparison)
+        || relativePath.StartsWith(".staging-", comparison);
+
     private static IReadOnlyList<(string File, byte[] Content)> ReadZip(string path)
     {
         using var archive = ZipFile.OpenRead(path);
         return archive.Entries
-            .Where(entry => !entry.FullName.EndsWith('/') && entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            .Where(entry => !entry.FullName.EndsWith('/') && entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase) && !IsPlatformSidecar(entry.FullName))
             .OrderBy(entry => entry.FullName, StringComparer.Ordinal)
             .Select(entry =>
             {

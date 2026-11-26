@@ -50,10 +50,14 @@ internal static class VersionSelection
 
         foreach (var (_, versions) in byDefinition.OrderBy(entry => entry.Key, StringComparer.Ordinal))
         {
-            var published = versions.Where(item => item.Definition.IsPublished).ToArray();
-            var pool = published.Length > 0 ? published : versions;
+            // A version without a version id cannot be imported (the import refuses it), so it never displaces one that can.
+            var identified = versions.Where(item => !string.IsNullOrWhiteSpace(item.Definition.Id)).ToArray();
+            if (identified.Length == 0)
+                identified = versions;
+            var published = identified.Where(item => item.Definition.IsPublished).ToArray();
+            var pool = published.Length > 0 ? published : identified;
             var latest = pool.MaxBy(item => item.Definition.Version)!;
-            if (published.Length == 0)
+            if (published.Length == 0 && !string.IsNullOrWhiteSpace(latest.Definition.Id))
                 noPublished.Add(latest.Definition.Id);
             pending.Push(latest);
         }

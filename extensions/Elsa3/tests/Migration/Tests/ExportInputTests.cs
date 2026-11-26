@@ -113,14 +113,31 @@ public sealed class ExportInputTests : IDisposable
     }
 
     [Fact]
-    public void An_output_folder_at_the_export_root_excludes_nothing()
+    public void An_output_folder_at_the_export_root_leaves_out_only_the_run_output()
     {
         Write("a.json", Definition("a", 1));
+        Write("report.json", "{\"schemaVersion\":1}");
+        Write("migrated/workflows/a.json", "[]");
+        Write("migrated/activities/activities.json", "[]");
 
         var (input, refusal) = ExportInputReader.Read(_root, _root);
 
         Assert.Null(refusal);
-        Assert.Single(input!.Items);
+        Assert.Equal(["a.json"], input!.Items.Select(item => item.File));
+        Assert.Empty(input.InputFindings);
+    }
+
+    [Fact]
+    public void MacOS_sidecar_files_are_not_read()
+    {
+        Write("a.json", Definition("a", 1));
+        File.WriteAllBytes(Path.Combine(_root, "._a.json"), [0x00, 0x05, 0x16, 0x07]);
+        Write("__MACOSX/._a.json", "x");
+
+        var (input, _) = ExportInputReader.Read(_root);
+
+        Assert.Equal(["a.json"], input!.Items.Select(item => item.File));
+        Assert.Empty(input.InputFindings);
     }
 
     internal static string Definition(string definitionId, int version, bool published = true, string? versionId = null, string rootActivities = "", bool reusable = false)
@@ -224,6 +241,19 @@ public sealed class VersionSelectionTests
 
         Assert.Single(result.Selected);
         Assert.Empty(MissingTargetDetector.Detect(result.Selected.Select(item => item.Definition), result.Selected.Select(item => item.Definition)));
+    }
+
+    [Fact]
+    public void A_version_without_an_id_does_not_displace_one_with_an_id()
+    {
+        var items = Items(("a", 1, true, null))
+            .Append(Parse("noid.json", ExportInputTests.Definition("a", 2, versionId: "")))
+            .ToArray();
+
+        var result = VersionSelection.Select(items, allVersions: false);
+
+        Assert.Equal(["a-v1"], result.Selected.Select(item => item.Definition.Id));
+        Assert.Equal([("a", 2)], result.NotConverted.Select(item => (item.DefinitionId, item.Version)));
     }
 
     [Fact]
