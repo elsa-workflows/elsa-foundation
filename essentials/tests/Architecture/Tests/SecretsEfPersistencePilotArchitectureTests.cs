@@ -357,7 +357,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
             .Where(path => !IsBuildOutput(path))
             .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.ProjectPaths, projects);
+        Assert.Equal(EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.ProjectPaths.Order(StringComparer.Ordinal), projects);
     }
 
     [Fact]
@@ -449,7 +449,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
             .Where(path => !IsBuildOutput(path))
             .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(PilotSources, actual);
+        Assert.Equal(PilotSources.Order(StringComparer.Ordinal), actual);
     }
 
     [Fact]
