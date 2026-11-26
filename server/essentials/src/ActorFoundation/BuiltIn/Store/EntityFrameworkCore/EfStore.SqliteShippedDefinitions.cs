@@ -328,8 +328,11 @@ public sealed partial class EfStore
                 ("Partition", "Target", "FoundationReleasedBy", "Seq")
                 WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done" AND "FoundationReleasedBy" IS NOT NULL
                 """);
-            yield return Index("IX_FoundationRootInbox_CohortWaiting", "Messages", $"""
-                ("Partition", "Due", "Seq") WHERE {SqliteCohortWaitingWork}
+            yield return Index("IX_FoundationRootInbox_CohortGroups", "Messages", $"""
+                ("Partition", "Seen", "Due", "Seq", "Target") WHERE {SqliteCohortWaitingWork}
+                """);
+            yield return Index("IX_FoundationRootInbox_CohortSequence", "Messages", $"""
+                ("Partition", "Seq", "Target", "Due", "Seen") WHERE {SqliteCohortWaitingWork}
                 """);
         }
         yield return Index("IX_FoundationRootOperators_Pending", "Messages", """
