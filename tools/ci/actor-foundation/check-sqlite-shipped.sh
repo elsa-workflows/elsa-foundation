@@ -8,7 +8,7 @@ for fence in checked in-batch; do
   dotnet "$runner" sqlite-host-lifetime "$fence" shipped
   for check in sqlite-root-timed-jobs sqlite-root-held-replies sqlite-root-terminate sqlite-root-retirement \
       sqlite-root-held-operators sqlite-root-park-opening sqlite-root-park-arrivals sqlite-root-park-inspection sqlite-root-parked-operators \
-      sqlite-root-park-recovery sqlite-root-actor-reads sqlite-root-workflow-history; do
+      sqlite-root-park-recovery sqlite-root-park-cohort sqlite-root-actor-reads sqlite-root-workflow-history; do
     dotnet "$runner" "$check" "$fence"
   done
 done

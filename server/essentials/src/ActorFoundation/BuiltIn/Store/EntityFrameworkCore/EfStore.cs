@@ -843,7 +843,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 if (SamplesAuthoredCohortWithholding(db))
                 {
                     var (actors, revisions) = await ReadWithheldCohortsAsync(db, [new(partition, epoch, 0)], limit, cancellationToken);
-                    args = [.. args, actors, revisions];
+                    args = db.UsesSqliteRootRuntime ? [.. args, SqliteCohortDecisions(actors, revisions)] : [.. args, actors, revisions];
                 }
                 var page = await db.Database.SqlQueryRaw<GeneratedPollRow>(sql, args).ToListAsync(cancellationToken);
                 var result = ToGeneratedPoll(page, root, db);
@@ -858,8 +858,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private string RootInputScopes => $"{InboxKey.FoundationOccurrenceScope}, {RootSelfScope}" +
         (RootTimedJobSettlementEnabled ? $", {RootTimedJobScope}" : RootJobsEnabled ? $", {RootJobScope}" : "");
     private string RootPollFilter(KernelDb db) => _ordinaryRoots is null ? "" :
-        db.UsesSqliteRootRuntime ? (db.UsesRootParkRecovery ? SqliteParkRecoveryPollFilter
-            : db.UsesRootParkArrivals ? SqliteParkArrivalsPollFilter : SqliteRootPollFilter) :
+        db.UsesSqliteRootRuntime ? SqlitePollFilter(db) :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
              AND m."EventMatch" IS NULL
              {(db.UsesRootOperatorProtocol ? PostgresOperatorPollFilter(db) : "")}
@@ -925,8 +924,13 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     private static readonly string SqliteRootPollFilter = SqliteRootPoll(includeParkArrivals: false, recovery: false);
     private static readonly string SqliteParkArrivalsPollFilter = SqliteRootPoll(includeParkArrivals: true, recovery: false);
     private static readonly string SqliteParkRecoveryPollFilter = SqliteRootPoll(includeParkArrivals: true, recovery: true);
+    private static readonly string SqliteAuthoredParkRecoveryPollFilter = SqliteRootPoll(includeParkArrivals: true, recovery: true, authoredCohort: true);
 
-    private static string SqliteRootPoll(bool includeParkArrivals, bool recovery) =>
+    private string SqlitePollFilter(KernelDb db) => SamplesAuthoredCohortWithholding(db) ? SqliteAuthoredParkRecoveryPollFilter
+        : db.UsesRootParkRecovery ? SqliteParkRecoveryPollFilter
+        : db.UsesRootParkArrivals ? SqliteParkArrivalsPollFilter : SqliteRootPollFilter;
+
+    private static string SqliteRootPoll(bool includeParkArrivals, bool recovery, bool authoredCohort = false) =>
         (recovery ? WithReleasedCohort(RootOperatorPollTemplate) : RootOperatorPollTemplate)
         .Replace("LIKE 'operator/%'", "GLOB 'operator/*'", StringComparison.Ordinal)
         .Replace("/*earlier-command-input*/", includeParkArrivals
@@ -936,7 +940,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
               """
             : "AND " + SqliteSupportedOperator("prior."), StringComparison.Ordinal)
         .Replace("/*supported-operator*/", "AND " + SqliteSupportedOperator("op.", recovery), StringComparison.Ordinal) +
-        SqliteRootPollScope(includeParkArrivals, recovery);
+        SqliteRootPollScope(includeParkArrivals, recovery, authoredCohort);
     // A parked root without Park arrivals withholds its ordinary inputs, so only an earlier operator row holds a command back.
     // A held command admitted before the Park opened passes too: the owner refuses it there and answers its caller.
     private static bool WithholdsParkInputs(KernelDb db) => db.UsesRootParkedOperators && !db.UsesRootParkArrivals;
