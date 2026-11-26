@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.EntityFramework;
 
@@ -14,12 +15,12 @@ public sealed partial class EfStore
             throw new NotSupportedException("Qualified checkpoints require PostgreSQL or the owned SQLite root writer.");
     }
 
-    internal WorkerRoots BindSqliteWorkerNode()
+    internal WorkerRoots BindSqliteWorkerNode(Func<Contract.ActorHeader, bool>? withholds = null)
     {
         using var db = create();
         if (!db.UsesSqliteRootRuntime || postgres || Engine is not null || !OwnedSetsAvailable)
             throw new NotSupportedException("A SQLite root node requires the shipped context and owned commits.");
-        return InstallWorkerScope(new(null, [], discover: true));
+        return InstallWorkerScope(new(null, [], discover: true) { AuthoredWithholds = withholds });
     }
 
     // The discovered birth join already limits creators to their exact tenant/reference envelope.
@@ -29,7 +30,17 @@ public sealed partial class EfStore
                 SELECT 1 FROM "Instances" i
                 WHERE i."Id" = m."Target" AND i."Partition" = m."Partition"
                     AND i."FoundationReference" = b."Reference" AND i."FoundationTenant" = b."Tenant"
-                    AND NOT i."Retired" AND i."FoundationParkAt" IS NULL)))
+                    AND NOT i."Retired" AND i."FoundationParkAt" IS NULL)
+            AND (m."Id" NOT GLOB 'operator/*' OR ({SqliteSupportedOperator("m.")}))))
+        """;
+
+    // A staged owner leaves later operator envelopes pending. They also cannot block an earlier supported stage's FIFO.
+    private static string SqliteSupportedOperator(string columnPrefix) =>
+        $"""
+        {columnPrefix}"Id" GLOB 'operator/*' AND {columnPrefix}"Kind" = '{Kinds.Terminate}'
+        AND {columnPrefix}"ReplyTo" IS NULL AND {columnPrefix}"Start" GLOB '{PostgresRootAdmission.OperatorPrefix}*'
+        AND CASE WHEN json_valid(substr({columnPrefix}"Start", {PostgresRootAdmission.OperatorPrefix.Length + 1}))
+            THEN json_type(substr({columnPrefix}"Start", {PostgresRootAdmission.OperatorPrefix.Length + 1}), '$.Park') IS NULL ELSE 0 END
         """;
 
     private static Task<List<WorkerRoot>> ResolveSqliteWorkerRootsAsync(KernelDb db, int? partition, string[] actors,
@@ -138,7 +149,7 @@ public sealed partial class EfStore
         var settled = turn.TimedJob
             ? await ConsumeRootTimedInputsAsync(db, actor, turn.Inputs, turn.JobCompletion, token)
             : await SettleSqliteRootInputsAsync(db, turn.Reference, actor,
-                turn.Inputs.Select(input => input.InboxKey).ToArray(), turn.Inputs, turn.Current.Suspended, token);
+                turn.Inputs.Select(input => input.InboxKey).ToArray(), turn.Inputs, turn.Current.Suspended || turn.WithheldInputs, token);
         if (!settled) return false;
         if (turn.SettledJobs is { Length: > 0 } jobIds &&
             await SqlitePendingRootTimedInputs(db, actor, jobIds).ExecuteDeleteAsync(token) != jobIds.Length) return false;
@@ -168,9 +179,13 @@ public sealed partial class EfStore
             SELECT * FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
                 AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL AND NOT "Done"
                 AND "Due" <= /*sqlite-root-clock*/ AND (NOT {suspended} OR "Id" GLOB 'operator/*')
+                AND ("Id" NOT GLOB 'operator/*' OR (/*supported-operator*/))
             ORDER BY "Seq" LIMIT {expected.Count}
             """;
-        var rows = await db.Messages.FromSqlInterpolated(UseSqliteRootClock(ready)).AsNoTracking().ToListAsync(token);
+        var sql = UseSqliteRootClock(ready);
+        var eligible = FormattableStringFactory.Create(
+            sql.Format.Replace("/*supported-operator*/", SqliteSupportedOperator(""), StringComparison.Ordinal), sql.GetArguments());
+        var rows = await db.Messages.FromSqlInterpolated(eligible).AsNoTracking().ToListAsync(token);
         var messages = rows.Select(row => DecodeRootInput(db, row, reference, issue: null)).ToArray();
         if (!SameInputs(messages, expected) || messages.Any(message => message.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;

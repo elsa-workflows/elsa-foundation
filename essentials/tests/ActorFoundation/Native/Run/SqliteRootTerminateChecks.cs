@@ -32,6 +32,7 @@ internal static partial class SqliteHostLifetimeChecks
             await using var db = OpenFoundationDb(path);
             var first = await AdmitAsync("ordinary");
             var second = await AdmitAsync("job");
+            var withheld = await AdmitAsync("withheld");
             var cursor = await SqliteRootAdmission.ReadSelectionCursorAsync(db, token);
             var firstSelection = PostgresRootSelection.SealRunning(cursor, scope.Tenant, first.Id);
             var secondSelection = PostgresRootSelection.SealRunning(cursor, scope.Tenant, second.Id);
@@ -65,11 +66,22 @@ internal static partial class SqliteHostLifetimeChecks
                     jobRows.Count == 0, "the Cancelled checkpoint settles the outstanding timed job and its deadline " +
                     $"({jobEnd.Status}, revision {jobEnd.Revision}, terminal {jobEnd.TerminalRevision}, next generation {jobEnd.NextJobGeneration}, " +
                     $"job rows {string.Join(", ", jobRows)})");
+                await WaitForRootAsync(store, scope.Tenant, withheld, 1, token);
+                var earlier = await ingress.SendAsync(scope, new Contract.Target.Ref(withheld), "withheld", "record", cancellationToken: token);
+                var withheldSelection = PostgresRootSelection.SealRunning(cursor, scope.Tenant, withheld.Id);
+                Require(earlier.Outcome == Contract.AdmissionOutcome.Accepted &&
+                    await SendTerminateAsync(ingress, scope, withheld, "terminate-withheld", withheldSelection) is
+                    { Outcome: Contract.AdmissionOutcome.Accepted }, "the withheld actor admits ordinary work and a kernel control");
+                await WaitForRootAsync(store, scope.Tenant, withheld, 2, token);
+                Require(await store.ReadFirstRootAsync(scope.Tenant, withheld.Id, token) is { Status: InstanceStatus.Cancelled, State: "\"ready\"" } &&
+                    actor.WithheldModelTurns == 0, "the kernel control passes the earlier input that the running actor withholds");
                 await owner.StopAsync(token);
                 Require(owner.LastError is null, "the first owner stops cleanly");
             }
 
             var exact = new Contract.Target.Ref(first);
+            var checkpoint = (await store.ReadFirstRootAsync(scope.Tenant, first.Id, token))!;
+            var deferredId = await InsertLaterOperatorAsync(db, scope.Tenant, first.Id, checkpoint.Actor.Id, token);
             Require(await ingress.SendAsync(scope, exact, "future", "record", options: new(DueAt: long.MaxValue), cancellationToken: token) is
                 { Outcome: Contract.AdmissionOutcome.Accepted }, "an earlier future input is admitted");
             Require(await ingress.SendAsync(scope, exact, "ordinary", "record", cancellationToken: token) is
@@ -95,9 +107,11 @@ internal static partial class SqliteHostLifetimeChecks
                 await SendTerminateAsync(ingress, scope, first, "terminate-again", firstSelection) is
                 { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
                 "the original operator receipt stays replayable after its root ends");
-            Require(await db.Messages.CountAsync(row => row.Target == ended.Actor.Id && !row.Done, token) == 1 &&
+            Require(await db.Messages.CountAsync(row => row.Target == ended.Actor.Id && !row.Done, token) == 2 &&
                 await db.Messages.AllAsync(row => row.InboxScope != InboxKey.FoundationOccurrenceScope || !row.Done ||
-                    row.Start == null && row.Payload == null && row.ReplyTo == null, token), "each settled occurrence is scrubbed and the future input remains pending");
+                    row.Start == null && row.Payload == null && row.ReplyTo == null, token), "each settled occurrence is scrubbed and later inputs remain pending");
+            Require(await db.Messages.AsNoTracking().SingleAsync(row => row.Id == deferredId, token) is { Done: false, Seen: 0, ReplyTo: not null },
+                "a held operator from a later slice stays pending and cannot block the staged FIFO");
             await replacement.StopAsync(token);
             Require(replacement.LastError is null, "the replacement owner stops cleanly");
             return 0;
@@ -122,12 +136,32 @@ internal static partial class SqliteHostLifetimeChecks
         finally { folder.Delete(recursive: true); }
     }
 
+    private static async Task<string> InsertLaterOperatorAsync(KernelDb db, string tenant, string reference, string actor, CancellationToken token)
+    {
+        const string operation = "later-held-terminate";
+        var deadline = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60_000;
+        var caller = new Requests().OpenBound(operation, deadline, tenant, null);
+        var route = caller.ReplyAddress("later-stage");
+        var digest = FoundationRootCreator.OperationDigest(operation);
+        var (id, header) = PostgresRootAdmission.EncodeOperator(reference, operation, digest, 1, Kinds.Terminate, null, replyAddress: route);
+        var home = new InstanceRef(actor).Partition;
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Messages" ("Id", "InboxScope", "Target", "Partition", "Seq", "Kind", "Due", "Start",
+                "Done", "Seen", "Attempts", "Trial", "JobGeneration", "KeepUntil", "ReplyTo")
+            VALUES ({id}, {InboxKey.FoundationOccurrenceScope}, {actor}, {home},
+                (SELECT coalesce(max("Seq"), 0) + 1 FROM "Messages"), {Kinds.Terminate}, 0, {header},
+                0, 0, 0, 0, 0, {deadline}, {route})
+            """, token);
+        return id;
+    }
+
     private sealed class TerminationActor : Contract.IActorType
     {
         internal TaskCompletionSource JobEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource JobCancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal int WithheldModelTurns { get; private set; }
         public string Type => OperatorKind;
-        public bool Withholds(Contract.ActorHeader header) => false;
+        public bool Withholds(Contract.ActorHeader header) => header is { TypeData: "withheld", Status: Contract.ActorStatus.Running };
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => throw new NotSupportedException();
@@ -141,6 +175,7 @@ internal static partial class SqliteHostLifetimeChecks
             }
             else if (turn.Inbox is [{ Kind: "record" }])
             {
+                if (turn.Header.TypeData == "withheld") WithheldModelTurns++;
                 turn.State = "\"recorded\"";
                 turn.Record(new { Step = "recorded" });
             }

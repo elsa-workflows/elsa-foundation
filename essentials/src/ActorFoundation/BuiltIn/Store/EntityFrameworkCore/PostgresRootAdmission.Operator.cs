@@ -8,7 +8,7 @@ namespace Kernel.EntityFramework;
 
 internal sealed partial class PostgresRootAdmission
 {
-    private const string OperatorPrefix = "!kernel-operator/1:";
+    internal const string OperatorPrefix = "!kernel-operator/1:";
     private const string HeldOperatorPrefix = "!kernel-held-operator/1:";
     private const string TerminateThenDeletePrefix = "!kernel-operator/2:";
     private const string RetentionDeletePrefix = "!kernel-operator/3:";
