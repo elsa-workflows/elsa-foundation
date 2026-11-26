@@ -255,9 +255,9 @@ loop with its own item and index.
 
 - **One item.** One pass. The loop completes with `Done` after it.
 - **Large collections.** Up to 1,000 items. Above that, the loop faults with `ParallelForEachCapExceeded` and the
-  documentation shows the batching patterns from the large fan-out page. The collection is read once and indexed per
-  pass. A pass completion costs the same whatever the number of items: it never lists or materialises all passes, so
-  the total cost grows linearly with the number of items.
+  documentation shows the batching patterns from the large fan-out page. A pass completion never lists or
+  materialises the other passes. It reads the collection from the loop's input snapshot, as `ForEach` does, and the
+  cap bounds that read.
 - **Collection changes after start.** The collection is evaluated once, at start. A later write to the variable it
   came from does not add or remove passes.
 - **Nested loops.** A `ParallelForEach` inside a `ParallelForEach` (or a `ForEach`) gets its own iteration frame per
@@ -301,8 +301,9 @@ loop with its own item and index.
   strategy (US2 scenarios 3 and 4).
 - **FR-007**: A pass whose body completes with the `Break` outcome MUST count as completed. It MUST NOT end the loop
   or cancel other passes.
-- **FR-008**: The activity MUST read its collection once per run. Handling one pass completion MUST NOT list or
-  materialise all passes or all items, so a run of N items costs O(N) in total.
+- **FR-008**: Handling one pass completion MUST NOT list or materialise the other passes. It reads one count and, when
+  it starts a pass, envelopes only that pass's item. The collection is read from the loop's input snapshot on each
+  evaluation, as for `ForEach`. It is never evaluated again, so it cannot change during the run.
 - **FR-009**: The activity MUST NOT offer a join mode, an author-set cap or any concurrency setting other than
   `MaxDegreeOfParallelism`.
 - **FR-009a**: A collection of more than 1,000 items MUST fault the activity with `ParallelForEachCapExceeded` before
@@ -381,8 +382,9 @@ loop with its own item and index.
   such as value capture (#5647), are tracked against their own issues.
 - **SC-003**: With a body that waits 1 second per item, a 10-item loop completes in under 3 seconds of wall time, where
   a `ForEach` takes at least 10.
-- **SC-004**: A 1,000-item loop (the cap) with an inline body completes, and the time spent evaluating pass completions grows
-  linearly with the item count (1,000 items take at most about 10 times as long as 100 items).
+- **SC-004**: A 1,000-item loop (the cap) with an inline body completes. A pass completion reads no other pass's
+  state. The times for 100 and 1,000 items are measured and recorded in the implementing PR, together with the share
+  spent re-reading the collection snapshot.
 - **SC-005**: Every publish of a body that writes an outer variable shows exactly one concurrent-write warning per
   variable. A body that writes only its own variables shows none.
 - **SC-006**: Under `WaitForIntervention`, in a run with one faulted pass, every other pass completes. After the

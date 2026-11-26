@@ -12,7 +12,7 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
 - [ ] T002 Give `StructuredExecutionIdentity` an iteration id for the new loop without changing `ForEach`'s ids; unit
   test both forms round-trip through `TryReadIteration`.
 - [ ] T003 Add `LoopKind.ParallelForEach` (iteration names, `ExposeIndex` switch, `PassesUnordered = true`).
-- [ ] T003a Add `CountChildIterationsAsync` (started iterations, and processed completed iterations carrying the
+- [ ] T003a Add `CountProcessedCompletedChildIterationsAsync` (completed iterations carrying the
   `ParentCompletionProcessedWorkItemId` marker) to `IActivityExecutionStateStore`, implemented in the EF Core store
   (index and migration) and the in-memory store, with a shared contract test (distinct iteration ids, superseded rows
   excluded, unprocessed completions not counted); update the store's `EXTENSION_POINTS.md`.
@@ -41,8 +41,9 @@ Tests are xunit only. Build and test only the projects touched; leave the full s
 - [ ] T008 [US2] Tests: under the default strategy the instance faults and the loop is marked `Faulted`; under
   `ContinueWithIncidents` an unretried pass leaves the loop running with the incident open (documented, US2
   scenario 4).
-- [ ] T009 Performance check (SC-003, SC-004): 10 items with a 1 s delay finish under 3 s; 1,000 inline items scale
-  linearly against 100. Record the numbers in the PR.
+- [ ] T009 Performance check (SC-003, SC-004): 10 items with a 1 s delay finish under 3 s. Measure 100 and 1,000
+  inline items, with the share spent re-reading the collection snapshot per evaluation, and record the numbers in the
+  PR.
 
 ## Phase 3: Publish checks (US3)
 
