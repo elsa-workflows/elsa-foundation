@@ -124,8 +124,10 @@ compatibility shims.
    - The payload's terminal result (`DispatchWorkflowResult`) keeps its status, diagnostics and control, and no
      longer has output entries (FR-004).
 5. `ResumeAsync` sets `Terminal` from the payload's terminal result and copies `payload.Output` into
-   `DispatchWorkflowActivityResult.Output` for `Completed`. Fire-and-forget sets `Terminal` to null. Every other path,
-   including `Dispatched`, passes `null`, which D-1 leaves out of the serialized result.
+   `DispatchWorkflowActivityResult.Output` for `Completed`.
+   - It sets `Output` to `{}` for `Faulted`, `Cancelled` and `DispatchFailed`.
+   - Fire-and-forget (`Dispatched`) sets `Terminal` and `Output` to null, and D-1 leaves `Output` out of the serialized
+     result.
 6. **Designer and consumers.** Outputs come from the activity contract descriptor, so `Output` appears and `Result`
    disappears. The consumers to update (FR-005):
    - `essentials/tests/Activities/Design/Tests/Contracts/activity-contract-surface.baseline.json`
@@ -243,7 +245,7 @@ In `Elsa3BuiltInActivityMap.Entries.cs`:
 - **Diagnostics leaking into data (D-2).** If `Output` is ever built from `IWorkflowOutputSource`, values are truncated
   or redacted by a diagnostics setting. The `token` and 1,000-character tests guard against this.
 - **Absent versus null (D-1).** If the serializer writes `"output": null`, a capture overwrites its variable with null
-  where Elsa 3 left it unchanged. T002 asserts that the variable is unchanged on `Dispatched` and `Faulted`.
+  where Elsa 3 left it unchanged. T002 asserts that the variable is unchanged on `Dispatched`, and that it becomes `{}` on `Faulted`.
 - **Merge with main's kernel.** The main sync PR brings `NativeActivityShapes`. Its `Result` rule names an output that
   no longer exists, so it is harmless, and #4229 can drop it. An `Output` read is still unmapped there until #4229
   adds it (spec, "Raised with #4229" items 1 to 4). The coordinator

@@ -59,7 +59,9 @@ Tests are xunit only. `[P]` means the task can run in parallel with others (it t
   `Activities/Runtime/Core/PublicAPI.Unshipped.txt` entries, copied from the
   attempt. Test that a warning reported in `ResumeAsync` is recorded on the activity execution. Update
   `EXTENSION_POINTS.md` if it lists context members.
-- [ ] T003b `DispatchWorkflow.ResumeAsync` copies `payload.Output` into the activity result for `Completed`, and reports
+- [ ] T003b `DispatchWorkflow.ResumeAsync` copies `payload.Output` into the activity result for `Completed`. It sets
+  `Output` to `{}` for `Faulted`, `Cancelled` and `DispatchFailed`, which is what T002 tests for each status. It also
+  reports
   `dispatch.child-output-withheld` (Warning, `Details.outputs`) through T003c when `WithheldOutputs` is not empty. End-to-end
   tests:
   - A child with output `Decision = "approved"` gives `{ "Decision": "approved" }`.

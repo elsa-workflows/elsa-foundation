@@ -443,7 +443,7 @@ the current core but are refused or behave differently on the kernel:
 1. **Map `Output` to the Native result.** `NativeActivityShapes` refuses a Dispatch Workflow `Result` read. After this
    spec the current activity has no `Result`, so that rule can go. An `Output` read has the same shape as
    `Native.DispatchResult.Output`, so it can pass through. FR-002 also needs two changes to the Native `Output`:
-   - It must be `{}` after a child that faulted or was cancelled. Today `ChildDone.Output` is passed on for any
+   - It must be `{}` after a child that faulted or was cancelled, or a start that failed. Today `ChildDone.Output` is passed on for any
      status.
    - It must be absent, not null, on `Dispatched`. Today it completes with an explicit `null`
      (`DispatchResult(null, "Dispatched")`), which a capture writes.
