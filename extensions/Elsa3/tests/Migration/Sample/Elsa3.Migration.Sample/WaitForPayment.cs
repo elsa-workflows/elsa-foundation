@@ -33,5 +33,5 @@ public sealed record PaymentReceived(decimal Amount);
 
 public sealed record PaymentResult(
     [property: Output] string InvoiceNumber,
-    [property: Output] decimal AmountPaid);
+    [property: Output(Key = "Result")] decimal AmountPaid);
 // catalog:case-08 end

@@ -16,5 +16,5 @@ public sealed class CheckInvoiceStatus(IInvoiceClient invoices) : Activity<Invoi
         ActivityTransition.Complete(new InvoiceStatusResult(await invoices.GetStatusAsync(InvoiceNumber, context.CancellationToken)));
 }
 
-public sealed record InvoiceStatusResult([property: Output] string Status);
+public sealed record InvoiceStatusResult([property: Output(Key = "Result")] string Status);
 // catalog:case-10 end

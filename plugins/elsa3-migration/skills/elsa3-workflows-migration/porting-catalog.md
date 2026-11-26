@@ -84,14 +84,15 @@ public sealed class SendInvoice(IInvoiceClient invoices) : Activity<SendInvoiceR
 }
 
 public sealed record SendInvoiceResult(
-    [property: Output(DisplayName = "Invoice number")] string InvoiceNumber,
+    [property: Output(Key = "Result", DisplayName = "Invoice number")] string InvoiceNumber,
     [property: Output(Key = "InvoiceCurrency")] string Currency);
 ```
 
 **Steps**:
 1. Derive from `Activity<TResult>` when the activity produces values, or from `Activity` when it produces none.
 2. Gather everything the Elsa 3 activity wrote to `Result` and its `Output<T>` properties into one result record
-   (case 04): the activity returns all its outputs at once.
+   (case 04): the activity returns all its outputs at once. The property that holds Elsa 3's `Result` keeps that name
+   with `[Output(Key = "Result")]`.
 3. Override `ExecuteAsync(ActivityExecutionContext context)` and return a transition (case 05).
 4. An activity that waits for something from outside derives from a stateful base class instead (cases 08 and 09).
 
@@ -211,15 +212,16 @@ public class SendInvoice : CodeActivity<string>   // Result holds the invoice nu
 **After (Elsa 4)** <!-- sample: case-04 -->
 ```csharp
 public sealed record SendInvoiceResult(
-    [property: Output(DisplayName = "Invoice number")] string InvoiceNumber,
+    [property: Output(Key = "Result", DisplayName = "Invoice number")] string InvoiceNumber,
     [property: Output(Key = "InvoiceCurrency")] string Currency);
 ```
 
 **Steps**:
 1. Write one record with a property per output, each marked `[Output]`. The activity returns it in its completion
    (case 05).
-2. Keep the Elsa 3 output names where the converted workflows read them: give `[Output]` a `Key` when the property name
-   differs.
+2. Keep the Elsa 3 output names: the converter binds each captured Elsa 3 output to the Elsa 4 output with the same key
+   or name, and refuses a captured output it cannot find. Give `[Output]` a `Key` when the property name differs; the
+   value Elsa 3 held in `Result` takes `Key = "Result"`.
 3. Mark an output that may be absent with `IsRequired = false`.
 
 ## Case 05: Completion
@@ -392,7 +394,7 @@ public sealed record PaymentReceived(decimal Amount);
 
 public sealed record PaymentResult(
     [property: Output] string InvoiceNumber,
-    [property: Output] decimal AmountPaid);
+    [property: Output(Key = "Result")] decimal AmountPaid);
 ```
 
 **Steps** (bookmarks):
@@ -483,7 +485,7 @@ public sealed record IncomingInvoice(string InvoiceNumber);
 
 public sealed record InvoiceWaitState(string Mailbox);
 
-public sealed record InvoiceReceivedResult([property: Output] string InvoiceNumber);
+public sealed record InvoiceReceivedResult([property: Output(Key = "Result")] string InvoiceNumber);
 
 internal sealed class InvoiceReceivedStimulusProvider : IActivityTriggerStimulusProvider
 {
@@ -543,7 +545,7 @@ public sealed class CheckInvoiceStatus(IInvoiceClient invoices) : Activity<Invoi
         ActivityTransition.Complete(new InvoiceStatusResult(await invoices.GetStatusAsync(InvoiceNumber, context.CancellationToken)));
 }
 
-public sealed record InvoiceStatusResult([property: Output] string Status);
+public sealed record InvoiceStatusResult([property: Output(Key = "Result")] string Status);
 ```
 
 **Steps**:
@@ -613,7 +615,7 @@ public sealed class ReadCustomerNote : Activity<CustomerNoteResult>
         ValueTask.FromResult(ActivityTransition.Complete(new CustomerNoteResult(context.Variables.Get<string>("customerNote"))));
 }
 
-public sealed record CustomerNoteResult([property: Output] string Note);
+public sealed record CustomerNoteResult([property: Output(Key = "Result")] string Note);
 
 // Workflow state (here, a workflow output): the activity declares that it accesses it.
 [AccessesWorkflowState]
@@ -747,7 +749,7 @@ public sealed class ChargeCard : Activity<ChargeResult>
     }
 }
 
-public sealed record ChargeResult([property: Output] decimal Charged);
+public sealed record ChargeResult([property: Output(Key = "Result")] decimal Charged);
 ```
 
 **Steps**:
@@ -821,7 +823,7 @@ The conversion's rules, as they stand:
   call in the Elsa 3 definition first: `items.map(item => lookupCustomer(item))`.
 
 Elsa 3 built-ins a host function may take over: Elsa 4 does not provide these, so the converter refuses them, unless
-your host registers a function of the same name with a prefix: `getConfig`, `getConfiguration`, the definition
+your host registers a function of the same name with a prefix: `getConfig`, the definition
 readers (`getWorkflowDefinitionId`, `getWorkflowDefinitionVersionId`, `getWorkflowDefinitionVersion`),
 `getLastResult`, and the byte and stream helpers (`bytesToString`, `bytesFromString`, `bytesToBase64`,
 `bytesFromBase64`, `streamToBytes`, `streamToBase64`). They are Elsa 3's own, so there is no Elsa 3 source to search

@@ -33,7 +33,7 @@ public sealed class SendInvoice(IInvoiceClient invoices) : Activity<SendInvoiceR
 
 // catalog:case-04 begin
 public sealed record SendInvoiceResult(
-    [property: Output(DisplayName = "Invoice number")] string InvoiceNumber,
+    [property: Output(Key = "Result", DisplayName = "Invoice number")] string InvoiceNumber,
     [property: Output(Key = "InvoiceCurrency")] string Currency);
 // catalog:case-04 end
 // catalog:case-01 end

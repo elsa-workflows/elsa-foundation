@@ -30,7 +30,7 @@ public sealed class ReadCustomerNote : Activity<CustomerNoteResult>
         ValueTask.FromResult(ActivityTransition.Complete(new CustomerNoteResult(context.Variables.Get<string>("customerNote"))));
 }
 
-public sealed record CustomerNoteResult([property: Output] string Note);
+public sealed record CustomerNoteResult([property: Output(Key = "Result")] string Note);
 
 // Workflow state (here, a workflow output): the activity declares that it accesses it.
 [AccessesWorkflowState]

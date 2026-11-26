@@ -27,5 +27,5 @@ public sealed class ChargeCard : Activity<ChargeResult>
     }
 }
 
-public sealed record ChargeResult([property: Output] decimal Charged);
+public sealed record ChargeResult([property: Output(Key = "Result")] decimal Charged);
 // catalog:case-13 end
